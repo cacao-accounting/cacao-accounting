@@ -112,3 +112,5 @@ dist
 cacao_accounting_mockup.egg-info/
 sdist/
 *.pyc
+
+.vscode/
