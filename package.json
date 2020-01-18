@@ -1,0 +1,17 @@
+{
+  "name": "cacao-accounting-mockup",
+  "version": "1.0.0",
+  "description": "Vista previa interfas de usuario de cacao-accounting",
+  "main": "index.js",
+  "scripts": {},
+  "repository": "git+https://github.com/cacao-accounting/cacao-accounting-mockup.git",
+  "author": "William Moreno Reyes",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cacao-accounting/cacao-accounting-mockup/issues"
+  },
+  "homepage": "https://github.com/cacao-accounting/cacao-accounting-mockup#readme",
+  "dependencies": {
+    "@patternfly/patternfly": "^2.50.0"
+  }
+}
