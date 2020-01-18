@@ -28,7 +28,7 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ```
 # Python
-  pip install -r requirements.txt
+  python -m pip install -r requirements.txt
 
 # Nodejs
   yarn
