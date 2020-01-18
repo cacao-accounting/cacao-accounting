@@ -11,7 +11,7 @@ Requisitos:
 
 ## Iniciando proyecto:
 
-```
+```bash
 git clone https://github.com/cacao-accounting/cacao-accounting-mockup.git
 ```
 
@@ -19,14 +19,14 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ### Crear un entorno virtual de python.
 
-```
+```bash
   python -m venv venv
   venv\Scripts\activate.bat
 ```
 
 ### Instalar las dependencias:
 
-```
+```bash
 # Python
   python -m pip install -r requirements.txt
 
@@ -38,7 +38,7 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
-```
+```bash
   python setup.py develop
   python wsgi.py    
 ```
