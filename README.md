@@ -2,9 +2,9 @@
 
 Requisitos:
 
-  * Nodejs 12 o superior
-  * Yarn 1.12 o superior
-  * Python 3.7 o superior
+  * [Nodejs](https://nodejs.org/en/) 12 o superior
+  * [Yarn](https://yarnpkg.com/lang/en/) 1.12 o superior
+  * [Python](https://www.python.org/downloads/) 3.8 o superior
 
   Este en un simple proyecto en Flask utilizando la funcion render_template() para mostrar en el navegador 
   plantillas utilizando Jinja2 como motor de renderizado.
