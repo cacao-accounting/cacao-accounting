@@ -5,6 +5,10 @@ app = Flask(__name__)
 def hello():
     return redirect("/login")
 
+@app.route("/base")
+def base():
+    return render_template("base.html")
+
 @app.route("/login")
 def login():
     return render_template("auth/login.html")
