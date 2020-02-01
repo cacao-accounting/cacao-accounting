@@ -18,7 +18,7 @@ def login():
 
 
 @app.route("/setup")
-def login():
+def septup():
     return render_template("setup/setup.html")
 
 
