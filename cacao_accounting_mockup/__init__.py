@@ -17,5 +17,10 @@ def login():
     return render_template("auth/login.html")
 
 
+@app.route("/setup")
+def login():
+    return render_template("setup/setup.html")
+
+
 if __name__ == "__main__":
     app.run()
