@@ -11,6 +11,8 @@ Requisitos:
 
 ## Iniciando proyecto:
 
+Descarga el codigo fuente con:
+
 ```bash
 git clone https://github.com/cacao-accounting/cacao-accounting-mockup.git
 ```
@@ -33,6 +35,8 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 # Nodejs
   yarn
 ```
+
+Yarn es necesario para no tener incluir librerias de JavaScritp de terceros en el repositorio principal del proyecto.
 
 ## Iniciar
 
