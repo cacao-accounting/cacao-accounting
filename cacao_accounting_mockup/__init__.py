@@ -22,5 +22,10 @@ def septup():
     return render_template("setup/setup.html")
 
 
+@app.route("/notas")
+def notas():
+    return render_template("notas.html")
+
+
 if __name__ == "__main__":
     app.run()
