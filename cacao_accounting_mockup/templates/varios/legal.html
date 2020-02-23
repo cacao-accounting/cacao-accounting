@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="pf-c-about-modal-box" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+    <div class="pf-c-about-modal-box__brand">
+      <!--
+      <img class="pf-c-about-modal-box__brand-image" src="/assets/images/pf_mini_logo_white.svg" alt="PatternFly brand logo" />
+      -->    
+    </div>
+    <div class="pf-c-about-modal-box__close">
+      <button class="pf-c-button pf-m-plain" type="button" aria-label="Close dialog">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="pf-c-about-modal-box__header">
+      <h1 class="pf-c-title pf-m-4xl" id="about-modal-title">Cacao Accounting</h1>
+      <p>Sistema contable para pequeñas y medianas empresas.</p>
+    </div>
+    <div class="pf-c-about-modal-box__hero"></div>
+    <div class="pf-c-about-modal-box__content">
+      <p class="pf-c-about-modal-box__strapline">Copyright 2020 William Moreno Reyes</p>
+      <p class="pf-c-about-modal-box__strapline">Apache License Version 2.0</p>
+    </div>
+  </div>
+{% endblock %}
