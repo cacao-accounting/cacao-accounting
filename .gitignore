@@ -114,3 +114,5 @@ sdist/
 *.pyc
 
 .vscode/
+
+test.db
