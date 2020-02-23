@@ -36,5 +36,10 @@ def notas():
     return render_template("notas.html")
 
 
+@app.route("/indice")
+def indice():
+    return render_template("indice.html")
+
+
 if __name__ == "__main__":
     app.run()
