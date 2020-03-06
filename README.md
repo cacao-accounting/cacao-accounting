@@ -45,5 +45,5 @@ Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido
 
 ```bash
   python setup.py develop
-  python wsgi.py    
+  flask run
 ```
