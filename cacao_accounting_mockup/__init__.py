@@ -41,5 +41,10 @@ def indice():
     return render_template("indice.html")
 
 
+@app.route("/principal")
+def principal():
+    return render_template("pagina-base.html")
+
+
 if __name__ == "__main__":
     app.run()

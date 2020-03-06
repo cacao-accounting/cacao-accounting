@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="pf-c-page" id="page-expandable-nav-example">
+  <a class="pf-c-skip-to-content pf-c-button pf-m-primary" href="#main-content-page-expandable-nav-example">Skip to content</a>
+  <header role="banner" class="pf-c-page__header">
+    <div class="pf-c-page__header-brand">
+      <div class="pf-c-page__header-brand-toggle">
+        <button class="pf-c-button pf-m-plain" type="button" id="page-expandable-nav-example-nav-toggle" aria-label="Global navigation" aria-expanded="true" aria-controls="page-expandable-nav-example-expandable-nav">
+          <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+      </div>
+      <a class="pf-c-page__header-brand-link">
+        <img class="pf-c-brand" src="{{ url_for('static', filename='@patternfly/patternfly/assets/images/PF-Masthead-Logo.svg') }}" alt="PatternFly logo" />
+      </a>
+    </div>
+    <div class="pf-c-page__header-tools">
+      <div class="pf-c-page__header-tools-group">
+        <div class="pf-c-dropdown">
+          <button class="pf-c-dropdown__toggle pf-m-mobile pf-m-plain" type="button" id="page-expandable-nav-example-dropdown-kebab-right-aligned-1-button" aria-expanded="false" aria-label="Actions">
+            <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
+          </button>
+          <ul class="pf-c-dropdown__menu pf-m-align-right" aria-labelledby="page-expandable-nav-example-dropdown-kebab-right-aligned-1-button" hidden>
+            <li>
+              <a class="pf-c-dropdown__menu-item" href="#">Link</a>
+            </li>
+            <li>
+              <button class="pf-c-dropdown__menu-item" type="button">Action</button>
+            </li>
+            <li>
+              <a class="pf-c-dropdown__menu-item pf-m-disabled" href="#" aria-disabled="true" tabindex="-1">Disabled link</a>
+            </li>
+            <li>
+              <button class="pf-c-dropdown__menu-item" type="button" disabled>Disabled action</button>
+            </li>
+            <li class="pf-c-dropdown__separator" role="separator"></li>
+            <li>
+              <a class="pf-c-dropdown__menu-item" href="#">Separated link</a>
+            </li>
+          </ul>
+        </div>
+        <div class="pf-m-user">
+          <div class="pf-c-dropdown">
+            <p>Nombre del Usuario</p>
+          </div>
+        </div>
+      </div>
+      <img class="pf-c-avatar" src="{{ url_for('static', filename='@patternfly/patternfly/assets/images/img_avatar.svg') }}" alt="Avatar image" />
+    </div>
+  </header>
+  <div class="pf-c-page__sidebar pf-m-dark">
+    <div class="pf-c-page__sidebar-body">
+      <nav class="pf-c-nav pf-m-dark" id="page-expandable-nav-example-expandable-nav" aria-label="Global">
+        <ul class="pf-c-nav__list">
+          <li class="pf-c-nav__item pf-m-expandable pf-m-expanded pf-m-current">
+            <a href="#" class="pf-c-nav__link" id="page-expandable-nav-example-expandable-nav-link1" aria-expanded="true">Contabilidad
+              <span class="pf-c-nav__toggle">
+                <i class="fas fa-angle-right" aria-hidden="true"></i>
+              </span>
+            </a>
+            <section class="pf-c-nav__subnav" aria-labelledby="page-expandable-nav-example-expandable-nav-link1">
+              <ul class="pf-c-nav__simple-list">
+                <li class="pf-c-nav__item">
+                  <a href="#" class="pf-c-nav__link">Maestros</a>
+                </li>
+                <li class="pf-c-nav__item">
+                  <a href="#" class="pf-c-nav__link pf-m-current" aria-current="page">Registros</a>
+                </li>
+                <li class="pf-c-nav__item">
+                  <a href="#" class="pf-c-nav__link">Reportes</a>
+                </li>
+              </ul>
+            </section>
+          </li>
+          </li>
+          <li class="pf-c-nav__item pf-m-expandable pf-m-expanded pf-m-current">
+            <a href="#" class="pf-c-nav__link" id="page-expandable-nav-example-expandable-nav-link1" aria-expanded="true">Compras
+              <span class="pf-c-nav__toggle">
+                <i class="fas fa-angle-right" aria-hidden="true"></i>
+              </span>
+            </a>
+          </li>
+          <li class="pf-c-nav__item pf-m-expandable pf-m-expanded pf-m-current">
+            <a href="#" class="pf-c-nav__link" id="page-expandable-nav-example-expandable-nav-link1" aria-expanded="true">Inventarios
+              <span class="pf-c-nav__toggle">
+                <i class="fas fa-angle-right" aria-hidden="true"></i>
+              </span>
+            </a>
+          </li>
+          <li class="pf-c-nav__item pf-m-expandable pf-m-expanded pf-m-current">
+            <a href="#" class="pf-c-nav__link" id="page-expandable-nav-example-expandable-nav-link1" aria-expanded="true">Ventas
+              <span class="pf-c-nav__toggle">
+                <i class="fas fa-angle-right" aria-hidden="true"></i>
+              </span>
+            </a>
+          </li>
+          <li class="pf-c-nav__item pf-m-expandable pf-m-expanded pf-m-current">
+            <a href="#" class="pf-c-nav__link" id="page-expandable-nav-example-expandable-nav-link1" aria-expanded="true">Administración
+              <span class="pf-c-nav__toggle">
+                <i class="fas fa-angle-right" aria-hidden="true"></i>
+              </span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+  <main role="main" class="pf-c-page__main" tabindex="-1" id="main-content-page-expandable-nav-example">
+    <section class="pf-c-page__main-section pf-m-light">
+      <div class="pf-c-content">
+        <h1>Titulo de la sección</h1>
+      </div>
+    </section>
+    <section class="pf-c-page__main-section">
+    Contenido de la seccion principal.
+    </section>
+  </main>
+</div>
+{% endblock %}
