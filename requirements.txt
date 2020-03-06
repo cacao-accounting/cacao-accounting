@@ -1,3 +1,4 @@
+alembic
 flask
 flask-sqlalchemy
 gunicorn
