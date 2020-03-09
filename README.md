@@ -47,3 +47,11 @@ Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido
   python setup.py develop
   flask run
 ```
+
+## Esquema de la base de datos
+
+Para crear una base de datos sqlite con el esquema de la base de datos utilizar el comando:
+
+```bash
+  flask init-db
+```
