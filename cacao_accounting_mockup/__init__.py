@@ -1,8 +1,10 @@
+import click
 from flask import Flask, redirect, render_template
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
@@ -12,6 +14,7 @@ def db_command():
     """Crea la base de datos."""
     db.drop_all()
     db.create_all()
+    click.echo("Base de datos creada.")
 
 
 @app.route("/")
