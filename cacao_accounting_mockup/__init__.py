@@ -3,7 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
+
 db = SQLAlchemy(app)
+
+
+@app.cli.command("init-db")
+def db_command():
+    """Crea la base de datos."""
+    db.drop_all()
+    db.create_all()
 
 
 @app.route("/")
