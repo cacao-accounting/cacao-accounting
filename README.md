@@ -2,18 +2,26 @@
 
 Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
 
-:warning: Aun es desarrollo temprano.
+:warning:  
+* Este es un proyecto en etapa temprana de desarrollo.
+* No apta para uso en producción.
 
-Requisitos:
 
-  * [Nodejs](https://nodejs.org/en/) 12 o superior
-  * [Yarn](https://yarnpkg.com/lang/en/) 1.12 o superior
-  * [Python](https://www.python.org/downloads/) 3.8 o superior
+## Participar en el Proyecto:
 
-  Este en un simple proyecto en Flask utilizando la funcion render_template() para mostrar en el navegador 
-  plantillas utilizando Jinja2 como motor de renderizado.
+Todos los aportes son bienvenidos.
 
-## Iniciando proyecto:
+### Requisitos para el desarrollo:
+
+  * [GIT](https://git-scm.com/)
+  * [Nodejs](https://nodejs.org/en/)
+  * [Yarn](https://yarnpkg.com/lang/en/)
+  * [Python](https://www.python.org/downloads/)
+
+El desarrollo es multiplataforma, puedes utilizar tanto Windows, Linux o Mac
+para aportar el proyecto.
+
+#### Obteniendo el codigo fuente:
 
 Descarga el codigo fuente con:
 
@@ -23,7 +31,7 @@ git clone https://github.com/cacao-accounting/cacao-accounting-mockup.git
 
 Para iniciar el proyecto es necesario seguir estos pasos:
 
-### Crear un entorno virtual de python.
+#### Crear un entorno virtual de python.
 
 ```bash
   python -m venv venv
@@ -31,7 +39,7 @@ Para iniciar el proyecto es necesario seguir estos pasos:
   source venv/bin/activate # Linux
 ```
 
-### Instalar las dependencias:
+#### Instalar las dependencias:
 
 ```bash
 # Python
@@ -43,21 +51,21 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 Yarn es necesario para no tener incluir librerias de JavaScritp de terceros en el repositorio principal del proyecto.
 
-## Iniciar
+#### Esquema de la base de datos
+
+Para crear una base de datos sqlite de pruebas ejecutar:
+
+```bash
+  flask init-db
+```
+
+#### Ejecutar servidor de desarrollo:
 
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
 ```bash
   python setup.py develop
   flask run
-```
-
-## Esquema de la base de datos
-
-Para crear una base de datos sqlite con el esquema de la base de datos utilizar el comando:
-
-```bash
-  flask init-db
 ```
 # Licencia.
 
