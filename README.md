@@ -23,7 +23,7 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ```bash
   python -m venv venv
-  venv\Scripts\activate.bat # Windows
+  .\venv\Scripts\activate.bat # Windows
   source venv/bin/activate # Linux
 ```
 
