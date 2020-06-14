@@ -1,4 +1,8 @@
-# cacao-accounting-mockup
+# Cacao Accounting
+
+Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
+
+:warning: Aun es desarrollo temprano.
 
 Requisitos:
 
