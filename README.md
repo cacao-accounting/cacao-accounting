@@ -1,3 +1,5 @@
+![Logo](https://raw.githubusercontent.com/williamjmorenor/cacao-accounting-mockup/master/cacao_accounting/static/media/cacao_accounting%20_logo.png)
+
 # Cacao Accounting
 
 Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
