@@ -40,7 +40,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
-cacao_accounting_mockup/static/
+cacao_accounting_mockup/static/js/
 venv/
 
 # TypeScript v1 declaration files
