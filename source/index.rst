@@ -3,8 +3,12 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Cacao Accounting's documentation!
-============================================
+Bienvenido a la Documentación de Cacao Accounting.
+==================================================
+
+Esta es la documentación tecnica de Cacao Accounting.
+
+Existe un sitio dedicado para el `Manual de Usuario <https://cacao-accounting-manual.readthedocs.io/es/latest/>`_.
 
 .. toctree::
    :maxdepth: 2
