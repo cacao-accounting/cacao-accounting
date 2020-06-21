@@ -16,24 +16,3 @@ limitations under the License.
 Contributors:
  - William José Moreno Reyes
 """
-
-from flask import Flask
-from cacao_accounting.vistas.auth import auth
-
-__name__ = "Cacao Accounting"
-__license__ = "Apache Software License "
-
-DEVELOPMENT = True
-
-def create_app(conf):
-    """
-    Aplication factory
-    
-    Referencias:
-     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
-    """
-    app = Flask(__name__)
-    app.config.from_object(conf)
-    app.register_blueprint(auth)
-
-    return app

@@ -1,4 +1,6 @@
 alembic
+appdirs
+configobj
 flask
 flask-sqlalchemy
 gunicorn
