@@ -36,7 +36,7 @@ setup(
     version=cacao_accounting.__version__ + timestamp,
     author="William José Moreno Reyes",
     author_email="williamjmorenor@gmail.com",
-    description="Aplición contable para que MiPymes.",
+    description="Aplicación contable para que MiPymes.",
     long_description=descripcion,
     packages=["cacao_accounting"],
     classifiers=[
