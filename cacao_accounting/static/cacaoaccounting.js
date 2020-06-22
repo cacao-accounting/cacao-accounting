@@ -1,4 +1,4 @@
-"""
+/*
 Copyright 2020 William José Moreno Reyes
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,12 +15,4 @@ limitations under the License.
 
 Contributors:
  - William José Moreno Reyes
-"""
-
-from setuptools import setup
-
-setup(
-    name="cacao_accounting",
-    version="0.0.1",
-    packages=["cacao_accounting"],
-)
+*/

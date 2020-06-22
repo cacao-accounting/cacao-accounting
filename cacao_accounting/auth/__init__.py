@@ -17,10 +17,17 @@ Contributors:
  - William José Moreno Reyes
 """
 
-from setuptools import setup
+from flask import (
+    current_app, Blueprint, redirect, render_template
+    )
 
-setup(
-    name="cacao_accounting",
-    version="0.0.1",
-    packages=["cacao_accounting"],
-)
+login = Blueprint("login", __name__, template_folder="templates")
+
+@login.route("/")
+def home():
+    return redirect("/login")
+
+
+@login.route("/login")
+def inicio():
+    return render_template("login.html")
