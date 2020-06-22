@@ -27,7 +27,7 @@ DEVELOPMENT = True
 
 def create_app(conf):
     """Aplication factory"""
-    app = Flask(__name__)
+    app = Flask(__name__, instance_relative_config=False)
     app.config.from_object(conf)
     app.register_blueprint(login)
 
