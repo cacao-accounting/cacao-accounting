@@ -32,10 +32,3 @@ def create_app(conf):
     app.register_blueprint(login)
 
     return app
-
-if __name__ == "__main__":
-    from cacao_accounting.conf import config
-    app = create_app(config)
-    app.config["EXPLAIN_TEMPLATE_LOADING"] = True
-    app.config["DEBUG"] = True
-    app.run()
