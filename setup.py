@@ -18,9 +18,37 @@ Contributors:
 """
 
 from setuptools import setup
+from os import path
+import cacao_accounting
+
+aqui = path.abspath(path.dirname(__file__))
+with open(path.join(aqui, 'README.md'), encoding='utf-8') as f:
+    descripcion = f.read()
+
+if cacao_accounting.DEVELOPMENT:
+    from datetime import datetime
+    timestamp = ".dev" + datetime.today().strftime('%Y%m%d')
+else:
+    timestamp = ""
 
 setup(
     name="cacao_accounting",
-    version="0.0.1",
+    version=cacao_accounting.__version__ + timestamp,
+    author="William José Moreno Reyes",
+    author_email="williamjmorenor@gmail.com",
+    description="Aplición contable para que MiPymes.",
+    long_description=descripcion,
     packages=["cacao_accounting"],
+    classifiers=[
+        "Development Status :: 1 - Planning",
+        "Framework :: Flask",
+        "Intended Audience :: Financial and Insurance Industry",
+        "License :: OSI Approved :: Apache Software License",
+        "Natural Language :: Spanish",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Topic :: Office/Business :: Financial",
+        "Topic :: Office/Business :: Financial :: Accounting"
+    ],
 )

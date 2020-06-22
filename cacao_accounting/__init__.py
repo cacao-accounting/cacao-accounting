@@ -22,6 +22,7 @@ from cacao_accounting.auth import login
 
 __name__ = "Cacao Accounting"
 __license__ = "Apache Software License "
+__version__ = "0.0.1"
 
 DEVELOPMENT = True
 

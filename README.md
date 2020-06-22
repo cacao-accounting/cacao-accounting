@@ -4,7 +4,7 @@
 
 Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
 
-:warning:  
+Nota: 
 * Este es un proyecto en etapa temprana de desarrollo.
 * No apta para uso en producción.
 
@@ -36,19 +36,16 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 #### Crear un entorno virtual de python.
 
 ```bash
-  python -m venv venv
-  .\venv\Scripts\activate.bat # Windows
-  source venv/bin/activate # Linux
+python -m venv venv
+\venv\Scripts\activate.bat
+source venv/bin/activate
 ```
 
 #### Instalar las dependencias:
 
 ```bash
-# Python
-  python -m pip install -r requirements.txt
-
-# Nodejs
-  yarn
+python -m pip install -r requirements.txt
+yarn
 ```
 
 Yarn es necesario para no tener incluir librerias de JavaScritp de terceros en el repositorio principal del proyecto.
@@ -58,7 +55,7 @@ Yarn es necesario para no tener incluir librerias de JavaScritp de terceros en e
 Para crear una base de datos sqlite de pruebas ejecutar:
 
 ```bash
-  flask init-db
+flask init-db
 ```
 
 #### Ejecutar servidor de desarrollo:
@@ -66,8 +63,8 @@ Para crear una base de datos sqlite de pruebas ejecutar:
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
 ```bash
-  python setup.py develop
-  flask run
+python setup.py develop
+flask run
 ```
 # Licencia.
 
