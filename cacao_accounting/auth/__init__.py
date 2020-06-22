@@ -17,15 +17,17 @@ Contributors:
  - William José Moreno Reyes
 """
 
-from flask import Blueprint, redirect, render_template
+from flask import (
+    current_app, Blueprint, redirect, render_template
+    )
 
-auth = Blueprint("auth", __name__, template_folder="templates")
+login = Blueprint("login", __name__, template_folder="templates")
 
-@auth.route("/")
+@login.route("/")
 def home():
     return redirect("/login")
 
 
-@auth.route("/login")
-def login():
+@login.route("/login")
+def inicio():
     return render_template("login.html")

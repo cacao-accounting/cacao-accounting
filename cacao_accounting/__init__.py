@@ -18,7 +18,7 @@ Contributors:
 """
 
 from flask import Flask
-from cacao_accounting.vistas.auth import auth
+from cacao_accounting.auth import login
 
 __name__ = "Cacao Accounting"
 __license__ = "Apache Software License "
@@ -26,14 +26,16 @@ __license__ = "Apache Software License "
 DEVELOPMENT = True
 
 def create_app(conf):
-    """
-    Aplication factory
-    
-    Referencias:
-     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
-    """
+    """Aplication factory"""
     app = Flask(__name__)
     app.config.from_object(conf)
-    app.register_blueprint(auth)
+    app.register_blueprint(login)
 
     return app
+
+if __name__ == "__main__":
+    from cacao_accounting.conf import config
+    app = create_app(config)
+    app.config["EXPLAIN_TEMPLATE_LOADING"] = True
+    app.config["DEBUG"] = True
+    app.run()
