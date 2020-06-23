@@ -28,7 +28,12 @@ DEVELOPMENT = True
 
 def create_app(conf):
     """Aplication factory"""
-    app = Flask(__name__, instance_relative_config=False)
+    app = Flask(
+        __name__,
+        template_folder="cacao_accounting/templates",
+        static_folder="cacao_accounting/static",
+        instance_relative_config=False,
+        )
     app.config.from_object(conf)
     app.register_blueprint(login)
 
