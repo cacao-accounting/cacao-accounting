@@ -1,1 +1,1 @@
-web: gunicorn cacao_accounting_mockup:app
+web: gunicorn wsgi:app
