@@ -26,7 +26,7 @@ __version__ = "0.0.1"
 
 DEVELOPMENT = True
 
-def create_app(conf):
+def create_app(conf=None):
     """Aplication factory"""
     app = Flask(
         __name__,
