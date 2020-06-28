@@ -2,7 +2,7 @@
 
 pushd %~dp0
 
-REM Command file for Sphinx documentation
+REM Crear documentacion en Windows
 
 if "%SPHINXBUILD%" == "" (
 	set SPHINXBUILD=sphinx-build

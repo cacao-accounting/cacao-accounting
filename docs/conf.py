@@ -18,11 +18,12 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Cacao Accounting'
-copyright = '2020, William Moreno Reyes'
+copyright = '2020 - William Moreno Reyes'
 author = 'William Moreno Reyes'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.1'
+from cacao_accounting import __version__
+release = __version__
 
 
 # -- General configuration ---------------------------------------------------
