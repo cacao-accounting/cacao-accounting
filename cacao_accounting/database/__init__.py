@@ -15,10 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting import create_app, DEVELOPMENT
-from cacao_accounting.conf import configuracion
+from flask_login import UserMixin
+from flask_sqlalchemy import SQLAlchemy
 
-app = create_app(configuracion)
+db = SQLAlchemy()
 
-if __name__ == "__main__":
-    app.run()
+class Usuario(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    p_nombre = db.Column(db.String(80))
+    s_nombre = db.Column(db.String(80))
+    p_apellido = db.Column(db.String(80))
+    s_apellido = db.Column(db.String(80))
+    correo_e = db.Column(db.String(150), unique=True, nullable=False)

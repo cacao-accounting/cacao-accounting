@@ -15,8 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+import click
 from flask import Flask
 from cacao_accounting.auth import login
+from cacao_accounting.database import db
 
 __name__ = "Cacao Accounting"
 __license__ = "Apache Software License "
@@ -24,7 +26,7 @@ __version__ = "0.0.1"
 
 DEVELOPMENT = True
 
-def create_app(conf=None):
+def create_app(ajustes=None):
     """Aplication factory"""
     app = Flask(
         __name__,
@@ -32,7 +34,27 @@ def create_app(conf=None):
         static_folder="cacao_accounting/static",
         instance_relative_config=False,
         )
-    app.config.from_object(conf)
+    if ajustes:
+        for i in ajustes:
+            app.config[i] = ajustes[i]
+
     app.register_blueprint(login)
+    db.init_app(app)
+
+    @app.cli.command("create-db")
+    def crear_db():
+        "Crea el esquema de la base de datos."
+        db.create_all()
+
+    @app.cli.command("reset-db")
+    def eliminar_db():
+        "Elimina la base de datos, solo disponible para desarrollo."
+        if DEVELOPMENT:
+            db.drop_all()
+
+    @app.cli.command("load-db")
+    def cargar_db():
+        "Carga la información seleccionada en la base de datos."
+        pass
 
     return app

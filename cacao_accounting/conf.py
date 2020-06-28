@@ -16,29 +16,28 @@
 # - William José Moreno Reyes
 
 from appdirs import user_config_dir, site_config_dir
-import configobj
+from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
+
 local_conf = "cacaoaccounting.conf"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
 
 # Verificación si estamos corriendo en Heroku
-if "DYNO" in ["DYNO"]:
+if "DYNO" in environ:
     HEROKU = True
 else:
     HEROKU = False
 
 if exists(local_conf):
-    config = configobj.ConfigObj(local_conf)
+    configuracion = ConfigObj(local_conf)
 elif exists(user_conf):
-    config = configobj.ConfigObj(user_conf)
+    configuracion = ConfigObj(user_conf)
 elif exists(global_conf):
-    config = configobj.ConfigObj(global_conf)
+    configuracion = ConfigObj(global_conf)
 else:
-    config = []
-
-
+    configuracion = None

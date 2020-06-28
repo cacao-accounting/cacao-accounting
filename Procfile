@@ -1,1 +1,1 @@
-web: gunicorn "cacao_accounting:create_app()"
+web: gunicorn wsgi:app
