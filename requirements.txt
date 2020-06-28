@@ -1,6 +1,7 @@
 # Mantener en orden alfabetico
 alembic
 appdirs
+bcrypt
 configobj
 flask
 flask-login
