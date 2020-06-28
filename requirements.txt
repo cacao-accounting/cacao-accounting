@@ -2,5 +2,6 @@ alembic
 appdirs
 configobj
 flask
+flask-login
 flask-sqlalchemy
 gunicorn
