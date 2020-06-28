@@ -38,7 +38,9 @@ setup(
     author_email="williamjmorenor@gmail.com",
     description="Aplicación contable para que MiPymes.",
     long_description=descripcion,
+    long_description_content_type='text/markdown',
     packages=["cacao_accounting"],
+    include_package_data=True,
     classifiers=[
         "Development Status :: 1 - Planning",
         "Framework :: Flask",
