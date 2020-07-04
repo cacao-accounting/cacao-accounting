@@ -21,40 +21,31 @@
       <main class="pf-c-login__main">
         <header class="pf-c-login__main-header">
           <h1 class="pf-c-title pf-m-3xl">Cacao Accounting.</h1>
-          <p class="pf-c-login__main-header-desc">Sistema Contable para Pequeñas y Medianas Empresas.</p>
-          <div class="pf-c-dropdown">
-            <button class="pf-c-dropdown__toggle" id="login-demo-dropdown-select-button" aria-expanded="false">
-              <span class="pf-c-dropdown__toggle-text">Español</span>
-              <i class="fas fa-caret-down pf-c-dropdown__toggle-icon" aria-hidden="true"></i>
-            </button>
-            <div class="pf-c-dropdown__menu" hidden>[Panel contents here]</div>
-          </div>
         </header>
         <div class="pf-c-login__main-body">
-          <form novalidate class="pf-c-form">
+          <form class="pf-c-form" method="POST">
+            {{ form.csrf_token }}
             <p class="pf-c-form__helper-text pf-m-error pf-m-hidden">
               <i class="fas fa-exclamation-circle pf-c-form__helper-text-icon" aria-hidden="true"></i>
-  Invalid login credentials.
+              Inicio de Sesión Invalido.
             </p>
             <div class="pf-c-form__group">
-              <label class="pf-c-form__label" for="login-demo-form-username">
+              <label class="pf-c-form__label" for="formulario-inicio-sesion">
                 <span class="pf-c-form__label-text">Usuario</span>
                 <span class="pf-c-form__label-required" aria-hidden="true">&#42;</span>
               </label>
-              <input class="pf-c-form-control" required input="true" type="text" id="login-demo-form-username" name="login-demo-form-username" />
-            </input>
+              {{ form.usuario(class="pf-c-form-control", id="login-usuario") }}
           </div>
           <div class="pf-c-form__group">
-            <label class="pf-c-form__label" for="login-demo-form-password">
+            <label class="pf-c-form__label" for="formulario-inicio-sesion">
               <span class="pf-c-form__label-text">Contraseña</span>
               <span class="pf-c-form__label-required" aria-hidden="true">&#42;</span>
             </label>
-            <input class="pf-c-form-control" required input="true" type="password" id="login-demo-form-password" name="login-demo-form-password" />
-          </input>
+            {{ form.acceso(class="pf-c-form-control", id="login-contraseña") }}
         </div>
         <div class="pf-c-form__group">
           <div class="pf-c-check">
-            <input class="pf-c-check__input" type="checkbox" type="checkbox" id="login-demo-checkbox" name="login-demo-checkbox" />
+            {{ form.mantener_sesion(class="pf-c-check__input", type="checkbox", id="login-demo-checkbox", id="login-checkbox")  }}
             <label class="pf-c-check__label" for="login-demo-checkbox">Mantener sesión iniciada.</label>
           </div>
         </div>

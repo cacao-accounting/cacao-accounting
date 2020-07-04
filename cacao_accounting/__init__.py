@@ -17,8 +17,10 @@
 
 import click
 from flask import Flask
-from cacao_accounting.auth import login
 from cacao_accounting.database import db
+from cacao_accounting.app import cacao_app
+from cacao_accounting.auth import administrador_sesion, login
+
 
 __name__ = "Cacao Accounting"
 __license__ = "Apache Software License "
@@ -38,23 +40,26 @@ def create_app(ajustes=None):
         for i in ajustes:
             app.config[i] = ajustes[i]
 
-    app.register_blueprint(login)
+    
     db.init_app(app)
-
-    @app.cli.command("create-db")
+    administrador_sesion.init_app(app)
+    with app.app_context():
+        app.register_blueprint(login)
+        app.register_blueprint(cacao_app)
+    
+    @app.cli.command("init-db")
     def crear_db():
+        from cacao_accounting.datos import cargar_datos, demo_data
         "Crea el esquema de la base de datos."
         db.create_all()
+        with app.app_context():
+            cargar_datos()
+            demo_data()
 
     @app.cli.command("reset-db")
     def eliminar_db():
         "Elimina la base de datos, solo disponible para desarrollo."
         if DEVELOPMENT:
             db.drop_all()
-
-    @app.cli.command("load-db")
-    def cargar_db():
-        "Carga la información seleccionada en la base de datos."
-        pass
 
     return app

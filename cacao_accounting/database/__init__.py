@@ -21,27 +21,40 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 class Usuario(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    """
+    Una entidad con acceso al sistema.
+    """
+    id = db.Column(db.String(15), primary_key=True, nullable=False)
     p_nombre = db.Column(db.String(80))
     s_nombre = db.Column(db.String(80))
     p_apellido = db.Column(db.String(80))
     s_apellido = db.Column(db.String(80))
     correo_e = db.Column(db.String(150), unique=True, nullable=False)
-    acceso = db.Column(db.Binary())
+    clave_acceso = db.Column(db.LargeBinary())
+    tipo = db.Column(db.String(10))
 
 
 class Pais(db.Model):
+    """
+    Registro de un país, define algunos parametros determinados
+    """
     id = db.Column(db.String(5), primary_key=True)
     moneda = db.Column(db.String(5), db.ForeignKey('moneda.id'))
-
+    idioma = db.Column(db.String(5), db.ForeignKey('idioma.id'))
 
 
 class Idioma(db.Model):
+    """
+    Registro de un idioma para mostrar la interfaz de usuario.
+    """
     id = db.Column(db.String(5), primary_key=True)
     nombre = db.Column(db.String(50), primary_key=True)
 
 
 class Moneda(db.Model):
+    """
+    Una divisa para el registro de las transacciones.
+    """
     id = db.Column(db.String(5), primary_key=True)
     singular = db.Column(db.String(50))
     plural = db.Column(db.String(50))
@@ -49,6 +62,9 @@ class Moneda(db.Model):
 
 
 class TasaDeCambio(db.Model):
+    """
+    Conversión de una divisa a otra para un fecha determinada.
+    """
     id = db.Column(db.Integer, primary_key=True)
     moneda_base = db.Column(db.String(5), db.ForeignKey('moneda.id'))
     moneda_destino = db.Column(db.String(5), db.ForeignKey('moneda.id'))
@@ -57,6 +73,10 @@ class TasaDeCambio(db.Model):
 
 
 class Entidad(db.Model):
+    """
+    Una entidad es una unidad de negocios de la que se lleva registros
+    en el sistema. 
+    """
     id = db.Column(db.String(5), primary_key=True)
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
@@ -65,3 +85,4 @@ class Entidad(db.Model):
     nombre_comercial = db.Column(db.String(50))
     moneda = db.Column(db.String(5), db.ForeignKey('moneda.id'))
     pais = db.Column(db.String(5), db.ForeignKey('pais.id'))
+
