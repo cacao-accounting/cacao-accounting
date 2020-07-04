@@ -37,7 +37,7 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ```bash
 python -m venv venv
-\venv\Scripts\activate.bat
+.\venv\Scripts\activate.bat
 source venv/bin/activate
 ```
 
@@ -64,7 +64,7 @@ Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido
 
 ```bash
 python setup.py develop
-flask run
+python wsgi.py
 ```
 # Licencia.
 
