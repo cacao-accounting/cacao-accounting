@@ -39,11 +39,14 @@ elif exists(user_conf):
     configuracion = ConfigObj(user_conf)
 elif exists(global_conf):
     configuracion = ConfigObj(global_conf)
-elif HEROKU or "CACAO_ACCOUNTING" in environ:
-    configuracion = {}
-    configuracion["SQLALCHEMY_DATABASE_URI"] = os.environ("SQLALCHEMY_DATABASE_URI")
-    configuracion["ENV"] = os.environ("ENV")
-    configuracion["SECRET_KEY"] = os.environ("SECRET_KEY")
-    configuracion["SECRET_KEY"] = os.environ("SECRET_KEY")  
 else:
-    configuracion = None
+    configuracion = {}
+    if HEROKU or "CACAO_ACCOUNTING" in environ:
+        configuracion["SQLALCHEMY_DATABASE_URI"] = os.environ("SQLALCHEMY_DATABASE_URI")
+        configuracion["ENV"] = os.environ("ENV")
+        configuracion["SECRET_KEY"] = os.environ("SECRET_KEY")
+    else:
+        configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
+        configuracion["ENV"] = "development"
+        configuracion["DEBUG"] = True
+        configuracion["SECRET_KEY"] = "dev"
