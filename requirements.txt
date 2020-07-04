@@ -8,5 +8,6 @@ flask-login
 flask-sqlalchemy
 flask-wtf
 gunicorn
+pg8000
 sqlalchemy
 wtforms
