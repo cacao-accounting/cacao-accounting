@@ -34,44 +34,6 @@ class Usuario(UserMixin, db.Model):
     tipo = db.Column(db.String(10))
 
 
-class Pais(db.Model):
-    """
-    Registro de un país, define algunos parametros determinados
-    """
-    id = db.Column(db.String(5), primary_key=True)
-    moneda = db.Column(db.String(5), db.ForeignKey('moneda.id'))
-    idioma = db.Column(db.String(5), db.ForeignKey('idioma.id'))
-
-
-class Idioma(db.Model):
-    """
-    Registro de un idioma para mostrar la interfaz de usuario.
-    """
-    id = db.Column(db.String(5), primary_key=True)
-    nombre = db.Column(db.String(50), primary_key=True)
-
-
-class Moneda(db.Model):
-    """
-    Una divisa para el registro de las transacciones.
-    """
-    id = db.Column(db.String(5), primary_key=True)
-    singular = db.Column(db.String(50))
-    plural = db.Column(db.String(50))
-    simbolo = db.Column(db.String(5))
-
-
-class TasaDeCambio(db.Model):
-    """
-    Conversión de una divisa a otra para un fecha determinada.
-    """
-    id = db.Column(db.Integer, primary_key=True)
-    moneda_base = db.Column(db.String(5), db.ForeignKey('moneda.id'))
-    moneda_destino = db.Column(db.String(5), db.ForeignKey('moneda.id'))
-    fecha = db.Column(db.Date())
-    tasa = db.Column(db.Float())
-
-
 class Entidad(db.Model):
     """
     Una entidad es una unidad de negocios de la que se lleva registros
@@ -83,6 +45,3 @@ class Entidad(db.Model):
     nit = db.Column(db.String(50), unique=True, nullable=False)
     corre_electronico = db.Column(db.String(50))
     nombre_comercial = db.Column(db.String(50))
-    moneda = db.Column(db.String(5), db.ForeignKey('moneda.id'))
-    pais = db.Column(db.String(5), db.ForeignKey('pais.id'))
-
