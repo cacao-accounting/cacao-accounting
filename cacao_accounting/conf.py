@@ -42,9 +42,9 @@ elif exists(global_conf):
 else:
     configuracion = {}
     if HEROKU or "CACAO_ACCOUNTING" in environ:
-        configuracion["SQLALCHEMY_DATABASE_URI"] = os.environ("SQLALCHEMY_DATABASE_URI")
-        configuracion["ENV"] = os.environ("ENV")
-        configuracion["SECRET_KEY"] = os.environ("SECRET_KEY")
+        configuracion["SQLALCHEMY_DATABASE_URI"] = environ("SQLALCHEMY_DATABASE_URI")
+        configuracion["ENV"] = environ("ENV")
+        configuracion["SECRET_KEY"] = environ("SECRET_KEY")
     else:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
         configuracion["ENV"] = "development"
