@@ -28,5 +28,4 @@ class LoginForm(FlaskForm):
     """
     usuario = StringField(validators=[DataRequired()])
     acceso = PasswordField(validators=[DataRequired()])
-    mantener_sesion = BooleanField()
     inicio_sesion = SubmitField()
