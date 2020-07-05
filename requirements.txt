@@ -9,5 +9,6 @@ flask-sqlalchemy
 flask-wtf
 gunicorn
 pg8000
+PyMySQL
 sqlalchemy
 wtforms
