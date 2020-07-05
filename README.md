@@ -37,8 +37,8 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ```bash
 python -m venv venv
-.\venv\Scripts\activate.bat
-source venv/bin/activate
+.\venv\Scripts\activate.bat # windows
+source venv/bin/activate # Linux
 ```
 
 #### Instalar las dependencias:
