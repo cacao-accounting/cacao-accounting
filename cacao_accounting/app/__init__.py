@@ -18,9 +18,11 @@
 from flask import (
     Blueprint, render_template
     )
+from flask_login import login_required
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 
 @cacao_app.route("/app")
+@login_required
 def pagina_inicio():
     return render_template("app.html")

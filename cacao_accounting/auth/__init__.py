@@ -17,18 +17,25 @@
 
 from cacao_accounting.database import Usuario
 from flask import (
-    current_app, Blueprint, redirect, render_template
+    current_app, Blueprint, redirect, render_template, flash
     )
-from flask_login import LoginManager, logout_user
+from flask_login import LoginManager, logout_user, login_user
 
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
 
 
 @administrador_sesion.user_loader
-def load_user():
+def cargar_sesion(id):
+    if id is not None:
+        return Usuario.query.get(id)
     return None
 
+
+@administrador_sesion.unauthorized_handler
+def no_autorizado():
+    flash("Favor iniciar sesión para acceder al sistema.")
+    return redirect("/login")
 
 def proteger_passwd(clave):
     from bcrypt import hashpw, gensalt
@@ -63,6 +70,8 @@ def inicio_sesion():
     form = LoginForm()
     if form.validate_on_submit():
         if validar_acceso(form.usuario.data, form.acceso.data):
+            identidad = Usuario.query.filter_by(id=form.usuario.data).first()
+            login_user(identidad)
             return redirect("/app")
         else:
             return redirect("/login")
