@@ -1,10 +1,12 @@
-<!doctype html>
-{% import "macros.jinja" as macros %}
-<html lang="en">
-<head>
-  {{ macros.imports() }}
-</head>
-<body>
-    
-</body>
-</html>
+{% extends "base.html" %}
+{% block contenido %}
+<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
+    <section class="pf-c-page__main-section pf-m-light">
+      <div class="pf-c-content">
+        <h1>Cacao Accounting</h1>
+        <p>Aplicacion Contable para Micro Pequeñas y Medianas Empresas.</p>
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}

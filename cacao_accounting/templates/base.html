@@ -1,17 +1,10 @@
-<!doctype html>
-
 {% import "macros.jinja" as macros %}
-
-<html>
-    <head>
-        {% block head %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='js/@patternfly/patternfly/patternfly.css') }}">
-        <script src="{{ url_for('static', filename='cacaoaccounting.js') }}"></script>
-        {% endblock %}
-    </head>
-    <body>
-        <div id="content">
-            {% block contenido %}{% endblock %}
-        </div>
-    </body>
+{{ macros.htmltag() }}
+<body>
+  <div class="pf-c-page" id="pagina-principal">
+    {{ macros.appheader() }}
+    {{ macros.appbarralateral() }}
+    {% block contenido %}
+    {% endblock %}
+</body>
 </html>
