@@ -2,6 +2,11 @@
 {# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
 
 {% macro imports() -%}
+{# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 <link rel="stylesheet" href="{{ url_for('static', filename='js/@patternfly/patternfly/patternfly.css') }}">
   <script src="{{ url_for('static', filename='cacaoaccounting.js') }}"></script>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/favicon-32x32.png') }}" sizes="32x32" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/favicon-16x16.png') }}" sizes="16x16" />
 {%- endmacro %}
+
+
