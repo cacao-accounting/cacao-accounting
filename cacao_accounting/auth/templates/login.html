@@ -1,5 +1,11 @@
-{% extends "base.html" %}
-{% block contenido %}
+<!doctype html>
+{% import "macros.jinja" as macros %}
+<html>
+<head>
+  {{ macros.imports() }}
+</head>
+
+<body>
 <div class="pf-c-background-image">
     <svg xmlns="http://www.w3.org/2000/svg" class="pf-c-background-image__filter" width="0" height="0">
       <filter id="image_overlay">
@@ -45,4 +51,5 @@
         </div>
       </form>
     </div> 
-{% endblock %}
+  </body>
+</html>

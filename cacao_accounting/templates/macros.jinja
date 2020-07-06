@@ -1,0 +1,7 @@
+{# Esta no es una página web, contiene funciones para que puedan ser usadas en otras páginas. #}
+{# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
+
+{% macro imports() -%}
+<link rel="stylesheet" href="{{ url_for('static', filename='js/@patternfly/patternfly/patternfly.css') }}">
+  <script src="{{ url_for('static', filename='cacaoaccounting.js') }}"></script>
+{%- endmacro %}
