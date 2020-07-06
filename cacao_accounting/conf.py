@@ -47,6 +47,7 @@ else:
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
     else:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
+        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
         configuracion["ENV"] = "development"
         configuracion["DEBUG"] = True
         configuracion["SECRET_KEY"] = "dev"
