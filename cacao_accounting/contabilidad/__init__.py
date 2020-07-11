@@ -22,6 +22,7 @@ from flask_login import login_required
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
+
 @contabilidad.route("/contabilidad")
 @contabilidad.route("/conta")
 @contabilidad.route("/accounts")

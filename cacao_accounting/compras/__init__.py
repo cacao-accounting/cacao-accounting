@@ -22,6 +22,7 @@ from flask_login import login_required
 
 compras = Blueprint("compras", __name__, template_folder="templates")
 
+
 @compras.route("/compras")
 @compras.route("/buying")
 @login_required

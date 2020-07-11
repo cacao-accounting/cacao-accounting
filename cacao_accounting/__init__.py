@@ -59,7 +59,6 @@ def create_app(ajustes=None):
         app.register_blueprint(login)
         app.register_blueprint(ventas)
 
-
     @app.cli.command("init-db")
     def crear_db():
         from cacao_accounting.datos import cargar_datos

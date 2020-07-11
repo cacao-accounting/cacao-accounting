@@ -37,6 +37,7 @@ def no_autorizado():
     flash("Favor iniciar sesión para acceder al sistema.")
     return redirect("/login")
 
+
 def proteger_passwd(clave):
     from bcrypt import hashpw, gensalt
     clave = clave
@@ -77,9 +78,8 @@ def inicio_sesion():
             return redirect("/login")
     return render_template("login.html", form=form)
 
+
 @login.route("/logout")
 def cerrar_sesion():
     logout_user()
     return redirect("/login")
-
-    

@@ -22,6 +22,7 @@ from flask_login import login_required
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
 
+
 @bancos.route("/caja")
 @bancos.route("/tesoreria")
 @bancos.route("/bancos")
