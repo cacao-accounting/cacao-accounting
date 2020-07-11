@@ -20,6 +20,7 @@ from flask import Flask
 from cacao_accounting.database import db
 from cacao_accounting.app import cacao_app
 from cacao_accounting.auth import administrador_sesion, login
+from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 
 
@@ -48,6 +49,7 @@ def create_app(ajustes=None):
         app.register_blueprint(login)
         app.register_blueprint(cacao_app)
         app.register_blueprint(contabilidad)
+        app.register_blueprint(bancos)
 
     @app.cli.command("init-db")
     def crear_db():
