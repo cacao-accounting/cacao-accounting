@@ -2,6 +2,10 @@
 
 # Cacao Accounting
 
+![Python package](https://github.com/cacao-accounting/cacao-accounting/workflows/Python%20package/badge.svg?branch=master)
+![Licencia](https://img.shields.io/badge/Licencia-Apache%20V2-green)
+![Licencia](https://img.shields.io/pypi/v/cacao-accounting?color=Blue&label=Version&logo=pypi)
+
 Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
 
 Nota: 
