@@ -62,11 +62,17 @@ def create_app(ajustes=None):
 
     @app.cli.command("init-db")
     def crear_db():
-        from cacao_accounting.datos import cargar_datos, demo_data
+        from cacao_accounting.datos import cargar_datos
         "Crea el esquema de la base de datos."
         db.create_all()
         with app.app_context():
             cargar_datos()
+
+    @app.cli.command("demo-data")
+    def crear_db():
+        from cacao_accounting.datos import demo_data
+        "Carga datos de prueba en la base de datos."
+        with app.app_context():
             demo_data()
 
     @app.cli.command("reset-db")
