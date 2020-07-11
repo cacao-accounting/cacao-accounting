@@ -45,6 +45,7 @@ source venv/bin/activate # Linux
 
 ```bash
 python -m pip install -r requirements.txt
+python setup.py develop
 yarn
 ```
 
@@ -63,7 +64,6 @@ flask init-db
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
 ```bash
-python setup.py develop
 python wsgi.py
 ```
 # Licencia.
