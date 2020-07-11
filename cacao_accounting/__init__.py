@@ -18,6 +18,7 @@
 import click
 from flask import Flask
 from cacao_accounting.database import db
+from cacao_accounting.admin import admin
 from cacao_accounting.app import cacao_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.bancos import bancos
@@ -56,6 +57,7 @@ def create_app(ajustes=None):
         app.register_blueprint(compras)
         app.register_blueprint(inventario)
         app.register_blueprint(ventas)
+        app.register_blueprint(admin)
 
     @app.cli.command("init-db")
     def crear_db():
