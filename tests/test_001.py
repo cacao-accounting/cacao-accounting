@@ -43,4 +43,4 @@ class Test_basicos():
         db.session.add(test_usuario)
         db.session.commit()
         from cacao_accounting.auth import validar_acceso
-        assert "utest" == validar_acceso("utest", "testpasswd123+")
+        assert True == validar_acceso("utest", "testpasswd123+")
