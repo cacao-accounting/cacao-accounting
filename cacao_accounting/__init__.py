@@ -24,6 +24,7 @@ from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
+from cacao_accounting.ventas import ventas
 
 
 __name__ = "Cacao Accounting"
@@ -54,6 +55,7 @@ def create_app(ajustes=None):
         app.register_blueprint(bancos)
         app.register_blueprint(compras)
         app.register_blueprint(inventario)
+        app.register_blueprint(ventas)
 
     @app.cli.command("init-db")
     def crear_db():
