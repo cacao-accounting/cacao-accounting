@@ -1,7 +1,6 @@
 # Software the terceros.
 
-Cacao Accounting es posible gracias al uso de estas librerias de terceros las
-cuales han sido publicadas bajo una licencias que permite su uso libremente.
+Cacao Accounting es posible gracias al uso de estas librerias de terceros.
 
 Este listado incluye aquellas dependencias de primer nivel, es decir aquellas
 especificadas directamente como un dependencia para el proyecto.
