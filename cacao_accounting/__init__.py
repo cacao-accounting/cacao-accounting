@@ -17,12 +17,12 @@
 
 import click
 from flask import Flask
-from cacao_accounting.database import db
 from cacao_accounting.admin import admin
 from cacao_accounting.app import cacao_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
+from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
 from cacao_accounting.ventas import ventas
@@ -50,14 +50,15 @@ def create_app(ajustes=None):
     db.init_app(app)
     administrador_sesion.init_app(app)
     with app.app_context():
-        app.register_blueprint(login)
+        app.register_blueprint(admin)
+        app.register_blueprint(bancos)
         app.register_blueprint(cacao_app)
         app.register_blueprint(contabilidad)
-        app.register_blueprint(bancos)
         app.register_blueprint(compras)
         app.register_blueprint(inventario)
+        app.register_blueprint(login)
         app.register_blueprint(ventas)
-        app.register_blueprint(admin)
+
 
     @app.cli.command("init-db")
     def crear_db():
