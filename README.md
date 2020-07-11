@@ -48,7 +48,7 @@ python -m pip install -r requirements.txt
 yarn
 ```
 
-Yarn es necesario para no tener incluir librerias de JavaScritp de terceros en el repositorio principal del proyecto.
+Yarn es necesario para no tener que incluir librerias JavaScritp de terceros en el repositorio principal del proyecto.
 
 #### Esquema de la base de datos
 
