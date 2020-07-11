@@ -20,6 +20,7 @@ from flask import Flask
 from cacao_accounting.database import db
 from cacao_accounting.app import cacao_app
 from cacao_accounting.auth import administrador_sesion, login
+from cacao_accounting.contabilidad import contabilidad
 
 
 __name__ = "Cacao Accounting"
@@ -27,6 +28,7 @@ __license__ = "Apache Software License "
 __version__ = "0.0.1"
 
 DEVELOPMENT = True
+
 
 def create_app(ajustes=None):
     """Aplication factory"""
@@ -40,13 +42,13 @@ def create_app(ajustes=None):
         for i in ajustes:
             app.config[i] = ajustes[i]
 
-    
     db.init_app(app)
     administrador_sesion.init_app(app)
     with app.app_context():
         app.register_blueprint(login)
         app.register_blueprint(cacao_app)
-    
+        app.register_blueprint(contabilidad)
+
     @app.cli.command("init-db")
     def crear_db():
         from cacao_accounting.datos import cargar_datos, demo_data
