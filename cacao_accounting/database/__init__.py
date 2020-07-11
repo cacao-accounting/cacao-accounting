@@ -20,6 +20,24 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+
+class Moneda(db.Model):
+    id = db.Column(db.String(5), primary_key=True, nullable=False)
+    nombre = db.Column(db.String(50), nullable=False)
+    plural = db.Column(db.String(50), nullable=False)
+    pais = db.Column(db.String(50), nullable=False)
+
+
+class TasaDeCambio(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    base = db.Column(db.String(5), db.ForeignKey('moneda.id'), nullable=False)
+    conversion = db.Column(
+        db.String(5), db.ForeignKey('moneda.id'), nullable=False
+        )
+    tasa = db.Column(db.Numeric(), nullable=False)
+    fecha = db.Column(db.Date(), nullable=False)
+
+
 class Usuario(UserMixin, db.Model):
     """
     Una entidad con acceso al sistema.
@@ -37,11 +55,25 @@ class Usuario(UserMixin, db.Model):
 class Entidad(db.Model):
     """
     Una entidad es una unidad de negocios de la que se lleva registros
-    en el sistema. 
+    en el sistema.
     """
+    # Información legal de la entidad
     id = db.Column(db.String(5), primary_key=True)
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
-    nit = db.Column(db.String(50), unique=True, nullable=False)
+    id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
+    # Individual, Sociedad, Sin Fines de Lucro
+    tipo_entidad = db.Column(db.String(50))
+    # Información de contacto
     corre_electronico = db.Column(db.String(50))
-    nombre_comercial = db.Column(db.String(50))
+    web = db.Column(db.String(50))
+    telefono1 = db.Column(db.String(50))
+    telefono1 = db.Column(db.String(50))
+    fax = db.Column(db.String(50))
+    pais = db.Column(db.String(50))
+    departamento = db.Column(db.String(50))
+    ciudad = db.Column(db.String(50))
+    direccion1 = db.Column(db.String(100))
+    direccion2 = db.Column(db.String(100))
+    calle = db.Column(db.String(100))
+    casa = db.Column(db.String(100))
