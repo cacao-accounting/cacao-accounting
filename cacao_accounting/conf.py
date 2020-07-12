@@ -53,5 +53,5 @@ else:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
         configuracion["ENV"] = "development"
-        configuracion["DEBUG"] = True
         configuracion["SECRET_KEY"] = "dev"
+        configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
