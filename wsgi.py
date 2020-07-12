@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting import create_app, DEVELOPMENT
+from cacao_accounting import create_app
 from cacao_accounting.conf import configuracion
 
 app = create_app(configuracion)
