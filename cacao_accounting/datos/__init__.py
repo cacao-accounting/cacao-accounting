@@ -15,6 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Modulo para alimentar la base de datos con información por defecto.
+"""
+
 from cacao_accounting import create_app
 from cacao_accounting.conf import configuracion
 

@@ -15,6 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Utilidad para cargar la configuración de la aplicacion.
+"""
+
 from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
 from os import environ

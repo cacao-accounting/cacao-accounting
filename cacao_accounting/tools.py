@@ -14,3 +14,7 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+"""
+Definición de herramientas varias.
+"""

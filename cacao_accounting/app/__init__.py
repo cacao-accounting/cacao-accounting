@@ -15,6 +15,11 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Página principal de la aplicación.
+"""
+
+
 from flask import (
     Blueprint, render_template
     )

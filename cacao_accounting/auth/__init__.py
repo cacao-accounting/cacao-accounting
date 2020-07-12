@@ -15,6 +15,11 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Inición de sesión de usuarios.
+"""
+
+
 from cacao_accounting.database import Usuario
 from flask import (
     current_app, Blueprint, redirect, render_template, flash

@@ -15,6 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Modulo de Caja y Bancos.
+"""
+
 from flask import (
     Blueprint, render_template
     )

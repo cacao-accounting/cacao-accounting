@@ -15,6 +15,13 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Interface principal de la aplicacion.
+
+Aquí creamos la función que define la "app" que se ejecuta en el servidor
+WSGI.
+"""
+
 import click
 from flask import Flask
 from cacao_accounting.admin import admin
@@ -28,15 +35,20 @@ from cacao_accounting.inventario import inventario
 from cacao_accounting.ventas import ventas
 
 
-__name__ = "Cacao Accounting"
-__license__ = "Apache Software License "
-__version__ = "0.0.1"
+NOMBRE = "Cacao Accounting"
+LICENSE = "Apache Software License "
+VERSION = "0.0.1"
 
 DEVELOPMENT = True
 
 
 def create_app(ajustes=None):
-    """Aplication factory"""
+    """
+    Aplication factory.
+
+    Referencias:
+     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
+    """
     app = Flask(
         __name__,
         template_folder="cacao_accounting/templates",
@@ -61,22 +73,23 @@ def create_app(ajustes=None):
 
     @app.cli.command("init-db")
     def crear_db():
+        """Crea el esquema de la base de datos."""
         from cacao_accounting.datos import cargar_datos
-        "Crea el esquema de la base de datos."
         db.create_all()
         with app.app_context():
             cargar_datos()
 
     @app.cli.command("demo-data")
-    def crear_db():
+    def demo_data():
+        """Carga datos de prueba en la base de datos."""
         from cacao_accounting.datos import demo_data
-        "Carga datos de prueba en la base de datos."
+
         with app.app_context():
             demo_data()
 
     @app.cli.command("reset-db")
     def eliminar_db():
-        "Elimina la base de datos, solo disponible para desarrollo."
+        """Elimina la base de datos, solo disponible para desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
 

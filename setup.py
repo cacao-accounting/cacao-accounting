@@ -31,7 +31,7 @@ else:
 
 setup(
     name="cacao_accounting",
-    version=cacao_accounting.__version__ + timestamp,
+    version=cacao_accounting.VERSION + timestamp,
     author="William José Moreno Reyes",
     author_email="williamjmorenor@gmail.com",
     description="Software contable. Aun es etapa de desarrollo.",

@@ -15,6 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Modulo de Inventarios.
+"""
+
 from flask import (
     Blueprint, render_template
     )
