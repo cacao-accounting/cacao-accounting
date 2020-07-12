@@ -22,7 +22,7 @@ Inición de sesión de usuarios.
 
 from cacao_accounting.database import Usuario
 from flask import (
-    current_app, Blueprint, redirect, render_template, flash
+    Blueprint, redirect, render_template, flash
     )
 from flask_login import LoginManager, logout_user, login_user
 
