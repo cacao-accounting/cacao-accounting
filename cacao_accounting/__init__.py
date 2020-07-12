@@ -22,7 +22,6 @@ Aquí creamos la función que define la "app" que se ejecuta en el servidor
 WSGI.
 """
 
-import click
 from flask import Flask
 from cacao_accounting.admin import admin
 from cacao_accounting.app import cacao_app
