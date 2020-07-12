@@ -52,7 +52,6 @@ def proteger_passwd(clave):
 
 def validar_acceso(usuario, clave):
     from bcrypt import checkpw
-    from cacao_accounting.database import Usuario
     acceso = clave
     registro = Usuario.query.filter_by(id=usuario).first()
     if registro is not None:
