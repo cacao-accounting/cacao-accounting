@@ -31,9 +31,9 @@ administrador_sesion = LoginManager()
 
 
 @administrador_sesion.user_loader
-def cargar_sesion(id):
-    if id is not None:
-        return Usuario.query.get(id)
+def cargar_sesion(identidad):
+    if identidad is not None:
+        return Usuario.query.get(identidad)
     return None
 
 
