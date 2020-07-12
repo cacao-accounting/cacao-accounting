@@ -1,0 +1,9 @@
+[project]
+name = "cacao_accounting"
+version = "0.0.1"
+description = "Software contable. Aun es etapa de desarrollo."
+
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = ["setuptools", "wheel"]  # PEP 508 specifications.
+build-backend = "setuptools.build_meta"

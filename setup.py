@@ -17,21 +17,17 @@
 
 from setuptools import setup
 from os import path
-import cacao_accounting
+from datetime import datetime
 
 aqui = path.abspath(path.dirname(__file__))
 with open(path.join(aqui, 'README.md'), encoding='utf-8') as f:
     descripcion = f.read()
 
-if cacao_accounting.DEVELOPMENT:
-    from datetime import datetime
-    timestamp = ".dev" + datetime.today().strftime('%Y%m%d')
-else:
-    timestamp = ""
+timestamp = ".dev" + datetime.today().strftime('%Y%m%d')
 
 setup(
     name="cacao_accounting",
-    version=cacao_accounting.VERSION + timestamp,
+    version="0.0.1" + timestamp,
     author="William José Moreno Reyes",
     author_email="williamjmorenor@gmail.com",
     description="Software contable. Aun es etapa de desarrollo.",
@@ -51,4 +47,33 @@ setup(
         "Topic :: Office/Business :: Financial",
         "Topic :: Office/Business :: Financial :: Accounting"
     ],
+    install_requires=[
+        "alembic",
+        "appdirs",
+        "bcrypt",
+        "configobj",
+        "flask",
+        "flask-login",
+        "flask-sqlalchemy",
+        "flask-wtf",
+        "sqlalchemy",
+        "wtforms"
+    ],
+    extras_require={
+        "dev": [
+            "twine"
+        ],
+        "linux": [
+            "gunicorn"
+        ],
+        "mysql": [
+            "pymysql"
+        ],
+        "postgresql": [
+            "pg8000"
+        ],
+        "test": [
+            "pytest"
+        ],
+    }
 )

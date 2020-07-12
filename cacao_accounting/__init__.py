@@ -34,10 +34,6 @@ from cacao_accounting.inventario import inventario
 from cacao_accounting.ventas import ventas
 
 
-NOMBRE = "Cacao Accounting"
-LICENSE = "Apache Software License "
-VERSION = "0.0.1"
-
 DEVELOPMENT = True
 
 

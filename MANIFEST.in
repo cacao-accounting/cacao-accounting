@@ -5,6 +5,7 @@ include package.json
 include yarn.lock
 include make.bat
 include Makefile
+include pyproject.toml
 recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.py *.txt *.csv *.json
 recursive-include docs *.py *.rst
 recursive-exclude * __pycache__
