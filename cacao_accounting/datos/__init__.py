@@ -19,9 +19,6 @@
 Modulo para alimentar la base de datos con información por defecto.
 """
 
-from cacao_accounting import create_app
-from cacao_accounting.conf import configuracion
-
 
 def _demo_usuarios():
     from cacao_accounting.database import Usuario, db
