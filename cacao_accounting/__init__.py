@@ -78,7 +78,6 @@ def create_app(ajustes=None):
     def demo_data():
         """Carga datos de prueba en la base de datos."""
         from cacao_accounting.datos import demo_data
-
         with app.app_context():
             demo_data()
 
