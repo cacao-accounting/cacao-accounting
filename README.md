@@ -75,6 +75,15 @@ python wsgi.py
 
 El usuario de pruebas es cacao con contraseña cacao.
 
+#### Empaquetar para distribución
+
+Para crear el tarball y wheel del proyecto ejecutar:
+
+```bash
+python -m pep517.build .
+``
+
+
 # Licencia.
 
 Derechos de autor 2020 William José Moreno Reyes

@@ -28,11 +28,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         python setup.py develop
-        pip install flake8 pytest twine wheel
+        pip install flake8 pytest twine wheel pep517
     - name: Proyecto distribuible
       run: |
-        python setup.py bdist_wheel
-        python setup.py sdist
+        python -m pep517.build .
         twine check dist/* 
     - name: Lint with flake8
       run: |

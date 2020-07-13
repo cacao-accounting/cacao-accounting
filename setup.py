@@ -61,6 +61,7 @@ setup(
     ],
     extras_require={
         "dev": [
+            "pep517",
             "twine"
         ],
         "linux": [
