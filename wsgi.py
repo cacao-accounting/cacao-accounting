@@ -15,10 +15,13 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting import create_app
+from cacao_accounting import create_app, DEVELOPMENT
 from cacao_accounting.conf import configuracion
 
 app = create_app(configuracion)
 
 if __name__ == "__main__":
-    app.run()
+    if DEVELOPMENT:
+        app.config["EXPLAIN_TEMPLATE_LOADING"] = True
+        app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.run(debug=True)
