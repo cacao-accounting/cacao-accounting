@@ -31,6 +31,7 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
+from cacao_accounting.tools import  archivos, plantillas
 from cacao_accounting.ventas import ventas
 
 
@@ -46,8 +47,8 @@ def create_app(ajustes=None):
     """
     app = Flask(
         __name__,
-        # template_folder="cacao_accounting/templates",
-        # static_folder="cacao_accounting/static",
+        template_folder=plantillas,
+        static_folder=archivos,
         instance_relative_config=False,
         )
     if ajustes:

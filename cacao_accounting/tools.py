@@ -18,3 +18,9 @@
 """
 Definición de herramientas varias.
 """
+
+from os import path
+
+home = path.abspath(path.dirname(__file__))
+plantillas = path.join(home, "templates")
+archivos = path.join(home, "static")
