@@ -46,8 +46,8 @@ def create_app(ajustes=None):
     """
     app = Flask(
         __name__,
-        template_folder="cacao_accounting/templates",
-        static_folder="cacao_accounting/static",
+        # template_folder="cacao_accounting/templates",
+        # static_folder="cacao_accounting/static",
         instance_relative_config=False,
         )
     if ajustes:
