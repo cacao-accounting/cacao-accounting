@@ -23,7 +23,7 @@ aqui = path.abspath(path.dirname(__file__))
 with open(path.join(aqui, 'README.md'), encoding='utf-8') as f:
     descripcion = f.read()
 
-timestamp = ".dev" + datetime.today().strftime('%Y%m%d')
+timestamp = ".dev" + datetime.today().strftime('%Y%m%d%H%M')
 
 setup(
     name="cacao_accounting",
