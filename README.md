@@ -62,6 +62,7 @@ Para crear una base de datos sqlite de pruebas ejecutar:
 
 ```bash
 flask init-db
+flask demo-data
 ```
 
 #### Ejecutar servidor de desarrollo:
@@ -71,6 +72,9 @@ Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido
 ```bash
 python wsgi.py
 ```
+
+El usuario de pruebas es cacao con contraseña cacao.
+
 # Licencia.
 
 Derechos de autor 2020 William José Moreno Reyes
