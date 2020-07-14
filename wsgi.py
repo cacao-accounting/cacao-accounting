@@ -15,13 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
+from waitress import serve
 from cacao_accounting import create_app, DEVELOPMENT
 from cacao_accounting.conf import configuracion
 
 app = create_app(configuracion)
+if DEVELOPMENT:
+    app.config["EXPLAIN_TEMPLATE_LOADING"] = True
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["DEBUG"] = True
 
 if __name__ == "__main__":
-    if DEVELOPMENT:
-        app.config["EXPLAIN_TEMPLATE_LOADING"] = True
-        app.config["TEMPLATES_AUTO_RELOAD"] = True
-    app.run(debug=True)
+    serve(app, host='0.0.0.0', port=8080)

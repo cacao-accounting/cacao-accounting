@@ -7,8 +7,8 @@ flask
 flask-login
 flask-sqlalchemy
 flask-wtf
-gunicorn
 pg8000
 PyMySQL
 sqlalchemy
+waitress
 wtforms
