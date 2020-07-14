@@ -31,7 +31,7 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
-from cacao_accounting.tools import  archivos, plantillas
+from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
 
 
