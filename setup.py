@@ -64,8 +64,8 @@ setup(
             "pep517",
             "twine"
         ],
-        "linux": [
-            "gunicorn"
+        "server": [
+            "waitress"
         ],
         "mysql": [
             "pymysql"
