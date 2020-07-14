@@ -61,6 +61,10 @@ def validar_acceso(usuario, clave):
     return clave_validada
 
 
+def permisos_usuario(usuario):
+    pass
+
+
 @login.route("/")
 @login.route("/home")
 @login.route("/index")
