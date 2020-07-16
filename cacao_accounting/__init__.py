@@ -45,12 +45,7 @@ def create_app(ajustes=None):
     Referencias:
      - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
     """
-    app = Flask(
-        __name__,
-        template_folder=plantillas,
-        static_folder=archivos,
-        instance_relative_config=False,
-    )
+    app = Flask(__name__, template_folder=plantillas, static_folder=archivos, instance_relative_config=False,)
     if ajustes:
         for i in ajustes:
             app.config[i] = ajustes[i]
