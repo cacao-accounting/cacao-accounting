@@ -47,10 +47,12 @@ else:
     configuracion = {}
     if HEROKU or "CACAO_ACCOUNTING" in environ:
         configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
+        configuracion["DATABASE"] = environ["DATABASE"]
         configuracion["ENV"] = environ["ENV"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
     else:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
+        configuracion["DATABASE"] = "sqlite"
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
         configuracion["ENV"] = "development"
         configuracion["SECRET_KEY"] = "dev"
