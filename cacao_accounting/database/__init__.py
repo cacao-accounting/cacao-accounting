@@ -38,12 +38,12 @@ from cacao_accounting.conf import configuracion
 # Postgresql trabajo por defecto con el esquema "public", lo definiminos explisitamente
 # unicamente si la base de datos es "postgresl"
 
-if configuracion["DATABASE"] == "postgresql":
+if "DATABASE" in configuracion and configuracion["DATABASE"] == "postgresql":
     ARGUMENTOS = {"schema": "public"}
     ESQUEMA = "public."
 else:
-    ARGUMENTOS = None
-    ESQUEMA = None
+    ARGUMENTOS = {}
+    ESQUEMA = ""
 db = SQLAlchemy()
 
 
