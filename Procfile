@@ -1,3 +1,4 @@
+init: flask reset-db && flask init-db && flask demo-data
 web: waitress-serve \
 --listen "*:$PORT" \
 --trusted-proxy '*' \
