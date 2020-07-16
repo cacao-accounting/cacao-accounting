@@ -50,7 +50,7 @@ def create_app(ajustes=None):
         template_folder=plantillas,
         static_folder=archivos,
         instance_relative_config=False,
-        )
+    )
     if ajustes:
         for i in ajustes:
             app.config[i] = ajustes[i]
@@ -71,6 +71,7 @@ def create_app(ajustes=None):
     def crear_db():
         """Crea el esquema de la base de datos."""
         from cacao_accounting.datos import cargar_datos
+
         db.create_all()
         with app.app_context():
             cargar_datos()
@@ -79,6 +80,7 @@ def create_app(ajustes=None):
     def demo_data():
         """Carga datos de prueba en la base de datos."""
         from cacao_accounting.datos import demo_data
+
         with app.app_context():
             demo_data()
 

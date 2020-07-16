@@ -19,9 +19,7 @@
 Modulo de Inventarios.
 """
 
-from flask import (
-    Blueprint, render_template
-    )
+from flask import Blueprint, render_template
 from flask_login import login_required
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")

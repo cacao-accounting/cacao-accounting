@@ -48,7 +48,7 @@ db = SQLAlchemy()
 
 
 class Moneda(db.Model):
-    __table_args__ = (ARGUMENTOS)
+    __table_args__ = ARGUMENTOS
     id = db.Column(db.String(5), primary_key=True, nullable=False)
     nombre = db.Column(db.String(50), nullable=False)
     plural = db.Column(db.String(50), nullable=False)
@@ -56,10 +56,12 @@ class Moneda(db.Model):
 
 
 class TasaDeCambio(db.Model):
-    __table_args__ = (ARGUMENTOS)
+    __table_args__ = ARGUMENTOS
     id = db.Column(db.Integer, primary_key=True)
     base = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
-    conversion = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
+    conversion = db.Column(
+        db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False
+    )
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
 
@@ -68,7 +70,8 @@ class Usuario(UserMixin, db.Model):
     """
     Una entidad con acceso al sistema.
     """
-    __table_args__ = (ARGUMENTOS)
+
+    __table_args__ = ARGUMENTOS
     # Información Básica
     id = db.Column(db.String(15), primary_key=True, nullable=False)
     p_nombre = db.Column(db.String(80))
@@ -100,7 +103,8 @@ class Perfiles(db.Model):
     """
     Define los roles de acceso predeterminados.
     """
-    __table_args__ = (ARGUMENTOS)
+
+    __table_args__ = ARGUMENTOS
     id = db.Column(db.String(15), primary_key=True, unique=True)
     nombre = db.Column(db.String(50))
     detalle = db.Column(db.String(250))
@@ -111,7 +115,8 @@ class Permisos(db.Model):
     """
     Define los permisos que otorga cada rol.
     """
-    __table_args__ = (ARGUMENTOS)
+
+    __table_args__ = ARGUMENTOS
     id = db.Column(db.Integer(), primary_key=True)
     perfil = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "perfiles.id"))
     documento = db.Column(db.String(50))
@@ -127,7 +132,8 @@ class Entidad(db.Model):
     Una entidad es una unidad de negocios de la que se lleva registros
     en el sistema.
     """
-    __table_args__ = (ARGUMENTOS)
+
+    __table_args__ = ARGUMENTOS
     # Información legal de la entidad
     id = db.Column(db.String(5), primary_key=True)
     razon_social = db.Column(db.String(100), unique=True, nullable=False)

@@ -21,9 +21,7 @@ Inición de sesión de usuarios.
 
 
 from cacao_accounting.database import Usuario
-from flask import (
-    Blueprint, redirect, render_template, flash
-    )
+from flask import Blueprint, redirect, render_template, flash
 from flask_login import LoginManager, logout_user, login_user
 
 login = Blueprint("login", __name__, template_folder="templates")
@@ -45,6 +43,7 @@ def no_autorizado():
 
 def proteger_passwd(clave):
     from bcrypt import hashpw, gensalt
+
     clave = clave
     clave_encriptada = hashpw(clave.encode(), gensalt())
     return clave_encriptada
@@ -52,6 +51,7 @@ def proteger_passwd(clave):
 
 def validar_acceso(usuario, clave):
     from bcrypt import checkpw
+
     acceso = clave
     registro = Usuario.query.filter_by(id=usuario).first()
     if registro is not None:
@@ -72,10 +72,11 @@ def home():
     return redirect("/login")
 
 
-@login.route("/login", methods=['GET', 'POST'])
+@login.route("/login", methods=["GET", "POST"])
 def inicio_sesion():
     from cacao_accounting.auth.forms import LoginForm
     from cacao_accounting.auth import validar_acceso
+
     form = LoginForm()
     if form.validate_on_submit():
         if validar_acceso(form.usuario.data, form.acceso.data):

@@ -19,9 +19,7 @@
 Modulo administrativo.
 """
 
-from flask import (
-    Blueprint, render_template
-    )
+from flask import Blueprint, render_template
 from flask_login import login_required
 
 admin = Blueprint("admin", __name__, template_folder="templates")
