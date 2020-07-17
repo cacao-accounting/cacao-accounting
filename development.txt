@@ -1,0 +1,8 @@
+# Crear tarball y wheel
+pep517
+twine
+
+# Control de calidad
+black
+flake8
+pytest

@@ -58,23 +58,5 @@ setup(
         "flask-wtf",
         "sqlalchemy",
         "wtforms"
-    ],
-    extras_require={
-        "dev": [
-            "pep517",
-            "twine"
-        ],
-        "server": [
-            "waitress"
-        ],
-        "mysql": [
-            "pymysql"
-        ],
-        "postgresql": [
-            "pg8000"
-        ],
-        "test": [
-            "pytest"
-        ],
-    }
+    ]
 )
