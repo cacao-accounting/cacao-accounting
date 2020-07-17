@@ -18,9 +18,9 @@ de que pueda ser útil para algún fin especifico.
 
 ## Certifica el origen de tus aportes.
 
-Para incorporar tus aportes al proyecto requerimos que certifiques tus aportes son de propiedad o que tienes permiso de terceros para incorporar el aporte al proyecto, siguiendo el [certificado de origen del desarrollador](https://developercertificate.org/).
+Para incorporar tus aportes al proyecto requerimos que certifiques el o los aportes son de propiedad o que tienes permiso de terceros para incorporar el aporte al proyecto, siguiendo el [certificado de origen del desarrollador](https://developercertificate.org/).
 
-Realmete solo debes hacer:
+Recomendamos ejecutar:
 
 ```bash
 git commit -s
@@ -116,8 +116,6 @@ black cacao_accounting
 flake8 cacao_accounting
 pytest
 ```
-
-#### 
 
 #### Empaquetar para distribución:
 
