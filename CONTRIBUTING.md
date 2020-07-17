@@ -84,6 +84,7 @@ source venv/bin/activate # Linux
 
 ```bash
 python -m pip install -r requirements.txt
+python -m pip install -r development.txt
 python setup.py develop
 yarn
 ```
