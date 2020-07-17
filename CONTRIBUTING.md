@@ -30,6 +30,22 @@ Y se agregara una firma apropiada al commit.
 
 ## Colaborando con el proyecto
 
+### Formas de colaborar.
+
+Pueden colaborar de distintas formas:
+
+* Como desarrollador.
+* Escribiendo documentación.
+* Aportando ideas de nuevas caracteristicas.
+* Reportando errores.
+* Traduciendo.
+* Brindando guía y soporte a otros usuarios.
+* Compartiendo el proyecto con otros.
+
+Al formar de la comunidad del proyecto debes seguir el [código de conducta](https://github.com/cacao-accounting/cacao-accounting/blob/master/CODE_OF_CONDUCT.md) establecido.
+
+### Colaborando con el desarrollo del proyecto:
+
 El desarrollo es multiplataforma, puedes utilizar tanto Windows, Linux o Mac
 para aportar el proyecto, para colaborar con el proyecto necesitas:
 
@@ -115,6 +131,40 @@ Recomendamos ejecutar antes de enviar tus cambios:
 black cacao_accounting
 flake8 cacao_accounting
 pytest
+```
+
+#### Escribe un buen mensaje en tu commit
+
+Agracedemos te tomes tu tiempo para escribir un buen mensaje en tus commit, recomendamos seguir este ejemplo de [Chris Beams](https://chris.beams.io/posts/git-commit/):
+
+```
+Summarize changes in around 50 characters or less
+
+More detailed explanatory text, if necessary. Wrap it to about 72
+characters or so. In some contexts, the first line is treated as the
+subject of the commit and the rest of the text as the body. The
+blank line separating the summary from the body is critical (unless
+you omit the body entirely); various tools like `log`, `shortlog`
+and `rebase` can get confused if you run the two together.
+
+Explain the problem that this commit is solving. Focus on why you
+are making this change as opposed to how (the code explains that).
+Are there side effects or other unintuitive consequences of this
+change? Here's the place to explain them.
+
+Further paragraphs come after blank lines.
+
+ - Bullet points are okay, too
+
+ - Typically a hyphen or asterisk is used for the bullet, preceded
+   by a single space, with blank lines in between, but conventions
+   vary here
+
+If you use an issue tracker, put references to them at the bottom,
+like this:
+
+Resolves: #123
+See also: #456, #789
 ```
 
 #### Empaquetar para distribución:
