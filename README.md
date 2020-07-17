@@ -16,75 +16,9 @@ Nota:
 
 ## Participar en el Proyecto:
 
-Todos los aportes son bienvenidos.
+Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://github.com/cacao-accounting/cacao-accounting/blob/master/CONTRIBUTING.md) para mas detalles.
 
-### Requisitos para el desarrollo:
-
-  * [GIT](https://git-scm.com/)
-  * [Nodejs](https://nodejs.org/en/)
-  * [Yarn](https://yarnpkg.com/lang/en/)
-  * [Python](https://www.python.org/downloads/)
-
-El desarrollo es multiplataforma, puedes utilizar tanto Windows, Linux o Mac
-para aportar el proyecto.
-
-#### Obteniendo el codigo fuente:
-
-Descarga el codigo fuente con:
-
-```bash
-git clone https://github.com/cacao-accounting/cacao-accounting-mockup.git
-```
-
-Para iniciar el proyecto es necesario seguir estos pasos:
-
-#### Crear un entorno virtual de python.
-
-```bash
-python -m venv venv
-.\venv\Scripts\activate.bat # windows
-source venv/bin/activate # Linux
-```
-
-#### Instalar las dependencias:
-
-```bash
-python -m pip install -r requirements.txt
-python setup.py develop
-yarn
-```
-
-Yarn es necesario para no tener que incluir librerias JavaScritp de terceros en el repositorio principal del proyecto.
-
-#### Esquema de la base de datos
-
-Para crear una base de datos sqlite de pruebas ejecutar:
-
-```bash
-flask init-db
-flask demo-data
-```
-
-#### Ejecutar servidor de desarrollo:
-
-Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
-
-```bash
-python wsgi.py
-```
-
-El usuario de pruebas es cacao con contraseña cacao.
-
-#### Empaquetar para distribución
-
-Para crear el tarball y wheel del proyecto ejecutar:
-
-```bash
-python -m pep517.build .
-```
-
-
-# Licencia.
+## Licencia.
 
 Derechos de autor 2020 William José Moreno Reyes
 
