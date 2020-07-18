@@ -4,7 +4,6 @@ twine
 wheel
 
 # Control de calidad
-black
 flake8
 flask-testing
 pytest
