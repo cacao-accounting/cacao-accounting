@@ -9,3 +9,7 @@ flake8
 flask-testing
 pytest
 requests
+
+# Covertura de pruebas
+coverage
+pytest-cov
