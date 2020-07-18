@@ -6,3 +6,7 @@ twine
 black
 flake8
 pytest
+
+# Covertura de pruebas
+coverage
+pytest-cov
