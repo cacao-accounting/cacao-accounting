@@ -33,7 +33,7 @@ de negocios de licenciamiento, si no con servicios conexos como implementación,
 
 ## Participar en el Proyecto:
 
-Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://github.com/cacao-accounting/cacao-accounting/blob/master/CONTRIBUTING.md) para mas detalles.
+Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://github.com/cacao-accounting/cacao-accounting/blob/development/CONTRIBUTING.md) para mas detalles.
 
 ## Licencia.
 
