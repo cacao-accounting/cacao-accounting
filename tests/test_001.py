@@ -15,19 +15,20 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting import create_app
+from cacao_accounting import create_app as create
 from cacao_accounting.conf import configuracion
 
-app=create_app(configuracion)
+app = create(configuracion)
 # Ver: https://flask-sqlalchemy.palletsprojects.com/en/2.x/contexts/
 app.app_context().push()
 
-class Test_basicos():
 
+class Test_basicos:
     def test_dbschema(self):
         """Validamos que el esquema de la base de datos es valida"""
 
         from cacao_accounting.database import db, Usuario
+
         db.drop_all()
         db.create_all()
 
@@ -35,12 +36,11 @@ class Test_basicos():
         """Creamos un usuario y validamos su login"""
         from cacao_accounting.database import Usuario, db
         from cacao_accounting.auth import proteger_passwd
+
         acceso = "testpasswd123+"
-        test_usuario = Usuario(id="utest",
-        correo_e = "usuario@dominio.com",
-        clave_acceso=proteger_passwd(acceso)
-        )
+        test_usuario = Usuario(id="utest", correo_e="usuario@dominio.com", clave_acceso=proteger_passwd(acceso))
         db.session.add(test_usuario)
         db.session.commit()
         from cacao_accounting.auth import validar_acceso
-        assert True == validar_acceso("utest", "testpasswd123+")
+
+        assert validar_acceso("utest", "testpasswd123+") is True

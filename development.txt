@@ -1,8 +1,11 @@
 # Crear tarball y wheel
 pep517
 twine
+wheel
 
 # Control de calidad
 black
 flake8
+flask-testing
 pytest
+requests
