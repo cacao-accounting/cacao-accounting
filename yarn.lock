@@ -2,7 +2,7 @@
 # yarn lockfile v1
 
 
-"@patternfly/patternfly@^2.50.0":
-  version "2.71.7"
-  resolved "https://registry.yarnpkg.com/@patternfly/patternfly/-/patternfly-2.71.7.tgz#0816479c4a34728d0f9f804b74398d2d39c2112d"
-  integrity sha512-JjgBJcPOiZhEyixc6mY781eMmVL+qm5gs/h7IipVfps3IoadEZVlvOjffBCfqOVWug0DJbv6APqrZqOQmzISMA==
+"@patternfly/patternfly@^4.23.3":
+  version "4.23.3"
+  resolved "https://registry.yarnpkg.com/@patternfly/patternfly/-/patternfly-4.23.3.tgz#ecc60fe2a1c1315951dc39bf7d52ced9c1c74079"
+  integrity sha512-q8C98ihcRYBY+FB+KY3bQ9y1Pn/NjBff4hwKsxatrs/MSO/++CuEncg4q7WHjIq2zadA4/7W+Vg3CXuiOP0geg==
