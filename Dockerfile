@@ -12,7 +12,7 @@ RUN apk add --virtual --update --no-cache musl-dev gcc libffi-dev \
 ADD . /app
 WORKDIR /app
 RUN apk add --virtual --update --no-cache yarn \
-    && python setup.py install \
+    && python setup.py install && rm -rf dist \
     # We need yarn to include third party javascritp
     && yarn && yarn cache clean --all \
     # Make the final image smaller
