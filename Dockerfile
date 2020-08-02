@@ -18,4 +18,4 @@ RUN apk add --virtual --update --no-cache yarn \
     # Make the final image smaller
     && apk del --no-network yarn
 
-CMD [ "python", "-m cacao_accounting"]
+ENTRYPOINT [ "python", "/app/wsgi.py"]
