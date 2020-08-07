@@ -7,11 +7,4 @@ wheel
 flake8
 flask-testing
 pytest
-<<<<<<< HEAD
 requests
-=======
-
-# Covertura de pruebas
-coverage
-pytest-cov
->>>>>>> 8e41644... Configura covertura de codigo
