@@ -16,7 +16,8 @@
 # - William José Moreno Reyes
 
 from waitress import serve
-from cacao_accounting import create_app, DEVELOPMENT
+from cacao_accounting import create_app
+from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.conf import configuracion
 
 app = create_app(configuracion)
@@ -25,5 +26,11 @@ if DEVELOPMENT:
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["DEBUG"] = True
 
+
+def run():
+    """Ejecuta la aplicacion con Waitress como servidor WSGI"""
+    serve(app, host="0.0.0.0", port=8080)
+
+
 if __name__ == "__main__":
-    serve(app, host='0.0.0.0', port=8080)
+    run()

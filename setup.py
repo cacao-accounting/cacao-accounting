@@ -20,10 +20,10 @@ from os import path
 from datetime import datetime
 
 aqui = path.abspath(path.dirname(__file__))
-with open(path.join(aqui, 'README.md'), encoding='utf-8') as f:
+with open(path.join(aqui, "README.md"), encoding="utf-8") as f:
     descripcion = f.read()
 
-timestamp = ".dev" + datetime.today().strftime('%Y%m%d%H%M')
+timestamp = ".dev" + datetime.today().strftime("%Y%m%d%H%M")
 
 setup(
     name="cacao_accounting",
@@ -32,7 +32,7 @@ setup(
     author_email="williamjmorenor@gmail.com",
     description="Software contable. Aun es etapa de desarrollo.",
     long_description=descripcion,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     packages=["cacao_accounting"],
     include_package_data=True,
     classifiers=[
@@ -45,7 +45,7 @@ setup(
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Office/Business :: Financial",
-        "Topic :: Office/Business :: Financial :: Accounting"
+        "Topic :: Office/Business :: Financial :: Accounting",
     ],
     install_requires=[
         "alembic",
@@ -57,6 +57,6 @@ setup(
         "flask-sqlalchemy",
         "flask-wtf",
         "sqlalchemy",
-        "wtforms"
-    ]
+        "wtforms",
+    ],
 )

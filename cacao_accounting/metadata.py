@@ -15,7 +15,14 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.__main__ import app, run
+# development
+# release_candidate
+# alpha
+# beta
+# stable
 
-if __name__ == "__main__":
-    run()
+__state__ = "development"
+if __state__ != "stabe":
+    DEVELOPMENT = True
+else:
+    DEVELOPMENT = False
