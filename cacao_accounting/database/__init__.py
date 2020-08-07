@@ -202,11 +202,19 @@ class CuentaContable(db.Model):
     entidad = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
+<<<<<<< HEAD
     codigo = db.Column(db.String(50), unique=True, index=True)
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "cuenta_contable.id"))
+=======
+    codigo = db.Column(db.String(50))
+    nombre = db.Column(db.String(100))
+    # Cuenta agrupador o cuenta que recibe movimientos
+    grupo = db.Column(db.Boolean())
+    padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "cuenta_contable.codigo"))
+>>>>>>> e740f53... Actualiza modelo de datos
     moneda = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
@@ -214,6 +222,10 @@ class CuentaContable(db.Model):
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
     tipo = db.Column(db.String(15))
+<<<<<<< HEAD
+=======
+    db.UniqueConstraint("codigo")
+>>>>>>> e740f53... Actualiza modelo de datos
 
 
 class CentroCosto(db.Model):
@@ -232,10 +244,18 @@ class CentroCosto(db.Model):
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
+<<<<<<< HEAD
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "centro_costo.id"))
+=======
+    nombre = db.Column(db.String(100), unique=True)
+    # Cuenta agrupador o cuenta que recibe movimientos
+    grupo = db.Column(db.Boolean())
+    padre = db.Column(db.String(100), db.ForeignKey(ESQUEMA + "centro_costo.nombre"))
+    db.UniqueConstraint("nombre")
+>>>>>>> e740f53... Actualiza modelo de datos
 
 
 class Proyecto(db.Model):
@@ -254,10 +274,18 @@ class Proyecto(db.Model):
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
+<<<<<<< HEAD
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "centro_costo.id"))
+=======
+    nombre = db.Column(db.String(100), unique=True)
+    # Cuenta agrupador o cuenta que recibe movimientos
+    grupo = db.Column(db.Boolean())
+    padre = db.Column(db.String(100), db.ForeignKey(ESQUEMA + "centro_costo.nombre"))
+    db.UniqueConstraint("nombre")
+>>>>>>> e740f53... Actualiza modelo de datos
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
     finalizado = db.Column(db.Boolean())
@@ -273,6 +301,10 @@ class PeriodoContable(db.Model):
 
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     nombre = db.Column(db.String(50))
+<<<<<<< HEAD
     habilitado = db.Column(db.Boolean(), index=True)
+=======
+    habilitada = db.Column(db.Boolean(), index=True)
+>>>>>>> e740f53... Actualiza modelo de datos
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
