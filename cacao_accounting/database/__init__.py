@@ -189,25 +189,14 @@ class CuentaContable(db.Model):
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-<<<<<<< HEAD
-    padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "cuenta_contable.codigo"))
->>>>>>> e740f53... Actualiza modelo de datos
-    moneda = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
-=======
     padre = db.Column(db.String(50), db.ForeignKey("cuenta_contable.codigo"))
     moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
->>>>>>> 4da8e7a... Limpieza
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
     tipo = db.Column(db.String(15))
-    db.UniqueConstraint("codigo")
-<<<<<<< HEAD
->>>>>>> e740f53... Actualiza modelo de datos
-=======
->>>>>>> 4da8e7a... Limpieza
 
 
 class CentroCosto(db.Model):
@@ -231,10 +220,6 @@ class CentroCosto(db.Model):
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
     db.UniqueConstraint("nombre")
-<<<<<<< HEAD
->>>>>>> e740f53... Actualiza modelo de datos
-=======
->>>>>>> 4da8e7a... Limpieza
 
 
 class Proyecto(db.Model):
@@ -257,11 +242,6 @@ class Proyecto(db.Model):
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
-    db.UniqueConstraint("nombre")
-<<<<<<< HEAD
->>>>>>> e740f53... Actualiza modelo de datos
-=======
->>>>>>> 4da8e7a... Limpieza
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
     finalizado = db.Column(db.Boolean())
@@ -278,9 +258,5 @@ class PeriodoContable(db.Model):
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     nombre = db.Column(db.String(50))
     habilitada = db.Column(db.Boolean(), index=True)
-<<<<<<< HEAD
->>>>>>> e740f53... Actualiza modelo de datos
-=======
->>>>>>> 4da8e7a... Limpieza
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
