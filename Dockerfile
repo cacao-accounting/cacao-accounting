@@ -11,4 +11,4 @@ RUN pip --no-cache-dir install -r requirements.txt \
     && python setup.py develop \
     && rm -rf /root/.cache/ && ls /app/cacao_accounting/static/js/
 
-ENTRYPOINT [ "python", "/app/wsgi.py"]
+CMD [ "python", "/app/wsgi.py"]
