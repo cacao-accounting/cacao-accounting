@@ -12,3 +12,6 @@ PyMySQL
 sqlalchemy
 waitress
 wtforms
+
+#Heroku
+gunicorn
