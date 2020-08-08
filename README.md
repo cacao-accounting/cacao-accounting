@@ -32,6 +32,10 @@ pueder ser usada por multiples usuarios al mismo tiempo.
 Consideramos que una ves el proyecto sea un producto usable puede tener potencial economico, no mediante el modelo
 de negocios de licenciamiento, si no con servicios conexos como implementación, capacitación y mantenimiento
 
+Pueden explorar el estado actual del proyecto en el siguiente link: https://cacao-accounting-mockup.herokuapp.com/accounts
+Usuario: cacao
+Contraseña: cacao
+
 ## Participar en el Proyecto:
 
 Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://github.com/cacao-accounting/cacao-accounting/blob/development/CONTRIBUTING.md) para mas detalles.
