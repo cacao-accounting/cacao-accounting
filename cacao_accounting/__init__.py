@@ -67,7 +67,7 @@ def create_app(ajustes=None):
 
         db.create_all()
         with app.app_context():
-            cargar_datos()
+            pass
 
     @app.cli.command("demo-data")
     def demo_data():

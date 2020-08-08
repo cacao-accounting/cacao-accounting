@@ -49,9 +49,10 @@ else:
     elif DEVELOPMENT:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
         configuracion["DATABASE"] = "sqlite"
-        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
+        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         configuracion["ENV"] = "development"
         configuracion["SECRET_KEY"] = "dev"
         configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
+        configuracion["DEGUG"] = True
     else:
         pass

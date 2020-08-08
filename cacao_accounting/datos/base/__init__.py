@@ -16,12 +16,9 @@
 # - William José Moreno Reyes
 
 """
-Modulo para alimentar la base de datos con información por defecto.
+Datos básicos para iniciar el sistema.
 """
 
-from cacao_accounting.datos.demo import demo_data
-from cacao_accounting.datos.base import base_data
 
-
-def cargar_datos():
+def base_data():
     pass

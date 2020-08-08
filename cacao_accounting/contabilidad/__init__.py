@@ -31,3 +31,39 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 @login_required
 def conta():
     return render_template("contabilidad.html")
+
+
+@contabilidad.route("/accounts/entities")
+@login_required
+def entidades():
+    return render_template("contabilidad/entidades.html")
+
+
+@contabilidad.route("/accounts/units")
+@login_required
+def unidades():
+    return render_template("contabilidad/unidades.html")
+
+
+@contabilidad.route("/accounts/accounts")
+@login_required
+def cuentas():
+    return render_template("contabilidad/cuentas.html")
+
+
+@contabilidad.route("/accounts/ccenter")
+@login_required
+def ccostos():
+    return render_template("contabilidad/ccostos.html")
+
+
+@contabilidad.route("/accounts/projects")
+@login_required
+def proyectos():
+    return render_template("contabilidad/proyectos.html")
+
+
+@contabilidad.route("/accounts/exchange")
+@login_required
+def tc():
+    return render_template("contabilidad/tc.html")
