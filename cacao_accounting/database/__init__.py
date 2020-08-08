@@ -33,17 +33,7 @@ Referencia:
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from cacao_accounting.conf import configuracion
 
-# Postgresql trabajo por defecto con el esquema "public", lo definiminos explisitamente
-# unicamente si la base de datos es "postgresl"
-
-if "DATABASE" in configuracion and configuracion["DATABASE"] == "postgresql":
-    ARGUMENTOS = {"schema": "public"}
-    ESQUEMA = "public."
-else:
-    ARGUMENTOS = {}
-    ESQUEMA = ""
 db = SQLAlchemy()
 
 
@@ -52,7 +42,10 @@ class Moneda(db.Model):
     Una moneda para los registros de la entidad.
     """
 
+<<<<<<< HEAD
     __table_args__ = ARGUMENTOS
+=======
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     id = db.Column(db.String(5), primary_key=True, nullable=False)
     nombre = db.Column(db.String(50), nullable=False)
     plural = db.Column(db.String(50), nullable=False)
@@ -60,10 +53,13 @@ class Moneda(db.Model):
 
 
 class TasaDeCambio(db.Model):
-    __table_args__ = ARGUMENTOS
+    """
+    Tasa de conversión entre dos monedas distintas.
+    """
+
     id = db.Column(db.Integer, primary_key=True)
-    base = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
-    conversion = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
+    base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    conversion = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
 
@@ -73,7 +69,6 @@ class Usuario(UserMixin, db.Model):
     Una entidad con acceso al sistema.
     """
 
-    __table_args__ = ARGUMENTOS
     # Información Básica
     id = db.Column(db.String(15), primary_key=True, nullable=False)
     p_nombre = db.Column(db.String(80))
@@ -106,7 +101,6 @@ class Perfiles(db.Model):
     Define los roles de acceso predeterminados.
     """
 
-    __table_args__ = ARGUMENTOS
     id = db.Column(db.String(15), primary_key=True, unique=True)
     nombre = db.Column(db.String(50))
     detalle = db.Column(db.String(250))
@@ -118,9 +112,8 @@ class Permisos(db.Model):
     Define los permisos que otorga cada rol.
     """
 
-    __table_args__ = ARGUMENTOS
     id = db.Column(db.Integer(), primary_key=True)
-    perfil = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "perfiles.id"))
+    perfil = db.Column(db.String(50), db.ForeignKey("perfiles.id"))
     documento = db.Column(db.String(50))
     consultar = db.Column(db.Boolean())
     crear = db.Column(db.Boolean())
@@ -135,13 +128,12 @@ class Entidad(db.Model):
     en el sistema.
     """
 
-    __table_args__ = ARGUMENTOS
     # Información legal de la entidad
     id = db.Column(db.String(5), primary_key=True, unique=True, index=True)
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
-    moneda = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"))
+    moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
     # Individual, Sociedad, Sin Fines de Lucro
     tipo_entidad = db.Column(db.String(50))
     # Información de contacto
@@ -164,11 +156,18 @@ class Unidad(db.Model):
     Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
     """
 
+<<<<<<< HEAD
     __table_args__ = ARGUMENTOS
     # Información legal de la entidad
     id = db.Column(db.Integer(), primary_key=True, unique=True, index=True, autoincrement=True)
     nombre = db.Column(db.String(50), nullable=False)
     entidad = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "entidad.id"))
+=======
+    # Información legal de la entidad
+    id = db.Column(db.Integer(), primary_key=True, unique=True, index=True, autoincrement=True)
+    nombre = db.Column(db.String(50), nullable=False)
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     corre_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
@@ -189,12 +188,17 @@ class CuentaContable(db.Model):
     La base de contabilidad es el catalogo de cuentas.
     """
 
+<<<<<<< HEAD
     __table_args__ = ARGUMENTOS
+=======
+    __table_args__ = (db.UniqueConstraint("id", "codigo", name="cta_unica"),)
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todas las cuentas deben estan vinculadas a una compañia
+<<<<<<< HEAD
     entidad = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
@@ -204,13 +208,27 @@ class CuentaContable(db.Model):
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(50), db.ForeignKey(ESQUEMA + "cuenta_contable.codigo"))
     moneda = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "moneda.id"), nullable=False)
+=======
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
+    # 11.01.001.001.001.001.00001.0001.0001.00001.000001
+    codigo = db.Column(db.String(50), unique=True)
+    nombre = db.Column(db.String(100))
+    # Cuenta agrupador o cuenta que recibe movimientos
+    grupo = db.Column(db.Boolean())
+    padre = db.Column(db.String(50), db.ForeignKey("cuenta_contable.codigo"))
+    moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
     tipo = db.Column(db.String(15))
+<<<<<<< HEAD
     db.UniqueConstraint("codigo")
+=======
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
 
 
 class CentroCosto(db.Model):
@@ -218,21 +236,33 @@ class CentroCosto(db.Model):
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
+<<<<<<< HEAD
     __table_args__ = ARGUMENTOS
+=======
+    __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"),)
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
+<<<<<<< HEAD
     entidad = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "entidad.id"))
+=======
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
+<<<<<<< HEAD
     padre = db.Column(db.String(100), db.ForeignKey(ESQUEMA + "centro_costo.nombre"))
+=======
+    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     db.UniqueConstraint("nombre")
 
 
@@ -242,21 +272,33 @@ class Proyecto(db.Model):
     definido ademas de fechas de inicio y fin.
     """
 
+<<<<<<< HEAD
     __table_args__ = ARGUMENTOS
+=======
+    __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),)
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
+<<<<<<< HEAD
     entidad = db.Column(db.String(5), db.ForeignKey(ESQUEMA + "entidad.id"))
+=======
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
+<<<<<<< HEAD
     padre = db.Column(db.String(100), db.ForeignKey(ESQUEMA + "centro_costo.nombre"))
     db.UniqueConstraint("nombre")
+=======
+    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
+>>>>>>> d68b2682e2238139cf47ff78d2c1e52c5efca086
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
     finalizado = db.Column(db.Boolean())

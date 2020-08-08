@@ -15,7 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.__main__ import app, run
+"""
+Datos básicos para iniciar el sistema.
+"""
 
-if __name__ == "__main__":
-    run()
+
+def base_data():
+    pass

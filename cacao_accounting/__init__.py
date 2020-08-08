@@ -31,11 +31,9 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
+from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
-
-
-DEVELOPMENT = True
 
 
 def create_app(ajustes=None):
@@ -65,11 +63,10 @@ def create_app(ajustes=None):
     @app.cli.command("init-db")
     def crear_db():
         """Crea el esquema de la base de datos."""
-        from cacao_accounting.datos import cargar_datos
 
         db.create_all()
         with app.app_context():
-            cargar_datos()
+            pass
 
     @app.cli.command("demo-data")
     def demo_data():

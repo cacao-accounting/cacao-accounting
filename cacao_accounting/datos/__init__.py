@@ -19,20 +19,9 @@
 Modulo para alimentar la base de datos con información por defecto.
 """
 
-
-def _demo_usuarios():
-    from cacao_accounting.database import Usuario, db
-    from cacao_accounting.auth import proteger_passwd
-
-    acceso1 = "cacao"
-    usuario1 = Usuario(id="cacao", correo_e="usuario1@cacao:accounting.io", clave_acceso=proteger_passwd(acceso1),)
-    db.session.add(usuario1)
-    db.session.commit()
+from cacao_accounting.datos.demo import demo_data
+from cacao_accounting.datos.base import base_data
 
 
 def cargar_datos():
     pass
-
-
-def demo_data():
-    _demo_usuarios()

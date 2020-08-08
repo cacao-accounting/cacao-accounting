@@ -23,6 +23,7 @@ from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
+from cacao_accounting.metadata import DEVELOPMENT
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
@@ -31,11 +32,6 @@ local_conf = "cacaoaccounting.conf"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
 
-# Verificación si estamos corriendo en Heroku
-if "DYNO" in environ:
-    HEROKU = True
-else:
-    HEROKU = False
 
 if exists(local_conf):
     configuracion = ConfigObj(local_conf)
@@ -45,15 +41,18 @@ elif exists(global_conf):
     configuracion = ConfigObj(global_conf)
 else:
     configuracion = {}
-    if HEROKU or "CACAO_ACCOUNTING" in environ:
+    if "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
         configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
         configuracion["DATABASE"] = environ["DATABASE"]
         configuracion["ENV"] = environ["ENV"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
-    else:
+    elif DEVELOPMENT:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
         configuracion["DATABASE"] = "sqlite"
-        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
+        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         configuracion["ENV"] = "development"
         configuracion["SECRET_KEY"] = "dev"
         configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
+        configuracion["DEGUG"] = True
+    else:
+        pass

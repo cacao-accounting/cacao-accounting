@@ -9,6 +9,6 @@ flask-testing
 pytest
 requests
 
-# Covertura de pruebas
+# Cobertura de código
 coverage
 pytest-cov
