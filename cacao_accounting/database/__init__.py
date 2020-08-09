@@ -92,25 +92,55 @@ class Usuario(UserMixin, db.Model):
     roles = db.Column(db.JSON())
 
 
+class Modulos(db.Model):
+    """Simple lista de los modulos del sistema."""
+
+    __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
+    id = db.Column(db.Integer(), primary_key=True, unique=True)
+    modulo = db.Column(db.String(25), unique=True)
+
+
+class Registros(db.Model):
+    """Los modulos contienen registros."""
+
+    __table_args__ = (db.UniqueConstraint("id", "registro", name="registro_unico"),)
+    id = db.Column(db.Integer(), primary_key=True, unique=True)
+    registro = db.Column(db.String(50), unique=True)
+
+
 class Perfiles(db.Model):
     """
-    Define los roles de acceso predeterminados.
+    Los Roles Establecen una serie de permisos predeterminados.
     """
 
-    id = db.Column(db.String(15), primary_key=True, unique=True)
-    nombre = db.Column(db.String(50))
+    __table_args__ = (db.UniqueConstraint("id", "detalle", name="perfil_unico"),)
+    id = db.Column(db.String(25), primary_key=True, unique=True)
     detalle = db.Column(db.String(250))
-    modulo = db.Column(db.String(20), nullable=False)
+
+
+class PerfilUsuario(db.Model):
+    """Listado de Perfiles por usuario."""
+
+    id = db.Column(db.Integer(), primary_key=True, unique=True)
+    usuario = db.Column(db.String(15), db.ForeignKey("usuario.id"))
+    perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    unidad = db.Column(db.String(5), db.ForeignKey("unidad.id"))
+    activo = db.Column(db.Boolean())
 
 
 class Permisos(db.Model):
     """
-    Define los permisos que otorga cada rol.
+    Los permisos pueden ser establecidos a detalle por usuario y sobre escribir los
+    permisos predeterminados por cada Rol.
     """
 
     id = db.Column(db.Integer(), primary_key=True)
-    perfil = db.Column(db.String(50), db.ForeignKey("perfiles.id"))
-    documento = db.Column(db.String(50))
+    usuario = db.Column(db.String(15), db.ForeignKey("usuario.id"))
+    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    unidad = db.Column(db.String(5), db.ForeignKey("unidad.id"))
+    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
+    registro = db.Column(db.String(50), db.ForeignKey("registros.registro"))
     consultar = db.Column(db.Boolean())
     crear = db.Column(db.Boolean())
     autorizar = db.Column(db.Boolean())
@@ -152,6 +182,7 @@ class Unidad(db.Model):
     Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
     """
 
+    __table_args__ = (db.UniqueConstraint("id", "nombre", name="unidad_unica"),)
     # Información legal de la entidad
     id = db.Column(db.Integer(), primary_key=True, unique=True, index=True, autoincrement=True)
     nombre = db.Column(db.String(50), nullable=False)
