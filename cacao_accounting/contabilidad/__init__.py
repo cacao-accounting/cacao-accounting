@@ -45,7 +45,10 @@ def entidades():
 @contabilidad.route("/accounts/units")
 @login_required
 def unidades():
-    return render_template("contabilidad/unidades.html")
+    from cacao_accounting.database import Unidad
+
+    unidades = Unidad.query.order_by(Unidad.entidad).all()
+    return render_template("contabilidad/unidades.html", unidades=unidades)
 
 
 @contabilidad.route("/accounts/accounts")

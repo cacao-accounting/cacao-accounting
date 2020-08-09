@@ -4,6 +4,23 @@
   <section class="pf-c-page__main-section pf-m-light">
     <div class="pf-c-content">
       <h1>Unidades de Negocios</h1>
+      <table class="pf-c-table pf-m-grid-md" role="grid" aria-label="Tabla de entidades" id="tabla-entidades">
+        <thead>
+          <tr role="row">
+            <th role="columnheader" scope="col">Entidad</th>
+            <th role="columnheader" scope="col">Nombre</th>
+          </tr>
+        </thead>
+        <tbody role="rowgroup">
+          {% for unidad in unidades -%}
+          <tr role="row">
+            <td role="cell" data-label="Entidad">{{ unidad.entidad }}</td>
+            <td role="cell" data-label="Razón Social">{{ unidad.nombre }}</td>
+          </tr>
+          {%- endfor %}
+        </tbody>
+      </table>
+
     </div>
   </section>
 </main>

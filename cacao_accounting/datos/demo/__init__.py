@@ -51,6 +51,21 @@ def _demo_entidad():
     db.session.commit()
 
 
+def _demo_unidades():
+    """Unidades de Negocio de Demostración"""
+    from cacao_accounting.database import Unidad
+
+    unidades = [
+        Unidad(nombre="Casa Matriz", entidad="cacao"),
+        Unidad(nombre="Movil", entidad="cacao"),
+        Unidad(nombre="Masaya", entidad="cacao"),
+    ]
+    for unidad in unidades:
+        db.session.add(unidad)
+    db.session.commit()
+
+
 def demo_data():
     _demo_usuarios()
     _demo_entidad()
+    _demo_unidades()

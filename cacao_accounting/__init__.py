@@ -82,4 +82,13 @@ def create_app(ajustes=None):
         if DEVELOPMENT:
             db.drop_all()
 
+    @app.cli.command("setup-db")
+    def setup_db():
+        """Atajo para reiniciar la base de datos en etapa de desarrollo."""
+        if DEVELOPMENT:
+            db.drop_all()
+            db.create_all()
+            with app.app_context():
+                demo_data()
+
     return app

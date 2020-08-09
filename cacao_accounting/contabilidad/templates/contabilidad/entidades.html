@@ -4,15 +4,26 @@
   <section class="pf-c-page__main-section pf-m-light">
     <div class="pf-c-content">
       <h1>Entidades</h1>
-      <div class="pf-c-simple-list">
-        <ul class="pf-c-simple-list__list">
+      <table class="pf-c-table pf-m-grid-md" role="grid" aria-label="Tabla de entidades" id="tabla-entidades">
+        <thead>
+          <tr role="row">
+            <th role="columnheader" scope="col">ID</th>
+            <th role="columnheader" scope="col">Razón Social</th>
+            <th role="columnheader" scope="col">Nombre Comercial</th>
+            <th role="columnheader" scope="col">ID Fiscal</th>
+          </tr>
+        </thead>
+        <tbody role="rowgroup">
           {% for entidad in entidades -%}
-          <li class="pf-c-simple-list__item">
-            <a class="pf-c-simple-list__item-link pf-m-current" href="#" tabindex="0">{{ entidad.razon_social }}</a>
-          </li>
+          <tr role="row">
+            <td role="cell" data-label="Código">{{ entidad.id }}</td>
+            <td role="cell" data-label="Razón Social">{{ entidad.razon_social }}</td>
+            <td role="cell" data-label="Nombre Comercial">{{ entidad.nombre_comercial }}</td>
+            <td role="cell" data-label="ID Fiscal">{{ entidad.id_fiscal }}</td>
+          </tr>
           {%- endfor %}
-        </ul>
-      </div>
+        </tbody>
+      </table>
     </div>
   </section>
 </main>
