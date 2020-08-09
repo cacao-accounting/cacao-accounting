@@ -262,3 +262,5 @@ cython_debug/
 #Archivos de configuracion
 *.conf
 *.ini
+
+cacao_accounting/static/node_modules/*
