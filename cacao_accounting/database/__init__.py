@@ -55,7 +55,7 @@ class TasaDeCambio(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
-    conversion = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
 
