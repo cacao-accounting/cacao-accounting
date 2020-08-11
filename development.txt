@@ -6,7 +6,6 @@ wheel
 # Control de calidad
 flake8
 flask-testing
-pychecker
 pylama
 pytest
 requests
