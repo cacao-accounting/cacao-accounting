@@ -17,6 +17,6 @@
 # Contributors:
 # - William José Moreno Reyes
 
-cacaoctl init-db
-cacaoctl demo data
+cacaoctl initdb
+cacaoctl demodb
 cacaoctl serve

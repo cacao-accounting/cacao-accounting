@@ -70,7 +70,7 @@ def create_app(ajustes=None):
         app.register_blueprint(ventas)
 
     @app.cli.command()
-    def init-db():
+    def initdb():
         """Crea el esquema de la base de datos."""
 
         db.create_all()
@@ -78,7 +78,7 @@ def create_app(ajustes=None):
             pass
 
     @app.cli.command()
-    def demo-data():
+    def demodb():
         """Carga datos de prueba en la base de datos."""
         from cacao_accounting.datos import demo_data
 
@@ -86,7 +86,7 @@ def create_app(ajustes=None):
             demo_data()
 
     @app.cli.command()
-    def reset-db():
+    def cleandb():
         """Elimina la base de datos, solo disponible para desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
@@ -101,12 +101,12 @@ def create_app(ajustes=None):
         server()
 
     @app.cli.command()
-    def setup-db():
+    def setupdb():
         """Atajo para reiniciar la base de datos en etapa de desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
             db.create_all()
             with app.app_context():
-                demo_data()
+                demodb()
 
     return app
