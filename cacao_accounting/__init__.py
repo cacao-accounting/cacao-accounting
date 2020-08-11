@@ -90,6 +90,14 @@ def create_app(ajustes=None):
         if DEVELOPMENT:
             db.drop_all()
 
+    @app.cli.command("serve")
+    def servidor():
+        """
+        Inicio la aplicacion con waitress como servidor WSGI por  defecto.
+        """
+        from cacao_accounting.__main__ import server
+        server()
+
     @app.cli.command("setup-db")
     def setup_db():
         """Atajo para reiniciar la base de datos en etapa de desarrollo."""
