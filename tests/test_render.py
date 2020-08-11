@@ -25,10 +25,10 @@ from cacao_accounting.database import db
 class TestRenderTemplates(LiveServerTestCase):
     def create_app(self):
         app = create(configuracion)
-        app.config['TESTING'] = True
-        app.config['LIVESERVER_PORT'] = 0
+        app.config["TESTING"] = True
+        app.config["LIVESERVER_PORT"] = 0
         return app
-    
+
     def setUp(self):
         db.create_all()
 

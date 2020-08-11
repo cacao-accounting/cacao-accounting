@@ -41,6 +41,7 @@ def command():
     Interfaz de linea de commandos.
     """
     from flask.cli import main
+
     main(as_module="cacao_accounting")
 
 
@@ -96,6 +97,7 @@ def create_app(ajustes=None):
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
         """
         from cacao_accounting.__main__ import server
+
         server()
 
     @app.cli.command("setup-db")
