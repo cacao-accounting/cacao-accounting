@@ -69,30 +69,30 @@ def create_app(ajustes=None):
         app.register_blueprint(login)
         app.register_blueprint(ventas)
 
-    @app.cli.command("init-db")
-    def crear_db():
+    @app.cli.command()
+    def init-db():
         """Crea el esquema de la base de datos."""
 
         db.create_all()
         with app.app_context():
             pass
 
-    @app.cli.command("demo-data")
-    def demo_data():
+    @app.cli.command()
+    def demo-data():
         """Carga datos de prueba en la base de datos."""
         from cacao_accounting.datos import demo_data
 
         with app.app_context():
             demo_data()
 
-    @app.cli.command("reset-db")
-    def eliminar_db():
+    @app.cli.command()
+    def reset-db():
         """Elimina la base de datos, solo disponible para desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
 
-    @app.cli.command("serve")
-    def servidor():
+    @app.cli.command()
+    def serve():
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
         """
@@ -100,8 +100,8 @@ def create_app(ajustes=None):
 
         server()
 
-    @app.cli.command("setup-db")
-    def setup_db():
+    @app.cli.command()
+    def setup-db():
         """Atajo para reiniciar la base de datos en etapa de desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
