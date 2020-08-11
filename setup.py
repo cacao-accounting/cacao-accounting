@@ -59,4 +59,5 @@ setup(
         "sqlalchemy",
         "wtforms",
     ],
+    entry_points={"console_scripts": ["cacaoctl=cacao_accounting:command",]},
 )

@@ -36,6 +36,14 @@ from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
 
 
+def command():
+    """
+    Interfaz de linea de commandos.
+    """
+    from flask.cli import main
+    main(as_module="cacao_accounting")
+
+
 def create_app(ajustes=None):
     """
     Aplication factory.
