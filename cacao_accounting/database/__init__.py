@@ -17,18 +17,14 @@
 
 """
 Definicion de base de datos.
-
 El objetivo es que el sistema contable pueda ser desplegado sin tener que depender
 de una base de datos especifica, la prioridad en soportar Postresql como base de datos
 primaria para entornos multiusuarios y Sqlite como base de datos para entornos de un
 solo usuario.
-
 Mysql en su versión comunitaria es una opción secundaria, Mariadb no es un opción debido
 a que por el momento no soportan el tipo de datos JSON.
-
 Referencia:
  - https://mariadb.com/kb/en/json-data-type/
-
 """
 
 from flask_login import UserMixin
@@ -116,6 +112,7 @@ class Perfiles(db.Model):
     __table_args__ = (db.UniqueConstraint("id", "detalle", name="perfil_unico"),)
     id = db.Column(db.String(25), primary_key=True, unique=True)
     detalle = db.Column(db.String(250))
+    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
 
 
 class PerfilUsuario(db.Model):
@@ -136,9 +133,7 @@ class Permisos(db.Model):
     """
 
     id = db.Column(db.Integer(), primary_key=True)
-    usuario = db.Column(db.String(15), db.ForeignKey("usuario.id"))
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
-    unidad = db.Column(db.String(5), db.ForeignKey("unidad.id"))
+    perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
     modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
     registro = db.Column(db.String(50), db.ForeignKey("registros.registro"))
     consultar = db.Column(db.Boolean())
