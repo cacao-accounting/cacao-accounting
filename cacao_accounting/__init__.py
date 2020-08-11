@@ -96,9 +96,9 @@ def create_app(ajustes=None):
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
         """
-        from cacao_accounting.__main__ import server
+        from cacao_accounting.__main__ import run
 
-        server()
+        run()
 
     @app.cli.command()
     def setupdb():
