@@ -38,11 +38,12 @@ def cliente_pruebas():
             base_data()
             demo_data()
         yield pruebas
+        db.drop_all()
 
 
-# para actualizar el lista.
-# from wsgi import app
-# for rule in app.url_map.iter_rules(): print(rule)
+# para actualizar el listado de rutas a validad ejecutar.
+# >>> from wsgi import app
+# >>> for rule in app.url_map.iter_rules(): print(rule)
 
 _rutas = [
     "/accounts/entities",
@@ -63,7 +64,7 @@ _rutas = [
     "/compras",
     "/bancos",
     "/buying",
-    "/logout" "/ventas",
+    "/ventas",
     "/admin",
     "/conta",
     "/index",
@@ -74,9 +75,17 @@ _rutas = [
     "/home",
     "/app",
     "/",
+    "/logout",
 ]
 
 
 def test_vista(cliente_pruebas):
     for rutas in _rutas:
         cliente_pruebas.get(rutas)
+
+
+def test_valida_contraseña(cliente_pruebas):
+    from cacao_accounting.auth import validar_acceso
+
+    assert True == validar_acceso("cacao", "cacao")
+    assert False == validar_acceso("cacao", "prueba")
