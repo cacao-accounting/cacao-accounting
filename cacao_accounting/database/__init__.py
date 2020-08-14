@@ -121,8 +121,8 @@ class PerfilUsuario(db.Model):
     id = db.Column(db.Integer(), primary_key=True, unique=True)
     usuario = db.Column(db.String(15), db.ForeignKey("usuario.id"))
     perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
-    unidad = db.Column(db.String(5), db.ForeignKey("unidad.id"))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
+    unidad = db.Column(db.String(10), db.ForeignKey("unidad.id"))
     activo = db.Column(db.Boolean())
 
 
@@ -148,9 +148,9 @@ class Entidad(db.Model):
     Una entidad es una unidad de negocios de la que se lleva registros
     en el sistema.
     """
-
+    __table_args__ = (db.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
-    id = db.Column(db.String(5), primary_key=True, unique=True, index=True)
+    id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
@@ -179,9 +179,9 @@ class Unidad(db.Model):
 
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="unidad_unica"),)
     # Información legal de la entidad
-    id = db.Column(db.Integer(), primary_key=True, unique=True, index=True, autoincrement=True)
+    id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
     nombre = db.Column(db.String(50), nullable=False)
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     corre_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
@@ -208,7 +208,7 @@ class CuentaContable(db.Model):
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todas las cuentas deben estan vinculadas a una compañia
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True)
@@ -237,7 +237,7 @@ class CentroCosto(db.Model):
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
@@ -260,7 +260,7 @@ class Proyecto(db.Model):
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entidad = db.Column(db.String(5), db.ForeignKey("entidad.id"))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)

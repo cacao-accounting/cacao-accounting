@@ -56,9 +56,9 @@ def _demo_unidades():
     from cacao_accounting.database import Unidad
 
     unidades = [
-        Unidad(nombre="Casa Matriz", entidad="cacao"),
-        Unidad(nombre="Movil", entidad="cacao"),
-        Unidad(nombre="Masaya", entidad="cacao"),
+        Unidad(nombre="Casa Matriz", entidad="cacao", id="matriz",),
+        Unidad(nombre="Movil", entidad="cacao", id="movil",),
+        Unidad(nombre="Masaya", entidad="cacao", id="masaya",),
     ]
     for unidad in unidades:
         db.session.add(unidad)
