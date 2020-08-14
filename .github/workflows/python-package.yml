@@ -13,6 +13,32 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql
+        env:
+            MYSQL_ALLOW_EMPTY_PASSWORD: yes
+            MYSQL_DATABASE: cacaodb
+        ports:
+            - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: cacao
+          POSTGRES_PASSWORD: cacao
+          POSTGRES_DB: cacao
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     strategy:
       matrix:
         python-version: [3.5, 3.6, 3.7, 3.8]
@@ -34,16 +60,14 @@ jobs:
         python -m pep517.build .
         twine check dist/* 
     - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        # flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        flake8 cacao_accounting --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      run: flake8 cacao_accounting
     - name: Test with pytest
-      run: |
-        cacaoctl
-        pytest --cov=cacao_accounting
+      run: pytest --cov=cacao_accounting
+    - name: SQLite Backend
+      run: pytest tests/ghactions/sqlite.py
+    - name: Postgresql Backend
+      run: pytest tests/ghactions/postgresql.py
+    - name: MySQL Backend
+      run: pytest tests/ghactions/mysql.py
     - name: Codecov
       uses: codecov/codecov-action@v1.0.11
-
