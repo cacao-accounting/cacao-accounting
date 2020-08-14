@@ -19,8 +19,8 @@
 {% macro appheader() %}
 <header class="pf-c-page__header">
   <div class="pf-c-page__header-brand">
-    <a class="pf-c-page__header-brand-link">
-      <img class="pf-c-brand" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="PatternFly logo" />
+    <a class="pf-c-page__header-brand-link" href="{{ url_for("cacao_app.pagina_inicio") }}">
+      <img class="pf-c-brand" src="{{ url_for('static', filename='media/brand.svg') }}" alt="Cacao Accounting" />
     </a>
   </div>
 </header>
