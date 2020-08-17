@@ -65,9 +65,9 @@ jobs:
       run: pytest --cov=cacao_accounting
     - name: SQLite Backend
       run: pytest tests/ghactions/sqlite.py
-    - name: Postgresql Backend
-      run: pytest tests/ghactions/postgresql.py
     - name: MySQL Backend
       run: pytest tests/ghactions/mysql.py
+    - name: Postgresql Backend
+      run: pytest tests/ghactions/postgresql.py
     - name: Codecov
       uses: codecov/codecov-action@v1.0.11

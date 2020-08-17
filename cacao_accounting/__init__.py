@@ -101,13 +101,4 @@ def create_app(ajustes=None):
 
         run()
 
-    @app.cli.command()
-    def setupdb():
-        """Atajo para reiniciar la base de datos en etapa de desarrollo."""
-        if DEVELOPMENT:
-            db.drop_all()
-            db.create_all()
-            with app.app_context():
-                demodb()
-
     return app

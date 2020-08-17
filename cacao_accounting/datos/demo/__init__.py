@@ -65,7 +65,14 @@ def _demo_unidades():
     db.session.commit()
 
 
+def _catalogo():
+    from cacao_accounting.contabilidad.ctas import catalogo_base, cargar_catalogos
+
+    cargar_catalogos(catalogo_base, "cacao")
+
+
 def demo_data():
     _demo_usuarios()
     _demo_entidad()
     _demo_unidades()
+    _catalogo()

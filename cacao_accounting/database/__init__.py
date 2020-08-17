@@ -49,6 +49,7 @@ class TasaDeCambio(db.Model):
     Tasa de conversión entre dos monedas distintas.
     """
 
+    __tablename__ = "tc"
     id = db.Column(db.Integer, primary_key=True)
     base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
@@ -148,6 +149,7 @@ class Entidad(db.Model):
     Una entidad es una unidad de negocios de la que se lleva registros
     en el sistema.
     """
+
     __table_args__ = (db.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
     id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
@@ -197,7 +199,7 @@ class Unidad(db.Model):
 
 
 # Bases de la contabilidad
-class CuentaContable(db.Model):
+class Cuentas(db.Model):
     """
     La base de contabilidad es el catalogo de cuentas.
     """
@@ -215,8 +217,8 @@ class CuentaContable(db.Model):
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(50), db.ForeignKey("cuenta_contable.codigo"))
-    moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    padre = db.Column(db.String(50), db.ForeignKey("cuentas.codigo"), nullable=True)
+    # moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
@@ -230,6 +232,7 @@ class CentroCosto(db.Model):
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
+    __tablename__ = "cc"
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
@@ -244,7 +247,7 @@ class CentroCosto(db.Model):
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
+    padre = db.Column(db.String(100), db.ForeignKey("cc.nombre"))
     db.UniqueConstraint("nombre")
 
 
@@ -267,7 +270,7 @@ class Proyecto(db.Model):
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
+    padre = db.Column(db.String(100), db.ForeignKey("cc.nombre"))
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
     finalizado = db.Column(db.Boolean())
