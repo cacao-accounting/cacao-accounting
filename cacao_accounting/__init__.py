@@ -73,10 +73,11 @@ def create_app(ajustes=None):
     @app.cli.command()
     def initdb():
         """Crea el esquema de la base de datos."""
+        from cacao_accounting.datos.base import base_data
 
         db.create_all()
         with app.app_context():
-            pass
+            base_data()
 
     @app.cli.command()
     def demodb():

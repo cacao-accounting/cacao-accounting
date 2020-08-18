@@ -19,9 +19,16 @@
 Datos básicos para iniciar el sistema.
 """
 
+
 def monedas():
-    
+    from teritorio import Currencies
+    from cacao_accounting.database import db, Moneda
+
+    for moneda in Currencies():
+        registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
+        db.session.add(registro)
+        db.session.commit()
 
 
 def base_data():
-    pass
+    monedas()

@@ -39,7 +39,9 @@ class Moneda(db.Model):
     """
 
     id = db.Column(db.String(5), primary_key=True, nullable=False)
-    nombre = db.Column(db.String(50), nullable=False)
+    nombre = db.Column(db.String(75), nullable=False)
+    codigo = db.Column(db.Integer(), nullable=True)
+    decimales = db.Column(db.Integer(), nullable=True)
 
 
 class TasaDeCambio(db.Model):

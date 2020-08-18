@@ -30,7 +30,7 @@ def cargar_catalogos(csv, padre):
 
     Debe ser un archivo .cvs con los encabezados iguales a la base de datos.
     """
-    catalogo = DictReader(open(csv, "r", encoding='utf-8'))
+    catalogo = DictReader(open(csv, "r", encoding="utf-8"))
     for cuenta in catalogo:
         if cuenta["grupo"] == "1":
             cuenta["grupo"] = True
