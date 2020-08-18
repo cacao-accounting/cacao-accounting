@@ -136,15 +136,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 
-### Currencies
-
-* **Fuente:** https://pypi.org/project/currencies/
-* **Descripción:** Display money format and its filthy currencies, for all money lovers out there.
-
-GPL-3.0 License
-
----
-
 ### Flask
 
 * **Fuente:** https://pypi.org/project/Flask/
