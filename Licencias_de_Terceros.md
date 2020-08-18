@@ -328,6 +328,15 @@ SOFTWARE.
 
 ---
 
+### Territorio
+
+* **Fuente:** https://pypi.org/project/teritorio/
+* **Descripción:** A library for country and currency ISO codes
+
+GNU Lesser General Public License v3.0
+
+---
+
 ### Waitress
 
 * **Fuente:** https://pypi.org/project/waitress/

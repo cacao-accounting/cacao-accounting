@@ -40,8 +40,6 @@ class Moneda(db.Model):
 
     id = db.Column(db.String(5), primary_key=True, nullable=False)
     nombre = db.Column(db.String(50), nullable=False)
-    plural = db.Column(db.String(50), nullable=False)
-    pais = db.Column(db.String(50), nullable=False)
 
 
 class TasaDeCambio(db.Model):

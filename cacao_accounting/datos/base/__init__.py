@@ -19,6 +19,9 @@
 Datos básicos para iniciar el sistema.
 """
 
+def monedas():
+    
+
 
 def base_data():
     pass
