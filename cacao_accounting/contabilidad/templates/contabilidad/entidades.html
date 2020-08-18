@@ -16,10 +16,18 @@
         <tbody role="rowgroup">
           {% for entidad in entidades -%}
           <tr role="row">
-            <td role="cell" data-label="Código">{{ entidad.id }}</td>
-            <td role="cell" data-label="Razón Social">{{ entidad.razon_social }}</td>
-            <td role="cell" data-label="Nombre Comercial">{{ entidad.nombre_comercial }}</td>
-            <td role="cell" data-label="ID Fiscal">{{ entidad.id_fiscal }}</td>
+            <td role="cell" data-label="Código">
+              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id }}</a>
+            </td>
+            <td role="cell" data-label="Razón Social">
+              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.razon_social }}</a>
+            </td>
+            <td role="cell" data-label="Nombre Comercial">
+              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.nombre_comercial }}</a>
+            </td>
+            <td role="cell" data-label="ID Fiscal">
+              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id_fiscal }}</a>
+            </td>
           </tr>
           {%- endfor %}
         </tbody>

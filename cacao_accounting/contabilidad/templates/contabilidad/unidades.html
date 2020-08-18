@@ -14,8 +14,12 @@
         <tbody role="rowgroup">
           {% for unidad in unidades -%}
           <tr role="row">
-            <td role="cell" data-label="Entidad">{{ unidad.entidad }}</td>
-            <td role="cell" data-label="Razón Social">{{ unidad.nombre }}</td>
+            <td role="cell" data-label="Entidad">
+              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=unidad.entidad) }}>{{ unidad.entidad }}</a>
+            </td>
+            <td role="cell" data-label="Razón Social">
+              <a href = {{ url_for("contabilidad.unidad" ,id_unidad=unidad.id) }}>{{ unidad.nombre }}</a>
+            </td>
           </tr>
           {%- endfor %}
         </tbody>

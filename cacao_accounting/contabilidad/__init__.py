@@ -42,6 +42,15 @@ def entidades():
     return render_template("contabilidad/entidades.html", entidades=entidades)
 
 
+@contabilidad.route("/accounts/entities/<id_entidad>")
+@login_required
+def entidad(id_entidad):
+    from cacao_accounting.database import Entidad
+
+    registro = Entidad.query.filter_by(id=id_entidad).first()
+    return render_template("contabilidad/entidad.html", registro=registro)
+
+
 @contabilidad.route("/accounts/units")
 @login_required
 def unidades():
@@ -51,10 +60,31 @@ def unidades():
     return render_template("contabilidad/unidades.html", unidades=unidades)
 
 
+@contabilidad.route("/accounts/unit/<id_unidad>")
+@login_required
+def unidad(id_unidad):
+    from cacao_accounting.database import Unidad
+
+    registro = Unidad.query.filter_by(id=id_unidad).first()
+    return render_template("contabilidad/unidad.html", registro=registro)
+
+
 @contabilidad.route("/accounts/accounts")
 @login_required
 def cuentas():
-    return render_template("contabilidad/cuentas.html")
+    from cacao_accounting.database import Cuentas
+
+    catalogo = Cuentas.query.order_by(Cuentas.codigo).all()
+    return render_template("contabilidad/cuentas.html", catalogo=catalogo)
+
+
+@contabilidad.route("/accounts/accounts/<id_cta>")
+@login_required
+def cuenta(id_cta):
+    from cacao_accounting.database import Cuentas
+
+    registro = Cuentas.query.filter_by(codigo=id_cta).first()
+    return render_template("contabilidad/cuenta.html", registro=registro)
 
 
 @contabilidad.route("/accounts/ccenter")

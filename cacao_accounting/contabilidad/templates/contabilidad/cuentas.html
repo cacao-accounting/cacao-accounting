@@ -4,6 +4,26 @@
   <section class="pf-c-page__main-section pf-m-light">
     <div class="pf-c-content">
       <h1>Catálogo de Cuentas Contables</h1>
+      <table class="pf-c-table pf-m-grid-md" role="grid" aria-label="Tabla de entidades" id="tabla-entidades">
+        <thead>
+          <tr role="row">
+            <th role="columnheader" scope="col">Codigo</th>
+            <th role="columnheader" scope="col">Nombre</th>
+          </tr>
+        </thead>
+        <tbody role="rowgroup">
+          {% for cuenta in catalogo -%}
+          <tr role="row">
+            <td role="cell" data-label="Codigo">
+              <a href = {{ url_for("contabilidad.cuenta" ,id_cta=cuenta.codigo) }}>{{ cuenta.codigo }}</a>
+            </td>
+            <td role="cell" data-label="Nombre">
+              <a href = {{ url_for("contabilidad.cuenta" ,id_cta=cuenta.codigo) }}>{{ cuenta.nombre }}</a>
+            </td>
+          </tr>
+          {%- endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 </main>
