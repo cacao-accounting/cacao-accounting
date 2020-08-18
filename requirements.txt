@@ -3,6 +3,7 @@ alembic
 appdirs
 bcrypt
 configobj
+currencies
 flask
 flask-login
 flask-sqlalchemy
