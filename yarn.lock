@@ -6,8 +6,3 @@
   version "2.71.7"
   resolved "https://registry.yarnpkg.com/@patternfly/patternfly/-/patternfly-2.71.7.tgz#0816479c4a34728d0f9f804b74398d2d39c2112d"
   integrity sha512-JjgBJcPOiZhEyixc6mY781eMmVL+qm5gs/h7IipVfps3IoadEZVlvOjffBCfqOVWug0DJbv6APqrZqOQmzISMA==
-
-js-treeview@^1.1.5:
-  version "1.1.5"
-  resolved "https://registry.yarnpkg.com/js-treeview/-/js-treeview-1.1.5.tgz#adf4191e18a3a24c89ec56e3b71c798ad8a06fe8"
-  integrity sha512-PtOfvElB7KZL4O0aO3z7UY38G7ReMN74Y1iRSZPsOfyS+YGtVrHVTst+rwIy96PGoWQ2/7wEUOjjpSeYUj7+mg==

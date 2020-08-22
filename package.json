@@ -12,7 +12,6 @@
   },
   "homepage": "https://github.com/cacao-accounting/cacao-accounting-mockup#readme",
   "dependencies": {
-    "@patternfly/patternfly": "^2.50.0",
-    "js-treeview": "^1.1.5"
+    "@patternfly/patternfly": "^2.50.0"
   }
 }
