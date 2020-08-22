@@ -29,7 +29,10 @@ if DEVELOPMENT:
 
 def run():
     """Ejecuta la aplicacion con Waitress como servidor WSGI"""
-    serve(app, port=8080)
+    try:
+        serve(app, port=8080)
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":
