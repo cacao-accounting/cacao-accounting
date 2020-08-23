@@ -1,0 +1,14 @@
+[Unit]
+Description=Cacao Accounting WSGI server
+After=syslog.target network.target
+
+[Service]
+PIDFile=/run/cacaoctl.pid
+ExecStart=/usr/bin/cacaoctl serve
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+User=cacaoctl
+Group=cacaoctl
+
+[Install]
+WantedBy=multi-user.target
