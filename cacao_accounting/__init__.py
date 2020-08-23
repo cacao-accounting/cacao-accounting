@@ -78,14 +78,10 @@ def create_app(ajustes=None):
         db.create_all()
         with app.app_context():
             base_data()
+            if DEVELOPMENT:
+                from cacao_accounting.datos import demo_data
 
-    @app.cli.command()
-    def demodb():
-        """Carga datos de prueba en la base de datos."""
-        from cacao_accounting.datos import demo_data
-
-        with app.app_context():
-            demo_data()
+                demo_data()
 
     @app.cli.command()
     def cleandb():
