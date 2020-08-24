@@ -19,26 +19,43 @@
 Utilidad para cargar la configuración de la aplicacion.
 """
 
-from appdirs import user_config_dir, site_config_dir
+from appdirs import user_config_dir, site_config_dir, user_log_dir
 from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
+from sys import platform, stdout
+from cacao_accounting.loggin import logger as logs
 from cacao_accounting.metadata import DEVELOPMENT
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
 
 local_conf = "cacaoaccounting.conf"
+log_file = "cacaoaccounting.log"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
+user_logs = join(user_log_dir(appname, appauthor), log_file)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
 
 
 if exists(local_conf):
     configuracion = ConfigObj(local_conf)
+    logs.add(log_file, format="{time} {level} {message}", level="DEBUG")
+
 elif exists(user_conf):
     configuracion = ConfigObj(user_conf)
+    logs.add(user_logs, format="{time} {level} {message}", level="INFO")
+
 elif exists(global_conf):
     configuracion = ConfigObj(global_conf)
+    if "DOCKERISED" in environ:
+        logs.add(stdout, format="{time} {level} {message}", level="INFO")
+    elif platform == "linux":
+        logs.add(join("/var/logs", log_file), format="{time} {level} {message}", level="INFO")
+    elif platform == "'win32'":
+        logs.add(log_file, format="{time} {level} {message}", level="INFO")
+    else:
+        pass
+
 else:
     configuracion = {}
     if "DYNO" in environ or "CACAO_ACCOUNTING" in environ:

@@ -15,17 +15,28 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Configuración centralizada para logs del sistema.
-"""
-
-from sys import stderr
-from loguru import logger
+from cacao_accounting.loggin import logger
 from cacao_accounting.metadata import __state__
 
-if __state__ == "development":
-    logger.add(stderr, format="{time} {level} {message}", level="DEBUG")
-elif __state__ == "release_candidate" or __state__ == "alpha":
-    logger.add(logger.ad(stderr, format="{time} {level} {message}", level="INFO"))
-else:
-    logger.add(logger.ad(stderr, format="{time} {level} {message}", level="INFO"))
+
+def logs():
+    logger.debug("Debug")
+    logger.info("Info")
+    logger.warning("Warning")
+    logger.error("Error")
+    logger.critical("Critical")
+
+
+def test_dev():
+    __state__ = "development"
+    logs()
+
+
+def test_rc():
+    __state__ = "release_candidate"
+    logs()
+
+
+def test_stable():
+    __state__ = "stable"
+    logs()
