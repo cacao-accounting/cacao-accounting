@@ -19,6 +19,7 @@
 Datos de ejemplo.
 """
 from cacao_accounting.database import db
+from cacao_accounting.loggin import logger as log
 
 
 def _demo_usuarios():
@@ -72,7 +73,9 @@ def _catalogo():
 
 
 def demo_data():
+    log.debug("Iniciando carda de empresa de prueba.")
     _demo_usuarios()
     _demo_entidad()
     _demo_unidades()
     _catalogo()
+    log.debug("Empresa de pruebas creada correctamente.")

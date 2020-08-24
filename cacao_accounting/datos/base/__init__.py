@@ -19,16 +19,22 @@
 Datos básicos para iniciar el sistema.
 """
 
+from cacao_accounting.loggin import logger as log
+
 
 def monedas():
     from teritorio import Currencies
     from cacao_accounting.database import db, Moneda
 
+    log.debug("Iniciando carga de base monedas a la base de datos.")
     for moneda in Currencies():
         registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
         db.session.add(registro)
-        db.session.commit()
+    db.session.commit()
+    log.debug("Monedas cargadas Correctamente")
 
 
 def base_data():
+    log.debug("Iniciando carga de datos base al sistema.")
     monedas()
+    log.debug("Batos base cargados en la base de datos.")
