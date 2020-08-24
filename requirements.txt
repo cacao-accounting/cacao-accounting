@@ -1,9 +1,11 @@
 # Mantener en orden alfabetico
 alembic
 appdirs
+babel
 bcrypt
 configobj
 flask
+flask-babel
 flask-login
 flask-sqlalchemy
 flask-wtf

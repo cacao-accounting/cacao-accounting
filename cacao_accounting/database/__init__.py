@@ -286,7 +286,9 @@ class PeriodoContable(db.Model):
     """
 
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
-    nombre = db.Column(db.String(50))
+    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
+    nombre = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50))
     habilitada = db.Column(db.Boolean(), index=True)
-    inicio = db.Column(db.Date())
-    fin = db.Column(db.Date())
+    inicio = db.Column(db.Date(), nullable=False)
+    fin = db.Column(db.Date(), nullable=False)
