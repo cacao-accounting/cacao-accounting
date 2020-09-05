@@ -19,7 +19,7 @@
 Modulo de Caja y Bancos.
 """
 
-from flask import Blueprint,redirect, render_template
+from flask import Blueprint, redirect, render_template
 from flask_login import login_required
 from cacao_accounting.modulos import validar_modulo_activo
 

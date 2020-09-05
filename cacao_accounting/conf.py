@@ -24,37 +24,37 @@ from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
 from sys import platform, stdout
-from cacao_accounting.loggin import logger as logs
 from cacao_accounting.metadata import DEVELOPMENT
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
 
 local_conf = "cacaoaccounting.conf"
-log_file = "cacaoaccounting.log"
+_log_file = "cacaoaccounting.log"
+logs_file = stdout
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
-user_logs = join(user_log_dir(appname, appauthor), log_file)
+user_logs = join(user_log_dir(appname, appauthor), _log_file)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
 
 
 if exists(local_conf):
     configuracion = ConfigObj(local_conf)
-    logs.add(log_file, format="{time} {level} {message}", level="DEBUG")
+    logs_file = _log_file
 
 elif exists(user_conf):
     configuracion = ConfigObj(user_conf)
-    logs.add(user_logs, format="{time} {level} {message}", level="INFO")
+    logs_file = user_logs
 
 elif exists(global_conf):
     configuracion = ConfigObj(global_conf)
     if "DOCKERISED" in environ:
-        logs.add(stdout, format="{time} {level} {message}", level="INFO")
+        logs_file = stdout
     elif platform == "linux":
-        logs.add(join("/var/logs", log_file), format="{time} {level} {message}", level="INFO")
+        logs_file = join("/var/logs", _log_file)
     elif platform == "'win32'":
-        logs.add(log_file, format="{time} {level} {message}", level="INFO")
+        logs_file = _log_file
     else:
-        pass
+        logs_file = stdout
 
 else:
     configuracion = {}

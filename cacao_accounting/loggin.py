@@ -21,6 +21,7 @@ Configuración centralizada para logs del sistema.
 
 from sys import stderr
 from loguru import logger
+from cacao_accounting.conf import logs_file
 from cacao_accounting.metadata import __state__
 
 if __state__ == "development":
@@ -28,4 +29,4 @@ if __state__ == "development":
 elif __state__ == "release_candidate" or __state__ == "alpha":
     logger.add(logger.ad(stderr, format="{time} {level} {message}", level="INFO"))
 else:
-    logger.add(logger.ad(stderr, format="{time} {level} {message}", level="INFO"))
+    logger.add(logger.ad(logs_file, format="{time} {level} {message}", level="INFO"))
