@@ -94,8 +94,10 @@ class Modulos(db.Model):
     """Simple lista de los modulos del sistema."""
 
     __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
-    id = db.Column(db.Integer(), primary_key=True, unique=True)
-    modulo = db.Column(db.String(25), unique=True)
+    id = db.Column(db.Integer(), primary_key=True, unique=True, nullable=False)
+    modulo = db.Column(db.String(25), unique=True, index=True)
+    estandar = db.Column(db.Boolean(), nullable=False)
+    habilitado = db.Column(db.Boolean(), nullable=True)
 
 
 class Registros(db.Model):

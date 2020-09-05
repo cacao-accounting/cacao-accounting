@@ -19,8 +19,9 @@
 Modulo de Inventarios.
 """
 
-from flask import Blueprint, render_template
+from flask import Blueprint,redirect, render_template
 from flask_login import login_required
+from cacao_accounting.modulos import validar_modulo_activo
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
@@ -29,4 +30,7 @@ inventario = Blueprint("inventario", __name__, template_folder="templates")
 @inventario.route("/inventory")
 @login_required
 def inventario_():
-    return render_template("inventario.html")
+    if validar_modulo_activo("inventory"):
+        return render_template("inventario.html")
+    else:
+        redirect("/app")

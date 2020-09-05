@@ -70,6 +70,10 @@ def create_app(ajustes=None):
         app.register_blueprint(login)
         app.register_blueprint(ventas)
 
+    from cacao_accounting.modulos import validar_modulo_activo
+
+    app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+
     @app.cli.command()
     def initdb():
         """Crea el esquema de la base de datos."""

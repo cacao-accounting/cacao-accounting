@@ -19,8 +19,9 @@
 Modulo de Contabilidad.
 """
 
-from flask import Blueprint, render_template
+from flask import Blueprint,redirect, render_template
 from flask_login import login_required
+from cacao_accounting.modulos import validar_modulo_activo
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
@@ -30,7 +31,10 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 @contabilidad.route("/accounts")
 @login_required
 def conta():
-    return render_template("contabilidad.html")
+    if validar_modulo_activo("accounting"):
+        return render_template("contabilidad.html")
+    else:
+        redirect("/app")
 
 
 @contabilidad.route("/accounts/entities")

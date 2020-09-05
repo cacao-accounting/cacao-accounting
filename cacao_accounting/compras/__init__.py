@@ -19,8 +19,9 @@
 Modulo de Compras.
 """
 
-from flask import Blueprint, render_template
+from flask import Blueprint,redirect, render_template
 from flask_login import login_required
+from cacao_accounting.modulos import validar_modulo_activo
 
 compras = Blueprint("compras", __name__, template_folder="templates")
 
@@ -29,4 +30,7 @@ compras = Blueprint("compras", __name__, template_folder="templates")
 @compras.route("/buying")
 @login_required
 def compras_():
-    return render_template("compras.html")
+    if validar_modulo_activo("buying"):
+        return render_template("compras.html")
+    else:
+        redirect("/app")

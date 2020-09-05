@@ -20,6 +20,7 @@ Datos básicos para iniciar el sistema.
 """
 
 from cacao_accounting.loggin import logger as log
+from cacao_accounting.modulos import _init_modulos
 
 
 def monedas():
@@ -37,4 +38,5 @@ def monedas():
 def base_data():
     log.debug("Iniciando carga de datos base al sistema.")
     monedas()
+    _init_modulos()
     log.debug("Batos base cargados en la base de datos.")

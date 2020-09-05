@@ -19,8 +19,9 @@
 Modulo administrativo.
 """
 
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, render_template
 from flask_login import login_required
+from cacao_accounting.modulos import validar_modulo_activo
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 
@@ -32,4 +33,7 @@ admin = Blueprint("admin", __name__, template_folder="templates")
 @admin.route("/settings")
 @login_required
 def admin_():
-    return render_template("admin.html")
+    if validar_modulo_activo("admin"):
+        return render_template("admin.html")
+    else:
+        redirect("/app")
