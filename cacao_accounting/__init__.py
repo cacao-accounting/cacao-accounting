@@ -32,6 +32,7 @@ from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
 from cacao_accounting.metadata import DEVELOPMENT
+from cacao_accounting.modulos import registrar_modulos_adicionales
 from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
 
@@ -69,6 +70,7 @@ def create_app(ajustes=None):
         app.register_blueprint(inventario)
         app.register_blueprint(login)
         app.register_blueprint(ventas)
+        registrar_modulos_adicionales(app)
 
     from cacao_accounting.modulos import validar_modulo_activo
 

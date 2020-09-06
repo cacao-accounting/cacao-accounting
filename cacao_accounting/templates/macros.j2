@@ -38,27 +38,27 @@
           <a href="{{ url_for("contabilidad.conta") }}" class="pf-c-nav__link">Contabilidad</a>
         </li>
         {% endif %}
-        {% if validar_modulo_activo("accounting")  %}
+        {% if validar_modulo_activo("cash")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("bancos.bancos_") }}" class="pf-c-nav__link">Caja y Bancos</a>
         </li>
         {% endif %}
-        {% if validar_modulo_activo("accounting")  %}
+        {% if validar_modulo_activo("buying")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("compras.compras_") }}" class="pf-c-nav__link">Compras</a>
         </li>
         {% endif %}
-        {% if validar_modulo_activo("accounting")  %}
+        {% if validar_modulo_activo("inventory")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("inventario.inventario_") }}" class="pf-c-nav__link">Inventarios</a>
         </li>
         {% endif %}
-        {% if validar_modulo_activo("accounting")  %}
+        {% if validar_modulo_activo("sales")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("ventas.ventas_") }}" class="pf-c-nav__link">Ventas</a>
         </li>
         {% endif %}
-        {% if validar_modulo_activo("accounting")  %}
+        {% if validar_modulo_activo("admin")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("admin.admin_") }}" class="pf-c-nav__link">Administración</a>
         </li>
