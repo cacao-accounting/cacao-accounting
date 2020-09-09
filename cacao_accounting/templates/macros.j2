@@ -58,6 +58,15 @@
           <a href="{{ url_for("ventas.ventas_") }}" class="pf-c-nav__link">Ventas</a>
         </li>
         {% endif %}
+        {% if modulos_extra %}
+        {% for modulo in modulos_extra -%}
+        {% if validar_modulo_activo(modulo.nombre_modulo)  %}
+        <li class="pf-c-nav__item">
+          <a href="{{ url_for( modulo.url ) }}" class="pf-c-nav__link">{{ modulo.nombre }} </a>
+        </li>
+        {% endif %}
+        {%- endfor %}
+        {% endif %}
         {% if validar_modulo_activo("admin")  %}
         <li class="pf-c-nav__item">
           <a href="{{ url_for("admin.admin_") }}" class="pf-c-nav__link">Administración</a>
