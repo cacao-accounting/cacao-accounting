@@ -13,7 +13,7 @@ loguru
 pg8000
 PyMySQL
 sqlalchemy
-teritorio
+# teritorio only py >= 3.6
 waitress
 wtforms
 

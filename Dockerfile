@@ -7,6 +7,7 @@ FROM python:slim
 COPY . /app
 WORKDIR /app
 RUN pip --no-cache-dir install -r requirements.txt \
+    && pip install territorio \
     && python setup.py develop \
     && rm -rf /root/.cache/ && cacaoctl
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules

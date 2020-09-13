@@ -24,13 +24,23 @@ from cacao_accounting.modulos import _init_modulos
 
 
 def monedas():
-    from teritorio import Currencies
+    try:
+        from teritorio import Currencies
+    except ImportError:
+        Currencies = None
     from cacao_accounting.database import db, Moneda
 
     log.debug("Iniciando carga de base monedas a la base de datos.")
-    for moneda in Currencies():
-        registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
-        db.session.add(registro)
+    if Currencies:
+        for moneda in Currencies():
+            registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
+            db.session.add(registro)
+    else:
+        log.debug("No se detecto libreria territorio, cargando solo monedas básicas.")
+        nio = Moneda(id="NIO", nombre="Cordoba Oro", codigo=558, decimales=2)
+        db.session.add(nio)
+        usd = Moneda(id="USD", nombre="US Dollar", codigo=840, decimales=2)
+        db.session.add(usd)
     db.session.commit()
     log.debug("Monedas cargadas Correctamente")
 
