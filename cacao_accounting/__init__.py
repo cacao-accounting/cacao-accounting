@@ -22,6 +22,7 @@ Aquí creamos la función que define la "app" que se ejecuta en el servidor
 WSGI.
 """
 
+from sys import version_info
 from flask import Flask
 from cacao_accounting.admin import admin
 from cacao_accounting.app import cacao_app
@@ -54,6 +55,10 @@ def create_app(ajustes=None):
      - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
     """
     # pylint: disable=W0612
+    if version_info >= (3, 6):
+        pass
+    else:
+        raise RuntimeError("Python >= 3.6 requerido.")
     app = Flask(__name__, template_folder=plantillas, static_folder=archivos, instance_relative_config=False,)
     if ajustes:
         for i in ajustes:
