@@ -16,6 +16,7 @@ sqlalchemy
 teritorio
 waitress
 wtforms
+WTForms-SQLAlchemy
 
 #Heroku
 gunicorn
