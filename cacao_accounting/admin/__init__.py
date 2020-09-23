@@ -37,3 +37,12 @@ def admin_():
         return render_template("admin.html")
     else:
         redirect("/app")
+
+
+@admin.route("/settings/modules")
+@login_required
+def lista_modulos():
+    if validar_modulo_activo("admin"):
+        return render_template("admin/modulos.html")
+    else:
+        redirect("/app")
