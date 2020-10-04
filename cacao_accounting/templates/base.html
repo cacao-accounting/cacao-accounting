@@ -1,11 +1,14 @@
-{% import "macros.j2" as macros %}
+{% import "macros.html" as macros %}
 {{ macros.htmltag() }}
+
 <body>
 <div class="pf-c-page" id="pagina-principal">
+
   {{ macros.appheader() }}
   {{ macros.appbarralateral() }}
   {% block contenido %}
   {% endblock %}
+
 </div>
 </body>
 </html>
