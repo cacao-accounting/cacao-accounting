@@ -59,7 +59,12 @@ def create_app(ajustes=None):
         pass
     else:
         raise RuntimeError("Python >= 3.6 requerido.")
-    app = Flask(__name__, template_folder=plantillas, static_folder=archivos, instance_relative_config=False,)
+    app = Flask(
+        __name__,
+        template_folder=plantillas,
+        static_folder=archivos,
+        instance_relative_config=False,
+    )
     if ajustes:
         for i in ajustes:
             app.config[i] = ajustes[i]

@@ -28,13 +28,41 @@ def _demo_usuarios():
     from cacao_accounting.auth import proteger_passwd
 
     usuarios = [
-        Usuario(id="cacao", correo_e="cacao@cacao_accounting.io", clave_acceso=proteger_passwd("cacao"),),
-        Usuario(id="admin", correo_e="admin@cacao_accounting.io", clave_acceso=proteger_passwd("admin"),),
-        Usuario(id="ventas", correo_e="ventas@cacao_accounting.io", clave_acceso=proteger_passwd("ventas"),),
-        Usuario(id="compras", correo_e="compras@cacao_accounting.io", clave_acceso=proteger_passwd("compras"),),
-        Usuario(id="conta", correo_e="contabilidad@cacao_accounting.io", clave_acceso=proteger_passwd("conta"),),
-        Usuario(id="almacen", correo_e="almacen@cacao_accounting.io", clave_acceso=proteger_passwd("almacen"),),
-        Usuario(id="caja", correo_e="caja@cacao_accounting.io", clave_acceso=proteger_passwd("caja"),),
+        Usuario(
+            id="cacao",
+            correo_e="cacao@cacao_accounting.io",
+            clave_acceso=proteger_passwd("cacao"),
+        ),
+        Usuario(
+            id="admin",
+            correo_e="admin@cacao_accounting.io",
+            clave_acceso=proteger_passwd("admin"),
+        ),
+        Usuario(
+            id="ventas",
+            correo_e="ventas@cacao_accounting.io",
+            clave_acceso=proteger_passwd("ventas"),
+        ),
+        Usuario(
+            id="compras",
+            correo_e="compras@cacao_accounting.io",
+            clave_acceso=proteger_passwd("compras"),
+        ),
+        Usuario(
+            id="conta",
+            correo_e="contabilidad@cacao_accounting.io",
+            clave_acceso=proteger_passwd("conta"),
+        ),
+        Usuario(
+            id="almacen",
+            correo_e="almacen@cacao_accounting.io",
+            clave_acceso=proteger_passwd("almacen"),
+        ),
+        Usuario(
+            id="caja",
+            correo_e="caja@cacao_accounting.io",
+            clave_acceso=proteger_passwd("caja"),
+        ),
     ]
     for usuario in usuarios:
         db.session.add(usuario)
@@ -57,9 +85,21 @@ def _demo_unidades():
     from cacao_accounting.database import Unidad
 
     unidades = [
-        Unidad(nombre="Casa Matriz", entidad="cacao", id="matriz",),
-        Unidad(nombre="Movil", entidad="cacao", id="movil",),
-        Unidad(nombre="Masaya", entidad="cacao", id="masaya",),
+        Unidad(
+            nombre="Casa Matriz",
+            entidad="cacao",
+            id="matriz",
+        ),
+        Unidad(
+            nombre="Movil",
+            entidad="cacao",
+            id="movil",
+        ),
+        Unidad(
+            nombre="Masaya",
+            entidad="cacao",
+            id="masaya",
+        ),
     ]
     for unidad in unidades:
         db.session.add(unidad)
