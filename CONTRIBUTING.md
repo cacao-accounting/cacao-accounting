@@ -96,8 +96,7 @@ Yarn es necesario para no tener que incluir librerias JavaScritp de terceros en 
 Para crear una base de datos de pruebas ejecutar:
 
 ```bash
-flask init-db
-flask demo-data
+flask initdb
 ```
 
 #### Ejecutar servidor de desarrollo:
@@ -105,13 +104,13 @@ flask demo-data
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
 ```bash
-flask run
+cacaoctl run
 ```
 
 Para verficiar que el proyecto se ejecuta correctamente con un servidor WSGI acto para producción ejecutar:
 
 ```bash
-python wsgi.py
+cacaoctl serve
 ```
 
 El usuario de pruebas es cacao con contraseña cacao.

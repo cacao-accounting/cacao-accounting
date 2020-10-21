@@ -2,7 +2,7 @@ from cacao_accounting import create_app
 from cacao_accounting.conf import configuracion
 
 app = create_app(configuracion)
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgres+pg8000://cacao:cacao@localhost:5432/cacao"
+app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 
 
 def test_postgres():
