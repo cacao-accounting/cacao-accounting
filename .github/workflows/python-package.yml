@@ -67,7 +67,7 @@ jobs:
       run: pytest tests/ghactions/sqlite.py
     - name: MySQL Backend
       run: pytest tests/ghactions/mysql.py
-    - name: Postgresql Backend
-      run: pytest tests/ghactions/postgresql.py
+  #  - name: Postgresql Backend
+  #    run: pytest tests/ghactions/postgresql.py
     - name: Codecov
       uses: codecov/codecov-action@v1.0.11
