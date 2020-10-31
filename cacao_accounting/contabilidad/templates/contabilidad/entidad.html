@@ -1,10 +1,35 @@
 {% extends "base.html" %}
 {% block contenido %}
-<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
-  <section class="pf-c-page__main-section pf-m-light">
-    <div class="pf-c-content">
-      <h1>{{ registro.razon_social }}</h1>
+<section class="pf-c-page__main-section pf-m-light">
+  <div class="pf-c-content">
+    <h3>Entidad.</h3>
+    <div class="container">
+      <div class="row">
+        <h5 class="card-title">Información General</h5>
+        <div class="col-md">
+          <h6>Datos Generales:</h6>
+          <p>Identificador: {{ registro.id }} </p>
+          <p>Razón Social: {{ registro.razon_social }}</p>
+          <p>Nombre: {{ registro.nombre_comercial }}</p>
+          <p>ID Fiscal: {{ registro.id_fiscal }}</p>
+          <p>Tipo: {{ registro.tipo_entidad }}</p>
+        </div>
+        <div class="col-md">
+          <h6>Datos de Contacto:</h6>
+          <p>Pais: {{ registro.pais }}</p>
+          <p>Departamento: {{ registro.departamento }}</p>
+          <p>Ciudad: {{ registro.ciudad }}</p>
+          <p>Dirección {{ registro.direccion1 }} - {{ registro.direccion2 }}</p>
+          <p>Calle: {{ registro.calle }}</p>
+          <p>Casa_ {{ registro.casa }}</p>
+          <p>Página Web: {{ registro.web }}</p>
+          <p>Correo Electrónico: {{ registro.correo_electronico }}</p>
+          <p>Telefono: {{ registro.telefono1 }}</p>
+          <p>Telefono: {{ registro.telefono2 }}</p>
+          <p>Fax: {{ registro.fax }}</p>
+        </div>
+      </div>
     </div>
-  </section>
-</main>
+  </div>
+</section>
 {% endblock %}

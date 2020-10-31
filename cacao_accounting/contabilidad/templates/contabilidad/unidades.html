@@ -1,31 +1,15 @@
 {% extends "base.html" %}
 {% block contenido %}
-<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
-  <section class="pf-c-page__main-section pf-m-light">
-    <div class="pf-c-content">
-      <h1>Unidades de Negocios</h1>
-      <table class="pf-c-table pf-m-grid-md" role="grid" aria-label="Tabla de entidades" id="tabla-entidades">
-        <thead>
-          <tr role="row">
-            <th role="columnheader" scope="col">Entidad</th>
-            <th role="columnheader" scope="col">Nombre</th>
-          </tr>
-        </thead>
-        <tbody role="rowgroup">
-          {% for unidad in unidades -%}
-          <tr role="row">
-            <td role="cell" data-label="Entidad">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=unidad.entidad) }}>{{ unidad.entidad }}</a>
-            </td>
-            <td role="cell" data-label="Razón Social">
-              <a href = {{ url_for("contabilidad.unidad" ,id_unidad=unidad.id) }}>{{ unidad.nombre }}</a>
-            </td>
-          </tr>
-          {%- endfor %}
-        </tbody>
-      </table>
 
-    </div>
-  </section>
-</main>
+<section>
+  <h3>Entidades.</h3>
+  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Unidad de Negocios</a>
+  <h6>Listado de Entidades:</h6>
+  <ul>
+  {% for unidad in unidades -%}
+  <li>
+    <a href = {{ url_for("contabilidad.entidad" ,id_entidad=unidad.entidad) }}>{{ unidad.entidad }}</a> - <a href = {{ url_for("contabilidad.unidad" ,id_unidad=unidad.id) }}>{{ unidad.nombre }}</a>
+  {%- endfor %}
+  </ul>
+</section>
 {% endblock %}

@@ -1,38 +1,16 @@
 {% extends "base.html" %}
 {% block contenido %}
-<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
-  <section class="pf-c-page__main-section pf-m-light">
-    <div class="pf-c-content">
-      <h1>Entidades</h1>
-      <table class="pf-c-table pf-m-grid-md" role="grid" aria-label="Tabla de entidades" id="tabla-entidades">
-        <thead>
-          <tr role="row">
-            <th role="columnheader" scope="col">ID</th>
-            <th role="columnheader" scope="col">Razón Social</th>
-            <th role="columnheader" scope="col">Nombre Comercial</th>
-            <th role="columnheader" scope="col">ID Fiscal</th>
-          </tr>
-        </thead>
-        <tbody role="rowgroup">
-          {% for entidad in entidades -%}
-          <tr role="row">
-            <td role="cell" data-label="Código">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id }}</a>
-            </td>
-            <td role="cell" data-label="Razón Social">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.razon_social }}</a>
-            </td>
-            <td role="cell" data-label="Nombre Comercial">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.nombre_comercial }}</a>
-            </td>
-            <td role="cell" data-label="ID Fiscal">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id_fiscal }}</a>
-            </td>
-          </tr>
-          {%- endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-</main>
+
+<section>
+  <h3>Entidades.</h3>
+  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button">Crear Nueva Entidad</a>
+  <h6>Listado de Entidades:</h6>
+  <ul>
+  {% for entidad in entidades -%}
+  <li>
+    <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id }}</a> - <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.razon_social }}</a> - <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id_fiscal }}</a>
+  </li>
+  {%- endfor %}
+  </ul>
+</section>
 {% endblock %}

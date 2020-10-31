@@ -163,7 +163,7 @@ class Entidad(db.Model):
     # Individual, Sociedad, Sin Fines de Lucro
     tipo_entidad = db.Column(db.String(50))
     # Información de contacto
-    corre_electronico = db.Column(db.String(50))
+    correo_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))

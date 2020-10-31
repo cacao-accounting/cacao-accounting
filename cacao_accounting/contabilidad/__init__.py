@@ -37,6 +37,8 @@ def conta():
         redirect("/app")
 
 
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Entidades
 @contabilidad.route("/accounts/entities")
 @login_required
 def entidades():
@@ -55,6 +57,14 @@ def entidad(id_entidad):
     return render_template("contabilidad/entidad.html", registro=registro)
 
 
+@contabilidad.route("/accounts/entities/new")
+@login_required
+def nueva_entidad():
+    return render_template("contabilidad/nuevaentidad.html")
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Unidades de Negocio
 @contabilidad.route("/accounts/units")
 @login_required
 def unidades():
@@ -73,6 +83,14 @@ def unidad(id_unidad):
     return render_template("contabilidad/unidad.html", registro=registro)
 
 
+@contabilidad.route("/accounts/units/new")
+@login_required
+def nueva_unidad():
+    return render_template("contabilidad/nuevaunidad.html")
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Cuentas Contables
 @contabilidad.route("/accounts/accounts")
 @login_required
 def cuentas():
@@ -91,18 +109,24 @@ def cuenta(id_cta):
     return render_template("contabilidad/cuenta.html", registro=registro)
 
 
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Centros de Costos
 @contabilidad.route("/accounts/ccenter")
 @login_required
 def ccostos():
     return render_template("contabilidad/ccostos.html")
 
 
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Proyectos
 @contabilidad.route("/accounts/projects")
 @login_required
 def proyectos():
     return render_template("contabilidad/proyectos.html")
 
 
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Tipos de Cambio
 @contabilidad.route("/accounts/exchange")
 @login_required
 def tc():
