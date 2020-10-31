@@ -30,10 +30,9 @@
 
 {# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
 {% macro cabecera() %}
-
 <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
   <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
-    <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting">
+    <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
   </a>
   <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse" data-target="#BarraLateralMenu" aria-controls="BarraLateralMenu" aria-expanded="false" aria-label="Navegación">
     <span class="navbar-toggler-icon"></span>
@@ -44,12 +43,10 @@
     </li>
   </ul>
 </header>
-
 {%- endmacro %}
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
-
 <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
   <div class="position-sticky pt-3">
     <ul class="nav flex-column">
@@ -92,8 +89,7 @@
           <a href="{{ url_for("admin.admin_") }}" class="nav-link active">Administración</a>
         </li>
         {% endif %}
-    </ul>
-    </nav>
-  </div>
-</div>
+      </ul>
+    </div>
+</nav>
 {%- endmacro %}

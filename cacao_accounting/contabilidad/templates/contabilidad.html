@@ -1,39 +1,23 @@
 {% extends "base.html" %}
 {% block contenido %}
-<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
-  <section class="pf-c-page__main-section pf-m-light">
-    <div class="pf-c-content">
-      <h1>Contabilidad</h1>
-      <div class="pf-l-gallery pf-m-gutter">
-        <div class="pf-l-gallery__item">
-          <h2>Cuentas</h2>
-          <p><a href="{{ url_for("contabilidad.entidades") }}" class="pf-c-nav__link">Entidades</a></p>
-          <p><a href="{{ url_for("contabilidad.unidades") }}" class="pf-c-nav__link">Unidades de Negocio</a></p>
-          <p><a href="{{ url_for("contabilidad.cuentas") }}" class="pf-c-nav__link">Catálogo de Cuentas</a></p>
-          <p><a href="{{ url_for("contabilidad.ccostos") }}" class="pf-c-nav__link">Centros de Costos</a></p>
-          <p><a href="{{ url_for("contabilidad.proyectos") }}" class="pf-c-nav__link">Proyectos</a></p>
-          <p><a href="{{ url_for("contabilidad.tc") }}" class="pf-c-nav__link">Tasas de Cambio</a></p>
-        </div>
-        <div class="pf-l-gallery__item">
-          <h2>Registros</h2>
-          <p>Períodos Contables</p>
-          <p>Comprobantes de Diario</p>
-          <p>Cierre Mensual</p>
-          <p>Cierre Anual</p>
-          <p>Comprobantes de Ajuste</p>
-        </div>
-        <div class="pf-l-gallery__item">
-          <h2>Reportes</h2>
-          <p>Libro Diario</p>
-          <p>Libro Mayor</p>
-          <p>Balanza de Comprobación</p>
-          <p>Balance General</p>
-          <p>Estado de Resultado</p>
-        </div>
-        </div>
+  <section>
+    <h3>Módulo Contabilidad.</h3>
+    <div class="container">
+      <div class="row">
+        <div class="col-md">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Configuración</h5>
+              <p><a href="{{ url_for("contabilidad.entidades") }}" class="nav__link">Entidades</a></p>
+              <p><a href="{{ url_for("contabilidad.unidades") }}" class="nav__link">Unidades de Negocio</a></p>
+              <p><a href="{{ url_for("contabilidad.cuentas") }}" class="nav__link">Catálogo de Cuentas</a></p>
+              <p><a href="{{ url_for("contabilidad.ccostos") }}" class="nav__link">Centros de Costos</a></p>
+              <p><a href="{{ url_for("contabilidad.proyectos") }}" class="nav__link">Proyectos</a></p>
+              <p><a href="{{ url_for("contabilidad.tc") }}" class="nav__link">Tasas de Cambio</a></p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
-</main>
 {% endblock %}

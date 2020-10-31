@@ -1,23 +1,18 @@
 {% extends "base.html" %}
 {% block contenido %}
-<main class="pf-c-page__main" tabindex="-1" id="main-content-page-default-nav-example">
-  <section class="pf-c-page__main-section pf-m-light">
-    <div class="pf-c-content">
-      <h1>Administración</h1>
-      <div class="pf-l-gallery pf-m-gutter">
-        <div class="pf-l-gallery__item">
-          <h2>Modulos</h2>
-          <a href="{{ url_for("admin.lista_modulos") }}" class="pf-c-nav__link">Modulos</a>
-        </div>
-        <div class="pf-l-gallery__item">
-          <h2>Usuarios y Permisos</h2>
-          <p>Usuarios</p>
-          <p>Perfiles</p>
-        </div>
-        </div>
+<section>
+  <h3>Módulo Administración.</h3>
+  <div class="container">
+    <div class="row">
+      <div class="col-md">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Modulos</h5>
+            <a href="{{ url_for("admin.lista_modulos") }}">Modulos</a>
+          </div>
         </div>
       </div>
     </div>
-  </section>
-</main>
+  </div>
+</section>
 {% endblock %}
