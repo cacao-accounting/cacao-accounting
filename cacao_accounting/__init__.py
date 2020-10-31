@@ -42,7 +42,7 @@ def command():
     """
     Interfaz de linea de commandos.
     """
-    from flask.cli import main
+    from cacao_accounting.cli import main
 
     main(as_module="cacao_accounting")
 
