@@ -2,10 +2,12 @@
 {# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
 
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
-{% macro htmltag() -%}
-<!DOCTYPE html>
-<html>
-<head>
+{% macro headertags() -%}
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cacao Accounting Software">
+  <meta name="author" content="William Moreno Reyes">
 
   {% if titulo  %}
   <title> {{ titulo }} </title>
@@ -13,19 +15,17 @@
   <title>Cacao Accounting</title>
   {% endif %}
 
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  {# Patternfly #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/@patternfly/patternfly/patternfly.css') }}">
-
-  {# JS Local #}
+  <!-- Bootstrap core CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+  <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+  
+  <!-- Código JS local -->
   <script src="{{ url_for('static', filename='cacaoaccounting.js') }}"></script>
 
+  <!-- Favicons -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/favicon-32x32.png') }}" sizes="32x32">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/favicon-16x16.png') }}" sizes="16x16">
 
-</head>
 {%- endmacro %}
 
 {# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
