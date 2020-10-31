@@ -29,64 +29,70 @@
 {%- endmacro %}
 
 {# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
-{% macro appheader() %}
+{% macro cabecera() %}
 
-<header class="pf-c-page__header">
-  <div class="pf-c-page__header-brand">
-    <a class="pf-c-page__header-brand-link" href="{{ url_for("cacao_app.pagina_inicio") }}">
-      <img class="pf-c-brand" src="{{ url_for('static', filename='media/brand.svg') }}" alt="Cacao Accounting" />
-    </a>
-  </div>
+<header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+  <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href=""> 
+    <img class="mb-4" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting">
+  </a>
+  <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse" data-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <ul class="navbar-nav px-3">
+    <li class="nav-item text-nowrap">
+      <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">Salir</a>
+    </li>
+  </ul>
 </header>
 
 {%- endmacro %}
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
-{% macro appbarralateral() -%}
-<div class="pf-c-page__sidebar">
-  <div class="pf-c-page__sidebar-body">
-    <nav class="pf-c-nav" id="page-default-nav-example-primary-nav" aria-label="Global">
-      <ul class="pf-c-nav__list">
-        {% if validar_modulo_activo("accounting")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("contabilidad.conta") }}" class="pf-c-nav__link">Contabilidad</a>
+{% macro barralateral() -%}
+
+<nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+  <div class="position-sticky pt-3">
+    <ul class="nav flex-column">
+      {% if validar_modulo_activo("accounting")  %}
+        <li class="nav__item">
+          <a href="{{ url_for("contabilidad.conta") }}" class="nav-link active" >Contabilidad</a>
         </li>
         {% endif %}
         {% if validar_modulo_activo("cash")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("bancos.bancos_") }}" class="pf-c-nav__link">Caja y Bancos</a>
+        <li class="nav__item">
+          <a href="{{ url_for("bancos.bancos_") }}" class="nav-link active">Caja y Bancos</a>
         </li>
         {% endif %}
         {% if validar_modulo_activo("buying")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("compras.compras_") }}" class="pf-c-nav__link">Compras</a>
+        <li class="nav__item">
+          <a href="{{ url_for("compras.compras_") }}" class="nav-link active">Compras</a>
         </li>
         {% endif %}
         {% if validar_modulo_activo("inventory")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("inventario.inventario_") }}" class="pf-c-nav__link">Inventarios</a>
+        <li class="nav__item">
+          <a href="{{ url_for("inventario.inventario_") }}" class="nav-link active">Inventarios</a>
         </li>
         {% endif %}
         {% if validar_modulo_activo("sales")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("ventas.ventas_") }}" class="pf-c-nav__link">Ventas</a>
+        <li class="nav__item">
+          <a href="{{ url_for("ventas.ventas_") }}" class="nav-link active">Ventas</a>
         </li>
         {% endif %}
         {% if modulos_extra %}
         {% for modulo in modulos_extra -%}
         {% if validar_modulo_activo(modulo.nombre_modulo)  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for( modulo.url ) }}" class="pf-c-nav__link">{{ modulo.nombre }} </a>
+        <li class="nav__item">
+          <a href="{{ url_for( modulo.url ) }}" class="nav-link active">{{ modulo.nombre }} </a>
         </li>
         {% endif %}
         {%- endfor %}
         {% endif %}
         {% if validar_modulo_activo("admin")  %}
-        <li class="pf-c-nav__item">
-          <a href="{{ url_for("admin.admin_") }}" class="pf-c-nav__link">Administración</a>
+        <li class="nav__item">
+          <a href="{{ url_for("admin.admin_") }}" class="nav-link active">Administración</a>
         </li>
         {% endif %}
-      </ul>
+    </ul>
     </nav>
   </div>
 </div>
