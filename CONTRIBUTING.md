@@ -191,7 +191,7 @@ Otros ejemplos de buenos mensajes de commit se pueden encontrar aca:
 Para crear los archivos para distribuir el proyecto ejecutar:
 
 ```bash
-python -m pep517.build .
+python -m build
 twine check dist/*
 # Solo usuario con permisos de cargar en Pypi.
 twine upload dist/*

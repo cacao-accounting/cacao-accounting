@@ -1,4 +1,5 @@
 # Crear tarball y wheel
+build
 pep517
 twine
 wheel
