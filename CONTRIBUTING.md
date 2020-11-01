@@ -192,6 +192,9 @@ Para crear los archivos para distribuir el proyecto ejecutar:
 
 ```bash
 python -m pep517.build .
+twine check dist/*
+# Solo usuario con permisos de cargar en Pypi.
+twine upload dist/*
 ```
 
 Es un objetivo principal que el proyecto sea [pip instalable](https://pypi.org/project/cacao-accounting/) así como ofrecer una versión del proyecto que pueda ser utilizada como [aplicación de escritorio](https://pypi.org/project/cacao-accounting-desktop/), para cumplir este objetivo hemos desarrollado [open marquesote](https://pypi.org/project/open-marquesote/).
