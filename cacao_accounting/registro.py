@@ -35,6 +35,20 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 
+from cacao_accounting.database import db
+
 
 class Registro:
+    """
+    Interfaz comun para la administración de registros.
+    Las relaciones entre registros son la base de la integridad de datos en el sistema.
+    """
+
+    database = db
+
+
+def insertar_registro(tabla, datos):
+    """
+    Utileria para uniformar el registro de transacciones en la base de datos.
+    """
     pass

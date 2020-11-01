@@ -175,6 +175,8 @@ class Entidad(db.Model):
     direccion2 = db.Column(db.String(100))
     calle = db.Column(db.String(100))
     casa = db.Column(db.String(100))
+    habilitada = db.Column(db.Boolean())
+    predeterminada = db.Column(db.Boolean())
 
 
 class Unidad(db.Model):

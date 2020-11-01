@@ -60,7 +60,19 @@ def entidad(id_entidad):
 @contabilidad.route("/accounts/entities/new")
 @login_required
 def nueva_entidad():
-    return render_template("contabilidad/nuevaentidad.html")
+    from cacao_accounting.contabilidad.forms import FormularioEntidad
+
+    formulario = FormularioEntidad()
+    return render_template("contabilidad/nuevaentidad.html", form=formulario)
+
+
+@contabilidad.route("/accounts/entities/edit/<id_entidad>")
+@login_required
+def editar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.forms import FormularioEntidad
+
+    formulario = FormularioEntidad()
+    return render_template("contabilidad/editarentidad.html", form=formulario)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

@@ -14,3 +14,17 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.registro import Registro
+from cacao_accounting.database import Entidad
+
+
+class RegistroEntidad(Registro):
+    """
+    Registro base para controlar la logica de negocios de una entidad.
+
+    Una entidad es la base contra la que se realizan las transacciones en el
+    sistema.
+    """
+
+    tabla_entidad = Entidad()
