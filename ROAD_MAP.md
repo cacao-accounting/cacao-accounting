@@ -1,4 +1,6 @@
 
+![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/cacao_accounting/static/media/cacao_accounting%20_logo.png)
+
 Estas son las funciones necesarias para definir que el proyecto a alcansado un estado usable y útil para llegar los registros de una entidad.
 
 Funcionalidad Base. 

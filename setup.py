@@ -30,7 +30,7 @@ setup(
     version="0.0.1" + timestamp,
     author="William José Moreno Reyes",
     author_email="williamjmorenor@gmail.com",
-    description="Software contable. Aun es etapa de desarrollo.",
+    description="Software contable para micro, pequeñas y medianas empresas.",
     long_description=descripcion,
     long_description_content_type="text/markdown",
     packages=["cacao_accounting"],
@@ -54,14 +54,26 @@ setup(
     install_requires=[
         "alembic",
         "appdirs",
+        "babel",
         "bcrypt",
         "configobj",
         "flask",
+        "flask-babel",
         "flask-login",
         "flask-sqlalchemy",
         "flask-wtf",
+        "loguru",
+        "pg8000",
+        "PyMySQL",
         "sqlalchemy",
+        "teritorio",
+        "waitress",
         "wtforms",
+        "WTForms-SQLAlchemy",
     ],
-    entry_points={"console_scripts": ["cacaoctl=cacao_accounting:command",]},
+    entry_points={
+        "console_scripts": [
+            "cacaoctl=cacao_accounting:command",
+        ]
+    },
 )

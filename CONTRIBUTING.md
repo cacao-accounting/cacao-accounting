@@ -2,12 +2,14 @@
 
 Gracias por su interes en colaborar con Cacao Accounting (el proyecto).
 
+![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/cacao_accounting/static/media/cacao_accounting%20_logo.png)
+
 ## Licencia del Proyecto.
 
 Cacao Accounting es sofware libre y de código abierto liberado bajo la licencia Apache Versión 2 (la [licencia](https://github.com/cacao-accounting/cacao-accounting/blob/master/LICENSE) del proyecto), esto quiere decir que los usuarios del proyecto pueden:
 
 * Usar el proyecto con o sin fines de lucro.
-* Modificar el proyecto para ajustarse a sus necesidades especificas (definiendo claramente los cambios realizados al proyecto original).
+* Modificar el proyecto para ajustarlo a sus necesidades especificas (definiendo claramente los cambios realizados al proyecto original).
 
 Sin embargo los usuarios no pueden:
 
@@ -18,7 +20,7 @@ de que pueda ser útil para algún fin especifico.
 
 ## Certifica el origen de tus aportes.
 
-Para incorporar tus aportes al proyecto requerimos que certifiques el o los aportes son de tu propiedad o que tienes permiso de terceros para incorporar el aporte al proyecto, siguiendo el [certificado de origen del desarrollador](https://developercertificate.org/).
+Para incorporar tus aportes al proyecto requerimos que certifiques que el o los aportes son de tu propiedad o que tienes permiso de terceros para incorporar el o los aportes al proyecto, siguiendo el [certificado de origen del desarrollador](https://developercertificate.org/).
 
 Recomendamos ejecutar:
 
@@ -26,7 +28,8 @@ Recomendamos ejecutar:
 git commit -s
 ```
 
-Y se agregara una firma apropiada al commit.
+Y se agregara una firma apropiada al commit, no se incluiran en el proyecto commits sin el correspondiente
+Sing-Off.
 
 ## Colaborando con el proyecto
 
@@ -35,7 +38,8 @@ Y se agregara una firma apropiada al commit.
 Pueden colaborar de distintas formas:
 
 * Como desarrollador.
-* Escribiendo documentación.
+* Como control de Calidad (QA).
+* Escribiendo y mejorando la documentación.
 * Aportando ideas de nuevas caracteristicas.
 * Reportando errores.
 * Traduciendo.
@@ -50,16 +54,18 @@ El desarrollo es multiplataforma, puedes utilizar tanto Windows, Linux o Mac
 para aportar el proyecto, para colaborar con el proyecto necesitas:
 
   * [GIT](https://git-scm.com/)
-  * [Nodejs](https://nodejs.org/en/)
   * [Yarn](https://yarnpkg.com/lang/en/)
   * [Python](https://www.python.org/downloads/)
 
-Tecnologías utilizadas:
-* Backend: [Flask](https://flask.palletsprojects.com/en/1.1.x/)
-* Frontend: [PatternFly](https://www.patternfly.org/v4/)
-* ORM: [SQLAlchemy](https://www.sqlalchemy.org/), con soporte a Postgresql, Mysql y Sqlite (Mariadb hasta que tenga soporte real a [JSON](https://mariadb.com/kb/en/json-data-type/))
+La versión de Python soportada es: >=3.6
 
-El desarrollo se realiza en la rama development.
+Tecnologías utilizadas:
+* Backend: [Flask](https://flask.palletsprojects.com/en/1.1.x/).
+* Frontend: [Bootstrap 5](https://v5.getbootstrap.com/).
+* ORM: [SQLAlchemy](https://www.sqlalchemy.org/).
+
+El desarrollo se realiza en la rama ```development```, una vez el proyecto sea liberado para producción la rama
+```main``` contendra la últma versión apta su uso en producción.
 
 #### Obteniendo el codigo fuente:
 
@@ -76,8 +82,10 @@ Para iniciar el proyecto es necesario seguir estos pasos:
 
 ```bash
 python -m venv venv
-.\venv\Scripts\activate.bat # Windows
-source venv/bin/activate # Linux
+# Windows:
+.\venv\Scripts\activate.bat
+# Linux y MAC: 
+source venv/bin/activate 
 ```
 
 #### Instalar las dependencias:
@@ -91,12 +99,18 @@ yarn
 
 Yarn es necesario para no tener que incluir librerias JavaScritp de terceros en el repositorio principal del proyecto.
 
+Puede verificar que la instalación fue correcta ejecutando:
+
+```bash
+cacaoctl
+```
+
 #### Esquema de la base de datos
 
 Para crear una base de datos de pruebas ejecutar:
 
 ```bash
-flask initdb
+cacaoctl initdb
 ```
 
 #### Ejecutar servidor de desarrollo:
@@ -113,7 +127,7 @@ Para verficiar que el proyecto se ejecuta correctamente con un servidor WSGI act
 cacaoctl serve
 ```
 
-El usuario de pruebas es cacao con contraseña cacao.
+El usuario de pruebas es ```cacao``` con contraseña ```cacao```.
 
 #### Guía de estilo:
 
@@ -167,10 +181,17 @@ Resolves: #123
 See also: #456, #789
 ```
 
+Otros ejemplos de buenos mensajes de commit se pueden encontrar aca:
+
+ - [Buenas Practicas En Commits De Git](https://www.codigofacilito.com/articulos/buenas-practicas-en-commits-de-git) 
+ - [How to Write a Git Commit Message](https://chris.beams.io/posts/git-commit/)
+
 #### Empaquetar para distribución:
 
-Para crear el tarball y wheel del proyecto ejecutar:
+Para crear los archivos para distribuir el proyecto ejecutar:
 
 ```bash
 python -m pep517.build .
 ```
+
+Es un objetivo principal que el proyecto sea [pip instalable](https://pypi.org/project/cacao-accounting/) así como ofrecer una versión del proyecto que pueda ser utilizada como [aplicación de escritorio](https://pypi.org/project/cacao-accounting-desktop/), para cumplir este objetivo hemos desarrollado [open marquesote](https://pypi.org/project/open-marquesote/).

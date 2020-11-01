@@ -1,16 +1,16 @@
 {
-  "name": "cacao-accounting-mockup",
+  "name": "cacao-accounting",
   "version": "1.0.0",
-  "description": "Vista previa interfas de usuario de cacao-accounting",
+  "description": "Software contable para micro, pequeñas y medianas empresas.",
   "main": "index.js",
   "scripts": {},
-  "repository": "git+https://github.com/cacao-accounting/cacao-accounting-mockup.git",
+  "repository": "git+https://github.com/cacao-accounting/cacao-accounting.git",
   "author": "William Moreno Reyes",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/cacao-accounting/cacao-accounting-mockup/issues"
+    "url": "https://github.com/cacao-accounting/cacao-accounting/issues"
   },
-  "homepage": "https://github.com/cacao-accounting/cacao-accounting-mockup#readme",
+  "homepage": "https://github.com/cacao-accounting/cacao-accounting#readme",
   "dependencies": {
     "bootstrap": "^5.0.0-alpha2",
     "bootstrap-icons": "^1.1.0",

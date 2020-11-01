@@ -1,3 +1,5 @@
+![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/cacao_accounting/static/media/cacao_accounting%20_logo.png)
+
 # Código de Conducta convenido para Contribuyentes
 
 ## Nuestro compromiso
