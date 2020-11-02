@@ -2,7 +2,7 @@
 
 # Cacao Accounting
 
-![Licencia](https://img.shields.io/badge/Licencia-Apache%20V2-green)
+![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
 ![Python package](https://github.com/cacao-accounting/cacao-accounting/workflows/Python%20package/badge.svg?branch=master)
 ![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/cacaoaccounting/cacaoaccounting)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting)
