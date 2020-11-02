@@ -1,5 +1,13 @@
 # Colaborando con Cacao Accounting.
 
+![GitHub top language](https://img.shields.io/github/languages/top/cacao-accounting/cacao-accounting)
+![GitHub language count](https://img.shields.io/github/languages/count/cacao-accounting/cacao-accounting)
+![GitHub contributors](https://img.shields.io/github/contributors/cacao-accounting/cacao-accounting)
+![GitHub last commit](https://img.shields.io/github/last-commit/cacao-accounting/cacao-accounting)
+![GitHub issues](https://img.shields.io/github/issues/cacao-accounting/cacao-accounting)
+![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/cacao-accounting/cacao-accounting)
+
+
 Gracias por su interes en colaborar con Cacao Accounting (el proyecto).
 
 ![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/cacao_accounting/static/media/cacao_accounting%20_logo.png)
