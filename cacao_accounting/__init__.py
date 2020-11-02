@@ -24,6 +24,7 @@ WSGI.
 
 from sys import version_info
 from flask import Flask
+from flask_alembic import Alembic
 from cacao_accounting.admin import admin
 from cacao_accounting.app import cacao_app
 from cacao_accounting.auth import administrador_sesion, login
@@ -36,6 +37,9 @@ from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.modulos import registrar_modulos_adicionales
 from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
+
+
+alembic = Alembic()
 
 
 def command():
@@ -69,6 +73,7 @@ def create_app(ajustes=None):
         for i in ajustes:
             app.config[i] = ajustes[i]
 
+    alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
     with app.app_context():

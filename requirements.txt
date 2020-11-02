@@ -5,6 +5,7 @@ babel
 bcrypt
 configobj
 flask
+Flask-Alembic
 flask-babel
 flask-login
 flask-sqlalchemy
