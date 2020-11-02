@@ -1,2 +1,2 @@
-init: flask reset-db && flask init-db && flask demo-data
+init: flask cleandb && flask initdb
 web: gunicorn wsgi:app
