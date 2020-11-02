@@ -1,4 +1,7 @@
 site_name: Cacao Accounting
-theme: material
-palette:
-    accent: teal
+theme: 
+    name: material
+    favicon: media/favicon.png
+    logo: media/cacao_accounting.png
+    palette:
+        accent: teal
