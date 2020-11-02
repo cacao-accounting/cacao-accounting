@@ -5,12 +5,36 @@
   <h3>Entidades.</h3>
   <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button">Crear Nueva Entidad</a>
   <h6>Listado de Entidades:</h6>
-  <ul>
-  {% for entidad in entidades -%}
-  <li>
-    <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id }}</a> - <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.razon_social }}</a> - <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }}>{{ entidad.id_fiscal }}</a>
-  </li>
-  {%- endfor %}
-  </ul>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th scope="col">Estado</th>
+        <th scope="col">ID</th>
+        <th scope="col">Razón Social</th>
+        <th scope="col">Nombre Comercial</th>
+        <th scope="col">ID Fiscal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entidad in entidades -%}
+      <tr>
+        <th>
+          {{ entidad.habilitada }}
+        </th>
+        <th scope="row">
+          <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.id }}</a>
+        </th>
+        <td>
+          <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.razon_social }}</a>
+        </td>
+        <td>
+          <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
+        </td>
+        <td>
+          <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
+        </td>
+      </tr>
+      {%- endfor %}
+  </table>
 </section>
 {% endblock %}
