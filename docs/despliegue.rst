@@ -1,5 +1,27 @@
 
 
+Docker
+======
+
+Existe una imagen de imagen de contenedor disponible para ejecutar la aplicación en:
+
+https://hub.docker.com/r/cacaoaccounting/cacaoaccounting
+
+En este ejemplo usaremos podman pero los comandos son equivalentes usando moby (docker):
+
+podman pull cacaoaccounting/cacaoaccounting
+
+podman images
+REPOSITORY                                 TAG     IMAGE ID      CREATED       SIZE
+docker.io/cacaoaccounting/cacaoaccounting  latest  a25d0896a2ab  22 hours ago  193 MB
+
+
+podman run -name cacao -d -p 8080:8080 cacaoaccounting/cacaoaccountin
+
+podman ps
+CONTAINER ID  IMAGE                                             COMMAND               CREATED         STATUS             PORTS                   NAMES
+e70999f0cd83  docker.io/cacaoaccounting/cacaoaccounting:latest  /app/entrypoint.s...  28 seconds ago  Up 28 seconds ago  0.0.0.0:8070->8080/tcp  cacao
+
 Systemd
 =======
 
