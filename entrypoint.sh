@@ -18,5 +18,4 @@
 # - William José Moreno Reyes
 
 cacaoctl initdb
-cacaoctl demodb
 cacaoctl serve
