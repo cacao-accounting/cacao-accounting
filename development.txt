@@ -14,3 +14,7 @@ requests
 # Cobertura de código
 coverage
 pytest-cov
+
+# Docs
+mkdocs
+mkdocs-material

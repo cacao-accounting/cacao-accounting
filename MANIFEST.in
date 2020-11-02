@@ -7,8 +7,6 @@ include wsgi.py
 include package.json
 include yarn.lock
 include .yarnrc
-include make.bat
-include Makefile
 include pyproject.toml
 include Dockerfile
 include entrypoint.sh 

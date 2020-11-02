@@ -1,7 +1,9 @@
+# Instalacion
 
+Existen varias formas de desplegar Cacao Accounting
 
-Docker
-======
+## Docker
+
 
 Existe una imagen de imagen de contenedor disponible para ejecutar la aplicación en:
 
@@ -22,8 +24,8 @@ podman ps
 CONTAINER ID  IMAGE                                             COMMAND               CREATED         STATUS             PORTS                   NAMES
 e70999f0cd83  docker.io/cacaoaccounting/cacaoaccounting:latest  /app/entrypoint.s...  28 seconds ago  Up 28 seconds ago  0.0.0.0:8070->8080/tcp  cacao
 
-Systemd
-=======
+# Systemd
+
 
 En sistemmas Linux systemd se ha vuelto la implementación predominante para
 el arranque del sistema, systemd utiliza archivos .unit para describir los 
@@ -43,8 +45,7 @@ systemctl daemon-reload
 systemctl enable cacao-accounting.service --now
 
 
-Usando el unit file sin permisos de root
-----------------------------------------
+### Usando el unit file sin permisos de root
 
 Si no tiene acceso de administrador al sistema aun puede utilizar systemd para
 administrar Cacoa Accounting, debe colocar en archivo .unit en:

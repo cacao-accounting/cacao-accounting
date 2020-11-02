@@ -3,6 +3,5 @@ venv
 tests
 docs
 development.txt
-make.bat
-Makefile
 Procfile
+mkdocs.yml
