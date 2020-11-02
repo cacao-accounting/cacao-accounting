@@ -1,3 +1,3 @@
-# Documentación de Cacao Accounting
+# Cacao Accounting
 
 
