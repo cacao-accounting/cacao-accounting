@@ -8,8 +8,9 @@
       
       
       
+      
       <link rel="shortcut icon" href="media/favicon.png">
-      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.1.2">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.1.5">
     
     
       
@@ -17,10 +18,10 @@
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.19190aaf.min.css">
+      <link rel="stylesheet" href="assets/stylesheets/main.21aed14c.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.24b84193.min.css">
+        <link rel="stylesheet" href="assets/stylesheets/palette.196e0c26.min.css">
         
       
     
@@ -36,9 +37,56 @@
     
     
     
+  
       
     
+
+  <!-- Track external links -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      document.body.addEventListener("click", function(ev) {
+        if (ev.target instanceof HTMLElement) {
+          var el = ev.target.closest("a[href^=http]")
+          if (el)
+            ga("send", "event", "outbound", "click", el.href)
+        }
+      })
+    })
+  </script>
+
     
+
+  <!-- Determine title -->
+  
+  
+
+  <!-- The image needs to have an absolute URL -->
+  
+
+  <!-- Open graph meta tags -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Cacao Accounting" />
+  <meta property="og:description" content="None" />
+  <meta property="og:url" content="None" />
+  <meta property="og:image" content="assets/images/banner.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1080" />
+  <meta property="og:image:height" content="568" />
+
+  <!-- Twitter meta tags -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@squidfunk" />
+  <meta name="twitter:creator" content="@squidfunk" />
+  <meta name="twitter:title" content="Cacao Accounting" />
+  <meta name="twitter:description" content="None" />
+  <meta name="twitter:image" content="assets/images/banner.png" />
+
+  <!-- Extra stylesheets -->
+  <link
+    rel="stylesheet"
+    href="assets/stylesheets/overrides.css"
+  />
+
   </head>
   
   
@@ -62,6 +110,20 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-announce">
+          <div class="md-announce__inner md-grid md-typeset">
+            
+  <a href="https://twitter.com/squidfunk">
+    For updates follow <strong>@squidfunk</strong> on
+    <span class="twemoji twitter">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M459.37 151.716c.325 4.548.325 9.097.325 13.645 0 138.72-105.583 298.558-298.558 298.558-59.452 0-114.68-17.219-161.137-47.106 8.447.974 16.568 1.299 25.34 1.299 49.055 0 94.213-16.568 130.274-44.832-46.132-.975-84.792-31.188-98.112-72.772 6.498.974 12.995 1.624 19.818 1.624 9.421 0 18.843-1.3 27.614-3.573-48.081-9.747-84.143-51.98-84.143-102.985v-1.299c13.969 7.797 30.214 12.67 47.431 13.319-28.264-18.843-46.781-51.005-46.781-87.391 0-19.492 5.197-37.36 14.294-52.954 51.655 63.675 129.3 105.258 216.365 109.807-1.624-7.797-2.599-15.918-2.599-24.04 0-57.828 46.782-104.934 104.934-104.934 30.213 0 57.502 12.67 76.67 33.137 23.715-4.548 46.456-13.32 66.599-25.34-7.798 24.366-24.366 44.833-46.132 57.827 21.117-2.273 41.584-8.122 60.426-16.243-14.292 20.791-32.161 39.308-52.628 54.253z"/></svg>
+    </span>
+    <strong>Twitter</strong>
+  </a>
+
+          </div>
+        </aside>
       
     </div>
     
@@ -93,7 +155,7 @@
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active" required>
       <label class="md-search__icon md-icon" for="__search">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
@@ -204,11 +266,30 @@
           <div class="md-content">
             <article class="md-content__inner md-typeset">
               
+  
                 
                 
                 <h1 id="cacao-accounting">Cacao Accounting</h1>
                 
               
+
+  <!-- Content footer -->
+  <footer class="tx-content__footer md-typeset">
+    <a href="insiders/" title="Material for MkDocs Insiders">
+      <hr />
+      <span class="twemoji">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 89"><path d="M3.136 17.387v42.932l42.932 21.467L3.136 17.387z"/><path d="M21.91 8l42.933 64.398-18.775 9.388L3.136 17.387 21.91 8z" fill-opacity=".5"/><path d="M67.535 17.387L40.273 35.543l21.878 32.818 5.384 2.691V17.387z"/><path d="M67.535 17.387v53.666l18.774-9.388V8l-18.774 9.387z" fill-opacity=".25"/></svg>
+      </span>
+      <span class="twemoji">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </span>
+      <span class="twemoji tx-heart">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 20.408c-.492.308-.903.546-1.192.709-.153.086-.308.17-.463.252h-.002a.75.75 0 01-.686 0 16.709 16.709 0 01-.465-.252 31.147 31.147 0 01-4.803-3.34C3.8 15.572 1 12.331 1 8.513 1 5.052 3.829 2.5 6.736 2.5 9.03 2.5 10.881 3.726 12 5.605 13.12 3.726 14.97 2.5 17.264 2.5 20.17 2.5 23 5.052 23 8.514c0 3.818-2.801 7.06-5.389 9.262A31.146 31.146 0 0114 20.408z"/></svg>
+      </span>
+      <hr />
+    </a>
+  </footer>
+
               
                 
 
@@ -260,7 +341,7 @@
     </div>
     
       <script src="assets/javascripts/vendor.7e0ee788.min.js"></script>
-      <script src="assets/javascripts/bundle.c1ccee15.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
+      <script src="assets/javascripts/bundle.b3a72adc.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
       
       <script>
         app = initialize({
