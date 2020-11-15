@@ -15,10 +15,12 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.registro import Registro
+from cacao_accounting.registro import Registros
 
 
-class Moneda(Registro):
+class Moneda:
     """
     Administración de monedas.
     """
+
+    registros = Registros()
