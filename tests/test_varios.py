@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.loggin import logger
+from cacao_accounting.loggin import log as logger
 from cacao_accounting.metadata import __state__
 
 

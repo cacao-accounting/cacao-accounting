@@ -36,6 +36,7 @@ def monedas():
     monedas = Moneda.query.order_by(Moneda.id).all()
     return render_template("contabilidad/monedas.html", monedas=monedas)
 
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Contabilidad
 @contabilidad.route("/contabilidad")
