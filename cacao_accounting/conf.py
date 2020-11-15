@@ -28,6 +28,8 @@ from cacao_accounting.metadata import DEVELOPMENT
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
 
+DOCKERISED = "DOCKERISED" in environ
+
 local_conf = "cacaoaccounting.conf"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
