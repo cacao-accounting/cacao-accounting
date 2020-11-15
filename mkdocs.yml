@@ -1,6 +1,7 @@
 site_name: Cacao Accounting
 theme: 
     name: material
+    custom_dir: overrides
     favicon: media/favicon.png
     logo: media/cacao_accounting.png
     palette:

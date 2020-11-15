@@ -46,9 +46,8 @@ class Registro:
 
     database = db
 
-
-def insertar_registro(tabla, datos):
-    """
-    Utileria para uniformar el registro de transacciones en la base de datos.
-    """
-    pass
+    def insertar_registro(tabla=None, datos=None, tabla_detalle=None, datos_detalle=None):
+        """
+        Utileria para uniformar el registro de transacciones en la base de datos.
+        """
+        pass

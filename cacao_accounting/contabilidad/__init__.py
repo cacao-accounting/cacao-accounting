@@ -26,6 +26,18 @@ from cacao_accounting.modulos import validar_modulo_activo
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
 
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Monedas
+@contabilidad.route("/currencies")
+@login_required
+def monedas():
+    from cacao_accounting.database import Moneda
+
+    monedas = Moneda.query.order_by(Moneda.id).all()
+    return render_template("contabilidad/monedas.html", monedas=monedas)
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Contabilidad
 @contabilidad.route("/contabilidad")
 @contabilidad.route("/conta")
 @contabilidad.route("/accounts")

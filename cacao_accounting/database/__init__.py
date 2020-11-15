@@ -43,6 +43,7 @@ class Moneda(db.Model):
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
     activa = db.Column(db.Boolean, nullable=True)
+    predeterminada = db.Column(db.Boolean, nullable=True)
 
 
 class TasaDeCambio(db.Model):
