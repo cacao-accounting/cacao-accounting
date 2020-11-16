@@ -24,11 +24,14 @@ from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
 from cacao_accounting.metadata import DEVELOPMENT
+from cacao_accounting.tools import home
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
 
 DOCKERISED = "DOCKERISED" in environ
+
+DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
 
 local_conf = "cacaoaccounting.conf"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
