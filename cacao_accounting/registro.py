@@ -74,7 +74,7 @@ class Registros:
         pass
 
     @classmethod
-    def consulta_por_id(id=None, tabla=None, tabla_detalle=None):
+    def consulta_por_id(identificador=None, tabla=None, tabla_detalle=None):
         """
         Obtiene la lista  completa de una tabla y sus detalles.
         """
@@ -88,7 +88,7 @@ class Registros:
         pass
 
     @classmethod
-    def cambiar_estado(id=None, tabla=None):
+    def cambiar_estado(identificador=None, tabla=None):
         """
         Cambia el estado de un registro.
         """
