@@ -65,6 +65,7 @@ class Registros:
         """
         Utileria para uniformar la actualización de transacciones en la base de datos.
         """
+        pass
 
     @classmethod
     def consulta_tabla(tabla=None, tabla_detalle=None):
