@@ -88,7 +88,7 @@ def inicio_sesion():
             login_user(identidad)
             return redirect("/app")
         else:
-            return redirect("/login", titulo="Intente Nuevamente - Cacao Accounting")
+            return redirect("/login")
     return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
