@@ -6,6 +6,8 @@ RUN yarn
 FROM python:slim
 COPY . /app
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 
 RUN pip --no-cache-dir install -r requirements.txt \
     && python setup.py develop \
     && rm -rf /root/.cache/
