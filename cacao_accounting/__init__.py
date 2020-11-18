@@ -90,6 +90,7 @@ def create_app(ajustes=None):
     from cacao_accounting.modulos import validar_modulo_activo
 
     app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+    app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
 
     @app.cli.command()
     def initdb():
