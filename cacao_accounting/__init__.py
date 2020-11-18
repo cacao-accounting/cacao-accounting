@@ -69,6 +69,8 @@ def create_app(ajustes=None):
         static_folder=archivos,
         instance_relative_config=False,
     )
+    app.jinja_env.trim_blocks = True
+    app.jinja_env.lstrop_blocks = True
     if ajustes:
         for i in ajustes:
             app.config[i] = ajustes[i]
