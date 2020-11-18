@@ -7,6 +7,9 @@ services:
       - POSTGRES_DB=cacaoaccounting
       - POSTGRES_USER=cacaoaccounting
       - POSTGRES_PASSWORD=cacaoaccounting
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+
   app:
     environment: 
       - CACAO_ACCOUNTING = True
@@ -19,3 +22,12 @@ services:
       - "8080:8080"
     depends_on:
       - db
+  
+server:
+  image: nginx
+  ports:
+      - 8080:80
+  volumes:
+      - ./cacao_accounting/misc/ejemplos/conf.d:/etc/nginx/conf.d
+  depends_on: 
+    - app
