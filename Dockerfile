@@ -7,7 +7,7 @@ FROM python:slim
 COPY . /app
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 
+ENV PYTHONUNBUFFERED = 1
 RUN pip --no-cache-dir install -r requirements.txt \
     && python setup.py develop \
     && rm -rf /root/.cache/
