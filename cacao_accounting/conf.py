@@ -34,7 +34,7 @@ DOCKERISED = "DOCKERISED" in environ
 DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
 
 if "SERVER_THREADS" in environ:
-    THREADS = int(SERVER_THREADS)
+    THREADS = int("SERVER_THREADS")
 else:
     THREADS = 2
 
@@ -56,12 +56,10 @@ else:
     configuracion = {}
     if "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
         configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
-        configuracion["DATABASE"] = environ["DATABASE"]
         configuracion["ENV"] = environ["ENV"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
     elif DEVELOPMENT:
         configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
-        configuracion["DATABASE"] = "sqlite"
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         configuracion["ENV"] = "development"
         configuracion["SECRET_KEY"] = "dev"
