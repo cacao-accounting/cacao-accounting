@@ -19,7 +19,7 @@
 Datos básicos para iniciar el sistema.
 """
 
-from cacao_accounting.loggin import logger as log
+from cacao_accounting.loggin import log
 from cacao_accounting.modulos import _init_modulos
 
 

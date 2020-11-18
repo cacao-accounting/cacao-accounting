@@ -15,28 +15,12 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.loggin import log as logger
-from cacao_accounting.metadata import __state__
+from cacao_accounting.registro import Registros
 
 
-def logs():
-    logger.debug("Debug")
-    logger.info("Info")
-    logger.warning("Warning")
-    logger.error("Error")
-    logger.critical("Critical")
+class Moneda:
+    """
+    Administración de monedas.
+    """
 
-
-def test_dev():
-    __state__ = "development"
-    logs()
-
-
-def test_rc():
-    __state__ = "release_candidate"
-    logs()
-
-
-def test_stable():
-    __state__ = "stable"
-    logs()
+    registros = Registros()

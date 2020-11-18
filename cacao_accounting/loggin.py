@@ -19,14 +19,10 @@
 Configuración centralizada para logs del sistema.
 """
 
-from sys import stderr
-from loguru import logger
-from cacao_accounting.conf import logs_file
-from cacao_accounting.metadata import __state__
+from loguru import logger as log
+from cacao_accounting.conf import DOCKERISED
 
-if __state__ == "development":
-    logger.add(stderr, format="{time} {level} {message}", level="DEBUG")
-elif __state__ == "release_candidate" or __state__ == "alpha":
-    logger.add(logger.ad(stderr, format="{time} {level} {message}", level="INFO"))
-else:
-    logger.add(logger.ad(logs_file, format="{time} {level} {message}", level="INFO"))
+if DOCKERISED:
+    from sys import stderr
+
+    log.add(stderr)

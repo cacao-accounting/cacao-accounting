@@ -19,42 +19,33 @@
 Utilidad para cargar la configuración de la aplicacion.
 """
 
-from appdirs import user_config_dir, site_config_dir, user_log_dir
+from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
-from sys import platform, stdout
 from cacao_accounting.metadata import DEVELOPMENT
+from cacao_accounting.tools import home
 
 appname = "CacaoAccounting"
 appauthor = "William Moreno Reyes"
 
+DOCKERISED = "DOCKERISED" in environ
+
+DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
+
 local_conf = "cacaoaccounting.conf"
-_log_file = "cacaoaccounting.log"
-logs_file = stdout
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
-user_logs = join(user_log_dir(appname, appauthor), _log_file)
 global_conf = join(site_config_dir(appname, appauthor), local_conf)
 
 
 if exists(local_conf):
     configuracion = ConfigObj(local_conf)
-    logs_file = _log_file
 
 elif exists(user_conf):
     configuracion = ConfigObj(user_conf)
-    logs_file = user_logs
 
 elif exists(global_conf):
     configuracion = ConfigObj(global_conf)
-    if "DOCKERISED" in environ:
-        logs_file = stdout
-    elif platform == "linux":
-        logs_file = join("/var/logs", _log_file)
-    elif platform == "'win32'":
-        logs_file = _log_file
-    else:
-        logs_file = stdout
 
 else:
     configuracion = {}

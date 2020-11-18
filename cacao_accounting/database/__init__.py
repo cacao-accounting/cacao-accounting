@@ -43,6 +43,7 @@ class Moneda(db.Model):
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
     activa = db.Column(db.Boolean, nullable=True)
+    predeterminada = db.Column(db.Boolean, nullable=True)
 
 
 class TasaDeCambio(db.Model):
@@ -91,7 +92,7 @@ class Usuario(UserMixin, db.Model):
 
 
 class Modulos(db.Model):
-    """Simple lista de los modulos del sistema."""
+    """Lista de los modulos del sistema."""
 
     __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
     id = db.Column(db.Integer(), primary_key=True, unique=True, nullable=False)
@@ -103,9 +104,23 @@ class Modulos(db.Model):
 class Registros(db.Model):
     """Los modulos contienen registros."""
 
-    __table_args__ = (db.UniqueConstraint("id", "registro", name="registro_unico"),)
     id = db.Column(db.Integer(), primary_key=True, unique=True)
-    registro = db.Column(db.String(50), unique=True)
+    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
+    tipo = db.Column(db.String(50))
+    identificador = db.Column(db.String(50))
+    estado = db.Column(db.String(50))
+
+
+class RelacionRegistros(db.Model):
+    """Los registros de diversos modulos tienen relaciones entre si."""
+
+    id = db.Column(db.Integer(), primary_key=True, unique=True)
+    modulo_base = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
+    tipo_base = db.Column(db.String(50))
+    identificador_base = db.Column(db.String(50))
+    modulo_destino = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
+    tipo_destino = db.Column(db.String(50))
+    identificador_destino = db.Column(db.String(50))
 
 
 class Perfiles(db.Model):
@@ -139,7 +154,6 @@ class Permisos(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
     perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
     modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-    registro = db.Column(db.String(50), db.ForeignKey("registros.registro"))
     consultar = db.Column(db.Boolean())
     crear = db.Column(db.Boolean())
     autorizar = db.Column(db.Boolean())

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<section>
+  <h3>Unidades.</h3>
+  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Unidad de Negocios</a>
+  <h6>Listado de Monedas:</h6>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th scope="col">ID</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Código</th>
+      </tr>
+    </thead>
+  {% for moneda in monedas -%}
+  <tr>
+    <th>
+      {{ moneda.id }}
+    </th>
+    <th scope="row">
+      {{ moneda.nombre }}
+    </th>
+    <td>
+      {{ moneda.codigo }}
+    </td>
+  </tr>
+  {%- endfor %}
+</table>
+</section>
+{% endblock %}

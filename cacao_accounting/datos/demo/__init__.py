@@ -19,7 +19,7 @@
 Datos de ejemplo.
 """
 from cacao_accounting.database import db
-from cacao_accounting.loggin import logger as log
+from cacao_accounting.loggin import log
 
 
 def _demo_usuarios():
