@@ -14,3 +14,39 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+
+import pytest
+from cacao_accounting import create_app
+from cacao_accounting.conf import configuracion
+from cacao_accounting.database import db
+from cacao_accounting.datos.base import base_data
+from cacao_accounting.datos.demo import demo_data
+
+
+app = create_app(configuracion)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+app.config["TESTING"] = True
+app.config["DEBUG"] = True
+app.config["WTF_CSRF_ENABLED"] = False
+
+
+@pytest.fixture
+def client():
+    with app.test_client() as client:
+        yield client
+
+
+def test_inicio(client):
+    response = app.test_client().get("/login")
+    assert response.status_code == 200
+
+
+def test_app(client):
+    response = app.test_client().get("/app")
+    assert response.status_code == 302
+
+
+def test_logout(client):
+    response = app.test_client().get("/logout")
+    assert response.status_code == 302
