@@ -15,28 +15,28 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.loggin import log as logger
-from cacao_accounting.metadata import __state__
+
+def crear_db():
+    from cacao_accounting import create_app
+    from cacao_accounting.conf import configuracion
+    from cacao_accounting.database import db
+    from cacao_accounting.datos.base import base_data
+    from cacao_accounting.datos.demo import demo_data
+
+    app = create_app(configuracion)
+    app.app_context().push()
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+    app.config["TESTING"] = True
+    app.config["DEBUG"] = True
+    db.create_all()
+    base_data()
+    demo_data()
 
 
-def logs():
-    logger.debug("Debug")
-    logger.info("Info")
-    logger.warning("Warning")
-    logger.error("Error")
-    logger.critical("Critical")
+def test_valida_contraseña():
+    from cacao_accounting.auth import validar_acceso
 
+    crear_db()
 
-def test_dev():
-    __state__ = "development"
-    logs()
-
-
-def test_rc():
-    __state__ = "release_candidate"
-    logs()
-
-
-def test_stable():
-    __state__ = "stable"
-    logs()
+    assert True == validar_acceso("cacao", "cacao")
+    assert False == validar_acceso("cacao", "prueba")
