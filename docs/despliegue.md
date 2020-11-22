@@ -59,13 +59,11 @@ En este ejemplo usaremos podman pero los comandos son equivalentes usando moby (
 
 ```bash
 podman pull quay.io/cacaoaccounting/cacaoaccounting
-```
 
 podman images
 REPOSITORY                                 TAG     IMAGE ID      CREATED       SIZE
 docker.io/cacaoaccounting/cacaoaccounting  latest  a25d0896a2ab  22 hours ago  193 MB
 
-```bash
 podman run -name cacao -d -p 8080:8080 cacaoaccounting/cacaoaccountin
 
 podman ps
