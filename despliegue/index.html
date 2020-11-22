@@ -434,11 +434,12 @@ proyecto donde periodicamente se publican los avances del proyecto.</p>
 </code></pre>
 <p>En este ejemplo usaremos podman pero los comandos son equivalentes usando moby (docker):</p>
 <pre><code class="language-bash">podman pull quay.io/cacaoaccounting/cacaoaccounting
-</code></pre>
-<p>podman images
+
+podman images
 REPOSITORY                                 TAG     IMAGE ID      CREATED       SIZE
-docker.io/cacaoaccounting/cacaoaccounting  latest  a25d0896a2ab  22 hours ago  193 MB</p>
-<pre><code class="language-bash">podman run -name cacao -d -p 8080:8080 cacaoaccounting/cacaoaccountin
+docker.io/cacaoaccounting/cacaoaccounting  latest  a25d0896a2ab  22 hours ago  193 MB
+
+podman run -name cacao -d -p 8080:8080 cacaoaccounting/cacaoaccountin
 
 podman ps
 CONTAINER ID  IMAGE                                             COMMAND               CREATED         STATUS             PORTS                   NAMES
