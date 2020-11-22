@@ -36,7 +36,7 @@ DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
 if "SERVER_THREADS" in environ:
     THREADS = int("SERVER_THREADS")
 else:
-    THREADS = 2
+    THREADS = 3
 
 local_conf = "cacaoaccounting.conf"
 user_conf = join(user_config_dir(appname, appauthor), local_conf)
