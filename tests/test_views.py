@@ -29,17 +29,32 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
 app.config["TESTING"] = True
 app.config["DEBUG"] = True
 app.config["WTF_CSRF_ENABLED"] = False
+app.app_context().push()
+cliente = app.test_client()
 
 
 @pytest.fixture
 def client():
     with app.test_client() as client:
+        try:
+            db.drop_all()
+        except:
+            pass
+        db.create_all()
+        base_data()
+        demo_data()
         yield client
 
 
 def test_inicio(client):
     response = app.test_client().get("/login")
     assert response.status_code == 200
+    assert b"Cacao Accounting" in response.data
+
+
+def test_render_inicio(client):
+    response = app.test_client().get("/login")
+    assert b"Cacao Accounting" in response.data
 
 
 def test_app(client):
