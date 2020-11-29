@@ -28,6 +28,7 @@ def crear_db():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
     app.config["TESTING"] = True
     app.config["DEBUG"] = True
+    db.drop_all()
     db.create_all()
     base_data()
     demo_data()
@@ -40,3 +41,10 @@ def test_valida_contraseña():
 
     assert True == validar_acceso("cacao", "cacao")
     assert False == validar_acceso("cacao", "prueba")
+
+
+def test_logea_usuario():
+    from cacao_accounting.auth import cargar_sesion
+
+    crear_db()
+    cargar_sesion("cacao")
