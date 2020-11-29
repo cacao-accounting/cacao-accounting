@@ -5,3 +5,4 @@ docs
 development.txt
 Procfile
 mkdocs.yml
+requirements.txt

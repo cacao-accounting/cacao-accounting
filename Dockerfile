@@ -3,17 +3,26 @@ COPY package.json .
 COPY yarn.lock .
 RUN yarn
 
-FROM python:slim
-COPY . /app
-WORKDIR /app
+FROM 3.9-slim
+
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED = 1
-RUN pip --no-cache-dir install -r requirements.txt \
-    && python setup.py develop \
-    && rm -rf /root/.cache/
-COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 ENV DOCKERISED=Yes
-EXPOSE 8080
 
+# Install dependencies in a layer
+COPY requirements.txt /tmp/
+RUN pip --no-cache-dir install -r /tmp/requirements.txt \
+    && rm -rf /root/.cache/
+
+# Copy and install app
+COPY . /app
+WORKDIR /app
+
+RUN python setup.py develop 
+
+# Install nodejs modules in the final docker image    
+COPY --from=js node_modules /app/cacao_accounting/static/node_modules
+
+EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
 CMD [ "/app/entrypoint.sh" ]
