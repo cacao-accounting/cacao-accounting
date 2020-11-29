@@ -1,6 +1,14 @@
 # Instalacion
 
-Existen varias formas de desplegar Cacao Accounting
+Existen varias formas de desplegar Cacao Accounting, basicamente Cacao Accounting es una
+aplicación WEB creada utilizando [flask](flask.palletsprojects.com) como base, las aplicaciones
+desarrolladas con flask son compatibles con el estandar [wsgi](flask.palletsprojects.com) por lo
+que para instalar Cacao Accounting se requiere:
+
+1. Un servidor WSGI, [gunicorn]() y [waitress]() son las opciones recomendadas.
+2. Un servidor web, [nginx]() es la opción recomendada.
+3. Un servidor de bases de datos, [postgresql](https://www.postgresql.org/), 
+[MySQL](https://www.mysql.com/), [MariaDB](https://mariadb.org/) y [SQLite](https://www.sqlite.org/index.html) son oficialmente soportadas.
 
 ## Entorno Virtual de Python
 
@@ -70,6 +78,10 @@ podman ps
 CONTAINER ID  IMAGE                                             COMMAND               CREATED         STATUS             PORTS                   NAMES
 e70999f0cd83  docker.io/cacaoaccounting/cacaoaccounting:latest  /app/entrypoint.s...  28 seconds ago  Up 28 seconds ago  0.0.0.0:8070->8080/tcp  cacao
 ```
+
+Hay una plantilla de [docker-compose](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/docker-compose.yml)
+disponible para apoyar al despliegue de la aplicacion con
+contenedores.
 
 ## Systemd
 
