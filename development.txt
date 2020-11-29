@@ -6,7 +6,7 @@ wheel
 
 # Control de calidad
 flake8
-flask - testing
+flask-testing
 pylama
 pytest
 requests
@@ -14,7 +14,7 @@ pydocstyle
 
 # Cobertura de código
 coverage
-pytest - cov
+pytest-cov
 
 # Docs
 mkdocs
