@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-
+from unittest import TestCase
 import pytest
 from cacao_accounting import create_app
 from cacao_accounting.conf import configuracion
@@ -29,47 +29,28 @@ configuracion["TESTING"] = True
 configuracion["DEBUG"] = True
 configuracion["WTF_CSRF_ENABLED"] = False
 configuracion["SESSION_PROTECTION "] = None
-app = create_app(configuracion)
-app.login_manager.session_protection = None
-app.login_manager.init_app(app)
-app.app_context().push()
-cliente = app.test_client()
 
 
-@pytest.fixture
-def client():
-    with app.test_client() as client:
-        try:
-            db.drop_all()
-        except:
-            pass
+class FlaskrTestCase(TestCase):
+    def setUp(self):
+        self.app = create_app(configuracion)
+        self.app.config["LOGIN_DISABLED"] = True
         db.create_all()
         base_data()
         demo_data()
-        yield client
 
+    def tearDown(self):
+        db.drop_all()
 
-def test_inicio(client):
-    response = app.test_client().get("/login")
-    assert response.status_code == 200
-    assert b"Cacao Accounting" in response.data
+    def test_without_login(self):
+        response = self.app.test_client().get("/")
+        assert response.status_code == 302
 
+    def test_loging(self):
+        response = self.app.test_client().get("/login")
+        assert response.status_code == 200
 
-def test_render_inicio(client):
-    response = app.test_client().get("/login")
-    assert b"Cacao Accounting" in response.data
-
-
-def test_app(client):
-    response = app.test_client().get("/app")
-    assert response.status_code == 302
-
-
-def test_logout(client):
-    response = app.test_client().get("/logout")
-    assert response.status_code == 302
-
-
-def test_contabilidad(client):
-    response = app.test_client().get("/accounts")
-    assert response.status_code == 302
+    def test_cash(self):
+        response = self.app.test_client().get("/cash")
+        assert response.status_code == 200
+        assert b"Caja y Bancos" in response.data
