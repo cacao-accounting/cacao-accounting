@@ -194,6 +194,19 @@ Otros ejemplos de buenos mensajes de commit se pueden encontrar aca:
  - [Buenas Practicas En Commits De Git](https://www.codigofacilito.com/articulos/buenas-practicas-en-commits-de-git) 
  - [How to Write a Git Commit Message](https://chris.beams.io/posts/git-commit/)
 
+#### Utilizar Commits Convencionales:
+
+Solicitamos su apoyo para adoptar [Commits Convencionales](https://www.conventionalcommits.org/es/v1.0.0-beta.3/):
+
+- fix:
+- feat: 
+- chore:
+- ci:
+- docs:
+- style:
+- refactor:
+- test:
+
 #### Empaquetar para distribución:
 
 Para crear los archivos para distribuir el proyecto ejecutar:
