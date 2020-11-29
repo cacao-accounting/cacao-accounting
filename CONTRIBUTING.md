@@ -207,6 +207,21 @@ Solicitamos su apoyo para adoptar [Commits Convencionales](https://www.conventio
 - refactor:
 - test:
 
+
+#### Versionado semantico
+
+Para Cacao Accounting hemos adoptado [versiones semanticas](https://www.conventionalcommits.org/en/v1.0.0/).
+
+Mayor: Al ser una aplicación contable trabajamos con datos historicos, así que cualquier cambio en
+la estructura de base datos que agregue cambios no compatibles con versiones anteriores se debera considerar un cambio mayor y requerir un lanzamiento mayor. Una migración efectiva del esquema de la
+base de datos debe proveerse a los usuarios.
+
+Menor: Lanzamiento de nuevas caracteristicas.
+
+Path: Correciones menores.
+
+Fix: Correción de errores criticos.
+
 #### Empaquetar para distribución:
 
 Para crear los archivos para distribuir el proyecto ejecutar:
