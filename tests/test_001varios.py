@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+from unittest import TestCase
+
 
 def crear_db():
     from cacao_accounting import create_app
@@ -34,10 +36,12 @@ def crear_db():
     demo_data()
 
 
+def test_db():
+    crear_db()
+
+
 def test_valida_contraseña():
     from cacao_accounting.auth import validar_acceso
-
-    crear_db()
 
     assert True == validar_acceso("cacao", "cacao")
     assert False == validar_acceso("cacao", "prueba")
@@ -46,5 +50,35 @@ def test_valida_contraseña():
 def test_logea_usuario():
     from cacao_accounting.auth import cargar_sesion
 
-    crear_db()
     cargar_sesion("cacao")
+
+
+def test_run():
+    import subprocess
+    from sys import executable
+    from cacao_accounting.__main__ import app, run
+
+    subprocess.Popen(
+        [executable, "-m", "cacao_accounting"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+class TestBasicos(TestCase):
+    def setUp(self):
+        from cacao_accounting import create_app
+
+        self.app = create_app()
+        self.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    def test_flaskapp(self):
+        from flask import Flask
+
+        self.assertIsInstance(self.app, Flask)
+
+    def test_dbinstance(self):
+        from flask_sqlalchemy import SQLAlchemy
+        from cacao_accounting.database import db
+
+        self.assertIsInstance(db, SQLAlchemy)

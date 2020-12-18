@@ -25,6 +25,7 @@ from cacao_accounting.datos.demo import demo_data
 
 
 configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 configuracion["TESTING"] = True
 configuracion["DEBUG"] = True
 configuracion["WTF_CSRF_ENABLED"] = False

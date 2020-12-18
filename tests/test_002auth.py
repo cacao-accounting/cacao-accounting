@@ -25,6 +25,7 @@ from cacao_accounting.datos.demo import demo_data
 
 
 configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 configuracion["TESTING"] = True
 configuracion["DEBUG"] = True
 configuracion["WTF_CSRF_ENABLED"] = False
@@ -35,12 +36,13 @@ class FlaskrTestCase(TestCase):
     def setUp(self):
         self.app = create_app(configuracion)
         self.app.config["LOGIN_DISABLED"] = True
+        db.drop_all()
         db.create_all()
         base_data()
         demo_data()
 
     def tearDown(self):
-        db.drop_all()
+        pass
 
     def test_without_login(self):
         response = self.app.test_client().get("/")
