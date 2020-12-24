@@ -31,6 +31,7 @@ from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+# pylint: disable=too-few-public-methods
 
 
 class Moneda(db.Model):
@@ -180,7 +181,7 @@ class Entidad(db.Model):
     correo_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
-    telefono1 = db.Column(db.String(50))
+    telefono2 = db.Column(db.String(50))
     fax = db.Column(db.String(50))
     pais = db.Column(db.String(50))
     departamento = db.Column(db.String(50))

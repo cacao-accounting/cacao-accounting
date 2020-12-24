@@ -72,12 +72,32 @@ def _demo_usuarios():
 def _demo_entidad():
     """Entidad de demostración"""
     from cacao_accounting.database import Entidad
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
-    demo = Entidad(
-        id="cacao", razon_social="Hot Chocolate CIA LTDA", nombre_comercial="Choco Sonrisas", id_fiscal="J310000001234"
-    )
-    db.session.add(demo)
-    db.session.commit()
+    demo = {
+        "id": "cacao",
+        "razon_social": "Choco Sonrisas Sociedad Anonima",
+        "nombre_comercial": "Choco Sonrisas",
+        "id_fiscal": "J0310000000000",
+        "moneda": "NIO",
+        "tipo_entidad": "Sociedad",
+        "correo_electronico": "info@chocoworld.com",
+        "web": "chocoworld.com",
+        "telefono1": "+505 8456 6543",
+        "telefono2": "+505 8456 7543",
+        "fax": "+505 8456 7545",
+        "pais": "Nicaragua",
+        "departamento": "Managua",
+        "ciudad": "Managua",
+        "direccion1": "Edicio x",
+        "direccion2": "Oficina 23",
+        "calle": 25,
+        "casa": 3,
+        "habilitada": True,
+        "predeterminada": True,
+    }
+    entidad = Entidad(**demo)
+    RegistroEntidad.crear(entidad)
 
 
 def _demo_unidades():

@@ -15,8 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.registro import Registro
+"""
+Administraión de Entidades en Cacao Accounting
+
+Una unidad es la base para los registros de transacciones en el sistema, todo registro
+debe estar vinculado a una entidad.
+"""
+
 from cacao_accounting.database import Entidad
+from cacao_accounting.registro import Registro
 
 
 class RegistroEntidad(Registro):
@@ -27,4 +34,5 @@ class RegistroEntidad(Registro):
     sistema.
     """
 
-    tabla_entidad = Entidad()
+    def __init__(self):
+        self.tabla = Entidad

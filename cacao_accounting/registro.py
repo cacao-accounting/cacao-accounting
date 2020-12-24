@@ -34,71 +34,17 @@ Un registro:
      - Vista modificación registro mostrando los datos actuales en el sistema permitiendo al usuario cambiarlos.
  - Un registro tiene estados, estos estados van a depender del documento.
 """
-
 from cacao_accounting.database import db
 
 
-class Registros:
+class Registro:
     """
     Interfaz comun para la administración de registros.
     Las relaciones entre registros son la base de la integridad de datos en el sistema.
     """
 
-    database = db
-
-    @classmethod
-    def crear(tabla=None, datos=None, tabla_detalle=None, datos_detalle=None):
-        """
-        Utileria para uniformar la creación de transacciones en la base de datos.
-        """
-        pass
-
-    @classmethod
-    def eliminar(id_registro=None, tabla=None, tabla_detalle=None):
-        """
-        Utileria para uniformar la eliminación de transacciones en la base de datos.
-        """
-        pass
-
-    @classmethod
-    def actualizar(id_registro=None, tabla=None, datos=None, tabla_detalle=None, datos_detalle=None):
-        """
-        Utileria para uniformar la actualización de transacciones en la base de datos.
-        """
-        pass
-
-    @classmethod
-    def consulta_tabla(tabla=None, tabla_detalle=None):
-        """
-        Obtiene la lista  completa de una tabla y sus detalles.
-        """
-        pass
-
-    @classmethod
-    def consulta_por_id(identificador=None, tabla=None, tabla_detalle=None):
-        """
-        Obtiene la lista  completa de una tabla y sus detalles.
-        """
-        pass
-
-    @classmethod
-    def actualiza_tabla_registros(operacion=None, tipo=None, identiciador=None):
-        """
-        Actualiza registro consolidado de registros.
-        """
-        pass
-
-    @classmethod
-    def cambiar_estado(identificador=None, tabla=None):
-        """
-        Cambia el estado de un registro.
-        """
-        pass
-
-    @classmethod
-    def vincula_registros(registro1=None, registro2=None):
-        pass
-
-    @classmethod
-    def desvincula_registros(registro1=None, registro2=None):
-        pass
+    def crear(datos=None):
+        database = db
+        if datos:
+            database.session.add(datos)
+            database.session.commit()
