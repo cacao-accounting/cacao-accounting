@@ -26,7 +26,3 @@ __all__ = (
     "demo_data",
     "base_data",
 )
-
-
-def cargar_datos():
-    pass
