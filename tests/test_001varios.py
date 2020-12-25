@@ -65,6 +65,35 @@ def test_run():
     )
 
 
+def test_cli():
+    import subprocess
+    from cacao_accounting import cli
+
+    subprocess.Popen(
+        ["cacaoctl"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def test_run():
+    from cacao_accounting.__main__ import run
+
+    run()
+    run()
+
+
+def test_main():
+    import subprocess
+    from sys import executable
+
+    subprocess.Popen(
+        [executable, "cacao_accounting"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
 class TestBasicos(TestCase):
     def setUp(self):
         from cacao_accounting import create_app
