@@ -14,13 +14,3 @@
 #
 # Contributors:
 # - William José Moreno Reyes
-
-from cacao_accounting.registro import Registros
-
-
-class Moneda:
-    """
-    Administración de monedas.
-    """
-
-    registros = Registros()

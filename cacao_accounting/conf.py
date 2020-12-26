@@ -19,15 +19,15 @@
 Utilidad para cargar la configuración de la aplicacion.
 """
 
-from appdirs import user_config_dir, site_config_dir
-from configobj import ConfigObj
 from os import environ
 from os.path import exists, join
+from appdirs import user_config_dir, site_config_dir
+from configobj import ConfigObj
 from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.tools import home
 
-appname = "CacaoAccounting"
-appauthor = "William Moreno Reyes"
+APPNAME = "CacaoAccounting"
+APPAUTHOR = "William Moreno Reyes"
 
 DOCKERISED = "DOCKERISED" in environ
 
@@ -39,8 +39,8 @@ else:
     THREADS = 3
 
 local_conf = "cacaoaccounting.conf"
-user_conf = join(user_config_dir(appname, appauthor), local_conf)
-global_conf = join(site_config_dir(appname, appauthor), local_conf)
+user_conf = join(user_config_dir(APPNAME, APPAUTHOR), local_conf)
+global_conf = join(site_config_dir(APPNAME, APPAUTHOR), local_conf)
 
 
 if exists(local_conf):

@@ -33,6 +33,9 @@ admin = Blueprint("admin", __name__, template_folder="templates")
 @admin.route("/settings")
 @login_required
 def admin_():
+    """
+    Definición del modulo administrativo.
+    """
     if validar_modulo_activo("admin"):
         return render_template("admin.html")
     else:
@@ -42,6 +45,9 @@ def admin_():
 @admin.route("/settings/modules")
 @login_required
 def lista_modulos():
+    """
+    Define vista para listar modulos del sistema.
+    """
     if validar_modulo_activo("admin"):
         return render_template("admin/modulos.html")
     else:

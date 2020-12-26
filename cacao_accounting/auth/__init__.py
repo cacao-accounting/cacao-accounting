@@ -44,7 +44,6 @@ def no_autorizado():
 def proteger_passwd(clave):
     from bcrypt import hashpw, gensalt
 
-    clave = clave
     clave_encriptada = hashpw(clave.encode(), gensalt())
     return clave_encriptada
 
@@ -79,7 +78,6 @@ def home():
 @login.route("/login", methods=["GET", "POST"])
 def inicio_sesion():
     from cacao_accounting.auth.forms import LoginForm
-    from cacao_accounting.auth import validar_acceso
 
     form = LoginForm()
     if form.validate_on_submit():

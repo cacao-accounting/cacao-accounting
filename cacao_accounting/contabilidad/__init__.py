@@ -33,8 +33,8 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 def monedas():
     from cacao_accounting.database import Moneda
 
-    monedas = Moneda.query.order_by(Moneda.id).all()
-    return render_template("contabilidad/monedas.html", monedas=monedas)
+    MONEDAS = Moneda.query.order_by(Moneda.id).all()
+    return render_template("contabilidad/monedas.html", monedas=MONEDAS)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -57,8 +57,8 @@ def conta():
 def entidades():
     from cacao_accounting.database import Entidad
 
-    entidades = Entidad.query.order_by(Entidad.id).all()
-    return render_template("contabilidad/entidades.html", entidades=entidades)
+    ENTIDADES = Entidad.query.order_by(Entidad.id).all()
+    return render_template("contabilidad/entidades.html", entidades=ENTIDADES)
 
 
 @contabilidad.route("/accounts/entities/<id_entidad>")
@@ -95,8 +95,8 @@ def editar_entidad(id_entidad):
 def unidades():
     from cacao_accounting.database import Unidad
 
-    unidades = Unidad.query.order_by(Unidad.entidad).all()
-    return render_template("contabilidad/unidades.html", unidades=unidades)
+    UNIDADES = Unidad.query.order_by(Unidad.entidad).all()
+    return render_template("contabilidad/unidades.html", unidades=UNIDADES)
 
 
 @contabilidad.route("/accounts/unit/<id_unidad>")
@@ -154,5 +154,5 @@ def proyectos():
 # Tipos de Cambio
 @contabilidad.route("/accounts/exchange")
 @login_required
-def tc():
+def tasa_cambio():
     return render_template("contabilidad/tc.html")

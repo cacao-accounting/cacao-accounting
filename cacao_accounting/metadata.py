@@ -22,7 +22,4 @@
 # stable
 
 __state__ = "development"
-if __state__ != "stabe":
-    DEVELOPMENT = True
-else:
-    DEVELOPMENT = False
+DEVELOPMENT = __state__ != "stable"

@@ -22,6 +22,8 @@ Datos básicos para iniciar el sistema.
 from cacao_accounting.loggin import log
 from cacao_accounting.modulos import _init_modulos
 
+# pylint: disable=import-outside-toplevel
+
 
 def monedas():
     from teritorio import Currencies
@@ -36,6 +38,9 @@ def monedas():
 
 
 def base_data():
+    """
+    Definición de metodo para cargar información base al sistema.
+    """
     log.debug("Iniciando carga de datos base al sistema.")
     monedas()
     _init_modulos()

@@ -28,5 +28,4 @@ Interfaz de linea de comandos para la administración de Cacao Accounting.
 
 
 def main(as_module=False):
-    # TODO omit sys.argv once https://github.com/pallets/click/issues/536 is fixed
     cli.main(args=sys.argv[1:], prog_name="python -m flask" if as_module else None)

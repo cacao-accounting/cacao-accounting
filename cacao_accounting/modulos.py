@@ -61,21 +61,21 @@ MODULOS_STANDAR = [
 
 MODULOS_ADICIONALES = None
 modulos = iter_modules()
-for i in modulos:
-    text = str(i.name)
+for modulo in modulos:
+    MODULO_COMO_TEXTO = str(modulo.name)
     try:
-        if text.startswith("cacao_accounting_modulo"):
+        if MODULO_COMO_TEXTO.startswith("cacao_accounting_modulo"):
             MODULOS_ADICIONALES = []
-            MODULOS_ADICIONALES.append(text)
+            MODULOS_ADICIONALES.append(MODULO_COMO_TEXTO)
     except AttributeError:
         pass
 
 
-def registrar_modulo(modulo):
+def registrar_modulo(entrada):
     """
     Recibe un diccionario y lo inserta en la base de datos.
     """
-    registro = Modulos(modulo=modulo["modulo"], estandar=modulo["estandar"], habilitado=modulo["habilitado"])
+    registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
     db.session.add(registro)
     db.session.commit()
 
@@ -105,20 +105,20 @@ def listado_modulos():
             _modulos_activos.append(i.modulo)
         else:
             _modulos_inactivos.append(i.modulo)
-    modulos = {
+    lista_modulos = {
         "modulos_activos": list(_modulos_activos),
         "modulos_inactivos": list(_modulos_inactivos),
         "modulos": list(_modulos),
     }
-    return modulos
+    return lista_modulos
 
 
-def validar_modulo_activo(modulo):
+def validar_modulo_activo(modulo_a_validar):
     """
     Se utiliza en las plantillas para determinar si un modulo se debe presentar o no en la interfas de usuario.
     """
     datos = listado_modulos()
-    return modulo in datos["modulos_activos"]
+    return modulo_a_validar in datos["modulos_activos"]
 
 
 def registrar_modulos_adicionales(flaskapp):
@@ -133,9 +133,9 @@ def registrar_modulos_adicionales(flaskapp):
     if MODULOS_ADICIONALES:
         modulos_extra = []
         for i in MODULOS_ADICIONALES:
-            modulo = import_module(i)
-            flaskapp.register_blueprint(modulo.blueprint)
-            modulos_extra.append(modulo)
+            paquete = import_module(i)
+            flaskapp.register_blueprint(paquete.blueprint)
+            modulos_extra.append(paquete)
     else:
         modulos_extra = None
     flaskapp.add_template_global(modulos_extra, "modulos_extra")

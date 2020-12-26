@@ -30,6 +30,9 @@ inventario = Blueprint("inventario", __name__, template_folder="templates")
 @inventario.route("/inventory")
 @login_required
 def inventario_():
+    """
+    Definición de vista principal de inventarios.
+    """
     if validar_modulo_activo("inventory"):
         return render_template("inventario.html")
     else:

@@ -20,6 +20,7 @@ Datos de ejemplo.
 """
 from cacao_accounting.database import db
 from cacao_accounting.loggin import log
+
 # pylint: disable=import-outside-toplevel
 
 

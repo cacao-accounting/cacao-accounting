@@ -43,7 +43,7 @@ class Registro:
     Las relaciones entre registros son la base de la integridad de datos en el sistema.
     """
 
-    def crear(datos=None):
+    def crear(self, datos=None, datos_detalle=None):
         database = db
         if datos:
             database.session.add(datos)
