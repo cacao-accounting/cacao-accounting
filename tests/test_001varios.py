@@ -76,22 +76,27 @@ def test_cli():
     )
 
 
-def test_run():
-    from cacao_accounting.__main__ import run
-
-    run()
-    run()
-
-
 def test_main():
     import subprocess
     from sys import executable
 
-    subprocess.Popen(
+    proceso1 = subprocess.Popen(
         [executable, "cacao_accounting"],
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
     )
+    proceso2 = subprocess.Popen(
+        [executable, "cacao_accounting"],
+    )
+    proceso1.terminate()
+    proceso2.terminate()
+
+
+def test_cli():
+    import subprocess
+
+    proceso = subprocess.Popen(
+        ["cacaoctl"],
+    )
+    proceso.terminate()
 
 
 class TestBasicos(TestCase):
@@ -100,6 +105,8 @@ class TestBasicos(TestCase):
 
         self.app = create_app()
         self.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app.app_context().push()
 
     def test_flaskapp(self):
         from flask import Flask

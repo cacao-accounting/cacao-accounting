@@ -29,48 +29,31 @@ configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 configuracion["TESTING"] = True
 configuracion["DEBUG"] = True
 configuracion["WTF_CSRF_ENABLED"] = False
-configuracion["SESSION_PROTECTION "] = None
 app = create_app(configuracion)
 app.login_manager.session_protection = None
 app.login_manager.init_app(app)
 app.app_context().push()
-cliente = app.test_client()
 
 
-@pytest.fixture
-def client():
-    with app.test_client() as client:
-        try:
-            db.drop_all()
-        except:
-            pass
-        db.create_all()
-        base_data()
-        demo_data()
-        yield client
-
-
-def test_inicio(client):
+def test_inicio():
     response = app.test_client().get("/login")
     assert response.status_code == 200
     assert b"Cacao Accounting" in response.data
 
 
-def test_render_inicio(client):
-    response = app.test_client().get("/login")
-    assert b"Cacao Accounting" in response.data
+VISTAS_PROTEGIDAS = [
+    "/app",
+    "/accounts",
+    "/cash",
+    "/buying",
+    "/inventory",
+    "/sales",
+    "/settings",
+]
 
 
-def test_app(client):
-    response = app.test_client().get("/app")
-    assert response.status_code == 302
-
-
-def test_logout(client):
-    response = app.test_client().get("/logout")
-    assert response.status_code == 302
-
-
-def test_contabilidad(client):
-    response = app.test_client().get("/accounts")
-    assert response.status_code == 302
+def test_vista():
+    for url in VISTAS_PROTEGIDAS:
+        print(url)
+        response = app.test_client().get(url)
+        assert response.status_code == 302

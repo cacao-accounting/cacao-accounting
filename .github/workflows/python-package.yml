@@ -1,7 +1,4 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
-name: Python package
+name: Pruebas de Integración Continua
 
 on:
   push:
@@ -13,7 +10,6 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, 'skip-ci')"
     services:
       mysql:
         image: mysql
@@ -65,10 +61,6 @@ jobs:
       run: flake8 cacao_accounting
     - name: Test with pytest
       run: pytest --cov=cacao_accounting
-    - name: Modulo adicional
-      run: |
-        python -m pip install git+https://github.com/cacao-accounting/cacao-accounting-modulo-activo-fijo.git
-        pytest --cov=cacao_accounting tests/ghactions/modulos.py
     - name: SQLite Backend
       run: pytest tests/ghactions/sqlite.py
     - name: MySQL Backend
