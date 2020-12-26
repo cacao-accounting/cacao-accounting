@@ -22,7 +22,6 @@ Una unidad es la base para los registros de transacciones en el sistema, todo re
 debe estar vinculado a una entidad.
 """
 
-from cacao_accounting.database import Entidad
 from cacao_accounting.registro import Registro
 
 
@@ -35,4 +34,6 @@ class RegistroEntidad(Registro):
     """
 
     def __init__(self):
+        from cacao_accounting.database import Entidad
+
         self.tabla = Entidad

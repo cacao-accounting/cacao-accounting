@@ -71,35 +71,36 @@ def _demo_usuarios():
     db.session.commit()
 
 
+ENTIDAD_DEMO = {
+    "id": "cacao",
+    "razon_social": "Choco Sonrisas Sociedad Anonima",
+    "nombre_comercial": "Choco Sonrisas",
+    "id_fiscal": "J0310000000000",
+    "moneda": "NIO",
+    "tipo_entidad": "Sociedad",
+    "correo_electronico": "info@chocoworld.com",
+    "web": "chocoworld.com",
+    "telefono1": "+505 8456 6543",
+    "telefono2": "+505 8456 7543",
+    "fax": "+505 8456 7545",
+    "pais": "Nicaragua",
+    "departamento": "Managua",
+    "ciudad": "Managua",
+    "direccion1": "Edicio x",
+    "direccion2": "Oficina 23",
+    "calle": 25,
+    "casa": 3,
+    "habilitada": True,
+    "predeterminada": True,
+}
+
+
 def _demo_entidad():
     """Entidad de demostración"""
-    from cacao_accounting.database import Entidad
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
-    demo = {
-        "id": "cacao",
-        "razon_social": "Choco Sonrisas Sociedad Anonima",
-        "nombre_comercial": "Choco Sonrisas",
-        "id_fiscal": "J0310000000000",
-        "moneda": "NIO",
-        "tipo_entidad": "Sociedad",
-        "correo_electronico": "info@chocoworld.com",
-        "web": "chocoworld.com",
-        "telefono1": "+505 8456 6543",
-        "telefono2": "+505 8456 7543",
-        "fax": "+505 8456 7545",
-        "pais": "Nicaragua",
-        "departamento": "Managua",
-        "ciudad": "Managua",
-        "direccion1": "Edicio x",
-        "direccion2": "Oficina 23",
-        "calle": 25,
-        "casa": 3,
-        "habilitada": True,
-        "predeterminada": True,
-    }
-    entidad = Entidad(**demo)
-    RegistroEntidad.crear(entidad)
+    instancia_entidad = RegistroEntidad()
+    instancia_entidad.crear(datos=ENTIDAD_DEMO)
 
 
 def _demo_unidades():
