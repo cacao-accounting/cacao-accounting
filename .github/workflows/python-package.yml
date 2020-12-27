@@ -38,7 +38,7 @@ jobs:
           --health-retries 5
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-alpha.3 ]
 
     steps:
     - uses: actions/checkout@v2
@@ -52,6 +52,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r development.txt
         pip install psycopg2
+        pip install importlib-metadata
         python setup.py develop
     - name: Proyecto distribuible
       run: |
@@ -61,8 +62,6 @@ jobs:
       run: flake8 cacao_accounting
     - name: Test with pytest
       run: pytest --cov=cacao_accounting
-    - name: SQLite Backend
-      run: pytest tests/ghactions/sqlite.py
     - name: MySQL Backend
       run: pytest tests/ghactions/mysql.py
     - name: Postgresql Backend
