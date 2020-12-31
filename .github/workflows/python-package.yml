@@ -56,7 +56,7 @@ jobs:
         python setup.py develop
     - name: Proyecto distribuible
       run: |
-        python -m pep517.build .
+        python -m build
         twine check dist/* 
     - name: Lint with flake8
       run: flake8 cacao_accounting
