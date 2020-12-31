@@ -67,4 +67,4 @@ jobs:
     - name: Postgresql Backend
       run: pytest tests/ghactions/postgresql.py
     - name: Codecov
-      uses: codecov/codecov-action@v1.0.11
+      uses: codecov/codecov-action@v1
