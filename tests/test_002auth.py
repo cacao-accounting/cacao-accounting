@@ -38,7 +38,7 @@ class FlaskrTestCase(TestCase):
         self.app.config["LOGIN_DISABLED"] = True
         db.drop_all()
         db.create_all()
-        base_data()
+        base_data(carga_rapida=True)
         demo_data()
 
     def tearDown(self):

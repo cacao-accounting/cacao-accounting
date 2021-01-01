@@ -1,5 +1,5 @@
 from cacao_accounting import create_app
-from cacao_accounting.conf import configuracion
+from cacao_accounting.config import configuracion
 
 app = create_app(configuracion)
 app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://root@localhost:3306/cacaodb"

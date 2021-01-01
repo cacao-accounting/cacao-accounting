@@ -38,6 +38,7 @@ class BaseTabla:
     """
     Columnas estandar para todas las tablas de la base de datos.
     """
+
     concecutivo = db.Column(db.Integer, autoincrement=True)
     fecha_creacion = db.Column(db.DateTime, default=db.func.now())
 
