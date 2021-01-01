@@ -1,6 +1,6 @@
 class BaseTest:
     from cacao_accounting import create_app
-    from cacao_accounting.conf import configuracion
+    from cacao_accounting.config import configuracion
     from cacao_accounting.database import db
 
     app = create_app(configuracion)
