@@ -14,3 +14,26 @@ def test_mysql():
 
         base_data()
         demo_data()
+
+
+from base_test import BaseTest
+
+
+class MyQSL(BaseTest):
+    app = create_app(configuracion)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://root@localhost:3306/cacaodb"
+    app.app_context().push()
+
+
+class TestMYSQL(MyQSL):
+    def test_mysql_en_configuracion(self):
+        url = str(self.app.config["SQLALCHEMY_DATABASE_URI"])
+        assert url.startswith("mysql")
+
+
+from unittest import TestCase
+from crud import Entidad
+
+
+class TestEntidad(MyQSL, Entidad, TestCase):
+    pass

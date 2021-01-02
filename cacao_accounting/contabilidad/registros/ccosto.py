@@ -14,3 +14,15 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.database import CentroCosto
+from cacao_accounting.registro import Registro
+
+
+class RegistroCentroCosto(Registro):
+    """
+    Registro para la administración de Centros de Costos.
+    """
+
+    def __init__(self):
+        self.table = CentroCosto
