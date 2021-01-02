@@ -2,31 +2,33 @@ from unittest import TestCase
 from ghactions.crud import Entidad
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from ghactions.base_test import BaseTest
 
 
-<<<<<<< Updated upstream
-class SQLite(BaseTest):
-=======
 class SQLite:
->>>>>>> Stashed changes
+    from cacao_accounting.database import db
+    from cacao_accounting.datos import base_data
+
+    db = db
     app = create_app(configuracion)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
     app.app_context().push()
 
+    def setUp(self):
+        self.db.drop_all()
+        self.db.create_all()
+        self.base_data()
 
-class TestSQLite(SQLite):
+    def tearDown(self):
+        pass
+
+
+class TestSQLite(SQLite, TestCase):
     def test_sqlite_en_configuracion(self):
         url = str(self.app.config["SQLALCHEMY_DATABASE_URI"])
         assert url.startswith("sqlite")
 
 
-<<<<<<< Updated upstream
-from unittest import TestCase
-
-
-class TestEntidad(Entidad, SQLite, TestCase):
-=======
 class TestEntidad(Entidad, SQLite):
->>>>>>> Stashed changes
-    pass
+    app = create_app(configuracion)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+    app.app_context().push()

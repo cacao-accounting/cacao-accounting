@@ -16,7 +16,6 @@
 # - William José Moreno Reyes
 
 from unittest import TestCase
-from ghactions.base_test import BaseTest
 
 
 def crear_db():

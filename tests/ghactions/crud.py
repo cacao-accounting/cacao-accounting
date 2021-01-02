@@ -88,8 +88,3 @@ class Entidad:
 
     def test_entidadescreadas(self):
         assert self.db.session.query(self.Entidad).count(), 2
-
-    def test_noduplicarid(self):
-
-        with self.assertRaises(self.IntegrityError):
-            self.instancia_entidad.crear(ENTIDAD3)
