@@ -52,7 +52,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r development.txt
         pip install psycopg2
-        pip install importlib-metadata
+        pip install --upgrade setuptools
         python setup.py develop
     - name: Proyecto distribuible
       run: |
