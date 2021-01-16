@@ -18,6 +18,14 @@
 from unittest import TestCase
 
 
+def test_run():
+    from cacao_accounting.__main__ import run
+
+    run()
+    # si se ejecuta por segunda vez no debe reportar error
+    run()
+
+
 def crear_db():
     from cacao_accounting import create_app
     from cacao_accounting.config import configuracion
@@ -43,6 +51,7 @@ def test_db():
 def test_valida_contraseña():
     from cacao_accounting.auth import validar_acceso
 
+    crear_db()
     assert True == validar_acceso("cacao", "cacao")
     assert False == validar_acceso("cacao", "prueba")
 
@@ -50,6 +59,7 @@ def test_valida_contraseña():
 def test_logea_usuario():
     from cacao_accounting.auth import cargar_sesion
 
+    crear_db()
     cargar_sesion("cacao")
 
 
@@ -63,6 +73,11 @@ def test_run():
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
+    subprocess.Popen(
+        [executable, "cacao_accounting/cli.py"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def test_cli():
@@ -71,6 +86,17 @@ def test_cli():
 
     subprocess.Popen(
         ["cacaoctl"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def test__main__():
+    import subprocess
+    from sys import executable
+
+    subprocess.Popen(
+        [executable, "cacao_accounting/__main__.py"],
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )

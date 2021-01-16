@@ -32,10 +32,11 @@ configuracion["WTF_CSRF_ENABLED"] = False
 configuracion["SESSION_PROTECTION "] = None
 
 
-class FlaskrTestCase(TestCase):
+class TestAutenticacion(TestCase):
     def setUp(self):
         self.app = create_app(configuracion)
         self.app.config["LOGIN_DISABLED"] = True
+        self.app.app_context().push()
         db.drop_all()
         db.create_all()
         base_data(carga_rapida=True)
@@ -52,7 +53,26 @@ class FlaskrTestCase(TestCase):
         response = self.app.test_client().get("/login")
         assert response.status_code == 200
 
-    def test_cash(self):
-        response = self.app.test_client().get("/cash")
-        assert response.status_code == 200
-        assert b"Caja y Bancos" in response.data
+    def test_login_valido(self):
+        from cacao_accounting.auth import validar_acceso
+
+        correcto = validar_acceso("cacao", "cacao")
+        assert correcto == True
+
+    def test_contraseña_erronea(self):
+        from cacao_accounting.auth import validar_acceso
+
+        erroneo = validar_acceso("cacao", "hola")
+        assert erroneo == False
+
+    def test_usuario_no_existe(self):
+        from cacao_accounting.auth import validar_acceso
+
+        erroneo = validar_acceso("hola", "hola")
+        assert erroneo == False
+
+    def test_sesion_nula(self):
+        from cacao_accounting.auth import cargar_sesion
+
+        resultado = cargar_sesion(None)
+        assert resultado == None
