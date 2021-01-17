@@ -144,3 +144,21 @@ class TestBasicos(TestCase):
         from cacao_accounting.database import db
 
         self.assertIsInstance(db, SQLAlchemy)
+
+    def test_directorio_archivos(self):
+        from cacao_accounting.tools import archivos
+
+        assert self.app.static_folder == archivos
+
+    def test_directorio_plantillas(self):
+        from cacao_accounting.tools import plantillas
+
+        assert self.app.template_folder == plantillas
+
+    def test_directorio_principal(self):
+        from cacao_accounting.tools import home
+
+        assert self.app.root_path == home
+
+    def test_import_name(self):
+        assert self.app.import_name == "cacao_accounting"
