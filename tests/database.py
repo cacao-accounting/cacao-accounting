@@ -106,6 +106,7 @@ class Entidad:
 class BaseSQLite:
     app = create_app(CONFIG)
     app.config["SQLALCHEMY_DATABASE_URI"] = SQLITE
+    app.app_context().push()
 
 
 class TestSQLite(BaseSQLite, TestCase):
