@@ -100,7 +100,7 @@ def _demo_entidad():
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
     instancia_entidad = RegistroEntidad()
-    instancia_entidad.crear(datos=ENTIDAD_DEMO)
+    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO)
 
 
 def _demo_unidades():

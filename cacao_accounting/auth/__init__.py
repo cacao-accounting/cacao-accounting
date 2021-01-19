@@ -60,14 +60,6 @@ def validar_acceso(usuario, clave):
     return clave_validada
 
 
-def roles_usuaio():
-    pass
-
-
-def permisos_usuario(usuario):
-    pass
-
-
 @login.route("/")
 @login.route("/home")
 @login.route("/index")

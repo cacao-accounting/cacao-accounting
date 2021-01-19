@@ -34,7 +34,16 @@ db = SQLAlchemy()
 # pylint: disable=too-few-public-methods
 
 
-class Moneda(db.Model):
+class BaseTabla:
+    """
+    Columnas estandar para todas las tablas de la base de datos.
+    """
+
+    concecutivo = db.Column(db.Integer, autoincrement=True)
+    fecha_creacion = db.Column(db.DateTime, default=db.func.now())
+
+
+class Moneda(db.Model, BaseTabla):
     """
     Una moneda para los registros de la entidad.
     """
@@ -47,7 +56,7 @@ class Moneda(db.Model):
     predeterminada = db.Column(db.Boolean, nullable=True)
 
 
-class TasaDeCambio(db.Model):
+class TasaDeCambio(db.Model, BaseTabla):
     """
     Tasa de conversión entre dos monedas distintas.
     """
@@ -60,7 +69,7 @@ class TasaDeCambio(db.Model):
     fecha = db.Column(db.Date(), nullable=False)
 
 
-class Usuario(UserMixin, db.Model):
+class Usuario(UserMixin, db.Model, BaseTabla):
     """
     Una entidad con acceso al sistema.
     """
@@ -92,7 +101,7 @@ class Usuario(UserMixin, db.Model):
     roles = db.Column(db.JSON())
 
 
-class Modulos(db.Model):
+class Modulos(db.Model, BaseTabla):
     """Lista de los modulos del sistema."""
 
     __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
@@ -100,66 +109,6 @@ class Modulos(db.Model):
     modulo = db.Column(db.String(25), unique=True, index=True)
     estandar = db.Column(db.Boolean(), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
-
-
-class Registros(db.Model):
-    """Los modulos contienen registros."""
-
-    id = db.Column(db.Integer(), primary_key=True, unique=True)
-    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-    tipo = db.Column(db.String(50))
-    identificador = db.Column(db.String(50))
-    estado = db.Column(db.String(50))
-
-
-class RelacionRegistros(db.Model):
-    """Los registros de diversos modulos tienen relaciones entre si."""
-
-    id = db.Column(db.Integer(), primary_key=True, unique=True)
-    modulo_base = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-    tipo_base = db.Column(db.String(50))
-    identificador_base = db.Column(db.String(50))
-    modulo_destino = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-    tipo_destino = db.Column(db.String(50))
-    identificador_destino = db.Column(db.String(50))
-
-
-class Perfiles(db.Model):
-    """
-    Los Roles Establecen una serie de permisos predeterminados.
-    """
-
-    __table_args__ = (db.UniqueConstraint("id", "detalle", name="perfil_unico"),)
-    id = db.Column(db.String(25), primary_key=True, unique=True)
-    detalle = db.Column(db.String(250))
-    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-
-
-class PerfilUsuario(db.Model):
-    """Listado de Perfiles por usuario."""
-
-    id = db.Column(db.Integer(), primary_key=True, unique=True)
-    usuario = db.Column(db.String(15), db.ForeignKey("usuario.id"))
-    perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
-    unidad = db.Column(db.String(10), db.ForeignKey("unidad.id"))
-    activo = db.Column(db.Boolean())
-
-
-class Permisos(db.Model):
-    """
-    Los permisos pueden ser establecidos a detalle por usuario y sobre escribir los
-    permisos predeterminados por cada Rol.
-    """
-
-    id = db.Column(db.Integer(), primary_key=True)
-    perfil = db.Column(db.String(25), db.ForeignKey("perfiles.id"))
-    modulo = db.Column(db.String(25), db.ForeignKey("modulos.modulo"))
-    consultar = db.Column(db.Boolean())
-    crear = db.Column(db.Boolean())
-    autorizar = db.Column(db.Boolean())
-    cancelar = db.Column(db.Boolean())
-    corregir = db.Column(db.Boolean())
 
 
 class Entidad(db.Model):

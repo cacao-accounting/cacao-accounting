@@ -37,3 +37,7 @@ class RegistroEntidad(Registro):
         from cacao_accounting.database import Entidad
 
         self.tabla = Entidad
+
+    def crear_entidad(self, datos=None):
+        if datos:
+            self.crear(datos=datos)

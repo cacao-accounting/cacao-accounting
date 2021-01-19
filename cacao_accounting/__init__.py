@@ -101,11 +101,13 @@ def create_app(ajustes=None):
 
         db.create_all()
         with app.app_context():
-            base_data()
             if DEVELOPMENT:
                 from cacao_accounting.datos import demo_data
 
+                base_data(carga_rapida=True)
                 demo_data()
+            else:
+                base_data(carga_rapida=False)
 
     @app.cli.command()
     def cleandb():

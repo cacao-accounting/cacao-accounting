@@ -17,8 +17,9 @@
 
 
 import pytest
+from unittest import TestCase
 from cacao_accounting import create_app
-from cacao_accounting.conf import configuracion
+from cacao_accounting.config import configuracion
 from cacao_accounting.database import db, Usuario
 from cacao_accounting.datos.base import base_data
 from cacao_accounting.datos.demo import demo_data
@@ -57,3 +58,19 @@ def test_vista():
         print(url)
         response = app.test_client().get(url)
         assert response.status_code == 302
+
+
+class TestVistas(TestCase):
+    def setUp(self):
+        self.app = create_app(configuracion)
+        self.app.config["LOGIN_DISABLED"] = True
+        self.app.app_context().push()
+        db.drop_all()
+        db.create_all()
+        base_data(carga_rapida=True)
+        demo_data()
+
+    def test_cash(self):
+        response = self.app.test_client().get("/cash")
+        assert response.status_code == 200
+        assert b"Caja y Bancos" in response.data

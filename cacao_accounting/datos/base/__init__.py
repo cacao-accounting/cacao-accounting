@@ -25,23 +25,29 @@ from cacao_accounting.modulos import _init_modulos
 # pylint: disable=import-outside-toplevel
 
 
-def monedas():
+def registra_monedas(carga_rapida=False):
     from teritorio import Currencies
     from cacao_accounting.database import db, Moneda
 
     log.debug("Iniciando carga de base monedas a la base de datos.")
-    for moneda in Currencies():
-        registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
-        db.session.add(registro)
+    if carga_rapida:
+        nio = Moneda(id="NIO", nombre="Cordobas Oro", codigo=558, decimales=2)
+        usd = Moneda(id="USD", nombre="Dolares de los Estados Unidos", codigo=559, decimales=2)
+        db.session.add(nio)
+        db.session.add(usd)
+    else:
+        for moneda in Currencies():
+            registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
+            db.session.add(registro)
     db.session.commit()
     log.debug("Monedas cargadas Correctamente")
 
 
-def base_data():
+def base_data(carga_rapida=False):
     """
     Definición de metodo para cargar información base al sistema.
     """
     log.debug("Iniciando carga de datos base al sistema.")
-    monedas()
+    registra_monedas(carga_rapida=carga_rapida)
     _init_modulos()
     log.debug("Batos base cargados en la base de datos.")

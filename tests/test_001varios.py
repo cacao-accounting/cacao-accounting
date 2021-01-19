@@ -16,12 +16,19 @@
 # - William José Moreno Reyes
 
 from unittest import TestCase
-from base_test import BaseTest
+
+
+def test_run():
+    from cacao_accounting.__main__ import run
+
+    run()
+    # si se ejecuta por segunda vez no debe reportar error
+    run()
 
 
 def crear_db():
     from cacao_accounting import create_app
-    from cacao_accounting.conf import configuracion
+    from cacao_accounting.config import configuracion
     from cacao_accounting.database import db
     from cacao_accounting.datos.base import base_data
     from cacao_accounting.datos.demo import demo_data
@@ -33,7 +40,7 @@ def crear_db():
     app.config["DEBUG"] = True
     db.drop_all()
     db.create_all()
-    base_data()
+    base_data(carga_rapida=True)
     demo_data()
 
 
@@ -44,6 +51,7 @@ def test_db():
 def test_valida_contraseña():
     from cacao_accounting.auth import validar_acceso
 
+    crear_db()
     assert True == validar_acceso("cacao", "cacao")
     assert False == validar_acceso("cacao", "prueba")
 
@@ -51,6 +59,7 @@ def test_valida_contraseña():
 def test_logea_usuario():
     from cacao_accounting.auth import cargar_sesion
 
+    crear_db()
     cargar_sesion("cacao")
 
 
@@ -64,6 +73,11 @@ def test_run():
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
+    subprocess.Popen(
+        [executable, "cacao_accounting/cli.py"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def test_cli():
@@ -72,6 +86,17 @@ def test_cli():
 
     subprocess.Popen(
         ["cacaoctl"],
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def test__main__():
+    import subprocess
+    from sys import executable
+
+    subprocess.Popen(
+        [executable, "cacao_accounting/__main__.py"],
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
@@ -120,95 +145,20 @@ class TestBasicos(TestCase):
 
         self.assertIsInstance(db, SQLAlchemy)
 
+    def test_directorio_archivos(self):
+        from cacao_accounting.tools import archivos
 
-ENTIDAD1 = {
-    "id": "cacao1",
-    "razon_social": "Choco Sonrisas Sociedad Anonima",
-    "nombre_comercial": "Choco Sonrisas",
-    "id_fiscal": "J0310000000000",
-    "moneda": "NIO",
-    "tipo_entidad": "Sociedad",
-    "correo_electronico": "info@chocoworld.com",
-    "web": "chocoworld.com",
-    "telefono1": "+505 8456 6543",
-    "telefono2": "+505 8456 7543",
-    "fax": "+505 8456 7545",
-    "pais": "Nicaragua",
-    "departamento": "Managua",
-    "ciudad": "Managua",
-    "direccion1": "Edicio x",
-    "direccion2": "Oficina 23",
-    "calle": 25,
-    "casa": 3,
-    "habilitada": True,
-    "predeterminada": True,
-}
+        assert self.app.static_folder == archivos
 
-ENTIDAD2 = {
-    "id": "cacao2",
-    "razon_social": "Choco Sonrisas 2 Sociedad Anonima",
-    "nombre_comercial": "Choco Sonrisas 2",
-    "id_fiscal": "J0310000000001",
-    "moneda": "NIO",
-    "tipo_entidad": "Sociedad",
-    "correo_electronico": "info@chocoworld.com",
-    "web": "chocoworld.com",
-    "telefono1": "+505 8456 6543",
-    "telefono2": "+505 8456 7543",
-    "fax": "+505 8456 7545",
-    "pais": "Nicaragua",
-    "departamento": "Managua",
-    "ciudad": "Managua",
-    "direccion1": "Edicio x",
-    "direccion2": "Oficina 23",
-    "calle": 25,
-    "casa": 3,
-    "habilitada": True,
-    "predeterminada": True,
-}
+    def test_directorio_plantillas(self):
+        from cacao_accounting.tools import plantillas
 
+        assert self.app.template_folder == plantillas
 
-ENTIDAD3 = {
-    "id": "cacao2",
-    "razon_social": "Choco Sonrisas 2 Sociedad Anonima",
-    "nombre_comercial": "Choco Sonrisas 2",
-    "id_fiscal": "J0310000000001",
-    "moneda": "NIO",
-    "tipo_entidad": "Sociedad",
-    "correo_electronico": "info@chocoworld.com",
-    "web": "chocoworld.com",
-    "telefono1": "+505 8456 6543",
-    "telefono2": "+505 8456 7543",
-    "fax": "+505 8456 7545",
-    "pais": "Nicaragua",
-    "departamento": "Managua",
-    "ciudad": "Managua",
-    "direccion1": "Edicio x",
-    "direccion2": "Oficina 23",
-    "calle": 25,
-    "casa": 3,
-    "habilitada": True,
-    "predeterminada": True,
-}
+    def test_directorio_principal(self):
+        from cacao_accounting.tools import home
 
+        assert self.app.root_path == home
 
-class TestInstancias(TestCase, BaseTest):
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-    from sqlalchemy.exc import IntegrityError
-    from cacao_accounting.database import db, Entidad
-    instancia_entidad = RegistroEntidad()
-
-    def test_crearentidad(self):
-        self.db.drop_all()
-        self.db.create_all()
-        self.instancia_entidad.crear(ENTIDAD1)
-        self.instancia_entidad.crear(ENTIDAD2)
-
-    def test_entidadescreadas(self):
-        assert self.db.session.query(self.Entidad).count(), 2
-
-
-    def test_noduplicarid(self):
-        
-        with self.assertRaises(self.IntegrityError):
-            self.instancia_entidad.crear(ENTIDAD3)
+    def test_import_name(self):
+        assert self.app.import_name == "cacao_accounting"

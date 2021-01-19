@@ -15,7 +15,9 @@ jobs:
         image: mysql
         env:
             MYSQL_ALLOW_EMPTY_PASSWORD: yes
-            MYSQL_DATABASE: cacaodb
+            MYSQL_DATABASE: cacao
+            MYSQL_USER: cacao
+            MYSQL_PASSWORD: cacao
         ports:
             - 3306:3306
         options: >-
@@ -38,7 +40,7 @@ jobs:
           --health-retries 5
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9,]
+        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-alpha.4 ]
 
     steps:
     - uses: actions/checkout@v2
@@ -51,8 +53,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r development.txt
-        pip install psycopg2
-        pip install importlib-metadata
+        pip install --upgrade setuptools
         python setup.py develop
     - name: Proyecto distribuible
       run: |
@@ -61,10 +62,6 @@ jobs:
     - name: Lint with flake8
       run: flake8 cacao_accounting
     - name: Test with pytest
-      run: pytest --cov=cacao_accounting
-    - name: MySQL Backend
-      run: pytest tests/ghactions/mysql.py
-    - name: Postgresql Backend
-      run: pytest tests/ghactions/postgresql.py
+      run: pytest tests/*.py --cov=cacao_accounting
     - name: Codecov
       uses: codecov/codecov-action@v1

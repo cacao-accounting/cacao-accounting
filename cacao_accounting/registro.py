@@ -44,15 +44,15 @@ class Registro:
     """
 
     database = db
-
-    def __init(self, tabla=None, tabla_detalle=None):
-        self.tabla = tabla
-        self.tabla_detalle = tabla_detalle
+    tabla = None
+    tabla_detalle = None
 
     def crear(self, datos=None, datos_detalle=None):
-        if datos:
+        if datos and self.tabla:
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
+            if datos_detalle and self.tabla_detalle:
+                pass
 
     def eliminar(self, id=None):
         pass

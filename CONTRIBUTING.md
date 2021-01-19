@@ -222,6 +222,13 @@ Path: Correciones menores.
 
 Fix: Correción de errores criticos.
 
+#### Ejecutar prubas unitarias:
+
+```bash
+export CACAOTEST=True
+pytest
+```
+
 #### Empaquetar para distribución:
 
 Para crear los archivos para distribuir el proyecto ejecutar:
