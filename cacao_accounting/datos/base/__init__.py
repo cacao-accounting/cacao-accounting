@@ -31,10 +31,13 @@ def registra_monedas(carga_rapida=False):
 
     log.debug("Iniciando carga de base monedas a la base de datos.")
     if carga_rapida:
-        nio = Moneda(id="NIO", nombre="Cordobas Oro", codigo=558, decimales=2)
-        usd = Moneda(id="USD", nombre="Dolares de los Estados Unidos", codigo=559, decimales=2)
-        db.session.add(nio)
-        db.session.add(usd)
+        from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+
+        nio = {"id": "NIO", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
+        usd = {"id": "USD", "nombre": "Dolares de los Estados Unidos", "codigo": 559, "decimales": 2}
+        r = RegistroMoneda()
+        r.crear(nio)
+        r.crear(usd)
     else:
         for moneda in Currencies():
             registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
