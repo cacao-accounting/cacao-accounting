@@ -14,3 +14,16 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.registro import Registro
+
+
+class RegistroProyecto(Registro):
+    """
+    Registro para manejar los proyetos.
+    """
+
+    def __init__(self):
+        from cacao_accounting.database import Proyecto
+
+        self.tabla = Proyecto

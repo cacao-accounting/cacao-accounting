@@ -15,7 +15,6 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.database import CentroCosto
 from cacao_accounting.registro import Registro
 
 
@@ -25,4 +24,6 @@ class RegistroCentroCosto(Registro):
     """
 
     def __init__(self):
+        from cacao_accounting.database import CentroCosto
+
         self.table = CentroCosto

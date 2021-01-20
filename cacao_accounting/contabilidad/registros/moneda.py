@@ -14,3 +14,16 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.registro import Registro
+
+
+class RegistroMoneda(Registro):
+    """
+    Registro para administración de Monedas
+    """
+
+    def __init__(self):
+        from cacao_accounting.database import Moneda
+
+        self.tabla = Moneda

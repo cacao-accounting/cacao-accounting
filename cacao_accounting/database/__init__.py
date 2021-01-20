@@ -39,7 +39,6 @@ class BaseTabla:
     Columnas estandar para todas las tablas de la base de datos.
     """
 
-    concecutivo = db.Column(db.Integer, autoincrement=True)
     fecha_creacion = db.Column(db.DateTime, default=db.func.now())
 
 
@@ -156,7 +155,7 @@ class Unidad(db.Model):
     corre_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
-    telefono1 = db.Column(db.String(50))
+    telefono2 = db.Column(db.String(50))
     fax = db.Column(db.String(50))
     pais = db.Column(db.String(50))
     departamento = db.Column(db.String(50))
@@ -228,9 +227,9 @@ class Proyecto(db.Model):
 
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
-    activa = db.Column(db.Boolean(), index=True)
+    activo = db.Column(db.Boolean(), index=True)
     # Un CC puede estar activo pero deshabilitado temporalmente.
-    habilitada = db.Column(db.Boolean(), index=True)
+    habilitado = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:

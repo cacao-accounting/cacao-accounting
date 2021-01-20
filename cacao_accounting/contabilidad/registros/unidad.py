@@ -14,3 +14,16 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.registro import Registro
+
+
+class RegistroUnidad(Registro):
+    """
+    Registro para la administración de unidades.
+    """
+
+    def __init__(self):
+        from cacao_accounting.database import Unidad
+
+        self.tabla = Unidad
