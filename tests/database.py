@@ -239,6 +239,13 @@ class Proyecto:
         p = RegistroProyecto()
         p.crear(datos=PROYECTO)
 
+MONEDA = {"id": "LALA", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
+
+class Moneda:
+    def test_crear_moneda(self):
+        from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+        r = RegistroMoneda()
+        r.crear(MONEDA)
 
 # <-------------------------------------------------------------------------> #
 class BaseSQLite:
@@ -247,7 +254,7 @@ class BaseSQLite:
     app.app_context().push()
 
 
-class TestSQLite(BaseSQLite, TestCase, Entidad, CentroCosto, Unidad, Proyecto):
+class TestSQLite(BaseSQLite, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
     def setUp(self):
         db.drop_all()
         db.create_all()
@@ -276,7 +283,7 @@ if mysql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL
         app.app_context().push()
 
-    class TestMySQL(BaseMySQL, TestCase, Entidad, CentroCosto, Unidad, Proyecto):
+    class TestMySQL(BaseMySQL, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
         def setUp(self):
             db.drop_all()
             db.create_all()
@@ -305,7 +312,7 @@ if postgresql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = POSTGRESQL
         app.app_context().push()
 
-    class TestPostgresl(BasePostgresl, TestCase, Entidad, CentroCosto, Unidad, Proyecto):
+    class TestPostgresl(BasePostgresl, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
         def setUp(self):
             db.drop_all()
             db.create_all()
