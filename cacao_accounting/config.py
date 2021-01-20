@@ -59,7 +59,10 @@ else:
         configuracion["ENV"] = environ["ENV"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
     elif DEVELOPMENT or "CACAOTEST" in environ:
-        configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cacaoaccounting.db"
+        SQLITE = "sqlite:///cacaoaccounting.db"
+        MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
+        POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
+        configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         configuracion["ENV"] = "development"
         configuracion["SECRET_KEY"] = "dev"

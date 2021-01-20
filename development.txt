@@ -19,3 +19,6 @@ pytest-cov
 # Docs
 mkdocs
 mkdocs - material
+
+# MySQL en Windows
+cryptography

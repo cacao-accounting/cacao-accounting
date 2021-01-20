@@ -222,11 +222,52 @@ Path: Correciones menores.
 
 Fix: Correción de errores criticos.
 
-#### Ejecutar prubas unitarias:
+#### Ejecutar pruebas unitarias:
 
 ```bash
 export CACAOTEST=True
 pytest
+```
+
+##### Configurar Base de datos para pruebas
+
+El proyecto se prueba con SQLite, MySQL 8 y Postgresql 13.
+
+###### MySQL
+
+Para crear una base de datos de pruebas ejecutar los siguientes queries en MySQL:
+
+```sql
+CREATE DATABASE IF NOT EXISTS cacao;
+CREATE USER IF NOT EXISTS 'cacao' IDENTIFIED BY 'cacao';
+GRANT ALL PRIVILEGES ON cacao.* TO 'cacao';
+FLUSH PRIVILEGES;
+```
+
+###### Postgresql
+
+Para crear una base de datos de pruebas ejecutar los siguientes queries en Postgresql:
+
+```sql
+CREATE DATABASE cacao;
+CREATE USER cacao WITH PASSWORD 'cacao';
+GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
+```
+
+###### Pruebas de integración 
+
+Para vaidar que las vases de datos fueron creadas correctamente y la conexión es correcta ejecutar:
+
+```bash
+python tests\database.py
+MySQL disponible
+Postgresql disponible
+```
+
+Para ejecutar las pruebas ejecutar:
+
+```bash
+pytest tests\database.py
 ```
 
 #### Empaquetar para distribución:

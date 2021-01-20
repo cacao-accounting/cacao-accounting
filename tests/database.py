@@ -109,7 +109,15 @@ class BaseSQLite:
     app.app_context().push()
 
 
-class TestSQLite(BaseSQLite, TestCase):
+class TestSQLite(BaseSQLite, TestCase, Entidad):
+    def setUp(self):
+        db.drop_all()
+        db.create_all()
+        base_data()
+
+    def tearDown(self):
+        pass
+
     def test_db(self):
         URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert URL.startswith("sqlite")
@@ -122,16 +130,6 @@ class TestSQLite(BaseSQLite, TestCase):
         db.drop_all()
 
 
-class EjecutarSQLite(BaseSQLite, TestCase, Entidad):
-    def setUp(self):
-        db.drop_all()
-        db.create_all()
-        base_data()
-
-    def tearDown(self):
-        pass
-
-
 # <-------------------------------------------------------------------------> #
 if mysql_disponible:
 
@@ -140,7 +138,15 @@ if mysql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL
         app.app_context().push()
 
-    class TestMySQL(BaseMySQL, TestCase):
+    class TestMySQL(BaseMySQL, TestCase, Entidad):
+        def setUp(self):
+            db.drop_all()
+            db.create_all()
+            base_data()
+
+        def tearDown(self):
+            pass
+
         def test_db(self):
             URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert URL.startswith("mysql")
@@ -152,15 +158,6 @@ if mysql_disponible:
             demo_data()
             db.drop_all()
 
-    class EjecutarMySQL(BaseMySQL, TestCase, Entidad):
-        def setUp(self):
-            db.drop_all()
-            db.create_all()
-            base_data()
-
-        def tearDown(self):
-            pass
-
 
 # <-------------------------------------------------------------------------> #
 if postgresql_disponible:
@@ -170,7 +167,15 @@ if postgresql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = POSTGRESQL
         app.app_context().push()
 
-    class TestPostgresl(BasePostgresl, TestCase):
+    class TestPostgresl(BasePostgresl, TestCase, Entidad):
+        def setUp(self):
+            db.drop_all()
+            db.create_all()
+            base_data()
+
+        def tearDown(self):
+            pass
+
         def test_db(self):
             URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert URL.startswith("postgresql")
@@ -181,12 +186,3 @@ if postgresql_disponible:
             base_data(carga_rapida=False)
             demo_data()
             db.drop_all()
-
-        class EjecutarPostgresl(BasePostgresl, TestCase, Entidad):
-            def setUp(self):
-                db.drop_all()
-                db.create_all()
-                base_data()
-
-            def tearDown(self):
-                pass
