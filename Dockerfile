@@ -3,7 +3,7 @@ COPY package.json .
 COPY yarn.lock .
 RUN yarn
 
-FROM python:3.9-slim
+FROM python:3.10-rc-slim
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED = 1
