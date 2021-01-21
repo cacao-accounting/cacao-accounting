@@ -37,6 +37,22 @@ Un registro:
 from cacao_accounting.database import db
 
 
+def validar_entidad(validar=None):
+    """
+    Para que una entidad se considere valida la entidad debe:
+    - Existir en la base de datos.
+    - Con estatus habilitada definida como True
+    """
+    return True
+
+
+def validar_perido_contable(fecha=None):
+    """
+    Todo registro que deba sea relacionado a una fecha debe pertenecer a un período contable valido.
+    """
+    return True
+
+
 class Registro:
     """
     Interfaz comun para la administración de registros.
@@ -46,13 +62,32 @@ class Registro:
     database = db
     tabla = None
     tabla_detalle = None
+    entidad = None
 
     def crear(self, datos=None, datos_detalle=None):
+        """
+        Utilizar este metodo para insertar registros maestros comunes a toda la instalación.
+        Ejemplo:
+         - Entidades
+         - Proveedores
+         - Clientes
+        """
         if datos and self.tabla:
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
             if datos_detalle and self.tabla_detalle:
                 pass
+
+    def crear_registro(self, datos=None, datos_detalle=None, entidad_madre=None):
+        """
+        Utilizar este metodo para crear registros que estan relacionados a una entidad madre, por ejemplo
+         - Unidades de Negocio
+         - Cuentas Contables
+         - Centro de Costos
+        """
+        if datos and self.tabla and validar_entidad(validar=entidad_madre):
+            self.database.session.add(self.tabla(**datos))
+            self.database.session.commit()
 
     def eliminar(self, id=None):
         pass
