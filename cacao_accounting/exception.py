@@ -26,3 +26,18 @@ class DataError(CacaoAccountingException):
 
 class IntegrityError(CacaoAccountingException):
     pass
+
+
+class TransactionError(CacaoAccountingException):
+    pass
+
+
+class OperationalError(CacaoAccountingException):
+    pass
+
+
+# <-------------------------------------------------------------------------> #
+# Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
+ERROR1 = "No se proporcionaron datos."
+ERROR2 = "No se ha espeficiado una tabla en la base de datos."
+ERROR3 = "Entidad invalida."

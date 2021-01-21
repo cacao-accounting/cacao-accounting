@@ -35,6 +35,7 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 from cacao_accounting.database import db
+from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
 
 
 def validar_entidad(validar=None):
@@ -72,11 +73,16 @@ class Registro:
          - Proveedores
          - Clientes
         """
-        if datos and self.tabla:
-            self.database.session.add(self.tabla(**datos))
-            self.database.session.commit()
-            if datos_detalle and self.tabla_detalle:
-                pass
+        if datos:
+            if self.tabla:
+                self.database.session.add(self.tabla(**datos))
+                self.database.session.commit()
+                if datos_detalle and self.tabla_detalle:
+                    pass
+            else:
+                raise OperationalError(ERROR2)
+        else:
+            raise OperationalError(ERROR1)
 
     def crear_registro(self, datos=None, datos_detalle=None, entidad_madre=None):
         """
@@ -85,9 +91,17 @@ class Registro:
          - Cuentas Contables
          - Centro de Costos
         """
-        if datos and self.tabla and validar_entidad(validar=entidad_madre):
-            self.database.session.add(self.tabla(**datos))
-            self.database.session.commit()
+        if datos:
+            if self.tabla:
+                if validar_entidad(entidad_madre):
+                    self.database.session.add(self.tabla(**datos))
+                    self.database.session.commit()
+                else:
+                    raise IntegrityError(ERROR3)
+            else:
+                raise OperationalError(ERROR2)
+        else:
+            raise OperationalError(ERROR1)
 
     def eliminar(self, id=None):
         pass
