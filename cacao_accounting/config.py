@@ -58,7 +58,7 @@ else:
         configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
         configuracion["ENV"] = environ["ENV"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
-    elif DEVELOPMENT or "CACAOTEST" in environ:
+    elif DEVELOPMENT or ("CACAOTEST" in environ) or ("CI" in environ):
         SQLITE = "sqlite:///cacaoaccounting.db"
         MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
         POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
