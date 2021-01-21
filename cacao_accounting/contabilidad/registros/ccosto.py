@@ -26,4 +26,4 @@ class RegistroCentroCosto(Registro):
     def __init__(self):
         from cacao_accounting.database import CentroCosto
 
-        self.table = CentroCosto
+        self.tabla = CentroCosto
