@@ -149,6 +149,7 @@ disable=print-statement,
         missing-module-docstring,
         missing-function-docstring,
         wrong-import-order,
+        missing-class-docstring
         # Temporal:
         invalid-name,
         
