@@ -103,12 +103,3 @@ class Registro:
                 raise OperationalError(ERROR2)
         else:
             raise OperationalError(ERROR1)
-
-    def eliminar(self, id=None):
-        pass
-
-    def actualizar(self, id=None, datos=None, datos_detalle=None):
-        pass
-
-    def consultar(self, id=None, detalle=None):
-        pass
