@@ -181,3 +181,24 @@ class TestExection(TestCase):
         r = Registro()
         with pytest.raises(OperationalError):
             r.crear(datos={})
+    
+    def test_registro_vacio(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos=None, entidad_madre="hola")
+
+    def test_entidad_vacias(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos={}, entidad_madre=None)
+
+    def test_sin_tabla(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos={}, entidad_madre="hola")
