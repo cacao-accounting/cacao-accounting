@@ -11,6 +11,7 @@ pylama
 pytest
 requests
 pydocstyle
+pylint
 
 # Cobertura de código
 coverage

@@ -142,6 +142,7 @@ disable=print-statement,
         comprehension-escape,
         unused-variable,
         # Personalizados
+        invalid-name,
         no-member,
         no-else-return,
         inconsistent-return-statements,
@@ -150,7 +151,6 @@ disable=print-statement,
         missing-function-docstring,
         wrong-import-order,
         missing-class-docstring
-        # Temporal:
         invalid-name,
         
 
