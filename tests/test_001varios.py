@@ -16,6 +16,7 @@
 # - William José Moreno Reyes
 
 from unittest import TestCase
+import pytest
 
 
 def test_run():
@@ -162,3 +163,21 @@ class TestBasicos(TestCase):
 
     def test_import_name(self):
         assert self.app.import_name == "cacao_accounting"
+
+
+class TestExection(TestCase):
+    def test_no_data(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear(datos=None)
+
+    def test_no_tabla(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear(datos={})

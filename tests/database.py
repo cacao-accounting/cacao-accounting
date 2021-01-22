@@ -239,13 +239,17 @@ class Proyecto:
         p = RegistroProyecto()
         p.crear(datos=PROYECTO)
 
+
 MONEDA = {"id": "LALA", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
+
 
 class Moneda:
     def test_crear_moneda(self):
         from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+
         r = RegistroMoneda()
         r.crear(MONEDA)
+
 
 # <-------------------------------------------------------------------------> #
 class BaseSQLite:
