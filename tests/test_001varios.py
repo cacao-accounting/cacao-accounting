@@ -16,6 +16,7 @@
 # - William José Moreno Reyes
 
 from unittest import TestCase
+import pytest
 
 
 def test_run():
@@ -162,3 +163,42 @@ class TestBasicos(TestCase):
 
     def test_import_name(self):
         assert self.app.import_name == "cacao_accounting"
+
+
+class TestExection(TestCase):
+    def test_no_data(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear(datos=None)
+
+    def test_no_tabla(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear(datos={})
+    
+    def test_registro_vacio(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos=None, entidad_madre="hola")
+
+    def test_entidad_vacias(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos={}, entidad_madre=None)
+
+    def test_sin_tabla(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.crear_registro(datos={}, entidad_madre="hola")

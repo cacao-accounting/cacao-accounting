@@ -91,7 +91,8 @@ class Registro:
          - Cuentas Contables
          - Centro de Costos
         """
-        if datos:
+        if datos and entidad_madre:
+            datos["entidad"] = entidad_madre
             if self.tabla:
                 if validar_entidad(entidad_madre):
                     self.database.session.add(self.tabla(**datos))

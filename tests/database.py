@@ -171,8 +171,18 @@ CENTRO_DE_COSTO2 = {
     "activa": True,
     "predeterminado": True,
     "habilitada": True,
-    "entidad": "cacao",
     "codigo": "11.02",
+    "nombre": "Centro de Costos de Prueba 1",
+    "grupo": False,
+    "padre": None,
+}
+
+CENTRO_DE_COSTO3 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "11.03",
     "nombre": "Centro de Costos de Prueba 2",
     "grupo": True,
     "padre": None,
@@ -187,7 +197,8 @@ class CentroCosto:
         demo_data()
         c = RegistroCentroCosto()
         c.crear(datos=CENTRO_DE_COSTO1)
-        c.crear(datos=CENTRO_DE_COSTO2)
+        c.crear(datos=CENTRO_DE_COSTO3)
+        c.crear_registro(datos=CENTRO_DE_COSTO2, entidad_madre="cacao")
 
 
 UNIDAD1 = {
@@ -195,6 +206,20 @@ UNIDAD1 = {
     "nombre": "Sucursal Ocotal",
     "entidad": "cacao",
     "corre_electronico": "sucursal1@chocoland.com",
+    "web": "chocoland.com",
+    "telefono1": "+505 8667 2108",
+    "telefono2": "+505 8771 0980",
+    "fax": "+505 7272 8181",
+    "pais": "Nicaragua",
+    "departamento": "Nueva Segovia",
+    "ciudad": "Ocotal",
+    "direccion1": "Parque Central",
+}
+
+UNIDAD2 = {
+    "id": "esteli",
+    "nombre": "Sucursal Esteli",
+    "corre_electronico": "sucursal2@chocoland.com",
     "web": "chocoland.com",
     "telefono1": "+505 8667 2108",
     "telefono2": "+505 8771 0980",
@@ -213,7 +238,8 @@ class Unidad:
 
         demo_data()
         r = RegistroUnidad()
-        r.crear(UNIDAD1)
+        r.crear(datos=UNIDAD1)
+        r.crear_registro(datos=UNIDAD2, entidad_madre="cacao")
 
 
 PROYECTO = {
@@ -239,13 +265,17 @@ class Proyecto:
         p = RegistroProyecto()
         p.crear(datos=PROYECTO)
 
+
 MONEDA = {"id": "LALA", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
+
 
 class Moneda:
     def test_crear_moneda(self):
         from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+
         r = RegistroMoneda()
         r.crear(MONEDA)
+
 
 # <-------------------------------------------------------------------------> #
 class BaseSQLite:
