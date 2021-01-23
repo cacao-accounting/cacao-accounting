@@ -35,7 +35,7 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 from cacao_accounting.database import db
-from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, ERROR4, IntegrityError, OperationalError
+from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
 
 
 def validar_entidad(validar=None):
@@ -119,11 +119,8 @@ class Registro:
         """
         if self.tabla:
             if identificador:
-                if validar_registro_activo():
-                    self.tabla.query.filter(self.tabla.id == identificador).delete()
-                    self.database.session.commit()
-                else:
-                    raise IntegrityError(ERROR4)
+                self.tabla.query.filter(self.tabla.id == identificador).delete()
+                self.database.session.commit()
             else:
                 raise IntegrityError(ERROR3)
         else:

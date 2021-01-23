@@ -203,6 +203,7 @@ class CentroCosto:
     def test_eliminar_centrocosto(self):
         from cacao_accounting.datos import demo_data
         from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
+
         demo_data()
         c = RegistroCentroCosto()
         c.crear(datos=CENTRO_DE_COSTO1)
