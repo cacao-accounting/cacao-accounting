@@ -202,16 +202,20 @@ class CentroCosto(db.Model):
 
     __tablename__ = "cc"
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"),)
-    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
+    # 11.01.001.001.001.001.00001.0001.0001.00001.000001
+    id = db.Column(
+        db.String(50),
+        unique=True,
+        index=True,
+        primary_key=True,
+    )
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
-    # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
-    # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(db.String(50), unique=True, index=True)
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())

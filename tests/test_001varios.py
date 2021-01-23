@@ -202,3 +202,10 @@ class TestExection(TestCase):
         r = Registro()
         with pytest.raises(OperationalError):
             r.crear_registro(datos={}, entidad_madre="hola")
+    def test_eliminar_sintabla(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.exception import OperationalError
+        r = Registro()
+        with pytest.raises(OperationalError):
+            r.eliminar(identificador="hola")
+

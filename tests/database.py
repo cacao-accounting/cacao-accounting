@@ -161,7 +161,7 @@ CENTRO_DE_COSTO1 = {
     "predeterminado": True,
     "habilitada": True,
     "entidad": "cacao",
-    "codigo": "11.01",
+    "id": "11.01",
     "nombre": "Centro de Costos de Prueba",
     "grupo": False,
     "padre": None,
@@ -171,7 +171,7 @@ CENTRO_DE_COSTO2 = {
     "activa": True,
     "predeterminado": True,
     "habilitada": True,
-    "codigo": "11.02",
+    "id": "11.02",
     "nombre": "Centro de Costos de Prueba 1",
     "grupo": False,
     "padre": None,
@@ -182,7 +182,7 @@ CENTRO_DE_COSTO3 = {
     "predeterminado": True,
     "habilitada": True,
     "entidad": "cacao",
-    "codigo": "11.03",
+    "id": "11.03",
     "nombre": "Centro de Costos de Prueba 2",
     "grupo": True,
     "padre": None,
@@ -199,6 +199,14 @@ class CentroCosto:
         c.crear(datos=CENTRO_DE_COSTO1)
         c.crear(datos=CENTRO_DE_COSTO3)
         c.crear_registro(datos=CENTRO_DE_COSTO2, entidad_madre="cacao")
+
+    def test_eliminar_centrocosto(self):
+        from cacao_accounting.datos import demo_data
+        from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
+        demo_data()
+        c = RegistroCentroCosto()
+        c.crear(datos=CENTRO_DE_COSTO1)
+        c.eliminar(identificador="11.01")
 
 
 UNIDAD1 = {

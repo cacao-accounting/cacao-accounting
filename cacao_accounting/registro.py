@@ -35,7 +35,7 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 from cacao_accounting.database import db
-from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
+from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, ERROR4, IntegrityError, OperationalError
 
 
 def validar_entidad(validar=None):
@@ -54,6 +54,13 @@ def validar_perido_contable(fecha=None):
     return True
 
 
+def validar_registro_activo():
+    """
+    Verifica si un registro se encuentra en un estatus activo
+    """
+    return True
+
+
 class Registro:
     """
     Interfaz comun para la administración de registros.
@@ -64,6 +71,7 @@ class Registro:
     tabla = None
     tabla_detalle = None
     entidad = None
+    estados = []
 
     def crear(self, datos=None, datos_detalle=None):
         """
@@ -103,3 +111,20 @@ class Registro:
                 raise OperationalError(ERROR2)
         else:
             raise OperationalError(ERROR1)
+
+    def eliminar(self, identificador=None):
+        """
+        Usar con precaucion, en el mayor de los casos es preferible anular que elimar, este metodo solo esta
+        disponible para datos registros.
+        """
+        if self.tabla:
+            if identificador:
+                if validar_registro_activo():
+                    self.tabla.query.filter(self.tabla.id == identificador).delete()
+                    self.database.session.commit()
+                else:
+                    raise IntegrityError(ERROR4)
+            else:
+                raise IntegrityError(ERROR3)
+        else:
+            raise OperationalError(ERROR2)
