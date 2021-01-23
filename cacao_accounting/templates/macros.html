@@ -4,10 +4,11 @@
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 {% macro headertags() -%}
 
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Cacao Accounting Software">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Aplicación Contable.">
   <meta name="author" content="William Moreno Reyes">
+    
 
   {% if titulo  %}
   <title> {{ titulo }} </title>
@@ -40,14 +41,35 @@
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="msapplication-TileColor" content="#ffffff">
   <meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#7952b3">
+
+<style>
+  .bd-placeholder-img {
+    font-size: 1.125rem;
+    text-anchor: middle;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  @media (min-width: 768px) {
+    .bd-placeholder-img-lg {
+      font-size: 3.5rem;
+    }
+  }
+</style>
+
+  <!-- Custom styles for this template -->
+  <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+
 
 {%- endmacro %}
 
 {# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
 {% macro cabecera() %}
 <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-  <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
+  <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
     <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
   </a>
   <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse" data-target="#BarraLateralMenu" aria-controls="BarraLateralMenu" aria-expanded="false" aria-label="Navegación">
@@ -63,9 +85,9 @@
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
-<nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
-  <div class="position-sticky pt-3">
-    <ul class="nav flex-column">
+    <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+      <div class="position-sticky pt-3">
+        <ul class="nav flex-column">
       {% if validar_modulo_activo("accounting")  %}
         <li class="nav__item">
           <a href="{{ url_for("contabilidad.conta") }}" class="nav-link active" >Contabilidad</a>
