@@ -72,7 +72,7 @@
   <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
     <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
   </a>
-  <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse" data-target="#BarraLateralMenu" aria-controls="BarraLateralMenu" aria-expanded="false" aria-label="Navegación">
+  <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
     <span class="navbar-toggler-icon"></span>
   </button>
   <ul class="navbar-nav px-3">
@@ -85,7 +85,7 @@
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
-    <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+    <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
       <div class="position-sticky pt-3">
         <ul class="nav flex-column">
       {% if validar_modulo_activo("accounting")  %}
