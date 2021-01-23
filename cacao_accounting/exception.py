@@ -41,3 +41,4 @@ class OperationalError(CacaoAccountingException):
 ERROR1 = "No se proporcionaron datos."
 ERROR2 = "No se ha espeficiado una tabla en la base de datos."
 ERROR3 = "Entidad invalida."
+ERROR4 = "Cambio de status no valido."
