@@ -3,8 +3,10 @@ COPY package.json .
 COPY yarn.lock .
 RUN yarn
 
-FROM python:3.10-rc-slim
+FROM python:3.8-slim
 
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED = 1
 ENV DOCKERISED=Yes
@@ -13,6 +15,10 @@ ENV DOCKERISED=Yes
 COPY requirements.txt /tmp/
 RUN pip --no-cache-dir install -r /tmp/requirements.txt \
     && rm -rf /root/.cache/
+
+# No ejecutar como root
+RUN useradd cacao
+USER cacao
 
 # Copy and install app
 COPY . /app
