@@ -34,7 +34,7 @@ def monedas():
     from cacao_accounting.database import Moneda
 
     MONEDAS = Moneda.query.order_by(Moneda.id).all()
-    return render_template("contabilidad/monedas.html", monedas=MONEDAS)
+    return render_template("contabilidad/moneda_lista.html", monedas=MONEDAS)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -58,7 +58,7 @@ def entidades():
     from cacao_accounting.database import Entidad
 
     ENTIDADES = Entidad.query.order_by(Entidad.id).all()
-    return render_template("contabilidad/entidades.html", entidades=ENTIDADES)
+    return render_template("contabilidad/entidad_lista.html", entidades=ENTIDADES)
 
 
 @contabilidad.route("/accounts/entities/<id_entidad>")
@@ -76,7 +76,7 @@ def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
-    return render_template("contabilidad/nuevaentidad.html", form=formulario)
+    return render_template("contabilidad/entidad_crear.html", form=formulario)
 
 
 @contabilidad.route("/accounts/entities/edit/<id_entidad>")
@@ -85,7 +85,7 @@ def editar_entidad(id_entidad):
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
-    return render_template("contabilidad/editarentidad.html", form=formulario)
+    return render_template("contabilidad/entidad_editar.html", form=formulario)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -96,7 +96,7 @@ def unidades():
     from cacao_accounting.database import Unidad
 
     UNIDADES = Unidad.query.order_by(Unidad.entidad).all()
-    return render_template("contabilidad/unidades.html", unidades=UNIDADES)
+    return render_template("contabilidad/unidad_lista.html", unidades=UNIDADES)
 
 
 @contabilidad.route("/accounts/unit/<id_unidad>")
@@ -111,7 +111,7 @@ def unidad(id_unidad):
 @contabilidad.route("/accounts/units/new")
 @login_required
 def nueva_unidad():
-    return render_template("contabilidad/nuevaunidad.html")
+    return render_template("contabilidad/unidad_crear.html")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -122,7 +122,7 @@ def cuentas():
     from cacao_accounting.database import Cuentas
 
     catalogo = Cuentas.query.order_by(Cuentas.codigo).all()
-    return render_template("contabilidad/cuentas.html", catalogo=catalogo)
+    return render_template("contabilidad/cuenta_lista.html", catalogo=catalogo)
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")
@@ -147,7 +147,7 @@ def ccostos():
 @contabilidad.route("/accounts/projects")
 @login_required
 def proyectos():
-    return render_template("contabilidad/proyectos.html")
+    return render_template("contabilidad/proyecto_lista.html")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
