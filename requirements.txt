@@ -16,7 +16,7 @@ loguru
 psycopg2-binary
 PyMySQL
 sqlalchemy
-sqlalchem-paginator
+sqlalchemy-paginator
 teritorio
 waitress
 wtforms
