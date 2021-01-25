@@ -213,3 +213,10 @@ class TestExection(TestCase):
         r = Registro()
         with pytest.raises(OperationalError):
             r.eliminar(identificador="hola")
+
+    def test_querry_vacio(self):
+        from cacao_accounting.exception import DataError
+        from cacao_accounting.consultas import paginar_consulta
+
+        with pytest.raises(DataError):
+            paginar_consulta(query=None, elementos=None)
