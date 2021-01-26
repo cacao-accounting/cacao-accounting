@@ -19,7 +19,7 @@
 Modulo de Contabilidad.
 """
 
-from flask import Blueprint, redirect, render_template
+from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
 from cacao_accounting.modulos import validar_modulo_activo
 
@@ -33,6 +33,7 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 def monedas():
     from cacao_accounting.database import Moneda
 
+    page = request.args.get("page", default=1, type=int)
     MONEDAS = Moneda.query.order_by(Moneda.id).all()
     return render_template("contabilidad/moneda_lista.html", monedas=MONEDAS)
 
@@ -58,8 +59,9 @@ def entidades():
     from cacao_accounting.database import Entidad
     from cacao_accounting.consultas import paginar_consulta
 
+    page = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(Entidad)
-    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO)
+    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, page=page)
 
 
 @contabilidad.route("/accounts/entities/<id_entidad>")
@@ -96,6 +98,7 @@ def editar_entidad(id_entidad):
 def unidades():
     from cacao_accounting.database import Unidad
 
+    page = request.args.get("page", default=1, type=int)
     UNIDADES = Unidad.query.order_by(Unidad.entidad).all()
     return render_template("contabilidad/unidad_lista.html", unidades=UNIDADES)
 
@@ -140,6 +143,7 @@ def cuenta(id_cta):
 @contabilidad.route("/accounts/ccenter")
 @login_required
 def ccostos():
+    page = request.args.get("page", default=1, type=int)
     return render_template("contabilidad/ccostos.html")
 
 
@@ -148,6 +152,7 @@ def ccostos():
 @contabilidad.route("/accounts/projects")
 @login_required
 def proyectos():
+    page = request.args.get("page", default=1, type=int)
     return render_template("contabilidad/proyecto_lista.html")
 
 
