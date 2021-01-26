@@ -56,9 +56,10 @@ def conta():
 @login_required
 def entidades():
     from cacao_accounting.database import Entidad
+    from cacao_accounting.consultas import paginar_consulta
 
-    ENTIDADES = Entidad.query.order_by(Entidad.id).all()
-    return render_template("contabilidad/entidad_lista.html", entidades=ENTIDADES)
+    RESULTADO = paginar_consulta(Entidad)
+    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO)
 
 
 @contabilidad.route("/accounts/entities/<id_entidad>")
