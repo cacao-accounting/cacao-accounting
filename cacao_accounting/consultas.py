@@ -28,8 +28,11 @@ def paginar_consulta(tabla=None, elementos=None):
     Toma una consulta simple y la devuel como una consulta paginada.
     """
     if tabla:
-        paginacion = elementos > MAX_NUMBER
-        consulta = db.session.query(tabla)
+        if elementos:
+            paginacion = elementos > MAX_NUMBER
+        else:
+            paginacion = False
+        consulta = db.session.query(tabla).order_by(tabla.id)
         no_resultados = consulta.count()
         if paginacion:
             consulta_paginada = Paginator(consulta, elementos)
