@@ -3,6 +3,7 @@
   <section>
     <h5>Crear Nueva Entidad.</h5>
     <form method="post"></form>
+    <button class="btn btn-lg btn-primary btn-block" type="submit">Guardar</button>
     {{ form.csrf_token }}
     <label>ID Entidad:</label>{{ form.id() }}
     <label>Razon Social:</label>{{ form.razon_social() }}

@@ -15,21 +15,32 @@
 # Contributors:
 # - William José Moreno Reyes
 
-
+from cacao_accounting.database import db
 from cacao_accounting.exception import DataError, ERROR1
 from sqlalchemy_paginator import Paginator
 
 
-def paginar_consulta(query=None, elementos=None):
+MAX_NUMBER = 25
+
+
+def paginar_consulta(tabla=None, elementos=None):
     """
     Toma una consulta simple y la devuel como una consulta paginada.
     """
-    if query:
-        if elementos:
-            resultado = Paginator(query, elementos)
-            return resultado
+    if tabla:
+        paginacion = elementos and elementos > MAX_NUMBER
+        consulta = db.session.query(tabla)
+        no_resultados = consulta.count()
+        if paginacion:
+            consulta_paginada = Paginator(consulta, elementos)
         else:
-            resultado = Paginator(query, 25)
-            return resultado
+            consulta_paginada = Paginator(consulta, MAX_NUMBER)
+        resultado = {
+            "paginacion": paginacion,
+            "consulta": consulta,
+            "consulta_paginada": consulta_paginada,
+            "no_resultados": no_resultados,
+        }
+        return resultado
     else:
         raise DataError(ERROR1)
