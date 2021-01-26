@@ -70,7 +70,7 @@ def entidad(id_entidad):
     return render_template("contabilidad/entidad.html", registro=registro)
 
 
-@contabilidad.route("/accounts/entities/new")
+@contabilidad.route("/accounts/entities/new", methods=["GET", "POST"])
 @login_required
 def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
