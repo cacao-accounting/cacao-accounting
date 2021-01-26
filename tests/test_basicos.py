@@ -219,4 +219,4 @@ class TestExection(TestCase):
         from cacao_accounting.consultas import paginar_consulta
 
         with pytest.raises(DataError):
-            paginar_consulta(query=None, elementos=None)
+            paginar_consulta(tabla=None, elementos=None)
