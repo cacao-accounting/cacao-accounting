@@ -129,6 +129,14 @@ class Entidad(db.Model):
     moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
     # Individual, Sociedad, Sin Fines de Lucro
     tipo_entidad = db.Column(db.String(50))
+    tipo_entidad_lista = [
+        "Asociación",
+        "Compañia Limitada",
+        "Cooperativa",
+        "Sociedad Anonima",
+        "Organización sin Fines de Lucro",
+        "Persona Natural",
+    ]
     # Información de contacto
     correo_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
@@ -141,6 +149,7 @@ class Entidad(db.Model):
     direccion1 = db.Column(db.String(100))
     direccion2 = db.Column(db.String(100))
     calle = db.Column(db.String(100))
+    avenida = db.Column(db.String(100))
     casa = db.Column(db.String(100))
     habilitada = db.Column(db.Boolean())
     predeterminada = db.Column(db.Boolean())

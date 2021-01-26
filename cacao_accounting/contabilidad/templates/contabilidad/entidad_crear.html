@@ -2,6 +2,30 @@
 {% block contenido %}
   <section>
     <h5>Crear Nueva Entidad.</h5>
+    <form method="post"></form>
+    {{ form.csrf_token }}
+    <label>ID Entidad:</label>{{ form.id() }}
+    <label>Razon Social:</label>{{ form.razon_social() }}
+    <label>Nombre Comercial:</label>{{ form.nombre_comercial }}
+    <label>Moneda Principal:</label>{{form.moneda}}
+    <label>Tipo de Entidad:</label>{{form.tipo_entidad}}
+    <label>Correo Electronico:</label>{{form.correo_electronico}}
+    <label>Página Web:</label>{{form.web}}
+    <label>Telefono 1:</label>{{form.telefono1}}
+    <label>Telefono 2:</label>{{form.telefono2}}
+    <label>Fax:</label>{{form.fax}}
+    <label>País:</label>{{form.pais}}
+    <label>Departamento:</label>{{form.departamento}}
+    <label>Ciudad:</label>{{form.ciudad}}
+    <label>Dirección 1</label>{{form.direccion1}}
+    <label>Dirección 1:</label>{{form.direccion2}}
+    <label>Calle:</label>{{form.calle}}
+    <label>Avenida:</label>{{form.avenida}}
+    <label>Número de Casa:</label>{{form.casa}}
+    <label>Habilitada: </label>{{ form.habilitada() }}
+    <label>Predeterminada: </label>{{ form.predeterminada() }}
+    <button class="btn btn-lg btn-primary btn-block" type="submit">Guardar</button>
+    </form>
 
   </section>
 {% endblock %}
