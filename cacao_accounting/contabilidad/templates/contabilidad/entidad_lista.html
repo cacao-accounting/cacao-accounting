@@ -15,50 +15,17 @@
         <th scope="col">ID Fiscal</th>
       </tr>
     </thead>
+      {% for item in pagina.object_list %}
+      <tr>
+        <td>{{ item.habilitada }}</td>
+        <td>{{ item.id }}</td>
+        <td>{{ item.razon_social }}</td>
+        <td>{{ item.nombre_comercial }}</td>
+        <td>{{ item.id_fiscal }}</td>
+      </tr>
+      {% endfor %}
     <tbody>
-      {% if resultado["paginacion"] %}
-        {% for page in  resultado["consulta_paginada"] %}
-          {% for entidad in resultado["consulta"] -%}
-          <tr>
-            <th>
-              {{ entidad.habilitada }}
-            </th>
-            <th scope="row">
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.id }}</a>
-            </th>
-            <td>
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.razon_social }}</a>
-            </td>
-            <td>
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
-            </td>
-            <td>
-              <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
-            </td>
-          </tr>
-          {%- endfor %}
-        {%- endfor %}
-      {% else %}
-      {% for entidad in resultado["consulta"] -%}
-        <tr>
-          <th>
-            {{ entidad.habilitada }}
-          </th>
-          <th scope="row">
-            <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.id }}</a>
-          </th>
-          <td>
-            <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.razon_social }}</a>
-          </td>
-          <td>
-            <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
-          </td>
-          <td>
-            <a href = {{ url_for("contabilidad.entidad" ,id_entidad=entidad.id) }} class="link-dark">{{ entidad.nombre_comercial }}</a>
-          </td>
-        </tr>
-        {%- endfor %}
-      {% endif %}
+    </tbody>
   </table>
 </section>
 {% endblock %}
