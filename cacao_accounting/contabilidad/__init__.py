@@ -35,7 +35,7 @@ def monedas():
 
     page = request.args.get("page", default=1, type=int)
     MONEDAS = Moneda.query.order_by(Moneda.id).all()
-    return render_template("contabilidad/moneda_lista.html", monedas=MONEDAS)
+    return render_template("contabilidad/moneda_lista.html", monedas=MONEDAS, page=page)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -60,8 +60,9 @@ def entidades():
     from cacao_accounting.consultas import paginar_consulta
 
     page = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(Entidad)
-    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, page=page)
+    RESULTADO = paginar_consulta(tabla=Entidad)
+    PAGINA = RESULTADO.page(page)
+    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
 @contabilidad.route("/accounts/entities/<id_entidad>")
@@ -100,7 +101,7 @@ def unidades():
 
     page = request.args.get("page", default=1, type=int)
     UNIDADES = Unidad.query.order_by(Unidad.entidad).all()
-    return render_template("contabilidad/unidad_lista.html", unidades=UNIDADES)
+    return render_template("contabilidad/unidad_lista.html", unidades=UNIDADES, page=page)
 
 
 @contabilidad.route("/accounts/unit/<id_unidad>")
@@ -144,7 +145,7 @@ def cuenta(id_cta):
 @login_required
 def ccostos():
     page = request.args.get("page", default=1, type=int)
-    return render_template("contabilidad/ccostos.html")
+    return render_template("contabilidad/ccostos.html", page=page)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -153,7 +154,7 @@ def ccostos():
 @login_required
 def proyectos():
     page = request.args.get("page", default=1, type=int)
-    return render_template("contabilidad/proyecto_lista.html")
+    return render_template("contabilidad/proyecto_lista.html", page=page)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
