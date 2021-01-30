@@ -1,8 +1,3 @@
-[project]
-name = "cacao_accounting"
-version = "0.0.1"
-description = "Software contable para micro, pequeñas y medianas empresas."
-
 [build-system]
 # Minimum requirements for the build system to execute.
 requires = ["setuptools", "wheel"]  # PEP 508 specifications.
