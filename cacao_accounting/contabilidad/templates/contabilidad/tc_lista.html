@@ -1,24 +1,31 @@
 {% extends "base.html" %}
 {% block contenido %}
 <section>
-  <h3>Listado de Proyectos.</h3>
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Moneda</a>
+  <h3>Listado de Tasas de Cambio.</h3>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Tasa de Cambio</a>
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col">ID</th>
-        <th scope="col">Nombre</th>
-        <th scope="col">Entidad</th>
+        <th scope="col">Base</th>
+        <th scope="col">Destino</th>
+        <th scope="col">Tasa</th>
+        <th scope="col">Fecha</th>
       </tr>
     </thead>
   {% for item in pagina.object_list -%}
   <tr>
     <th>
-      {{ item.id }}
+      {{ item.base }}
     </th>
-    <th scope="row">
-      {{ item.nombre }}
-    </th>
+    <td>
+      {{ item.destino }}
+    </td>
+    <td>
+      {{ item.fecha }}
+    </td>
+    <td>
+      {{ item.tasa }}
+    </td>
     <td>
       {{ item.entidad }}
     </td>

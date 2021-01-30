@@ -2,9 +2,8 @@
 {% block contenido %}
 
 <section>
-  <h3>Entidades.</h3>
-  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button">Crear Nueva Entidad</a>
-  <h6>Listado de Entidades:</h6>
+  <h3>Listado de Entidades.</h3>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button">Nueva Entidad</a>
   <table class="table table-sm">
     <thead>
       <tr>
@@ -27,5 +26,9 @@
     <tbody>
     </tbody>
   </table>
+</section>
+<section>
+  {% import "macros.html" as macros %}
+  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
 </section>
 {% endblock %}

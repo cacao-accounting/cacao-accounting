@@ -28,26 +28,32 @@ from cacao_accounting.database import db, Modulos
 contabilidad = {
     "modulo": "accounting",
     "estandar": True,
+    "habilitado": True,
 }
 bancos = {
     "modulo": "cash",
     "estandar": True,
+    "habilitado": False,
 }
 compras = {
     "modulo": "buying",
     "estandar": True,
+    "habilitado": False,
 }
 inventario = {
     "modulo": "inventory",
     "estandar": True,
+    "habilitado": False,
 }
 ventas = {
     "modulo": "sales",
     "estandar": True,
+    "habilitado": False,
 }
 admin = {
     "modulo": "admin",
     "estandar": True,
+    "habilitado": True,
 }
 
 MODULOS_STANDAR = [
@@ -85,7 +91,6 @@ def _init_modulos():
     Inserta en la base de datos los modulos predeterminados del sistema.
     """
     for i in MODULOS_STANDAR:
-        i["habilitado"] = True
         i["ruta"] = None
         registrar_modulo(i)
 

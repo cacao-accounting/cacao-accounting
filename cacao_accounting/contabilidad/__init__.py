@@ -38,7 +38,7 @@ def monedas():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Moneda)
     PAGINA = RESULTADO.page(PAGE)
-    TITULO = APPNAME + " - Monedas"
+    TITULO = "Monedas" + " - " + APPNAME
     return render_template("contabilidad/moneda_lista.html", resultado=RESULTADO, pagina=PAGINA, titulo=TITULO)
 
 
@@ -62,9 +62,9 @@ def conta():
 def entidades():
     from cacao_accounting.database import Entidad
 
-    page = request.args.get("page", default=1, type=int)
+    PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Entidad)
-    PAGINA = RESULTADO.page(page)
+    PAGINA = RESULTADO.page(PAGE)
     return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
@@ -102,9 +102,10 @@ def editar_entidad(id_entidad):
 def unidades():
     from cacao_accounting.database import Unidad
 
-    page = request.args.get("page", default=1, type=int)
-    UNIDADES = Unidad.query.order_by(Unidad.entidad).all()
-    return render_template("contabilidad/unidad_lista.html", unidades=UNIDADES, page=page)
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=Unidad)
+    PAGINA = RESULTADO.page(PAGE)
+    return render_template("contabilidad/unidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
 @contabilidad.route("/accounts/unit/<id_unidad>")
@@ -147,8 +148,11 @@ def cuenta(id_cta):
 @contabilidad.route("/accounts/ccenter")
 @login_required
 def ccostos():
-    page = request.args.get("page", default=1, type=int)
-    return render_template("contabilidad/ccostos.html", page=page)
+    from cacao_accounting.database import CentroCosto
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=CentroCosto)
+    PAGINA = RESULTADO.page(PAGE)
+    return render_template("contabilidad/centro-costo_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -156,8 +160,11 @@ def ccostos():
 @contabilidad.route("/accounts/projects")
 @login_required
 def proyectos():
-    page = request.args.get("page", default=1, type=int)
-    return render_template("contabilidad/proyecto_lista.html", page=page)
+    from cacao_accounting.database import CentroCosto
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=CentroCosto)
+    PAGINA = RESULTADO.page(PAGE)
+    return render_template("contabilidad/proyecto_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -165,4 +172,8 @@ def proyectos():
 @contabilidad.route("/accounts/exchange")
 @login_required
 def tasa_cambio():
-    return render_template("contabilidad/tc.html")
+    from cacao_accounting.database import TasaDeCambio
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=TasaDeCambio)
+    PAGINA = RESULTADO.page(PAGE)
+    return render_template("contabilidad/tc_lista.html", resultado=RESULTADO, pagina=PAGINA)

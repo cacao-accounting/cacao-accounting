@@ -1,9 +1,9 @@
 {% extends "base.html" %}
+{% set titulo = titulo %}
 {% block contenido %}
-
 <section>
   <h3>Listado de Monedas.</h3>
-  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Moneda</a>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Moneda</a>
   <table class="table table-sm">
     <thead>
       <tr>

@@ -2,14 +2,33 @@
 {% block contenido %}
 
 <section>
-  <h3>Entidades.</h3>
-  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Unidad de Negocios</a>
-  <h6>Listado de Entidades:</h6>
-  <ul>
-  {% for unidad in unidades -%}
-  <li>
-    <a href = {{ url_for("contabilidad.entidad" ,id_entidad=unidad.entidad) }}>{{ unidad.entidad }}</a> - <a href = {{ url_for("contabilidad.unidad" ,id_unidad=unidad.id) }}>{{ unidad.nombre }}</a>
+  <h3>Listado de Unidades de Negocio.</h3>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Unidad de Negocios</a>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th scope="col">ID</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Entidad</th>
+      </tr>
+    </thead>
+  {% for item in pagina.object_list -%}
+  <tr>
+    <td>
+      {{ item.id }}
+    </th>
+    <td>
+      {{ item.nombre }}
+    </th>
+    <td>
+      {{ item.entidad }}
+    </td>
+  </tr>
   {%- endfor %}
-  </ul>
+</table>
+</section>
+<section>
+  {% import "macros.html" as macros %}
+  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
 </section>
 {% endblock %}
