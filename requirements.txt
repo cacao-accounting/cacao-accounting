@@ -13,8 +13,6 @@ flask-reuploaded
 flask-sqlalchemy
 flask-wtf
 loguru
-psycopg2-binary
-PyMySQL
 sqlalchemy
 sqlalchemy-paginator
 teritorio
@@ -24,3 +22,7 @@ WTForms-SQLAlchemy
 
 # Heroku
 gunicorn
+
+# Bases de datos
+psycopg2-binary
+PyMySQL
