@@ -17,17 +17,19 @@
 
 from setuptools import setup
 from os import path
-from cacao_accounting.metadata import APPAUTHOR, VERSION
 
 aqui = path.abspath(path.dirname(__file__))
 with open(path.join(aqui, "README.md"), encoding="utf-8") as f:
     descripcion = f.read()
 
+metadata = {}
+with open("cacao_accounting/metadata.py") as fp:
+    exec(fp.read(), metadata)
 
 setup(
     name="cacao_accounting",
-    version=VERSION,
-    author=APPAUTHOR,
+    version=metadata["VERSION"],
+    author=metadata["APPAUTHOR"],
     author_email="williamjmorenor@gmail.com",
     description="Software contable para micro, pequeñas y medianas empresas.",
     long_description=descripcion,
