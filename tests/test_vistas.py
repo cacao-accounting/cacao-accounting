@@ -69,8 +69,3 @@ class TestVistas(TestCase):
         db.create_all()
         base_data(carga_rapida=True)
         demo_data()
-
-    def test_cash(self):
-        response = self.app.test_client().get("/cash")
-        assert response.status_code == 200
-        assert b"Caja y Bancos" in response.data
