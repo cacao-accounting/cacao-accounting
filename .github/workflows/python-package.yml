@@ -64,7 +64,7 @@ jobs:
       run: pylint cacao_accounting 
     - name: Test with pytest
       run: pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
-    #- name: Documentacion 
-    #  run: pydocstyle cacao_accounting
+    - name: Documentacion 
+      run: mkdocs build
     - name: Codecov
       uses: codecov/codecov-action@v1
