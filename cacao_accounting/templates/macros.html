@@ -10,11 +10,8 @@
   <meta name="author" content="William Moreno Reyes">
     
 
-  {% if titulo  %}
+  {% set titulo = titulo|default("Cacao Accounting") %}
   <title> {{ titulo }} </title>
-  {% else %}
-  <title>Cacao Accounting</title>
-  {% endif %}
 
   <!-- Bootstrap core CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
