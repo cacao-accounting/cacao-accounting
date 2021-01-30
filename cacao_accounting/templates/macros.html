@@ -131,3 +131,18 @@
     </div>
 </nav>
 {%- endmacro %}
+
+
+{% macro rendizar_paginacion(consulta_paginada=None, pagina_actual=None)%}
+{% if pagina_actual.has_other_pages() %}
+<p>Monstrando resultados {{ pagina_actual.start_index }} al {{ pagina_actual.end_index }} de {{ pagina_actual.paginator.count }} resultados encontrados. Página {{ pagina_actual.number }} de {{ pagina_actual.paginator.total_pages }}</p>
+<div class="btn-group btn-group-sm" role="group" aria-label="Basic example">
+  {% if pagina_actual.has_previous(): %}
+  <a type="button" href="{{ url_for("contabilidad.monedas", page=pagina_actual.previous_page_number) }}" class="btn btn-primary">Anterior</a>
+  {% endif %}
+  {% if pagina_actual.has_next(): %}
+  <a type="button" href="{{ url_for("contabilidad.monedas", page=pagina_actual.next_page_number) }}" class="btn btn-primary">Siguiente</a>
+  {% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
