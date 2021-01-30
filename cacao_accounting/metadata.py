@@ -15,6 +15,17 @@
 # Contributors:
 # - William José Moreno Reyes
 
+from datetime import datetime
+
+
+APPNAME = "Cacao Accounting"
+APPAUTHOR = "William Moreno Reyes"
+MAYOR = "0"
+MENOR = "0"
+PATCH = "1"
+PRERELEASE = "dev" + datetime.today().strftime("%Y%m%d%H%M") 
+VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
+
 # development
 # release_candidate
 # alpha
@@ -23,3 +34,5 @@
 
 __state__ = "development"
 DEVELOPMENT = __state__ != "stable"
+
+
