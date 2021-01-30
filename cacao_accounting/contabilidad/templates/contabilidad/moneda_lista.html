@@ -2,9 +2,8 @@
 {% block contenido %}
 
 <section>
-  <h3>Unidades.</h3>
-  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Unidad de Negocios</a>
-  <h6>Listado de Monedas:</h6>
+  <h3>Listado de Monedas.</h3>
+  <a class="btn btn-primary" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Crear Nueva Moneda</a>
   <table class="table table-sm">
     <thead>
       <tr>
@@ -13,7 +12,7 @@
         <th scope="col">Código</th>
       </tr>
     </thead>
-  {% for moneda in monedas -%}
+  {% for moneda in pagina.object_list -%}
   <tr>
     <th>
       {{ moneda.id }}
@@ -27,5 +26,9 @@
   </tr>
   {%- endfor %}
 </table>
+</section>
+<section>
+  {% import "macros.html" as macros %}
+  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
 </section>
 {% endblock %}
