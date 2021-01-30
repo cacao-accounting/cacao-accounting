@@ -31,14 +31,3 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     return render_template("app.html")
-
-
-if DEVELOPMENT:
-
-    @cacao_app.route("/demo-lista")
-    def demo_lista():
-        return render_template("demo_lista.html")
-
-    @cacao_app.route("/demo-registro")
-    def demo_registro():
-        return render_template("demo_registro.html")
