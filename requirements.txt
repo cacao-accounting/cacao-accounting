@@ -15,7 +15,6 @@ flask-wtf
 loguru
 psycopg2-binary
 PyMySQL
-semver
 sqlalchemy
 sqlalchemy-paginator
 teritorio
