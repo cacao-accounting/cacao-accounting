@@ -149,6 +149,7 @@ def cuenta(id_cta):
 @login_required
 def ccostos():
     from cacao_accounting.database import CentroCosto
+
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=CentroCosto)
     PAGINA = RESULTADO.page(PAGE)
@@ -161,6 +162,7 @@ def ccostos():
 @login_required
 def proyectos():
     from cacao_accounting.database import CentroCosto
+
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=CentroCosto)
     PAGINA = RESULTADO.page(PAGE)
@@ -173,6 +175,7 @@ def proyectos():
 @login_required
 def tasa_cambio():
     from cacao_accounting.database import TasaDeCambio
+
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=TasaDeCambio)
     PAGINA = RESULTADO.page(PAGE)
