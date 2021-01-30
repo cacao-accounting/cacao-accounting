@@ -22,7 +22,6 @@ Página principal de la aplicación.
 
 from flask import Blueprint, render_template
 from flask_login import login_required
-from cacao_accounting.metadata import DEVELOPMENT
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 
@@ -31,14 +30,3 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     return render_template("app.html")
-
-
-if DEVELOPMENT:
-
-    @cacao_app.route("/demo-lista")
-    def demo_lista():
-        return render_template("demo_lista.html")
-
-    @cacao_app.route("/demo-registro")
-    def demo_registro():
-        return render_template("demo_registro.html")
