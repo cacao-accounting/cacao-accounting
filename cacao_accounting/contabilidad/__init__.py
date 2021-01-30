@@ -21,6 +21,8 @@ Modulo de Contabilidad.
 
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
+from cacao_accounting.consultas import paginar_consulta
+from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
@@ -33,9 +35,11 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 def monedas():
     from cacao_accounting.database import Moneda
 
-    page = request.args.get("page", default=1, type=int)
-    MONEDAS = Moneda.query.order_by(Moneda.id).all()
-    return render_template("contabilidad/moneda_lista.html", monedas=MONEDAS, page=page)
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=Moneda)
+    PAGINA = RESULTADO.page(PAGE)
+    TITULO = APPNAME + " - Monedas"
+    return render_template("contabilidad/moneda_lista.html", resultado=RESULTADO, pagina=PAGINA, titulo=TITULO)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -57,7 +61,6 @@ def conta():
 @login_required
 def entidades():
     from cacao_accounting.database import Entidad
-    from cacao_accounting.consultas import paginar_consulta
 
     page = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Entidad)
