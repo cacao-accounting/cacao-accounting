@@ -20,7 +20,7 @@ from cacao_accounting.exception import DataError, ERROR1
 from sqlalchemy_paginator import Paginator
 
 
-MAX_NUMBER = 25
+MAX_NUMBER = 15
 
 
 def paginar_consulta(tabla=None, elementos=None):
