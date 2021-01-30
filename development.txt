@@ -3,6 +3,8 @@ build
 pep517
 twine
 wheel
+zest.releaser
+zest.releaser[recommended]
 
 # Control de calidad
 flake8
