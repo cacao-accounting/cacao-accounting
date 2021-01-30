@@ -17,18 +17,17 @@
 
 from setuptools import setup
 from os import path
-from datetime import datetime
+from cacao_accounting.metadata import APPAUTHOR, VERSION
 
 aqui = path.abspath(path.dirname(__file__))
 with open(path.join(aqui, "README.md"), encoding="utf-8") as f:
     descripcion = f.read()
 
-timestamp = ".dev" + datetime.today().strftime("%Y%m%d%H%M")
 
 setup(
     name="cacao_accounting",
-    version="0.0.1" + timestamp,
-    author="William José Moreno Reyes",
+    version=VERSION,
+    author=APPAUTHOR,
     author_email="williamjmorenor@gmail.com",
     description="Software contable para micro, pequeñas y medianas empresas.",
     long_description=descripcion,
