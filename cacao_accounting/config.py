@@ -23,11 +23,9 @@ from os import environ
 from os.path import exists, join
 from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
-from cacao_accounting.metadata import DEVELOPMENT
+from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME
 from cacao_accounting.tools import home
 
-APPNAME = "CacaoAccounting"
-APPAUTHOR = "William Moreno Reyes"
 
 DOCKERISED = "DOCKERISED" in environ
 
