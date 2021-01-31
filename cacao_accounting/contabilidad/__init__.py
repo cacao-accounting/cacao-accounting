@@ -68,7 +68,7 @@ def entidades():
     return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
 
 
-@contabilidad.route("/accounts/entities/<id_entidad>")
+@contabilidad.route("/accounts/entity/<id_entidad>")
 @login_required
 def entidad(id_entidad):
     from cacao_accounting.database import Entidad
