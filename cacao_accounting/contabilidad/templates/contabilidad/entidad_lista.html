@@ -17,10 +17,26 @@
       {% for item in pagina.object_list %}
       <tr>
         <td>{{ item.habilitada }}</td>
-        <td>{{ item.id }}</td>
-        <td>{{ item.razon_social }}</td>
-        <td>{{ item.nombre_comercial }}</td>
-        <td>{{ item.id_fiscal }}</td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.id }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.razon_social }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.nombre_comercial }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.id_fiscal }}
+          </a>
+        </td>
       </tr>
       {% endfor %}
     <tbody>
