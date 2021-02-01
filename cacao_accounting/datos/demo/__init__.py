@@ -92,6 +92,7 @@ ENTIDAD_DEMO = {
     "casa": 3,
     "habilitada": True,
     "predeterminada": True,
+    "status": "predeterminada",
 }
 
 
