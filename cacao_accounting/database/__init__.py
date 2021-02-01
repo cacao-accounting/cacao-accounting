@@ -27,10 +27,12 @@ Referencia:
  - https://mariadb.com/kb/en/json-data-type/
 """
 
+from collections import namedtuple
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
 # pylint: disable=too-few-public-methods
 
 
@@ -123,6 +125,12 @@ class Entidad(db.Model):
     __table_args__ = (db.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
     id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
+    status = db.Column(db.String(50), nullable=True)
+    status_web = {
+        "predeterminada": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
+        "activa": StatusWeb(color="DarkCyan", texto="Entidad Activa"),
+        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)

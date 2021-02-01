@@ -65,7 +65,7 @@ def entidades():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Entidad)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
+    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA, statusweb=Entidad.status_web)
 
 
 @contabilidad.route("/accounts/entity/<id_entidad>")

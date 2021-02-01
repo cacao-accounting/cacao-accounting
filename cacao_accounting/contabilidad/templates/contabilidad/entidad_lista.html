@@ -1,3 +1,4 @@
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -7,7 +8,7 @@
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col">Estado</th>
+        <th scope="col"></th>
         <th scope="col">ID</th>
         <th scope="col">Razón Social</th>
         <th scope="col">Nombre Comercial</th>
@@ -16,7 +17,7 @@
     </thead>
       {% for item in pagina.object_list %}
       <tr>
-        <td>{{ item.habilitada }}</td>
+        <td>{{ macros.render_status(status=item.status, lista_status=statusweb) }}</td>
         <td>
           <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
             {{ item.id }}
@@ -44,7 +45,6 @@
   </table>
 </section>
 <section>
-  {% import "macros.html" as macros %}
   {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
 </section>
 {% endblock %}
