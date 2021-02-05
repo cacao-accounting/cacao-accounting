@@ -71,7 +71,7 @@ def _demo_usuarios():
     db.session.commit()
 
 
-ENTIDAD_DEMO = {
+ENTIDAD_DEMO1 = {
     "id": "cacao",
     "razon_social": "Choco Sonrisas Sociedad Anonima",
     "nombre_comercial": "Choco Sonrisas",
@@ -96,12 +96,63 @@ ENTIDAD_DEMO = {
 }
 
 
+ENTIDAD_DEMO2 = {
+    "id": "cafe",
+    "razon_social": "Mundo Cafe Sociedad Anonima",
+    "nombre_comercial": "Mundo Cafe",
+    "id_fiscal": "J0310000000001",
+    "moneda": "USD",
+    "tipo_entidad": "Sociedad",
+    "correo_electronico": "info@mundocafe.com",
+    "web": "mundocafe.com",
+    "telefono1": "+505 8456 6542",
+    "telefono2": "+505 8456 7542",
+    "fax": "+505 8456 7546",
+    "pais": "Nicaragua",
+    "departamento": "Managua",
+    "ciudad": "Managua",
+    "direccion1": "Edicio Y",
+    "direccion2": "Oficina 25",
+    "calle": 20,
+    "casa": 5,
+    "habilitada": True,
+    "predeterminada": False,
+    "status": "activa",
+}
+
+ENTIDAD_DEMO3 = {
+    "id": "dulce",
+    "razon_social": "Mundo Sabor Sociedad Anonima",
+    "nombre_comercial": "Dulce Sabor",
+    "id_fiscal": "J0310000000002",
+    "moneda": "NIO",
+    "tipo_entidad": "Sociedad",
+    "correo_electronico": "info@chocoworld.com",
+    "web": "chocoworld.com",
+    "telefono1": "+505 8456 6543",
+    "telefono2": "+505 8456 7543",
+    "fax": "+505 8456 7545",
+    "pais": "Nicaragua",
+    "departamento": "Managua",
+    "ciudad": "Managua",
+    "direccion1": "Edicio x",
+    "direccion2": "Oficina 23",
+    "calle": 25,
+    "casa": 3,
+    "habilitada": False,
+    "predeterminada": False,
+    "status": "inactiva",
+}
+
+
 def _demo_entidad():
     """Entidad de demostración"""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
     instancia_entidad = RegistroEntidad()
-    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO)
+    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO1)
+    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO2)
+    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO3)
 
 
 def _demo_unidades():

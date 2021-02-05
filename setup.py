@@ -23,7 +23,7 @@ with open(path.join(aqui, "README.md"), encoding="utf-8") as f:
     descripcion = f.read()
 
 metadata = {}
-with open("cacao_accounting/metadata.py") as fp:
+with open("cacao_accounting/version.py") as fp:
     exec(fp.read(), metadata)
 
 setup(
