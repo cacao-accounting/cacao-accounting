@@ -11,6 +11,17 @@ jobs:
 
     runs-on: ubuntu-latest
     services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2017-latest
+        env:
+            ACCEPT_EULA: Y 
+            SA_PASSWORD: cacao+SQLSERVER2019
+            MSSQL_PID: Express
+        ports:
+            - 1433:1433  
+        options: >-
+          --hostname=mssqlserver
+          --name=mssqlserver
       mysql:
         image: mysql
         env:
@@ -62,6 +73,8 @@ jobs:
       run: flake8 cacao_accounting
     - name: Analysing the code with pylint
       run: pylint cacao_accounting 
+    - name: Create SQL Server db
+      run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
     - name: Test with pytest
       run: pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
     - name: Documentacion 

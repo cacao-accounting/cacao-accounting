@@ -26,3 +26,6 @@ mkdocs-material
 
 # MySQL en Windows
 cryptography
+
+# SQL Server
+pyodbc
