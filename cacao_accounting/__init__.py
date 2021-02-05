@@ -31,10 +31,11 @@ from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
+from cacao_accounting.datos import base_data, demo_data
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
 from cacao_accounting.metadata import DEVELOPMENT
-from cacao_accounting.modulos import registrar_modulos_adicionales
+from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
 
@@ -51,33 +52,30 @@ def command():
     main(as_module="cacao_accounting")
 
 
-def create_app(ajustes=None):
+def verifica_pyversion():
     """
-    Aplication factory.
-
-    Referencias:
-     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
+    Requerimos al menos python 3.6 para la aplicación.
     """
     # pylint: disable=W0612
     if version_info >= (3, 6):
         pass
     else:
         raise RuntimeError("Python >= 3.6 requerido.")
-    app = Flask(
-        __name__,
-        template_folder=plantillas,
-        static_folder=archivos,
-        instance_relative_config=False,
-    )
-    app.jinja_env.trim_blocks = True
-    app.jinja_env.lstrop_blocks = True
-    if ajustes:
-        for i in ajustes:
-            app.config[i] = ajustes[i]
 
+
+def iniciar_extenciones(app):
+    """
+    Inicializa extenciones.
+    """
     alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
+
+
+def registrar_blueprints(app):
+    """
+    Registra blueprints por defecto.
+    """
     with app.app_context():
         app.register_blueprint(admin)
         app.register_blueprint(bancos)
@@ -89,33 +87,55 @@ def create_app(ajustes=None):
         app.register_blueprint(ventas)
         registrar_modulos_adicionales(app)
 
-    from cacao_accounting.modulos import validar_modulo_activo
 
-    app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
-    app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
+def create_app(ajustes=None):
+    """
+    Aplication factory.
 
-    @app.cli.command()
+    Referencias:
+     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
+    """
+    # pylint: disable=W0612
+    verifica_pyversion()
+    cacao_app = Flask(
+        __name__,
+        template_folder=plantillas,
+        static_folder=archivos,
+        instance_relative_config=False,
+    )
+    cacao_app.jinja_env.trim_blocks = True
+    cacao_app.jinja_env.lstrop_blocks = True
+    if ajustes:
+        for i in ajustes:
+            cacao_app.config[i] = ajustes[i]
+
+    iniciar_extenciones(cacao_app)
+
+    registrar_blueprints(cacao_app)
+
+    cacao_app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+    cacao_app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
+
+    @cacao_app.cli.command()
     def initdb():
         """Crea el esquema de la base de datos."""
-        from cacao_accounting.datos.base import base_data
 
         db.create_all()
-        with app.app_context():
+        with cacao_app.app_context():
             if DEVELOPMENT:
-                from cacao_accounting.datos import demo_data
 
                 base_data(carga_rapida=True)
                 demo_data()
             else:
                 base_data(carga_rapida=False)
 
-    @app.cli.command()
+    @cacao_app.cli.command()
     def cleandb():
         """Elimina la base de datos, solo disponible para desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
 
-    @app.cli.command()
+    @cacao_app.cli.command()
     def serve():
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
@@ -124,4 +144,4 @@ def create_app(ajustes=None):
 
         run()
 
-    return app
+    return cacao_app
