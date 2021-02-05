@@ -106,8 +106,7 @@ def create_app(ajustes=None):
     cacao_app.jinja_env.trim_blocks = True
     cacao_app.jinja_env.lstrop_blocks = True
     if ajustes:
-        for i in ajustes:
-            cacao_app.config[i] = ajustes[i]
+        cacao_app.config.from_mapping(ajustes)
 
     iniciar_extenciones(cacao_app)
 
