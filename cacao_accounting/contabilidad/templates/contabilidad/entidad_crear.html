@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 {% block contenido %}
   <section>
-    <h5>Crear Nueva Entidad.</h5>
+    <div class="container">
+      <div class="row">
+        <div class="col-sm">
+          <h5>Crear Nueva Entidad.</h5>
+        </div>
+        <div class="col-sm">
+          <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+          <a class="btn btn-sm btn-danger" type="link" >Cancelar</a>
+        </div>
+      </div>
+    </div>
     <form method="post"></form>
-    <button class="btn btn-lg btn-primary btn-block" type="submit">Guardar</button>
     {{ form.csrf_token }}
     <label>ID Entidad:</label>{{ form.id() }}
-    <label>Razon Social:</label>{{ form.razon_social() }}
     <label>Nombre Comercial:</label>{{ form.nombre_comercial }}
+    <label>Razon Social:</label>{{ form.razon_social() }}
     <label>Moneda Principal:</label>{{form.moneda}}
     <label>Tipo de Entidad:</label>{{form.tipo_entidad}}
     <label>Correo Electronico:</label>{{form.correo_electronico}}
@@ -25,7 +34,6 @@
     <label>Número de Casa:</label>{{form.casa}}
     <label>Habilitada: </label>{{ form.habilitada() }}
     <label>Predeterminada: </label>{{ form.predeterminada() }}
-    <button class="btn btn-lg btn-primary btn-block" type="submit">Guardar</button>
     </form>
   </section>
 {% endblock %}

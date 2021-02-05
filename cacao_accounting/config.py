@@ -23,13 +23,8 @@ from os import environ
 from os.path import exists, join
 from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
-from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME
-from cacao_accounting.tools import home
+from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME, DOCKERISED
 
-
-DOCKERISED = "DOCKERISED" in environ
-
-DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
 
 if "SERVER_THREADS" in environ:
     THREADS = int("SERVER_THREADS")
@@ -52,7 +47,7 @@ elif exists(global_conf):
 
 else:
     configuracion = {}
-    if "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
+    if DOCKERISED or "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
         configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
         configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
     elif DEVELOPMENT or ("CACAOTEST" in environ) or ("CI" in environ):

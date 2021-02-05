@@ -128,7 +128,7 @@ class Entidad(db.Model):
     status = db.Column(db.String(50), nullable=True)
     status_web = {
         "predeterminada": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
-        "activa": StatusWeb(color="DarkCyan", texto="Entidad Activa"),
+        "activa": StatusWeb(color="Navy", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
     razon_social = db.Column(db.String(100), unique=True, nullable=False)

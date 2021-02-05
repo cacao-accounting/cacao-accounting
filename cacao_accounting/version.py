@@ -15,22 +15,13 @@
 # Contributors:
 # - William José Moreno Reyes
 
-
-from os import environ
-from os.path import exists, join
-from cacao_accounting.tools import home
-from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
+from datetime import datetime
 
 
-__all__ = APPNAME, APPAUTHOR, VERSION
-# development
-# release_candidate
-# alpha
-# beta
-# stable
-
-__state__ = "development"
-DEVELOPMENT = __state__ != "stable"
-
-DOCKERISED = "DOCKERISED" in environ
-DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))
+APPNAME = "Cacao Accounting"
+APPAUTHOR = "William Moreno Reyes"
+MAYOR = "0"
+MENOR = "0"
+PATCH = "1"
+PRERELEASE = "dev" + datetime.today().strftime("%Y%m%d%H%M")
+VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
