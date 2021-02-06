@@ -20,7 +20,7 @@ try:
     with engine.connect() as con:
         rs = con.execute("SELECT VERSION()")
         for row in rs:
-            pass
+            print(row)
         mysql_disponible = True
         print("MySQL disponible")
 except:
@@ -42,7 +42,7 @@ try:
     with engine.connect() as con:
         rs = con.execute("SELECT VERSION()")
         for row in rs:
-            pass
+            print(row)
     postgresql_disponible = True
     print("Postgresql disponible")
 except:
