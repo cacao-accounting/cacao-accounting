@@ -65,6 +65,19 @@ jobs:
         pip install -r requirements.txt
         pip install -r development.txt
         python setup.py develop
+    - name: Install pyodbc
+      run: |
+        sudo su -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - "
+        cat /etc/os-release
+        sudo su -c "curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list"
+        sudo apt-get update
+        sudo ACCEPT_EULA=Y apt-get install msodbcsql17
+        sudo ACCEPT_EULA=Y apt-get install mssql-tools
+        echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
+        echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+        source ~/.bashrc
+        sudo apt install python3-pip unixodbc-dev python3-dev
+        pip install pyodbc
     - name: Proyecto distribuible
       run: |
         python -m build
@@ -76,7 +89,10 @@ jobs:
     - name: Create SQL Server db
       run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
     - name: Test with pytest
-      run: pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
+      run: |
+        python tests/nonfree-database.py
+        python tests/opensource-database.py
+        pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
     - name: Documentacion 
       run: mkdocs build
     - name: Codecov
