@@ -7,6 +7,7 @@ zest.releaser
 zest.releaser[recommended]
 
 # Control de calidad
+beautifulsoup4
 curlylint
 flake8
 flask-testing
