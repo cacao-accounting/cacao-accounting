@@ -7,6 +7,7 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=pypi)
 ![Pypi](https://img.shields.io/pypi/v/cacao-accounting?color=Blue&label=Version&logo=pypi)
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=pypi)
+[![Requirements Status](https://requires.io/github/cacao-accounting/cacao-accounting/requirements.svg?branch=main)](https://requires.io/github/cacao-accounting/cacao-accounting/requirements/?branch=main)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/2130c27fd51647b99748750086328acd)](https://app.codacy.com/gh/cacao-accounting/cacao-accounting?utm_source=github.com&utm_medium=referral&utm_content=cacao-accounting/cacao-accounting&utm_campaign=Badge_Grade_Dashboard)
 [![codecov](https://codecov.io/gh/cacao-accounting/cacao-accounting/branch/development/graph/badge.svg)](https://codecov.io/gh/cacao-accounting/cacao-accounting)
 
