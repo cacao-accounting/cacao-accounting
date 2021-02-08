@@ -135,6 +135,12 @@ def create_app(ajustes=None):
             db.drop_all()
 
     @cacao_app.cli.command()
+    def version():
+        """Muestra la version actual instalada."""
+        from cacao_accounting.version import VERSION
+        print(VERSION)
+
+    @cacao_app.cli.command()
     def serve():
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.

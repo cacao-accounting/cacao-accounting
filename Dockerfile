@@ -29,6 +29,9 @@ COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 RUN useradd cacao
 USER cacao
 
+# Verficación rápida
+RUN cacaoctl version
+
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
 CMD [ "/app/entrypoint.sh" ]
