@@ -84,7 +84,9 @@ def inicio_sesion():
     return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
+@login.route("/exit")
 @login.route("/logout")
+@login.route("/salir")
 def cerrar_sesion():
     logout_user()
     return redirect("/login")
