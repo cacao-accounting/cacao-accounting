@@ -21,7 +21,7 @@ Modulo de Ventas.
 
 from flask import Blueprint, redirect, render_template
 from flask_login import login_required
-from cacao_accounting.modulos import validar_modulo_activo
+
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -30,6 +30,8 @@ ventas = Blueprint("ventas", __name__, template_folder="templates")
 @ventas.route("/sales")
 @login_required
 def ventas_():
+    from cacao_accounting.modulos import validar_modulo_activo
+
     if validar_modulo_activo("sales"):
         return render_template("ventas.html")
     else:

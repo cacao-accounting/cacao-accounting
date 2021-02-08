@@ -22,6 +22,7 @@ from cacao_accounting.tools import home
 from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
 
 
+# pylint: disable=undefined-all-variable
 __all__ = APPNAME, APPAUTHOR, VERSION
 # development
 # release_candidate

@@ -34,6 +34,7 @@ Un registro:
      - Vista modificación registro mostrando los datos actuales en el sistema permitiendo al usuario cambiarlos.
  - Un registro tiene estados, estos estados van a depender del documento.
 """
+# pylint: disable=not-callable
 from cacao_accounting.database import db
 from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, ERROR4, IntegrityError, OperationalError
 

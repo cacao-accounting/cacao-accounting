@@ -26,7 +26,7 @@ from sys import version_info
 from flask import Flask
 from flask_alembic import Alembic
 from cacao_accounting.admin import admin
-from cacao_accounting.app import cacao_app
+from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
@@ -79,7 +79,7 @@ def registrar_blueprints(app):
     with app.app_context():
         app.register_blueprint(admin)
         app.register_blueprint(bancos)
-        app.register_blueprint(cacao_app)
+        app.register_blueprint(main_app)
         app.register_blueprint(contabilidad)
         app.register_blueprint(compras)
         app.register_blueprint(inventario)

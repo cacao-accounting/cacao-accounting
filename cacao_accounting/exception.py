@@ -17,23 +17,23 @@
 
 
 class CacaoAccountingException(Exception):
-    pass
+    """Clase base para generar errores locales."""
 
 
 class DataError(CacaoAccountingException):
-    pass
+    """Clase para generar errores de datos."""
 
 
 class IntegrityError(CacaoAccountingException):
-    pass
+    """Clase para generar errores de Integridad."""
 
 
 class TransactionError(CacaoAccountingException):
-    pass
+    """Clase para generar errores en transacciones."""
 
 
 class OperationalError(CacaoAccountingException):
-    pass
+    """Clase para generar errores operativos."""
 
 
 # <-------------------------------------------------------------------------> #
