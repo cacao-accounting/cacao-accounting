@@ -63,6 +63,8 @@ def validar_acceso(usuario, clave):
 @login.route("/")
 @login.route("/home")
 @login.route("/index")
+@login.route("/inicio")
+@login.route("/main")
 def home():
     return redirect("/login")
 
