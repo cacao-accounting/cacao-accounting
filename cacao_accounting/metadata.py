@@ -17,8 +17,6 @@
 
 
 from os import environ
-from os.path import exists, join
-from cacao_accounting.tools import home
 from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
 
 
@@ -34,4 +32,3 @@ __state__ = "development"
 DEVELOPMENT = __state__ != "stable"
 
 DOCKERISED = "DOCKERISED" in environ
-DESKTOP = "CACAO-DESKTOP" in environ or exists(join(home, "cacaodesktop"))

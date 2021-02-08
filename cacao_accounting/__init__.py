@@ -107,6 +107,10 @@ def create_app(ajustes=None):
     cacao_app.jinja_env.lstrop_blocks = True
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
+        try:
+            cacao_app.jinja_env.globals.update(modo_escritorio=ajustes["DESKTOPMODE"])
+        except KeyError:
+            cacao_app.jinja_env.globals.update(modo_escritorio=False)
 
     iniciar_extenciones(cacao_app)
 
