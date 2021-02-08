@@ -10,6 +10,8 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    if: |
+      !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[skip ci]')
     services:
       mssql:
         image: mcr.microsoft.com/mssql/server:2017-latest
@@ -93,7 +95,7 @@ jobs:
         python tests/nonfree_database.py
         python tests/opensource_database.py
         pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
-    - name: Documentacion 
-      run: mkdocs build
+#    - name: Documentacion 
+#      run: mkdocs build
     - name: Codecov
       uses: codecov/codecov-action@v1
