@@ -69,6 +69,7 @@ setup(
         "flask-wtf",
         "loguru",
         "sqlalchemy",
+        "sqlalchemy-json",
         "sqlalchemy-paginator",
         "teritorio",
         "waitress",
