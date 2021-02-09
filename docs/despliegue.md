@@ -7,8 +7,7 @@ que para instalar Cacao Accounting se requiere:
 
 1. Un servidor WSGI, [gunicorn]() y [waitress]() son las opciones recomendadas.
 2. Un servidor web, [nginx]() es la opción recomendada.
-3. Un servidor de bases de datos, [postgresql](https://www.postgresql.org/), 
-[MySQL](https://www.mysql.com/), [MariaDB](https://mariadb.org/) y [SQLite](https://www.sqlite.org/index.html) son oficialmente soportadas.
+3. Un servidor de bases de datos, [SQLite](https://www.sqlite.org/index.html), [Postgresql](https://www.postgresql.org/), [MySQL](https://www.mysql.com/) y [MS SQL Server](https://www.microsoft.com/es-mx/sql-server/sql-server-downloads),  son oficialmente soportadas.
 
 ## Entorno Virtual de Python
 
@@ -72,7 +71,7 @@ podman images
 REPOSITORY                                 TAG     IMAGE ID      CREATED       SIZE
 docker.io/cacaoaccounting/cacaoaccounting  latest  a25d0896a2ab  22 hours ago  193 MB
 
-podman run -name cacao -d -p 8080:8080 cacaoaccounting/cacaoaccountin
+podman run -name cacao -d -p 8080:8080 --env CACAO_ACCOUNTING=True --env ENV CACAO_DB=sqlite:///cacaoaccounting.db cacaoaccounting/cacaoaccounting
 
 podman ps
 CONTAINER ID  IMAGE                                             COMMAND               CREATED         STATUS             PORTS                   NAMES

@@ -14,8 +14,7 @@ services:
     environment: 
       - CACAO_ACCOUNTING = True
       - SERVER_THREADS = 4
-      - DOCKERISED = True
-      - SQLALCHEMY_DATABASE_URI = postgres://cacaoaccounting:cacaoaccounting@db:5432/cacaoaccounting
+      - CACAO_DB = postgresql+psycopg2://cacaoaccounting:cacaoaccounting@db:5432/cacaoaccounting
     build: .
     command: /bin/sh /app/entrypoint.sh
     ports:
