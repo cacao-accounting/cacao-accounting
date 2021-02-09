@@ -25,9 +25,16 @@ from appdirs import user_config_dir, site_config_dir
 from configobj import ConfigObj
 from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME, DOCKERISED
 
+if DEVELOPMENT or ("CACAO_TESTING" in environ):
+    # Free Open Source Databases
+    SQLITE = "sqlite:///cacaoaccounting.db"
+    MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
+    POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
+    # Non Free Databases
+    MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server"
 
-if "SERVER_THREADS" in environ:
-    THREADS = int("SERVER_THREADS")
+if "CACAO_THREADS" in environ:
+    THREADS = int("CACAO_THREADS")
 else:
     THREADS = 3
 
@@ -48,13 +55,11 @@ elif exists(global_conf):
 else:
     configuracion = {}
     if DOCKERISED or "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
-        configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"]
-        configuracion["SECRET_KEY"] = environ["SECRET_KEY"]
+        configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"] or environ["CACAO_DB"]
+        configuracion["SECRET_KEY"] = environ["SECRET_KEY"] or environ["CACAO_KEY"]
         configuracion["DESKTOPMODE"] = False
-    elif DEVELOPMENT or ("CACAOTEST" in environ) or ("CI" in environ):
-        SQLITE = "sqlite:///cacaoaccounting.db"
-        MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
-        POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
+        configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    elif DEVELOPMENT or ("CACAO_TESTING" in environ) or ("CI" in environ):
         configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         configuracion["ENV"] = "development"
