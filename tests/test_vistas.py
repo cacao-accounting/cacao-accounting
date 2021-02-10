@@ -17,22 +17,23 @@
 
 
 import pytest
+import requests
+import subprocess
+import time
+from sys import executable
 from unittest import TestCase
 from cacao_accounting import create_app
-from cacao_accounting.config import configuracion
-from cacao_accounting.database import db, Usuario
 from cacao_accounting.datos.base import base_data
 from cacao_accounting.datos.demo import demo_data
 
-
+configuracion = {}
 configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
 configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 configuracion["TESTING"] = True
 configuracion["DEBUG"] = True
 configuracion["WTF_CSRF_ENABLED"] = False
+configuracion["SECRET_KEY"] = "askjklafkaflkffkalksflaksdlaksndlkafnlnlnaflkflkfkfkl"
 app = create_app(configuracion)
-app.login_manager.session_protection = None
-app.login_manager.init_app(app)
 app.app_context().push()
 
 
@@ -58,14 +59,3 @@ def test_vista():
         print(url)
         response = app.test_client().get(url)
         assert response.status_code == 302
-
-
-class TestVistas(TestCase):
-    def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["LOGIN_DISABLED"] = True
-        self.app.app_context().push()
-        db.drop_all()
-        db.create_all()
-        base_data(carga_rapida=True)
-        demo_data()
