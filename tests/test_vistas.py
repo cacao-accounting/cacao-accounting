@@ -16,6 +16,7 @@
 # - William José Moreno Reyes
 
 
+import os
 import pytest
 import requests
 import subprocess
@@ -26,36 +27,12 @@ from cacao_accounting import create_app
 from cacao_accounting.datos.base import base_data
 from cacao_accounting.datos.demo import demo_data
 
-configuracion = {}
-configuracion["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
-configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-configuracion["TESTING"] = True
-configuracion["DEBUG"] = True
-configuracion["WTF_CSRF_ENABLED"] = False
-configuracion["SECRET_KEY"] = "askjklafkaflkffkalksflaksdlaksndlkafnlnlnaflkflkfkfkl"
-app = create_app(configuracion)
-app.app_context().push()
 
-
-def test_inicio():
-    response = app.test_client().get("/login")
-    assert response.status_code == 200
-    assert b"Cacao Accounting" in response.data
-
-
-VISTAS_PROTEGIDAS = [
-    "/app",
-    "/accounts",
-    "/cash",
-    "/buying",
-    "/inventory",
-    "/sales",
-    "/settings",
-]
-
-
-def test_vista():
-    for url in VISTAS_PROTEGIDAS:
-        print(url)
-        response = app.test_client().get(url)
-        assert response.status_code == 302
+@pytest.fixture(scope="class")
+def iniciar_servidor():
+    pr = subprocess.Popen(
+        [
+            executable,
+            os.path.abspath(os.path.dirname(__file__)),
+        ]
+    )
