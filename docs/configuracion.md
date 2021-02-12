@@ -9,18 +9,21 @@ En Linux se puede configurar Cacao Accounting ejecutando:
 # Para configurar Cacao Accounting en Linux ejecutar:
 export CACAO_ACCOUNTING=True
 export CACAO_DB=DATABASE_CONNECTION_URI
+export CACAO_KEY=SECRETKEY
 ```
 
 En Windows ejecutar:
 ```powershell
 setx CACAO_ACCOUNTING "True"
 setx CACAO_DB "DATABASE_CONNECTION_URI"
+setx CACAO_KEY "SECRETKEY"
 ```
 
 En un Dockerfile o en un archivo Docker compose se pueden configurar de la siguiente forma:
 ```dockerfile
 ENV CACAO_ACCOUNTING=True
 ENV CACAO_DB=DATABASE_CONNECTION_URI
+ENV CACAO_KEY=SECRETKEY
 ```
 
 ## Conexion a la base de datos
