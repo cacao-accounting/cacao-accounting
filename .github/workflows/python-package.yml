@@ -63,10 +63,12 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip setuptools
+        python -m pip install --upgrade pip setuptools pytest-xdist
         pip install -r requirements.txt
         pip install -r development.txt
         python setup.py develop
+    - name: Inicia servidor WSGI en segundo plano
+      run: python tests/server.py &
     - name: Install pyodbc
       run: |
         sudo su -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - "
@@ -80,6 +82,13 @@ jobs:
         source ~/.bashrc
         sudo apt install python3-pip unixodbc-dev python3-dev
         pip install pyodbc
+    - name: Create SQL Server db
+      run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
+    - name: Test with pytest
+      run: |
+        python tests/nonfree_database.py
+        python tests/opensource_database.py
+        pytest -n auto --dist loadfile --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
     - name: Proyecto distribuible
       run: |
         python -m build
@@ -88,13 +97,6 @@ jobs:
       run: flake8 cacao_accounting
     - name: Analysing the code with pylint
       run: pylint cacao_accounting 
-    - name: Create SQL Server db
-      run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
-    - name: Test with pytest
-      run: |
-        python tests/nonfree_database.py
-        python tests/opensource_database.py
-        pytest --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
     - name: Codecov

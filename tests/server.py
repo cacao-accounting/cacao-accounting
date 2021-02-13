@@ -3,6 +3,7 @@ def servidor_prueba():
     from cacao_accounting.config import SQLITE
     from cacao_accounting.database import db
     from cacao_accounting.datos import base_data, demo_data
+    from waitress import serve
 
     test_app = create_app(
         {
@@ -18,10 +19,7 @@ def servidor_prueba():
         db.create_all()
         base_data(carga_rapida=True)
         demo_data()
-        try:
-            test_app.run()
-        except OSError:
-            pass
+        serve(test_app, port=7563)
 
 
 if __name__ == "__main__":

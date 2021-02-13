@@ -10,7 +10,6 @@ zest.releaser[recommended]
 beautifulsoup4
 curlylint
 flake8
-flask-testing
 pylama
 pytest
 requests

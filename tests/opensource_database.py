@@ -9,6 +9,7 @@ from database import desplegar_base_de_datos, Entidad, CentroCosto, Unidad, Proy
 @pytest.fixture(autouse=True)
 def cargar_datos():
     db.drop_all()
+    db.session.commit()
     db.create_all()
     base_data()
     yield
