@@ -80,6 +80,7 @@ def inicio_sesion():
             login_user(identidad)
             return redirect("/app")
         else:
+            flash("Inicio de Sesion Incorrecto.")
             return redirect("/login")
     return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 

@@ -26,12 +26,21 @@
   <link href="{{ url_for('static', filename='css/signin.css') }}" rel="stylesheet">
 </head>
 
-<body >
+<body>
   <main class="form-signin">
     <form method="post">
       {{ form.csrf_token }}
       <img class="mb-4" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" height="75">
       <h1 class="h3 mb-3 font-weight-normal">Inicio de Sesión</h1>
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-success">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
       <label for="usuario" class="visually-hidden">Usuario</label>
       {{ form.usuario(class="form-control", id="usuario", placeholder="Usuario") }}
       <label for="contraseña" class="visually-hidden">Contraseña</label>
