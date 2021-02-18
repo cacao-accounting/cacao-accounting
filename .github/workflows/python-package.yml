@@ -84,8 +84,8 @@ jobs:
       run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
     - name: Test with pytest
       run: |
-        python tests/nonfree_database.py
-        python tests/opensource_database.py
+        python -W ignore tests/nonfree_database.py
+        python -W ignore tests/opensource_database.py
         pytest  --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
     - name: Proyecto distribuible
       run: |

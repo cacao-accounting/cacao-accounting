@@ -34,9 +34,9 @@ try:
     with engine.connect() as con:
         rs = con.execute("SELECT @@VERSION")
         for row in rs:
+            print("MS SQL Server disponible version:")
             print(row)
     mssql_disponible = True
-    print("MS SQL Server disponible")
 except:
     print("MS SQL Server no disponible")
     mssql_disponible = False

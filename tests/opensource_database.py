@@ -32,6 +32,17 @@ POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
 
 # <-------------------------------------------------------------------------> #
 # Validamos que bases de datos estan disponibles
+
+
+from sqlalchemy import create_engine
+
+engine = create_engine(SQLITE)
+with engine.connect() as con:
+    rs = con.execute("SELECT sqlite_version()")
+    for row in rs:
+        print("SQLite version:")
+        print(row)
+
 try:
     from sqlalchemy import create_engine
 
@@ -39,9 +50,10 @@ try:
     with engine.connect() as con:
         rs = con.execute("SELECT VERSION()")
         for row in rs:
+            print("MySQL disponible version:")
             print(row)
         mysql_disponible = True
-        print("MySQL disponible")
+        
 except:
     mysql_disponible = False
     print("MySQL no disponible")
@@ -61,9 +73,9 @@ try:
     with engine.connect() as con:
         rs = con.execute("SELECT VERSION()")
         for row in rs:
+            print("Postgresql disponible version:")
             print(row)
     postgresql_disponible = True
-    print("Postgresql disponible")
 except:
     postgresql_disponible = False
     print("Postgresql no disponible")
