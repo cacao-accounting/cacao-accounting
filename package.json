@@ -12,7 +12,7 @@
   },
   "homepage": "https://github.com/cacao-accounting/cacao-accounting#readme",
   "dependencies": {
-    "bootstrap": "^5.0.0-beta1",
+    "bootstrap": "5.0.0-beta2",
     "bootstrap-icons": "^1.1.0"
   }
 }
