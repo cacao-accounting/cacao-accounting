@@ -198,15 +198,19 @@ Otros ejemplos de buenos mensajes de commit se pueden encontrar aca:
 
 Solicitamos su apoyo para adoptar [Commits Convencionales](https://www.conventionalcommits.org/es/v1.0.0-beta.3/):
 
-- fix:
-- feat: 
-- chore:
-- ci:
-- docs:
-- style:
-- refactor:
-- test:
 
+```
+ - build: Cambios que efectan la distribución del proyecto.
+ - ci: Actualización a herramientas para pruebas automaticas.
+ - docs: Actualizacion de la documentación.
+ - feat: Agrega funcionalidades nuevas.
+ - fix: Correción de errores.
+ - refactor: Modificaciones que no agregan nuevas funciones o arreglan errores.
+ - style: Correcciones de Estilo.
+ - test: Cambios en pruebas unitarios.
+```
+
+Independientemente del tipo un commit con el texto BREAKING CHANGE, sin importar su tipo, se traducen a un cambio de versión MAJOR.
 
 #### Versionado semantico
 
