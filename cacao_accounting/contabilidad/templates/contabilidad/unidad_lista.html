@@ -1,3 +1,4 @@
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -7,6 +8,7 @@
   <table class="table table-sm">
     <thead>
       <tr>
+        <th scope="col"></th>
         <th scope="col">ID</th>
         <th scope="col">Nombre</th>
         <th scope="col">Entidad</th>
@@ -14,6 +16,10 @@
     </thead>
   {% for item in pagina.object_list -%}
   <tr>
+    <td>
+      {% import "macros.html" as macros %}
+      {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+    </td>
     <td>
       {{ item.id }}
     </th>

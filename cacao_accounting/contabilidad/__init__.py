@@ -66,7 +66,10 @@ def entidades():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Entidad)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/entidad_lista.html", resultado=RESULTADO, pagina=PAGINA, statusweb=Entidad.status_web)
+    TITULO = "Listado de Entidades - " + APPNAME
+    return render_template(
+        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Entidad.status_web
+    )
 
 
 @contabilidad.route("/accounts/entity/<id_entidad>")
@@ -128,7 +131,10 @@ def unidades():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Unidad)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/unidad_lista.html", resultado=RESULTADO, pagina=PAGINA)
+    TITULO = "Listado de Unidades de Negocio - " + APPNAME
+    return render_template(
+        "contabilidad/unidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Unidad.status_web
+    )
 
 
 @contabilidad.route("/accounts/unit/<id_unidad>")
@@ -140,10 +146,31 @@ def unidad(id_unidad):
     return render_template("contabilidad/unidad.html", registro=registro)
 
 
-@contabilidad.route("/accounts/units/new")
+@contabilidad.route("/accounts/units/new", methods=["GET", "POST"])
 @login_required
 def nueva_unidad():
-    return render_template("contabilidad/unidad_crear.html")
+    from cacao_accounting.contabilidad.forms import FormularioUnidad
+
+    formulario = FormularioUnidad()
+    TITULO = "Crear Nueva Unidad de Negocios - " + APPNAME
+    if formulario.validate_on_submit():
+        from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
+
+        e = RegistroUnidad()
+        DATA = {
+            "id": formulario.id.data,
+            "nombre": formulario.nombre.data,
+            "entidad": formulario.entidad.data,
+            "correo_electronico": formulario.correo_electronico.data,
+            "web": formulario.web.data,
+            "telefono1": formulario.telefono1.data,
+            "telefono2": formulario.telefono2.data,
+            "fax": formulario.fax.data,
+            "status": "activa",
+        }
+        e.crear(datos=DATA)
+        return redirect("/accounts/units")
+    return render_template("contabilidad/unidad_crear.html", titulo=TITULO, form=formulario)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

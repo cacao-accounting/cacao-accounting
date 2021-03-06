@@ -33,6 +33,18 @@ def lista_monedas():
     return monedas
 
 
+def lista_unidades():
+    """
+    Devuelve la lista de unidades en la base de datos.
+    """
+    entidades = []
+    consulta = Entidad.query.all()
+    for i in consulta:
+        entidad = (i.id, i.razon_social)
+        entidades.append(entidad)
+    return entidades
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
 
@@ -51,6 +63,26 @@ class FormularioEntidad(FlaskForm):
     id_fiscal = StringField(validators=[DataRequired()])
     moneda = SelectField("Tipo de Entidad", choices=lista_monedas())
     tipo_entidad = SelectField("Tipo de Entidad", choices=Entidad.tipo_entidad_lista)
+    correo_electronico = StringField(validators=[])
+    web = StringField(validators=[])
+    telefono1 = StringField(validators=[])
+    telefono2 = StringField(validators=[])
+    fax = StringField(validators=[])
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Unidades
+class FormularioUnidad(FlaskForm):
+    """
+    Formulario base para la administración de unidades de negocio.
+
+    Este formulario este vinculada la la tabla Unidad en la base de datos y debe contener
+    un mapeo de la mayoria de sus campos.
+    """
+
+    id = StringField(validators=[DataRequired()])
+    nombre = StringField(validators=[DataRequired()])
+    entidad = SelectField("Entidad", choices=lista_unidades())
     correo_electronico = StringField(validators=[])
     web = StringField(validators=[])
     telefono1 = StringField(validators=[])

@@ -143,16 +143,19 @@ def _demo_unidades():
             nombre="Casa Matriz",
             entidad="cacao",
             id="matriz",
+            status="activa",
         ),
         Unidad(
             nombre="Movil",
             entidad="cacao",
             id="movil",
+            status="activa",
         ),
         Unidad(
             nombre="Masaya",
             entidad="cacao",
             id="masaya",
+            status="inactiva",
         ),
     ]
     for unidad in unidades:

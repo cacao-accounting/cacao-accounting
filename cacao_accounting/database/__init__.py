@@ -165,18 +165,16 @@ class Unidad(db.Model):
     id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
     nombre = db.Column(db.String(50), nullable=False)
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
-    corre_electronico = db.Column(db.String(50))
+    correo_electronico = db.Column(db.String(50))
     web = db.Column(db.String(50))
     telefono1 = db.Column(db.String(50))
     telefono2 = db.Column(db.String(50))
     fax = db.Column(db.String(50))
-    pais = db.Column(db.String(50))
-    departamento = db.Column(db.String(50))
-    ciudad = db.Column(db.String(50))
-    direccion1 = db.Column(db.String(100))
-    direccion2 = db.Column(db.String(100))
-    calle = db.Column(db.String(100))
-    casa = db.Column(db.String(100))
+    status = db.Column(db.String(50), nullable=True)
+    status_web = {
+        "activa": StatusWeb(color="Navy", texto="Entidad Activa"),
+        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
 
 
 # Bases de la contabilidad
