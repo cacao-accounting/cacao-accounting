@@ -64,6 +64,7 @@ setup(
         "flask-babel",
         "flask-login",
         "flask-principal",
+        "flask-restful",
         "flask-reuploaded",
         "flask-sqlalchemy",
         "flask-wtf",
