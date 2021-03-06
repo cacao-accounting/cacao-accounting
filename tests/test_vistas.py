@@ -43,6 +43,7 @@ def client():
 try:
     # Ejecute python tests/server.py en una terminal distinta para ejecutar estas pruebas unitarias
     import time
+
     time.sleep(3)
     with requests.Session() as session:
         login = session.post("http://localhost:7563/login", data={"usuario": "cacao", "acceso": "cacao"})

@@ -130,29 +130,21 @@ UNIDAD1 = {
     "id": "ocotal",
     "nombre": "Sucursal Ocotal",
     "entidad": "cacao",
-    "corre_electronico": "sucursal1@chocoland.com",
+    "correo_electronico": "sucursal1@chocoland.com",
     "web": "chocoland.com",
     "telefono1": "+505 8667 2108",
     "telefono2": "+505 8771 0980",
     "fax": "+505 7272 8181",
-    "pais": "Nicaragua",
-    "departamento": "Nueva Segovia",
-    "ciudad": "Ocotal",
-    "direccion1": "Parque Central",
 }
 
 UNIDAD2 = {
     "id": "esteli",
     "nombre": "Sucursal Esteli",
-    "corre_electronico": "sucursal2@chocoland.com",
+    "correo_electronico": "sucursal2@chocoland.com",
     "web": "chocoland.com",
     "telefono1": "+505 8667 2108",
     "telefono2": "+505 8771 0980",
     "fax": "+505 7272 8181",
-    "pais": "Nicaragua",
-    "departamento": "Nueva Segovia",
-    "ciudad": "Ocotal",
-    "direccion1": "Parque Central",
 }
 
 

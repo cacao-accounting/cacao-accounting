@@ -53,7 +53,7 @@ try:
             print("MySQL disponible version:")
             print(row)
         mysql_disponible = True
-        
+
 except:
     mysql_disponible = False
     print("MySQL no disponible")
