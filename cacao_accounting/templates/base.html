@@ -1,30 +1,41 @@
 {% import "macros.html" as macros %}
+{% set titulo = titulo|default("Cacao Accounting") %}
 
 <!DOCTYPE html>
 <html>
-<head>
-{{ macros.headertags() }}
+  <head>
 
-</head>
+    <!-- Inicio del macro headers -->
+    {{ macros.headertags() }}
+    <!-- Fin del macro headers -->
 
-<body>
+    
+    <title> {{ titulo }} </title>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
 
-{{ macros.cabecera() }}
+        <!-- Inicio del macro cabecera -->
+        {{ macros.cabecera() }}
+        <!-- Fin del macro cabecera  -->
+    
+        <!-- Inicio del macro barra lateral  --> 
+        {{ macros.barralateral() }}
+        <!-- Fin del marcro barra lateral -->
 
-<div class="container-fluid">
-  <div class="row">
 
-  {{ macros.barralateral() }}
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+          <!-- Inicio del bloque contenido -->
 
-<main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
 
-{% block contenido %}
-{% endblock %}
-
-</main>
-
-  
-  </div>
-</div>
-</body>
+          {% block contenido %}
+          {% endblock %}
+          
+          
+          <!-- Fin del bloque contenido -->
+        </main> 
+      </div>
+    </div>
+  </body>
 </html>

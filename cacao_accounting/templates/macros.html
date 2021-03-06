@@ -3,133 +3,135 @@
 
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 {% macro headertags() -%}
-
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Aplicación Contable.">
-  <meta name="author" content="William Moreno Reyes">
+  {# Linea en blanco intencional #}
+<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aplicación Contable.">
+    <meta name="author" content="William Moreno Reyes">
     
 
-  {% set titulo = titulo|default("Cacao Accounting") %}
-  <title> {{ titulo }} </title>
-
-  <!-- Bootstrap core CSS -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
-  <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+    <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
   
-<!-- Bootstrap Font -->
-<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+    <!-- Bootstrap Font -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
 
-  <!-- Código local -->
-  <script src="{{ url_for('static', filename='js/cacaoaccounting.js') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/cacaoaccounting.css') }}">
+    <!-- Código local -->
+    <script src="{{ url_for('static', filename='js/cacaoaccounting.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cacaoaccounting.css') }}">
 
-  <!-- Favicons -->
-  <link rel="apple-touch-icon" sizes="57x57" href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
-  <link rel="apple-touch-icon" sizes="60x60" href="{{ url_for('static', filename='media/favicon/apple-icon-60x60.png') }}">
-  <link rel="apple-touch-icon" sizes="72x72" href="{{ url_for('static', filename='media/favicon/apple-icon-72x72.png') }}">
-  <link rel="apple-touch-icon" sizes="76x76" href="{{ url_for('static', filename='media/favicon/apple-icon-76x76.png') }}">
-  <link rel="apple-touch-icon" sizes="114x114" href="{{ url_for('static', filename='media/favicon/apple-icon-114x114.png') }}">
-  <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='media/favicon/apple-icon-120x120.png') }}">
-  <link rel="apple-touch-icon" sizes="144x144" href="{{ url_for('static', filename='media/favicon/apple-icon-144x144.png') }}">
-  <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='media/favicon/apple-icon-152x152.png') }}">
-  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='media/favicon/apple-icon-180x180.png') }}">
-  <link rel="icon" type="image/png" sizes="192x192"  href="{{ url_for('static', filename='media/favicon/android-icon-192x192.png') }}">
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='media/favicon/favicon-32x32.png') }}">
-  <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
-  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='media/favicon/favicon-16x16.png') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="msapplication-TileColor" content="#ffffff">
-  <meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
-  <meta name="theme-color" content="#7952b3">
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="57x57" href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
+    <link rel="apple-touch-icon" sizes="60x60" href="{{ url_for('static', filename='media/favicon/apple-icon-60x60.png') }}">
+    <link rel="apple-touch-icon" sizes="72x72" href="{{ url_for('static', filename='media/favicon/apple-icon-72x72.png') }}">
+    <link rel="apple-touch-icon" sizes="76x76" href="{{ url_for('static', filename='media/favicon/apple-icon-76x76.png') }}">
+    <link rel="apple-touch-icon" sizes="114x114" href="{{ url_for('static', filename='media/favicon/apple-icon-114x114.png') }}">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='media/favicon/apple-icon-120x120.png') }}">
+    <link rel="apple-touch-icon" sizes="144x144" href="{{ url_for('static', filename='media/favicon/apple-icon-144x144.png') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='media/favicon/apple-icon-152x152.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='media/favicon/apple-icon-180x180.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192"  href="{{ url_for('static', filename='media/favicon/android-icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='media/favicon/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='media/favicon/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
+    <meta name="theme-color" content="#7952b3">
 
-<style>
-  .bd-placeholder-img {
-    font-size: 1.125rem;
-    text-anchor: middle;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-  }
-
-  @media (min-width: 768px) {
-    .bd-placeholder-img-lg {
-      font-size: 3.5rem;
-    }
-  }
-</style>
-
-  <!-- Custom styles for this template -->
-  <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
-
+    <style>
+      .bd-placeholder-img {
+        font-size: 1.125rem;
+        text-anchor: middle;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      @media (min-width: 768px) {
+        .bd-placeholder-img-lg {
+          font-size: 3.5rem;
+        }
+      }
+    </style>
+    
+    <!-- Custom styles for this template -->
+    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
 
 {%- endmacro %}
 
 {# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
 {% macro cabecera() %}
 <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-  <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
-    <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
-  </a>
-  <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-  <ul class="navbar-nav px-3">
-    <li class="nav-item text-nowrap">
-      <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">Salir</a>
-    </li>
-  </ul>
-</header>
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
+          <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
+        </a>
+        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <ul class="navbar-nav px-3">
+          <li class="nav-item text-nowrap">
+            <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">Salir</a>
+          </li>
+        </ul>
+      </header>
 {%- endmacro %}
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
     <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
-      <div class="position-sticky pt-3">
-        <ul class="nav flex-column">
-      {% if validar_modulo_activo("accounting")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("contabilidad.conta") }}" class="nav-link active" >Contabilidad</a>
-        </li>
-        {% endif %}
-        {% if validar_modulo_activo("cash")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("bancos.bancos_") }}" class="nav-link active">Caja y Bancos</a>
-        </li>
-        {% endif %}
-        {% if validar_modulo_activo("buying")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("compras.compras_") }}" class="nav-link active">Compras</a>
-        </li>
-        {% endif %}
-        {% if validar_modulo_activo("inventory")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("inventario.inventario_") }}" class="nav-link active">Inventarios</a>
-        </li>
-        {% endif %}
-        {% if validar_modulo_activo("sales")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("ventas.ventas_") }}" class="nav-link active">Ventas</a>
-        </li>
-        {% endif %}
-        {% if modulos_extra %}
-        {% for modulo in modulos_extra -%}
-        {% if validar_modulo_activo(modulo.nombre_modulo)  %}
-        <li class="nav__item">
-          <a href="{{ url_for( modulo.url ) }}" class="nav-link active">{{ modulo.nombre }} </a>
-        </li>
-        {% endif %}
-        {%- endfor %}
-        {% endif %}
-        {% if validar_modulo_activo("admin")  %}
-        <li class="nav__item">
-          <a href="{{ url_for("admin.admin_") }}" class="nav-link active">Administración</a>
-        </li>
-        {% endif %}
-      </ul>
-    </div>
-</nav>
+          <div class="position-sticky pt-3">
+            <ul class="nav flex-column">
+              {% if validar_modulo_activo("accounting")  -%}
+
+              <li class="nav__item">
+                <a href="{{ url_for("contabilidad.conta") }}" class="nav-link active" >Contabilidad</a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("cash")  %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("bancos.bancos_") }}" class="nav-link active">Caja y Bancos</a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("buying")  %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("compras.compras_") }}" class="nav-link active">Compras</a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("inventory")  -%}
+
+              <li class="nav__item">
+                <a href="{{ url_for("inventario.inventario_") }}" class="nav-link active">Inventarios</a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("sales")  %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("ventas.ventas_") }}" class="nav-link active">Ventas</a>
+              </li>
+              {%- endif %}
+              {% if modulos_extra -%}
+              {% for modulo in modulos_extra -%}
+              {% if validar_modulo_activo(modulo.nombre_modulo)  -%}
+
+              <li class="nav__item">
+                <a href="{{ url_for( modulo.url ) }}" class="nav-link active">{{ modulo.nombre }} </a>
+              </li>
+              {%- endif %}
+              {%- endfor %}
+              {%- endif %}
+              {% if validar_modulo_activo("admin")  -%}
+              
+              <li class="nav__item">
+                <a href="{{ url_for("admin.admin_") }}" class="nav-link active">Administración</a>
+              </li>
+              {%- endif %}
+            </ul>
+          </div>
+        </nav>
 {%- endmacro %}
 
 
