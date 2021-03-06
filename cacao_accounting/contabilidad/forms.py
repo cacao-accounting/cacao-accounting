@@ -16,7 +16,7 @@
 # - William José Moreno Reyes
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, BooleanField, SelectField
+from wtforms import StringField, SelectField
 from wtforms.validators import DataRequired
 from cacao_accounting.database import Entidad, Moneda
 
