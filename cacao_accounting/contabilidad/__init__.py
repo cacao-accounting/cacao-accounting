@@ -49,8 +49,9 @@ def monedas():
 @contabilidad.route("/accounts")
 @login_required
 def conta():
+    TITULO = "Módulo Contabilidad - " + APPNAME
     if validar_modulo_activo("accounting"):
-        return render_template("contabilidad.html")
+        return render_template("contabilidad.html", titulo=TITULO)
     else:
         redirect("/app")
 
@@ -83,7 +84,29 @@ def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
-    return render_template("contabilidad/entidad_crear.html", form=formulario)
+    TITULO = "Crear Nueva Entidad - " + APPNAME
+    if formulario.validate_on_submit():
+        from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+
+        e = RegistroEntidad()
+        DATA = {
+            "id": formulario.id.data,
+            "razon_social": formulario.razon_social.data,
+            "nombre_comercial": formulario.nombre_comercial.data,
+            "id_fiscal": formulario.id_fiscal.data,
+            "moneda": formulario.moneda.data,
+            "tipo_entidad": formulario.tipo_entidad.data,
+            "correo_electronico": formulario.correo_electronico.data,
+            "web": formulario.web.data,
+            "telefono1": formulario.telefono1.data,
+            "telefono2": formulario.telefono2.data,
+            "fax": formulario.fax.data,
+            "status": "activa",
+        }
+        e.crear_entidad(datos=DATA)
+        return redirect("/accounts/entities")
+
+    return render_template("contabilidad/entidad_crear.html", form=formulario, titulo=TITULO)
 
 
 @contabilidad.route("/accounts/entities/edit/<id_entidad>")
