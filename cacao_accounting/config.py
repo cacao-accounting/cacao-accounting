@@ -55,8 +55,8 @@ elif exists(global_conf):
 else:
     configuracion = {}
     if DOCKERISED or "DYNO" in environ or "CACAO_ACCOUNTING" in environ:
-        configuracion["SQLALCHEMY_DATABASE_URI"] = environ["SQLALCHEMY_DATABASE_URI"] or environ["CACAO_DB"]
-        configuracion["SECRET_KEY"] = environ["SECRET_KEY"] or environ["CACAO_KEY"]
+        configuracion["SQLALCHEMY_DATABASE_URI"] = environ["CACAO_DB"]
+        configuracion["SECRET_KEY"] = environ["CACAO_KEY"]
         configuracion["DESKTOPMODE"] = False
         configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     elif DEVELOPMENT or ("CACAO_TESTING" in environ) or ("CI" in environ):

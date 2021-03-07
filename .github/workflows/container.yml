@@ -1,0 +1,26 @@
+name: Contenedores
+
+on:
+  push:
+    branches: [ main, development]
+  pull_request:
+    branches: [ main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps: 
+    - uses: actions/checkout@v2
+    - name: Crear Contedor
+      run: |
+        buildah bud -t cacao-image .
+    - name: Probar Contenedor
+      run: |
+        podman images
+        podman network create cacao-net
+        podman volume create cacao-database
+        podman pull mysql
+        podman run --network cacao-net --restart on-failure--volume cacao-database:/var/lib/mysql --name cacaodb -e MYSQL_ROOT_PASSWORD=cacadb -e MYSQL_DATABASE=cacaodb -e MYSQL_USER=cacaodb -e MYSQL_PASSWORD=cacaodb -d mysql
+        podman run --network cacao-net --name cacao -p 8080:8080 -d -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@cacaodb.dns.podman:3306/cacaodb localhost/cacao-image
+        podman container ls
+        curl http://127.0.0.1:8080

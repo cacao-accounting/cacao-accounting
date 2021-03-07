@@ -3,7 +3,7 @@ COPY package.json .
 COPY yarn.lock .
 RUN yarn
 
-FROM python:3.8-slim
+FROM python:slim
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
@@ -14,17 +14,20 @@ ENV CACAO_ACCOUNTING=True
 
 # Install dependencies in a layer
 COPY requirements.txt /tmp/
-RUN pip --no-cache-dir install -r /tmp/requirements.txt \
+RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
+    && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql waitress \
     && rm -rf /root/.cache/
 
 # Copy and install app
 COPY . /app
 WORKDIR /app
-
-RUN python setup.py develop 
+RUN cp docker-entry-point.sh /usr/local/bin/docker-entry-point && chmod +x /usr/local/bin/docker-entry-point
 
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
+
+RUN /usr/local/bin/python3 --version
+RUN /usr/local/bin/python3 setup.py develop
 
 # No ejecutar como root
 RUN useradd cacao
@@ -32,4 +35,4 @@ USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
-CMD [ "/app/entrypoint.sh" ]
+CMD [ "/usr/local/bin/docker-entry-point" ]

@@ -34,6 +34,7 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
 # pylint: disable=too-few-public-methods
+DBVERSION = "0.0.0dev"
 
 
 class BaseTabla:
@@ -46,6 +47,16 @@ class BaseTabla:
     _creado_por = db.Column(db.String(15), nullable=True)
     _fecha_modicacion = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=False)
     _modificado_por = db.Column(db.String(15), nullable=True)
+
+
+class Metadata(db.Model):
+    """
+    Informacion basica de la instalacion.
+    """
+
+    cacaoversion = db.Column(db.String(50), primary_key=True, nullable=False)
+    dbversion = db.Column(db.String(50), primary_key=True, nullable=False)
+    fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False, primary_key=True)
 
 
 class Moneda(db.Model, BaseTabla):

@@ -21,10 +21,3 @@ teritorio
 waitress
 wtforms
 WTForms-SQLAlchemy
-
-# Heroku
-gunicorn
-
-# Bases de datos
-psycopg2-binary
-PyMySQL
