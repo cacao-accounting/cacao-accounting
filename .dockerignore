@@ -8,7 +8,5 @@ docs
 development.txt
 Procfile
 mkdocs.yml
-yarn.lock
-package.json
 Dockerfile
 *.md

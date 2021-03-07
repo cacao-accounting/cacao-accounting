@@ -3,7 +3,7 @@ COPY package.json .
 COPY yarn.lock .
 RUN yarn
 
-FROM python:3.8-slim
+FROM python:slim
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
