@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Bases de datos
+psycopg2-binary
+PyMySQL

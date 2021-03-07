@@ -1,3 +1,6 @@
+# Base
+-r requirements-databases.txt
+
 # Crear tarball y wheel
 build
 pep517
