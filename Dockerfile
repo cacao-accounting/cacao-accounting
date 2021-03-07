@@ -21,7 +21,8 @@ RUN pip --no-cache-dir install -r /tmp/requirements.txt \
 COPY . /app
 WORKDIR /app
 
-RUN python setup.py develop 
+RUN python setup.py develop
+RUN cacaoctl --version && cacaoctl version
 
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules

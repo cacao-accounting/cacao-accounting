@@ -1,7 +1,14 @@
 .git
+.gitignore
+.pylintrc
+.yarnrc
 venv
 tests
 docs
 development.txt
 Procfile
 mkdocs.yml
+yarn.lock
+package.json
+Dockerfile
+*.md
