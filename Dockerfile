@@ -20,6 +20,7 @@ RUN pip --no-cache-dir install -r /tmp/requirements.txt \
 # Copy and install app
 COPY . /app
 WORKDIR /app
+RUN chmod u+x docker-entry-point.py && cp docker-entry-point.py /bin/docker-entry-point 
 
 RUN python setup.py develop
 RUN cacaoctl --version && cacaoctl version
@@ -33,4 +34,4 @@ USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
-CMD [ "/app/entrypoint.sh" ]
+CMD [ "/bin/docker-entry-point" ]

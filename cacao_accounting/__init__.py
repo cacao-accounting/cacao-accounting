@@ -90,6 +90,45 @@ def registrar_blueprints(app):
         registrar_modulos_adicionales(app)
 
 
+def db_metadata():
+    """
+    Actualiza metadatos en la base de datos.
+    """
+    from cacao_accounting.database import DBVERSION, Metadata
+    from cacao_accounting.version import VERSION
+
+    meta = Metadata(
+        cacaoversion=VERSION,
+        dbversion=DBVERSION,
+    )
+    db.session.add(meta)
+    db.session.commit()
+
+
+def db_migrate():
+    """
+    Utilidad para realizar migraciones en la base de datos.
+    """
+    from cacao_accounting.database import Metadata, DBVERSION
+    from cacao_accounting.loggin import log
+    from cacao_accounting.version import VERSION
+
+    meta = Metadata.query.all()
+
+    migrardb = False
+    while migrardb == False:  # noqa: E712
+        for i in meta:
+            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
+                pass
+            else:
+                log.info("Se requiere actualizar esquema de base de datos.")
+                migrardb = True
+        break
+
+    if migrardb:
+        pass
+
+
 def create_app(ajustes=None):
     """
     Aplication factory.
@@ -133,6 +172,7 @@ def create_app(ajustes=None):
                 demo_data()
             else:
                 base_data(carga_rapida=False)
+            db_metadata()
 
     @cacao_app.cli.command()
     def cleandb():
@@ -154,6 +194,7 @@ def create_app(ajustes=None):
         """
         from cacao_accounting.__main__ import run
 
+        db_migrate()
         run()
 
     return cacao_app

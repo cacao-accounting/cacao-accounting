@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/usr/local/bin/python3
 
 # Copyright 2020 William José Moreno Reyes
 #
@@ -17,5 +17,19 @@
 # Contributors:
 # - William José Moreno Reyes
 
-cacaoctl initdb
-cacaoctl serve
+
+from waitress import serve
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
+
+dockerapp = create_app(configuracion)
+
+with dockerapp.app_context():
+    from cacao_accounting import db_migrate
+    from cacao_accounting.database import db
+    from cacao_accounting.datos import base_data
+    db.create_all()
+    base_data()
+    db_migrate()
+
+serve(dockerapp, port=8080)
