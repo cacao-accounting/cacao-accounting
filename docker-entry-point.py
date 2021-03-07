@@ -18,18 +18,37 @@
 # - William José Moreno Reyes
 
 
+from os import environ
 from waitress import serve
 from cacao_accounting import create_app
-from cacao_accounting.config import configuracion
+from cacao_accounting.loggin import log
+
+
+log.info("Iniciando ejecución de imagen")
+
+
+configuracion = {
+    "SQLALCHEMY_DATABASE_URI": environ["CACAO_DB"],
+    "SECRET_KEY": environ["CACAO_KEY"],
+    "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+    "DESKTOPMODE": False,
+    "ENV": "production",
+}
 
 dockerapp = create_app(configuracion)
+dockerapp.config["ENV"] = "production"
+dockerapp.config
 
 with dockerapp.app_context():
     from cacao_accounting import db_migrate
     from cacao_accounting.database import db
     from cacao_accounting.datos import base_data
-    db.create_all()
-    base_data()
+
+    try:
+        db.create_all()
+        base_data()
+    except:
+        pass
     db_migrate()
 
-serve(dockerapp, port=8080)
+serve(dockerapp, listen="127.0.0.1:8080 [::1]:8080")

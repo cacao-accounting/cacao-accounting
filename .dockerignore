@@ -1,12 +1,26 @@
+# Control de Versiones
 .git
+.github
 .gitignore
+
+# Documentacion
+mkdocs.yml
+docs
+
+# No necesitamos docker files en el contenedor
+Dockerfile
+docker-compose.yml
+
+# Archivos para colaboradores
+.coveragerc
 .pylintrc
-.yarnrc
 venv
 tests
-docs
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+ROAD_MAP.md
 development.txt
-Procfile
-mkdocs.yml
-Dockerfile
-*.md
+Developer_Certificate_of_Origin
+requirements-databases.txt
+*.yml
+wsgi.py
