@@ -21,13 +21,15 @@ RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.tx
 # Copy and install app
 COPY . /app
 WORKDIR /app
-RUN cp docker-entry-point.py /bin/docker-entry-point
-RUN chmod u+x /bin/docker-entry-point 
-RUN /usr/local/bin/python3 --version
-RUN /usr/local/bin/python3 setup.py develop
+RUN pwd
+RUN ls
+RUN chmod +x docker-entry-point
 
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
+
+RUN /usr/local/bin/python3 --version
+RUN /usr/local/bin/python3 setup.py develop
 
 # No ejecutar como root
 RUN useradd cacao
@@ -35,4 +37,4 @@ USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
-CMD [ "/bin/docker-entry-point" ]
+CMD /app/docker-entry-point

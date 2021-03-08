@@ -23,4 +23,3 @@ development.txt
 Developer_Certificate_of_Origin
 requirements-databases.txt
 *.yml
-wsgi.py
