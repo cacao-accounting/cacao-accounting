@@ -17,11 +17,13 @@ jobs:
     - name: Ejecutar Contenedor
       run: |
         podman images
-        podman pod create --name cacao-pod -p 8080
+        podman pod create --name cacao-pod -p 8080 -p 443 -p 80 -p 3306
+        podman pod list
         podman volume create cacao-database
         podman pull mysql
         podman run --pod cacao-pod --restart on-failure --volume cacao-database:/var/lib/mysql --name cacaodb -e MYSQL_ROOT_PASSWORD=cacaodb -e MYSQL_DATABASE=cacaodb -e MYSQL_USER=cacaodb -e MYSQL_PASSWORD=cacaodb -d mysql
-        podman run --pod cacao-pod --name cacao -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@cacaodb:3306/cacaodb -d localhost/cacao-image
+        # podman run --pod cacao-pod --name cacao -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb -d localhost/cacao-image
+        podman run --pod cacao-pod --name cacao -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=sqlite:///cacaoaccounting.db -d localhost/cacao-image
         podman container ls
     - name: Probar Contenedor
       run: |

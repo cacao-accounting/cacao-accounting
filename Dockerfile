@@ -34,3 +34,4 @@ USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
+CMD [ "docker-entry-point" ]
