@@ -16,7 +16,8 @@ ENV CACAO_ACCOUNTING=True
 COPY requirements.txt /tmp/
 RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
     && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql waitress \
-    && rm -rf /root/.cache/
+    && rm -rf /root/.cache/ \
+    && apt upgrade -y && apt install -y mariadb-client
 
 # Copy and install app
 COPY . /app
