@@ -20,6 +20,8 @@ from cacao_accounting import create_app
 from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.config import configuracion, THREADS
 from cacao_accounting.loggin import log
+from cacao_accounting.tools import inicia_base_de_datos, verifica_acceso_db, verifica_db_version
+
 
 app = create_app(configuracion)
 if DEVELOPMENT:
@@ -30,11 +32,26 @@ if DEVELOPMENT:
 
 def run():
     """Ejecuta la aplicacion con Waitress como servidor WSGI"""
+    log.info("Iniciando Cacao Accounting")
+
+    if verifica_acceso_db(app):
+        if verifica_db_version(app):
+            log.warning("El esquema de la DB debe ser actualizado para ser compatible con este version de Cacao Accounting.")
+        else:
+            log.info("Esquema de base de datos compatible.")
+    else:
+        try:
+            log.warning("No se pudo acceder a la base de datos.")
+            log.info("Intentando conexión y crear esquema.")
+            inicia_base_de_datos(app)
+        except:  # noqa: E722
+            log.error("No se lo logro establecer conección a la base de datos.")
+
     try:
-        serve(app, port=8080, threads=THREADS)
-        log.info("Servicidor WSGI iniciando correctamente en puerto 8080")
+        log.info("Iniciando servidor WSGI.")
+        serve(app, listen="127.0.0.1:8080 [::1]:8080", threads=THREADS)
     except OSError:
-        log.error("Puerto 8080 actualmente en uso.")
+        log.error("Error al iniciar servidor WSGI, puerto 8080 actualmente en uso.")
 
 
 if __name__ == "__main__":

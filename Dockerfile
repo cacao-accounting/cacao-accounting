@@ -26,7 +26,6 @@ RUN cp docker-entry-point.sh /usr/local/bin/docker-entry-point && chmod +x /usr/
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 
-RUN /usr/local/bin/python3 --version
 RUN /usr/local/bin/python3 setup.py develop
 
 # No ejecutar como root
@@ -35,4 +34,3 @@ USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
-CMD [ "/usr/local/bin/docker-entry-point" ]
