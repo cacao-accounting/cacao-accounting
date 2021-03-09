@@ -56,6 +56,10 @@ Cacao Accounting es software en desarrollo no apto aún para su uso en producci�
 
 ## Docker
 
+[![Contenedores](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml/badge.svg)](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml)
+[![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
+
+
 Existe una imagen de imagen de contenedor disponible para ejecutar la aplicación en:
 
 ```bash
