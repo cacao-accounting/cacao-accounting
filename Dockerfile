@@ -36,3 +36,4 @@ USER cacao
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
 CMD [ "/usr/local/bin/docker-entry-point" ]
+CMD /app/docker-entry-point
