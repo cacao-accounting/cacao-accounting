@@ -18,6 +18,8 @@ RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.tx
     && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql waitress \
     && rm -rf /root/.cache/
 
+RUN apt update -y && apt install mariadb-client -y
+
 # Copy and install app
 COPY . /app
 WORKDIR /app
