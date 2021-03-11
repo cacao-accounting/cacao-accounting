@@ -53,7 +53,7 @@ def run():
     if DB_ACCESIBLE:
         try:
             log.info("Iniciando servidor WSGI.")
-            serve(app, listen="127.0.0.1:8080 [::1]:8080", threads=THREADS)
+            serve(app, port="8080", threads=THREADS)
         except OSError:
             log.error("Error al iniciar servidor WSGI, puerto 8080 actualmente en uso.")
     else:
