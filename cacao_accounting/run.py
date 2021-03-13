@@ -30,11 +30,11 @@ if DEVELOPMENT:
 
 def run():
     """Ejecuta la aplicacion con Waitress como servidor WSGI"""
-    from cacao_accounting.database import inicia_base_de_datos, verifica_coneccion_db, verifica_version_db
+    from cacao_accounting.database import inicia_base_de_datos, requiere_migracion_db, verifica_coneccion_db
 
     log.info("Iniciando Cacao Accounting.")
     if verifica_coneccion_db(app):
-        DATABASE = verifica_version_db(app)
+        DATABASE = requiere_migracion_db(app) ==False 
     else:
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")

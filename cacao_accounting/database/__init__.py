@@ -290,6 +290,25 @@ class PeriodoContable(db.Model):
 
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
+def requiere_migracion_db(app):
+    """
+    Utilidad para realizar migraciones en la base de datos.
+    """
+    from cacao_accounting.version import VERSION
+
+    with app.app_context():
+        meta = Metadata.query.all()
+
+    migrardb = False
+    while migrardb == False:  # noqa: E712
+        for i in meta:
+            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
+                pass
+            else:
+                log.info("Se requiere actualizar esquema de base de datos.")
+                migrardb = True
+        break
+    return migrardb
 
 
 def verifica_coneccion_db(app):
@@ -330,24 +349,3 @@ def inicia_base_de_datos(app):
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
     return DB_ESQUEMA
-
-
-def verifica_version_db(app):
-    """
-    Utilidad para realizar migraciones en la base de datos.
-    """
-    from cacao_accounting.version import VERSION
-
-    with app.app_context():
-        meta = Metadata.query.all()
-
-    migrardb = False
-    while migrardb == False:  # noqa: E712
-        for i in meta:
-            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
-                pass
-            else:
-                log.info("Se requiere actualizar esquema de base de datos.")
-                migrardb = True
-        break
-    return migrardb
