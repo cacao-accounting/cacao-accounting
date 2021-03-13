@@ -15,26 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from waitress import serve
-from cacao_accounting import create_app
-from cacao_accounting.metadata import DEVELOPMENT
-from cacao_accounting.config import configuracion, THREADS
-from cacao_accounting.loggin import log
-
-app = create_app(configuracion)
-if DEVELOPMENT:
-    app.config["EXPLAIN_TEMPLATE_LOADING"] = True
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
-    app.config["DEBUG"] = True
-
-
-def run():
-    """Ejecuta la aplicacion con Waitress como servidor WSGI"""
-    try:
-        serve(app, port=8080, threads=THREADS)
-        log.info("Servicidor WSGI iniciando correctamente en puerto 8080")
-    except OSError:
-        log.error("Puerto 8080 actualmente en uso.")
+from cacao_accounting.run import run
 
 
 if __name__ == "__main__":

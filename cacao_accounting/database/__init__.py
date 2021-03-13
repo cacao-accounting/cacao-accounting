@@ -30,6 +30,7 @@ Referencia:
 from collections import namedtuple
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from cacao_accounting.loggin import log
 
 db = SQLAlchemy()
 StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
@@ -285,3 +286,67 @@ class PeriodoContable(db.Model):
     habilitada = db.Column(db.Boolean(), index=True)
     inicio = db.Column(db.Date(), nullable=False)
     fin = db.Column(db.Date(), nullable=False)
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Herramientas auxiliares para verificar la ejecución de la base de datos.
+
+
+def verifica_coneccion_db(app):
+    """
+    Verifica si es posible conentarse a la base de datos.
+    """
+    log.info("Verificando conexión a la base de datos.")
+    with app.app_context():
+        try:
+            Metadata.query.all()
+            DB_CONN = True
+            log.info("Conexión a la base de datos exitosa.")
+        except:  # noqa: E722
+            DB_CONN = False
+            log.warning("No se pudo establecer conexion a la base de datos.")
+    return DB_CONN
+
+
+def inicia_base_de_datos(app):
+    """
+    Inicia esquema de base datos.
+    """
+    from cacao_accounting.datos import base_data, demo_data
+    from cacao_accounting.metadata import DEVELOPMENT
+
+    with app.app_context():
+        log.info("Intentando inicializar base de datos.")
+        try:
+            db.create_all()
+            if DEVELOPMENT:
+                base_data(carga_rapida=True)
+                demo_data()
+            else:
+                base_data(carga_rapida=False)
+            DB_ESQUEMA = True
+        except:  # noqa: E722
+            log.error("No se pudo iniciliazar esquema de base de datos.")
+            DB_ESQUEMA = False
+    return DB_ESQUEMA
+
+
+def verifica_version_db(app):
+    """
+    Utilidad para realizar migraciones en la base de datos.
+    """
+    from cacao_accounting.version import VERSION
+
+    with app.app_context():
+        meta = Metadata.query.all()
+
+    migrardb = False
+    while migrardb == False:  # noqa: E712
+        for i in meta:
+            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
+                pass
+            else:
+                log.info("Se requiere actualizar esquema de base de datos.")
+                migrardb = True
+        break
+    return migrardb

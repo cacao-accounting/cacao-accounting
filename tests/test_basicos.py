@@ -19,14 +19,6 @@ from unittest import TestCase
 import pytest
 
 
-def test_run():
-    from cacao_accounting.__main__ import run
-
-    run()
-    # si se ejecuta por segunda vez no debe reportar error
-    run()
-
-
 def crear_db():
     from cacao_accounting import create_app
     from cacao_accounting.config import configuracion
@@ -67,7 +59,7 @@ def test_logea_usuario():
 def test_run():
     import subprocess
     from sys import executable
-    from cacao_accounting.__main__ import app, run
+    from cacao_accounting.run import app, run
 
     subprocess.Popen(
         [executable, "-m", "cacao_accounting"],

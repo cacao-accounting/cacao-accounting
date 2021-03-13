@@ -150,8 +150,9 @@ disable=print-statement,
         missing-module-docstring,
         missing-function-docstring,
         wrong-import-order,
-        missing-class-docstring
+        missing-class-docstring,
         invalid-name,
+        cyclic-import,
         
 
 # Enable the message, report, category or checker with the given id(s). You can

@@ -15,24 +15,23 @@ ENV CACAO_ACCOUNTING=True
 # Install dependencies in a layer
 COPY requirements.txt /tmp/
 RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql waitress \
+    && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql \
     && rm -rf /root/.cache/
 
 # Copy and install app
 COPY . /app
 WORKDIR /app
-RUN cp docker-entry-point.sh /usr/local/bin/docker-entry-point && chmod +x /usr/local/bin/docker-entry-point
+RUN chmod +x docker-entry-point.sh
 
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 
-RUN /usr/local/bin/python3 --version
 RUN /usr/local/bin/python3 setup.py develop
 
 # No ejecutar como root
-RUN useradd cacao
-USER cacao
+# RUN useradd cacao
+# USER cacao
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
-CMD [ "/usr/local/bin/docker-entry-point" ]
+CMD [ "/app/docker-entry-point.sh" ]

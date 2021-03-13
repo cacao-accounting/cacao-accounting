@@ -1,6 +1,3 @@
 #!/bin/sh
 
-set -e
-
-cacaoctl initdb
-cacaoctl serve
+/usr/local/bin/python3 -m cacao_accounting
