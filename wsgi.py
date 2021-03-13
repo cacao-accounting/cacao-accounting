@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.__main__ import app, run
+from cacao_accounting.run import app, run
 
 
 __all__ = ("app", "run")

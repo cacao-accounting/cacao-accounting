@@ -322,9 +322,10 @@ def inicia_base_de_datos(app):
             if DEVELOPMENT:
                 base_data(carga_rapida=True)
                 demo_data()
+                DB_ESQUEMA = True
             else:
                 base_data(carga_rapida=False)
-            DB_ESQUEMA = True
+                DB_ESQUEMA = True
         except:  # noqa: E722
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
