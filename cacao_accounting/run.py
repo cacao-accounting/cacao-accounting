@@ -34,7 +34,7 @@ def run():
 
     log.info("Iniciando Cacao Accounting.")
     if verifica_coneccion_db(app):
-        DATABASE = requiere_migracion_db(app) == False
+        DATABASE = requiere_migracion_db(app) is False
     else:
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")
