@@ -16,18 +16,18 @@ jobs:
         buildah bud -t cacao-image .
     - name: Ejecutar Contenedor
       run: |
-        podman images
+        pwd && ls
+        mkdir cacao-pod
+        cp cacao_accounting/misc/ejemplos/nginx.conf.template  /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf
+        chmod o+r /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf
         podman pod create --name cacao-pod -p 8080:8080 -p 3306:3306 -p 8081:80 -p 8443:443
         podman volume create cacao-database
-        podman run --pod cacao-pod --restart on-failure --volume cacao-database:/var/lib/mysql --name cacaodb -e MYSQL_ROOT_PASSWORD=cacaodb -e MYSQL_DATABASE=cacaodb -e MYSQL_USER=cacaodb -e MYSQL_PASSWORD=cacaodb -d mysql
+        podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql  -e MYSQL_ROOT_PASSWORD=cacaodb -e MYSQL_DATABASE=cacaodb -e MYSQL_USER=cacaodb -e MYSQL_PASSWORD=cacaodb -d mysql
         podman run --pod cacao-pod --name cacao -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb -d localhost/cacao-image
-        mkdir cacao-pod
-        cp cacao_accounting/misc/ejemplos/nginx.conf.template  cacao-pod/nginx.conf
-        podman run --pod cacao-pod --restart on-failure -d -v ./cacao-pod/nginx.conf:/etc/nginx/nginx.conf:ronginx:stable-alpine
-        podman container ls
+        # podman run --pod cacao-pod --name cacao-server --volume /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf:/etc/nginx/nginx.conf:zro -d nginx:stable
     - name: Probar Contenedor
       run: |
-        sleep 5
+        sleep 10
         podman container ls
         curl localhost:8080
-        curl localhost:80
+        # curl localhost:8081
