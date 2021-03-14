@@ -37,10 +37,10 @@ def crear_db():
     demo_data()
 
 
-
 def test_verifica_coneccion_db():
     from flask import Flask
     from cacao_accounting.database import verifica_coneccion_db
+
     app = Flask(__name__)
     assert verifica_coneccion_db(app) == False
 
