@@ -14,7 +14,7 @@
     
     
       
-        <title>Configuración de Base de Datos - Cacao Accounting</title>
+        <title>Paquete Python - Cacao Accounting</title>
       
     
     
@@ -56,11 +56,6 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
-        
-        <a href="#configuracion-de-la-base-de-datos" class="md-skip">
-          Skip to content
-        </a>
-      
     </div>
     <div data-md-component="announce">
       
@@ -86,7 +81,7 @@
           </span>
           <span class="md-header-nav__topic md-ellipsis">
             
-              Configuración de Base de Datos
+              Paquete Python
             
           </span>
         </div>
@@ -159,7 +154,9 @@
     <li class="md-tabs__item">
       
       
-      <a href="../despliegue/" class="md-tabs__link">
+        
+      
+      <a href="../despliegue/" class="md-tabs__link md-tabs__link--active">
         Guía de Instalación
       </a>
     </li>
@@ -232,10 +229,12 @@
           
           
 
+  
 
-  <li class="md-nav__item md-nav__item--nested">
+
+  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
     
-    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-1" type="checkbox" id="nav-2-1" >
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-1" type="checkbox" id="nav-2-1" checked>
     <label class="md-nav__link" for="nav-2-1">
       Instalación
       <span class="md-nav__icon md-icon"></span>
@@ -276,11 +275,18 @@
           
           
 
+  
 
-  <li class="md-nav__item">
-    <a href="../pypi/" class="md-nav__link">
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+    
+    
+    <a href="./" class="md-nav__link md-nav__link--active">
       Paquete Python
     </a>
+    
   </li>
 
         
@@ -317,12 +323,10 @@
           
           
 
-  
 
-
-  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+  <li class="md-nav__item md-nav__item--nested">
     
-    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-3" type="checkbox" id="nav-2-3" checked>
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-3" type="checkbox" id="nav-2-3" >
     <label class="md-nav__link" for="nav-2-3">
       Base de Datos
       <span class="md-nav__icon md-icon"></span>
@@ -339,70 +343,11 @@
           
           
 
-  
 
-
-  <li class="md-nav__item md-nav__item--active">
-    
-    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-    
-      
-    
-    
-      <label class="md-nav__link md-nav__link--active" for="__toc">
-        Configuración de Base de Datos
-        <span class="md-nav__icon md-icon"></span>
-      </label>
-    
-    <a href="./" class="md-nav__link md-nav__link--active">
+  <li class="md-nav__item">
+    <a href="../database/" class="md-nav__link">
       Configuración de Base de Datos
     </a>
-    
-      
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#sqlite" class="md-nav__link">
-    SQLite
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mysql" class="md-nav__link">
-    MySQL:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#postgresql" class="md-nav__link">
-    Postgresql:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ms-sql-server" class="md-nav__link">
-    MS SQL Server
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-    
   </li>
 
         
@@ -423,105 +368,15 @@
               </div>
             
             
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#sqlite" class="md-nav__link">
-    SQLite
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mysql" class="md-nav__link">
-    MySQL:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#postgresql" class="md-nav__link">
-    Postgresql:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ms-sql-server" class="md-nav__link">
-    MS SQL Server
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
-            
           
           <div class="md-content">
             <article class="md-content__inner md-typeset">
               
                 
                 
-                <h1 id="configuracion-de-la-base-de-datos">Configuración de la base de datos.</h1>
-<p>Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la 
-aplicacion, la configuración de una linea de conección en la principal opción de configuración que requiere
-el sistema.</p>
-<p>En general configurar la base de datos para uso en Cacao Accounting requiere:</p>
-<ol>
-<li>Instalar e iniciar el motor de base de datos seleccionado.</li>
-<li>Crear un usuario distinto del usuario principal para acceder a la base de datos.</li>
-<li>Crear una base de datos.</li>
-<li>Dar acceso al usuario especificado a la base datos que acabamos de crear.</li>
-</ol>
-<p>En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distintos a los usados de ejemplo.</p>
-<h2 id="sqlite">SQLite</h2>
-<p>No se requiere pasos previos para utilizar SQLite como motor de base de datos.</p>
-<h2 id="mysql">MySQL:</h2>
-<p>Una vez instalado MySQL puede ejecutar las siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE IF NOT EXISTS cacao;
-CREATE USER IF NOT EXISTS 'cacao' IDENTIFIED BY 'cacao';
-GRANT ALL PRIVILEGES ON cacao.* TO 'cacao';
-FLUSH PRIVILEGES;
-</code></pre>
-<h2 id="postgresql">Postgresql:</h2>
-<p>Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE cacao;
-CREATE USER cacao WITH PASSWORD 'cacao';
-GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
-</code></pre>
-<h2 id="ms-sql-server">MS SQL Server</h2>
-<p>Una vez instalado MS SQL Server puede ejecitar las siguientes setencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">USE master;
-GO
-CREATE DATABASE cacao;
-GO
-CREATE LOGIN cacao WITH PASSWORD = 'cacao';
-GO
-CREATE USER cacaouser login cacao;
-GO
-USE cacao;
-GO
-GRANT ALL ON dbo.cacao TO cacaouser;
-GO  
-</code></pre>
+                  <h1>Paquete Python</h1>
+                
+                
                 
               
               
@@ -540,7 +395,7 @@ GO
     <div class="md-footer-nav">
       <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
         
-          <a href="../configuracion/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+          <a href="../contenedores/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
             <div class="md-footer-nav__button md-icon">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
             </div>
@@ -549,11 +404,25 @@ GO
                 <span class="md-footer-nav__direction">
                   Previous
                 </span>
-                Configuración
+                Contenedores
               </div>
             </div>
           </a>
         
+        
+          <a href="../fuentes/" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Desde las Fuentes
+              </div>
+            </div>
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+            </div>
+          </a>
         
       </nav>
     </div>

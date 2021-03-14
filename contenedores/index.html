@@ -14,7 +14,7 @@
     
     
       
-        <title>Configuración de Base de Datos - Cacao Accounting</title>
+        <title>Contenedores - Cacao Accounting</title>
       
     
     
@@ -57,7 +57,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#configuracion-de-la-base-de-datos" class="md-skip">
+        <a href="#crear-un-pod-para-ejecutar-cacao-accounting" class="md-skip">
           Skip to content
         </a>
       
@@ -86,7 +86,7 @@
           </span>
           <span class="md-header-nav__topic md-ellipsis">
             
-              Configuración de Base de Datos
+              Contenedores
             
           </span>
         </div>
@@ -159,7 +159,9 @@
     <li class="md-tabs__item">
       
       
-      <a href="../despliegue/" class="md-tabs__link">
+        
+      
+      <a href="../despliegue/" class="md-tabs__link md-tabs__link--active">
         Guía de Instalación
       </a>
     </li>
@@ -232,10 +234,12 @@
           
           
 
+  
 
-  <li class="md-nav__item md-nav__item--nested">
+
+  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
     
-    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-1" type="checkbox" id="nav-2-1" >
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-1" type="checkbox" id="nav-2-1" checked>
     <label class="md-nav__link" for="nav-2-1">
       Instalación
       <span class="md-nav__icon md-icon"></span>
@@ -264,11 +268,45 @@
           
           
 
+  
 
-  <li class="md-nav__item">
-    <a href="../contenedores/" class="md-nav__link">
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="__toc">
+        Contenedores
+        <span class="md-nav__icon md-icon"></span>
+      </label>
+    
+    <a href="./" class="md-nav__link md-nav__link--active">
       Contenedores
     </a>
+    
+      
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#crear-un-pod-para-ejecutar-cacao-accounting" class="md-nav__link">
+    Crear un pod para ejecutar Cacao Accounting.
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+    
   </li>
 
         
@@ -317,12 +355,10 @@
           
           
 
-  
 
-
-  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+  <li class="md-nav__item md-nav__item--nested">
     
-    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-3" type="checkbox" id="nav-2-3" checked>
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-3" type="checkbox" id="nav-2-3" >
     <label class="md-nav__link" for="nav-2-3">
       Base de Datos
       <span class="md-nav__icon md-icon"></span>
@@ -339,70 +375,11 @@
           
           
 
-  
 
-
-  <li class="md-nav__item md-nav__item--active">
-    
-    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-    
-      
-    
-    
-      <label class="md-nav__link md-nav__link--active" for="__toc">
-        Configuración de Base de Datos
-        <span class="md-nav__icon md-icon"></span>
-      </label>
-    
-    <a href="./" class="md-nav__link md-nav__link--active">
+  <li class="md-nav__item">
+    <a href="../database/" class="md-nav__link">
       Configuración de Base de Datos
     </a>
-    
-      
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#sqlite" class="md-nav__link">
-    SQLite
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mysql" class="md-nav__link">
-    MySQL:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#postgresql" class="md-nav__link">
-    Postgresql:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ms-sql-server" class="md-nav__link">
-    MS SQL Server
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-    
   </li>
 
         
@@ -430,8 +407,6 @@
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -440,29 +415,8 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#sqlite" class="md-nav__link">
-    SQLite
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mysql" class="md-nav__link">
-    MySQL:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#postgresql" class="md-nav__link">
-    Postgresql:
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ms-sql-server" class="md-nav__link">
-    MS SQL Server
+  <a href="#crear-un-pod-para-ejecutar-cacao-accounting" class="md-nav__link">
+    Crear un pod para ejecutar Cacao Accounting.
   </a>
   
 </li>
@@ -480,47 +434,54 @@
               
                 
                 
-                <h1 id="configuracion-de-la-base-de-datos">Configuración de la base de datos.</h1>
-<p>Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la 
-aplicacion, la configuración de una linea de conección en la principal opción de configuración que requiere
-el sistema.</p>
-<p>En general configurar la base de datos para uso en Cacao Accounting requiere:</p>
-<ol>
-<li>Instalar e iniciar el motor de base de datos seleccionado.</li>
-<li>Crear un usuario distinto del usuario principal para acceder a la base de datos.</li>
-<li>Crear una base de datos.</li>
-<li>Dar acceso al usuario especificado a la base datos que acabamos de crear.</li>
-</ol>
-<p>En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distintos a los usados de ejemplo.</p>
-<h2 id="sqlite">SQLite</h2>
-<p>No se requiere pasos previos para utilizar SQLite como motor de base de datos.</p>
-<h2 id="mysql">MySQL:</h2>
-<p>Una vez instalado MySQL puede ejecutar las siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE IF NOT EXISTS cacao;
-CREATE USER IF NOT EXISTS 'cacao' IDENTIFIED BY 'cacao';
-GRANT ALL PRIVILEGES ON cacao.* TO 'cacao';
-FLUSH PRIVILEGES;
+                  <h1>Contenedores</h1>
+                
+                <p><a href="https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml"><img alt="Contenedores" src="https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml/badge.svg" /></a>
+<a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting"><img alt="Docker Repository on Quay" src="https://quay.io/repository/cacaoaccounting/cacaoaccounting/status" title="Docker Repository on Quay" /></a></p>
+<p>Existe una imagen de imagen OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en <a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting">https://quay.io/repository/cacaoaccounting/cacaoaccounting</a>.</p>
+<h2 id="crear-un-pod-para-ejecutar-cacao-accounting">Crear un pod para ejecutar Cacao Accounting.</h2>
+<p>Podman es una herramienta para poder ejecutar pods, que son conjuntos de contenedores, con la cual 
+podemos administrar Cacao Accounting utilizando contenedores, para instalar podman ejecutar:</p>
+<pre><code class="language-bash"># Fedora, CentOS ...
+dnf -y install podman
+
+# Debian, Ubuntu ...
+apt install -y podman
 </code></pre>
-<h2 id="postgresql">Postgresql:</h2>
-<p>Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE cacao;
-CREATE USER cacao WITH PASSWORD 'cacao';
-GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
+<p>Una vez podman esta instalado ejecutar Cacao Accounting en un pod ejecutando:</p>
+<pre><code class="language-bash"># Creamos un pod:
+podman pod create --name cacao-pod -p 8080:8080 -p 3306:3306
+
+# Creamos un volumen para almacenar la base de datos fuera del contenedor:
+podman volume create cacao-database
+
+# Creamos el contenedor para la base de datos:
+podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql  \
+    -e MYSQL_ROOT_PASSWORD=cacaodb \
+    -e MYSQL_DATABASE=cacaodb \
+    -e MYSQL_USER=cacaodb \
+    -e MYSQL_PASSWORD=cacaodb \
+    -d mysql
+
+# Creamos el contenedor de la aplicación:
+podman run --pod cacao-pod --name cacao \
+    -e CACAO_ACCOUNTING=True \
+    -e CACAO_KEY=nsjksldknsdlkdsljdn \
+    -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
+    -d quay.io/cacaoaccounting/cacaoaccounting
 </code></pre>
-<h2 id="ms-sql-server">MS SQL Server</h2>
-<p>Una vez instalado MS SQL Server puede ejecitar las siguientes setencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">USE master;
-GO
-CREATE DATABASE cacao;
-GO
-CREATE LOGIN cacao WITH PASSWORD = 'cacao';
-GO
-CREATE USER cacaouser login cacao;
-GO
-USE cacao;
-GO
-GRANT ALL ON dbo.cacao TO cacaouser;
-GO  
+<p>Luego de un momento la aplicación debera estar disponible en: http://localhost:8080, en caso de
+que el contenedor no se ejecute puede reportar el error <a href="https://github.com/cacao-accounting/cacao-accounting/issues">aquí</a></p>
+<p>Para acceder a la aplicación los datos de acceso son:</p>
+<ul>
+<li>Usuario: cacao</li>
+<li>Contraseña: cacao</li>
+</ul>
+<pre><code class="language-bash">Cacao Accounting es software en desarrollo no apto para uso en producción.
+</code></pre>
+<p>Para administrar el pod podemos ejecutar:</p>
+<pre><code class="language-bash">podman pod stop cacao-pod
+podman pod start cacao-pod
 </code></pre>
                 
               
@@ -540,7 +501,7 @@ GO
     <div class="md-footer-nav">
       <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
         
-          <a href="../configuracion/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+          <a href="../despliegue/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
             <div class="md-footer-nav__button md-icon">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
             </div>
@@ -549,11 +510,25 @@ GO
                 <span class="md-footer-nav__direction">
                   Previous
                 </span>
-                Configuración
+                Introducción
               </div>
             </div>
           </a>
         
+        
+          <a href="../pypi/" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Paquete Python
+              </div>
+            </div>
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+            </div>
+          </a>
         
       </nav>
     </div>

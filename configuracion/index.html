@@ -152,15 +152,19 @@
         
   
   
+    
+    
+  
+  
     <li class="md-tabs__item">
       
       
-        
-      
-      <a href="../despliegue/" class="md-tabs__link md-tabs__link--active">
+      <a href="../despliegue/" class="md-tabs__link">
         Guía de Instalación
       </a>
     </li>
+  
+
   
 
       
@@ -229,10 +233,71 @@
           
 
 
+  <li class="md-nav__item md-nav__item--nested">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-2-1" type="checkbox" id="nav-2-1" >
+    <label class="md-nav__link" for="nav-2-1">
+      Instalación
+      <span class="md-nav__icon md-icon"></span>
+    </label>
+    <nav class="md-nav" aria-label="Instalación" data-md-level="2">
+      <label class="md-nav__title" for="nav-2-1">
+        <span class="md-nav__icon md-icon"></span>
+        Instalación
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
   <li class="md-nav__item">
     <a href="../despliegue/" class="md-nav__link">
-      Instalación
+      Introducción
     </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../contenedores/" class="md-nav__link">
+      Contenedores
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../pypi/" class="md-nav__link">
+      Paquete Python
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../fuentes/" class="md-nav__link">
+      Desde las Fuentes
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
   </li>
 
         
@@ -273,8 +338,8 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#establecer-varaibles-del-entorno-requeridas" class="md-nav__link">
-    Establecer varaibles del entorno requeridas:
+  <a href="#establecer-variables-del-entorno-requeridas" class="md-nav__link">
+    Establecer variables del entorno requeridas:
   </a>
   
 </li>
@@ -393,8 +458,8 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#establecer-varaibles-del-entorno-requeridas" class="md-nav__link">
-    Establecer varaibles del entorno requeridas:
+  <a href="#establecer-variables-del-entorno-requeridas" class="md-nav__link">
+    Establecer variables del entorno requeridas:
   </a>
   
 </li>
@@ -454,20 +519,28 @@
                 
                 
                 <h1 id="configuracion-de-la-aplicacion">Configuración de la aplicación:</h1>
-<p>Siguiendo las recomendaciones en <a href="https://12factor.net/config">the twelve factor app</a> Cacao Accounting puede leer la configuración desde variables del entorno:</p>
-<h2 id="establecer-varaibles-del-entorno-requeridas">Establecer varaibles del entorno requeridas:</h2>
+<p>Siguiendo las recomendaciones en <a href="https://12factor.net/config">the twelve factor app</a> Cacao Accounting puede leer la configuración desde variables del entorno, la configuración requerida
+es:</p>
+<pre><code class="language-bash">$CACAO_ACCOUNTING  # Indica a la aplicación a cargar la configuración desde variables del entorno.
+$CACAO_DB          # URI para conectarse a la base de datos.
+$CACAO_KEY         # Llave única para una ejecución segura.
+</code></pre>
+<h2 id="establecer-variables-del-entorno-requeridas">Establecer variables del entorno requeridas:</h2>
 <p>En Linux se puede configurar Cacao Accounting ejecutando:</p>
 <pre><code class="language-bash"># Para configurar Cacao Accounting en Linux ejecutar:
 export CACAO_ACCOUNTING=True
 export CACAO_DB=DATABASE_CONNECTION_URI
+export CACAO_KEY=SECRETKEY
 </code></pre>
 <p>En Windows ejecutar:</p>
 <pre><code class="language-powershell">setx CACAO_ACCOUNTING &quot;True&quot;
 setx CACAO_DB &quot;DATABASE_CONNECTION_URI&quot;
+setx CACAO_KEY &quot;SECRETKEY&quot;
 </code></pre>
 <p>En un Dockerfile o en un archivo Docker compose se pueden configurar de la siguiente forma:</p>
 <pre><code class="language-dockerfile">ENV CACAO_ACCOUNTING=True
 ENV CACAO_DB=DATABASE_CONNECTION_URI
+ENV CACAO_KEY=SECRETKEY
 </code></pre>
 <h2 id="conexion-a-la-base-de-datos">Conexion a la base de datos</h2>
 <p>Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y MS SQL Server:</p>
@@ -479,7 +552,7 @@ entornos multi usuarios:</p>
 </code></pre>
 <h3 id="mysql">MySQL:</h3>
 <p>Para funcionar con MySQL asegurece de tener instalado el driver apropiado:</p>
-<pre><code class="language-bash">pip install pymysql
+<pre><code class="language-bash">pip install cryptography pymysql
 </code></pre>
 <p>La linea de conección es por ejemplo:</p>
 <pre><code>mysql+pymysql://ususario:contraseña@servidor:puerto/database
@@ -523,7 +596,7 @@ mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17
     <div class="md-footer-nav">
       <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
         
-          <a href="../despliegue/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+          <a href="../fuentes/" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
             <div class="md-footer-nav__button md-icon">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
             </div>
@@ -532,7 +605,7 @@ mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17
                 <span class="md-footer-nav__direction">
                   Previous
                 </span>
-                Instalación
+                Desde las Fuentes
               </div>
             </div>
           </a>
