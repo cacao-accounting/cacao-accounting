@@ -1,8 +1,15 @@
 # Configuración de la aplicación:
 
-Siguiendo las recomendaciones en [the twelve factor app](https://12factor.net/config) Cacao Accounting puede leer la configuración desde variables del entorno:
+Siguiendo las recomendaciones en [the twelve factor app](https://12factor.net/config) Cacao Accounting puede leer la configuración desde variables del entorno, la configuración requerida
+es:
 
-## Establecer varaibles del entorno requeridas:
+```bash
+$CACAO_ACCOUNTING  # Indica a la aplicación a cargar la configuración desde variables del entorno.
+$CACAO_DB          # URI para conectarse a la base de datos.
+$CACAO_KEY         # Llave única para una ejecución segura.
+```
+
+## Establecer variables del entorno requeridas:
 
 En Linux se puede configurar Cacao Accounting ejecutando:
 ```bash
@@ -44,7 +51,7 @@ sqlite://cacaoaccounting.db
 Para funcionar con MySQL asegurece de tener instalado el driver apropiado:
 
 ```bash
-pip install pymysql
+pip install cryptography pymysql
 ```
 
 La linea de conección es por ejemplo:

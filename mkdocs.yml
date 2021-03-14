@@ -17,7 +17,11 @@ theme:
 nav:
     - Inicio: index.md
     - Guía de Instalación:
-        - Instalación: despliegue.md
+        - Instalación:
+          - Introducción: despliegue.md
+          - Contenedores: contenedores.md
+          - Paquete Python: pypi.md
+          - Desde las Fuentes: fuentes.md
         - Configuración: configuracion.md
         - Base de Datos:
           - Configuración de Base de Datos: database.md

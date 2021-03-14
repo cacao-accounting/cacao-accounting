@@ -48,7 +48,7 @@ Pueden colaborar de distintas formas:
 * Como desarrollador.
 * Como control de Calidad (QA).
 * [Escribiendo y mejorando la documentación](https://cacao-accounting.github.io/cacao-accounting/) o el [Manual de Usuario.](https://github.com/cacao-accounting/cacao-accounting-manual)
-* Aportando ideas de nuevas caracteristicas.
+* [Aportando ideas de nuevas caracteristicas.](https://github.com/cacao-accounting/cacao-accounting/discussions)
 * [Reportando errores.](https://github.com/cacao-accounting/cacao-accounting/issues)
 * Traduciendo.
 * Brindando guía y soporte a otros usuarios.
