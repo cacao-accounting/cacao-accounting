@@ -15,7 +15,7 @@ ENV CACAO_ACCOUNTING=True
 # Install dependencies in a layer
 COPY requirements.txt /tmp/
 RUN /usr/local/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql \
+    && /usr/local/bin/python3 -m pip --no-cache-dir install pymysql cryptography \
     && rm -rf /root/.cache/
 
 # Copy and install app
