@@ -16,9 +16,10 @@
 # - William José Moreno Reyes
 
 from cacao_accounting.run import app, run
+from cacao_accounting.metadata import DEVELOPMENT
 
-
-__all__ = ("app", "run")
+if DEVELOPMENT:
+    app.config["DEBUG"] = True
 
 if __name__ == "__main__":
     run()

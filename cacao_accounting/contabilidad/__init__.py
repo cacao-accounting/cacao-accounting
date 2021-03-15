@@ -38,7 +38,7 @@ def monedas():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=Moneda)
     PAGINA = RESULTADO.page(PAGE)
-    TITULO = "Monedas" + " - " + APPNAME
+    TITULO = "Listado de Monedas - " + " - " + APPNAME
     return render_template("contabilidad/moneda_lista.html", resultado=RESULTADO, pagina=PAGINA, titulo=TITULO)
 
 
@@ -180,8 +180,9 @@ def nueva_unidad():
 def cuentas():
     from cacao_accounting.database import Cuentas
 
+    TITULO = "Catalogo de Cuentas Contables - " + APPNAME
     catalogo = Cuentas.query.order_by(Cuentas.codigo).all()
-    return render_template("contabilidad/cuenta_lista.html", catalogo=catalogo)
+    return render_template("contabilidad/cuenta_lista.html", catalogo=catalogo, titulo=TITULO)
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")
@@ -203,7 +204,8 @@ def ccostos():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=CentroCosto)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/centro-costo_lista.html", resultado=RESULTADO, pagina=PAGINA)
+    TITULO = "Catalogo de Centros de Costos - " + APPNAME
+    return render_template("contabilidad/centro-costo_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -216,7 +218,8 @@ def proyectos():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=CentroCosto)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/proyecto_lista.html", resultado=RESULTADO, pagina=PAGINA)
+    TITULO = "Listados de Proyectos - " + APPNAME
+    return render_template("contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -229,4 +232,5 @@ def tasa_cambio():
     PAGE = request.args.get("page", default=1, type=int)
     RESULTADO = paginar_consulta(tabla=TasaDeCambio)
     PAGINA = RESULTADO.page(PAGE)
-    return render_template("contabilidad/tc_lista.html", resultado=RESULTADO, pagina=PAGINA)
+    TITULO = "Listado de Tasas de Cambio - " + APPNAME
+    return render_template("contabilidad/tc_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
