@@ -3,3 +3,4 @@
 # Bases de datos
 psycopg2-binary
 PyMySQL
+pg8000
