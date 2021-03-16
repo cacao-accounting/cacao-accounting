@@ -25,3 +25,6 @@ nav:
         - Configuración: configuracion.md
         - Base de Datos:
           - Configuración de Base de Datos: database.md
+    - Documentación para colaboradores:
+        - Codigo de Conducta: CODE_OF_CONDUCT.md
+        - Guía para Colaboradores: CONTRIBUTING.md
