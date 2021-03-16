@@ -27,7 +27,7 @@ CONFIG["DEGUG"] = True
 # Conecciones para cada tipo de base de datos.
 SQLITE = "sqlite://"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
-POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
+POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 # <-------------------------------------------------------------------------> #
 
 # <-------------------------------------------------------------------------> #
