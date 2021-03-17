@@ -16,18 +16,19 @@ jobs:
         buildah bud -t cacao-image .
     - name: Ejecutar Contenedor
       run: |
-        pwd && ls
-        mkdir cacao-pod
-        cp cacao_accounting/misc/ejemplos/nginx.conf.template  /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf
-        chmod o+r /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf
-        podman pod create --name cacao-pod -p 8080:8080 -p 3306:3306 -p 8081:80 -p 8443:443
+        # Mysql
+        podman pod create --name cacao-pod -p 8080:8080 
         podman volume create cacao-database
         podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql  -e MYSQL_ROOT_PASSWORD=cacaodb -e MYSQL_DATABASE=cacaodb -e MYSQL_USER=cacaodb -e MYSQL_PASSWORD=cacaodb -d mysql
-        podman run --pod cacao-pod --name cacao -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb -d localhost/cacao-image
-        # podman run --pod cacao-pod --name cacao-server --volume /home/runner/work/cacao-accounting/cacao-accounting/cacao-pod/nginx.conf:/etc/nginx/nginx.conf:zro -d nginx:stable
+        podman run --pod cacao-pod --name cacao-mysql -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb -d localhost/cacao-image
+        # Postgresql
+        podman pod create --name cacao-pod2 -p 8081:8080
+        podman volume create cacao-database-pg
+        podman run --pod cacao-pod2 --name cacaodb-pg --volume cacao-database-pg:/var/lib/postgresql/data -e POSTGRES_DB=cacaodb -e POSTGRES_USER=cacaodb -e POSTGRES_PASSWORD=cacaodb
+        podman run --pod cacao-pod2 --name cacao-postgresl -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb -d localhost/cacao-image
     - name: Probar Contenedor
       run: |
         sleep 10
         podman container ls
         curl localhost:8080
-        # curl localhost:8081
+        curl localhost:8081
