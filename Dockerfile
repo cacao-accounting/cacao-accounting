@@ -1,4 +1,4 @@
-FROM node:current AS js
+FROM node:alpine AS js
 COPY package.json .
 COPY yarn.lock .
 RUN yarn
