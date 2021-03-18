@@ -35,6 +35,6 @@ jobs:
         sleep 5
         podman container ls
         echo "Probando acceso a contenedor cacao-mysql"
-        curl localhost:8080
+        curl localhost:8080/development
         echo "Probando acceso a contenedor cacao-postgresl"
-        curl localhost:8081
+        curl localhost:8081/development

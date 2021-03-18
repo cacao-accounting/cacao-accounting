@@ -30,3 +30,29 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     return render_template("app.html")
+
+
+def dev_info():
+    from cacao_accounting.version import VERSION
+    from cacao_accounting.database import DBVERSION
+
+    info = {
+        "app": {
+            "version": VERSION,
+            "dbversion": DBVERSION,
+        }
+    }
+    return info
+
+
+@cacao_app.route("/development")
+def informacion_para_desarrolladores():
+    from cacao_accounting.metadata import DEVELOPMENT
+    from os import environ
+
+    if DEVELOPMENT or "CACAO_TEST" in environ:
+        return render_template("development.html", info=dev_info())
+    else:
+        from flask import redirect
+
+        return redirect("/login")

@@ -19,6 +19,7 @@
 import pytest
 import requests
 from cacao_accounting import create_app as app_factory
+from cacao_accounting.config import SQLITE
 
 
 @pytest.fixture
@@ -35,9 +36,6 @@ def client():
             "LIVESERVER_TIMEOUT": 10,
         }
     )
-    with flaskr.app.test_client() as client:
-        with flaskr.app.app_context():
-            yield client
 
 
 try:
@@ -53,6 +51,16 @@ try:
             assert "Cacao Accounting" in r.text
             assert "/static/css/signin.css" in r.text
             assert "Inicio de Sesión" in r.text
+
+        def test_development():
+            from cacao_accounting.metadata import DEVELOPMENT
+            from os import environ
+
+            r = requests.get("http://localhost:7563/development")
+            if DEVELOPMENT or "CACAO_TEST" in environ:
+                assert "desarrolladores" in r.text
+            else:
+                pass
 
         # <-------------------------------------------------------------------------------------------------------------> #
         # Aplicacion Principal

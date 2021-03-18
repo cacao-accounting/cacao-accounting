@@ -19,6 +19,12 @@ from unittest import TestCase
 import pytest
 
 
+def test_info_desarrollo():
+    from cacao_accounting.app import dev_info
+
+    assert dev_info() is not None
+
+
 def crear_db():
     from cacao_accounting import create_app
     from cacao_accounting.config import configuracion
