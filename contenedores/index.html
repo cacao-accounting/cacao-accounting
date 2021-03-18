@@ -170,6 +170,32 @@
   
 
       
+        
+  
+  
+    <li class="md-tabs__item">
+      
+      
+      <a href="../CONTRIBUTING/" class="md-tabs__link">
+        Documentación para colaboradores
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+    <li class="md-tabs__item">
+      
+      
+      <a href="../about/" class="md-tabs__link">
+        Sobre el Proyecto
+      </a>
+    </li>
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -301,6 +327,26 @@
     Crear un pod para ejecutar Cacao Accounting.
   </a>
   
+    <nav class="md-nav" aria-label="Crear un pod para ejecutar Cacao Accounting.">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mysql" class="md-nav__link">
+    MySQL
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql" class="md-nav__link">
+    Postgresql
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -393,6 +439,116 @@
   </li>
 
     
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-3" type="checkbox" id="nav-3" >
+    <label class="md-nav__link" for="nav-3">
+      Documentación para colaboradores
+      <span class="md-nav__icon md-icon"></span>
+    </label>
+    <nav class="md-nav" aria-label="Documentación para colaboradores" data-md-level="1">
+      <label class="md-nav__title" for="nav-3">
+        <span class="md-nav__icon md-icon"></span>
+        Documentación para colaboradores
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../CONTRIBUTING/" class="md-nav__link">
+      Guía para Colaboradores
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../CODE_OF_CONDUCT/" class="md-nav__link">
+      Codigo de Conducta
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../ROAD_MAP/" class="md-nav__link">
+      Mapa de Ruta
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="nav-4" type="checkbox" id="nav-4" >
+    <label class="md-nav__link" for="nav-4">
+      Sobre el Proyecto
+      <span class="md-nav__icon md-icon"></span>
+    </label>
+    <nav class="md-nav" aria-label="Sobre el Proyecto" data-md-level="1">
+      <label class="md-nav__title" for="nav-4">
+        <span class="md-nav__icon md-icon"></span>
+        Sobre el Proyecto
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../about/" class="md-nav__link">
+      Información General
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../faq/" class="md-nav__link">
+      Preguntas Frecuentes
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
   </ul>
 </nav>
                   </div>
@@ -418,6 +574,26 @@
   <a href="#crear-un-pod-para-ejecutar-cacao-accounting" class="md-nav__link">
     Crear un pod para ejecutar Cacao Accounting.
   </a>
+  
+    <nav class="md-nav" aria-label="Crear un pod para ejecutar Cacao Accounting.">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mysql" class="md-nav__link">
+    MySQL
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql" class="md-nav__link">
+    Postgresql
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -449,6 +625,7 @@ dnf -y install podman
 apt install -y podman
 </code></pre>
 <p>Una vez podman esta instalado ejecutar Cacao Accounting en un pod ejecutando:</p>
+<h3 id="mysql">MySQL</h3>
 <pre><code class="language-bash"># Creamos un pod:
 podman pod create --name cacao-pod -p 8080:8080 -p 3306:3306
 
@@ -461,7 +638,7 @@ podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql
     -e MYSQL_DATABASE=cacaodb \
     -e MYSQL_USER=cacaodb \
     -e MYSQL_PASSWORD=cacaodb \
-    -d mysql
+    -d mysql:8
 
 # Creamos el contenedor de la aplicación:
 podman run --pod cacao-pod --name cacao \
@@ -470,8 +647,31 @@ podman run --pod cacao-pod --name cacao \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
     -d quay.io/cacaoaccounting/cacaoaccounting
 </code></pre>
+<h3 id="postgresql">Postgresql</h3>
+<pre><code class="language-bash"># Creamos un pod:
+podman pod create --name cacao-pod -p 8080:8080 -p 5432:5432
+
+# Creamos un volumen para almacenar la base de datos fuera del contenedor:
+podman volume create cacao-database-pg
+
+# Creamos el contenedor para la base de datos:
+podman run --pod cacao-pod2 --name cacaodb-pg \
+    --volume cacao-database-pg:/var/lib/postgresql/data \
+    -e POSTGRES_DB=cacaodb \
+    -e POSTGRES_USER=cacaodb \
+    -e POSTGRES_PASSWORD=cacaodb \
+    -d postgres:13
+
+# Creamos el contenedor de la aplicación:
+podman run --pod cacao-pod --name cacao \
+    -e CACAO_ACCOUNTING=True \
+    -e CACAO_KEY=nsjksldknsdlkdsljdn \
+    -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
+    -d quay.io/cacaoaccounting/cacaoaccounting
+
+</code></pre>
 <p>Luego de un momento la aplicación debera estar disponible en: http://localhost:8080, en caso de
-que el contenedor no se ejecute puede reportar el error <a href="https://github.com/cacao-accounting/cacao-accounting/issues">aquí</a></p>
+que el contenedor no se ejecute puede reportar el error <a href="https://github.com/cacao-accounting/cacao-accounting/issues">aquí</a>.</p>
 <p>Para acceder a la aplicación los datos de acceso son:</p>
 <ul>
 <li>Usuario: cacao</li>
@@ -483,6 +683,8 @@ que el contenedor no se ejecute puede reportar el error <a href="https://github.
 <pre><code class="language-bash">podman pod stop cacao-pod
 podman pod start cacao-pod
 </code></pre>
+<p>Esta configuración es adecuada para uso en una red local, no se recomiendo exponer directamente el
+servidor WSGI a Internet, para eso es mejor configurar nginx como proxy inverso.</p>
                 
               
               
