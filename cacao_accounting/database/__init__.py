@@ -315,15 +315,22 @@ def verifica_coneccion_db(app):
     """
     Verifica si es posible conentarse a la base de datos.
     """
-    log.info("Verificando conexión a la base de datos.")
+    import time
+
     with app.app_context():
-        try:
-            Metadata.query.all()
-            DB_CONN = True
-            log.info("Conexión a la base de datos exitosa.")
-        except:  # noqa: E722
-            DB_CONN = False
-            log.warning("No se pudo establecer conexion a la base de datos.")
+        __inicio = time.time()
+        while (time.time() - __inicio) < 30:
+            log.info("Verificando conexión a la base de datos.")
+            try:
+                Metadata.query.all()
+                DB_CONN = True
+                log.info("Conexión a la base de datos exitosa.")
+                break
+            except:  # noqa: E722
+                DB_CONN = False
+                log.warning("No se pudo establecer conexion a la base de datos.")
+            time.sleep(1)
+            log.info("Reintentando conectar a la base de datos.")
     return DB_CONN
 
 
