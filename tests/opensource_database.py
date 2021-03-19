@@ -60,15 +60,6 @@ except:
 
 
 try:
-
-    import psycopg2
-    from sqlalchemy import create_engine
-
-    conn = psycopg2.connect("dbname='cacao' user='cacao' host='localhost' password='cacao'")
-    cur = conn.cursor()
-    cur.execute("SELECT version();")
-    records = cur.fetchall()
-
     engine = create_engine(POSTGRESQL)
     with engine.connect() as con:
         rs = con.execute("SELECT VERSION()")
