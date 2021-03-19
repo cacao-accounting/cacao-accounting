@@ -26,7 +26,7 @@ from sys import version_info
 from flask import Flask
 from flask_alembic import Alembic
 from cacao_accounting.admin import admin
-from cacao_accounting.api import apibp
+from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.bancos import bancos
@@ -85,7 +85,7 @@ def registrar_blueprints(app):
         app.register_blueprint(inventario)
         app.register_blueprint(login)
         app.register_blueprint(ventas)
-        app.register_blueprint(apibp)
+        app.register_blueprint(ajax)
         registrar_modulos_adicionales(app)
 
 

@@ -16,7 +16,5 @@
 # - William José Moreno Reyes
 
 from flask import Blueprint
-from flask_restful import Api
 
-apibp = Blueprint("api", __name__)
-api = Api(apibp)
+ajax = Blueprint("ajax", __name__)
