@@ -3,20 +3,13 @@
 
 # Crear tarball y wheel
 build
-pep517
 twine
 wheel
-zest.releaser
-zest.releaser[recommended]
 
 # Control de calidad
-beautifulsoup4
-curlylint
+black
 flake8
-pylama
 pytest
-requests
-pydocstyle
 pylint
 
 # Cobertura de código
@@ -26,6 +19,3 @@ pytest-cov
 # Docs
 mkdocs
 mkdocs-material
-
-# MySQL en Windows
-cryptography

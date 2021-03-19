@@ -1,6 +1,10 @@
 -r requirements.txt
 
 # Bases de datos
-psycopg2-binary
+
+#MySQL
 PyMySQL
+cryptography
+
+# Postgresql
 pg8000
