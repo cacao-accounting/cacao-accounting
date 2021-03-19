@@ -17,7 +17,7 @@ Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
 
 Nota: 
 * Este es un proyecto en etapa temprana de desarrollo no apta para uso en producción.
-* Hemos definido una serie de [metas y objetivos](https://github.com/cacao-accounting/cacao-accounting/blob/development/ROAD_MAP.md) para el proyecto.
+* Hemos definido una serie de [metas y objetivos](https://cacao-accounting.github.io/cacao-accounting/ROAD_MAP/) para el proyecto.
 
 Este proyecto surge de la necesidad observada en Nicaragua de contar con una solucion de software para que micro, pequeñas y medianas empresas (Pymes) cuenten con una herramienta para el procesamiento contable de sus actividades. 
 Dado el costo de soluciones de software ya existentes muchas Pymes obtan por usar software pirata que casi de forma
@@ -36,13 +36,9 @@ pueder ser usada por multiples usuarios al mismo tiempo.
 Consideramos que una ves el proyecto sea un producto usable puede tener potencial economico, no mediante el modelo
 de negocios de licenciamiento, si no con servicios conexos como implementación, capacitación, hospedaje en la nube y mantenimiento
 
-Pueden explorar el estado actual del proyecto en el siguiente link: https://cacao-accounting-mockup.herokuapp.com/accounts
-Usuario: cacao
-Contraseña: cacao
-
 ## Participar en el Proyecto:
 
-Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://github.com/cacao-accounting/cacao-accounting/blob/development/CONTRIBUTING.md) para mas detalles.
+Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://cacao-accounting.github.io/cacao-accounting/CONTRIBUTING/) para mas detalles.
 
 ## Licencia.
 

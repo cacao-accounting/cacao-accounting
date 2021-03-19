@@ -54,7 +54,7 @@ Pueden colaborar de distintas formas:
 * Brindando guía y soporte a otros usuarios.
 * Compartiendo el proyecto con otros.
 
-Al formar de la comunidad del proyecto debes seguir el [código de conducta](https://github.com/cacao-accounting/cacao-accounting/blob/master/CODE_OF_CONDUCT.md) establecido.
+Al formar de la comunidad del proyecto debes seguir el [código de conducta](CODE_OF_CONDUCT.md) establecido.
 
 ### Colaborando con el desarrollo del proyecto:
 
@@ -65,15 +65,16 @@ para aportar el proyecto, para colaborar con el proyecto necesitas:
   * [Yarn](https://yarnpkg.com/lang/en/)
   * [Python](https://www.python.org/downloads/)
 
-La versión de Python soportada es: >=3.6
+La versión minima de Python soportada es: >=3.6
 
 Tecnologías utilizadas:
+
 * Backend: [Flask](https://flask.palletsprojects.com/en/1.1.x/).
 * Frontend: [Bootstrap 5](https://v5.getbootstrap.com/).
 * ORM: [SQLAlchemy](https://www.sqlalchemy.org/).
 
-El desarrollo se realiza en la rama ```development```, una vez el proyecto sea liberado para producción la rama
-```main``` contendra la últma versión apta su uso en producción.
+El desarrollo se realiza en la rama ```development```, una vez el proyecto sea liberado para producción
+la rama ```main``` contendra la últma versión apta su uso en producción.
 
 #### Obteniendo el codigo fuente:
 
@@ -111,6 +112,25 @@ Puede verificar que la instalación fue correcta ejecutando:
 
 ```bash
 cacaoctl
+Usage: python -m flask [OPTIONS] COMMAND [ARGS]...
+
+  Interfaz de linea de comandos para la administración de Cacao Accounting.
+
+Options:
+  --version  Show the flask version
+  --help     Show this message and exit.
+
+Commands:
+  activofijo
+  cleandb     Elimina la base de datos, solo disponible para desarrollo.
+  db          Perform database migrations.
+  initdb      Crea el esquema de la base de datos.
+  routes      Show the routes for the app.
+  run         Run a development server.
+  serve       Inicio la aplicacion con waitress como servidor WSGI por...
+  shell       Run a shell in the app context.
+  version     Muestra la version actual instalada.
+
 ```
 
 #### Esquema de la base de datos
@@ -235,7 +255,7 @@ pytest
 
 ##### Configurar Base de datos para pruebas
 
-El proyecto se prueba con SQLite, MySQL 8 y Postgresql 13.
+El proyecto se prueba con SQLite, MySQL 8, Postgresql 13 y MS SQL Server.
 
 ###### MySQL
 

@@ -1,7 +1,13 @@
-# Documentación de Cacao Accounting
+# Cacao Accounting.
 
-Esta es la guía para personas interesadas es instalar Cacao Accounting,
-para usuarios favor revisar [el manual de usuario](https://github.com/cacao-accounting/cacao-accounting-manual).
+Solución Contable para la administración de:
+
+- Cuentas por Cobrar.
+- Cuentas por Pagar.
+- Inventarios.
+- Contabilidad General.
+
+[Manual de usuario](https://github.com/cacao-accounting/cacao-accounting-manual).
 
 
 
