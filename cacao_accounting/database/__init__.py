@@ -319,7 +319,7 @@ def verifica_coneccion_db(app):
 
     with app.app_context():
         __inicio = time.time()
-        while (time.time() - __inicio) < 30:
+        while (time.time() - __inicio) < 20:
             log.info("Verificando conexión a la base de datos.")
             try:
                 Metadata.query.all()
