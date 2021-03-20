@@ -8,8 +8,7 @@
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col"></th>
-        <th scope="col">ID</th>
+        <th scope="col">Código de Entidad</th>
         <th scope="col">Nombre</th>
         <th scope="col">Entidad</th>
       </tr>
@@ -19,15 +18,19 @@
     <td>
       {% import "macros.html" as macros %}
       {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-    </td>
-    <td>
-      {{ item.id }}
+      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.id) }}" class="link-dark">
+        {{ item.id }}
+      </a>
     </th>
     <td>
-      {{ item.nombre }}
+      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.id) }}" class="link-dark">
+        {{ item.nombre }}
+      </a>
     </th>
     <td>
-      {{ item.entidad }}
+      <a href="{{ url_for("contabilidad.entidad", id_entidad=item.entidad) }}" class="link-dark">
+        {{ item.entidad }}
+      </a>
     </td>
   </tr>
   {%- endfor %}
