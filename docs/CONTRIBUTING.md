@@ -225,6 +225,7 @@ Solicitamos su apoyo para adoptar [Commits Convencionales](https://www.conventio
  - docs: Actualizacion de la documentación.
  - feat: Agrega funcionalidades nuevas.
  - fix: Correción de errores.
+ - gui: Cambios que afectan la interfaz de usuario pero no la logica de negocios.
  - refactor: Modificaciones que no agregan nuevas funciones o arreglan errores.
  - style: Correcciones de Estilo.
  - test: Cambios en pruebas unitarios.
