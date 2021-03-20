@@ -141,9 +141,14 @@ class Registro:
         """
         if self.tabla:
             if identificador:
-                self.tabla.query.filter(self.tabla.id == identificador).delete()
-                self.database.session.commit()
+                try:
+                    self.tabla.query.filter(self.tabla.id == identificador).delete()
+                    self.database.session.commit()
+                    ELIMINADO = True
+                except:
+                    ELIMINADO = False
             else:
                 raise IntegrityError(ERROR3)
         else:
             raise OperationalError(ERROR2)
+        return ELIMINADO
