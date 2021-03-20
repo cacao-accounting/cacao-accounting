@@ -40,6 +40,8 @@ podman run --pod cacao-pod --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
+    -e CACAO_USER=cacaouser \
+    -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
 ``` 
 
@@ -65,6 +67,8 @@ podman run --pod cacao-pod --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
+    -e CACAO_USER=cacaouser \
+    -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
 
 ```

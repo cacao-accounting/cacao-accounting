@@ -4,9 +4,15 @@ Siguiendo las recomendaciones en [the twelve factor app](https://12factor.net/co
 es:
 
 ```bash
+# Requeridas
 $CACAO_ACCOUNTING  # Indica a la aplicación a cargar la configuración desde variables del entorno.
 $CACAO_DB          # URI para conectarse a la base de datos.
 $CACAO_KEY         # Llave única para una ejecución segura.
+# Opcionales
+$CACAO_USER        # Identificador del usuario administrador.
+                   # Si no se establece se usa "cacao" por defecto.
+$CACAO_PWD         # Contraseña del usuario administrador.
+                   # Si no se establece se usa "cacao" por defecto.
 ```
 
 ## Establecer variables del entorno requeridas:
