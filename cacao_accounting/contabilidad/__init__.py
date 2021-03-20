@@ -19,7 +19,7 @@
 Modulo de Contabilidad.
 """
 
-from flask import Blueprint, redirect, render_template, request
+from flask import Blueprint, redirect, render_template, request, flash
 from flask_login import login_required
 from cacao_accounting.consultas import paginar_consulta
 from cacao_accounting.metadata import APPNAME
@@ -121,6 +121,19 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario)
 
 
+@contabilidad.route("/accounts/entities/delete/<id_entidad>")
+@login_required
+def eliminar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+
+    e = RegistroEntidad()
+    if e.eliminar(identificador=id_entidad):
+        flash("Entidad Eliminada Correctamente.")
+    else:
+        flash("Entidad no puede ser eliminada.")
+    return redirect("/accounts/entities")
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Unidades de Negocio
 @contabilidad.route("/accounts/units")
@@ -144,6 +157,16 @@ def unidad(id_unidad):
 
     registro = Unidad.query.filter_by(id=id_unidad).first()
     return render_template("contabilidad/unidad.html", registro=registro)
+
+
+@contabilidad.route("/accounts/units/delete/<id_unidad>")
+@login_required
+def eliminar_unidad(id_unidad):
+    from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
+
+    u = RegistroUnidad()
+    u.eliminar(identificador=id_unidad)
+    return redirect("/accounts/units")
 
 
 @contabilidad.route("/accounts/units/new", methods=["GET", "POST"])

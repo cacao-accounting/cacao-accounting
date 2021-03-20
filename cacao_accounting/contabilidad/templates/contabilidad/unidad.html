@@ -1,4 +1,5 @@
 {% extends "base.html" %}
 {% block contenido %}
 <h1>{{ registro.nombre }}</h1>
+<a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_unidad", id_unidad=registro.id) }}"  type="link" >Eliminar</a>
 {% endblock %}
