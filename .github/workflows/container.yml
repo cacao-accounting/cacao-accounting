@@ -24,8 +24,8 @@ jobs:
         # Postgresql
         podman pod create --name cacao-pod2 -p 8081:8080
         podman volume create cacao-database-pg
-        podman run --pod cacao-pod2 --name cacaodb-pg --volume cacao-database-pg:/var/lib/postgresql/data -e POSTGRES_DB=cacaodb -e POSTGRES_USER=cacaodb -e POSTGRES_PASSWORD=cacaodb -d postgres:13
-        podman run --pod cacao-pod2 --name cacao-postgresl -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb -d localhost/cacao-image
+        podman run --pod cacao-pod2 --name cacaodb-pg --volume cacao-database-pg:/var/lib/postgresql/data -e CACAO_USER=cacao -e CACAO_PWD=cacao -e POSTGRES_DB=cacaodb -e POSTGRES_USER=cacaodb -e POSTGRES_PASSWORD=cacaodb -d postgres:13
+        podman run --pod cacao-pod2 --name cacao-postgresl -e CACAO_ACCOUNTING=True -e CACAO_KEY=nsjksldknsdlkdsljdn -e CACAO_USER=cacao -e CACAO_PWD=cacao -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb -d localhost/cacao-image
         sleep 10
         podman container ls
     - name: Probar Contenedor
