@@ -97,7 +97,7 @@ class Usuario(UserMixin, db.Model, BaseTabla):
     s_nombre = db.Column(db.String(80))
     p_apellido = db.Column(db.String(80))
     s_apellido = db.Column(db.String(80))
-    correo_e = db.Column(db.String(150), unique=True, nullable=False)
+    correo_e = db.Column(db.String(150), unique=True, nullable=True)
     clave_acceso = db.Column(db.LargeBinary(), nullable=False)
     tipo = db.Column(db.String(15))
     activo = db.Column(db.Boolean())

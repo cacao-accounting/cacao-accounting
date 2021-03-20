@@ -46,11 +46,32 @@ def registra_monedas(carga_rapida=False):
     log.debug("Monedas cargadas Correctamente")
 
 
+def crea_usuario_admin():
+    from os import environ
+    from cacao_accounting.auth import proteger_passwd
+    from cacao_accounting.database import Usuario, db
+
+    log.info("Creando Usuario Administrador")
+    try:
+        usuario = Usuario(
+            id=environ["CACAO_USER"],
+            clave_acceso=proteger_passwd(environ["CACAO_PWD"]),
+        )
+    except:  # noqa: E722
+        usuario = Usuario(
+            id="cacao",
+            clave_acceso=proteger_passwd("cacao"),
+        )
+    db.session.add(usuario)
+    db.session.commit()
+
+
 def base_data(carga_rapida=False):
     """
     Definición de metodo para cargar información base al sistema.
     """
     log.debug("Iniciando carga de datos base al sistema.")
+    crea_usuario_admin()
     registra_monedas(carga_rapida=carga_rapida)
     _init_modulos()
     log.debug("Batos base cargados en la base de datos.")

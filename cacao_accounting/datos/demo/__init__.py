@@ -31,11 +31,6 @@ def _demo_usuarios():
 
     usuarios = [
         Usuario(
-            id="cacao",
-            correo_e="cacao@cacao_accounting.io",
-            clave_acceso=proteger_passwd("cacao"),
-        ),
-        Usuario(
             id="admin",
             correo_e="admin@cacao_accounting.io",
             clave_acceso=proteger_passwd("admin"),
