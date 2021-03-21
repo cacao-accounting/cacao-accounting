@@ -33,22 +33,22 @@ contabilidad = {
 bancos = {
     "modulo": "cash",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 compras = {
     "modulo": "buying",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 inventario = {
     "modulo": "inventory",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 ventas = {
     "modulo": "sales",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 admin = {
     "modulo": "admin",
