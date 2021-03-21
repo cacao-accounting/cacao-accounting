@@ -300,7 +300,7 @@ def requiere_migracion_db(app):
         meta = Metadata.query.all()
 
     migrardb = False
-    while migrardb == False:  # noqa: E712
+    while migrardb is False:
         for i in meta:
             if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
                 pass

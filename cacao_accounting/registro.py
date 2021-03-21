@@ -36,7 +36,7 @@ Un registro:
 """
 # pylint: disable=not-callable
 from cacao_accounting.database import db
-from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, ERROR4, IntegrityError, OperationalError
+from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
 
 
 def validar_entidad(validar=None):
@@ -52,17 +52,6 @@ def validar_perido_contable(fecha=None):
     """
     Todo registro que deba sea relacionado a una fecha debe pertenecer a un período contable valido.
     """
-    return True
-
-
-def validar_registro_activo():
-    """
-    Verifica si un registro se encuentra en un estatus activo
-    """
-    return True
-
-
-def validar_cambio_status():
     return True
 
 
@@ -123,12 +112,9 @@ class Registro:
         """
         if self.tabla:
             if identificador:
-                if validar_cambio_status():
-                    registro = self.tabla.query.filter(self.tabla.id == identificador)
-                    registro.status = status_objetivo
-                    self.database.session.commit()
-                else:
-                    raise IntegrityError(ERROR4)
+                registro = self.tabla.query.filter(self.tabla.id == identificador)
+                registro.status = status_objetivo
+                self.database.session.commit()
             else:
                 raise IntegrityError(ERROR3)
         else:

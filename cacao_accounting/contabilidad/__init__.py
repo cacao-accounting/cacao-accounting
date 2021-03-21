@@ -116,9 +116,11 @@ def nueva_entidad():
 @login_required
 def editar_entidad(id_entidad):
     from cacao_accounting.contabilidad.forms import FormularioEntidad
+    from cacao_accounting.database import Entidad
 
+    e = Entidad.query.filter_by(id=id_entidad).first()
     formulario = FormularioEntidad()
-    return render_template("contabilidad/entidad_editar.html", form=formulario)
+    return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
 @contabilidad.route("/accounts/entities/delete/<id_entidad>")
