@@ -72,7 +72,9 @@
         </button>
         <ul class="navbar-nav px-3">
           <li class="nav-item text-nowrap">
-            <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">Salir</a>
+            <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">
+              <i class="bi bi-power" style="font-size: 1.5rem; color:IndianRed"></i>
+            </a>
           </li>
         </ul>
       </header>
@@ -80,37 +82,52 @@
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
-    <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+    <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
           <div class="position-sticky pt-3">
             <ul class="nav flex-column">
               {% if validar_modulo_activo("accounting")  -%}
 
               <li class="nav__item">
-                <a href="{{ url_for("contabilidad.conta") }}" class="nav-link active" >Contabilidad</a>
+                <a href="{{ url_for("contabilidad.conta") }}" class="nav-link" >
+                  <i class="bi bi-bar-chart"></i>
+                  Contabilidad
+                </a>
               </li>
               {%- endif %}
               {% if validar_modulo_activo("cash")  %}
 
               <li class="nav__item">
-                <a href="{{ url_for("bancos.bancos_") }}" class="nav-link active">Caja y Bancos</a>
+                <a href="{{ url_for("bancos.bancos_") }}" class="nav-link">
+                  <i class="bi bi-cash"></i>
+                  Caja y Bancos
+                </a>
               </li>
               {%- endif %}
               {% if validar_modulo_activo("buying")  %}
 
               <li class="nav__item">
-                <a href="{{ url_for("compras.compras_") }}" class="nav-link active">Compras</a>
+                <a href="{{ url_for("compras.compras_") }}" class="nav-link">
+                  <i class="bi bi-cart4"></i>
+                  Compras
+                </a>
               </li>
               {%- endif %}
               {% if validar_modulo_activo("inventory")  -%}
 
               <li class="nav__item">
-                <a href="{{ url_for("inventario.inventario_") }}" class="nav-link active">Inventarios</a>
+                <a href="{{ url_for("inventario.inventario_") }}" class="nav-link">
+                  <i class="bi bi-shop"></i>
+                  Inventarios
+                </a>
               </li>
               {%- endif %}
               {% if validar_modulo_activo("sales")  %}
 
               <li class="nav__item">
-                <a href="{{ url_for("ventas.ventas_") }}" class="nav-link active">Ventas</a>
+                <a href="{{ url_for("ventas.ventas_") }}" class="nav-link">
+                  <i class="bi bi-credit-card-2-back"></i>
+                  Ventas
+                </a>
               </li>
               {%- endif %}
               {% if modulos_extra -%}
@@ -118,7 +135,10 @@
               {% if validar_modulo_activo(modulo.nombre_modulo)  -%}
 
               <li class="nav__item">
-                <a href="{{ url_for( modulo.url ) }}" class="nav-link active">{{ modulo.nombre }} </a>
+                <a href="{{ url_for( modulo.url ) }}" class="nav-link">
+                  {{ modulo.icon}}
+                  {{ modulo.nombre }}
+                </a>
               </li>
               {%- endif %}
               {%- endfor %}
@@ -126,7 +146,10 @@
               {% if validar_modulo_activo("admin")  -%}
               
               <li class="nav__item">
-                <a href="{{ url_for("admin.admin_") }}" class="nav-link active">Administración</a>
+                <a href="{{ url_for("admin.admin_") }}" class="nav-link">
+                  <i class="bi bi-sliders"></i>
+                  Administración
+                </a>
               </li>
               {%- endif %}
             </ul>
@@ -150,5 +173,5 @@
 {% endmacro %}
 
 {% macro render_status(status=None, lista_status=None) %}
-<i class="w-50 bi bi-circle-fill" style="text-align: center ; font-size: 0.5rem; color:{{ lista_status[status].color }}"></i> 
+<i class="bi bi-circle-fill" style="text-align: center ; font-size: 0.5rem; color:{{ lista_status[status].color }}"></i> 
 {% endmacro %}

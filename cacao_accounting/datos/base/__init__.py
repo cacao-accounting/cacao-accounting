@@ -57,6 +57,7 @@ def crea_usuario_admin():
             id=environ["CACAO_USER"],
             clave_acceso=proteger_passwd(environ["CACAO_PWD"]),
         )
+        log.info("Creando usuario administrador desde variables de entorno.")
     except:  # noqa: E722
         usuario = Usuario(
             id="cacao",
