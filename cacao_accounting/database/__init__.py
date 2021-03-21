@@ -329,8 +329,9 @@ def verifica_coneccion_db(app):
             except:  # noqa: E722
                 DB_CONN = False
                 log.warning("No se pudo establecer conexion a la base de datos.")
-            time.sleep(1)
-            log.info("Reintentando conectar a la base de datos.")
+                log.info("Reintentando conectar a la base de datos.")
+            time.sleep(3)
+
     return DB_CONN
 
 
