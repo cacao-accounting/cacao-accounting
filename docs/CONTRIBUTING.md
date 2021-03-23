@@ -1,5 +1,6 @@
 # Colaborando con Cacao Accounting.
 
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 ![GitHub top language](https://img.shields.io/github/languages/top/cacao-accounting/cacao-accounting)
 ![GitHub language count](https://img.shields.io/github/languages/count/cacao-accounting/cacao-accounting)
 ![GitHub contributors](https://img.shields.io/github/contributors/cacao-accounting/cacao-accounting)
