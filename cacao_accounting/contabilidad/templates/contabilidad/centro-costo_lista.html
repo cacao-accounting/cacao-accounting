@@ -2,29 +2,7 @@
 {% block contenido %}
 <section>
   <h4>Listado de Centros de Costos.</h4>
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Centro de Costos.</a>
-  <table class="table table-sm">
-    <thead>
-      <tr>
-        <th scope="col">ID</th>
-        <th scope="col">Nombre</th>
-        <th scope="col">Entidad</th>
-      </tr>
-    </thead>
-  {% for item in pagina.object_list -%}
-  <tr>
-    <th>
-      {{ item.id }}
-    </th>
-    <th scope="row">
-      {{ item.nombre }}
-    </th>
-    <td>
-      {{ item.entidad }}
-    </td>
-  </tr>
-  {%- endfor %}
-</table>
+  
 </section>
 <section>
   {% import "macros.html" as macros %}
