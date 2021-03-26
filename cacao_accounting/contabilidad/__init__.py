@@ -200,14 +200,38 @@ def nueva_unidad():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Cuentas Contables
+
+
+def obtener_catalogo_base():
+    """
+    Utilidad para devolver el catalogo de cuentas.
+    """
+    from cacao_accounting.database import Cuentas
+
+    ctas_base = Cuentas.query.filter_by(padre=None).all()
+
+    return ctas_base
+
+
+def obtener_catalogo():
+    """
+    Utilidad para devolver el catalogo de cuentas.
+    """
+    from cacao_accounting.database import Cuentas
+
+    ctas = Cuentas.query.filter(Cuentas.padre is not None).all()
+
+    return ctas
+
+
 @contabilidad.route("/accounts/accounts")
 @login_required
 def cuentas():
-    from cacao_accounting.database import Cuentas
 
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
-    catalogo = Cuentas.query.order_by(Cuentas.codigo).all()
-    return render_template("contabilidad/cuenta_lista.html", catalogo=catalogo, titulo=TITULO)
+    return render_template(
+        "contabilidad/cuenta_lista.html", base_cuentas=obtener_catalogo_base(), cuentas=obtener_catalogo(), titulo=TITULO
+    )
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")
@@ -216,7 +240,7 @@ def cuenta(id_cta):
     from cacao_accounting.database import Cuentas
 
     registro = Cuentas.query.filter_by(codigo=id_cta).first()
-    return render_template("contabilidad/cuenta.html", registro=registro)
+    return render_template("contabilidad/cuenta.html", registro=registro, statusweb=Cuentas.status_web)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

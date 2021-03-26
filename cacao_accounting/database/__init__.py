@@ -216,6 +216,11 @@ class Cuentas(db.Model):
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
     tipo = db.Column(db.String(15))
+    status = db.Column(db.String(50), nullable=True)
+    status_web = {
+        "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
+        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
 
 
 class CentroCosto(db.Model):

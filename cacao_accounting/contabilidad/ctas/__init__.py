@@ -48,6 +48,7 @@ def cargar_catalogos(csv, padre):
             padre=cuenta["padre"],
             rubro=cuenta["rubro"],
             tipo=cuenta["tipo"],
+            status="activa",
         )
         db.session.add(registro)
         db.session.commit()

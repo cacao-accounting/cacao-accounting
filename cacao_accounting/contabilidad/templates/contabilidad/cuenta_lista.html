@@ -2,5 +2,23 @@
 {% block contenido %}
 <section>
   <h4>Catalogo de Cuentas Contables.</h4>
+  <ol class="tree">
+  {%- for cta in base_cuentas -%}
+      <li>
+        <label for="{{ cta.codigo }}">
+          <a href="{{ url_for("contabilidad.cuenta", id_cta=cta.codigo) }}" class="link-dark">
+            {{ cta.codigo + " - " + cta.nombre }}
+          </a>
+        </label>
+        <input type="checkbox" id="{{ cta.codigo }}" />
+        <ol>
+          <li><a href="">File 1</a></li>
+        </ol>
+      </li>
+
+    {%- endfor -%}
+    </ol>
+    
 </section>
 {% endblock %}
+

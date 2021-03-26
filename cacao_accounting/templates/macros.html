@@ -8,7 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Aplicación Contable.">
     <meta name="author" content="William Moreno Reyes">
-    
+
+    <!-- Código local -->
+    <link href="{{ url_for('static', filename='css/cacaoaccounting.css') }}" rel="stylesheet">
 
     <!-- Bootstrap core CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
@@ -16,10 +18,6 @@
   
     <!-- Bootstrap Font -->
     <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
-
-    <!-- Código local -->
-    <script src="{{ url_for('static', filename='js/cacaoaccounting.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/cacaoaccounting.css') }}">
 
     <!-- Favicons -->
     <link rel="apple-touch-icon" sizes="57x57" href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
