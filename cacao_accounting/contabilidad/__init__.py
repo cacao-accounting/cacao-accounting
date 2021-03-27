@@ -219,7 +219,7 @@ def obtener_catalogo():
     """
     from cacao_accounting.database import Cuentas
 
-    ctas = Cuentas.query.filter(Cuentas.padre != None).all()
+    ctas = Cuentas.query.filter(Cuentas.padre != None).all()  # noqa: E711
 
     return ctas
 
