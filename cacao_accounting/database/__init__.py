@@ -195,7 +195,7 @@ class Cuentas(db.Model):
     La base de contabilidad es el catalogo de cuentas.
     """
 
-    __table_args__ = (db.UniqueConstraint("id", "codigo", name="cta_unica"),)
+    __table_args__ = (db.UniqueConstraint("id", name="cta_unica"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
@@ -204,7 +204,7 @@ class Cuentas(db.Model):
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(db.String(50), unique=True)
+    codigo = db.Column(db.String(50),)
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
