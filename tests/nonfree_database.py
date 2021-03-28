@@ -4,7 +4,7 @@ import pyodbc
 from cacao_accounting import create_app
 from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
-from database import desplegar_base_de_datos, Entidad, CentroCosto, Unidad, Proyecto, Moneda
+from database import desplegar_base_de_datos, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +49,7 @@ if mssql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = MSSQL
         app.app_context().push()
 
-    class TestSQLServer(BaseSQLServer, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
+    class TestSQLServer(BaseSQLServer, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
         def test_db(self):
             URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert URL.startswith("mssql")

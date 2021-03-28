@@ -202,36 +202,71 @@ def nueva_unidad():
 # Cuentas Contables
 
 
-def obtener_catalogo_base():
+def obtener_catalogo_base(entidad=None):
     """
     Utilidad para devolver el catalogo de cuentas.
     """
-    from cacao_accounting.database import Cuentas
+    from cacao_accounting.database import Cuentas, Entidad
 
-    ctas_base = Cuentas.query.filter_by(padre=None).all()
+    if entidad:
+        ctas_base = Cuentas.query.filter(Cuentas.padre == None, Cuentas.entidad == entidad).all()  # noqa: E711
+    else:
+        ctas_base = (
+            Cuentas.query.join(Entidad).filter(Cuentas.padre == None, Entidad.status == "predeterminada").all()  # noqa: E711
+        )  # noqa: E711
 
     return ctas_base
 
 
-def obtener_catalogo():
+def obtener_catalogo(entidad=None):
     """
     Utilidad para devolver el catalogo de cuentas.
     """
-    from cacao_accounting.database import Cuentas
+    from cacao_accounting.database import Cuentas, Entidad
 
-    ctas = Cuentas.query.filter(Cuentas.padre != None).all()  # noqa: E711
+    if entidad:
+        ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad).all()  # noqa: E711
+    else:
+        ctas = (
+            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()  # noqa: E711
+        )  # noqa: E711
 
     return ctas
 
 
-@contabilidad.route("/accounts/accounts")
+def obtener_entidades():
+    """
+    Utilidad para obtener listado de entidades.
+    """
+    from cacao_accounting.database import Entidad
+
+    entidades = Entidad.query.all()
+    return entidades
+
+
+@contabilidad.route("/accounts/accounts", methods=["GET", "POST"])
 @login_required
 def cuentas():
 
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
-    return render_template(
-        "contabilidad/cuenta_lista.html", base_cuentas=obtener_catalogo_base(), cuentas=obtener_catalogo(), titulo=TITULO
-    )
+
+    if request.method or "entidad" in request.args:
+        return render_template(
+            "contabilidad/cuenta_lista.html",
+            base_cuentas=obtener_catalogo_base(entidad=request.args.get("entidad")),
+            cuentas=obtener_catalogo(entidad=request.args.get("entidad")),
+            entidades=obtener_entidades(),
+            titulo=TITULO,
+        )
+
+    else:
+        return render_template(
+            "contabilidad/cuenta_lista.html",
+            base_cuentas=obtener_catalogo_base(),
+            cuentas=obtener_catalogo(),
+            entidades=obtener_entidades(),
+            titulo=TITULO,
+        )
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")

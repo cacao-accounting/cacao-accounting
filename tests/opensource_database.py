@@ -3,7 +3,7 @@ from unittest import TestCase
 from cacao_accounting import create_app
 from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
-from database import desplegar_base_de_datos, Entidad, CentroCosto, Unidad, Proyecto, Moneda
+from database import desplegar_base_de_datos, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +86,7 @@ class BaseSQLite:
     app.app_context().push()
 
 
-class TestSQLite(BaseSQLite, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
+class TestSQLite(BaseSQLite, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
     def test_db(self):
         URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert URL.startswith("sqlite")
@@ -103,7 +103,7 @@ if mysql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL
         app.app_context().push()
 
-    class TestMySQL(BaseMySQL, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
+    class TestMySQL(BaseMySQL, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
         def test_db(self):
             URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert URL.startswith("mysql")
@@ -120,7 +120,7 @@ if postgresql_disponible:
         app.config["SQLALCHEMY_DATABASE_URI"] = POSTGRESQL
         app.app_context().push()
 
-    class TestPostgresl(BasePostgresl, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda):
+    class TestPostgresl(BasePostgresl, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
         def test_db(self):
             URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert URL.startswith("postgresql")

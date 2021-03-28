@@ -169,7 +169,7 @@ class TestBasicos(TestCase):
 
     def test_import_name(self):
         assert self.app.import_name == "cacao_accounting"
-
+    
 
 class TestExection(TestCase):
     def test_no_data(self):
