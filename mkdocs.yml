@@ -33,7 +33,7 @@ nav:
     - Documentación para colaboradores:
         - Guía para Colaboradores: CONTRIBUTING.md
         - Codigo de Conducta: CODE_OF_CONDUCT.md
-        - Mapa de Ruta: ROAD_MAP.md
+        - Cambios: changelog.md
     - Sobre el Proyecto:
         - Información General: about.md
         - Preguntas Frecuentes: faq.md
