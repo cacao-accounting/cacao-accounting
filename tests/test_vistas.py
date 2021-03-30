@@ -19,24 +19,74 @@
 import pytest
 import requests
 from cacao_accounting import create_app as app_factory
-from cacao_accounting.config import SQLITE
+from cacao_accounting.database import db
+from cacao_accounting.datos import base_data, demo_data
 
 
 @pytest.fixture
-def client():
+def app():
     app = app_factory(
         {
-            "WTF_CSRF_ENABLED": False,
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": SQLITE,
-            "SECRET_KEY": "jg2ja6ñl3ssl5dak7sj1dkl8asj4fk8jj9",
+            "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "SESSION_PROTECTION": None,
-            "LIVESERVER_PORT": 4589,
-            "LIVESERVER_TIMEOUT": 10,
+            "TESTING": True,
+            "WTF_CSRF_ENABLED": False,
         }
     )
+    with app.app_context():
+        db.create_all()
+        base_data()
+        demo_data()
+    yield app
 
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+@pytest.fixture
+def runner(app):
+    return app.test_cli_runner()
+
+
+class AuthActions(object):
+    def __init__(self, client):
+        self._client = client
+
+    def login(self):
+        return self._client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+    def logout(self):
+        return self._client.get("/salir")
+
+
+@pytest.fixture
+def auth(client):
+    return AuthActions(client)
+
+
+def test_login(client):
+    response = client.get("/login")
+    assert b"Cacao" in response.data
+
+
+def test_app(client, auth):
+    auth.login()
+    response = client.get("/app")
+    assert b"Aplicacion Contable" in response.data
+
+def test_contabilidad(client, auth):
+    auth.login()
+    response = client.get("/accounts")
+    assert b"Contabilidad." in response.data
+
+
+def test_listado_entidades(client, auth):
+    auth.login()
+    response = client.get("/accounts/entities")
+    assert b"Listado de Entidades." in response.data
 
 try:
     # Ejecute python tests/server.py en una terminal distinta para ejecutar estas pruebas unitarias

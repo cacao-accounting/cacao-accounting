@@ -193,15 +193,19 @@ class Moneda:
         r = RegistroMoneda()
         r.crear(MONEDA)
 
+
 class Varios:
     def test_obtener_ctas_base(self):
         from cacao_accounting.contabilidad import obtener_catalogo_base
+
         obtener_catalogo_base()
-    
+
     def test_obtener_ctas(self):
         from cacao_accounting.contabilidad import obtener_catalogo
+
         obtener_catalogo()
-    
+
     def test_obtener_entidades(self):
         from cacao_accounting.contabilidad import obtener_entidades
+
         obtener_entidades()
