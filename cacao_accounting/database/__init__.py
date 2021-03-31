@@ -204,7 +204,9 @@ class Cuentas(db.Model):
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(db.String(50),)
+    codigo = db.Column(
+        db.String(50),
+    )
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
