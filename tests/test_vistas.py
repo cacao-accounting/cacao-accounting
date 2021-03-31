@@ -23,7 +23,7 @@ from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
 
 
-@pytest.fixture
+@pytest.fixture(scope="module", autouse=True)
 def app():
     app = app_factory(
         {
@@ -35,6 +35,7 @@ def app():
         }
     )
     with app.app_context():
+        db.drop_all()
         db.create_all()
         base_data()
         demo_data()
@@ -77,6 +78,7 @@ def test_app(client, auth):
     response = client.get("/app")
     assert b"Aplicacion Contable" in response.data
 
+
 def test_contabilidad(client, auth):
     auth.login()
     response = client.get("/accounts")
@@ -87,6 +89,48 @@ def test_listado_entidades(client, auth):
     auth.login()
     response = client.get("/accounts/entities")
     assert b"Listado de Entidades." in response.data
+
+
+def test_nueva_entidad(client, auth):
+    auth.login()
+    response = client.get("/accounts/entities/new")
+    assert b"Crear Nueva Entidad." in response.data
+
+
+def test_entidad(client, auth):
+    auth.login()
+    response = client.get("/accounts/entity/cacao")
+    assert b"Datos Generales:" in response.data
+    assert b"Choco Sonrisas Sociedad Anonima" in response.data
+    response = client.get("/accounts/entity/dulce")
+    assert b"Mundo Sabor Sociedad Anonima" in response.data
+
+
+def test_listado_unidades(client, auth):
+    auth.login()
+    response = client.get("/accounts/units")
+    assert b"Listado de Unidades de Negocio." in response.data
+
+
+def test_unidad(client, auth):
+    auth.login()
+    response = client.get("/accounts/unit/masaya")
+    assert b"Masaya" in response.data
+    response = client.get("/accounts/unit/matriz")
+    assert b"Matriz" in response.data
+
+
+def test_catalogoctas(client, auth):
+    auth.login()
+    response = client.get("/accounts/accounts")
+    assert b"Catalogo de Cuentas Contables." in response.data
+
+
+def test_listado_monedas(client, auth):
+    auth.login()
+    responde = client.get("/currencies")
+
+
 
 try:
     # Ejecute python tests/server.py en una terminal distinta para ejecutar estas pruebas unitarias
