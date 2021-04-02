@@ -1,12 +1,13 @@
 [![Contenedores](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml/badge.svg)](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml)
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 
-Existe una imagen de imagen OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en [https://quay.io/repository/cacaoaccounting/cacaoaccounting](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
+Existe una imagen de imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en [https://quay.io/repository/cacaoaccounting/cacaoaccounting](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
 
 ## Crear un pod para ejecutar Cacao Accounting.
 
 Podman es una herramienta para poder ejecutar pods, que son conjuntos de contenedores, con la cual 
-podemos administrar Cacao Accounting utilizando contenedores, para instalar podman ejecutar:
+podemos facilitar la administración de aplicaciones que requieren mas de un contenedor para operar,
+para instalar podman ejecutar:
 
 ```bash
 # Fedora, CentOS ...
@@ -40,8 +41,8 @@ podman run --pod cacao-pod --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
-    -e CACAO_USER=cacaouser \
-    -e CACAO_PWD=cacappwd \
+    -e CACAO_USER=cacaouser \ # Si no es especifica utiliza cacao por defecto
+    -e CACAO_PWD=cacappwd \ # Si no es especifica utiliza cacao por defecto
     -d quay.io/cacaoaccounting/cacaoaccounting
 ``` 
 
@@ -67,19 +68,14 @@ podman run --pod cacao-pod --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
-    -e CACAO_USER=cacaouser \
-    -e CACAO_PWD=cacappwd \
+    -e CACAO_USER=cacaouser \ # Si no es especifica utiliza cacao por defecto
+    -e CACAO_PWD=cacappwd \ # Si no es especifica utiliza cacao por defecto
     -d quay.io/cacaoaccounting/cacaoaccounting
 
 ```
 
 Luego de un momento la aplicación debera estar disponible en: http://localhost:8080, en caso de
 que el contenedor no se ejecute puede reportar el error [aquí](https://github.com/cacao-accounting/cacao-accounting/issues).
-
-Para acceder a la aplicación los datos de acceso son:
-
-- Usuario: cacao
-- Contraseña: cacao
 
 ```bash
 Cacao Accounting es software en desarrollo no apto para uso en producción.
