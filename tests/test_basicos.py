@@ -19,6 +19,10 @@ from unittest import TestCase
 import pytest
 
 
+def test_dummy():
+    import cacao_accounting
+
+
 def test_info_desarrollo():
     from cacao_accounting.app import dev_info
 
@@ -169,6 +173,11 @@ class TestBasicos(TestCase):
 
     def test_import_name(self):
         assert self.app.import_name == "cacao_accounting"
+
+    def test_config(self):
+        from cacao_accounting.config import configuracion
+
+        assert configuracion is not None
 
 
 class TestExection(TestCase):
