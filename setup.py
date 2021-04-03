@@ -64,6 +64,7 @@ setup(
         "flask-babel",
         "flask-login",
         "flask-sqlalchemy",
+        "flask-talisman",
         "flask-wtf",
         "loguru",
         "sqlalchemy",
