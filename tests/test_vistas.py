@@ -32,6 +32,8 @@ def app():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
+            "DEBUG": True,
+            "DESKTOPMODE": False,
         }
     )
     with app.app_context():
@@ -40,6 +42,11 @@ def app():
         base_data()
         demo_data()
     yield app
+
+
+def test_config(app):
+    assert app.config["DEBUG"] == True
+
 
 
 @pytest.fixture
