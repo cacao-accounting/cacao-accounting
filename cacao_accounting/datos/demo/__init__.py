@@ -163,7 +163,7 @@ def _demo_unidades():
 
 def _catalogo():
     from cacao_accounting.contabilidad.ctas import catalogo_base, catalog_dev, cargar_catalogos
-    
+
     log.debug("Cargando catalogos de cuentas.")
     cargar_catalogos(catalog_dev, "cacao")
     cargar_catalogos(catalogo_base, "dulce")
