@@ -42,8 +42,10 @@ def cargar_catalogos(catalogo, entidad):
             cuenta["grupo"] = True
         else:
             cuenta["grupo"] = False
+
         if cuenta["padre"] == "":
             cuenta["padre"] = None
+
         registro = Cuentas(
             activa=True,
             habilitada=True,
