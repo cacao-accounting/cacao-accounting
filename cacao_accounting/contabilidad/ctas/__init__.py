@@ -15,24 +15,29 @@
 # Contributors:
 # - William José Moreno Reyes
 
+from collections import namedtuple
 from csv import DictReader
 from os.path import join
 from cacao_accounting.database import db, Cuentas
 from cacao_accounting.tools import home
 
+
+CatalogoCtas = namedtuple("CatalogoCtas", ["file", "pais", "idioma"])
 dir_ctas = join(home, "contabilidad", "ctas", "catalogos")
-catalogo_base = join(dir_ctas, "base.csv")
-catalog_dev = join(dir_ctas, "base-dev.csv")
+
+# Inicia deficion de catalogos de cuentas.
+base = CatalogoCtas(file=join(dir_ctas, "base.csv"), pais=None, idioma="ES")
+desarrollo = CatalogoCtas(file=join(dir_ctas, "base-dev.csv"), pais=None, idioma="ES")
 
 
-def cargar_catalogos(csv, padre):
+def cargar_catalogos(catalogo, entidad):
     """
     Utilitario para cargar un catalogo de cuentas al sistema.
 
     Debe ser un archivo .cvs con los encabezados iguales a la base de datos.
     """
-    catalogo = DictReader(open(csv, "r", encoding="utf-8"))
-    for cuenta in catalogo:
+    cuentas = DictReader(open(catalogo.file, "r", encoding="utf-8"))
+    for cuenta in cuentas:
         if cuenta["grupo"] == "1":
             cuenta["grupo"] = True
         else:
@@ -42,7 +47,7 @@ def cargar_catalogos(csv, padre):
         registro = Cuentas(
             activa=True,
             habilitada=True,
-            entidad=padre,
+            entidad=entidad,
             codigo=cuenta["codigo"],
             nombre=cuenta["nombre"],
             grupo=cuenta["grupo"],
