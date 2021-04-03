@@ -3,11 +3,13 @@
 
 Existe una imagen de imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en [https://quay.io/repository/cacaoaccounting/cacaoaccounting](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
 
-## Crear un pod para ejecutar Cacao Accounting.
+## Instalar podman para la administración de contenedores.
 
-Podman es una herramienta para poder ejecutar pods, que son conjuntos de contenedores, con la cual 
-podemos facilitar la administración de aplicaciones que requieren mas de un contenedor para operar,
-para instalar podman ejecutar:
+Recomendamos ```podman``` para ejecutar Cacao Accounting utilizando contenedores. Podman es
+permite ejecutar contenedores en ```pods```, un pod es un conjunto de contenedores que los que
+se ejecutan en conjunto con lo cual podemos facilitar la administración de aplicaciones que
+requieren mas de un contenedor para operar, para instalar podman debemos contar con acceso a
+instalar paquetes en su sistema operativo:
 
 ```bash
 # Fedora, CentOS ...
@@ -17,9 +19,10 @@ dnf -y install podman
 apt install -y podman
 ```
 
-Una vez podman esta instalado ejecutar Cacao Accounting en un pod ejecutando:
+Una vez podman esta instalado podemos ejecutar Cacao Accounting en un pod utilizando uno de
+los ejemplos siguientes.
 
-### MySQL
+## Utilizando MySQL como motor de base de datos.
 
 ```bash
 # Creamos un pod:
@@ -37,7 +40,7 @@ podman run --pod cacao-mysql --name cacaodb --volume cacao-database:/var/lib/mys
     -d mysql:8
 
 # Creamos el contenedor de la aplicación:
-podman run --pod cacao-mysql --init --name cacao \
+podman run --pod cacao-mysql --rm --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
@@ -46,7 +49,7 @@ podman run --pod cacao-mysql --init --name cacao \
     -d quay.io/cacaoaccounting/cacaoaccounting
 ``` 
 
-### Postgresql
+## Utilizando Postgresql como motor de base de datos.
 
 ```bash
 # Creamos un pod:
@@ -64,7 +67,7 @@ podman run --pod cacao-psql --name cacaodb-pg \
     -d postgres:13
 
 # Creamos el contenedor de la aplicación:
-podman run --pod cacao-psql --init --name cacao \
+podman run --pod cacao-psql --rm --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
@@ -74,8 +77,8 @@ podman run --pod cacao-psql --init --name cacao \
 
 ```
 
-Luego de un momento la aplicación debera estar disponible en: http://localhost:8080, en caso de
-que el contenedor no se ejecute puede reportar el error [aquí](https://github.com/cacao-accounting/cacao-accounting/issues).
+Luego de un momento la aplicación debera estar disponible en: http://localhost:8080, en caso
+que el contenedor no se ejecute puede favor de reportar el error [aquí](https://github.com/cacao-accounting/cacao-accounting/issues).
 
 ```bash
 Cacao Accounting es software en desarrollo no apto para uso en producción.
@@ -88,5 +91,6 @@ podman pod stop
 podman pod start 
 ```
 
-Esta configuración es adecuada para uso en una red local, no se recomiendo exponer directamente el
-servidor WSGI a Internet, para eso es mejor configurar nginx como proxy inverso.
+Esta configuración es adecuada para uso en una red local, no se recomiendo el exponer
+directamente el servidor WSGI a Internet, para eso es mejor configurar nginx como proxy
+inverso.
