@@ -20,7 +20,7 @@ Página principal de la aplicación.
 """
 
 
-from flask import Blueprint, render_template
+from flask import Blueprint, current_app, render_template
 from flask_login import login_required
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
@@ -30,6 +30,25 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     return render_template("app.html")
+
+
+def bd_actual():
+    """
+    Devuelve el motor de base de datos según la cadena de conexión establecida
+    en la configuración de la aplicación actual.
+    """
+    uri = str(current_app.config["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        db = "Sqlite"
+    elif uri.startswith("postgresql"):
+        db = "Postgresql"
+    elif uri.startswith("mysql"):
+        db = "MySQL"
+    elif uri.startswith("mssql"):
+        db = "MS SQL Server"
+    else:
+        db = None
+    return db
 
 
 def dev_info():
@@ -51,7 +70,7 @@ def informacion_para_desarrolladores():
     from os import environ
 
     if DEVELOPMENT or "CACAO_TEST" in environ:
-        return render_template("development.html", info=dev_info())
+        return render_template("development.html", info=dev_info(), db=bd_actual())
     else:
         from flask import redirect
 
