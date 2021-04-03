@@ -23,13 +23,13 @@ Una vez podman esta instalado ejecutar Cacao Accounting en un pod ejecutando:
 
 ```bash
 # Creamos un pod:
-podman pod create --name cacao-pod -p 8080:8080 -p 3306:3306
+podman pod create --name cacao-mysql -p 8080:8080 -p 3306:3306
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-database
 
 # Creamos el contenedor para la base de datos:
-podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql  \
+podman run --pod cacao-mysql --name cacaodb --volume cacao-database:/var/lib/mysql  \
     -e MYSQL_ROOT_PASSWORD=cacaodb \
     -e MYSQL_DATABASE=cacaodb \
     -e MYSQL_USER=cacaodb \
@@ -37,7 +37,7 @@ podman run --pod cacao-pod --name cacaodb --volume cacao-database:/var/lib/mysql
     -d mysql:8
 
 # Creamos el contenedor de la aplicación:
-podman run --pod cacao-pod --init --name cacao \
+podman run --pod cacao-mysql --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
@@ -50,13 +50,13 @@ podman run --pod cacao-pod --init --name cacao \
 
 ```bash
 # Creamos un pod:
-podman pod create --name cacao-pod -p 8080:8080 -p 5432:5432
+podman pod create --name cacao-psql -p 8080:8080 -p 5432:5432
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-database-pg
 
 # Creamos el contenedor para la base de datos:
-podman run --pod cacao-pod2 --name cacaodb-pg \
+podman run --pod cacao-psql --name cacaodb-pg \
     --volume cacao-database-pg:/var/lib/postgresql/data \
     -e POSTGRES_DB=cacaodb \
     -e POSTGRES_USER=cacaodb \
@@ -64,7 +64,7 @@ podman run --pod cacao-pod2 --name cacaodb-pg \
     -d postgres:13
 
 # Creamos el contenedor de la aplicación:
-podman run --pod cacao-pod --init --name cacao \
+podman run --pod cacao-psql --init --name cacao \
     -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
@@ -84,8 +84,8 @@ Cacao Accounting es software en desarrollo no apto para uso en producción.
 Para administrar el pod podemos ejecutar:
 
 ```bash
-podman pod stop cacao-pod
-podman pod start cacao-pod
+podman pod stop 
+podman pod start 
 ```
 
 Esta configuración es adecuada para uso en una red local, no se recomiendo exponer directamente el

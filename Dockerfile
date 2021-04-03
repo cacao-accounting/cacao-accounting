@@ -1,7 +1,7 @@
 FROM registry.access.redhat.com/ubi8/ubi-minimal AS js
-RUN rpm --import https://dl.yarnpkg.com/rpm/pubkey.gpg 
-RUN curl -sL https://dl.yarnpkg.com/rpm/yarn.repo -o /etc/yum.repos.d/yarn.repo 
-RUN microdnf -y install yarn
+RUN rpm --import https://dl.yarnpkg.com/rpm/pubkey.gpg \
+    && curl -sL https://dl.yarnpkg.com/rpm/yarn.repo -o /etc/yum.repos.d/yarn.repo \
+    && microdnf -y install yarn
 COPY package.json .
 COPY yarn.lock .
 RUN yarn
@@ -15,7 +15,8 @@ ENV PYTHONUNBUFFERED = 1
 ENV DOCKERISED=True
 ENV CACAO_ACCOUNTING=True
 
-RUN microdnf install -y --nodocs python3 python3-pip python3-cryptography
+RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cryptography \
+    && microdnf clean all
 
 # No ejecutar como root
 # RUN useradd cacao
@@ -25,7 +26,7 @@ RUN microdnf install -y --nodocs python3 python3-pip python3-cryptography
 COPY requirements.txt /tmp/
 RUN /usr/bin/python3 --version \
     && /usr/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && /usr/bin/python3 -m pip --no-cache-dir install pg8000 pymysql\
+    && /usr/bin/python3 -m pip --no-cache-dir install pg8000 pymysql \
     && rm -rf /root/.cache/
 
 # Copy and install app

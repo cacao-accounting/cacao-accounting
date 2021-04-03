@@ -2,6 +2,8 @@
 .git
 .github
 .gitignore
+.vscode
+
 
 # Documentacion
 mkdocs.yml
@@ -14,12 +16,10 @@ docker-compose.yml
 # Archivos para colaboradores
 .coveragerc
 .pylintrc
+codecov.yml
 venv
 tests
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-ROAD_MAP.md
 development.txt
-Developer_Certificate_of_Origin
 requirements-databases.txt
 *.yml
+*.db
