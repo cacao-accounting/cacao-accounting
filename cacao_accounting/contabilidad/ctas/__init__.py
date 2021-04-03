@@ -22,6 +22,7 @@ from cacao_accounting.tools import home
 
 dir_ctas = join(home, "contabilidad", "ctas", "catalogos")
 catalogo_base = join(dir_ctas, "base.csv")
+catalog_dev = join(dir_ctas, "base-dev.csv")
 
 
 def cargar_catalogos(csv, padre):

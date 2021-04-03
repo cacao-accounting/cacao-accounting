@@ -29,6 +29,7 @@ def _demo_usuarios():
     from cacao_accounting.database import Usuario
     from cacao_accounting.auth import proteger_passwd
 
+    log.debug("Creando usuarios de prueba.")
     usuarios = [
         Usuario(
             id="admin",
@@ -123,6 +124,7 @@ def _demo_entidad():
     """Entidad de demostración"""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
+    log.debug("Creando entidades de prueba.")
     instancia_entidad = RegistroEntidad()
     instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO1)
     instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO2)
@@ -133,6 +135,7 @@ def _demo_unidades():
     """Unidades de Negocio de Demostración"""
     from cacao_accounting.database import Unidad
 
+    log.debug("Cargando unidades de negocio de prueba.")
     unidades = [
         Unidad(
             nombre="Casa Matriz",
@@ -159,15 +162,18 @@ def _demo_unidades():
 
 
 def _catalogo():
-    from cacao_accounting.contabilidad.ctas import catalogo_base, cargar_catalogos
-
-    cargar_catalogos(catalogo_base, "cacao")
+    from cacao_accounting.contabilidad.ctas import catalogo_base, catalog_dev, cargar_catalogos
+    
+    log.debug("Cargando catalogos de cuentas.")
+    cargar_catalogos(catalog_dev, "cacao")
+    cargar_catalogos(catalogo_base, "dulce")
+    cargar_catalogos(catalogo_base, "cafe")
 
 
 def demo_data():
-    log.debug("Iniciando carda de empresa de prueba.")
+    log.debug("Iniciando carga de entidades de prueba.")
     _demo_usuarios()
     _demo_entidad()
     _demo_unidades()
     _catalogo()
-    log.debug("Empresa de pruebas creada correctamente.")
+    log.debug("Entidades de pruebas creada correctamente.")
