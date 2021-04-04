@@ -15,7 +15,7 @@ ENV PYTHONUNBUFFERED = 1
 ENV DOCKERISED=True
 ENV CACAO_ACCOUNTING=True
 
-RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cryptography \
+RUN microdnf install -y --nodocs --best --refresh python3 python3-cryptography \
     && microdnf clean all
 
 # No ejecutar como root
@@ -24,10 +24,12 @@ RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cr
 
 # Install dependencies in a layer
 COPY requirements.txt /tmp/
-RUN /usr/bin/python3 --version \
+RUN microdnf install -y --nodocs --best --refresh python3-pip \
+    && /usr/bin/python3 --version \
     && /usr/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
     && /usr/bin/python3 -m pip --no-cache-dir install pg8000 pymysql \
-    && rm -rf /root/.cache/
+    && rm -rf /root/.cache/ \
+    && microdnf remove -y python3-pip && microdnf clean all
 
 # Copy and install app
 COPY . /app
