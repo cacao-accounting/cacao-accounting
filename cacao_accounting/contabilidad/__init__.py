@@ -244,6 +244,19 @@ def obtener_entidades():
     return entidades
 
 
+def obtener_entidad(ent=None):
+    """
+    Obtiene la entidad actual o la entidad predeterminada.
+    """
+    from cacao_accounting.database import Entidad
+
+    if ent:
+        entidad = Entidad.query.filter(Entidad.id == ent).first()
+    else:
+        entidad = Entidad.query.filter(Entidad.predeterminada == True).first()  # noqa: E712
+    return entidad
+
+
 @contabilidad.route("/accounts/accounts", methods=["GET", "POST"])
 @login_required
 def cuentas():
@@ -256,6 +269,7 @@ def cuentas():
             base_cuentas=obtener_catalogo_base(entidad=request.args.get("entidad")),
             cuentas=obtener_catalogo(entidad=request.args.get("entidad")),
             entidades=obtener_entidades(),
+            entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,
         )
 
@@ -265,6 +279,7 @@ def cuentas():
             base_cuentas=obtener_catalogo_base(),
             cuentas=obtener_catalogo(),
             entidades=obtener_entidades(),
+            entidad=obtener_entidad(),
             titulo=TITULO,
         )
 

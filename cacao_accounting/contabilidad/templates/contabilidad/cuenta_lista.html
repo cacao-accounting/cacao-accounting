@@ -76,16 +76,24 @@
 <section>
   <h4>Catalogo de Cuentas Contables.</h4>
   <form>
-    <select class="form-control" id="entidad" name="entidad">
-      {%- for entidad in entidades -%}
-      <option value="{{ entidad.id }}">{{ entidad.nombre_comercial }}</option>
-      {%- endfor -%}
-    </select>
-    <button type="submit" class="btn btn-primary btn-sm">
-      Seleccionar entidad
-    </button>
+    <h6>Seleccionar Entidad.</h6>
+    <div class="row">
+      <div class="col-8">
+        <select class="form-control" id="entidad" name="entidad">
+          {%- for entidad in entidades -%}
+          <option value="{{ entidad.id }}">{{ entidad.nombre_comercial }}</option>
+          {%- endfor -%}
+        </select>
+      </div>
+      <div class="col-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          Actualizar
+        </button>
+      </div>
+    </div>
   </form>
   </br>
+  <p><b>Entidad Actual:</b> {{ entidad.razon_social }}</p>
   <ol class="tree">
   {%- for ctabase in base_cuentas -%}
       <li>
