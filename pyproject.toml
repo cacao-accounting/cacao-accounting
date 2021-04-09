@@ -5,3 +5,16 @@ build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 127
+
+[tool.curlylint]
+include = '\.(html|jinja)$'
+exclude = '''
+(
+  /(
+      \.eggs           # exclude a few common directories in the root of the project
+    | \.git
+    | \.venv
+  )/
+  | webpack-stats.html # also separately exclude a file named webpack-stats.html in the root of the project
+)
+'''

@@ -73,7 +73,7 @@
 </style>
 
 
-<section>
+
   <h4>Catalogo de Cuentas Contables.</h4>
   <form>
     <h6>Seleccionar Entidad.</h6>
@@ -92,7 +92,6 @@
       </div>
     </div>
   </form>
-  </br>
   <p><b>Entidad Actual:</b> {{ entidad.razon_social }}</p>
   <ol class="tree">
   {%- for ctabase in base_cuentas -%}
@@ -211,7 +210,5 @@
       </li>
     {%- endfor -%}
     </ol>
-    
-</section>
 {% endblock %}
 

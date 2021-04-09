@@ -74,6 +74,9 @@ jobs:
       run: flake8 cacao_accounting
     - name: Analysing the code with pylint
       run: pylint cacao_accounting 
+    - name: HTML Lint
+      run: |
+        curlylint cacao_accounting/templates
     - name: Install pyodbc
       run: |
         sudo su -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - "
