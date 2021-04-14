@@ -42,7 +42,6 @@ from cacao_accounting.ventas import ventas
 
 
 alembic = Alembic()
-talisman = Talisman()
 
 
 def command():
@@ -72,7 +71,9 @@ def iniciar_extenciones(app):
     alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
-    talisman.init_app(app)
+    if not DEVELOPMENT:
+        talisman = Talisman()
+        talisman.init_app(app)
 
 
 def registrar_blueprints(app):
