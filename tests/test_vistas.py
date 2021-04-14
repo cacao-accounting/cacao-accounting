@@ -152,3 +152,30 @@ def test_eliminar_entidad(client, auth):
 def test_eliminar_entidad(client, auth):
     auth.login()
     responde = client.get("/accounts/units/delete/masaya")
+
+
+def test_ctacontable(client, auth):
+    auth.login()
+    responde = client.get("/accounts/accounts/11")
+    responde = client.get("/accounts/accounts/21")
+    responde = client.get("/accounts/accounts/3")
+
+
+def test_centrocostos(client, auth):
+    auth.login()
+    responde = client.get("/accounts/ccenter")
+
+
+def test_proyectos(client, auth):
+    auth.login()
+    responde = client.get("/accounts/projects")
+
+
+def test_monedas(client, auth):
+    auth.login()
+    responde = client.get("/currencies")
+
+
+def test_tasascambio(client, auth):
+    auth.login()
+    responde = client.get("/accounts/exchange")
