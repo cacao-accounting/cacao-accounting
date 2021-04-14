@@ -263,7 +263,7 @@ def cuentas():
 
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
 
-    if request.method or "entidad" in request.args:
+    if "entidad" in request.args:
         return render_template(
             "contabilidad/cuenta_lista.html",
             base_cuentas=obtener_catalogo_base(entidad=request.args.get("entidad")),

@@ -48,7 +48,6 @@ def test_config(app):
     assert app.config["DEBUG"] == True
 
 
-
 @pytest.fixture
 def client(app):
     return app.test_client()
@@ -133,6 +132,23 @@ def test_catalogoctas(client, auth):
     assert b"Catalogo de Cuentas Contables." in response.data
 
 
+def test_catalogoctasent(client, auth):
+    auth.login()
+    response = client.get("/accounts/accounts?entidad=cafe")
+    assert b"Catalogo de Cuentas Contables." in response.data
+
+
 def test_listado_monedas(client, auth):
     auth.login()
     responde = client.get("/currencies")
+
+
+def test_eliminar_entidad(client, auth):
+    auth.login()
+    responde = client.get("/accounts/entities/delete/cafe")
+    responde = client.get("/accounts/entities/delete/cafe")
+
+
+def test_eliminar_entidad(client, auth):
+    auth.login()
+    responde = client.get("/accounts/units/delete/masaya")
