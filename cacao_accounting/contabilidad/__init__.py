@@ -87,6 +87,7 @@ def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
+
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit():
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
@@ -171,12 +172,27 @@ def eliminar_unidad(id_unidad):
     return redirect("/accounts/units")
 
 
+def lista_entidades():
+    """
+    Devuelve la lista de unidades en la base de datos.
+    """
+    from cacao_accounting.database import Entidad
+
+    _entidades = []
+    consulta = Entidad.query.all()
+    for i in consulta:
+        _entidad = (i.id, i.razon_social)
+        _entidades.append(_entidad)
+    return _entidades
+
+
 @contabilidad.route("/accounts/units/new", methods=["GET", "POST"])
 @login_required
 def nueva_unidad():
     from cacao_accounting.contabilidad.forms import FormularioUnidad
 
     formulario = FormularioUnidad()
+    formulario.entidad.choices = lista_entidades()
     TITULO = "Crear Nueva Unidad de Negocios - " + APPNAME
     if formulario.validate_on_submit():
         from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
@@ -202,14 +218,14 @@ def nueva_unidad():
 # Cuentas Contables
 
 
-def obtener_catalogo_base(entidad=None):
+def obtener_catalogo_base(entidad_=None):
     """
     Utilidad para devolver el catalogo de cuentas.
     """
     from cacao_accounting.database import Cuentas, Entidad
 
-    if entidad:
-        ctas_base = Cuentas.query.filter(Cuentas.padre == None, Cuentas.entidad == entidad).all()  # noqa: E711
+    if entidad_:
+        ctas_base = Cuentas.query.filter(Cuentas.padre == None, Cuentas.entidad == entidad_).all()  # noqa: E711
     else:
         ctas_base = (
             Cuentas.query.join(Entidad).filter(Cuentas.padre == None, Entidad.status == "predeterminada").all()  # noqa: E711
@@ -218,17 +234,17 @@ def obtener_catalogo_base(entidad=None):
     return ctas_base
 
 
-def obtener_catalogo(entidad=None):
+def obtener_catalogo(entidad_=None):
     """
     Utilidad para devolver el catalogo de cuentas.
     """
     from cacao_accounting.database import Cuentas, Entidad
 
-    if entidad:
-        ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad).all()  # noqa: E711
+    if entidad_:
+        ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad_).all()  # noqa: E711
     else:
         ctas = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()  # noqa: E711
+            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()
         )  # noqa: E711
 
     return ctas
@@ -240,8 +256,8 @@ def obtener_entidades():
     """
     from cacao_accounting.database import Entidad
 
-    entidades = Entidad.query.all()
-    return entidades
+    _entidades = Entidad.query.all()
+    return _entidades
 
 
 def obtener_entidad(ent=None):
@@ -251,10 +267,10 @@ def obtener_entidad(ent=None):
     from cacao_accounting.database import Entidad
 
     if ent:
-        entidad = Entidad.query.filter(Entidad.id == ent).first()
+        _entidad = Entidad.query.filter(Entidad.id == ent).first()
     else:
-        entidad = Entidad.query.filter(Entidad.predeterminada == True).first()  # noqa: E712
-    return entidad
+        _entidad = Entidad.query.filter(Entidad.predeterminada == True).first()  # noqa: E712
+    return _entidad
 
 
 @contabilidad.route("/accounts/accounts", methods=["GET", "POST"])
@@ -266,8 +282,8 @@ def cuentas():
     if "entidad" in request.args:
         return render_template(
             "contabilidad/cuenta_lista.html",
-            base_cuentas=obtener_catalogo_base(entidad=request.args.get("entidad")),
-            cuentas=obtener_catalogo(entidad=request.args.get("entidad")),
+            base_cuentas=obtener_catalogo_base(entidad_=request.args.get("entidad")),
+            cuentas=obtener_catalogo(entidad_=request.args.get("entidad")),
             entidades=obtener_entidades(),
             entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,

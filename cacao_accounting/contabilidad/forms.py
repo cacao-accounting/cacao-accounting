@@ -33,18 +33,6 @@ def lista_monedas():
     return monedas
 
 
-def lista_unidades():
-    """
-    Devuelve la lista de unidades en la base de datos.
-    """
-    entidades = []
-    consulta = Entidad.query.all()
-    for i in consulta:
-        entidad = (i.id, i.razon_social)
-        entidades.append(entidad)
-    return entidades
-
-
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
 
@@ -82,7 +70,7 @@ class FormularioUnidad(FlaskForm):
 
     id = StringField(validators=[DataRequired()])
     nombre = StringField(validators=[DataRequired()])
-    entidad = SelectField("Entidad", choices=lista_unidades())
+    entidad = SelectField("Entidad")
     correo_electronico = StringField(validators=[])
     web = StringField(validators=[])
     telefono1 = StringField(validators=[])
