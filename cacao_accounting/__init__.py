@@ -44,6 +44,8 @@ from cacao_accounting.ventas import ventas
 
 if DEVELOPMENT:
     environ["FLASK_ENV"] = "development"
+else:
+    environ["FLASK_ENV"] = "production"
 
 alembic = Alembic()
 
