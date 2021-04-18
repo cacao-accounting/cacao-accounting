@@ -155,6 +155,7 @@ disable=print-statement,
         cyclic-import,
         # No duplicar verificaciones con flake8
         bare-except,
+        singleton-comparison,
         
 
 # Enable the message, report, category or checker with the given id(s). You can
