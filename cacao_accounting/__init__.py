@@ -23,6 +23,7 @@ WSGI.
 """
 
 from sys import version_info
+from os import environ
 from flask import Flask
 from flask_alembic import Alembic
 from flask_talisman import Talisman
@@ -40,6 +41,9 @@ from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modu
 from cacao_accounting.tools import archivos, plantillas
 from cacao_accounting.ventas import ventas
 
+
+if DEVELOPMENT:
+    environ["FLASK_ENV"] = "development"
 
 alembic = Alembic()
 
