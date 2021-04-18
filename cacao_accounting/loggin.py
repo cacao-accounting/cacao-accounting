@@ -20,7 +20,7 @@ Configuración centralizada para logs del sistema.
 """
 
 from loguru import logger as log
-from cacao_accounting.config import DOCKERISED
+from cacao_accounting.metadata import DOCKERISED
 
 if DOCKERISED:
     from sys import stderr
