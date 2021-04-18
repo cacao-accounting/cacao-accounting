@@ -244,8 +244,8 @@ def obtener_catalogo(entidad_=None):
         ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad_).all()  # noqa: E711
     else:
         ctas = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()
-        )  # noqa: E711
+            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()  # noqa: E711
+        )
 
     return ctas
 
