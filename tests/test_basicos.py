@@ -152,7 +152,7 @@ class TestBasicos(TestCase):
 
     def test_cli(self):
         self.app.test_cli_runner()
-        
+
     def test_dbinstance(self):
         from flask_sqlalchemy import SQLAlchemy
         from cacao_accounting.database import db
