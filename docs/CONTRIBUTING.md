@@ -308,3 +308,14 @@ twine upload dist/*
 ```
 
 Es un objetivo principal que el proyecto sea [pip instalable](https://pypi.org/project/cacao-accounting/) así como ofrecer una versión del proyecto que pueda ser utilizada como [aplicación de escritorio](https://pypi.org/project/cacao-accounting-desktop/), para cumplir este objetivo hemos desarrollado [open marquesote](https://pypi.org/project/open-marquesote/).
+
+
+### Varios
+
+Estos son algunos tips a tomar en cuenta opcionalmente
+
+#### Ignorar correcciones de estilo en git blame
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
