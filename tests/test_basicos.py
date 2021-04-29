@@ -150,6 +150,9 @@ class TestBasicos(TestCase):
 
         self.assertIsInstance(self.app, Flask)
 
+    def test_cli(self):
+        self.app.test_cli_runner()
+        
     def test_dbinstance(self):
         from flask_sqlalchemy import SQLAlchemy
         from cacao_accounting.database import db
@@ -157,19 +160,19 @@ class TestBasicos(TestCase):
         self.assertIsInstance(db, SQLAlchemy)
 
     def test_directorio_archivos(self):
-        from cacao_accounting.tools import archivos
+        from cacao_accounting.tools import DIRECTORIO_ARCHIVOS
 
-        assert self.app.static_folder == archivos
+        assert self.app.static_folder == DIRECTORIO_ARCHIVOS
 
     def test_directorio_plantillas(self):
-        from cacao_accounting.tools import plantillas
+        from cacao_accounting.tools import DIRECTORIO_PLANTILLAS
 
-        assert self.app.template_folder == plantillas
+        assert self.app.template_folder == DIRECTORIO_PLANTILLAS
 
     def test_directorio_principal(self):
-        from cacao_accounting.tools import home
+        from cacao_accounting.tools import DIRECTORIO_APP
 
-        assert self.app.root_path == home
+        assert self.app.root_path == DIRECTORIO_APP
 
     def test_import_name(self):
         assert self.app.import_name == "cacao_accounting"
