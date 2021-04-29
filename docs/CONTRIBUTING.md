@@ -122,7 +122,6 @@ Options:
   --help     Show this message and exit.
 
 Commands:
-  activofijo
   cleandb     Elimina la base de datos, solo disponible para desarrollo.
   db          Perform database migrations.
   initdb      Crea el esquema de la base de datos.
@@ -147,6 +146,8 @@ cacaoctl initdb
 Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido en flask:
 
 ```bash
+FLASK_ENV=development  # Linux
+set FLASK_ENV="development"  # Windows
 cacaoctl run
 ```
 
