@@ -19,8 +19,9 @@
 Definición de herramientas varias.
 """
 
-from os import path
+from os import pardir, path
 
-home = path.abspath(path.dirname(__file__))
-plantillas = path.join(home, "templates")
-archivos = path.join(home, "static")
+DIRECTORIO_PRINCIPAL = pardir
+DIRECTORIO_APP = path.abspath(path.dirname(__file__))
+DIRECTORIO_PLANTILLAS = path.join(DIRECTORIO_APP, "templates")
+DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")

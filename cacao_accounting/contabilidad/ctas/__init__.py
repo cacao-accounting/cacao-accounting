@@ -19,15 +19,15 @@ from collections import namedtuple
 from csv import DictReader
 from os.path import join
 from cacao_accounting.database import db, Cuentas
-from cacao_accounting.tools import home
+from cacao_accounting.tools import DIRECTORIO_APP
 
 
 CatalogoCtas = namedtuple("CatalogoCtas", ["file", "pais", "idioma"])
-dir_ctas = join(home, "contabilidad", "ctas", "catalogos")
+DIRECTORIO_CTAS = join(DIRECTORIO_APP, "contabilidad", "ctas", "catalogos")
 
 # Inicia deficion de catalogos de cuentas.
-base = CatalogoCtas(file=join(dir_ctas, "base.csv"), pais=None, idioma="ES")
-desarrollo = CatalogoCtas(file=join(dir_ctas, "base-dev.csv"), pais=None, idioma="ES")
+base = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base.csv"), pais=None, idioma="ES")
+desarrollo = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base-dev.csv"), pais=None, idioma="ES")
 
 
 def cargar_catalogos(catalogo, entidad):

@@ -20,12 +20,12 @@
 import sys
 from flask.cli import FlaskGroup
 
-cli = FlaskGroup(
+LINEA_COMANDOS = FlaskGroup(
     help="""\
 Interfaz de linea de comandos para la administración de Cacao Accounting.
 """
 )
 
 
-def main(as_module=False):
-    cli.main(args=sys.argv[1:], prog_name="python -m flask" if as_module else None)
+def linea_comandos(as_module=False):
+    LINEA_COMANDOS.main(args=sys.argv[1:], prog_name="python -m flask" if as_module else None)

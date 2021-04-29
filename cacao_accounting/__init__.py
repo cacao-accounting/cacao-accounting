@@ -38,7 +38,7 @@ from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
 from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
-from cacao_accounting.tools import archivos, plantillas
+from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
 from cacao_accounting.ventas import ventas
 
 
@@ -54,9 +54,9 @@ def command():
     """
     Interfaz de linea de commandos.
     """
-    from cacao_accounting.cli import main
+    from cacao_accounting.cli import linea_comandos
 
-    main(as_module="cacao_accounting")
+    linea_comandos(as_module="cacao_accounting")
 
 
 def verifica_version_de_python():
@@ -125,8 +125,8 @@ def create_app(ajustes=None):
     verifica_version_de_python()
     CACAO_APP = Flask(
         __name__,
-        template_folder=plantillas,
-        static_folder=archivos,
+        template_folder=DIRECTORIO_PLANTILLAS,
+        static_folder=DIRECTORIO_ARCHIVOS,
         instance_relative_config=False,
     )
     CACAO_APP.jinja_env.trim_blocks = True
