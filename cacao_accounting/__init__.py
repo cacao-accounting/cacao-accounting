@@ -59,7 +59,7 @@ def command():
     main(as_module="cacao_accounting")
 
 
-def verifica_pyversion():
+def verifica_version_de_python():
     """
     Requerimos al menos python 3.6 para la aplicación.
     """
@@ -106,11 +106,11 @@ def db_metadata():
     from cacao_accounting.database import DBVERSION, Metadata
     from cacao_accounting.version import VERSION
 
-    meta = Metadata(
+    METADATOS = Metadata(
         cacaoversion=VERSION,
         dbversion=DBVERSION,
     )
-    db.session.add(meta)
+    db.session.add(METADATOS)
     db.session.commit()
 
 
@@ -122,51 +122,51 @@ def create_app(ajustes=None):
      - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
     """
     # pylint: disable=W0612
-    verifica_pyversion()
-    cacao_app = Flask(
+    verifica_version_de_python()
+    CACAO_APP = Flask(
         __name__,
         template_folder=plantillas,
         static_folder=archivos,
         instance_relative_config=False,
     )
-    cacao_app.jinja_env.trim_blocks = True
-    cacao_app.jinja_env.lstrop_blocks = True
+    CACAO_APP.jinja_env.trim_blocks = True
+    CACAO_APP.jinja_env.lstrop_blocks = True
     if ajustes:
-        cacao_app.config.from_mapping(ajustes)
+        CACAO_APP.config.from_mapping(ajustes)
         try:
-            cacao_app.jinja_env.globals.update(modo_escritorio=ajustes["DESKTOPMODE"])
+            CACAO_APP.jinja_env.globals.update(modo_escritorio=ajustes["DESKTOPMODE"])
         except KeyError:
-            cacao_app.jinja_env.globals.update(modo_escritorio=False)
+            CACAO_APP.jinja_env.globals.update(modo_escritorio=False)
 
-    iniciar_extenciones(cacao_app)
+    iniciar_extenciones(CACAO_APP)
 
-    registrar_blueprints(cacao_app)
+    registrar_blueprints(CACAO_APP)
 
-    cacao_app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
-    cacao_app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
+    CACAO_APP.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+    CACAO_APP.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
 
-    @cacao_app.cli.command()
+    @CACAO_APP.cli.command()
     def initdb():
         """Crea el esquema de la base de datos."""
 
         from cacao_accounting.database import inicia_base_de_datos
 
-        inicia_base_de_datos(cacao_app)
+        inicia_base_de_datos(CACAO_APP)
 
-    @cacao_app.cli.command()
+    @CACAO_APP.cli.command()
     def cleandb():
         """Elimina la base de datos, solo disponible para desarrollo."""
         if DEVELOPMENT:
             db.drop_all()
 
-    @cacao_app.cli.command()
+    @CACAO_APP.cli.command()
     def version():
         """Muestra la version actual instalada."""
         from cacao_accounting.version import VERSION
 
         print(VERSION)
 
-    @cacao_app.cli.command()
+    @CACAO_APP.cli.command()
     def serve():
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
@@ -175,4 +175,4 @@ def create_app(ajustes=None):
 
         run()
 
-    return cacao_app
+    return CACAO_APP
