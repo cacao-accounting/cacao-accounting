@@ -165,6 +165,8 @@ Seguimos [PEP8](https://www.python.org/dev/peps/pep-0008/) con un largo de linea
 
 [Black](https://github.com/psf/black) es una excelente herramienta para dar formato a tu código antes de hacer commit de tus cambios.
 
+Si usa VSCode puede [configurar black para formatear sus cambios al guardar.](https://dev.to/adamlombard/how-to-use-the-black-python-code-formatter-in-vscode-3lo0)
+
 #### Pruebas automaticas:
 
 Utilizamos [flake8](https://flake8.pycqa.org/en/latest/) y [pytest](https://docs.pytest.org/en/stable/) para asegurar la calidad del código fuente del proyecto.
