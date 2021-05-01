@@ -1,5 +1,8 @@
+import pytest
+from unittest import TestCase
+from cacao_accounting import create_app
 from cacao_accounting.database import db
-from cacao_accounting.datos import base_data
+from cacao_accounting.datos import base_data, demo_data
 
 
 def desplegar_base_de_datos():
@@ -209,3 +212,159 @@ class Varios:
         from cacao_accounting.contabilidad import obtener_entidades
 
         obtener_entidades()
+
+
+
+@pytest.fixture(autouse=True)
+def cargar_datos():
+    db.drop_all()
+    db.session.commit()
+    db.create_all()
+    base_data()
+    yield
+    db.drop_all()
+
+
+CONFIG = {}
+CONFIG["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+CONFIG["ENV"] = "development"
+CONFIG["SECRET_KEY"] = "dev"
+CONFIG["EXPLAIN_TEMPLATE_LOADING"] = True
+CONFIG["DEGUG"] = True
+
+# <-------------------------------------------------------------------------> #
+# Conecciones para cada tipo de base de datos.
+SQLITE = "sqlite://"
+MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
+POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
+MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server"
+# <-------------------------------------------------------------------------> #
+
+# <-------------------------------------------------------------------------> #
+# Validamos que bases de datos estan disponibles
+
+
+from sqlalchemy import create_engine
+
+engine = create_engine(SQLITE)
+with engine.connect() as con:
+    rs = con.execute("SELECT sqlite_version()")
+    for row in rs:
+        print("SQLite version:")
+        print(row)
+
+try:
+    from sqlalchemy import create_engine
+
+    engine = create_engine(MYSQL)
+    with engine.connect() as con:
+        rs = con.execute("SELECT VERSION()")
+        for row in rs:
+            print("MySQL disponible version:")
+            print(row)
+        mysql_disponible = True
+
+except:
+    mysql_disponible = False
+    print("MySQL no disponible")
+
+
+try:
+    engine = create_engine(POSTGRESQL)
+    with engine.connect() as con:
+        rs = con.execute("SELECT VERSION()")
+        for row in rs:
+            print("Postgresql disponible version:")
+            print(row)
+    postgresql_disponible = True
+except:
+    postgresql_disponible = False
+    print("Postgresql no disponible")
+
+try:
+    from sqlalchemy import create_engine
+
+    engine = create_engine(MSSQL)
+    with engine.connect() as con:
+        rs = con.execute("SELECT @@VERSION")
+        for row in rs:
+            print("MS SQL Server disponible version:")
+            print(row)
+    mssql_disponible = True
+except:
+    print("MS SQL Server no disponible")
+    mssql_disponible = False
+
+# <-------------------------------------------------------------------------> #
+# Clases base para los test, cado uno de estas clases debe ejecutarse correctamente
+# con cada motor de base de datos soportado:
+#   - SQLite
+#   - Postgresl
+#   - MySQL
+
+
+# <-------------------------------------------------------------------------> #
+class BaseSQLite:
+    app = create_app(CONFIG)
+    app.config["SQLALCHEMY_DATABASE_URI"] = SQLITE
+    app.app_context().push()
+
+
+class TestSQLite(BaseSQLite, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
+    def test_db(self):
+        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert URL.startswith("sqlite")
+
+    def test_demo(self):
+        demo_data()
+
+
+# <-------------------------------------------------------------------------> #
+if mysql_disponible:
+
+    class BaseMySQL:
+        app = create_app(CONFIG)
+        app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL
+        app.app_context().push()
+
+    class TestMySQL(BaseMySQL, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
+        def test_db(self):
+            URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert URL.startswith("mysql")
+
+        def test_demo(self):
+            demo_data()
+
+
+# <-------------------------------------------------------------------------> #
+if postgresql_disponible:
+
+    class BasePostgresl:
+        app = create_app(CONFIG)
+        app.config["SQLALCHEMY_DATABASE_URI"] = POSTGRESQL
+        app.app_context().push()
+
+    class TestPostgresl(BasePostgresl, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
+        def test_db(self):
+            URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert URL.startswith("postgresql")
+
+        def test_demo(self):
+            demo_data()
+
+
+# <-------------------------------------------------------------------------> #
+if mssql_disponible:
+
+    class BaseSQLServer:
+        app = create_app(CONFIG)
+        app.config["SQLALCHEMY_DATABASE_URI"] = MSSQL
+        app.app_context().push()
+
+    class TestSQLServer(BaseSQLServer, TestCase, Entidad, CentroCosto, Unidad, Proyecto, Moneda, Varios):
+        def test_db(self):
+            URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert URL.startswith("mssql")
+
+        def test_demo(self):
+            demo_data()

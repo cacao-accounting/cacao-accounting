@@ -93,9 +93,8 @@ jobs:
     - name: Test with pytest
       run: |
         sleep 5
-        python -W ignore tests/nonfree_database.py
-        python -W ignore tests/opensource_database.py
-        pytest  --disable-warnings --full-trace --exitfirst tests/*.py --cov=cacao_accounting
+        python -W ignore tests/integracion/test_crud.py
+        pytest  --disable-warnings --full-trace --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
     - name: Codecov
