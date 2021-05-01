@@ -36,6 +36,7 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
+from cacao_accounting.loggin import log
 from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
@@ -114,6 +115,29 @@ def db_metadata():
     db.session.commit()
 
 
+def establece_variables_de_entorno(app=None):
+    """
+    Funcion auxiliar para establecer algunas varias de entorno al inicio de la
+    aplicacion.
+    """
+    try:
+        MODO_PRUEBAS = "CACAOTEST" in environ
+    except KeyError:
+        MODO_PRUEBAS = False
+
+    if MODO_PRUEBAS or DEVELOPMENT:
+        environ["FLASK_DEBUG"] = "True"
+        environ["FLASK_ENV"] = "development"
+        log.debug("Ejecutando aplicación en modo de pruebas.")
+        if app:
+            app.config.update(
+                TESTING=True,
+            )
+    else:
+        environ["FLASK_ENV"] = "production"
+        log.info("Ejecutando aplicación en modo de producción.")
+
+
 def create_app(ajustes=None):
     """
     Aplication factory.
@@ -175,4 +199,5 @@ def create_app(ajustes=None):
 
         run()
 
+    establece_variables_de_entorno(app=CACAO_APP)
     return CACAO_APP
