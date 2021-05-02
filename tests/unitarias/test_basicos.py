@@ -183,6 +183,23 @@ class TestBasicos(TestCase):
         assert configuracion is not None
 
 
+def test_validar_conexion_db():
+    from cacao_accounting.config import valida_direccion_base_datos, MSSQL, MYSQL, POSTGRESQL, SQLITE
+
+    assert valida_direccion_base_datos(MSSQL) == True
+    assert valida_direccion_base_datos(MYSQL) == True
+    assert valida_direccion_base_datos(POSTGRESQL) == True
+    assert valida_direccion_base_datos(SQLITE) == True
+    assert valida_direccion_base_datos("hola") == False
+
+
+def test_valida_clave_secreta():
+    from cacao_accounting.config import valida_llave_secreta
+
+    assert valida_llave_secreta("gw(5g6qd$fM\MZJ{") == True
+    assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
+
+
 class TestExection(TestCase):
     def test_no_data(self):
         from cacao_accounting.registro import Registro

@@ -214,7 +214,6 @@ class Varios:
         obtener_entidades()
 
 
-
 @pytest.fixture(autouse=True)
 def cargar_datos():
     db.drop_all()
