@@ -43,14 +43,6 @@ from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
 from cacao_accounting.ventas import ventas
 
 
-if DEVELOPMENT:
-    environ["FLASK_ENV"] = "development"
-else:
-    environ["FLASK_ENV"] = "production"
-
-alembic = Alembic()
-
-
 def command():
     """
     Interfaz de linea de commandos.
@@ -75,6 +67,7 @@ def iniciar_extenciones(app):
     """
     Inicializa extenciones.
     """
+    alembic = Alembic()
     alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
@@ -138,6 +131,17 @@ def establece_variables_de_entorno(app=None):
         log.info("Ejecutando aplicación en modo de producción.")
 
 
+def actualiza_variables_globales_jinja(app=None):
+    """
+    Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2.
+    """
+    if app:
+        app.jinja_env.trim_blocks = True
+        app.jinja_env.lstrop_blocks = True
+        app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+        app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
+
+
 def create_app(ajustes=None):
     """
     Aplication factory.
@@ -153,21 +157,13 @@ def create_app(ajustes=None):
         static_folder=DIRECTORIO_ARCHIVOS,
         instance_relative_config=False,
     )
-    CACAO_APP.jinja_env.trim_blocks = True
-    CACAO_APP.jinja_env.lstrop_blocks = True
+
     if ajustes:
         CACAO_APP.config.from_mapping(ajustes)
         try:
             CACAO_APP.jinja_env.globals.update(modo_escritorio=ajustes["DESKTOPMODE"])
         except KeyError:
             CACAO_APP.jinja_env.globals.update(modo_escritorio=False)
-
-    iniciar_extenciones(CACAO_APP)
-
-    registrar_blueprints(CACAO_APP)
-
-    CACAO_APP.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
-    CACAO_APP.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
 
     @CACAO_APP.cli.command()
     def initdb():
@@ -199,5 +195,8 @@ def create_app(ajustes=None):
 
         run()
 
+    actualiza_variables_globales_jinja(app=CACAO_APP)
     establece_variables_de_entorno(app=CACAO_APP)
+    iniciar_extenciones(CACAO_APP)
+    registrar_blueprints(CACAO_APP)
     return CACAO_APP
