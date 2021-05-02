@@ -5,7 +5,6 @@ es:
 
 ```bash
 # Requeridas
-$CACAO_ACCOUNTING  # Indica a la aplicación a cargar la configuración desde variables del entorno.
 $CACAO_DB          # URI para conectarse a la base de datos.
 $CACAO_KEY         # Llave única para una ejecución segura.
 # Opcionales
@@ -13,6 +12,8 @@ $CACAO_USER        # Identificador del usuario administrador.
                    # Si no se establece se usa "cacao" por defecto.
 $CACAO_PWD         # Contraseña del usuario administrador.
                    # Si no se establece se usa "cacao" por defecto.
+$CACAO_THREADS     # Numero de hilos para el servidor WSGI.
+                   # si no se establece se estable a 4 por defecto.
 ```
 
 ## Establecer variables del entorno requeridas:
@@ -20,14 +21,12 @@ $CACAO_PWD         # Contraseña del usuario administrador.
 En Linux se puede configurar Cacao Accounting ejecutando:
 ```bash
 # Para configurar Cacao Accounting en Linux ejecutar:
-export CACAO_ACCOUNTING=True
 export CACAO_DB=DATABASE_CONNECTION_URI
 export CACAO_KEY=SECRETKEY
 ```
 
 En Windows ejecutar:
 ```powershell
-setx CACAO_ACCOUNTING "True"
 setx CACAO_DB "DATABASE_CONNECTION_URI"
 setx CACAO_KEY "SECRETKEY"
 ```
