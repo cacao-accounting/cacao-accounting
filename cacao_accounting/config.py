@@ -72,20 +72,38 @@ else:
 # configurar la aplicacion.
 
 
+def valida_llave_secreta(llave):
+
+    CONTIENE_MAYUSCULAS = bool(any(chr.isupper() for chr in llave))
+    CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
+    CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
+    CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
+    if DEVELOPMENT:
+        return True
+    else:
+        return CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
+
+
+def valida_direccion_base_datos(uri):
+    DIRECCION = str(uri)
+    MSSQL_URI = DIRECCION.startswith("mssql")
+    MYSQL_URI = DIRECCION.startswith("mysql")
+    POSTGRESQL_URI = DIRECCION.startswith("postgresql")
+    SQLITE_URI = DIRECCION.startswith("sqlite")
+    return MSSQL_URI or MYSQL_URI or POSTGRESQL_URI or SQLITE_URI
+
+
 def probar_configuracion_por_variables_de_entorno():
     """
     Valida que las opciones requeridas para configuración la aplicacion desde variables del entorno
     se encuentran correctamente configuradas.
     """
-    if "CACAO_DB" in environ and "CACAO_KEY" in environ:
-        try:
-            URI = environ["CACAO_DB"]
-            KEY = environ["CACAO_KEY"]
-            URI, KEY
-            return True
-        except KeyError:
-            return False
-    else:
+    from cacao_accounting.exception import OperationalError
+
+    try:
+        return valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
+    except KeyError:
+        log.info("Clave secreta o dirección de conexión a la base no especificadas.")
         return False
 
 
