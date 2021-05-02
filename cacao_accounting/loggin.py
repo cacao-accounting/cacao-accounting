@@ -19,10 +19,8 @@
 Configuración centralizada para logs del sistema.
 """
 
+from sys import stdout
 from loguru import logger as log
-from cacao_accounting.metadata import DOCKERISED
 
-if DOCKERISED:
-    from sys import stderr
-
-    log.add(stderr)
+log.remove()
+log.add(stdout)

@@ -16,19 +16,17 @@
 # - William José Moreno Reyes
 
 
-from os import environ
 from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
 
 
 # pylint: disable=undefined-all-variable
 __all__ = APPNAME, APPAUTHOR, VERSION
+
 # development
-# release_candidate
 # alpha
 # beta
+# release_candidate
 # stable
 
 __state__ = "development"
 DEVELOPMENT = __state__ != "stable"
-
-DOCKERISED = "DOCKERISED" in environ
