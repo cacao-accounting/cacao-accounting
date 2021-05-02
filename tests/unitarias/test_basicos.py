@@ -199,7 +199,6 @@ def test_valida_clave_secreta():
     assert valida_llave_secreta("gw(5g6qd$fM\MZJ{") == True
     assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
 
-
 class TestExection(TestCase):
     def test_no_data(self):
         from cacao_accounting.registro import Registro

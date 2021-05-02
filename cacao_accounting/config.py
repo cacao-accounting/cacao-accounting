@@ -98,7 +98,6 @@ def probar_configuracion_por_variables_de_entorno():
     Valida que las opciones requeridas para configuración la aplicacion desde variables del entorno
     se encuentran correctamente configuradas.
     """
-    from cacao_accounting.exception import OperationalError
 
     try:
         return valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
