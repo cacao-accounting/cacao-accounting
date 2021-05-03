@@ -159,7 +159,7 @@ def probar_modo_escritorio():
         # modo escritorio.
         if CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL:
             try:
-                "CACAO_DESKTOP" in configuracion
+                EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in configuracion
             except:  # noqa: E722
                 EJECUTANDO_COMO_DESKTOP = False
         else:
