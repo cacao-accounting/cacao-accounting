@@ -45,6 +45,12 @@ try:
 except KeyError:
     THREADS = 4
 
+# < --------------------------------------------------------------------------------------------- >
+# Permite al usuario establecer en que puerto servir la aplicacion con el servidor WSGI por defecto
+try:
+    PORT = int(environ["CACAO_PORT"])
+except KeyError:
+    PORT = 8080
 
 # < --------------------------------------------------------------------------------------------- >
 # En entornos de escritorio es util poder establecer la configuracion desde un archivo ubicado en

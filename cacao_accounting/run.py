@@ -18,7 +18,7 @@
 from waitress import serve
 from cacao_accounting import create_app
 from cacao_accounting.metadata import DEVELOPMENT
-from cacao_accounting.config import configuracion, THREADS
+from cacao_accounting.config import configuracion, PORT, THREADS
 from cacao_accounting.loggin import log
 
 app = create_app(configuracion)
@@ -47,8 +47,8 @@ def run():
 
     if DATABASE:
         try:
-            log.info("Iniciando servidor WSGI.")
-            serve(app, port=8080, threads=THREADS)
+            log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
+            serve(app, port=PORT, threads=THREADS)
         except OSError:
             log.error("Puerto 8080 actualmente en uso.")
     else:

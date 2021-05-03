@@ -14,6 +14,8 @@ $CACAO_PWD         # Contraseña del usuario administrador.
                    # Si no se establece se usa "cacao" por defecto.
 $CACAO_THREADS     # Numero de hilos para el servidor WSGI.
                    # si no se establece se estable a 4 por defecto.
+$CACAO_PORT        # Puerto para servir la aplicacion a utilizar.
+                   # Si no se especifica se utiliza 8080 por defecto.
 ```
 
 ## Establecer variables del entorno requeridas:
