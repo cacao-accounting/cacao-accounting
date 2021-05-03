@@ -114,12 +114,15 @@ def establece_variables_de_entorno(app=None):
     Funcion auxiliar para establecer algunas varias de entorno al inicio de la
     aplicacion.
     """
-    try:
-        MODO_PRUEBAS = "CACAOTEST" in environ
-    except KeyError:
-        MODO_PRUEBAS = False
+    if DEVELOPMENT:
+        MODO_PRUEBAS = True
+    else:
+        try:
+            MODO_PRUEBAS = "CACAOTEST" in environ
+        except KeyError:
+            MODO_PRUEBAS = False
 
-    if MODO_PRUEBAS or DEVELOPMENT:
+    if MODO_PRUEBAS:
         environ["FLASK_DEBUG"] = "True"
         environ["FLASK_ENV"] = "development"
         log.debug("Ejecutando aplicación en modo de pruebas.")
