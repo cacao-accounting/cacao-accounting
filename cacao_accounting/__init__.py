@@ -162,10 +162,6 @@ def create_app(ajustes=None):
 
     if ajustes:
         CACAO_APP.config.from_mapping(ajustes)
-        try:
-            CACAO_APP.jinja_env.globals.update(modo_escritorio=ajustes["DESKTOPMODE"])
-        except KeyError:
-            CACAO_APP.jinja_env.globals.update(modo_escritorio=False)
 
     @CACAO_APP.cli.command()
     def initdb():
