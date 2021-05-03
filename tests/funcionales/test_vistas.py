@@ -143,9 +143,15 @@ def test_listado_monedas(client, auth):
     responde = client.get("/currencies")
 
 
+def test_cambiar_status_entidad(client, auth):
+    auth.login()
+    response = client.get("/accounts/entities/set_inactive/cacao")
+    response = client.get("/accounts/entities/set_default/cacao")
+
 def test_eliminar_entidad(client, auth):
     auth.login()
-    responde = client.get("/accounts/entities/delete/cafe")
+    response = client.get("/accounts/entities/set_inactive/cafe")
+    response = client.get("/accounts/entities/set_default/cafe")
     responde = client.get("/accounts/entities/delete/cafe")
 
 

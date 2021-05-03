@@ -144,6 +144,32 @@ def eliminar_entidad(id_entidad):
     return redirect("/accounts/entities")
 
 
+@contabilidad.route("/accounts/entities/set_inactive/<id_entidad>")
+@login_required
+def inactivar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+
+    e = RegistroEntidad()
+    if e.cambiar_estado(identificador=id_entidad, status_objetivo="inactiva"):
+        flash("Entidad establecida como inactiva.")
+    else:
+        flash("Entidad no se puede establecer como inactiva.")
+    return redirect("/accounts/entities")
+
+
+@contabilidad.route("/accounts/entities/set_default/<id_entidad>")
+@login_required
+def predeterminar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+
+    e = RegistroEntidad()
+    if e.cambiar_estado(identificador=id_entidad, status_objetivo="predeterminada"):
+        flash("Entidad establecida como predeterminada.")
+    else:
+        flash("Entidad no se puede establecer como predeterminada.")
+    return redirect("/accounts/entities")
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Unidades de Negocio
 @contabilidad.route("/accounts/units")
