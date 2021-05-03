@@ -19,8 +19,8 @@
 Configuración centralizada para logs del sistema.
 """
 
-from sys import stdout
+from sys import stderr
 from loguru import logger as log
 
 log.remove()
-log.add(stdout)
+log.add(stderr)
