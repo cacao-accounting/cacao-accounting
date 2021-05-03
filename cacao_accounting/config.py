@@ -128,3 +128,43 @@ elif DEVELOPMENT:
 else:
     log.warning("No se pudo encontrar una fuente para la configuración de la aplicacion, revise la documentacion")
     configuracion = None
+
+
+def probar_modo_escritorio():
+    """
+    Función utilitaria para establecer nodo de escritorio.
+    """
+
+    # Probamos si estamos en un paquete SNAP
+    # Referencias
+    #  - https://snapcraft.io/docs/environment-variables
+    try:
+        EJECUTANDO_COMO_SNAP = "SNAP_NAME" in environ
+    except KeyError:
+        EJECUTANDO_COMO_SNAP = False
+
+    # Probamos si estamos en un paquete FLATPAK
+    # Referencias:
+    #  - https://www.systutorials.com/docs/linux/man/1-flatpak-run/
+    try:
+        EJECUTANDO_COMO_FLATPAK = "FLATPAK_ID" in environ
+    except KeyError:
+        EJECUTANDO_COMO_FLATPAK = False
+
+    # Probamos si se ha establecido la variable de entorno CACAO_DESKTOP
+    try:
+        EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in environ
+    except KeyError:
+        # Finalmente probamos si en el archivo de configuración se especificado el
+        # modo escritorio.
+        if CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL:
+            try:
+                "CACAO_DESKTOP" in configuracion
+            except:  # noqa: E722
+                EJECUTANDO_COMO_DESKTOP = False
+        else:
+            EJECUTANDO_COMO_DESKTOP = False
+    return EJECUTANDO_COMO_SNAP or EJECUTANDO_COMO_FLATPAK or EJECUTANDO_COMO_DESKTOP
+
+
+MODO_ESCRITORIO = probar_modo_escritorio()
