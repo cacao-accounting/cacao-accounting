@@ -28,7 +28,7 @@ if DEVELOPMENT:
     app.config["DEBUG"] = True
 
 
-def run():
+def server():
     """Ejecuta la aplicacion con Waitress como servidor WSGI"""
     from cacao_accounting.database import inicia_base_de_datos, requiere_migracion_db, verifica_coneccion_db
 

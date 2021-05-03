@@ -189,9 +189,9 @@ def create_app(ajustes=None):
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
         """
-        from cacao_accounting.run import run
+        from cacao_accounting.server import server
 
-        run()
+        server()
 
     actualiza_variables_globales_jinja(app=CACAO_APP)
     establece_variables_de_entorno(app=CACAO_APP)

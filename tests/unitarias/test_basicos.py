@@ -77,7 +77,7 @@ def test_logea_usuario():
 def test_run():
     import subprocess
     from sys import executable
-    from cacao_accounting.run import app, run
+    from cacao_accounting.server import app, server
 
     subprocess.Popen(
         [executable, "-m", "cacao_accounting"],
