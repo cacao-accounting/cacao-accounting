@@ -15,11 +15,11 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.run import app, run
+from cacao_accounting.server import app, server
 from cacao_accounting.metadata import DEVELOPMENT
 
 if DEVELOPMENT:
     app.config["DEBUG"] = True
 
 if __name__ == "__main__":
-    run()
+    server()
