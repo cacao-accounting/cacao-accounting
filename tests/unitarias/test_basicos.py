@@ -93,7 +93,6 @@ def test_run():
 
 def test_cli():
     import subprocess
-    from cacao_accounting import cli
 
     subprocess.Popen(
         ["cacaoctl"],
@@ -125,15 +124,6 @@ def test_main():
     )
     proceso1.terminate()
     proceso2.terminate()
-
-
-def test_cli():
-    import subprocess
-
-    proceso = subprocess.Popen(
-        ["cacaoctl"],
-    )
-    proceso.terminate()
 
 
 class TestBasicos(TestCase):
@@ -198,6 +188,7 @@ def test_valida_clave_secreta():
 
     assert valida_llave_secreta("gw(5g6qd$fM\MZJ{") == True
     assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
+
 
 class TestExection(TestCase):
     def test_no_data(self):
