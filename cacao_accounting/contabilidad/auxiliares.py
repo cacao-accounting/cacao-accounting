@@ -50,6 +50,24 @@ def obtener_catalogo_base(entidad_=None):
     return ctas_base
 
 
+def obtener_catalogo_centros_costo_base(entidad_=None):
+    """
+    Utilidad para devolver el catalogo de centros de costos.
+    """
+    from cacao_accounting.database import CentroCosto, Entidad
+
+    if entidad_:
+        ctas_base = CentroCosto.query.filter(CentroCosto.padre == None, CentroCosto.entidad == entidad_).all()  # noqa: E711
+    else:
+        ctas_base = (
+            CentroCosto.query.join(Entidad)
+            .filter(CentroCosto.padre == None, Entidad.status == "predeterminada")  # noqa: E711
+            .all()
+        )
+
+    return ctas_base
+
+
 def obtener_catalogo(entidad_=None):
     """
     Utilidad para devolver el catalogo de cuentas.
@@ -61,6 +79,24 @@ def obtener_catalogo(entidad_=None):
     else:
         ctas = (
             Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()  # noqa: E711
+        )
+
+    return ctas
+
+
+def obtener_catalogo_centros_costos(entidad_=None):
+    """
+    Utilidad para devolver el catalogo de centros de costos..
+    """
+    from cacao_accounting.database import CentroCosto, Entidad
+
+    if entidad_:
+        ctas = CentroCosto.query.filter(CentroCosto.padre != None, CentroCosto.entidad == entidad_).all()  # noqa: E711
+    else:
+        ctas = (
+            CentroCosto.query.join(Entidad)
+            .filter(CentroCosto.padre != None, Entidad.status == "predeterminada")  # noqa: E711
+            .all()
         )
 
     return ctas

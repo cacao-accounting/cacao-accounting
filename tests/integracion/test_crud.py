@@ -80,20 +80,21 @@ CENTRO_DE_COSTO1 = {
     "predeterminado": True,
     "habilitada": True,
     "entidad": "cacao",
-    "id": "11.01",
-    "nombre": "Centro de Costos de Prueba",
     "grupo": False,
-    "padre": None,
+    "codigo": "C11111",
+    "nombre": "Centro Costos Prueba",
+    "status": "activa",
 }
 
 CENTRO_DE_COSTO2 = {
     "activa": True,
-    "predeterminado": True,
+    "predeterminado": False,
     "habilitada": True,
-    "id": "11.02",
-    "nombre": "Centro de Costos de Prueba 1",
+    "entidad": "cacao",
     "grupo": False,
-    "padre": None,
+    "codigo": "D11111",
+    "nombre": "Centro Costos Prueba",
+    "status": "activa",
 }
 
 CENTRO_DE_COSTO3 = {
@@ -101,10 +102,10 @@ CENTRO_DE_COSTO3 = {
     "predeterminado": True,
     "habilitada": True,
     "entidad": "cacao",
-    "id": "11.03",
-    "nombre": "Centro de Costos de Prueba 2",
-    "grupo": True,
-    "padre": None,
+    "grupo": False,
+    "codigo": "E11111",
+    "nombre": "Centro Costos Prueba",
+    "status": "activa",
 }
 
 

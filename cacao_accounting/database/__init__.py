@@ -225,32 +225,33 @@ class Cuentas(db.Model):
     }
 
 
-class CentroCosto(db.Model):
+class CentroCosto(db.Model, BaseTabla):
     """
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
-    __tablename__ = "cc"
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"),)
-    # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
-    # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    id = db.Column(
-        db.String(50),
-        unique=True,
-        index=True,
-        primary_key=True,
-    )
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
-    nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
+    # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
+    # 11.01.001.001.001.001.00001.0001.0001.00001.000001
+    codigo = db.Column(
+        db.String(50),
+    )
+    nombre = db.Column(db.String(100))
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("cc.nombre"))
-    db.UniqueConstraint("nombre")
+    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.codigo"), nullable=True)
+    status = db.Column(db.String(50), nullable=True)
+    status_web = {
+        "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
+        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
 
 
 class Proyecto(db.Model):
@@ -262,7 +263,7 @@ class Proyecto(db.Model):
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activo = db.Column(db.Boolean(), index=True)
-    # Un CC puede estar activo pero deshabilitado temporalmente.
+    # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
@@ -272,7 +273,7 @@ class Proyecto(db.Model):
     nombre = db.Column(db.String(100), unique=True)
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("cc.nombre"))
+    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
     inicio = db.Column(db.Date())
     fin = db.Column(db.Date())
     finalizado = db.Column(db.Boolean())

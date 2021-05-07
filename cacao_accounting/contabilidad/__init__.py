@@ -23,7 +23,9 @@ from flask import Blueprint, redirect, render_template, request, flash
 from flask_login import login_required
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
+    obtener_catalogo_centros_costo_base,
     obtener_catalogo,
+    obtener_catalogo_centros_costos,
     obtener_entidad,
     obtener_entidades,
     obtener_lista_entidades_por_id_razonsocial,
@@ -275,16 +277,39 @@ def cuenta(id_cta):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Centros de Costos
-@contabilidad.route("/accounts/ccenter")
+@contabilidad.route("/accounts/costs_center", methods=["GET", "POST"])
 @login_required
 def ccostos():
+    TITULO = "Catalogo de Centros de Costos - " + APPNAME
+
+    if "entidad" in request.args:
+        return render_template(
+            "contabilidad/centro-costo_lista.html",
+            base_centrocostos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad")),
+            ccostos=obtener_catalogo_centros_costos(entidad_=request.args.get("entidad")),
+            entidades=obtener_entidades(),
+            entidad=obtener_entidad(ent=request.args.get("entidad")),
+            titulo=TITULO,
+        )
+
+    else:
+        return render_template(
+            "contabilidad/centro-costo_lista.html",
+            base_centrocostos=obtener_catalogo_centros_costo_base(),
+            ccostos=obtener_catalogo_centros_costos(),
+            entidades=obtener_entidades(),
+            entidad=obtener_entidad(),
+            titulo=TITULO,
+        )
+
+
+@contabilidad.route("/accounts/costs_center/<id_cc>")
+@login_required
+def centro_costo(id_cc):
     from cacao_accounting.database import CentroCosto
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=CentroCosto)
-    PAGINA = RESULTADO.page(PAGE)
-    TITULO = "Catalogo de Centros de Costos - " + APPNAME
-    return render_template("contabilidad/centro-costo_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
+    registro = CentroCosto.query.filter_by(codigo=id_cc).first()
+    return render_template("contabilidad/centro-costo.html", registro=registro, statusweb=CentroCosto.status_web)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

@@ -163,6 +163,7 @@ def test_eliminar_entidad(client, auth):
 
 def test_ctacontable(client, auth):
     auth.login()
+    responde = client.get("/accounts/accounts")
     responde = client.get("/accounts/accounts/11")
     responde = client.get("/accounts/accounts/21")
     responde = client.get("/accounts/accounts/3")
@@ -170,7 +171,11 @@ def test_ctacontable(client, auth):
 
 def test_centrocostos(client, auth):
     auth.login()
-    responde = client.get("/accounts/ccenter")
+    responde = client.get("/accounts/costs_center")
+    responde = client.get("/accounts/costs_center?entidad=cafe")
+    responde = client.get("/accounts/costs_center/A00000")
+    responde = client.get("/accounts/costs_center/B00000")
+    responde = client.get("/accounts/costs_center/B00001")
 
 
 def test_proyectos(client, auth):

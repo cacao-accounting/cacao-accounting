@@ -170,10 +170,111 @@ def _catalogo():
     cargar_catalogos(base, "cafe")
 
 
+CENTRO_COSTO_BASE = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": False,
+    "codigo": "A00000",
+    "nombre": "Centro Costos Predeterminado",
+    "status": "activa",
+}
+
+CENTRO_COSTO_NIVEL01 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B00000",
+    "nombre": "Centro Costos Nivel 1",
+    "status": "activa",
+}
+
+CENTRO_COSTO_NIVEL02 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B00001",
+    "nombre": "Centro Costos Nivel 2",
+    "status": "activa",
+    "padre": "B00000",
+}
+
+CENTRO_COSTO_NIVEL03 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B00011",
+    "nombre": "Centro Costos Nivel 3",
+    "status": "activa",
+    "padre": "B00001",
+}
+
+CENTRO_COSTO_NIVEL03 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B00111",
+    "nombre": "Centro Costos Nivel 3",
+    "status": "activa",
+    "padre": "B00011",
+}
+
+CENTRO_COSTO_NIVEL04 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B01111",
+    "nombre": "Centro Costos Nivel 4",
+    "status": "activa",
+    "padre": "B00111",
+}
+
+CENTRO_COSTO_NIVEL05 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": False,
+    "codigo": "B11111",
+    "nombre": "Centro Costos Nivel 5",
+    "status": "activa",
+    "padre": "B01111",
+}
+
+
+def _centros_de_costos():
+    from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
+
+    CENTRO_DE_COSTO = RegistroCentroCosto()
+    log.debug("Cargando centros de costos.")
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_COSTO_BASE["entidad"] = "dulce"
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_COSTO_BASE["entidad"] = "cafe"
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL01)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL02)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL03)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL04)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL05)
+
+
 def demo_data():
     log.debug("Iniciando carga de entidades de prueba.")
     _demo_usuarios()
     _demo_entidad()
     _demo_unidades()
+    _centros_de_costos()
     _catalogo()
     log.debug("Entidades de pruebas creada correctamente.")
