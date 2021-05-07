@@ -196,6 +196,18 @@ def create_app(ajustes=None):
 
         server()
 
+    if DEVELOPMENT:
+
+        @CACAO_APP.cli.command()
+        def setupdb():
+            """
+            Define una base de datos de desarrollo nueva.
+            """
+            from cacao_accounting.database import inicia_base_de_datos
+
+            db.drop_all()
+            inicia_base_de_datos(CACAO_APP)
+
     actualiza_variables_globales_jinja(app=CACAO_APP)
     establece_variables_de_entorno(app=CACAO_APP)
     iniciar_extenciones(CACAO_APP)
