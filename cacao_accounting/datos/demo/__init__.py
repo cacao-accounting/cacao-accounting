@@ -161,13 +161,128 @@ def _demo_unidades():
     db.session.commit()
 
 
+CUENTA_PRUEBA_NIVEL01 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6",
+    "nombre": "Cuenta Prueba Nivel 1",
+    "grupo": True,
+    "padre": None,
+}
+
+CUENTA_PRUEBA_NIVEL02 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1",
+    "nombre": "Cuenta Prueba Nivel 2",
+    "grupo": True,
+    "padre": "6",
+}
+
+CUENTA_PRUEBA_NIVEL03 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1",
+    "nombre": "Cuenta Prueba Nivel 3",
+    "grupo": True,
+    "padre": "6.1",
+}
+
+CUENTA_PRUEBA_NIVEL04 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 4",
+    "grupo": True,
+    "padre": "6.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL05 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 5",
+    "grupo": True,
+    "padre": "6.1.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL06 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 6",
+    "grupo": True,
+    "padre": "6.1.1.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL07 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 7",
+    "grupo": True,
+    "padre": "6.1.1.1.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL08 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 8",
+    "grupo": True,
+    "padre": "6.1.1.1.1.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL09 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 9",
+    "grupo": True,
+    "padre": "6.1.1.1.1.1.1.1",
+}
+
+CUENTA_PRUEBA_NIVEL10 = {
+    "activa": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "codigo": "6.1.1.1.1.1.1.1.1.1",
+    "nombre": "Cuenta Prueba Nivel 10",
+    "grupo": False,
+    "padre": "6.1.1.1.1.1.1.1.1",
+}
+
 def _catalogo():
     from cacao_accounting.contabilidad.ctas import base, desarrollo, cargar_catalogos
+    from cacao_accounting.contabilidad.registros.cuenta import RegistroCuentaContable
 
     log.debug("Cargando catalogos de cuentas.")
     cargar_catalogos(desarrollo, "cacao")
     cargar_catalogos(base, "dulce")
     cargar_catalogos(base, "cafe")
+    CUENTA_CONTABLE = RegistroCuentaContable()
+    for CTA in (
+        CUENTA_PRUEBA_NIVEL01,
+        CUENTA_PRUEBA_NIVEL02,
+        CUENTA_PRUEBA_NIVEL03,
+        CUENTA_PRUEBA_NIVEL04,
+        CUENTA_PRUEBA_NIVEL05,
+        CUENTA_PRUEBA_NIVEL06,
+        CUENTA_PRUEBA_NIVEL07,
+        CUENTA_PRUEBA_NIVEL08,
+        CUENTA_PRUEBA_NIVEL09,
+        CUENTA_PRUEBA_NIVEL10,
+    ):
+        CUENTA_CONTABLE.crear(CTA)
 
 
 CENTRO_COSTO_BASE = {

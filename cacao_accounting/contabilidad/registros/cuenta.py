@@ -14,3 +14,16 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+from cacao_accounting.registro import Registro
+
+
+class RegistroCuentaContable(Registro):
+    """
+    Clase para administrar cuentas en el sistema.
+    """
+
+    def __init__(self):
+        from cacao_accounting.database import Cuentas
+
+        self.tabla = Cuentas
