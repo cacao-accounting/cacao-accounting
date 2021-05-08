@@ -58,7 +58,7 @@ def runner(app):
     return app.test_cli_runner()
 
 
-class AuthActions(object):
+class AuthActions:
     def __init__(self, client):
         self._client = client
 
@@ -191,3 +191,7 @@ def test_monedas(client, auth):
 def test_tasascambio(client, auth):
     auth.login()
     responde = client.get("/accounts/exchange")
+
+def test_development(client, auth):
+    auth.login()
+    responde = client.get("/development")

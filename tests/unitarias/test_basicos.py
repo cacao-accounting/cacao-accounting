@@ -19,10 +19,6 @@ from unittest import TestCase
 import pytest
 
 
-def test_dummy():
-    import cacao_accounting
-
-
 def test_info_desarrollo():
     from cacao_accounting.app import dev_info
 
@@ -63,8 +59,8 @@ def test_valida_contraseña():
     from cacao_accounting.auth import validar_acceso
 
     crear_db()
-    assert True == validar_acceso("cacao", "cacao")
-    assert False == validar_acceso("cacao", "prueba")
+    assert validar_acceso("cacao", "cacao") == True
+    assert validar_acceso("cacao", "prueba") == False
 
 
 def test_logea_usuario():
@@ -77,7 +73,6 @@ def test_logea_usuario():
 def test_run():
     import subprocess
     from sys import executable
-    from cacao_accounting.server import app, server
 
     subprocess.Popen(
         [executable, "-m", "cacao_accounting"],
@@ -186,7 +181,7 @@ def test_validar_conexion_db():
 def test_valida_clave_secreta():
     from cacao_accounting.config import valida_llave_secreta
 
-    assert valida_llave_secreta("gw(5g6qd$fM\MZJ{") == True
+    assert valida_llave_secreta("gw(5g6qd$fM|MZJ{") == True
     assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
 
 

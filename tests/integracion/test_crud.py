@@ -1,5 +1,7 @@
 import pytest
+from datetime import date
 from unittest import TestCase
+from sqlalchemy import create_engine
 from cacao_accounting import create_app
 from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
@@ -111,7 +113,6 @@ CENTRO_DE_COSTO3 = {
 
 class CentroCosto:
     def test_crear_centrocosto(self):
-        from cacao_accounting.datos import demo_data
         from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
 
         demo_data()
@@ -121,7 +122,6 @@ class CentroCosto:
         c.crear_registro(datos=CENTRO_DE_COSTO2, entidad_madre="cacao")
 
     def test_eliminar_centrocosto(self):
-        from cacao_accounting.datos import demo_data
         from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
 
         demo_data()
@@ -154,7 +154,6 @@ UNIDAD2 = {
 
 class Unidad:
     def test_crear_unidad(self):
-        from cacao_accounting.datos import demo_data
         from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
 
         demo_data()
@@ -167,7 +166,7 @@ PROYECTO = {
     "habilitado": True,
     "entidad": "cacao",
     "codigo": "PTO002",
-    "nombre": "Proyecto Prueba",
+    "nombre": "Proyecto Pruebas",
     "fechainicio": date(year=2020, month=6, day=5),
     "fechafin": date(year=2020, month=9, day=5),
     "presupuesto": 10000,
@@ -178,7 +177,6 @@ PROYECTO = {
 class Proyecto:
     def test_crear_proyecto(self):
         from cacao_accounting.contabilidad.registros.proyecto import RegistroProyecto
-        from cacao_accounting.datos import demo_data
 
         demo_data()
         p = RegistroProyecto()
@@ -242,8 +240,6 @@ MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+
 # Validamos que bases de datos estan disponibles
 
 
-from sqlalchemy import create_engine
-
 engine = create_engine(SQLITE)
 with engine.connect() as con:
     rs = con.execute("SELECT sqlite_version()")
@@ -252,7 +248,6 @@ with engine.connect() as con:
         print(row)
 
 try:
-    from sqlalchemy import create_engine
 
     engine = create_engine(MYSQL)
     with engine.connect() as con:
@@ -280,7 +275,6 @@ except:
     print("Postgresql no disponible")
 
 try:
-    from sqlalchemy import create_engine
 
     engine = create_engine(MSSQL)
     with engine.connect() as con:
@@ -292,6 +286,29 @@ try:
 except:
     print("MS SQL Server no disponible")
     mssql_disponible = False
+
+
+# <-------------------------------------------------------------------------> #
+# Pruebas unitarias basicas relacionadas a la base de datos.
+
+
+def test_crea_db():
+    from cacao_accounting import create_app
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import inicia_base_de_datos
+
+    APP = create_app(configuracion)
+    inicia_base_de_datos(APP)
+
+
+def test_requiere_migracion_db():
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import requiere_migracion_db
+
+    APP = create_app(configuracion)
+    APP.app_context().push()
+    db.create_all()
+    requiere_migracion_db(APP)
 
 # <-------------------------------------------------------------------------> #
 # Clases base para los test, cado uno de estas clases debe ejecutarse correctamente
