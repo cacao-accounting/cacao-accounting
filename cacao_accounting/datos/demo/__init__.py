@@ -18,6 +18,7 @@
 """
 Datos de ejemplo.
 """
+from datetime import date
 from cacao_accounting.database import db
 from cacao_accounting.loggin import log
 
@@ -387,11 +388,72 @@ def _centros_de_costos():
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL05)
 
 
-def demo_data():
-    log.debug("Iniciando carga de entidades de prueba.")
+PROYECTO01 = {
+    "habilitado": True,
+    "entidad": "cacao",
+    "codigo": "PTO001",
+    "nombre": "Proyecto Prueba",
+    "fechainicio": date(year=2020, month=6, day=5),
+    "fechafin": date(year=2020, month=9, day=5),
+    "presupuesto": 10000,
+    "status": "abierto",
+}
+
+
+def _proyectos():
+    from cacao_accounting.contabilidad.registros.proyecto import RegistroProyecto
+
+    PROYECTO = RegistroProyecto()
+    log.debug("Creando proyectos de pruebas.")
+    PROYECTO.crear(datos=PROYECTO01)
+
+
+MONEDA01 = {
+    "id": "custom",
+    "nombre": "Dolar Paralelo",
+    "codigo": 9874,
+    "decimales": 4,
+    "activa": True,
+    "predeterminada": False,
+}
+
+
+def _monedas():
+    from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+
+    MONEDA = RegistroMoneda()
+    log.debug("Creando monedas de prueba.")
+    MONEDA.crear(datos=MONEDA01)
+
+
+TASA_CAMBIO01 = {
+    "base": "NIO",
+    "destino": "USD",
+    "tasa": 34.5984,
+    "fecha": date(year=2021, month=6, day=30),
+}
+
+
+def _tasas_de_cambio():
+    from cacao_accounting.contabilidad.registros.tasa_cambio import RegistroTasaCambio
+
+    TASA_CAMBIO = RegistroTasaCambio()
+    log.debug("Creando tasas de cambio de pruebas.")
+    TASA_CAMBIO.crear(datos=TASA_CAMBIO01)
+
+
+def master_data():
+    log.debug("Iniciando carga de master data de pruebas.")
     _demo_usuarios()
     _demo_entidad()
     _demo_unidades()
     _centros_de_costos()
+    _proyectos()
+    _monedas()
+    _tasas_de_cambio()
     _catalogo()
-    log.debug("Entidades de pruebas creada correctamente.")
+    log.debug("Master data de prueba creada correctamente.")
+
+
+def demo_data():
+    master_data()

@@ -164,16 +164,14 @@ class Unidad:
 
 
 PROYECTO = {
-    "activo": True,
     "habilitado": True,
     "entidad": "cacao",
-    "codigo": "99.01",
-    "nombre": "Proyecto de Prueba",
-    "grupo": False,
-    "padre": None,
-    "finalizado": False,
-    "presupuesto": 100000.00,
-    "ejecutado": 50000,
+    "codigo": "PTO002",
+    "nombre": "Proyecto Prueba",
+    "fechainicio": date(year=2020, month=6, day=5),
+    "fechafin": date(year=2020, month=9, day=5),
+    "presupuesto": 10000,
+    "status": "abierto",
 }
 
 

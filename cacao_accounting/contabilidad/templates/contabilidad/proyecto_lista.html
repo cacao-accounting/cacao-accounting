@@ -1,33 +1,48 @@
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
+
 <section>
   <h4>Listado de Proyectos.</h4>
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Proyecto</a>
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col">ID</th>
+        <th scope="col">Código de Proyecto</th>
         <th scope="col">Nombre</th>
-        <th scope="col">Entidad</th>
+        <th scope="col">Fecha Inicio</th>
+        <th scope="col">Fecha Fin</th>
       </tr>
     </thead>
-  {% for item in pagina.object_list -%}
-  <tr>
-    <th>
-      {{ item.id }}
-    </th>
-    <th scope="row">
-      {{ item.nombre }}
-    </th>
-    <td>
-      {{ item.entidad }}
-    </td>
-  </tr>
-  {%- endfor %}
-</table>
+      {% for item in pagina.object_list %}
+      <tr>
+        <td>
+          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.codigo }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.nombre }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.fechainicio }}
+          </a>
+        </td>
+        <td>
+          <a href="{{ url_for("contabilidad.entidad", id_entidad=item.id) }}" class="link-dark">
+            {{ item.fechafin }}
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    <tbody>
+    </tbody>
+  </table>
 </section>
 <section>
-  {% import "macros.html" as macros %}
   {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
 </section>
 {% endblock %}

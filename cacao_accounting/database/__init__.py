@@ -65,7 +65,7 @@ class Moneda(db.Model, BaseTabla):
     Una moneda para los registros de la entidad.
     """
 
-    id = db.Column(db.String(5), primary_key=True, nullable=False)
+    id = db.Column(db.String(6), primary_key=True, nullable=False)
     nombre = db.Column(db.String(75), nullable=False)
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
@@ -78,8 +78,7 @@ class TasaDeCambio(db.Model, BaseTabla):
     Tasa de conversión entre dos monedas distintas.
     """
 
-    __tablename__ = "tc"
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer(), primary_key=True, nullable=False, autoincrement=True)
     base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
@@ -262,7 +261,6 @@ class Proyecto(db.Model):
 
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
-    activo = db.Column(db.Boolean(), index=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
@@ -271,15 +269,14 @@ class Proyecto(db.Model):
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(db.String(50), unique=True, index=True)
     nombre = db.Column(db.String(100), unique=True)
-    # Cuenta agrupador o cuenta que recibe movimientos
-    grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.nombre"))
-    inicio = db.Column(db.Date())
-    fin = db.Column(db.Date())
-    finalizado = db.Column(db.Boolean())
-    fecha_fin = db.Column(db.Date())
+    fechainicio = db.Column(db.Date())
+    fechafin = db.Column(db.Date())
     presupuesto = db.Column(db.Float())
-    ejecutado = db.Column(db.Float())
+    status = db.Column(db.String(50), nullable=True)
+    status_web = {
+        "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
+        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
 
 
 class PeriodoContable(db.Model):

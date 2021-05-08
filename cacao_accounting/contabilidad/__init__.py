@@ -317,13 +317,15 @@ def centro_costo(id_cc):
 @contabilidad.route("/accounts/projects")
 @login_required
 def proyectos():
-    from cacao_accounting.database import CentroCosto
+    from cacao_accounting.database import Proyecto
 
     PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=CentroCosto)
+    RESULTADO = paginar_consulta(tabla=Proyecto)
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listados de Proyectos - " + APPNAME
-    return render_template("contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
+    return render_template(
+        "contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Proyecto.status_web
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
