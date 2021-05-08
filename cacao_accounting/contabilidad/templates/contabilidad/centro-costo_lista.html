@@ -96,25 +96,61 @@
       <li>
         <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase.codigo) }}" class="link-dark">
           {{ centrocostobase.codigo + " - " + centrocostobase.nombre }}
-        </a> 
+        </a>
+        {% if centrocostobase.grupo == True %}
         <ol>
-          {%- for centrocostonivel01 in ccostos if centrocostonivel01.padre == centrocostobase.codigo-%}
+          {%- for centrocostonivel01 in centros_costo if centrocostonivel01.padre == centrocostobase.codigo -%}
           <li>
             <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel01.codigo) }}" class="link-dark">
-              {{ centrocostonivel01.codigo + " - " + centrocostonivel01.nombre}}
+              {{ centrocostonivel01.codigo + " - " + centrocostonivel01.nombre }}
             </a>
-            {%- if  centrocostonivel01.grupo == True -%}
+            {% if centrocostonivel01.grupo == True %}
             <ol>
-              {%- for centrocostonivel02 in ccostos if centrocostonivel02.padre == centrocostonivel01.codigo -%}
+              {%- for centrocostonivel02 in centros_costo if centrocostonivel02.padre == centrocostonivel01.codigo -%}
               <li>
-                {{ centrocostonivel02.codigo + " - " + centrocostonivel02.nombre}}
+                <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel02.codigo) }}" class="link-dark">
+                  {{ centrocostonivel02.codigo + " - " + centrocostonivel02.nombre }}
+                </a>
+                {% if centrocostonivel02.grupo == True %}
+                <ol>
+                  {%- for centrocostonivel03 in centros_costo if centrocostonivel03.padre == centrocostonivel02.codigo -%}
+                  <li>
+                    <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel03.codigo) }}" class="link-dark">
+                      {{ centrocostonivel03.codigo + " - " + centrocostonivel03.nombre }}
+                    </a>
+                    {% if centrocostonivel03.grupo == True %}
+                    <ol>
+                    {%- for centrocostonivel04 in centros_costo if centrocostonivel04.padre == centrocostonivel03.codigo -%}
+                      <li>
+                        <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel04.codigo) }}" class="link-dark">
+                          {{ centrocostonivel04.codigo + " - " + centrocostonivel04.nombre }}
+                        </a>
+                        {% if centrocostonivel04.grupo == True%}
+                        <ol>
+                          {%- for centrocostonivel05 in centros_costo if centrocostonivel05.padre == centrocostonivel04.codigo -%}
+                            <li>
+                              <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel05.codigo) }}" class="link-dark">
+                                {{ centrocostonivel05.codigo + " - " + centrocostonivel05.nombre }}
+                              </a>
+                            </li>
+                          {% endfor %}
+                        {% endif %}
+                      </li>
+                    {% endfor%}
+                    </ol>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ol>
+                {% endif %}
               </li>
-              {%- endfor -%}
+              {% endfor %}
             </ol>
             {% endif %}
           </li>
-          {%- endfor -%}
+          {% endfor %}
         </ol>
+        {% endif %}
       </li>
     {%- endfor -%}
     </ol>

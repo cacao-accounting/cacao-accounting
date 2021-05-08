@@ -166,7 +166,7 @@ CUENTA_PRUEBA_NIVEL01 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6",
-    "nombre": "Cuenta Prueba Nivel 1",
+    "nombre": "Cuenta Prueba Nivel 0",
     "grupo": True,
     "padre": None,
 }
@@ -176,7 +176,7 @@ CUENTA_PRUEBA_NIVEL02 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1",
-    "nombre": "Cuenta Prueba Nivel 2",
+    "nombre": "Cuenta Prueba Nivel 1",
     "grupo": True,
     "padre": "6",
 }
@@ -186,7 +186,7 @@ CUENTA_PRUEBA_NIVEL03 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1",
-    "nombre": "Cuenta Prueba Nivel 3",
+    "nombre": "Cuenta Prueba Nivel 2",
     "grupo": True,
     "padre": "6.1",
 }
@@ -196,7 +196,7 @@ CUENTA_PRUEBA_NIVEL04 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 4",
+    "nombre": "Cuenta Prueba Nivel 3",
     "grupo": True,
     "padre": "6.1.1",
 }
@@ -206,7 +206,7 @@ CUENTA_PRUEBA_NIVEL05 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 5",
+    "nombre": "Cuenta Prueba Nivel 4",
     "grupo": True,
     "padre": "6.1.1.1",
 }
@@ -216,7 +216,7 @@ CUENTA_PRUEBA_NIVEL06 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 6",
+    "nombre": "Cuenta Prueba Nivel 5",
     "grupo": True,
     "padre": "6.1.1.1.1",
 }
@@ -226,7 +226,7 @@ CUENTA_PRUEBA_NIVEL07 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 7",
+    "nombre": "Cuenta Prueba Nivel 6",
     "grupo": True,
     "padre": "6.1.1.1.1.1",
 }
@@ -236,7 +236,7 @@ CUENTA_PRUEBA_NIVEL08 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 8",
+    "nombre": "Cuenta Prueba Nivel 7",
     "grupo": True,
     "padre": "6.1.1.1.1.1.1",
 }
@@ -246,7 +246,7 @@ CUENTA_PRUEBA_NIVEL09 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 9",
+    "nombre": "Cuenta Prueba Nivel 8",
     "grupo": True,
     "padre": "6.1.1.1.1.1.1.1",
 }
@@ -256,10 +256,11 @@ CUENTA_PRUEBA_NIVEL10 = {
     "habilitada": True,
     "entidad": "cacao",
     "codigo": "6.1.1.1.1.1.1.1.1.1",
-    "nombre": "Cuenta Prueba Nivel 10",
+    "nombre": "Cuenta Prueba Nivel 9",
     "grupo": False,
     "padre": "6.1.1.1.1.1.1.1.1",
 }
+
 
 def _catalogo():
     from cacao_accounting.contabilidad.ctas import base, desarrollo, cargar_catalogos
@@ -296,15 +297,27 @@ CENTRO_COSTO_BASE = {
     "status": "activa",
 }
 
-CENTRO_COSTO_NIVEL01 = {
+CENTRO_COSTO_NIVEL00 = {
     "activa": True,
     "predeterminado": True,
     "habilitada": True,
     "entidad": "cacao",
     "grupo": True,
     "codigo": "B00000",
+    "nombre": "Centro Costos Nivel 0",
+    "status": "activa",
+}
+
+CENTRO_COSTO_NIVEL01 = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cacao",
+    "grupo": True,
+    "codigo": "B00001",
     "nombre": "Centro Costos Nivel 1",
     "status": "activa",
+    "padre": "B00000",
 }
 
 CENTRO_COSTO_NIVEL02 = {
@@ -313,20 +326,8 @@ CENTRO_COSTO_NIVEL02 = {
     "habilitada": True,
     "entidad": "cacao",
     "grupo": True,
-    "codigo": "B00001",
-    "nombre": "Centro Costos Nivel 2",
-    "status": "activa",
-    "padre": "B00000",
-}
-
-CENTRO_COSTO_NIVEL03 = {
-    "activa": True,
-    "predeterminado": True,
-    "habilitada": True,
-    "entidad": "cacao",
-    "grupo": True,
     "codigo": "B00011",
-    "nombre": "Centro Costos Nivel 3",
+    "nombre": "Centro Costos Nivel 2",
     "status": "activa",
     "padre": "B00001",
 }
@@ -378,6 +379,7 @@ def _centros_de_costos():
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
     CENTRO_COSTO_BASE["entidad"] = "cafe"
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL00)
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL01)
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL02)
     CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL03)

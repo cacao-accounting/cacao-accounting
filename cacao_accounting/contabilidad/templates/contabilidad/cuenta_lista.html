@@ -100,110 +100,110 @@
           {{ ctabase.codigo + " - " + ctabase.nombre }}
         </a>
         <ol>
-          {%- for cta in cuentas if cta.padre == ctabase.codigo-%}
+          {%- for cuentanivel01 in cuentas if cuentanivel01.padre == ctabase.codigo-%}
           <li>
-            <a href="{{ url_for("contabilidad.cuenta", id_cta=cta.codigo) }}" class="link-dark">
-              {{ cta.codigo + " - " + cta.nombre}}
+            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel01.codigo) }}" class="link-dark">
+              {{ cuentanivel01.codigo + " - " + cuentanivel01.nombre}}
             </a>
-            {%- if cta.grupo == True -%}
+            {% if cuentanivel01.grupo == True %}
             <ol>
-              {%- for i in cuentas if i.padre == cta.codigo -%}
+              {% for cuentanivel02 in cuentas if cuentanivel02.padre == cuentanivel01.codigo  %}
               <li>
-                <a href="{{ url_for("contabilidad.cuenta", id_cta=i.codigo) }}" class="link-dark">
-                  {{ i.codigo + " - " + i.nombre}}
+                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel02.codigo) }}" class="link-dark">
+                  {{ cuentanivel02.codigo + " - " + cuentanivel02.nombre}}
                 </a>
-                {%- if i.grupo == True -%}
+                {% if cuentanivel02.grupo == True %}
                 <ol>
-                  {%- for ii in cuentas if ii.padre == i.codigo -%}
+                  {% for cuentanivel03 in cuentas if cuentanivel03.padre == cuentanivel02.codigo  %}
                   <li>
-                    <a href="{{ url_for("contabilidad.cuenta", id_cta=ii.codigo) }}" class="link-dark">
-                      {{ ii.codigo + " - " + ii.nombre}}
+                    <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel03.codigo) }}" class="link-dark">
+                      {{ cuentanivel03.codigo + " - " + cuentanivel03.nombre}}
                     </a>
-                    {%- if ii.grupo == True -%}
+                    {% if cuentanivel03.grupo == True %}
                     <ol>
-                      {%- for iii in cuentas if iii.padre == ii.codigo -%}
+                      {% for cuentanivel04 in cuentas if cuentanivel04.padre == cuentanivel03.codigo %}
                       <li>
-                        <a href="{{ url_for("contabilidad.cuenta", id_cta=iii.codigo) }}" class="link-dark">
-                          {{ iii.codigo + " - " + iii.nombre}}
+                        <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel04.codigo) }}" class="link-dark">
+                          {{ cuentanivel04.codigo + " - " + cuentanivel04.nombre}}
                         </a>
-                        {%- if iii.grupo == True -%}
+                        {% if cuentanivel04.grupo == True %}
                         <ol>
-                        {%- for iv in cuentas if iv.padre == iii.codigo -%}
+                          {% for cuentanivel05 in cuentas if cuentanivel05.padre == cuentanivel04.codigo %}
                           <li>
-                            <a href="{{ url_for("contabilidad.cuenta", id_cta=iv.codigo) }}" class="link-dark">
-                            {{ iv.codigo + " - " + iv.nombre}}
+                            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel05.codigo) }}" class="link-dark">
+                              {{ cuentanivel05.codigo + " - " + cuentanivel05.nombre}}
                             </a>
-                            {%- if iv.grupo == True -%}
+                            {% if cuentanivel05.grupo == True %}
                             <ol>
-                              {%- for v in cuentas if v.padre == iv.codigo -%}
+                              {% for cuentanivel06 in cuentas if cuentanivel06.padre == cuentanivel05.codigo %}
                               <li>
-                                <a href="{{ url_for("contabilidad.cuenta", id_cta=v.codigo) }}" class="link-dark">
-                                  {{ v.codigo + " - " + v.nombre}}
+                                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel06.codigo) }}" class="link-dark">
+                                  {{ cuentanivel06.codigo + " - " + cuentanivel06.nombre}}
                                 </a>
-                                {%- if v.grupo == True -%}
+                                {% if cuentanivel06.grupo == True %}
                                 <ol>
-                                  {%- for vi in cuentas if vi.padre == v.codigo -%}
+                                  {% for cuentanivel07 in cuentas if cuentanivel07.padre == cuentanivel06.codigo %}
                                   <li>
-                                    <a href="{{ url_for("contabilidad.cuenta", id_cta=vi.codigo) }}" class="link-dark">
-                                      {{ vi.codigo + " - " + vi.nombre}}
+                                    <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel07.codigo) }}" class="link-dark">
+                                      {{ cuentanivel07.codigo + " - " + cuentanivel07.nombre}}
                                     </a>
-                                    {%- if vi.grupo == True -%}
+                                    {% if cuentanivel07.grupo == True %}
                                     <ol>
-                                      {%- for vii in cuentas if vii.padre == vi.codigo -%}
+                                      {% for cuentanivel08 in cuentas if cuentanivel08.padre == cuentanivel07.codigo %}
                                       <li>
-                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=vii.codigo) }}" class="link-dark">
-                                          {{ vii.codigo + " - " + vii.nombre}}
+                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel08.codigo) }}" class="link-dark">
+                                          {{ cuentanivel08.codigo + " - " + cuentanivel08.nombre}}
                                         </a>
-                                        {%- if vii.grupo == True -%}
+                                        {% if cuentanivel08.grupo == True %}
                                         <ol>
-                                          {%- for viii in cuentas if viii.padres == vii.codigo -%}
+                                          {% for cuentanivel09 in cuentas if cuentanivel09.padre == cuentanivel08.codigo %}
                                           <li>
-                                            <a href="{{ url_for("contabilidad.cuenta", id_cta=viii.codigo) }}" class="link-dark">
-                                              {{ viii.codigo + " - " + viii.nombre}}
+                                            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel09.codigo) }}" class="link-dark">
+                                              {{ cuentanivel09.codigo + " - " + cuentanivel09.nombre}}
                                             </a>
-                                            {%- if viii.grupo == True -%}
+                                            {% if cuentanivel09.grupo == True %}
                                             <ol>
-                                              {%- for ix in cuentas if ix.padre == viii.codigo -%}
+                                            {% for cuentanivel10 in cuentas if cuentanivel10.padre == cuentanivel09.codigo %}
                                               <li>
-                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=ix.codigo) }}" class="link-dark">
-                                                {{ ix.codigo + " - " + ix.nombre}}
+                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel10.codigo) }}" class="link-dark">
+                                                  {{ cuentanivel10.codigo + " - " + cuentanivel10.nombre}}
                                                 </a>
                                               </li>
-                                              {%- endfor -%}
+                                            {% endfor %}
                                             </ol>
-                                            {%- endif -%}
+                                            {% endif %}
                                           </li>
-                                          {%- endfor -%}
+                                          {% endfor %}
                                         </ol>
-                                        {%- endif -%}
+                                        {% endif %}
                                       </li>
-                                      {%- endfor -%}
+                                      {% endfor %}
                                     </ol>
-                                    {%- endif -%}
+                                    {% endif %}
                                   </li>
-                                  {%- endfor -%}
+                                  {% endfor %}
                                 </ol>
-                                {%- endif -%}
+                                {% endif %}
                               </li>
-                              {%- endfor -%}
+                              {% endfor %}
                             </ol>
-                            {%- endif -%}
+                            {% endif %}
                           </li>
-                        {%- endfor -%}
+                          {% endfor %}
                         </ol>
-                        {%- endif -%}
+                        {% endif %}
                       </li>
-                      {%- endfor -%}
+                      {% endfor %}
                     </ol>
-                    {%- endif -%}
+                    {% endif %}
                   </li>
-                  {%- endfor -%}
+                  {% endfor %}
                 </ol>
-                {%- endif -%}
+                {% endif %}
               </li>
               {% endfor %}
             </ol>
-            {%- endif -%}
+            {% endif %}
           </li> 
           {%- endfor -%}
         </ol>
