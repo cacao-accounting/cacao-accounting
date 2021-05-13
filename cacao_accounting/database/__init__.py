@@ -38,6 +38,9 @@ StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
 DBVERSION = "0.0.0dev"
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
+# ellas.
 class BaseTabla:
     """
     Columnas estandar para todas las tablas de la base de datos.
@@ -48,8 +51,49 @@ class BaseTabla:
     _creado_por = db.Column(db.String(15), nullable=True)
     _fecha_modicacion = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=False)
     _modificado_por = db.Column(db.String(15), nullable=True)
+    _ultima_modificacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
 
 
+class BaseTercero(BaseTabla):
+    """
+    Esta es clase contiene campos comunes para terceros, principalmente:
+     - Cliente
+     - Proveedor
+    """
+
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    # Requerisitos minimos para tener crear el registro.
+    nombre = db.Column(db.String(50), nullable=False)
+    # Individual, Sociedad
+    tipo = db.Column(db.String(50), nullable=False)
+    habilitado = db.Column(db.Boolean(), nullable=True)
+    identificacion = db.Column(db.String(30),nullable=True)
+    id_fiscal = db.Column(db.String(30),nullable=True)
+
+
+class BaseContacto:
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    telefono = db.Column(db.String(30),nullable=True)
+    celular = db.Column(db.String(30),nullable=True)
+    correo_electronico = db.Column(db.String(30),nullable=True)
+    codigo_postal = db.Column(db.String(30),nullable=True)
+
+
+class BaseDireccion:
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    pais = db.Column(db.String(30),nullable=True)
+    estado = db.Column(db.String(50),nullable=True)
+    ciudad = db.Column(db.String(50),nullable=True)
+    calle = db.Column(db.String(50),nullable=True)
+    avenida = db.Column(db.String(50),nullable=True)
+    numero = db.Column(db.String(10),nullable=True)
+    codigo_postal = db.Column(db.String(30),nullable=True)
+    linea1 = db.Column(db.String(30),nullable=True)
+    linea2 = db.Column(db.String(30),nullable=True)
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Información sobre la instalación actual del sistema.
 class Metadata(db.Model):
     """
     Informacion basica de la instalacion.
@@ -60,6 +104,8 @@ class Metadata(db.Model):
     fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False, primary_key=True)
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Administración de monedas y tipos de cambio.
 class Moneda(db.Model, BaseTabla):
     """
     Una moneda para los registros de la entidad.
@@ -85,6 +131,8 @@ class TasaDeCambio(db.Model, BaseTabla):
     fecha = db.Column(db.Date(), nullable=False)
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Administración de usuario, roles, grupos y permisos.
 class Usuario(UserMixin, db.Model, BaseTabla):
     """
     Una entidad con acceso al sistema.
@@ -117,6 +165,8 @@ class Usuario(UserMixin, db.Model, BaseTabla):
     roles = db.Column(db.JSON())
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Administración de módulos del sistema.
 class Modulos(db.Model, BaseTabla):
     """Lista de los modulos del sistema."""
 
@@ -126,7 +176,8 @@ class Modulos(db.Model, BaseTabla):
     estandar = db.Column(db.Boolean(), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
 
-
+# <---------------------------------------------------------------------------------------------> #
+# Descripción de la estructura funcional de la entidad.
 class Entidad(db.Model):
     """
     Una entidad es una unidad de negocios de la que se lleva registros
@@ -187,7 +238,13 @@ class Unidad(db.Model):
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
 
+class Direcciones(BaseDireccion):
+    """
+    La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas.
+    """
+    pass
 
+# <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
 class Cuentas(db.Model):
     """
@@ -291,6 +348,34 @@ class PeriodoContable(db.Model):
     habilitada = db.Column(db.Boolean(), index=True)
     inicio = db.Column(db.Date(), nullable=False)
     fin = db.Column(db.Date(), nullable=False)
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Cuentas por Cobrar
+class Cliente(db.Model, BaseTercero):
+    pass
+
+
+class ClienteDireccion(db.Model, BaseDireccion):
+    pass
+
+
+class ClienteContacto(db.Model, BaseContacto):
+    pass
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Cuentas por Pagar
+class Proveedor(db.Model, BaseTercero):
+    pass
+
+
+class ProveedorDireccion(db.Model, BaseDireccion):
+    pass
+
+
+class ProveedorContacto(db.Model, BaseContacto):
+    pass
 
 
 # <---------------------------------------------------------------------------------------------> #

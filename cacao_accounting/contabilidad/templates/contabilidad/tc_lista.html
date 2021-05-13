@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block contenido %}
 <section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+    </ol>
+  </nav>
   <h4>Listado de Tasas de Cambio.</h4>
   <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Tasa de Cambio</a>
   <table class="table table-sm">

@@ -71,9 +71,24 @@
      li input:checked + ol > li:last-child { margin: 0 0 0.063em; /* 1px */ }
  
 </style>
-
-
-
+<div class="row">
+  <div class="col">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb lh-sm">
+        <li class="breadcrumb-item active" aria-current="page">
+          <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+            <i class="bi bi-house"></i> Inicio
+          </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+          <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+            Contabilidad
+          </a>
+        </li>
+      </ol>
+    </nav>
+  </div>
+</div>
   <h4>Catalogo de Cuentas Contables.</h4>
   <form>
     <h6>Seleccionar Entidad.</h6>

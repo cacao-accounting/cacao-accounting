@@ -27,6 +27,7 @@ def obtener_lista_entidades_por_id_razonsocial():
     from cacao_accounting.database import Entidad
 
     _entidades = []
+    _entidades.append(("", ""))
     consulta = Entidad.query.all()
     for i in consulta:
         _entidad = (i.id, i.razon_social)
