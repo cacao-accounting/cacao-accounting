@@ -31,7 +31,7 @@ from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME
 # Free Open Source Databases
 SQLITE = "sqlite:///cacaoaccounting.db"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
-POSTGRESQL = "postgresql+psycopg2://cacao:cacao@localhost:5432/cacao"
+POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 # Non Free Databases
 MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server"
 
