@@ -455,5 +455,48 @@ def master_data():
     log.debug("Master data de prueba creada correctamente.")
 
 
+def _periodo_contable():
+    from cacao_accounting.contabilidad.registros.periodo import RegistroPeriodoContable
+
+    PERIODO = RegistroPeriodoContable()
+    log.debug("Creando periodos contables de prueba.")
+    PERIODO.crear(
+        {
+            "entidad": "cacao",
+            "nombre": "2019",
+            "status": "cerrado",
+            "habilitada": False,
+            "inicio": date(year=2019, month=1, day=1),
+            "fin": date(year=2019, month=12, day=31),
+        }
+    )
+    PERIODO.crear(
+        {
+            "entidad": "cacao",
+            "nombre": "2020",
+            "status": "actual",
+            "habilitada": False,
+            "inicio": date(year=2020, month=1, day=1),
+            "fin": date(year=2020, month=12, day=31),
+        }
+    )
+    PERIODO.crear(
+        {
+            "entidad": "cacao",
+            "nombre": "2021",
+            "status": "abierto",
+            "habilitada": False,
+            "inicio": date(year=2021, month=1, day=1),
+            "fin": date(year=2021, month=12, day=31),
+        }
+    )
+
+
+def transacciones():
+    _periodo_contable()
+    log.debug("Transacciones de Pruebas Creadas correstamente.")
+
+
 def demo_data():
     master_data()
+    transacciones()

@@ -67,29 +67,29 @@ class BaseTercero(BaseTabla):
     # Individual, Sociedad
     tipo = db.Column(db.String(50), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
-    identificacion = db.Column(db.String(30),nullable=True)
-    id_fiscal = db.Column(db.String(30),nullable=True)
+    identificacion = db.Column(db.String(30), nullable=True)
+    id_fiscal = db.Column(db.String(30), nullable=True)
 
 
 class BaseContacto:
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
-    telefono = db.Column(db.String(30),nullable=True)
-    celular = db.Column(db.String(30),nullable=True)
-    correo_electronico = db.Column(db.String(30),nullable=True)
-    codigo_postal = db.Column(db.String(30),nullable=True)
+    telefono = db.Column(db.String(30), nullable=True)
+    celular = db.Column(db.String(30), nullable=True)
+    correo_electronico = db.Column(db.String(30), nullable=True)
+    codigo_postal = db.Column(db.String(30), nullable=True)
 
 
 class BaseDireccion:
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
-    pais = db.Column(db.String(30),nullable=True)
-    estado = db.Column(db.String(50),nullable=True)
-    ciudad = db.Column(db.String(50),nullable=True)
-    calle = db.Column(db.String(50),nullable=True)
-    avenida = db.Column(db.String(50),nullable=True)
-    numero = db.Column(db.String(10),nullable=True)
-    codigo_postal = db.Column(db.String(30),nullable=True)
-    linea1 = db.Column(db.String(30),nullable=True)
-    linea2 = db.Column(db.String(30),nullable=True)
+    pais = db.Column(db.String(30), nullable=True)
+    estado = db.Column(db.String(50), nullable=True)
+    ciudad = db.Column(db.String(50), nullable=True)
+    calle = db.Column(db.String(50), nullable=True)
+    avenida = db.Column(db.String(50), nullable=True)
+    numero = db.Column(db.String(10), nullable=True)
+    codigo_postal = db.Column(db.String(30), nullable=True)
+    linea1 = db.Column(db.String(30), nullable=True)
+    linea2 = db.Column(db.String(30), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -176,6 +176,7 @@ class Modulos(db.Model, BaseTabla):
     estandar = db.Column(db.Boolean(), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
 
+
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad.
 class Entidad(db.Model):
@@ -238,11 +239,12 @@ class Unidad(db.Model):
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
 
+
 class Direcciones(BaseDireccion):
     """
     La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas.
     """
-    pass
+
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
@@ -348,6 +350,11 @@ class PeriodoContable(db.Model):
     habilitada = db.Column(db.Boolean(), index=True)
     inicio = db.Column(db.Date(), nullable=False)
     fin = db.Column(db.Date(), nullable=False)
+    status_web = {
+        "actual": StatusWeb(color="DodgerBlue", texto="Entidad Activa"),
+        "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
+        "cerrado": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+    }
 
 
 # <---------------------------------------------------------------------------------------------> #

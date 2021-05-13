@@ -192,6 +192,12 @@ def test_tasascambio(client, auth):
     auth.login()
     responde = client.get("/accounts/exchange")
 
+
 def test_development(client, auth):
     auth.login()
     responde = client.get("/development")
+
+
+def test_periodo_contable(client, auth):
+    auth.login()
+    responde = client.get("/accounting_period")

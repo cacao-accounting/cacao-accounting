@@ -340,3 +340,23 @@ def tasa_cambio():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Tasas de Cambio - " + APPNAME
     return render_template("contabilidad/tc_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Períodos Contables
+@contabilidad.route("/accounts/accounting_period")
+@login_required
+def periodo_contable():
+    from cacao_accounting.database import PeriodoContable
+
+    PAGE = request.args.get("page", default=1, type=int)
+    RESULTADO = paginar_consulta(tabla=PeriodoContable)
+    PAGINA = RESULTADO.page(PAGE)
+    TITULO = "Listado de Períodos Contables - " + APPNAME
+    return render_template(
+        "contabilidad/periodo_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        statusweb=PeriodoContable.status_web,
+    )
