@@ -73,14 +73,18 @@ class BaseTercero(BaseTabla):
 
 class BaseContacto:
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    tipo = db.Column(db.String(25), nullable=True)
+    nombre = db.Column(db.String(50), nullable=True)
     telefono = db.Column(db.String(30), nullable=True)
     celular = db.Column(db.String(30), nullable=True)
     correo_electronico = db.Column(db.String(30), nullable=True)
-    codigo_postal = db.Column(db.String(30), nullable=True)
 
 
 class BaseDireccion:
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
+    linea1 = db.Column(db.String(150), nullable=True)
+    linea2 = db.Column(db.String(150), nullable=True)
+    linea3 = db.Column(db.String(150), nullable=True)
     pais = db.Column(db.String(30), nullable=True)
     estado = db.Column(db.String(50), nullable=True)
     ciudad = db.Column(db.String(50), nullable=True)
@@ -88,8 +92,6 @@ class BaseDireccion:
     avenida = db.Column(db.String(50), nullable=True)
     numero = db.Column(db.String(10), nullable=True)
     codigo_postal = db.Column(db.String(30), nullable=True)
-    linea1 = db.Column(db.String(30), nullable=True)
-    linea2 = db.Column(db.String(30), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -152,17 +154,6 @@ class Usuario(UserMixin, db.Model, BaseTabla):
     genero = db.Column(db.String(10))
     nacimiento = db.Column(db.Date())
     telefono = db.Column(db.String(50))
-    # Roles y Permisos
-    admin = db.Column(db.Boolean())
-    # Si esta columna es tipo JSON, así que debemos seguir el soporte de bases de datos a este
-    # tipo de datos
-    # Referencia: https://docs.sqlalchemy.org/en/13/core/type_basics.html#sqlalchemy.types.JSON
-    # JSON is provided as a facade for vendor-specific JSON types. Since it supports JSON SQL operations,
-    # it only works on backends that have an actual JSON type, currently:
-    #  - PostgreSQL
-    #  - MySQL as of version 5.7 (MariaDB as of the 10.2 series does not)
-    #  - SQLite as of version 3.9
-    roles = db.Column(db.JSON())
 
 
 # <---------------------------------------------------------------------------------------------> #
