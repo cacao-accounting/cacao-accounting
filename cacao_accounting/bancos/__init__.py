@@ -35,4 +35,4 @@ def bancos_():
     if validar_modulo_activo("cash"):
         return render_template("bancos.html")
     else:
-        redirect("/app")
+        return redirect("/app")

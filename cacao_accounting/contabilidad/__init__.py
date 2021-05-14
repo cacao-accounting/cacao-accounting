@@ -62,7 +62,7 @@ def conta():
     if validar_modulo_activo("accounting"):
         return render_template("contabilidad.html", titulo=TITULO)
     else:
-        redirect("/app")
+        return redirect("/app")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

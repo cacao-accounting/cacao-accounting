@@ -33,4 +33,4 @@ def compras_():
     if validar_modulo_activo("buying"):
         return render_template("compras.html")
     else:
-        redirect("/app")
+        return redirect("/app")

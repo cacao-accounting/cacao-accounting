@@ -35,4 +35,4 @@ def ventas_():
     if validar_modulo_activo("sales"):
         return render_template("ventas.html")
     else:
-        redirect("/app")
+        return redirect("/app")

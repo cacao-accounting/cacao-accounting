@@ -41,6 +41,7 @@ def app():
         db.create_all()
         base_data()
         demo_data()
+    app.app_context().push()
     yield app
 
 
@@ -77,6 +78,9 @@ def auth(client):
 def test_login(client):
     response = client.get("/login")
     assert b"Cacao" in response.data
+
+
+
 
 
 def test_app(client, auth):
@@ -201,3 +205,21 @@ def test_development(client, auth):
 def test_periodo_contable(client, auth):
     auth.login()
     responde = client.get("/accounting_period")
+
+# Dejar este test al final porque modifica los estatus de los modulos en la base de datos.
+def test_modulos_inactivos(client, auth):
+    from cacao_accounting.database import Modulos
+
+    for modulo in ["accounting", "cash", "buying", "inventory", "sales"]:
+        modulo = Modulos.query.filter_by(modulo=modulo).first()
+        modulo.habilitado = False
+        db.session.add(modulo)
+        db.session.commit()
+
+    auth.login()
+    responde = client.get("/app")
+    responde = client.get("/accounts")
+    responde = client.get("/cash")
+    responde = client.get("/buying")
+    responde = client.get("/inventory")
+    responde = client.get("/sales")

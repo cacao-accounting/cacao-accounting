@@ -36,4 +36,4 @@ def inventario_():
     if validar_modulo_activo("inventory"):
         return render_template("inventario.html")
     else:
-        redirect("/app")
+        return redirect("/app")
