@@ -80,9 +80,6 @@ def test_login(client):
     assert b"Cacao" in response.data
 
 
-
-
-
 def test_app(client, auth):
     auth.login()
     response = client.get("/app")
@@ -205,6 +202,7 @@ def test_development(client, auth):
 def test_periodo_contable(client, auth):
     auth.login()
     responde = client.get("/accounting_period")
+
 
 # Dejar este test al final porque modifica los estatus de los modulos en la base de datos.
 def test_modulos_inactivos(client, auth):
