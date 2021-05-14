@@ -27,14 +27,19 @@ Referencia:
  - https://mariadb.com/kb/en/json-data-type/
 """
 
+# pylint: disable=too-few-public-methods
+
 from collections import namedtuple
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy_paginator import Paginator
+from cacao_accounting.exception import DataError, ERROR1
 from cacao_accounting.loggin import log
+
 
 db = SQLAlchemy()
 StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
-# pylint: disable=too-few-public-methods
+
 DBVERSION = "0.0.0dev"
 
 
@@ -63,9 +68,11 @@ class BaseTercero(BaseTabla):
 
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Requerisitos minimos para tener crear el registro.
-    nombre = db.Column(db.String(50), nullable=False)
+    razon_social = db.Column(db.String(150), nullable=False)
+    nombre = db.Column(db.String(150), nullable=False)
     # Individual, Sociedad
     tipo = db.Column(db.String(50), nullable=False)
+    grupo = db.Column(db.String(50), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
     identificacion = db.Column(db.String(30), nullable=True)
     id_fiscal = db.Column(db.String(30), nullable=True)
@@ -107,7 +114,7 @@ class Metadata(db.Model):
 
 
 # <---------------------------------------------------------------------------------------------> #
-# Administración de monedas y tipos de cambio.
+# Administración de monedas, localización, tasas de cambio y otras configuraciones regionales.
 class Moneda(db.Model, BaseTabla):
     """
     Una moneda para los registros de la entidad.
@@ -445,3 +452,19 @@ def inicia_base_de_datos(app):
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
     return DB_ESQUEMA
+
+
+MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
+
+
+def paginar_consulta(tabla=None, elementos=None):
+    """
+    Toma una consulta simple y la devuel como una consulta paginada.
+    """
+    if tabla:
+        items = elementos or MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
+        consulta = db.session.query(tabla).order_by(tabla.id)
+        consulta_paginada = Paginator(consulta, items)
+        return consulta_paginada
+    else:
+        raise DataError(ERROR1)
