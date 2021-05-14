@@ -43,18 +43,6 @@ def crear_db():
     demo_data()
 
 
-def test_verifica_coneccion_db():
-    from flask import Flask
-    from cacao_accounting.database import verifica_coneccion_db
-
-    app = Flask(__name__)
-    assert verifica_coneccion_db(app) == False
-
-
-def test_db():
-    crear_db()
-
-
 def test_run():
     import subprocess
     from sys import executable
@@ -115,19 +103,8 @@ class TestBasicos(TestCase):
         self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         self.app.app_context().push()
 
-    def test_flaskapp(self):
-        from flask import Flask
-
-        self.assertIsInstance(self.app, Flask)
-
     def test_cli(self):
         self.app.test_cli_runner()
-
-    def test_dbinstance(self):
-        from flask_sqlalchemy import SQLAlchemy
-        from cacao_accounting.database import db
-
-        self.assertIsInstance(db, SQLAlchemy)
 
     def test_directorio_archivos(self):
         from cacao_accounting.tools import DIRECTORIO_ARCHIVOS
@@ -168,6 +145,85 @@ def test_valida_clave_secreta():
 
     assert valida_llave_secreta("gw(5g6qd$fM|MZJ{") == True
     assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
+
+
+class TestInstanciasDeClasesCorrectas(TestCase):
+    def setUp(self):
+        from cacao_accounting import create_app
+
+        self.app = create_app()
+        self.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app.app_context().push()
+
+    def test_Flask(self):
+        from flask import Flask
+
+        self.assertIsInstance(self.app, Flask)
+
+    def test_SQLAlchemy(self):
+        from flask_sqlalchemy import SQLAlchemy
+        from cacao_accounting.database import db
+
+        self.assertIsInstance(db, SQLAlchemy)
+
+    def test_Alembic(self):
+        from flask_alembic import Alembic
+        from cacao_accounting import alembic
+
+        self.assertIsInstance(alembic, Alembic)
+
+    def test_Talisman(self):
+        from flask_talisman import Talisman
+        from cacao_accounting import talisman
+
+        self.assertIsInstance(talisman, Talisman)
+
+    def test_Blueprints(self):
+        from flask.blueprints import Blueprint
+        from cacao_accounting.contabilidad import contabilidad
+
+        self.assertIsInstance(contabilidad, Blueprint)
+        from cacao_accounting.app import cacao_app
+
+        self.assertIsInstance(cacao_app, Blueprint)
+        from cacao_accounting.compras import compras
+
+        self.assertIsInstance(compras, Blueprint)
+        from cacao_accounting.bancos import bancos
+
+        self.assertIsInstance(bancos, Blueprint)
+        from cacao_accounting.ventas import ventas
+
+        self.assertIsInstance(ventas, Blueprint)
+        from cacao_accounting.inventario import inventario
+
+        self.assertIsInstance(inventario, Blueprint)
+
+
+class TestClasesHeredades(TestCase):
+    def setUp(self):
+        from cacao_accounting import create_app
+
+        self.app = create_app()
+        self.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app.app_context().push()
+
+    def test_Form(self):
+        from flask_wtf import FlaskForm
+        from cacao_accounting.contabilidad.forms import FormularioEntidad
+
+        self.assertTrue(issubclass(FormularioEntidad, FlaskForm))
+        from cacao_accounting.contabilidad.forms import FormularioUnidad
+
+        self.assertTrue(issubclass(FormularioUnidad, FlaskForm))
+
+    def test_Registro(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
+
+        self.assertTrue(issubclass(RegistroCentroCosto, Registro))
 
 
 class TestExection(TestCase):
@@ -221,7 +277,7 @@ class TestExection(TestCase):
 
     def test_querry_vacio(self):
         from cacao_accounting.exception import DataError
-        from cacao_accounting.consultas import paginar_consulta
+        from cacao_accounting.database import paginar_consulta
 
         with pytest.raises(DataError):
             paginar_consulta(tabla=None, elementos=None)

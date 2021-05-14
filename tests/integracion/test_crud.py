@@ -7,6 +7,14 @@ from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
 
 
+def test_verifica_coneccion_db():
+    from flask import Flask
+    from cacao_accounting.database import verifica_coneccion_db
+
+    app = Flask(__name__)
+    assert verifica_coneccion_db(app) == True
+
+
 def desplegar_base_de_datos():
     db.drop_all()
     db.create_all()
@@ -66,14 +74,14 @@ ENTIDAD3 = {
 class Entidad:
     def test_crear_entidad(self):
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-        from cacao_accounting.database import Entidad
+        from cacao_accounting.database import Entidad as Ent
 
         e = RegistroEntidad()
         e.crear_entidad(datos=ENTIDAD1)
-        entidades1 = Entidad.query.count()
+        entidades1 = Ent.query.count()
         assert entidades1 == 1
         e.crear_entidad(datos=ENTIDAD2)
-        entidades2 = Entidad.query.count()
+        entidades2 = Ent.query.count()
         assert entidades2 == 2
 
 
@@ -293,7 +301,6 @@ except:
 
 
 def test_crea_db():
-    from cacao_accounting import create_app
     from cacao_accounting.config import configuracion
     from cacao_accounting.database import inicia_base_de_datos
 
