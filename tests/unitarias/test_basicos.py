@@ -55,21 +55,6 @@ def test_db():
     crear_db()
 
 
-def test_valida_contraseña():
-    from cacao_accounting.auth import validar_acceso
-
-    crear_db()
-    assert validar_acceso("cacao", "cacao") == True
-    assert validar_acceso("cacao", "prueba") == False
-
-
-def test_logea_usuario():
-    from cacao_accounting.auth import cargar_sesion
-
-    crear_db()
-    cargar_sesion("cacao")
-
-
 def test_run():
     import subprocess
     from sys import executable

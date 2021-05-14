@@ -76,3 +76,36 @@ class TestAutenticacion(TestCase):
 
         resultado = cargar_sesion(None)
         assert resultado == None
+
+
+def crear_db():
+    from cacao_accounting import create_app
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import db
+    from cacao_accounting.datos.base import base_data
+    from cacao_accounting.datos.demo import demo_data
+
+    app = create_app(configuracion)
+    app.app_context().push()
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+    app.config["TESTING"] = True
+    app.config["DEBUG"] = True
+    db.drop_all()
+    db.create_all()
+    base_data(carga_rapida=True)
+    demo_data()
+
+
+def test_valida_contraseña():
+    from cacao_accounting.auth import validar_acceso
+
+    crear_db()
+    assert validar_acceso("cacao", "cacao") == True
+    assert validar_acceso("cacao", "prueba") == False
+
+
+def test_logea_usuario():
+    from cacao_accounting.auth import cargar_sesion
+
+    crear_db()
+    cargar_sesion("cacao")
