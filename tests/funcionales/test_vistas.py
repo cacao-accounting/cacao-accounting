@@ -15,9 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
-
+# pylint: disable=redefined-outer-name
 import pytest
-import requests
 from cacao_accounting import create_app as app_factory
 from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
@@ -150,7 +149,7 @@ def test_cambiar_status_entidad(client, auth):
     response = client.get("/accounts/entities/set_default/cacao")
 
 
-def test_eliminar_entidad(client, auth):
+def test_cambio_status(client, auth):
     auth.login()
     response = client.get("/accounts/entities/set_inactive/cafe")
     response = client.get("/accounts/entities/set_default/cafe")
