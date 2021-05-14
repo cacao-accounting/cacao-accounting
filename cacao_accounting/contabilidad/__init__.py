@@ -28,9 +28,10 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_centros_costos,
     obtener_entidad,
     obtener_entidades,
+    obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
-from cacao_accounting.consultas import paginar_consulta
+from cacao_accounting.database import paginar_consulta
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
 
@@ -96,6 +97,7 @@ def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
+    formulario.moneda.choices = obtener_lista_monedas()
 
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit():

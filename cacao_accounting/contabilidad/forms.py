@@ -18,19 +18,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField
 from wtforms.validators import DataRequired
-from cacao_accounting.database import Entidad, Moneda
-
-
-def lista_monedas():
-    """
-    Devuelve la lista de monedas disponibles en la base de datos.
-    """
-    monedas = []
-    consulta = Moneda.query.all()
-    for i in consulta:
-        moneda = (i.id, i.nombre)
-        monedas.append(moneda)
-    return monedas
+from cacao_accounting.database import Entidad
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -49,7 +37,9 @@ class FormularioEntidad(FlaskForm):
     razon_social = StringField(validators=[DataRequired()])
     nombre_comercial = StringField(validators=[])
     id_fiscal = StringField(validators=[DataRequired()])
-    moneda = SelectField("Tipo de Entidad", choices=lista_monedas())
+    moneda = SelectField(
+        "Tipo de Entidad",
+    )
     tipo_entidad = SelectField("Tipo de Entidad", choices=Entidad.tipo_entidad_lista)
     correo_electronico = StringField(validators=[])
     web = StringField(validators=[])

@@ -124,3 +124,17 @@ def obtener_entidad(ent=None):
     else:
         _entidad = Entidad.query.filter(Entidad.predeterminada == True).first()  # noqa: E712
     return _entidad
+
+
+def obtener_lista_monedas():
+    """
+    Devuelve la lista de monedas disponibles en la base de datos.
+    """
+    from cacao_accounting.database import Moneda
+
+    monedas = []
+    consulta = Moneda.query.all()
+    for i in consulta:
+        moneda = (i.id, i.nombre)
+        monedas.append(moneda)
+    return monedas

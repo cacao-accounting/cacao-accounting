@@ -44,6 +44,10 @@ from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
 from cacao_accounting.ventas import ventas
 
 
+alembic = Alembic()
+talisman = Talisman()
+
+
 def command():
     """
     Interfaz de linea de commandos.
@@ -68,12 +72,10 @@ def iniciar_extenciones(app):
     """
     Inicializa extenciones.
     """
-    alembic = Alembic()
     alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
     if not DEVELOPMENT:
-        talisman = Talisman()
         talisman.init_app(app)
 
 
