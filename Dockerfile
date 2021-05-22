@@ -35,7 +35,8 @@ RUN chmod +x docker-entry-point.sh
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 
-RUN /usr/bin/python3 setup.py develop
+RUN /usr/bin/python3 -m pip install -e .
+RUN /usr/bin/python3 -m pip list
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
