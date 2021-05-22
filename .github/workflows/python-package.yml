@@ -53,7 +53,7 @@ jobs:
           --health-retries 5
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-alpha.5 ]
+        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-beta.1]
 
     steps:
     - uses: actions/checkout@v2
