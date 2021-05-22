@@ -159,10 +159,9 @@ def create_app(ajustes=None):
     # pylint: disable=W0612
     verifica_version_de_python()
     CACAO_APP = Flask(
-        __name__,
+        "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
         static_folder=DIRECTORIO_ARCHIVOS,
-        instance_relative_config=False,
     )
 
     if ajustes:
