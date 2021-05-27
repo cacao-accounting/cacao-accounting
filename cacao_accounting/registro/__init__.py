@@ -44,7 +44,7 @@ class Registro:
     Interfaz comun para la administración de registros.
 
     Las relaciones entre registros son la base de la integridad de datos en el sistema.
-    
+
     """
 
     database = db
