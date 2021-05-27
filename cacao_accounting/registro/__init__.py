@@ -36,7 +36,7 @@ Un registro:
 """
 # pylint: disable=not-callable
 from cacao_accounting.database import db
-from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
+from cacao_accounting.exception import ERROR2, ERROR3, IntegrityError, OperationalError
 
 
 class Registro:
@@ -53,43 +53,30 @@ class Registro:
     estatus = None
     validaciones = None
 
-    def crear(self, datos=None, datos_detalle=None):
+    def crear_registro_principal(self, datos: None):
         """
-        Utilizar este metodo para insertar registros maestros comunes a toda la instalación.
-        Ejemplo:
-         - Entidades
-         - Proveedores
-         - Clientes
+        Un registro principal no depende de otros, ejemplos de registros principales son:
+         Registros maestros como:
+          - Una entidad
+          - Un cliente
+          - Un proveedor
+        Registros principales de una transaccion como:
+          - Una factura
+          - Un comprobante de pago
+          - Un comprobante de diario
         """
-        if datos:
-            if self.tabla:
-                self.database.session.add(self.tabla(**datos))
-                self.database.session.commit()
-                if datos_detalle and self.tabla_detalle:
-                    pass
-            else:
-                raise OperationalError(ERROR2)
-        else:
-            raise OperationalError(ERROR1)
+        if self.tabla:
+            self.database.session.add(self.tabla(**datos))
+            self.database.session.commit()
 
-    def crear_registro(self, datos=None, datos_detalle=None, entidad_madre=None):
+    def crear_registro_secundario(self, registro_principal=None, datos_detalle=None):
         """
-        Utilizar este metodo para crear registros que estan relacionados a una entidad madre, por ejemplo
-         - Unidades de Negocio
-         - Cuentas Contables
-         - Centro de Costos
+        Un registro secundario proporciona información adicional a un registro principal como:
+          - La lista de items de una factura.
+          - La lista de cuentas afectadas en un comprobantes de diario.
         """
-        if datos and entidad_madre:
-            datos["entidad"] = entidad_madre
-            if self.tabla:
-                self.database.session.add(self.tabla(**datos))
-                self.database.session.commit()
-            else:
-                raise OperationalError(ERROR2)
-        else:
-            raise OperationalError(ERROR1)
 
-    def cambiar_estado(self, identificador=None, status_objetivo=None):
+    def cambiar_estado_registro_principal(self, identificador=None, status_actual=None, status_objetivo=None):
         """
         Actualiza el status de un registro.
         """
@@ -103,21 +90,16 @@ class Registro:
         else:
             raise OperationalError(ERROR2)
 
-    def eliminar(self, identificador=None):
+    def eliminar_registros_dependientes(self, identificador=None):
         """
-        Usar con precaucion, en el mayor de los casos es preferible anular que elimar, este metodo solo esta
-        disponible para datos registros.
+        Elimina un registro de la base de datos.
         """
-        if self.tabla:
-            if identificador:
-                try:
-                    self.tabla.query.filter(self.tabla.id == identificador).delete()
-                    self.database.session.commit()
-                    ELIMINADO = True
-                except:  # noqa: E722
-                    ELIMINADO = False
-            else:
-                raise IntegrityError(ERROR3)
+
+    def eliminar_registro_principal(self, identificador=None):
+        """
+        Elimina un registro de la base de datos.
+        """
+        if self.tabla_detalle:
+            self.eliminar_registros_dependientes(identificador=identificador)
         else:
-            raise OperationalError(ERROR2)
-        return ELIMINADO
+            pass

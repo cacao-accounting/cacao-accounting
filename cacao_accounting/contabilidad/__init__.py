@@ -19,7 +19,7 @@
 Modulo de Contabilidad.
 """
 
-from flask import Blueprint, redirect, render_template, request, flash
+from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
@@ -138,40 +138,22 @@ def editar_entidad(id_entidad):
 @contabilidad.route("/accounts/entities/delete/<id_entidad>")
 @login_required
 def eliminar_entidad(id_entidad):
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-
-    e = RegistroEntidad()
-    if e.eliminar(identificador=id_entidad):
-        flash("Entidad Eliminada Correctamente.")
-    else:
-        flash("Entidad no puede ser eliminada.")
-    return redirect("/accounts/entities")
+    # TODO
+    return redirect("/app")
 
 
 @contabilidad.route("/accounts/entities/set_inactive/<id_entidad>")
 @login_required
 def inactivar_entidad(id_entidad):
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-
-    e = RegistroEntidad()
-    if e.cambiar_estado(identificador=id_entidad, status_objetivo="inactiva"):
-        flash("Entidad establecida como inactiva.")
-    else:
-        flash("Entidad no se puede establecer como inactiva.")
-    return redirect("/accounts/entities")
+    # TODO
+    return redirect("/app")
 
 
 @contabilidad.route("/accounts/entities/set_default/<id_entidad>")
 @login_required
 def predeterminar_entidad(id_entidad):
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-
-    e = RegistroEntidad()
-    if e.cambiar_estado(identificador=id_entidad, status_objetivo="predeterminada"):
-        flash("Entidad establecida como predeterminada.")
-    else:
-        flash("Entidad no se puede establecer como predeterminada.")
-    return redirect("/accounts/entities")
+    # TODO
+    return redirect("/app")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -202,11 +184,8 @@ def unidad(id_unidad):
 @contabilidad.route("/accounts/units/delete/<id_unidad>")
 @login_required
 def eliminar_unidad(id_unidad):
-    from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
-
-    u = RegistroUnidad()
-    u.eliminar(identificador=id_unidad)
-    return redirect("/accounts/units")
+    # TODO
+    return redirect("/app")
 
 
 @contabilidad.route("/accounts/units/new", methods=["GET", "POST"])

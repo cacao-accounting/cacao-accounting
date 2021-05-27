@@ -127,9 +127,9 @@ def _demo_entidad():
 
     log.debug("Creando entidades de prueba.")
     instancia_entidad = RegistroEntidad()
-    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO1)
-    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO2)
-    instancia_entidad.crear_entidad(datos=ENTIDAD_DEMO3)
+    instancia_entidad.crear_registro_principal(datos=ENTIDAD_DEMO1)
+    instancia_entidad.crear_registro_principal(datos=ENTIDAD_DEMO2)
+    instancia_entidad.crear_registro_principal(datos=ENTIDAD_DEMO3)
 
 
 def _demo_unidades():
@@ -284,7 +284,7 @@ def _catalogo():
         CUENTA_PRUEBA_NIVEL09,
         CUENTA_PRUEBA_NIVEL10,
     ):
-        CUENTA_CONTABLE.crear(CTA)
+        CUENTA_CONTABLE.crear_registro_principal(CTA)
 
 
 CENTRO_COSTO_BASE = {
@@ -375,17 +375,17 @@ def _centros_de_costos():
 
     CENTRO_DE_COSTO = RegistroCentroCosto()
     log.debug("Cargando centros de costos.")
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_BASE)
     CENTRO_COSTO_BASE["entidad"] = "dulce"
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_BASE)
     CENTRO_COSTO_BASE["entidad"] = "cafe"
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_BASE)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL00)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL01)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL02)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL03)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL04)
-    CENTRO_DE_COSTO.crear(datos=CENTRO_COSTO_NIVEL05)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_BASE)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL00)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL01)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL02)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL03)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL04)
+    CENTRO_DE_COSTO.crear_registro_principal(datos=CENTRO_COSTO_NIVEL05)
 
 
 PROYECTO01 = {
@@ -405,7 +405,7 @@ def _proyectos():
 
     PROYECTO = RegistroProyecto()
     log.debug("Creando proyectos de pruebas.")
-    PROYECTO.crear(datos=PROYECTO01)
+    PROYECTO.crear_registro_principal(datos=PROYECTO01)
 
 
 MONEDA01 = {
@@ -423,7 +423,7 @@ def _monedas():
 
     MONEDA = RegistroMoneda()
     log.debug("Creando monedas de prueba.")
-    MONEDA.crear(datos=MONEDA01)
+    MONEDA.crear_registro_principal(datos=MONEDA01)
 
 
 TASA_CAMBIO01 = {
@@ -439,7 +439,7 @@ def _tasas_de_cambio():
 
     TASA_CAMBIO = RegistroTasaCambio()
     log.debug("Creando tasas de cambio de pruebas.")
-    TASA_CAMBIO.crear(datos=TASA_CAMBIO01)
+    TASA_CAMBIO.crear_registro_principal(datos=TASA_CAMBIO01)
 
 
 def master_data():
@@ -460,7 +460,7 @@ def _periodo_contable():
 
     PERIODO = RegistroPeriodoContable()
     log.debug("Creando periodos contables de prueba.")
-    PERIODO.crear(
+    PERIODO.crear_registro_principal(
         {
             "entidad": "cacao",
             "nombre": "2019",
@@ -470,7 +470,7 @@ def _periodo_contable():
             "fin": date(year=2019, month=12, day=31),
         }
     )
-    PERIODO.crear(
+    PERIODO.crear_registro_principal(
         {
             "entidad": "cacao",
             "nombre": "2020",
@@ -480,7 +480,7 @@ def _periodo_contable():
             "fin": date(year=2020, month=12, day=31),
         }
     )
-    PERIODO.crear(
+    PERIODO.crear_registro_principal(
         {
             "entidad": "cacao",
             "nombre": "2021",

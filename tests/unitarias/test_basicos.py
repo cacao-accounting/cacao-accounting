@@ -227,54 +227,6 @@ class TestClasesHeredades(TestCase):
 
 
 class TestExection(TestCase):
-    def test_no_data(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.crear(datos=None)
-
-    def test_no_tabla(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.crear(datos={})
-
-    def test_registro_vacio(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.crear_registro(datos=None, entidad_madre="hola")
-
-    def test_entidad_vacias(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.crear_registro(datos={}, entidad_madre=None)
-
-    def test_sin_tabla(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.crear_registro(datos={}, entidad_madre="hola")
-
-    def test_eliminar_sintabla(self):
-        from cacao_accounting.registro import Registro
-        from cacao_accounting.exception import OperationalError
-
-        r = Registro()
-        with pytest.raises(OperationalError):
-            r.eliminar(identificador="hola")
-
     def test_querry_vacio(self):
         from cacao_accounting.exception import DataError
         from cacao_accounting.database import paginar_consulta
