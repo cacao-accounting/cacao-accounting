@@ -13,7 +13,6 @@ flask-talisman
 flask-wtf
 loguru
 sqlalchemy
-sqlalchemy-json
 sqlalchemy-paginator
 teritorio
 waitress
