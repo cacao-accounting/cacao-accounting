@@ -39,33 +39,19 @@ from cacao_accounting.database import db
 from cacao_accounting.exception import ERROR1, ERROR2, ERROR3, IntegrityError, OperationalError
 
 
-def validar_entidad(validar=None):
-    """
-    Para que una entidad se considere valida la entidad debe:
-    - Existir en la base de datos.
-    - Con estatus habilitada definida como True
-    """
-    return True
-
-
-def validar_perido_contable(fecha=None):
-    """
-    Todo registro que deba sea relacionado a una fecha debe pertenecer a un período contable valido.
-    """
-    return True
-
-
 class Registro:
     """
     Interfaz comun para la administración de registros.
+
     Las relaciones entre registros son la base de la integridad de datos en el sistema.
+    
     """
 
     database = db
     tabla = None
     tabla_detalle = None
-    entidad = None
-    estados = []
+    estatus = None
+    validaciones = None
 
     def crear(self, datos=None, datos_detalle=None):
         """
@@ -96,11 +82,8 @@ class Registro:
         if datos and entidad_madre:
             datos["entidad"] = entidad_madre
             if self.tabla:
-                if validar_entidad(entidad_madre):
-                    self.database.session.add(self.tabla(**datos))
-                    self.database.session.commit()
-                else:
-                    raise IntegrityError(ERROR3)
+                self.database.session.add(self.tabla(**datos))
+                self.database.session.commit()
             else:
                 raise OperationalError(ERROR2)
         else:
