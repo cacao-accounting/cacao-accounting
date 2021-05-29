@@ -119,8 +119,6 @@ class CentroCosto:
         c.crear_registro_principal(datos=CENTRO_DE_COSTO1)
         c.crear_registro_principal(datos=CENTRO_DE_COSTO2)
         c.crear_registro_principal(datos=CENTRO_DE_COSTO3)
-        
-
 
 
 UNIDAD1 = {
