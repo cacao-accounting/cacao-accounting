@@ -16,7 +16,7 @@
 # - William José Moreno Reyes
 
 from functools import wraps
-from flask import flash, redirect
+from flask import flash, redirect, url_for
 from cacao_accounting.modulos import validar_modulo_activo
 
 
@@ -28,7 +28,7 @@ def modulo_activo(modulo):
                 return func(*args, **kwargs)
             else:
                 flash("El modulo que intenta acceder se encuentra inactivo")
-                return redirect("app")
+                return redirect(url_for("cacao_app.pagina_inicio"))
 
         return wrapper
 
