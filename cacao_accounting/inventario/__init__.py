@@ -21,19 +21,17 @@ Modulo de Inventarios.
 
 from flask import Blueprint, redirect, render_template
 from flask_login import login_required
-from cacao_accounting.modulos import validar_modulo_activo
+from cacao_accounting.decorators import modulo_activo
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
 
 @inventario.route("/inventario")
 @inventario.route("/inventory")
+@modulo_activo("inventory")
 @login_required
 def inventario_():
     """
     Definición de vista principal de inventarios.
     """
-    if validar_modulo_activo("inventory"):
-        return render_template("inventario.html")
-    else:
-        return redirect("/app")
+    return render_template("inventario.html")
