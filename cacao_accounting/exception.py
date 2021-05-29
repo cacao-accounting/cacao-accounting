@@ -35,9 +35,9 @@ class TransactionError(CacaoAccountingException):
 class OperationalError(CacaoAccountingException):
     """Clase para generar errores operativos."""
 
-class AccessDenied(UserError):
-    """Clase para generar errores de acceso."""
 
+class AccessDenied(CacaoAccountingException):
+    """Clase para generar errores de acceso."""
 
 
 # <-------------------------------------------------------------------------> #
