@@ -35,6 +35,10 @@ class TransactionError(CacaoAccountingException):
 class OperationalError(CacaoAccountingException):
     """Clase para generar errores operativos."""
 
+class AccessDenied(UserError):
+    """Clase para generar errores de acceso."""
+
+
 
 # <-------------------------------------------------------------------------> #
 # Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
