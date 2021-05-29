@@ -21,7 +21,7 @@ Modulo de Caja y Bancos.
 
 from flask import Blueprint, redirect, render_template
 from flask_login import login_required
-from cacao_accounting.modulos import validar_modulo_activo
+from cacao_accounting.decorators import modulo_activo
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
 
@@ -30,9 +30,7 @@ bancos = Blueprint("bancos", __name__, template_folder="templates")
 @bancos.route("/tesoreria")
 @bancos.route("/bancos")
 @bancos.route("/cash")
+@modulo_activo("cash")
 @login_required
 def bancos_():
-    if validar_modulo_activo("cash"):
-        return render_template("bancos.html")
-    else:
-        return redirect("/app")
+    return render_template("bancos.html")
