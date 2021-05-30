@@ -79,6 +79,18 @@ def iniciar_extenciones(app):
         talisman.init_app(app)
 
 
+def registrar_rutas_predeterminadas(app):
+    """
+    Registra rutas predeterminadas.
+    """
+    from flask import render_template
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        # note that we set the 404 status explicitly
+        return render_template("404.html"), 404
+
+
 def registrar_blueprints(app):
     """
     Registra blueprints por defecto.
@@ -213,4 +225,5 @@ def create_app(ajustes=None):
     establece_variables_de_entorno(app=CACAO_APP)
     iniciar_extenciones(CACAO_APP)
     registrar_blueprints(CACAO_APP)
+    registrar_rutas_predeterminadas(CACAO_APP)
     return CACAO_APP
