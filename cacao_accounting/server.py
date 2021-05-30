@@ -17,15 +17,10 @@
 
 from waitress import serve
 from cacao_accounting import create_app
-from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.config import configuracion, PORT, THREADS
 from cacao_accounting.loggin import log
 
 app = create_app(configuracion)
-if DEVELOPMENT:
-    app.config["EXPLAIN_TEMPLATE_LOADING"] = True
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
-    app.config["DEBUG"] = True
 
 
 def server():

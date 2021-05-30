@@ -23,8 +23,8 @@ WSGI.
 """
 
 from sys import version_info
-from os import environ
 from flask import Flask
+from flask import current_app
 from flask_alembic import Alembic
 from flask_talisman import Talisman
 from cacao_accounting.admin import admin
@@ -37,8 +37,6 @@ from cacao_accounting.database import db
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
 from cacao_accounting.inventario import inventario
-from cacao_accounting.loggin import log
-from cacao_accounting.metadata import DEVELOPMENT
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
 from cacao_accounting.ventas import ventas
@@ -75,8 +73,9 @@ def iniciar_extenciones(app):
     alembic.init_app(app)
     db.init_app(app)
     administrador_sesion.init_app(app)
-    if not DEVELOPMENT:
-        talisman.init_app(app)
+    with app.app_context():
+        if not current_app.config.get("ENV") == "development":
+            talisman.init_app(app)
 
 
 def registrar_rutas_predeterminadas(app):
@@ -86,7 +85,7 @@ def registrar_rutas_predeterminadas(app):
     from flask import render_template
 
     @app.errorhandler(404)
-    def page_not_found(e):
+    def page_not_found():
         # note that we set the 404 status explicitly
         return render_template("404.html"), 404
 
@@ -123,42 +122,17 @@ def db_metadata():
     db.session.commit()
 
 
-def establece_variables_de_entorno(app=None):
-    """
-    Funcion auxiliar para establecer algunas varias de entorno al inicio de la
-    aplicacion.
-    """
-    if DEVELOPMENT:
-        MODO_PRUEBAS = True
-    else:
-        try:
-            MODO_PRUEBAS = "CACAOTEST" in environ
-        except KeyError:
-            MODO_PRUEBAS = False
-
-    if MODO_PRUEBAS:
-        environ["FLASK_DEBUG"] = "True"
-        environ["FLASK_ENV"] = "development"
-        log.debug("Ejecutando aplicación en modo de pruebas.")
-        if app:
-            app.config.update(
-                TESTING=True,
-            )
-    else:
-        environ["FLASK_ENV"] = "production"
-        log.info("Ejecutando aplicación en modo de producción.")
-
-
 def actualiza_variables_globales_jinja(app=None):
     """
     Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2.
     """
     if app:
-        app.jinja_env.trim_blocks = True
-        app.jinja_env.lstrop_blocks = True
-        app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
-        app.jinja_env.globals.update(DEVELOPMENT=DEVELOPMENT)
-        app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+        with app.app_context():
+            app.jinja_env.trim_blocks = True
+            app.jinja_env.lstrop_blocks = True
+            app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
+            app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
+            app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
 
 
 def create_app(ajustes=None):
@@ -190,7 +164,7 @@ def create_app(ajustes=None):
     @CACAO_APP.cli.command()
     def cleandb():
         """Elimina la base de datos, solo disponible para desarrollo."""
-        if DEVELOPMENT:
+        if current_app.config.get("ENV") == "development":
             db.drop_all()
 
     @CACAO_APP.cli.command()
@@ -209,20 +183,18 @@ def create_app(ajustes=None):
 
         server()
 
-    if DEVELOPMENT:
+    @CACAO_APP.cli.command()
+    def setupdb():
+        """
+        Define una base de datos de desarrollo nueva.
+        """
+        from cacao_accounting.database import inicia_base_de_datos
 
-        @CACAO_APP.cli.command()
-        def setupdb():
-            """
-            Define una base de datos de desarrollo nueva.
-            """
-            from cacao_accounting.database import inicia_base_de_datos
-
+        if current_app.config.get("ENV") == "development":
             db.drop_all()
             inicia_base_de_datos(CACAO_APP)
 
     actualiza_variables_globales_jinja(app=CACAO_APP)
-    establece_variables_de_entorno(app=CACAO_APP)
     iniciar_extenciones(CACAO_APP)
     registrar_blueprints(CACAO_APP)
     registrar_rutas_predeterminadas(CACAO_APP)

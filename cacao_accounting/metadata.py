@@ -21,12 +21,3 @@ from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
 
 # pylint: disable=undefined-all-variable
 __all__ = APPNAME, APPAUTHOR, VERSION
-
-# development
-# alpha
-# beta
-# release_candidate
-# stable
-
-__state__ = "development"
-DEVELOPMENT = __state__ != "stable"

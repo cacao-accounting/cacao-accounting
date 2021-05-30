@@ -66,10 +66,9 @@ def dev_info():
 
 @cacao_app.route("/development")
 def informacion_para_desarrolladores():
-    from cacao_accounting.metadata import DEVELOPMENT
     from os import environ
 
-    if DEVELOPMENT or "CACAO_TEST" in environ:
+    if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):
         return render_template("development.html", info=dev_info(), db=bd_actual())
     else:
         from flask import redirect
