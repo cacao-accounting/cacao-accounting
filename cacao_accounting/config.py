@@ -22,9 +22,10 @@ Modulo para la configuración centralizada de la configuración de la aplicacion
 from os import environ
 from os.path import exists, join
 from appdirs import user_config_dir, site_config_dir
+from flask import current_app
 from configobj import ConfigObj
 from cacao_accounting.loggin import log
-from cacao_accounting.metadata import DEVELOPMENT, APPAUTHOR, APPNAME
+from cacao_accounting.metadata import APPAUTHOR, APPNAME
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
@@ -84,7 +85,7 @@ def valida_llave_secreta(llave):
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
     CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
     CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
-    if DEVELOPMENT:
+    if current_app.config.get("ENV") == "development":
         return True
     else:
         return CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
@@ -121,7 +122,8 @@ if not CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL and CONFIGURACION_BASADA_EN_VARIABL
     configuracion["SECRET_KEY"] = environ["CACAO_KEY"]
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-elif DEVELOPMENT:
+else:
+    log.warning("No se pudo encontrar una fuente para la configuración de la aplicacion, revise la documentacion")
     log.warning("Utilizando configuración predeterminada para desarrollo, no apta para producción")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
@@ -130,10 +132,6 @@ elif DEVELOPMENT:
     configuracion["SECRET_KEY"] = "dev"
     configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
     configuracion["DEGUG"] = True
-
-else:
-    log.warning("No se pudo encontrar una fuente para la configuración de la aplicacion, revise la documentacion")
-    configuracion = None
 
 
 def probar_modo_escritorio():

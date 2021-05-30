@@ -16,6 +16,10 @@ $CACAO_THREADS     # Numero de hilos para el servidor WSGI.
                    # si no se establece se estable a 4 por defecto.
 $CACAO_PORT        # Puerto para servir la aplicacion a utilizar.
                    # Si no se especifica se utiliza 8080 por defecto.
+$FLASK_ENV         # Modo de ejecución del proyecto puede ser "development" o "production"
+                   # Si no se especifica se utiliza "production" por defecto.
+                   # Referencias:
+                   #  - https://flask.palletsprojects.com/en/2.0.x/config/
 ```
 
 ## Establecer variables del entorno requeridas:

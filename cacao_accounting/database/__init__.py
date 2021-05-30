@@ -434,14 +434,14 @@ def inicia_base_de_datos(app):
     """
     Inicia esquema de base datos.
     """
+    from flask import current_app
     from cacao_accounting.datos import base_data, demo_data
-    from cacao_accounting.metadata import DEVELOPMENT
 
     with app.app_context():
         log.info("Intentando inicializar base de datos.")
         try:
             db.create_all()
-            if DEVELOPMENT:
+            if current_app.config.get("ENV") == "development":
                 base_data(carga_rapida=True)
                 demo_data()
                 DB_ESQUEMA = True
