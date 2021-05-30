@@ -201,6 +201,11 @@ class Varios:
 
         obtener_entidades()
 
+    def test_obtener_lista_entidades_por_id_razonsocial(self):
+        from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+        obtener_lista_entidades_por_id_razonsocial()
+
 
 @pytest.fixture(autouse=True)
 def cargar_datos():
