@@ -19,7 +19,7 @@
 Modulo de Ventas.
 """
 
-from flask import Blueprint, redirect, render_template
+from flask import Blueprint, render_template
 from flask_login import login_required
 from cacao_accounting.decorators import modulo_activo
 
