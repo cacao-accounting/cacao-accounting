@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.server import server
+from cacao_accounting.server import app, server
 
 
 if __name__ == "__main__":
