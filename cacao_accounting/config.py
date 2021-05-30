@@ -109,7 +109,7 @@ def probar_configuracion_por_variables_de_entorno():
     try:
         return valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
     except KeyError:
-        log.info("Clave secreta o dirección de conexión a la base no especificadas.")
+        log.info("Configuración por variables de entornos no definida.")
         return False
 
 
@@ -123,8 +123,8 @@ if not CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL and CONFIGURACION_BASADA_EN_VARIABL
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 else:
-    log.warning("No se pudo encontrar una fuente para la configuración de la aplicacion, revise la documentacion")
-    log.warning("Utilizando configuración predeterminada para desarrollo, no apta para producción")
+    log.warning("No se encontro una fuente para la configuración, revise la documentacion")
+    log.warning("Utilizando configuración para desarrollo, no apta para uso en producción")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
