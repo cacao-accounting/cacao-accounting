@@ -41,7 +41,7 @@ jobs:
         echo ""
         echo ""
         echo "Probando acceso a contenedor cacao-mysql"
-        curl localhost:8080/development
+        #curl localhost:8080/development
         echo ""
         echo ""
         echo "Probando acceso a contenedor cacao-postgresl"

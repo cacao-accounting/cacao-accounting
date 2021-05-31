@@ -85,8 +85,7 @@ def registrar_rutas_predeterminadas(app):
     from flask import render_template
 
     @app.errorhandler(404)
-    def page_not_found():
-        # note that we set the 404 status explicitly
+    def page_not_found(error):
         return render_template("404.html"), 404
 
 
