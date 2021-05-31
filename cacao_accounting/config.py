@@ -109,7 +109,7 @@ def probar_configuracion_por_variables_de_entorno():
     try:
         return valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
     except KeyError:
-        log.info("Clave secreta o dirección de conexión a la base no especificadas.")
+        log.info("Configuración por variables de entornos no definida.")
         return False
 
 
