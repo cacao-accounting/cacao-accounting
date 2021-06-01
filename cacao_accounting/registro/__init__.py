@@ -36,7 +36,23 @@ Un registro:
 """
 # pylint: disable=not-callable
 from cacao_accounting.database import db
-from cacao_accounting.exception import ERROR2, ERROR3, IntegrityError, OperationalError
+
+
+def comprueba_lista_validaciones(lista_a_validar: list = None) -> bool:
+    """
+    Para que una transacción pueda ser registrada debe pasar una serie de validaciones, las validaciones
+    se deben poder espeficiar al momento de iniciar la instancia de clase.
+
+    Las validaciones deben retornar un boleano.
+    """
+    VERIFICACION_TIPO_LISTA = lista_a_validar is not None and isinstance(lista_a_validar, list)
+    if VERIFICACION_TIPO_LISTA:
+        LISTA_EJECUTABLES = True
+        while LISTA_EJECUTABLES:
+            for v in lista_a_validar:
+                LISTA_EJECUTABLES = callable(v)
+            break
+    return VERIFICACION_TIPO_LISTA and LISTA_EJECUTABLES
 
 
 class Registro:
@@ -51,7 +67,8 @@ class Registro:
     tabla = None
     tabla_detalle = None
     estatus = None
-    validaciones = None
+    lista_validaciones = None
+    validaciones_verificadas = comprueba_lista_validaciones(lista_a_validar=lista_validaciones)
 
     def crear_registro_principal(self, datos: None):
         """
@@ -64,6 +81,8 @@ class Registro:
           - Una factura
           - Un comprobante de pago
           - Un comprobante de diario
+
+        Por defecto los registros principales siempre deben crearse como borrador.
         """
         if self.tabla:
             self.database.session.add(self.tabla(**datos))
@@ -76,30 +95,24 @@ class Registro:
           - La lista de cuentas afectadas en un comprobantes de diario.
         """
 
-    def cambiar_estado_registro_principal(self, identificador=None, status_actual=None, status_objetivo=None):
+    def _validaciones_predefinidas(self, **kwargs):
+        return True
+
+    def _ejecuta_validacion_cambio_estado(self, **kwargs):
+        if self.lista_validaciones and self.validaciones_verificadas and self._validaciones_predefinidas():
+            TRANSACCION_VALIDADA = True
+            while TRANSACCION_VALIDADA:
+                for validacion in self.lista_validaciones:
+                    TRANSACCION_VALIDADA = validacion(**kwargs)
+                break
+        else:
+            # Toda transacción deberia tener al menos una validacion.
+            TRANSACCION_VALIDADA = False
+        return TRANSACCION_VALIDADA
+
+    def cambiar_estado_registro_principal(self, **kwargs):
         """
         Actualiza el status de un registro.
         """
-        if self.tabla:
-            if identificador:
-                registro = self.tabla.query.filter(self.tabla.id == identificador)
-                registro.status = status_objetivo
-                self.database.session.commit()
-            else:
-                raise IntegrityError(ERROR3)
-        else:
-            raise OperationalError(ERROR2)
-
-    def eliminar_registros_dependientes(self, identificador=None):
-        """
-        Elimina un registro de la base de datos.
-        """
-
-    def eliminar_registro_principal(self, identificador=None):
-        """
-        Elimina un registro de la base de datos.
-        """
-        if self.tabla_detalle:
-            self.eliminar_registros_dependientes(identificador=identificador)
-        else:
+        if self._ejecuta_validacion_cambio_estado(**kwargs):
             pass

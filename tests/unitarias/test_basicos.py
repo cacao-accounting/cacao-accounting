@@ -226,6 +226,21 @@ class TestClasesHeredades(TestCase):
         self.assertTrue(issubclass(RegistroCentroCosto, Registro))
 
 
+def test_comprueba_lista_validaciones():
+    from cacao_accounting import create_app
+    from cacao_accounting.contabilidad.auxiliares import obtener_catalogo
+    from cacao_accounting.registro import comprueba_lista_validaciones
+
+    lista_funciones = [create_app, obtener_catalogo]
+    lista_nofunciones = ["hola"]
+    tuple_funciones = (create_app, obtener_catalogo)
+    assert comprueba_lista_validaciones(lista_a_validar=lista_funciones) is True
+    assert comprueba_lista_validaciones(lista_a_validar=tuple_funciones) is False
+    assert comprueba_lista_validaciones(lista_a_validar=lista_nofunciones) is False
+    assert comprueba_lista_validaciones(lista_a_validar=None) is False
+    assert comprueba_lista_validaciones(lista_a_validar={}) is False
+
+
 class TestExection(TestCase):
     def test_querry_vacio(self):
         from cacao_accounting.exception import DataError
