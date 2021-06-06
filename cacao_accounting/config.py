@@ -85,7 +85,12 @@ def valida_llave_secreta(llave):
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
     CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
     CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
-    if current_app.config.get("ENV") == "development":
+    try:
+        current_app.app_context().push()
+        CONFIGURACION_DESARROLLO = current_app.config.get("ENV") == "development"
+    except RuntimeError:
+        CONFIGURACION_DESARROLLO = False
+    if CONFIGURACION_DESARROLLO:
         return True
     else:
         return CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
@@ -128,6 +133,8 @@ else:
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
+    # variable de entorno
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = "dev"
     configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
@@ -159,15 +166,16 @@ def probar_modo_escritorio():
     try:
         EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in environ
     except KeyError:
-        # Finalmente probamos si en el archivo de configuración se especificado el
-        # modo escritorio.
-        if CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL:
-            try:
-                EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in configuracion
-            except:  # noqa: E722
-                EJECUTANDO_COMO_DESKTOP = False
-        else:
+        EJECUTANDO_COMO_DESKTOP = False
+    # Finalmente probamos si en el archivo de configuración se especificado el
+    # modo escritorio.
+    if CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL:
+        try:
+            EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in configuracion
+        except:  # noqa: E722
             EJECUTANDO_COMO_DESKTOP = False
+    else:
+        EJECUTANDO_COMO_DESKTOP = False
     return EJECUTANDO_COMO_SNAP or EJECUTANDO_COMO_FLATPAK or EJECUTANDO_COMO_DESKTOP
 
 
