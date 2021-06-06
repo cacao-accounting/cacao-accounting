@@ -12,6 +12,7 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED = 1
+ENV FLASK_ENV "production"
 
 RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cryptography \
     && microdnf clean all
@@ -36,7 +37,7 @@ RUN chmod +x docker-entry-point.sh
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 
 RUN /usr/bin/python3 -m pip install -e .
-RUN /usr/bin/python3 -m pip list
+RUN /usr/bin/python3 -m pip list --format=columns
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]
