@@ -69,7 +69,7 @@ def informacion_para_desarrolladores():
     from os import environ
 
     if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):
-        return render_template("development.html", info=dev_info(), db=bd_actual())
+        return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:
         from flask import redirect
 
