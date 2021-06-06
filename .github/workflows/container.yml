@@ -37,7 +37,13 @@ jobs:
         echo ""
         echo "Probando acceso a contenedor cacao-mysql"
         curl http://127.0.0.1:8888/info
+        curl http://127.0.0.1:8888/app
+        curl http://127.0.0.1:8888/hola
+        curl http://127.0.0.1:8888/login
         echo ""
         echo ""
         echo "Probando acceso a contenedor cacao-postgresl"
         curl http://127.0.0.1:9999/info
+        curl http://127.0.0.1:9999/app
+        curl http://127.0.0.1:9999/hola
+        curl http://127.0.0.1:9999/login
