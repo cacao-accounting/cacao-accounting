@@ -306,6 +306,16 @@ def test_requiere_migracion_db():
     requiere_migracion_db(APP)
 
 
+def test_obtener_listado_entidades():
+    from flask import current_app
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    with current_app.test_request_context():
+        with current_app.app_context():
+            LISTA_ENTIDADES = obtener_lista_entidades_por_id_razonsocial()
+            assert type(LISTA_ENTIDADES) == type([])
+
+
 # <-------------------------------------------------------------------------> #
 # Clases base para los test, cado uno de estas clases debe ejecutarse correctamente
 # con cada motor de base de datos soportado:
@@ -379,3 +389,29 @@ if mssql_disponible:
 
         def test_demo(self):
             demo_data()
+
+
+# Ejecutar al final ya que modifica variables de entorno
+@pytest.fixture
+def variables_de_entorno():
+    from os import environ
+    from flask import current_app
+
+    environ["CACAO_USER"] = "testing-user"
+    environ["CACAO_PWD"] = "testing-pwd"
+    current_app.app_context().push()
+
+
+def test_user_from_environ(variables_de_entorno):
+    from os import environ
+    from flask import current_app
+    from cacao_accounting.datos.base import crea_usuario_admin
+    from cacao_accounting.database import Usuario
+
+    assert environ["CACAO_USER"] == "testing-user"
+    assert environ["CACAO_PWD"] == "testing-pwd"
+    current_app.app_context().push()
+    db.create_all()
+    crea_usuario_admin()
+    consulta = db.session.query(Usuario).filter(Usuario.id == "testing-user").count()
+    assert consulta, 1

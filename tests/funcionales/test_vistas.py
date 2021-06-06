@@ -220,3 +220,12 @@ def test_modulos_inactivos(client, auth):
     responde = client.get("/buying")
     responde = client.get("/inventory")
     responde = client.get("/sales")
+
+
+def test_no_autorizado(client):
+    from flask import current_app
+    from cacao_accounting.auth import no_autorizado
+
+    with current_app.test_request_context():
+        with current_app.app_context():
+            no_autorizado()
