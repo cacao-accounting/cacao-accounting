@@ -65,6 +65,7 @@ def dev_info():
 
 
 @cacao_app.route("/development")
+@cacao_app.route("/info")
 def informacion_para_desarrolladores():
     from os import environ
 
