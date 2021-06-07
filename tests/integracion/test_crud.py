@@ -316,6 +316,16 @@ def test_obtener_listado_entidades():
             assert type(LISTA_ENTIDADES) == type([])
 
 
+def test_obtener_listado_entidades():
+    from flask import current_app
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    with current_app.test_request_context():
+        with current_app.app_context():
+            LISTA_ENTIDADES = obtener_lista_entidades_por_id_razonsocial()
+            assert type(LISTA_ENTIDADES) == type([])
+
+
 # <-------------------------------------------------------------------------> #
 # Clases base para los test, cado uno de estas clases debe ejecutarse correctamente
 # con cada motor de base de datos soportado:
