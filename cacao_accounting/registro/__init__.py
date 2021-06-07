@@ -102,7 +102,7 @@ class Registro:
         if self.lista_validaciones and self.validaciones_verificadas and self._validaciones_predefinidas():
             TRANSACCION_VALIDADA = True
             while TRANSACCION_VALIDADA:
-                for validacion in self.lista_validaciones:
+                for validacion in self.lista_validaciones:  # pylint: disable=E1133
                     TRANSACCION_VALIDADA = validacion(**kwargs)
                 break
         else:
