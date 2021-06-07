@@ -85,7 +85,7 @@ def registrar_rutas_predeterminadas(app):
     from flask import render_template
 
     @app.errorhandler(404)
-    def page_not_found(error):
+    def page_not_found(error):  # pylint: disable=W0613
         return render_template("404.html"), 404
 
 
@@ -104,21 +104,6 @@ def registrar_blueprints(app):
         app.register_blueprint(ventas)
         app.register_blueprint(ajax)
         registrar_modulos_adicionales(app)
-
-
-def db_metadata():
-    """
-    Actualiza metadatos en la base de datos.
-    """
-    from cacao_accounting.database import DBVERSION, Metadata
-    from cacao_accounting.version import VERSION
-
-    METADATOS = Metadata(
-        cacaoversion=VERSION,
-        dbversion=DBVERSION,
-    )
-    db.session.add(METADATOS)
-    db.session.commit()
 
 
 def actualiza_variables_globales_jinja(app=None):
