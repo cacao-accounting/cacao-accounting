@@ -49,7 +49,7 @@ def comprueba_lista_validaciones(lista_a_validar: list = None) -> bool:
     if VERIFICACION_TIPO_LISTA:
         LISTA_EJECUTABLES = True
         while LISTA_EJECUTABLES:
-            for v in lista_a_validar:
+            for v in lista_a_validar:  # type: ignore[union-attr]
                 LISTA_EJECUTABLES = callable(v)
             break
     return VERIFICACION_TIPO_LISTA and LISTA_EJECUTABLES

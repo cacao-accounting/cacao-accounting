@@ -22,3 +22,6 @@ pytest-cov
 # Docs
 mkdocs
 mkdocs-material
+
+# Verificación de tipos
+mypy
