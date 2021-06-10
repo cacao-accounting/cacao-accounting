@@ -103,7 +103,8 @@ class BaseDireccion:
 
 # <---------------------------------------------------------------------------------------------> #
 # Información sobre la instalación actual del sistema.
-class Metadata(db.Model):
+# https://github.com/python/mypy/issues/8603
+class Metadata(db.Model):  # type: ignore[name-defined]
     """
     Informacion basica de la instalacion.
     """
@@ -115,7 +116,7 @@ class Metadata(db.Model):
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de monedas, localización, tasas de cambio y otras configuraciones regionales.
-class Moneda(db.Model, BaseTabla):
+class Moneda(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
     Una moneda para los registros de la entidad.
     """
@@ -128,7 +129,7 @@ class Moneda(db.Model, BaseTabla):
     predeterminada = db.Column(db.Boolean, nullable=True)
 
 
-class TasaDeCambio(db.Model, BaseTabla):
+class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
     Tasa de conversión entre dos monedas distintas.
     """
@@ -142,7 +143,7 @@ class TasaDeCambio(db.Model, BaseTabla):
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de usuario, roles, grupos y permisos.
-class Usuario(UserMixin, db.Model, BaseTabla):
+class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
     """
     Una entidad con acceso al sistema.
     """
@@ -165,7 +166,7 @@ class Usuario(UserMixin, db.Model, BaseTabla):
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de módulos del sistema.
-class Modulos(db.Model, BaseTabla):
+class Modulos(db.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
     __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
@@ -177,7 +178,7 @@ class Modulos(db.Model, BaseTabla):
 
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad.
-class Entidad(db.Model):
+class Entidad(db.Model):  # type: ignore[name-defined]
     """
     Una entidad es una unidad de negocios de la que se lleva registros
     en el sistema.
@@ -216,7 +217,7 @@ class Entidad(db.Model):
     predeterminada = db.Column(db.Boolean())
 
 
-class Unidad(db.Model):
+class Unidad(db.Model):  # type: ignore[name-defined]
     """
     Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
     """
@@ -246,7 +247,7 @@ class Direcciones(BaseDireccion):
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
-class Cuentas(db.Model):
+class Cuentas(db.Model):  # type: ignore[name-defined]
     """
     La base de contabilidad es el catalogo de cuentas.
     """
@@ -281,7 +282,7 @@ class Cuentas(db.Model):
     }
 
 
-class CentroCosto(db.Model, BaseTabla):
+class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
@@ -310,7 +311,7 @@ class CentroCosto(db.Model, BaseTabla):
     }
 
 
-class Proyecto(db.Model):
+class Proyecto(db.Model):  # type: ignore[name-defined]
     """
     Similar a un Centro de Costo pero con una vida mas efimera y normalmente con un presupuesto
     definido ademas de fechas de inicio y fin.
@@ -336,7 +337,7 @@ class Proyecto(db.Model):
     }
 
 
-class PeriodoContable(db.Model):
+class PeriodoContable(db.Model):  # type: ignore[name-defined]
     """
     Todas las transaciones deben estar vinculadas a un periodo contable.
     """
@@ -357,29 +358,29 @@ class PeriodoContable(db.Model):
 
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Cobrar
-class Cliente(db.Model, BaseTercero):
+class Cliente(db.Model, BaseTercero):  # type: ignore[name-defined]
     pass
 
 
-class ClienteDireccion(db.Model, BaseDireccion):
+class ClienteDireccion(db.Model, BaseDireccion):  # type: ignore[name-defined]
     pass
 
 
-class ClienteContacto(db.Model, BaseContacto):
+class ClienteContacto(db.Model, BaseContacto):  # type: ignore[name-defined]
     pass
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Pagar
-class Proveedor(db.Model, BaseTercero):
+class Proveedor(db.Model, BaseTercero):  # type: ignore[name-defined]
     pass
 
 
-class ProveedorDireccion(db.Model, BaseDireccion):
+class ProveedorDireccion(db.Model, BaseDireccion):  # type: ignore[name-defined]
     pass
 
 
-class ProveedorContacto(db.Model, BaseContacto):
+class ProveedorContacto(db.Model, BaseContacto):  # type: ignore[name-defined]
     pass
 
 

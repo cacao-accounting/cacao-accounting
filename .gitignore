@@ -259,7 +259,4 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-#Archivos de configuracion
-*.ini
-
 cacao_accounting/static/node_modules/*
