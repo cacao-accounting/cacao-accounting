@@ -57,22 +57,6 @@ def test_run():
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
-
-
-def test_cli():
-    import subprocess
-
-    subprocess.Popen(
-        ["cacaoctl"],
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-    )
-
-
-def test__main__():
-    import subprocess
-    from sys import executable
-
     subprocess.Popen(
         [executable, "cacao_accounting/__main__.py"],
         stderr=subprocess.DEVNULL,

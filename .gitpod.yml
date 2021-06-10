@@ -1,0 +1,4 @@
+ports:
+- port: 8080
+tasks:
+- command: 'bash /workspace/cacao-accounting/scritps/setup.sh '
