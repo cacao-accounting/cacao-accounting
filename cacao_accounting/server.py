@@ -15,7 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from waitress import serve  # type: ignore[name]
+from waitress import serve  # type: ignore[import]
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion, PORT, THREADS
 from cacao_accounting.loggin import log
