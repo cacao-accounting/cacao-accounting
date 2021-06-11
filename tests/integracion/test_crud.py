@@ -320,7 +320,6 @@ def test_obtener_listado_entidades():
             assert type(LISTA_ENTIDADES) == type([])
 
 
-
 # <-------------------------------------------------------------------------> #
 # Clases base para los test, cado uno de estas clases debe ejecutarse correctamente
 # con cada motor de base de datos soportado:
