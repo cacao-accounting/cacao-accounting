@@ -31,7 +31,7 @@ jobs:
       run: |
         sudo podman pod stop cacao-mysql cacao-postgresl
         sudo podman pod start cacao-mysql cacao-postgresl
-        sleep 30
+        sleep 35
         sudo podman container ls
         echo ""
         echo ""
