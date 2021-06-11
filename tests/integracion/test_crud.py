@@ -7,14 +7,6 @@ from cacao_accounting.database import db
 from cacao_accounting.datos import base_data, demo_data
 
 
-def test_verifica_coneccion_db():
-    from flask import Flask
-    from cacao_accounting.database import verifica_coneccion_db
-
-    app = Flask(__name__)
-    assert verifica_coneccion_db(app) == True
-
-
 def desplegar_base_de_datos():
     db.drop_all()
     db.create_all()
@@ -297,13 +289,29 @@ def test_crea_db():
     APP.config["ENV"] = "production"
     with APP.app_context():
         from cacao_accounting.database import db
+
         db.drop_all()
         assert inicia_base_de_datos(APP) is True
     with APP.app_context():
         from cacao_accounting.database import db
+
         db.drop_all()
         APP.config["SQLALCHEMY_DATABASE_URI"] = "hola"
         assert inicia_base_de_datos(APP) is False
+
+
+def test_verifica_coneccion_db():
+    from flask import Flask
+    from cacao_accounting.database import verifica_coneccion_db, inicia_base_de_datos
+
+    from cacao_accounting import create_app
+    from cacao_accounting.config import configuracion
+
+    cacao = create_app(configuracion)
+    inicia_base_de_datos(cacao)
+    assert verifica_coneccion_db(cacao) is True
+    cacao.config["SQLALCHEMY_DATABASE_URI"] = "hola"
+    assert verifica_coneccion_db(cacao) is False
 
 
 def test_requiere_migracion_db():

@@ -30,6 +30,7 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from collections import namedtuple
+from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy_paginator import Paginator
@@ -407,6 +408,12 @@ def requiere_migracion_db(app):
     return migrardb
 
 
+if "CACAO_TEST" in environ:
+    TIEMPO_ESPERA = 2
+else:
+    TIEMPO_ESPERA = 30
+
+
 def verifica_coneccion_db(app):
     """
     Verifica si es posible conentarse a la base de datos.
@@ -415,7 +422,7 @@ def verifica_coneccion_db(app):
 
     with app.app_context():
         __inicio = time.time()
-        while (time.time() - __inicio) < 20:
+        while (time.time() - __inicio) < TIEMPO_ESPERA:
             log.info("Verificando conexión a la base de datos.")
             try:
                 Metadata.query.all()
