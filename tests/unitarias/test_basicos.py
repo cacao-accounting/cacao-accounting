@@ -232,3 +232,21 @@ class TestExection(TestCase):
 
         with pytest.raises(DataError):
             paginar_consulta(tabla=None, elementos=None)
+
+    def test_flask_app_as_parameter(self):
+        from cacao_accounting import iniciar_extenciones
+
+        with pytest.raises(RuntimeError):
+            iniciar_extenciones(app=object)
+        from cacao_accounting import registrar_rutas_predeterminadas
+
+        with pytest.raises(RuntimeError):
+            registrar_rutas_predeterminadas(app=object)
+        from cacao_accounting import registrar_blueprints
+
+        with pytest.raises(RuntimeError):
+            registrar_blueprints(app=object)
+        from cacao_accounting import actualiza_variables_globales_jinja
+
+        with pytest.raises(RuntimeError):
+            actualiza_variables_globales_jinja(app=object)

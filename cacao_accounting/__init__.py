@@ -23,6 +23,8 @@ WSGI.
 """
 
 from sys import version_info
+from typing import Union
+from configobj import ConfigObj
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
@@ -36,6 +38,7 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
+from cacao_accounting.exception import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
@@ -46,7 +49,7 @@ alembic = Alembic()
 talisman = Talisman()
 
 
-def command():
+def command() -> None:
     """
     Interfaz de linea de commandos.
     """
@@ -55,7 +58,7 @@ def command():
     linea_comandos(as_module="cacao_accounting")
 
 
-def verifica_version_de_python():
+def verifica_version_de_python() -> None:
     """
     Requerimos al menos python 3.6 para la aplicación.
     """
@@ -66,60 +69,73 @@ def verifica_version_de_python():
         raise RuntimeError("Python >= 3.6 requerido.")
 
 
-def iniciar_extenciones(app):
+def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
     """
     Inicializa extenciones.
     """
-    alembic.init_app(app)
-    db.init_app(app)
-    administrador_sesion.init_app(app)
-    with app.app_context():
-        if not current_app.config.get("ENV") == "development":
-            talisman.init_app(app)
+    if app and isinstance(app, Flask):
+        alembic.init_app(app)
+        db.init_app(app)
+        administrador_sesion.init_app(app)
+        with app.app_context():
+            if not current_app.config.get("ENV") == "development":
+                talisman.init_app(app)
+    else:
+        raise RuntimeError(ERROR2)
 
 
-def registrar_rutas_predeterminadas(app):
+def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
     """
     Registra rutas predeterminadas.
     """
-    from flask import render_template
+    if app and isinstance(app, Flask):
+        from flask import render_template
 
-    @app.errorhandler(404)
-    def page_not_found(error):  # pylint: disable=W0613
-        return render_template("404.html"), 404
+        @app.errorhandler(404)
+        def page_not_found(error):  # pylint: disable=W0613
+            return render_template("404.html"), 404
+
+    else:
+        raise RuntimeError(ERROR2)
 
 
-def registrar_blueprints(app):
+def registrar_blueprints(app: Union[Flask, None] = None) -> None:
     """
     Registra blueprints por defecto.
     """
-    with app.app_context():
-        app.register_blueprint(admin)
-        app.register_blueprint(bancos)
-        app.register_blueprint(main_app)
-        app.register_blueprint(contabilidad)
-        app.register_blueprint(compras)
-        app.register_blueprint(inventario)
-        app.register_blueprint(login)
-        app.register_blueprint(ventas)
-        app.register_blueprint(ajax)
-        registrar_modulos_adicionales(app)
+    if app and isinstance(app, Flask):
+        with app.app_context():
+            app.register_blueprint(admin)
+            app.register_blueprint(bancos)
+            app.register_blueprint(main_app)
+            app.register_blueprint(contabilidad)
+            app.register_blueprint(compras)
+            app.register_blueprint(inventario)
+            app.register_blueprint(login)
+            app.register_blueprint(ventas)
+            app.register_blueprint(ajax)
+            registrar_modulos_adicionales(app)
+    else:
+        raise RuntimeError(ERROR2)
 
 
-def actualiza_variables_globales_jinja(app=None):
+def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
     """
     Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2.
     """
-    if app:
+
+    if app and isinstance(app, Flask):
         with app.app_context():
             app.jinja_env.trim_blocks = True
             app.jinja_env.lstrop_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+    else:
+        raise RuntimeError(ERROR2)
 
 
-def create_app(ajustes=None):
+def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
     """
     Aplication factory.
 
@@ -179,7 +195,7 @@ def create_app(ajustes=None):
             inicia_base_de_datos(CACAO_APP)
 
     actualiza_variables_globales_jinja(app=CACAO_APP)
-    iniciar_extenciones(CACAO_APP)
-    registrar_blueprints(CACAO_APP)
-    registrar_rutas_predeterminadas(CACAO_APP)
+    iniciar_extenciones(app=CACAO_APP)
+    registrar_blueprints(app=CACAO_APP)
+    registrar_rutas_predeterminadas(app=CACAO_APP)
     return CACAO_APP

@@ -79,7 +79,7 @@ else:
 # configurar la aplicacion.
 
 
-def valida_llave_secreta(llave):
+def valida_llave_secreta(llave: str) -> bool:
 
     CONTIENE_MAYUSCULAS = bool(any(chr.isupper() for chr in llave))
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
@@ -96,7 +96,7 @@ def valida_llave_secreta(llave):
         return CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
 
 
-def valida_direccion_base_datos(uri):
+def valida_direccion_base_datos(uri: str) -> bool:
     DIRECCION = str(uri)
     MSSQL_URI = DIRECCION.startswith("mssql")
     MYSQL_URI = DIRECCION.startswith("mysql")
@@ -105,7 +105,7 @@ def valida_direccion_base_datos(uri):
     return MSSQL_URI or MYSQL_URI or POSTGRESQL_URI or SQLITE_URI
 
 
-def probar_configuracion_por_variables_de_entorno():
+def probar_configuracion_por_variables_de_entorno() -> bool:
     """
     Valida que las opciones requeridas para configuración la aplicacion desde variables del entorno
     se encuentran correctamente configuradas.
@@ -141,7 +141,7 @@ else:
     configuracion["DEGUG"] = True
 
 
-def probar_modo_escritorio():
+def probar_modo_escritorio() -> bool:
     """
     Función utilitaria para establecer nodo de escritorio.
     """

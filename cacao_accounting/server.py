@@ -23,7 +23,7 @@ from cacao_accounting.loggin import log
 app = create_app(configuracion)
 
 
-def server():
+def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI"""
     from cacao_accounting.database import inicia_base_de_datos, requiere_migracion_db, verifica_coneccion_db
 
