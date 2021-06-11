@@ -295,9 +295,15 @@ def test_crea_db():
     APP = create_app(configuracion)
     inicia_base_de_datos(APP)
     APP.config["ENV"] = "production"
-    assert inicia_base_de_datos(APP) is False
-    APP.config["SQLALCHEMY_DATABASE_URI"] = "hola"
-    assert inicia_base_de_datos(APP) is False
+    with APP.app_context():
+        from cacao_accounting.database import db
+        db.drop_all()
+        assert inicia_base_de_datos(APP) is True
+    with APP.app_context():
+        from cacao_accounting.database import db
+        db.drop_all()
+        APP.config["SQLALCHEMY_DATABASE_URI"] = "hola"
+        assert inicia_base_de_datos(APP) is False
 
 
 def test_requiere_migracion_db():
