@@ -408,9 +408,10 @@ def requiere_migracion_db(app):
     return migrardb
 
 
-if "CACAO_TEST" in environ:
-    TIEMPO_ESPERA = 2
-else:
+try:
+    if environ["CACAO_TEST"] == "True" or environ["CACAO_TEST"] is True:
+        TIEMPO_ESPERA = 2
+except KeyError:
     TIEMPO_ESPERA = 30
 
 
