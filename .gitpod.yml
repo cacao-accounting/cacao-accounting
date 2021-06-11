@@ -1,4 +1,5 @@
 ports:
-- port: 8080
+- port: 5000
 tasks:
-- command: 'bash /workspace/cacao-accounting/scritps/setup.sh '
+- init: 'bash /workspace/cacao-accounting/scritps/setup.sh '
+  command: 'FLASK_DEBUG=True flask run '
