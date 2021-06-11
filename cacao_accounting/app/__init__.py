@@ -37,29 +37,18 @@ def bd_actual():
     Devuelve el motor de base de datos según la cadena de conexión establecida
     en la configuración de la aplicación actual.
     """
-    from sqlalchemy import create_engine
-
     uri = str(current_app.config["SQLALCHEMY_DATABASE_URI"])
-    engine = create_engine(uri)
-
-    with current_app.app_context():
-        with engine.connect() as con:
-            if uri.startswith("sqlite"):
-                db = "Sqlite"
-                version = con.execute("SELECT sqlite_version()").fetchone()
-            elif uri.startswith("postgresql"):
-                db = "Postgresql"
-                version = con.execute("SELECT VERSION()").fetchone()
-            elif uri.startswith("mysql"):
-                db = "MySQL"
-                version = con.execute("SELECT VERSION()").fetchone()
-            elif uri.startswith("mssql"):
-                db = "MS SQL Server"
-                version = con.execute("SELECT @@VERSION").fetchone()
-            else:
-                db = None
-                version = None
-    return {"DB": db, "VERSION": version}
+    if uri.startswith("sqlite"):
+        db = "Sqlite"
+    elif uri.startswith("postgresql"):
+        db = "Postgresql"
+    elif uri.startswith("mysql"):
+        db = "MySQL"
+    elif uri.startswith("mssql"):
+        db = "MS SQL Server"
+    else:
+        db = None
+    return db
 
 
 def dev_info():
