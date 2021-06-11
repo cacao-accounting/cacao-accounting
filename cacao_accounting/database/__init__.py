@@ -462,6 +462,7 @@ def inicia_base_de_datos(app):
                 demo_data()
                 DB_ESQUEMA = True
             else:
+                db_metadata()
                 base_data(carga_rapida=False)
                 DB_ESQUEMA = True
         except:  # noqa: E722
