@@ -294,6 +294,10 @@ def test_crea_db():
 
     APP = create_app(configuracion)
     inicia_base_de_datos(APP)
+    APP.config["ENV"] = "production"
+    assert inicia_base_de_datos(APP) is False
+    APP.config["SQLALCHEMY_DATABASE_URI"] = "hola"
+    assert inicia_base_de_datos(APP) is False
 
 
 def test_requiere_migracion_db():
@@ -304,16 +308,6 @@ def test_requiere_migracion_db():
     APP.app_context().push()
     db.create_all()
     requiere_migracion_db(APP)
-
-
-def test_obtener_listado_entidades():
-    from flask import current_app
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    with current_app.test_request_context():
-        with current_app.app_context():
-            LISTA_ENTIDADES = obtener_lista_entidades_por_id_razonsocial()
-            assert type(LISTA_ENTIDADES) == type([])
 
 
 def test_obtener_listado_entidades():
