@@ -2,6 +2,7 @@
 .git
 .github
 .gitignore
+.git-blame-ignore-revs
 .vscode
 
 
@@ -14,6 +15,7 @@ Dockerfile
 docker-compose.yml
 
 # Archivos para colaboradores
+.theia
 .coveragerc
 .pylintrc
 codecov.yml
@@ -23,3 +25,5 @@ development.txt
 requirements-databases.txt
 *.yml
 *.db
+.mypy.ini
+.gitpod.yml
