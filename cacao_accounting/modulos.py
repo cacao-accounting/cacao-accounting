@@ -22,6 +22,8 @@ Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprin
 """
 
 from pkgutil import iter_modules
+from typing import Union
+from flask import Flask
 from cacao_accounting.database import db, Modulos
 
 
@@ -77,7 +79,7 @@ for modulo in modulos:
         pass
 
 
-def registrar_modulo(entrada):
+def registrar_modulo(entrada: dict) -> None:
     """
     Recibe un diccionario y lo inserta en la base de datos.
     """
@@ -86,7 +88,7 @@ def registrar_modulo(entrada):
     db.session.commit()
 
 
-def _init_modulos():
+def _init_modulos() -> None:
     """
     Inserta en la base de datos los modulos predeterminados del sistema.
     """
@@ -95,7 +97,7 @@ def _init_modulos():
         registrar_modulo(i)
 
 
-def listado_modulos():
+def listado_modulos() -> dict:
     """
     Devuelve listado de modulos instalados en dos listas.
 
@@ -118,7 +120,7 @@ def listado_modulos():
     return lista_modulos
 
 
-def validar_modulo_activo(modulo_a_validar):
+def validar_modulo_activo(modulo_a_validar: str) -> bool:
     """
     Se utiliza en las plantillas para determinar si un modulo se debe presentar o no en la interfas de usuario.
     """
@@ -126,7 +128,7 @@ def validar_modulo_activo(modulo_a_validar):
     return modulo_a_validar in datos["modulos_activos"]
 
 
-def registrar_modulos_adicionales(flaskapp):
+def registrar_modulos_adicionales(flaskapp: Flask) -> None:
     """
     Registra los blueprints definidos en el modulo.
 
@@ -136,11 +138,11 @@ def registrar_modulos_adicionales(flaskapp):
     from importlib import import_module
 
     if MODULOS_ADICIONALES:
-        modulos_extra = []
+        modulos_extra: Union[list, None] = []
         for i in MODULOS_ADICIONALES:
             paquete = import_module(i)
-            flaskapp.register_blueprint(paquete.blueprint)
-            modulos_extra.append(paquete)
+            flaskapp.register_blueprint(paquete.blueprint)  # type: ignore[attr-defined]
+            modulos_extra.append(paquete)  # type: ignore[union-attr]
     else:
         modulos_extra = None
-    flaskapp.add_template_global(modulos_extra, "modulos_extra")
+    flaskapp.add_template_global(modulos_extra, "modulos_extra")  # type: ignore[arg-type]
