@@ -96,7 +96,7 @@ jobs:
       run: |
         sleep 5
         python -W ignore tests/integracion/test_crud.py
-        pytest  -v --disable-warnings --full-trace --exitfirst --cov=cacao_accounting
+        CACAO_TEST=True pytest  -v --disable-warnings --full-trace --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
     - name: Codecov
