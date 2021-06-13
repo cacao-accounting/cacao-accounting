@@ -36,8 +36,8 @@ def registra_monedas(carga_rapida=False):
         nio = {"id": "NIO", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
         usd = {"id": "USD", "nombre": "Dolares de los Estados Unidos", "codigo": 559, "decimales": 2}
         r = RegistroMoneda()
-        r.crear_registro_principal(nio)
-        r.crear_registro_principal(usd)
+        r.crear_registro_maestro(nio)
+        r.crear_registro_maestro(usd)
     else:
         for moneda in Currencies():
             registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)

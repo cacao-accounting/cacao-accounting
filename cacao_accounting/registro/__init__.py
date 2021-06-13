@@ -70,7 +70,7 @@ class Registro:
     lista_validaciones = None
     validaciones_verificadas = comprueba_lista_validaciones(lista_a_validar=lista_validaciones)
 
-    def crear_registro_principal(self, datos: None):
+    def crear_registro_maestro(self, datos: None):
         """
         Un registro principal no depende de otros, ejemplos de registros principales son:
          Registros maestros como:
@@ -88,12 +88,19 @@ class Registro:
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
 
-    def crear_registro_secundario(self, registro_principal=None, datos_detalle=None):
+    def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
         """
         Un registro secundario proporciona información adicional a un registro principal como:
           - La lista de items de una factura.
           - La lista de cuentas afectadas en un comprobantes de diario.
         """
+
+        if self.tabla and self.tabla_detalle:
+            self.database.session.add(self.tabla(**transaccion))
+            self.database.session.commit()
+            for i in transaccion_detalle:
+                self.database.session.add(self.tabla_detalle(**i))
+                self.database.session.commit()
 
     def _validaciones_predefinidas(self, **kwargs):
         return True
