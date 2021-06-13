@@ -38,6 +38,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
+      mariadb:
+        image: mariadb
+        env:
+            MARIADB_ALLOW_EMPTY_PASSWORD: yes
+            MARIADB_DATABASE: cacao
+            MARIADB_USER: cacao
+            MARIADB_PASSWORD: cacao
+        ports:
+            - 3307:3306
       postgres:
         image: postgres:latest
         env:
@@ -53,7 +62,8 @@ jobs:
           --health-retries 5
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-beta.1]
+         python-version: [3.6, 3.10.0-beta.3]
+#        python-version: [3.6, 3.7, 3.8, 3.9,3.10.0-beta.1]
 
     steps:
     - uses: actions/checkout@v2
@@ -95,7 +105,8 @@ jobs:
     - name: Test with pytest
       run: |
         sleep 5
-        CACAO_TEST=True pytest  -v --disable-warnings --full-trace --exitfirst --cov=cacao_accounting
+        CACAO_TEST=True python -m pytest  -v --exitfirst --cov=cacao_accounting
+#        CACAO_TEST=True SQLALCHEMY_WARN_20=1 python -W always::DeprecationWarning -m pytest  -v --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
     - name: Codecov

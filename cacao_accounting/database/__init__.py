@@ -33,6 +33,7 @@ from collections import namedtuple
 from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import UniqueConstraint
 from sqlalchemy_paginator import Paginator
 from cacao_accounting.exception import DataError, ERROR1
 from cacao_accounting.loggin import log
@@ -122,7 +123,7 @@ class Moneda(db.Model, BaseTabla):  # type: ignore[name-defined]
     Una moneda para los registros de la entidad.
     """
 
-    id = db.Column(db.String(6), primary_key=True, nullable=False)
+    id = db.Column(db.String(10), primary_key=True, nullable=False)
     nombre = db.Column(db.String(75), nullable=False)
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
@@ -136,8 +137,8 @@ class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     id = db.Column(db.Integer(), primary_key=True, nullable=False, autoincrement=True)
-    base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
-    destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    base = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
+    destino = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
 
@@ -197,7 +198,7 @@ class Entidad(db.Model):  # type: ignore[name-defined]
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
-    moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
+    moneda = db.Column(db.String(10), db.ForeignKey("moneda.id"))
     # Individual, Sociedad, Sin Fines de Lucro
     tipo_entidad = db.Column(db.String(50))
     tipo_entidad_lista = [
@@ -253,7 +254,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     La base de contabilidad es el catalogo de cuentas.
     """
 
-    __table_args__ = (db.UniqueConstraint("id", name="cta_unica"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"))
+    __table_args__ = (db.UniqueConstraint("id"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"), )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
@@ -262,14 +263,12 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(
-        db.String(50),
-    )
+    codigo = db.Column(db.String(50), index=True)
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(50), db.ForeignKey("cuentas.codigo"), nullable=True)
-    # moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
+    padre = db.Column(db.String(50), nullable=True)
+    moneda = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=True)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
@@ -281,6 +280,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
         "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="cta_unica_entidad")
 
 
 class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
@@ -288,10 +288,7 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
-    __table_args__ = (
-        db.UniqueConstraint("id", "nombre", name="cc_unico"),
-        db.UniqueConstraint("entidad", "codigo", name="cc_unico"),
-    )
+    __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="cc_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
@@ -307,12 +304,13 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     )
     nombre = db.Column(db.String(100))
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.codigo"), nullable=True)
+    padre = db.Column(db.String(100), nullable=True)
     status = db.Column(db.String(50), nullable=True)
     status_web = {
         "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="cc_unico_entidad")
 
 
 class Proyecto(db.Model):  # type: ignore[name-defined]
@@ -321,10 +319,7 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (
-        db.UniqueConstraint("id", "nombre", name="proyecto_unico"),
-        db.UniqueConstraint("entidad", "codigo", name="py_unico"),
-    )
+    __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="py_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
@@ -342,6 +337,7 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
         "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="proyecto_unica_entidad")
 
 
 class PeriodoContable(db.Model):  # type: ignore[name-defined]

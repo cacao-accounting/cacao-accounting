@@ -11,6 +11,7 @@ from .x_basicos import Basicos
 # Conecciones para cada tipo de base de datos.
 SQLITE = "sqlite://"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
+MARIADB = "mariadb+pymysql://cacao:cacao@localhost:3307/cacao"
 POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server"
 
@@ -21,6 +22,18 @@ MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+
 def verficar_conceccion_a_mysql():
     try:
         engine = create_engine(MYSQL)
+        with engine.connect() as con:
+            rs = con.execute("SELECT VERSION()")
+            for row in rs:
+                pass
+        return True
+    except:
+        return False
+
+
+def verficar_conceccion_a_mariadb():
+    try:
+        engine = create_engine(MARIADB)
         with engine.connect() as con:
             rs = con.execute("SELECT VERSION()")
             for row in rs:
@@ -56,6 +69,7 @@ def verficar_conceccion_a_mssql():
 
 TEST_SQLITE = True  # Siempre disponible
 TEST_MYSQL = verficar_conceccion_a_mysql()
+TEST_MARIADB = verficar_conceccion_a_mariadb()
 TEST_POSTGRESQL = verficar_conceccion_a_postgresql()
 TEST_MSSQL = verficar_conceccion_a_mssql()
 
@@ -84,8 +98,8 @@ class TestSQLite(TestCase, Basicos):
             db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("sqlite://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("sqlite://")
 
 
 class TestMySQL(TestCase, Basicos):
@@ -111,8 +125,35 @@ class TestMySQL(TestCase, Basicos):
                 db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("mysql+pymysql://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("mysql+pymysql://")
+
+
+class TestMariaDB(TestCase, Basicos):
+    def setUp(self):
+        self.dbengine = TEST_MARIADB
+        self.app = create_app(
+            {
+                "SQLALCHEMY_DATABASE_URI": MARIADB,
+                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+                "ENV": "development",
+                "SECRET_KEY": "dev",
+            }
+        )
+        with self.app.app_context():
+            if TEST_MARIADB:
+                db.create_all()
+                base_data(carga_rapida=True)
+                demo_data()
+
+    def tearDown(self):
+        with self.app.app_context():
+            if TEST_MARIADB:
+                db.drop_all()
+
+    def test_db(self):
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("mariadb+pymysql://")
 
 
 class TestPostgresql(TestCase, Basicos):
@@ -138,8 +179,8 @@ class TestPostgresql(TestCase, Basicos):
                 db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("postgresql+pg8000://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("postgresql+pg8000://")
 
 
 class TestMSSQL(TestCase, Basicos):
@@ -165,10 +206,9 @@ class TestMSSQL(TestCase, Basicos):
     def tearDown(self):
         if self.app:
             with self.app.app_context():
-
                 db.drop_all()
 
     def test_db(self):
         if TestMSSQL and self.app is not None:
-            URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-            assert URL.startswith("mssql+pyodbc://")
+            self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert self.URL.startswith("mssql+pyodbc://")
