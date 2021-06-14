@@ -165,7 +165,6 @@ class TestMSSQL(TestCase, Basicos):
     def tearDown(self):
         if self.app:
             with self.app.app_context():
-
                 db.drop_all()
 
     def test_db(self):
