@@ -95,7 +95,6 @@ jobs:
     - name: Test with pytest
       run: |
         sleep 5
-        python -W ignore tests/integracion/test_crud.py
         CACAO_TEST=True pytest  -v --disable-warnings --full-trace --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
