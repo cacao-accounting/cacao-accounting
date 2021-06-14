@@ -414,11 +414,18 @@ def requiere_migracion_db(app):
     return migrardb
 
 
+<<<<<<< HEAD
 try:
     if environ["CACAO_TEST"] == "True" or environ["CACAO_TEST"] is True:
         TIEMPO_ESPERA = 2
 except KeyError:
     TIEMPO_ESPERA = 20
+=======
+if "CACAO_TEST" in environ:
+    TIEMPO_ESPERA = 2
+else:
+    TIEMPO_ESPERA = 30
+>>>>>>> 5cce79a (fix: Asegura verficar conexión incorrecta a db)
 
 
 def verifica_coneccion_db(app):
