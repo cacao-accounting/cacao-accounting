@@ -84,8 +84,8 @@ class TestSQLite(TestCase, Basicos):
             db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("sqlite://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("sqlite://")
 
 
 class TestMySQL(TestCase, Basicos):
@@ -111,8 +111,8 @@ class TestMySQL(TestCase, Basicos):
                 db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("mysql+pymysql://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("mysql+pymysql://")
 
 
 class TestPostgresql(TestCase, Basicos):
@@ -138,8 +138,8 @@ class TestPostgresql(TestCase, Basicos):
                 db.drop_all()
 
     def test_db(self):
-        URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-        assert URL.startswith("postgresql+pg8000://")
+        self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert self.URL.startswith("postgresql+pg8000://")
 
 
 class TestMSSQL(TestCase, Basicos):
@@ -169,5 +169,5 @@ class TestMSSQL(TestCase, Basicos):
 
     def test_db(self):
         if TestMSSQL and self.app is not None:
-            URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
-            assert URL.startswith("mssql+pyodbc://")
+            self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert self.URL.startswith("mssql+pyodbc://")
