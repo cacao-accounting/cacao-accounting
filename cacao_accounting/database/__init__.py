@@ -33,6 +33,7 @@ from collections import namedtuple
 from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import UniqueConstraint
 from sqlalchemy_paginator import Paginator
 from cacao_accounting.exception import DataError, ERROR1
 from cacao_accounting.loggin import log
@@ -281,6 +282,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
         "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="cta_unica_entidad")
 
 
 class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
@@ -313,6 +315,7 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
         "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="cc_unico_entidad")
 
 
 class Proyecto(db.Model):  # type: ignore[name-defined]
@@ -342,6 +345,7 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
         "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
         "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
     }
+    UniqueConstraint("entidad", "codigo", name="proyecto_unica_entidad")
 
 
 class PeriodoContable(db.Model):  # type: ignore[name-defined]
