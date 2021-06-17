@@ -369,6 +369,28 @@ CENTRO_COSTO_NIVEL05 = {
     "padre": "B01111",
 }
 
+CENTRO_COSTO_CAFE = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "cafe",
+    "grupo": False,
+    "codigo": "A00000",
+    "nombre": "Centro Costos Predeterminado",
+    "status": "activa",
+}
+
+CENTRO_COSTO_DULCE = {
+    "activa": True,
+    "predeterminado": True,
+    "habilitada": True,
+    "entidad": "dulce",
+    "grupo": False,
+    "codigo": "A00000",
+    "nombre": "Centro Costos Predeterminado",
+    "status": "activa",
+}
+
 
 def _centros_de_costos():
     from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
@@ -376,16 +398,14 @@ def _centros_de_costos():
     CENTRO_DE_COSTO = RegistroCentroCosto()
     log.debug("Cargando centros de costos.")
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_BASE)
-    CENTRO_COSTO_BASE["entidad"] = "dulce"
-    CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_BASE)
-    CENTRO_COSTO_BASE["entidad"] = "cafe"
-    CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_BASE)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL00)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL01)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL02)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL03)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL04)
     CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_NIVEL05)
+    CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_CAFE)
+    CENTRO_DE_COSTO.crear_registro_maestro(datos=CENTRO_COSTO_DULCE)
 
 
 PROYECTO01 = {
