@@ -1,5 +1,5 @@
 ports:
 - port: 5000
 tasks:
-- init: 'git config pull.rebase true && bash /workspace/cacao-accounting/scritps/setup.sh && export CACAO_TEST="True" && $CACAO_TEST'
+- init: 'bash /workspace/cacao-accounting/scritps/setup.sh && export CACAO_TEST=True && $CACAO_TEST'
   command: 'FLASK_DEBUG=True flask run '

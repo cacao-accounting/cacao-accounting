@@ -253,7 +253,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     La base de contabilidad es el catalogo de cuentas.
     """
 
-    __table_args__ = (db.UniqueConstraint("id", name="cta_unica"),)
+    __table_args__ = (db.UniqueConstraint("id", name="cta_unica"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"))
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
@@ -288,7 +288,10 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
-    __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"),)
+    __table_args__ = (
+        db.UniqueConstraint("id", "nombre", name="cc_unico"),
+        db.UniqueConstraint("entidad", "codigo", name="cc_unico"),
+    )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
@@ -318,7 +321,10 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),)
+    __table_args__ = (
+        db.UniqueConstraint("id", "nombre", name="proyecto_unico"),
+        db.UniqueConstraint("entidad", "codigo", name="py_unico"),
+    )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
@@ -412,7 +418,7 @@ try:
     if environ["CACAO_TEST"] == "True" or environ["CACAO_TEST"] is True:
         TIEMPO_ESPERA = 2
 except KeyError:
-    TIEMPO_ESPERA = 20
+    TIEMPO_ESPERA = 30
 
 
 def verifica_coneccion_db(app):
