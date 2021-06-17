@@ -288,7 +288,10 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
     """
 
-    __table_args__ = (db.UniqueConstraint("id", "nombre", name="cc_unico"), db.UniqueConstraint("entidad", "codigo", name="cc_unico"))
+    __table_args__ = (
+        db.UniqueConstraint("id", "nombre", name="cc_unico"),
+        db.UniqueConstraint("entidad", "codigo", name="cc_unico"),
+    )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
@@ -318,7 +321,10 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (db.UniqueConstraint("id", "nombre", name="proyecto_unico"),  db.UniqueConstraint("entidad", "codigo", name="py_unico"))
+    __table_args__ = (
+        db.UniqueConstraint("id", "nombre", name="proyecto_unico"),
+        db.UniqueConstraint("entidad", "codigo", name="py_unico"),
+    )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
