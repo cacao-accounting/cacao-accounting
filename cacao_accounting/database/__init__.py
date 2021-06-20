@@ -30,6 +30,7 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from collections import namedtuple
+from operator import index
 from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -264,7 +265,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = db.Column(
-        db.String(50),
+        db.String(50), index=True
     )
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
