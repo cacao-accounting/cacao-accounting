@@ -291,7 +291,6 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __table_args__ = (
-        db.UniqueConstraint("id", "nombre", name="cc_unico"),
         db.UniqueConstraint("entidad", "codigo", name="cc_unico"),
     )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
@@ -325,7 +324,6 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
     """
 
     __table_args__ = (
-        db.UniqueConstraint("id", "nombre", name="proyecto_unico"),
         db.UniqueConstraint("entidad", "codigo", name="py_unico"),
     )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
