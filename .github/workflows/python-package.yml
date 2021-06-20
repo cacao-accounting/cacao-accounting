@@ -38,6 +38,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
+      mariadb:
+        image: mariadb
+        env:
+            MARIADB_ALLOW_EMPTY_PASSWORD: yes
+            MARIADB_DATABASE: cacao
+            MARIADB_USER: cacao
+            MARIADB_PASSWORD: cacao
+        ports:
+            - 3307:3306
       postgres:
         image: postgres:latest
         env:
