@@ -31,7 +31,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
-from cacao_accounting.database import paginar_consulta
+from cacao_accounting.database.helpers import paginar_consulta
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
