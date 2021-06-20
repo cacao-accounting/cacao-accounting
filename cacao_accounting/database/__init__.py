@@ -321,9 +321,7 @@ class Proyecto(db.Model):  # type: ignore[name-defined]
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (
-        db.UniqueConstraint("entidad", "codigo", name="py_unico"),
-    )
+    __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="py_unico"),)
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
