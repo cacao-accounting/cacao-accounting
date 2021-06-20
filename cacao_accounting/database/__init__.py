@@ -30,7 +30,6 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from collections import namedtuple
-from operator import index
 from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
