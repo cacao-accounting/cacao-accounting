@@ -131,7 +131,7 @@ class TestMySQL(TestCase, Basicos):
 
 class TestMariaDB(TestCase, Basicos):
     def setUp(self):
-        self.dbengine = TEST_MYSQL
+        self.dbengine = TEST_MARIADB
         self.app = create_app(
             {
                 "SQLALCHEMY_DATABASE_URI": MARIADB,
