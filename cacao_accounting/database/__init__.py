@@ -198,7 +198,7 @@ class Entidad(db.Model):  # type: ignore[name-defined]
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
-    moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
+    moneda = db.Column(db.String(10), db.ForeignKey("moneda.id"))
     # Individual, Sociedad, Sin Fines de Lucro
     tipo_entidad = db.Column(db.String(50))
     tipo_entidad_lista = [
@@ -268,7 +268,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(50), nullable=True)
-    # moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
+    moneda = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=True)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
