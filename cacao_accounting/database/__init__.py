@@ -254,7 +254,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     La base de contabilidad es el catalogo de cuentas.
     """
 
-    __table_args__ = (db.UniqueConstraint("id"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"))
+    __table_args__ = (db.UniqueConstraint("id"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"), )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
@@ -267,7 +267,7 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     nombre = db.Column(db.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(50), db.ForeignKey("cuentas.codigo"), nullable=True)
+    padre = db.Column(db.String(50), nullable=True)
     # moneda = db.Column(db.String(5), db.ForeignKey("moneda.id"))
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = db.Column(db.String(15), index=True)
