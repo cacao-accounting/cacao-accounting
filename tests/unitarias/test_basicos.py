@@ -228,7 +228,7 @@ def test_comprueba_lista_validaciones():
 class TestExection(TestCase):
     def test_querry_vacio(self):
         from cacao_accounting.exception import DataError
-        from cacao_accounting.database import paginar_consulta
+        from cacao_accounting.database.helpers import paginar_consulta
 
         with pytest.raises(DataError):
             paginar_consulta(tabla=None, elementos=None)

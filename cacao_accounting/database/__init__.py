@@ -30,13 +30,9 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from collections import namedtuple
-from os import environ
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
-from sqlalchemy_paginator import Paginator
-from cacao_accounting.exception import DataError, ERROR1
-from cacao_accounting.loggin import log
 
 
 db = SQLAlchemy()
@@ -111,9 +107,11 @@ class Metadata(db.Model):  # type: ignore[name-defined]
     Informacion basica de la instalacion.
     """
 
-    cacaoversion = db.Column(db.String(50), primary_key=True, nullable=False)
-    dbversion = db.Column(db.String(50), primary_key=True, nullable=False)
-    fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False, primary_key=True)
+    __table_args__ = (db.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
+    cacaoversion = db.Column(db.String(50), nullable=False)
+    dbversion = db.Column(db.String(50), nullable=False)
+    fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -254,7 +252,10 @@ class Cuentas(db.Model):  # type: ignore[name-defined]
     La base de contabilidad es el catalogo de cuentas.
     """
 
-    __table_args__ = (db.UniqueConstraint("id"), db.UniqueConstraint("entidad", "codigo", name="cta_unica"), )
+    __table_args__ = (
+        db.UniqueConstraint("id"),
+        db.UniqueConstraint("entidad", "codigo", name="cta_unica"),
+    )
     id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
@@ -385,113 +386,3 @@ class ProveedorDireccion(db.Model, BaseDireccion):  # type: ignore[name-defined]
 
 class ProveedorContacto(db.Model, BaseContacto):  # type: ignore[name-defined]
     pass
-
-
-# <---------------------------------------------------------------------------------------------> #
-# Herramientas auxiliares para verificar la ejecución de la base de datos.
-def requiere_migracion_db(app):
-    """
-    Utilidad para realizar migraciones en la base de datos.
-    """
-    from cacao_accounting.version import VERSION
-
-    with app.app_context():
-        meta = Metadata.query.all()
-
-    migrardb = False
-    while migrardb is False:
-        for i in meta:
-            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
-                pass
-            else:
-                log.info("Se requiere actualizar esquema de base de datos.")
-                migrardb = True
-        break
-    return migrardb
-
-
-try:
-    if environ["CACAO_TEST"] == "True" or environ["CACAO_TEST"] is True:
-        TIEMPO_ESPERA = 2
-except KeyError:
-    TIEMPO_ESPERA = 20
-
-
-def verifica_coneccion_db(app):
-    """
-    Verifica si es posible conentarse a la base de datos.
-    """
-    import time
-
-    with app.app_context():
-        __inicio = time.time()
-        while (time.time() - __inicio) < TIEMPO_ESPERA:
-            log.info("Verificando conexión a la base de datos.")
-            try:
-                Metadata.query.all()
-                DB_CONN = True
-                log.info("Conexión a la base de datos exitosa.")
-                break
-            except:  # noqa: E722
-                DB_CONN = False
-                log.warning("No se pudo establecer conexion a la base de datos.")
-                log.info("Reintentando conectar a la base de datos.")
-            time.sleep(3)
-
-    return DB_CONN
-
-
-def db_metadata():
-    """
-    Actualiza metadatos en la base de datos.
-    """
-    from cacao_accounting.version import VERSION
-
-    METADATOS = Metadata(
-        cacaoversion=VERSION,
-        dbversion=DBVERSION,
-    )
-    db.session.add(METADATOS)
-    db.session.commit()
-
-
-def inicia_base_de_datos(app):
-    """
-    Inicia esquema de base datos.
-    """
-    from flask import current_app
-    from cacao_accounting.datos import base_data, demo_data
-
-    with app.app_context():
-        log.info("Intentando inicializar base de datos.")
-        try:
-            db.create_all()
-            if current_app.config.get("ENV") == "development":
-                db_metadata()
-                base_data(carga_rapida=True)
-                demo_data()
-                DB_ESQUEMA = True
-            else:
-                db_metadata()
-                base_data(carga_rapida=False)
-                DB_ESQUEMA = True
-        except:  # noqa: E722
-            log.error("No se pudo iniciliazar esquema de base de datos.")
-            DB_ESQUEMA = False
-    return DB_ESQUEMA
-
-
-MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
-
-
-def paginar_consulta(tabla=None, elementos=None):
-    """
-    Toma una consulta simple y la devuel como una consulta paginada.
-    """
-    if tabla:
-        items = elementos or MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
-        consulta = db.session.query(tabla).order_by(tabla.id)
-        consulta_paginada = Paginator(consulta, items)
-        return consulta_paginada
-    else:
-        raise DataError(ERROR1)

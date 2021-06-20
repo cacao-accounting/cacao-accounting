@@ -157,7 +157,7 @@ def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
     def initdb():
         """Crea el esquema de la base de datos."""
 
-        from cacao_accounting.database import inicia_base_de_datos
+        from cacao_accounting.database.helpers import inicia_base_de_datos
 
         inicia_base_de_datos(CACAO_APP)
 
@@ -188,7 +188,7 @@ def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
         """
         Define una base de datos de desarrollo nueva.
         """
-        from cacao_accounting.database import inicia_base_de_datos
+        from cacao_accounting.database.helpers import inicia_base_de_datos
 
         if current_app.config.get("ENV") == "development":
             db.drop_all()
