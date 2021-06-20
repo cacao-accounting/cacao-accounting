@@ -138,7 +138,7 @@ class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer(), primary_key=True, nullable=False, autoincrement=True)
     base = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
-    destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    destino = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
 
