@@ -123,7 +123,7 @@ class Moneda(db.Model, BaseTabla):  # type: ignore[name-defined]
     Una moneda para los registros de la entidad.
     """
 
-    id = db.Column(db.String(6), primary_key=True, nullable=False)
+    id = db.Column(db.String(10), primary_key=True, nullable=False)
     nombre = db.Column(db.String(75), nullable=False)
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
@@ -137,7 +137,7 @@ class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     id = db.Column(db.Integer(), primary_key=True, nullable=False, autoincrement=True)
-    base = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
+    base = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
     destino = db.Column(db.String(5), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
     fecha = db.Column(db.Date(), nullable=False)
