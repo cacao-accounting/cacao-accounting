@@ -304,7 +304,7 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     )
     nombre = db.Column(db.String(100))
     grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), db.ForeignKey("centro_costo.codigo"), nullable=True)
+    padre = db.Column(db.String(100), nullable=True)
     status = db.Column(db.String(50), nullable=True)
     status_web = {
         "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
