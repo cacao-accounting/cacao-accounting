@@ -13,6 +13,7 @@ ENV LC_ALL C.UTF-8
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED = 1
 ENV FLASK_ENV "production"
+ENV FLASK_APP cacao_accounting
 
 RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cryptography \
     && microdnf clean all
