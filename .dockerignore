@@ -27,3 +27,4 @@ requirements-databases.txt
 *.db
 .mypy.ini
 .gitpod.yml
+.gitpod.sh
