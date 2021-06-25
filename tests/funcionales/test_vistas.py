@@ -44,6 +44,17 @@ def app():
     yield app
 
 
+@pytest.fixture
+def elimina_variable_entorno(app):
+    import os
+
+    if os.environ.get("CACAO_TEST"):
+        os.environ.pop("CACAO_TEST")
+        app.config["ENV"] = "production"
+    else:
+        pass
+
+
 def test_config(app):
     assert app.config["DEBUG"] == True
 
@@ -229,3 +240,7 @@ def test_no_autorizado(client):
     with current_app.test_request_context():
         with current_app.app_context():
             no_autorizado()
+
+
+def test_devpage_false(client, elimina_variable_entorno):
+    r = client.get("/info")
