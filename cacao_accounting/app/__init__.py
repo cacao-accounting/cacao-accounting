@@ -46,6 +46,8 @@ def bd_actual():
         db = "MySQL"
     elif uri.startswith("mssql"):
         db = "MS SQL Server"
+    elif uri.startswith("mariadb"):
+        db = "Mariadb"
     else:
         db = None
     return db
