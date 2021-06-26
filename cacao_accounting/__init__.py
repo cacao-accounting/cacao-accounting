@@ -60,13 +60,13 @@ def command() -> None:  # pragma: no cover
 
 def verifica_version_de_python() -> None:
     """
-    Requerimos al menos python 3.6 para la aplicación.
+    Requerimos al menos python 3.7 para la aplicación.
     """
     # pylint: disable=W0612
-    if version_info >= (3, 6):
+    if version_info >= (3, 7):
         pass
     else:
-        raise RuntimeError("Python >= 3.6 requerido.")
+        raise RuntimeError("Python >= 3.7 requerido.")
 
 
 def iniciar_extenciones(app: Union[Flask, None] = None) -> None:

@@ -15,7 +15,7 @@ ENV PYTHONUNBUFFERED = 1
 ENV FLASK_ENV "production"
 ENV FLASK_APP cacao_accounting
 
-RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cryptography \
+RUN microdnf install -y --nodocs --best --refresh python38 python38-pip python38-cryptography \
     && microdnf clean all
 
 # No ejecutar como root
@@ -24,9 +24,9 @@ RUN microdnf install -y --nodocs --best --refresh python3 python3-pip python3-cr
 
 # Install dependencies in a layer
 COPY requirements.txt /tmp/
-RUN /usr/bin/python3 --version \
-    && /usr/bin/python3 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && /usr/bin/python3 -m pip --no-cache-dir install pg8000 pymysql \
+RUN /usr/bin/python3.8 --version \
+    && /usr/bin/python3.8 -m pip --no-cache-dir install -r /tmp/requirements.txt \
+    && /usr/bin/python3.8 -m pip --no-cache-dir install pg8000 pymysql \
     && rm -rf /root/.cache/
 
 # Copy and install app
@@ -37,8 +37,8 @@ RUN chmod +x docker-entry-point.sh
 # Install nodejs modules in the final docker image    
 COPY --from=js node_modules /app/cacao_accounting/static/node_modules
 
-RUN /usr/bin/python3 -m pip install -e .
-RUN /usr/bin/python3 -m pip list --format=columns
+RUN /usr/bin/python3.8 -m pip install -e .
+RUN /usr/bin/python3.8 -m pip list --format=columns
 
 EXPOSE 8080
 ENTRYPOINT [ "/bin/sh" ]

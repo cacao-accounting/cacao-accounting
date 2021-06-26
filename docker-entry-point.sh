@@ -2,4 +2,4 @@
 
 set -e
 
-/usr/bin/python3 -m cacao_accounting
+/usr/bin/python3.8 -m cacao_accounting
