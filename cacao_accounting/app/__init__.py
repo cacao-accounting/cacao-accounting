@@ -37,7 +37,7 @@ def bd_actual():
     Devuelve el motor de base de datos según la cadena de conexión establecida
     en la configuración de la aplicación actual.
     """
-    uri = str(current_app.config["SQLALCHEMY_DATABASE_URI"])
+    uri = str(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
     if uri.startswith("sqlite"):
         db = "Sqlite"
     elif uri.startswith("postgresql"):
