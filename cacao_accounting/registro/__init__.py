@@ -88,6 +88,21 @@ class Registro:
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
 
+    def elimar_registro_maestro(self, id=None):
+        """
+        Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
+        un usuario de sistema se limita a cancelar o anular una operacion.
+        """
+        from sqlalchemy.exc import OperationalError
+
+        if self.tabla:
+            self.database.session.begin()
+            self.database.session.query(self.tabla).filter(self.identidad == id).delete()
+            try:
+                self.database.session.commit()
+            except OperationalError:
+                self.database.session.rollback()
+
     def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
         """
         Un registro secundario proporciona información adicional a un registro principal como:
@@ -102,8 +117,21 @@ class Registro:
                 self.database.session.add(self.tabla_detalle(**i))
                 self.database.session.commit()
 
-    def _validaciones_predefinidas(self, **kwargs):
-        return True
+    def elimar_registro_transaccion(self, id=None):
+        """
+        Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
+        un usuario de sistema se limita a cancelar o anular una operacion.
+        """
+        from sqlalchemy.exc import OperationalError
+
+        if self.tabla and self.tabla_detalle:
+            self.database.session.begin()
+            self.database.session.query(self.tabla_detalle).filter(self.padre == id).delete()
+            self.database.session.query(self.tabla).filter(self.identidad == id).delete()
+            try:
+                self.database.session.commit()
+            except OperationalError:
+                self.database.session.rollback()
 
     def _ejecuta_validacion_cambio_estado(self, **kwargs):
         if self.lista_validaciones and self.validaciones_verificadas and self._validaciones_predefinidas():
