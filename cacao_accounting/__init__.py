@@ -49,7 +49,7 @@ alembic = Alembic()
 talisman = Talisman()
 
 
-def command() -> None:
+def command() -> None:  # pragma: no cover
     """
     Interfaz de linea de commandos.
     """
@@ -154,7 +154,7 @@ def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
         CACAO_APP.config.from_mapping(ajustes)
 
     @CACAO_APP.cli.command()
-    def initdb():
+    def initdb():  # pragma: no cover
         """Crea el esquema de la base de datos."""
 
         from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -162,20 +162,20 @@ def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
         inicia_base_de_datos(CACAO_APP)
 
     @CACAO_APP.cli.command()
-    def cleandb():
+    def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
         if current_app.config.get("ENV") == "development":
             db.drop_all()
 
     @CACAO_APP.cli.command()
-    def version():
+    def version():  # pragma: no cover
         """Muestra la version actual instalada."""
         from cacao_accounting.version import VERSION
 
         print(VERSION)
 
     @CACAO_APP.cli.command()
-    def serve():
+    def serve():  # pragma: no cover
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
         """
@@ -184,7 +184,7 @@ def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
         server()
 
     @CACAO_APP.cli.command()
-    def setupdb():
+    def setupdb():  # pragma: no cover
         """
         Define una base de datos de desarrollo nueva.
         """
