@@ -50,11 +50,10 @@ class BaseTabla:
     """
 
     # Pistas de auditoria comunes a todas las tablas.
-    _fecha_creacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    _fecha_creacion = db.Column(db.DateTime, default=db.func.now, nullable=False)
     _creado_por = db.Column(db.String(15), nullable=True)
-    _fecha_modicacion = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=False)
+    _fecha_modicacion = db.Column(db.DateTime, default=db.func.now, onupdate=db.func.now, nullable=False)
     _modificado_por = db.Column(db.String(15), nullable=True)
-    _ultima_modificacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
 
 
 class BaseTercero(BaseTabla):
