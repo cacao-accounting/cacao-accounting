@@ -39,6 +39,17 @@ if DB_URI and DB_URI.startswith("postgresql"):
     from sqlalchemy.dialects.postgresql import UUID
 
     COLUMNA_UUID = Column(UUID(as_uuid=False), primary_key=True, nullable=True, index=True)
+
+elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
+    from sqlalchemy.dialects.mysql import VARCHAR
+
+    COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=True, index=True)
+
+elif DB_URI and DB_URI.startswith("mssql"):
+    from sqlalchemy.dialects.mssql import VARCHAR
+
+    COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=True, index=True)
+
 else:
     from sqlalchemy.types import String
 
