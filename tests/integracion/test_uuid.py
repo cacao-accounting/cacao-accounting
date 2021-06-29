@@ -146,7 +146,7 @@ class UUIDMYSQL(MYSQL_DB.Model, Tabla):
 
 if verficar_conceccion_a_mysql():
 
-    def test_uuid_mariadb():
+    def test_uuid_mysql():
         with MYSQL_APP.app_context():
             # Eliminamos las tablas por si existe de una ejecucion anterior
             MYSQL_DB.drop_all()
