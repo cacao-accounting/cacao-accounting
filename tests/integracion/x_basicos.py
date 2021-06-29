@@ -19,7 +19,7 @@ class Basicos:
                 meta.dbversion = "hola"
                 meta.cacaoversion = "hola"
                 db.session.add(meta)
-                db.session.commit
+                db.session.commit()
                 meta = Metadata.query.first()
                 assert meta.dbversion == "hola"
                 assert meta.cacaoversion == "hola"
@@ -50,7 +50,6 @@ class Basicos:
 
     def test_inicia_base_de_datos_F(self):
         from flask import Flask
-        from cacao_accounting.database import db
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         self.fapp = Flask(__name__)
