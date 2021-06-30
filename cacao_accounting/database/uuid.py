@@ -43,7 +43,7 @@ if DB_URI and DB_URI.startswith("postgresql"):
 elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
     from sqlalchemy.dialects.mysql import VARCHAR
 
-    COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=False, index=True)
+    COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
 
 elif DB_URI and DB_URI.startswith("mssql"):
     from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
