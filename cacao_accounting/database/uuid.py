@@ -46,9 +46,9 @@ elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
     COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=True, index=True)
 
 elif DB_URI and DB_URI.startswith("mssql"):
-    from sqlalchemy.dialects.mssql import VARCHAR
+    from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 
-    COLUMNA_UUID = Column(VARCHAR(length=36), primary_key=True, nullable=True, index=True)
+    COLUMNA_UUID = Column(UNIQUEIDENTIFIER(),  primary_key=True, nullable=True, index=True)
 
 else:
     from sqlalchemy.types import String
