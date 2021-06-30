@@ -33,7 +33,6 @@ from collections import namedtuple
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
-from cacao_accounting.database.uuid import COLUMNA_UUID
 
 
 db = SQLAlchemy()
@@ -51,7 +50,6 @@ class BaseTabla:
     """
 
     # Pistas de auditoria comunes a todas las tablas.
-    uuid = COLUMNA_UUID
     fecha_creacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
     creado_por = db.Column(db.String(15), nullable=True)
     fecha_modicacion = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=False)
@@ -65,6 +63,7 @@ class BaseTercero(BaseTabla):
      - Proveedor
     """
 
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Requerisitos minimos para tener crear el registro.
     razon_social = db.Column(db.String(150), nullable=False)
     nombre = db.Column(db.String(150), nullable=False)
@@ -76,7 +75,8 @@ class BaseTercero(BaseTabla):
     id_fiscal = db.Column(db.String(30), nullable=True)
 
 
-class BaseContacto(BaseTabla):
+class BaseContacto:
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     tipo = db.Column(db.String(25), nullable=True)
     nombre = db.Column(db.String(50), nullable=True)
     telefono = db.Column(db.String(30), nullable=True)
@@ -84,7 +84,8 @@ class BaseContacto(BaseTabla):
     correo_electronico = db.Column(db.String(30), nullable=True)
 
 
-class BaseDireccion(BaseTabla):
+class BaseDireccion:
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     linea1 = db.Column(db.String(150), nullable=True)
     linea2 = db.Column(db.String(150), nullable=True)
     linea3 = db.Column(db.String(150), nullable=True)
@@ -106,7 +107,7 @@ class Metadata(db.Model):  # type: ignore[name-defined]
     """
 
     __table_args__ = (db.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
-    id = COLUMNA_UUID
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
     cacaoversion = db.Column(db.String(50), nullable=False)
     dbversion = db.Column(db.String(50), nullable=False)
     fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False)
@@ -119,7 +120,7 @@ class Moneda(db.Model, BaseTabla):  # type: ignore[name-defined]
     Una moneda para los registros de la entidad.
     """
 
-    id = db.Column(db.String(10), nullable=False, unique=True)
+    id = db.Column(db.String(10), primary_key=True, nullable=False)
     nombre = db.Column(db.String(75), nullable=False)
     codigo = db.Column(db.Integer(), nullable=True)
     decimales = db.Column(db.Integer(), nullable=True)
@@ -132,6 +133,7 @@ class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
     Tasa de conversión entre dos monedas distintas.
     """
 
+    id = db.Column(db.Integer(), primary_key=True, nullable=False, autoincrement=True)
     base = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
     destino = db.Column(db.String(10), db.ForeignKey("moneda.id"), nullable=False)
     tasa = db.Column(db.Numeric(), nullable=False)
@@ -146,7 +148,7 @@ class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     # Información Básica
-    id = db.Column(db.String(15), nullable=False)
+    id = db.Column(db.String(15), primary_key=True, nullable=False)
     p_nombre = db.Column(db.String(80))
     s_nombre = db.Column(db.String(80))
     p_apellido = db.Column(db.String(80))
@@ -167,6 +169,7 @@ class Modulos(db.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
     __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
+    id = db.Column(db.Integer(), primary_key=True, unique=True, nullable=False)
     modulo = db.Column(db.String(25), unique=True, index=True)
     estandar = db.Column(db.Boolean(), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
@@ -174,7 +177,7 @@ class Modulos(db.Model, BaseTabla):  # type: ignore[name-defined]
 
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad.
-class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Entidad(db.Model):  # type: ignore[name-defined]
     """
     Una entidad es una unidad de negocios de la que se lleva registros
     en el sistema.
@@ -182,7 +185,7 @@ class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
 
     __table_args__ = (db.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
-    id = db.Column(db.String(10), unique=True, index=True)
+    id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
     status = db.Column(db.String(50), nullable=True)
     status_web = {
         "predeterminada": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
@@ -213,14 +216,14 @@ class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
     predeterminada = db.Column(db.Boolean())
 
 
-class Unidad(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Unidad(db.Model):  # type: ignore[name-defined]
     """
     Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
     """
 
     __table_args__ = (db.UniqueConstraint("id", "nombre", name="unidad_unica"),)
     # Información legal de la entidad
-    id = db.Column(db.String(10), unique=True, index=True)
+    id = db.Column(db.String(10), primary_key=True, unique=True, index=True)
     nombre = db.Column(db.String(50), nullable=False)
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     correo_electronico = db.Column(db.String(50))
@@ -243,7 +246,7 @@ class Direcciones(BaseDireccion):
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
-class Cuentas(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Cuentas(db.Model):  # type: ignore[name-defined]
     """
     La base de contabilidad es el catalogo de cuentas.
     """
@@ -252,6 +255,7 @@ class Cuentas(db.Model, BaseTabla):  # type: ignore[name-defined]
         db.UniqueConstraint("id"),
         db.UniqueConstraint("entidad", "codigo", name="cta_unica"),
     )
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     habilitada = db.Column(db.Boolean(), index=True)
@@ -285,6 +289,7 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="cc_unico"),)
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     activa = db.Column(db.Boolean(), index=True)
     predeterminado = db.Column(db.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
@@ -308,13 +313,14 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     UniqueConstraint("entidad", "codigo", name="cc_unico_entidad")
 
 
-class Proyecto(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Proyecto(db.Model):  # type: ignore[name-defined]
     """
     Similar a un Centro de Costo pero con una vida mas efimera y normalmente con un presupuesto
     definido ademas de fechas de inicio y fin.
     """
 
     __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="py_unico"),)
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     habilitado = db.Column(db.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
@@ -334,11 +340,12 @@ class Proyecto(db.Model, BaseTabla):  # type: ignore[name-defined]
     UniqueConstraint("entidad", "codigo", name="proyecto_unica_entidad")
 
 
-class PeriodoContable(db.Model, BaseTabla):  # type: ignore[name-defined]
+class PeriodoContable(db.Model):  # type: ignore[name-defined]
     """
     Todas las transaciones deben estar vinculadas a un periodo contable.
     """
 
+    id = db.Column(db.Integer(), unique=True, primary_key=True, index=True, autoincrement=True)
     entidad = db.Column(db.String(10), db.ForeignKey("entidad.id"))
     nombre = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(50))
