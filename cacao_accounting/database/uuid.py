@@ -48,7 +48,7 @@ elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
 elif DB_URI and DB_URI.startswith("mssql"):
     from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 
-    COLUMNA_UUID = Column(UNIQUEIDENTIFIER(), primary_key=True)
+    COLUMNA_UUID = Column(UNIQUEIDENTIFIER(), primary_key=True, nullable=False, default=obtiene_texto_unico)
 
 else:
     from sqlalchemy.types import String
