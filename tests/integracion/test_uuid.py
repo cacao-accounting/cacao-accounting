@@ -175,7 +175,7 @@ if verficar_conceccion_a_postgresql():
         with POSTGRESQL_APP.app_context():
             # Eliminamos las tablas por si existe de una ejecucion anterior
             POSTGRESQL_DB.drop_all()
-            POSTGRESQL.create_all()
+            POSTGRESQL_DB.create_all()
             registro1 = UUIDPOSTGRESQL(name="Python")
             registro2 = UUIDPOSTGRESQL(name="PHP")
             POSTGRESQL_DB.session.add(registro1)
