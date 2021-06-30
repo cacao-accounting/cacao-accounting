@@ -33,7 +33,7 @@
       {% import "macros.html" as macros %}
       {{ macros.render_status(status=item.status, lista_status=statusweb) }}
       <a href="{{ url_for("contabilidad.unidad", id_unidad=item.id) }}" class="link-dark">
-        {{ item.id }}
+        {{ item.unidad }}
       </a>
     </td>
     <td>

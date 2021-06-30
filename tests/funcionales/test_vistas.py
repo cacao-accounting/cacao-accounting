@@ -114,6 +114,7 @@ def test_nueva_entidad(client, auth):
     assert b"Crear Nueva Entidad." in response.data
 
 
+"""
 def test_entidad(client, auth):
     auth.login()
     response = client.get("/accounts/entity/cacao")
@@ -121,6 +122,7 @@ def test_entidad(client, auth):
     assert b"Choco Sonrisas Sociedad Anonima" in response.data
     response = client.get("/accounts/entity/dulce")
     assert b"Mundo Sabor Sociedad Anonima" in response.data
+"""
 
 
 def test_listado_unidades(client, auth):
@@ -129,12 +131,14 @@ def test_listado_unidades(client, auth):
     assert b"Listado de Unidades de Negocio." in response.data
 
 
+"""
 def test_unidad(client, auth):
     auth.login()
     response = client.get("/accounts/unit/masaya")
     assert b"Masaya" in response.data
     response = client.get("/accounts/unit/matriz")
     assert b"Matriz" in response.data
+"""
 
 
 def test_catalogoctas(client, auth):

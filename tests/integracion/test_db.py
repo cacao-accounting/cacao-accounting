@@ -1,3 +1,4 @@
+from os import environ
 from unittest import TestCase
 from sqlalchemy import create_engine
 from cacao_accounting import create_app
@@ -14,6 +15,10 @@ MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
 MARIADB = "mariadb+pymysql://cacao:cacao@localhost:3307/cacao"
 POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 MSSQL = "mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server"
+
+# Online testing
+DB4FREE = "mysql+pymysql://cacao_test:cacao_test@db4free.net:3306/cacao_test"
+ELEPHANTSQL = "postgresql+pg8000://fnifwoyu:ZHW8k1Y3z0Pvl1iOcDnimcvnFdx-SSrU@ruby.db.elephantsql.com/fnifwoyu"
 
 # <-------------------------------------------------------------------------> #
 # Validamos que bases de datos estan disponibles
@@ -79,10 +84,11 @@ TEST_MSSQL = verficar_conceccion_a_mssql()
 
 class TestSQLite(TestCase, Basicos):
     def setUp(self):
+        environ["CACAO_DB"] = SQLITE
         self.dbengine = TEST_SQLITE
         self.app = create_app(
             {
-                "SQLALCHEMY_DATABASE_URI": SQLITE,
+                "SQLALCHEMY_DATABASE_URI": environ.get("CACAO_DB"),
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
                 "ENV": "development",
                 "SECRET_KEY": "dev",
@@ -96,18 +102,23 @@ class TestSQLite(TestCase, Basicos):
     def tearDown(self):
         with self.app.app_context():
             db.drop_all()
+            environ.pop("CACAO_DB")
 
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("sqlite://")
+        assert environ.get("CACAO_DB") == self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert environ.get("CACAO_DB") == SQLITE
+        assert self.app.config["SQLALCHEMY_DATABASE_URI"] == SQLITE
 
 
 class TestMySQL(TestCase, Basicos):
     def setUp(self):
+        environ["CACAO_DB"] = MYSQL
         self.dbengine = TEST_MYSQL
         self.app = create_app(
             {
-                "SQLALCHEMY_DATABASE_URI": MYSQL,
+                "SQLALCHEMY_DATABASE_URI": environ.get("CACAO_DB"),
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
                 "ENV": "development",
                 "SECRET_KEY": "dev",
@@ -123,18 +134,23 @@ class TestMySQL(TestCase, Basicos):
         with self.app.app_context():
             if TEST_MYSQL:
                 db.drop_all()
+                environ.pop("CACAO_DB")
 
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("mysql+pymysql://")
+        assert environ.get("CACAO_DB") == self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert environ.get("CACAO_DB") == MYSQL
+        assert self.app.config["SQLALCHEMY_DATABASE_URI"] == MYSQL
 
 
 class TestMariaDB(TestCase, Basicos):
     def setUp(self):
+        environ["CACAO_DB"] = MARIADB
         self.dbengine = TEST_MARIADB
         self.app = create_app(
             {
-                "SQLALCHEMY_DATABASE_URI": MARIADB,
+                "SQLALCHEMY_DATABASE_URI": environ.get("CACAO_DB"),
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
                 "ENV": "development",
                 "SECRET_KEY": "dev",
@@ -154,14 +170,18 @@ class TestMariaDB(TestCase, Basicos):
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("mariadb+pymysql://")
+        assert environ.get("CACAO_DB") == self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert environ.get("CACAO_DB") == MARIADB
+        assert self.app.config["SQLALCHEMY_DATABASE_URI"] == MARIADB
 
 
 class TestPostgresql(TestCase, Basicos):
     def setUp(self):
+        environ["CACAO_DB"] = POSTGRESQL
         self.dbengine = TEST_POSTGRESQL
         self.app = create_app(
             {
-                "SQLALCHEMY_DATABASE_URI": POSTGRESQL,
+                "SQLALCHEMY_DATABASE_URI": environ.get("CACAO_DB"),
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
                 "ENV": "development",
                 "SECRET_KEY": "dev",
@@ -181,15 +201,19 @@ class TestPostgresql(TestCase, Basicos):
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("postgresql+pg8000://")
+        assert environ.get("CACAO_DB") == self.app.config["SQLALCHEMY_DATABASE_URI"]
+        assert environ.get("CACAO_DB") == POSTGRESQL
+        assert self.app.config["SQLALCHEMY_DATABASE_URI"] == POSTGRESQL
 
 
 class TestMSSQL(TestCase, Basicos):
     def setUp(self):
         self.dbengine = TEST_MSSQL
         if TEST_MSSQL:
+            environ["CACAO_DB"] = MSSQL
             self.app = create_app(
                 {
-                    "SQLALCHEMY_DATABASE_URI": MSSQL,
+                    "SQLALCHEMY_DATABASE_URI": environ.get("CACAO_DB"),
                     "SQLALCHEMY_TRACK_MODIFICATIONS": False,
                     "ENV": "development",
                     "SECRET_KEY": "dev",
@@ -212,3 +236,6 @@ class TestMSSQL(TestCase, Basicos):
         if TestMSSQL and self.app is not None:
             self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
             assert self.URL.startswith("mssql+pyodbc://")
+            assert environ.get("CACAO_DB") == self.app.config["SQLALCHEMY_DATABASE_URI"]
+            assert environ.get("CACAO_DB") == MSSQL
+            assert self.app.config["SQLALCHEMY_DATABASE_URI"] == MSSQL

@@ -19,7 +19,7 @@ class Basicos:
                 meta.dbversion = "hola"
                 meta.cacaoversion = "hola"
                 db.session.add(meta)
-                db.session.commit
+                db.session.commit()
                 meta = Metadata.query.first()
                 assert meta.dbversion == "hola"
                 assert meta.cacaoversion == "hola"

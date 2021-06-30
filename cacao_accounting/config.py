@@ -20,12 +20,8 @@ Modulo para la configuración centralizada de la configuración de la aplicacion
 """
 
 from os import environ
-from os.path import exists, join
-from appdirs import user_config_dir, site_config_dir
 from flask import current_app
-from configobj import ConfigObj
 from cacao_accounting.loggin import log
-from cacao_accounting.metadata import APPAUTHOR, APPNAME
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
@@ -53,26 +49,6 @@ try:
 except KeyError:
     PORT = 8080
 
-# < --------------------------------------------------------------------------------------------- >
-# En entornos de escritorio es util poder establecer la configuracion desde un archivo ubicado en
-# una ubicacion predeterminada en el equipo del usuario.
-ARCHIVO_CONFIGURACION = "cacaoaccounting.conf"
-CONFIGURACION_USUARIO = join(user_config_dir(APPNAME, APPAUTHOR), ARCHIVO_CONFIGURACION)
-CONFIGURACION_GLOBAL = join(site_config_dir(APPNAME, APPAUTHOR), ARCHIVO_CONFIGURACION)
-
-
-if exists(CONFIGURACION_USUARIO):
-    configuracion = ConfigObj(CONFIGURACION_USUARIO)
-    CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL = True
-    log.info("Cargando configuración desde carpeta personal del usuario.")
-
-elif exists(CONFIGURACION_GLOBAL):
-    configuracion = ConfigObj(CONFIGURACION_GLOBAL)
-    CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL = True
-    log.info("Cargando configuración desde carpeta global del sistema.")
-
-else:
-    CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL = False
 
 # < --------------------------------------------------------------------------------------------- >
 # En entornos de web y de contenedores es un patron recomendado utlizar variables del entorno para
@@ -93,52 +69,64 @@ def valida_llave_secreta(llave: str) -> bool:
     if CONFIGURACION_DESARROLLO:
         return True
     else:
-        return CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
+        VALIDACION = CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
+        if VALIDACION:
+            log.info("Clave secreta valida.")
+        else:
+            log.warning("Clave secreta invalida.")
+        return VALIDACION
 
 
 def valida_direccion_base_datos(uri: str) -> bool:
     DIRECCION = str(uri)
     MSSQL_URI = DIRECCION.startswith("mssql")
     MYSQL_URI = DIRECCION.startswith("mysql")
+    MARIADB_URI = DIRECCION.startswith("mariadb")
     POSTGRESQL_URI = DIRECCION.startswith("postgresql")
     SQLITE_URI = DIRECCION.startswith("sqlite")
-    return MSSQL_URI or MYSQL_URI or POSTGRESQL_URI or SQLITE_URI
+    VALIDACION = MSSQL_URI or MYSQL_URI or POSTGRESQL_URI or SQLITE_URI or MARIADB_URI
+    if VALIDACION:
+        log.info("URL de Acceso a db validada correctamente.")
+    else:
+        log.warning("URL de Acceso a db invalida.")
+    return VALIDACION
 
 
-def probar_configuracion_por_variables_de_entorno() -> bool:
+def probar_configuracion_por_variables_de_entorno():
     """
     Valida que las opciones requeridas para configuración la aplicacion desde variables del entorno
     se encuentran correctamente configuradas.
     """
 
-    try:
-        return valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
-    except KeyError:
-        log.info("Configuración por variables de entornos no definida.")
-        return False
+    if environ.get("CACAO_DB", None) and environ.get("CACAO_KEY", None):
+        VALIDACION = valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
+        if VALIDACION:
+            log.info("Configuracion obtenida de variables de entorno")
+            return VALIDACION
+        else:
+            log.warning("No se encontro configuración valida.")
+            return VALIDACION
 
 
-CONFIGURACION_BASADA_EN_VARIABLES_DE_ENTORNO = probar_configuracion_por_variables_de_entorno()
-
-if not CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL and CONFIGURACION_BASADA_EN_VARIABLES_DE_ENTORNO:
+if probar_configuracion_por_variables_de_entorno():
     log.info("Cargando configuracion en base a variables de entorno.")
     configuracion = {}
-    configuracion["SQLALCHEMY_DATABASE_URI"] = environ["CACAO_DB"]
-    configuracion["SECRET_KEY"] = environ["CACAO_KEY"]
-    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB")
+    configuracion["SECRET_KEY"] = environ.get("CACAO_KEY")
+    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 else:
     log.warning("No se encontro una fuente para la configuración, revise la documentacion")
     log.warning("Utilizando configuración para desarrollo, no apta para uso en producción")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
-    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
     # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
     # variable de entorno
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = "dev"
-    configuracion["EXPLAIN_TEMPLATE_LOADING"] = True
-    configuracion["DEGUG"] = True
+    configuracion["EXPLAIN_TEMPLATE_LOADING"] = "True"
+    configuracion["DEGUG"] = "True"
 
 
 def probar_modo_escritorio() -> bool:
@@ -166,15 +154,6 @@ def probar_modo_escritorio() -> bool:
     try:
         EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in environ
     except KeyError:
-        EJECUTANDO_COMO_DESKTOP = False
-    # Finalmente probamos si en el archivo de configuración se especificado el
-    # modo escritorio.
-    if CONFIGURACION_BASADA_EN_ARCHIVO_LOCAL:
-        try:
-            EJECUTANDO_COMO_DESKTOP = "CACAO_DESKTOP" in configuracion
-        except:  # noqa: E722
-            EJECUTANDO_COMO_DESKTOP = False
-    else:
         EJECUTANDO_COMO_DESKTOP = False
     return EJECUTANDO_COMO_SNAP or EJECUTANDO_COMO_FLATPAK or EJECUTANDO_COMO_DESKTOP
 

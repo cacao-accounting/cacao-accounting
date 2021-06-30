@@ -33,32 +33,32 @@ def _demo_usuarios():
     log.debug("Creando usuarios de prueba.")
     usuarios = [
         Usuario(
-            id="admin",
+            usuario="admin",
             correo_e="admin@cacao_accounting.io",
             clave_acceso=proteger_passwd("admin"),
         ),
         Usuario(
-            id="ventas",
+            usuario="ventas",
             correo_e="ventas@cacao_accounting.io",
             clave_acceso=proteger_passwd("ventas"),
         ),
         Usuario(
-            id="compras",
+            usuario="compras",
             correo_e="compras@cacao_accounting.io",
             clave_acceso=proteger_passwd("compras"),
         ),
         Usuario(
-            id="conta",
+            usuario="conta",
             correo_e="contabilidad@cacao_accounting.io",
             clave_acceso=proteger_passwd("conta"),
         ),
         Usuario(
-            id="almacen",
+            usuario="almacen",
             correo_e="almacen@cacao_accounting.io",
             clave_acceso=proteger_passwd("almacen"),
         ),
         Usuario(
-            id="caja",
+            usuario="caja",
             correo_e="caja@cacao_accounting.io",
             clave_acceso=proteger_passwd("caja"),
         ),
@@ -69,7 +69,7 @@ def _demo_usuarios():
 
 
 ENTIDAD_DEMO1 = {
-    "id": "cacao",
+    "entidad": "cacao",
     "razon_social": "Choco Sonrisas Sociedad Anonima",
     "nombre_comercial": "Choco Sonrisas",
     "id_fiscal": "J0310000000000",
@@ -87,7 +87,7 @@ ENTIDAD_DEMO1 = {
 
 
 ENTIDAD_DEMO2 = {
-    "id": "cafe",
+    "entidad": "cafe",
     "razon_social": "Mundo Cafe Sociedad Anonima",
     "nombre_comercial": "Mundo Cafe",
     "id_fiscal": "J0310000000001",
@@ -104,7 +104,7 @@ ENTIDAD_DEMO2 = {
 }
 
 ENTIDAD_DEMO3 = {
-    "id": "dulce",
+    "entidad": "dulce",
     "razon_social": "Mundo Sabor Sociedad Anonima",
     "nombre_comercial": "Dulce Sabor",
     "id_fiscal": "J0310000000002",
@@ -141,19 +141,19 @@ def _demo_unidades():
         Unidad(
             nombre="Casa Matriz",
             entidad="cacao",
-            id="matriz",
+            unidad="matriz",
             status="activa",
         ),
         Unidad(
             nombre="Movil",
             entidad="cacao",
-            id="movil",
+            unidad="movil",
             status="activa",
         ),
         Unidad(
             nombre="Masaya",
             entidad="cacao",
-            id="masaya",
+            unidad="masaya",
             status="inactiva",
         ),
     ]
@@ -429,9 +429,8 @@ def _proyectos():
 
 
 MONEDA01 = {
-    "id": "custom",
+    "codigo": "custom",
     "nombre": "Dolar Paralelo",
-    "codigo": 9874,
     "decimales": 4,
     "activa": True,
     "predeterminada": False,

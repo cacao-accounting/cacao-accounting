@@ -1,3 +1,5 @@
+import pytest
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from cacao_accounting.registro import Registro
@@ -63,5 +65,46 @@ def test_crear_registro():
             transaccion_detalle=(
                 {"nombre": "La Vuelta al Mundo en 180 dias.", "padre": "verne", "status": "activa"},
                 {"nombre": "De la tierra a la luna.", "padre": "verne", "status": "inactiva"},
+            ),
+        )
+
+
+@pytest.fixture
+def despliega_db_pruebas():
+    with RECORD_APP.app_context():
+        # Eliminamos las tablas por si existe de una ejecucion anterior
+        DATABASE.drop_all()
+        DATABASE.create_all()
+        m = RegistroMaestro()
+        t = RegistroTransaccion()
+        m.crear_registro_maestro({"name": "bandas", "status": "activa"})
+        t.crear_registro_transaccion(
+            transaccion={"nombre": "therion", "padre": "bandas", "status": "activa"},
+            transaccion_detalle=(
+                {"nombre": "Theli", "padre": "therion", "status": "activa"},
+                {"nombre": "A'arab Zaraq - Lucid Dreaming", "padre": "therion", "status": "activa"},
+                {"nombre": "Vovin", "padre": "therion", "status": "activa"},
+            ),
+        )
+        t.crear_registro_transaccion(
+            transaccion={"nombre": "mana", "padre": "bandas", "status": "activa"},
+            transaccion_detalle=(
+                {"nombre": "Sombrero Verde", "padre": "mana", "status": "activa"},
+                {"nombre": "Mana", "padre": "mana", "status": "activa"},
+                {"nombre": "Falta amor", "padre": "mana", "status": "activa"},
+                {"nombre": "¿Dónde jugarán los niños?", "padre": "mana", "status": "activa"},
+                {"nombre": "Cuando los ángeles lloran", "padre": "mana", "status": "activa"},
+                {"nombre": "Sueños líquidos", "padre": "mana", "status": "activa"},
+                {"nombre": "MTV ´Unplugged´", "padre": "mana", "status": "activa"},
+                {"nombre": "Revolución de amor ", "padre": "mana", "status": "activa"},
+                {"nombre": "Amar es combatir ", "padre": "mana", "status": "activa"},
+            ),
+        )
+        m.crear_registro_maestro({"name": "actores", "status": "activa"})
+        t.crear_registro_transaccion(
+            transaccion=({"nombre": "Keanu Reeves", "padre": "actores", "status": "activa"}),
+            transaccion_detalle=(
+                {"nombre": "Matrix", "padre": "Keanu Reeves", "status": "activa"},
+                {"nombre": "John Wick", "padre": "Keanu Reeves", "status": "activa"},
             ),
         )

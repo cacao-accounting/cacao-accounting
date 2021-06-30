@@ -4,8 +4,9 @@ appdirs
 babel
 bcrypt
 configobj
-flask
+Flask[async]
 Flask-Alembic
+Flask-Authorize
 flask-babel
 flask-login
 flask-sqlalchemy

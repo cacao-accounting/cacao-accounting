@@ -35,6 +35,7 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 # pylint: disable=not-callable
+from flask_login import current_user
 from cacao_accounting.database import db
 
 
@@ -85,8 +86,25 @@ class Registro:
         Por defecto los registros principales siempre deben crearse como borrador.
         """
         if self.tabla:
+            if current_user:
+                datos["creado_por"] = current_user
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
+
+    def elimar_registro_maestro(self, uuid=None):
+        """
+        Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
+        un usuario de sistema se limita a cancelar o anular una operacion.
+        """
+        from sqlalchemy.exc import OperationalError
+
+        if self.tabla:
+            self.database.session.begin()
+            self.database.session.query(self.tabla).filter(self.identidad == uuid).delete()
+            try:
+                self.database.session.commit()
+            except OperationalError:
+                self.database.session.rollback()
 
     def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
         """
@@ -96,14 +114,31 @@ class Registro:
         """
 
         if self.tabla and self.tabla_detalle:
+            if current_user:
+                transaccion["creado_por"] = current_user
+                for i in transaccion_detalle:
+                    i["creado_por"] = current_user
             self.database.session.add(self.tabla(**transaccion))
             self.database.session.commit()
             for i in transaccion_detalle:
                 self.database.session.add(self.tabla_detalle(**i))
                 self.database.session.commit()
 
-    def _validaciones_predefinidas(self, **kwargs):
-        return True
+    def elimar_registro_transaccion(self, uuid=None):
+        """
+        Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
+        un usuario de sistema se limita a cancelar o anular una operacion.
+        """
+        from sqlalchemy.exc import OperationalError
+
+        if self.tabla and self.tabla_detalle:
+            self.database.session.begin()
+            self.database.session.query(self.tabla_detalle).filter(self.padre == uuid).delete()
+            self.database.session.query(self.tabla).filter(self.identidad == uuid).delete()
+            try:
+                self.database.session.commit()
+            except OperationalError:
+                self.database.session.rollback()
 
     def _ejecuta_validacion_cambio_estado(self, **kwargs):
         if self.lista_validaciones and self.validaciones_verificadas and self._validaciones_predefinidas():

@@ -52,7 +52,7 @@ def validar_acceso(usuario, clave):
     from bcrypt import checkpw
 
     acceso = clave
-    registro = Usuario.query.filter_by(id=usuario).first()
+    registro = Usuario.query.filter_by(usuario=usuario).first()
     if registro is not None:
         clave_validada = checkpw(acceso.encode(), registro.clave_acceso)
     else:
@@ -76,7 +76,7 @@ def inicio_sesion():
     form = LoginForm()
     if form.validate_on_submit():
         if validar_acceso(form.usuario.data, form.acceso.data):
-            identidad = Usuario.query.filter_by(id=form.usuario.data).first()
+            identidad = Usuario.query.filter_by(usuario=form.usuario.data).first()
             login_user(identidad)
             return redirect("/app")
         else:

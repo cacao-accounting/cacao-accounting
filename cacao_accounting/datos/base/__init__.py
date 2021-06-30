@@ -33,14 +33,14 @@ def registra_monedas(carga_rapida=False):
     if carga_rapida:
         from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
 
-        nio = {"id": "NIO", "nombre": "Cordobas Oro", "codigo": 558, "decimales": 2}
-        usd = {"id": "USD", "nombre": "Dolares de los Estados Unidos", "codigo": 559, "decimales": 2}
+        nio = {"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2}
+        usd = {"codigo": "USD", "nombre": "Dolares de los Estados Unidos", "decimales": 2}
         r = RegistroMoneda()
         r.crear_registro_maestro(nio)
         r.crear_registro_maestro(usd)
     else:
         for moneda in Currencies():
-            registro = Moneda(id=moneda.code, nombre=moneda.name, codigo=moneda.numeric_code, decimales=moneda.minor_units)
+            registro = Moneda(codigo=moneda.code, nombre=moneda.name, decimales=moneda.minor_units)
             db.session.add(registro)
     db.session.commit()
     log.debug("Monedas cargadas Correctamente")
@@ -54,13 +54,13 @@ def crea_usuario_admin():
     log.info("Creando Usuario Administrador")
     try:
         usuario = Usuario(
-            id=environ["CACAO_USER"],
+            usuario=environ["CACAO_USER"],
             clave_acceso=proteger_passwd(environ["CACAO_PWD"]),
         )
         log.info("Creando usuario administrador desde variables de entorno.")
-    except:  # noqa: E722
+    except KeyError:
         usuario = Usuario(
-            id="cacao",
+            usuario="cacao",
             clave_acceso=proteger_passwd("cacao"),
         )
     db.session.add(usuario)
