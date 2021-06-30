@@ -88,7 +88,7 @@ class Registro:
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
 
-    def elimar_registro_maestro(self, id=None):
+    def elimar_registro_maestro(self, uuid=None):
         """
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
@@ -97,7 +97,7 @@ class Registro:
 
         if self.tabla:
             self.database.session.begin()
-            self.database.session.query(self.tabla).filter(self.identidad == id).delete()
+            self.database.session.query(self.tabla).filter(self.identidad == uuid).delete()
             try:
                 self.database.session.commit()
             except OperationalError:
@@ -117,7 +117,7 @@ class Registro:
                 self.database.session.add(self.tabla_detalle(**i))
                 self.database.session.commit()
 
-    def elimar_registro_transaccion(self, id=None):
+    def elimar_registro_transaccion(self, uuid=None):
         """
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
@@ -126,8 +126,8 @@ class Registro:
 
         if self.tabla and self.tabla_detalle:
             self.database.session.begin()
-            self.database.session.query(self.tabla_detalle).filter(self.padre == id).delete()
-            self.database.session.query(self.tabla).filter(self.identidad == id).delete()
+            self.database.session.query(self.tabla_detalle).filter(self.padre == uuid).delete()
+            self.database.session.query(self.tabla).filter(self.identidad == uuid).delete()
             try:
                 self.database.session.commit()
             except OperationalError:
