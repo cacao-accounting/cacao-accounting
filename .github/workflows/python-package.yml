@@ -108,7 +108,6 @@ jobs:
         export FLASK_ENV=development
         export CACAO_TEST=True
         python -m pytest  -v --exitfirst --cov=cacao_accounting
-        FLASK_ENV=development, CACAO_TEST=True python -m pytest  -v --exitfirst --cov=cacao_accounting
 #        CACAO_TEST=True SQLALCHEMY_WARN_20=1 python -W always::DeprecationWarning -m pytest  -v --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
 #      run: mkdocs build
