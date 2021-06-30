@@ -33,7 +33,7 @@ DATABASE.init_app(UUID_APP)
 
 class Tabla:
     id = COLUMNA_UUID
-    name = DATABASE.Column(DATABASE.String(5), nullable=False)
+    name = DATABASE.Column(DATABASE.String(10), nullable=False)
 
 
 class UUIDTTabla(DATABASE.Model, Tabla):
