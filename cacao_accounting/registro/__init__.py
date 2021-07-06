@@ -87,7 +87,7 @@ class Registro:
         """
         if self.tabla:
             if current_user:
-                datos["creado_por"] = current_user
+                datos["creado_por"] = current_user.usuario
             self.database.session.add(self.tabla(**datos))
             self.database.session.commit()
 
@@ -115,9 +115,9 @@ class Registro:
 
         if self.tabla and self.tabla_detalle:
             if current_user:
-                transaccion["creado_por"] = current_user
+                transaccion["creado_por"] = current_user.usuario
                 for i in transaccion_detalle:
-                    i["creado_por"] = current_user
+                    i["creado_por"] = current_user.usuario
             self.database.session.add(self.tabla(**transaccion))
             self.database.session.commit()
             for i in transaccion_detalle:

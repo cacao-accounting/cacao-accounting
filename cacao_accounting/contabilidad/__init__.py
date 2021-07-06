@@ -124,7 +124,7 @@ def nueva_entidad():
             "fax": formulario.fax.data,
             "status": "activa",
         }
-        e.crear_entidad(datos=DATA)
+        e.crear_registro_maestro(datos=DATA)
         return redirect("/accounts/entities")
 
     return render_template("contabilidad/entidad_crear.html", form=formulario, titulo=TITULO)
