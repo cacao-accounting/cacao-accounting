@@ -225,7 +225,7 @@ def nueva_unidad():
             "fax": formulario.fax.data,
             "status": "activa",
         }
-        e.crear(datos=DATA)
+        e.crear_registro_maestro(datos=DATA)
         return redirect("/accounts/units")
     return render_template("contabilidad/unidad_crear.html", titulo=TITULO, form=formulario)
 
