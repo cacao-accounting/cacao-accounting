@@ -111,7 +111,7 @@ def nueva_entidad():
 
         e = RegistroEntidad()
         DATA = {
-            "id": formulario.id.data,
+            "entidad": formulario.id.data,
             "razon_social": formulario.razon_social.data,
             "nombre_comercial": formulario.nombre_comercial.data,
             "id_fiscal": formulario.id_fiscal.data,
@@ -215,7 +215,7 @@ def nueva_unidad():
 
         e = RegistroUnidad()
         DATA = {
-            "id": formulario.id.data,
+            "unidad": formulario.id.data,
             "nombre": formulario.nombre.data,
             "entidad": formulario.entidad.data,
             "correo_electronico": formulario.correo_electronico.data,

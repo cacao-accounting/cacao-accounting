@@ -30,7 +30,7 @@ def obtener_lista_entidades_por_id_razonsocial():
     _entidades.append(("", ""))
     consulta = Entidad.query.all()
     for i in consulta:
-        _entidad = (i.id, i.razon_social)
+        _entidad = (i.entidad, i.razon_social)
         _entidades.append(_entidad)
     return _entidades
 
