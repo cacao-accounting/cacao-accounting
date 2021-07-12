@@ -41,7 +41,7 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
-@contabilidad.route("/currencies")
+@contabilidad.route("/currency/list")
 @modulo_activo("accounting")
 @login_required
 def monedas():
@@ -71,7 +71,7 @@ def conta():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
-@contabilidad.route("/accounts/entities")
+@contabilidad.route("/accounts/entity/list")
 @modulo_activo("accounting")
 @login_required
 def entidades():
@@ -96,7 +96,7 @@ def entidad(id_entidad):
     return render_template("contabilidad/entidad.html", registro=registro)
 
 
-@contabilidad.route("/accounts/entities/new", methods=["GET", "POST"])
+@contabilidad.route("/accounts/entity/new", methods=["GET", "POST"])
 @modulo_activo("accounting")
 @login_required
 def nueva_entidad():
@@ -130,7 +130,7 @@ def nueva_entidad():
     return render_template("contabilidad/entidad_crear.html", form=formulario, titulo=TITULO)
 
 
-@contabilidad.route("/accounts/entities/edit/<id_entidad>")
+@contabilidad.route("/accounts/entity/edit/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def editar_entidad(id_entidad):
@@ -142,7 +142,7 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
-@contabilidad.route("/accounts/entities/delete/<id_entidad>")
+@contabilidad.route("/accounts/entity/delete/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def eliminar_entidad(id_entidad):
@@ -150,7 +150,7 @@ def eliminar_entidad(id_entidad):
     return redirect("/app")
 
 
-@contabilidad.route("/accounts/entities/set_inactive/<id_entidad>")
+@contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def inactivar_entidad(id_entidad):
@@ -158,7 +158,7 @@ def inactivar_entidad(id_entidad):
     return redirect("/app")
 
 
-@contabilidad.route("/accounts/entities/set_default/<id_entidad>")
+@contabilidad.route("/accounts/entity/set_default/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def predeterminar_entidad(id_entidad):
@@ -168,7 +168,7 @@ def predeterminar_entidad(id_entidad):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Unidades de Negocio
-@contabilidad.route("/accounts/units")
+@contabilidad.route("/accounts/unit/list")
 @modulo_activo("accounting")
 @login_required
 def unidades():
@@ -193,7 +193,7 @@ def unidad(id_unidad):
     return render_template("contabilidad/unidad.html", registro=registro)
 
 
-@contabilidad.route("/accounts/units/delete/<id_unidad>")
+@contabilidad.route("/accounts/unit/delete/<id_unidad>")
 @modulo_activo("accounting")
 @login_required
 def eliminar_unidad(id_unidad):
@@ -201,7 +201,7 @@ def eliminar_unidad(id_unidad):
     return redirect("/app")
 
 
-@contabilidad.route("/accounts/units/new", methods=["GET", "POST"])
+@contabilidad.route("/accounts/unit/new", methods=["GET", "POST"])
 @modulo_activo("accounting")
 @login_required
 def nueva_unidad():
@@ -313,7 +313,7 @@ def centro_costo(id_cc):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Proyectos
-@contabilidad.route("/accounts/projects")
+@contabilidad.route("/accounts/project/list")
 @modulo_activo("accounting")
 @login_required
 def proyectos():

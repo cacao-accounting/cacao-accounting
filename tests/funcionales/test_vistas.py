@@ -104,13 +104,13 @@ def test_contabilidad(client, auth):
 
 def test_listado_entidades(client, auth):
     auth.login()
-    response = client.get("/accounts/entities")
+    response = client.get("/accounts/entity/list")
     assert b"Listado de Entidades." in response.data
 
 
 def test_nueva_entidad(client, auth):
     auth.login()
-    response = client.get("/accounts/entities/new")
+    response = client.get("/accounts/entity/new")
     assert b"Crear Nueva Entidad." in response.data
 
 
@@ -127,7 +127,7 @@ def test_entidad(client, auth):
 
 def test_listado_unidades(client, auth):
     auth.login()
-    response = client.get("/accounts/units")
+    response = client.get("/accounts/unit/list")
     assert b"Listado de Unidades de Negocio." in response.data
 
 
@@ -173,7 +173,7 @@ def test_cambio_status(client, auth):
 
 def test_eliminar_entidad(client, auth):
     auth.login()
-    responde = client.get("/accounts/units/delete/masaya")
+    responde = client.get("/accounts/unit/delete/masaya")
 
 
 def test_ctacontable(client, auth):
