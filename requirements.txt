@@ -2,7 +2,6 @@
 alembic
 appdirs
 babel
-bcrypt
 configobj
 Flask[async]
 Flask-Alembic

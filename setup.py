@@ -57,7 +57,6 @@ setup(
         "appdirs",
         "babel",
         "bcrypt",
-        "configobj",
         "flask",
         "flask-alembic",
         "Flask-Authorize",

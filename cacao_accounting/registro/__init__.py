@@ -39,23 +39,6 @@ from flask_login import current_user
 from cacao_accounting.database import db
 
 
-def comprueba_lista_validaciones(lista_a_validar: list = None) -> bool:
-    """
-    Para que una transacción pueda ser registrada debe pasar una serie de validaciones, las validaciones
-    se deben poder espeficiar al momento de iniciar la instancia de clase.
-
-    Las validaciones deben retornar un boleano.
-    """
-    VERIFICACION_TIPO_LISTA = lista_a_validar is not None and isinstance(lista_a_validar, list)
-    if VERIFICACION_TIPO_LISTA:
-        LISTA_EJECUTABLES = True
-        while LISTA_EJECUTABLES:
-            for v in lista_a_validar:  # type: ignore[union-attr]
-                LISTA_EJECUTABLES = callable(v)
-            break
-    return VERIFICACION_TIPO_LISTA and LISTA_EJECUTABLES
-
-
 class Registro:
     """
     Interfaz comun para la administración de registros.
@@ -68,8 +51,6 @@ class Registro:
     tabla = None
     tabla_detalle = None
     estatus = None
-    lista_validaciones = None
-    validaciones_verificadas = comprueba_lista_validaciones(lista_a_validar=lista_validaciones)
 
     def crear_registro_maestro(self, datos: None):
         """

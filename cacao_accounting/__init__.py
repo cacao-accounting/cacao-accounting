@@ -24,7 +24,6 @@ WSGI.
 
 from sys import version_info
 from typing import Union
-from configobj import ConfigObj
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
@@ -135,7 +134,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
         raise RuntimeError(ERROR2)
 
 
-def create_app(ajustes: Union[ConfigObj, dict, None] = None) -> Flask:
+def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     Aplication factory.
 
