@@ -1,6 +1,5 @@
 # Mantener en orden alfabetico
 alembic
-appdirs
 babel
 configobj
 Flask[async]

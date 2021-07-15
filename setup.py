@@ -54,7 +54,6 @@ setup(
     ],
     install_requires=[
         "alembic",
-        "appdirs",
         "babel",
         "bcrypt",
         "flask",
