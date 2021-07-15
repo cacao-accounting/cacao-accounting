@@ -103,6 +103,18 @@ class BaseTabla:
     modificado_por = db.Column(db.String(15), nullable=True)
 
 
+class BaseTransaccion(BaseTabla):
+    registro = db.Column(db.String(50), nullable=True)
+    registro_id = db.Column(db.String(75), nullable=True)
+
+
+class BaseTransaccionDetalle(BaseTabla):
+    registro_padre = db.Column(db.String(50), nullable=True)
+    registro_padre_id = db.Column(db.String(75), nullable=True)
+    referencia = db.Column(db.String(50), nullable=True)
+    referencia_id = db.Column(db.String(75), nullable=True)
+
+
 class BaseTercero(BaseTabla):
     """
     Esta es clase contiene campos comunes para terceros, principalmente:
