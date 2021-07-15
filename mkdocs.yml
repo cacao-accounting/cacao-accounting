@@ -24,6 +24,7 @@ nav:
     - Guía de Instalación:
         - Instalación:
           - Introducción: despliegue.md
+          - Shared Hosting: shared_host.md
           - Contenedores: contenedores.md
           - Paquete Python: pypi.md
           - Desde las Fuentes: fuentes.md
