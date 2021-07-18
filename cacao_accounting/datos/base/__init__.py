@@ -21,50 +21,104 @@ Datos básicos para iniciar el sistema.
 
 from cacao_accounting.loggin import log
 from cacao_accounting.modulos import _init_modulos
+from cacao_accounting.transaccion import Transaccion
 
 # pylint: disable=import-outside-toplevel
 
 
 def registra_monedas(carga_rapida=False):
     from teritorio import Currencies
-    from cacao_accounting.database import db, Moneda
+    from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
 
     log.debug("Iniciando carga de base monedas a la base de datos.")
+    MONEDA = RegistroMoneda()
     if carga_rapida:
-        from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
 
-        nio = {"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2}
-        usd = {"codigo": "USD", "nombre": "Dolares de los Estados Unidos", "decimales": 2}
-        r = RegistroMoneda()
-        r.crear_registro_maestro(nio)
-        r.crear_registro_maestro(usd)
+        nio = Transaccion(
+            registro="Moneda",
+            tipo="principal",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            accion="crear",
+            datos={"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2},
+            datos_detalle=None,
+            relaciones=None,
+            relacion_id=None,
+        )
+        usd = Transaccion(
+            registro="Moneda",
+            tipo="principal",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            accion="crear",
+            datos={"codigo": "USD", "nombre": "Dolares de los Estados Unidos", "decimales": 2},
+            datos_detalle=None,
+            relaciones=None,
+            relacion_id=None,
+        )
+        MONEDA.ejecutar_transaccion_a_la_db(nio)
+        MONEDA.ejecutar_transaccion_a_la_db(usd)
     else:
-        for moneda in Currencies():
-            registro = Moneda(codigo=moneda.code, nombre=moneda.name, decimales=moneda.minor_units)
-            db.session.add(registro)
-    db.session.commit()
+        for currency in Currencies():
+            moneda = Transaccion(
+                registro="Moneda",
+                tipo="principal",
+                estatus_actual=None,
+                nuevo_estatus=None,
+                uuid=None,
+                accion="crear",
+                datos={"codigo": currency.code, "nombre": currency.name, "decimales": currency.minor_units},
+                datos_detalle=None,
+                relaciones=None,
+                relacion_id=None,
+            )
+            MONEDA.ejecutar_transaccion_a_la_db(moneda)
     log.debug("Monedas cargadas Correctamente")
 
 
 def crea_usuario_admin():
     from os import environ
     from cacao_accounting.auth import proteger_passwd
-    from cacao_accounting.database import Usuario, db
+    from cacao_accounting.auth.registros import RegistroUsuario
 
     log.info("Creando Usuario Administrador")
+    USUARIO = RegistroUsuario()
     try:
-        usuario = Usuario(
-            usuario=environ["CACAO_USER"],
-            clave_acceso=proteger_passwd(environ["CACAO_PWD"]),
+        usuario = Transaccion(
+            registro="Usuario",
+            tipo="principal",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            accion="crear",
+            datos={
+                "usuario": environ["CACAO_USER"],
+                "clave_acceso": proteger_passwd(environ["CACAO_PWD"]),
+            },
+            datos_detalle=None,
+            relaciones=None,
+            relacion_id=None,
         )
         log.info("Creando usuario administrador desde variables de entorno.")
     except KeyError:
-        usuario = Usuario(
-            usuario="cacao",
-            clave_acceso=proteger_passwd("cacao"),
+        usuario = Transaccion(
+            registro="Usuario",
+            tipo="principal",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            accion="crear",
+            datos={
+                "usuario": "cacao",
+                "clave_acceso": proteger_passwd("cacao"),
+            },
+            datos_detalle=None,
+            relaciones=None,
+            relacion_id=None,
         )
-    db.session.add(usuario)
-    db.session.commit()
+    USUARIO.ejecutar_transaccion_a_la_db(usuario)
 
 
 def base_data(carga_rapida=False):
