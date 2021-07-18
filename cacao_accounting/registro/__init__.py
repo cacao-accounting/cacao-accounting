@@ -35,8 +35,12 @@ Un registro:
  - Un registro tiene estados, estos estados van a depender del documento.
 """
 # pylint: disable=not-callable
+from typing import Union
 from flask_login import current_user
 from cacao_accounting.database import db
+from cacao_accounting.exception import TransactionError
+from cacao_accounting.transaccion import Transaccion
+from cacao_accounting.validaciones import VALIDACIONES_PREDETERMINADAS
 
 
 class Registro:
@@ -48,6 +52,25 @@ class Registro:
     DATABASE = db
     tabla = None
     tabla_detalle = None
+    LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
+
+    def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion) -> bool:
+        if transaccion.accion == "crear":
+            return self._crear_transaccion_principal_en_la_db(transaccion)
+        else:
+            raise TransactionError("Tipo de Acción no Implementada.")
+
+    def _ejecutar_validacion_de_transaccion(self, transaccion: Transaccion):
+        for validacion in self.LISTA_DE_VALIDACIONES_DE_TRANSACCION:
+            validacion(transaccion)
+
+    def _crear_transaccion_principal_en_la_db(self, transaccion: Transaccion):
+        if self.tabla:
+            if current_user:
+                transaccion.datos["creado_por"] = current_user.usuario
+            self.DATABASE.session.add(self.tabla(**transaccion.datos))
+            self.DATABASE.session.commit()
+            return True
 
     def crear_registro_maestro(self, datos: None):
         """
@@ -101,3 +124,11 @@ class Registro:
             for i in transaccion_detalle:
                 self.DATABASE.session.add(self.tabla_detalle(**i))
                 self.DATABASE.session.commit()
+
+    def ejecutar_transaccion_a_la_db(self, transaccion: Union[Transaccion, None] = None):
+        if transaccion:
+            try:
+                self._ejecutar_validacion_de_transaccion(transaccion)
+                self._ejecutar_transaccion_por_tipo(transaccion)
+            except TransactionError:
+                pass

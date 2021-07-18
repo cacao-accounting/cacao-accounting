@@ -7,4 +7,6 @@ flake8 cacao_accounting
 echo "Mypy"
 mypy cacao_accounting
 echo "Pylint"
-mypy cacao_accounting
+pylint cacao_accounting
+echo "Pytest"
+pytest -x

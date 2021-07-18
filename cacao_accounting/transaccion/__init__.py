@@ -36,7 +36,7 @@ Transaccion = namedtuple(
         # Uno de: princinpal, secundario, transaccional.
         "tipo",
         # Uno de: crear, actualizar, validar, autorizar, anular, cerrar.
-        "transaccion",
+        "accion",
         # Tipo de registro sobre el que se realiza la transaccion.
         "registro",
         # Estado actual de la transacción, vacio para nuevos registros.
@@ -48,8 +48,8 @@ Transaccion = namedtuple(
         # Un registro puede tener otros registros relacionados en otros tablas del sistema.
         "relaciones",
         # Una cadena de texto que el usuario pueda identificar para identificar la transaccion.
-        "relacion_id"
-        # Un diccionario con los datos principales de la transacción. Vacia en nuevos registros.
+        "relacion_id",
+        # Un diccionario con los datos principales de la transacción.
         "datos",
         # Una lista de transacciones secundarias relacionadas al registro principal.
         "datos_detalle",
