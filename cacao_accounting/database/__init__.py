@@ -115,6 +115,7 @@ class BaseTransaccion(BaseTabla):
     cerrado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
     cerrado_por = db.Column(db.String(15), nullable=True)
 
+
 class BaseTransaccionDetalle(BaseTabla):
     registro_padre = db.Column(db.String(50), nullable=True)
     registro_padre_id = db.Column(db.String(75), nullable=True)
