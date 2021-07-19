@@ -99,14 +99,21 @@ class BaseTabla:
     id = COLUMNA_UUID
     creado = db.Column(db.DateTime, default=db.func.now(), nullable=False)
     creado_por = db.Column(db.String(15), nullable=True)
-    modificado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=False)
+    modificado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
     modificado_por = db.Column(db.String(15), nullable=True)
 
 
 class BaseTransaccion(BaseTabla):
     registro = db.Column(db.String(50), nullable=True)
     registro_id = db.Column(db.String(75), nullable=True)
-
+    validado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
+    validado_por = db.Column(db.String(15), nullable=True)
+    autorizado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
+    autorizado_por = db.Column(db.String(15), nullable=True)
+    anulado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
+    anulado_por = db.Column(db.String(15), nullable=True)
+    cerrado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
+    cerrado_por = db.Column(db.String(15), nullable=True)
 
 class BaseTransaccionDetalle(BaseTabla):
     registro_padre = db.Column(db.String(50), nullable=True)
