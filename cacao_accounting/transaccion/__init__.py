@@ -51,6 +51,6 @@ class Transaccion:
     # Una cadena de texto que el usuario pueda identificar para identificar la transaccion.
     relacion_id: Union[str, None]
     # Un diccionario con los datos principales de la transacción.
-    datos: Union[dict, None]
+    datos: Union[dict, tuple, None]
     # Una lista de transacciones secundarias relacionadas al registro principal.
-    datos_detalle: Union[List[dict], None]
+    datos_detalle: Union[List[dict, tuple], None]
