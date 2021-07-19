@@ -19,7 +19,6 @@
 Modulo de Contabilidad.
 """
 
-from cacao_accounting.database import Entidad
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
 from cacao_accounting.contabilidad.auxiliares import (
