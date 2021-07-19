@@ -20,7 +20,6 @@ from cacao_accounting.registro import Registro
 
 
 class RegistroUsuario(Registro):
-    from cacao_accounting.database import Usuario
 
     def __init__(self):
 
