@@ -99,3 +99,14 @@ def test_establece_entidad_como_predeterminada(client, auth):
     dulce = Entidad.query.filter_by(entidad="dulce").first()
     response1 = client.get("/accounts/entity/set_default/" + dulce.id)
     assert "302 FOUND" == response1.status
+
+
+def test_establece_entidad_como_inabilitada(client, auth):
+    auth.login()
+    from cacao_accounting.database import Entidad
+
+    cafe = Entidad.query.filter_by(entidad="cafe").first()
+    assert cafe.status == "activo"
+    response = client.get("/accounts/entity/set_inactive/" + cafe.id)
+    check = Entidad.query.filter_by(entidad="cafe").first()
+    assert check.status == "inactivo"

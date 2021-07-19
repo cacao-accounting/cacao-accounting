@@ -83,9 +83,8 @@ class Registro:
 
     def _ejecuta_cambio_de_estatus(self, transaccion: Transaccion) -> bool:
         if self.tabla:
-            registro = self.tabla.query.filter_by(uuid=transaccion.uuid).first()
-            registro.status = transaccion.nuevo_estatus
-            db.session.add(registro)
+            transaccion.datos.status = transaccion.nuevo_estatus
+            db.session.add(transaccion.datos)
             db.session.commit()
             return True
         else:

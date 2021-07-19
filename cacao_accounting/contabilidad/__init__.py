@@ -155,8 +155,16 @@ def eliminar_entidad(id_entidad):
 @modulo_activo("accounting")
 @login_required
 def inactivar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "inactivo"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
 
 
 @contabilidad.route("/accounts/entity/set_default/<id_entidad>")
