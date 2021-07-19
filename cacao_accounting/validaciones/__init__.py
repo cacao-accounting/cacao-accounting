@@ -15,13 +15,12 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from functools import cache
 from cacao_accounting.exception import TransactionError
 from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.database import Entidad
 
 
-@cache
+
 def validar_entidad_activa(transaccion: Transaccion) -> bool:
     if transaccion.datos.get("entidad", None):
         entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()
