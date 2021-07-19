@@ -152,21 +152,21 @@ def paginar_consulta(tabla=None, elementos=None):
         raise DataError(ERROR1)
 
 
-def obtener_registro_desde_uuid(tipo=None, tabla=None , tabla_detalle=None, uuid=None) -> Transaccion:
-        if tabla:
-            REGISTRO = tabla.query.filter_by(id=uuid).first()
-            TRANSACCION = Transaccion(
-                registro="Entidad",
-                tipo="principal",
-                accion="consultar",
-                estatus_actual=REGISTRO.status,
-                nuevo_estatus=None,
-                uuid=REGISTRO.id,
-                relaciones=None,
-                relacion_id=None,
-                datos=REGISTRO,
-                datos_detalle=None
-            )
-            return TRANSACCION
-        else:
-            raise OperationalError(ERROR4)
+def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:
+    if tabla:
+        REGISTRO = tabla.query.filter_by(id=uuid).first()
+        TRANSACCION = Transaccion(
+            registro="Entidad",
+            tipo="principal",
+            accion="consultar",
+            estatus_actual=REGISTRO.status,
+            nuevo_estatus=None,
+            uuid=REGISTRO.id,
+            relaciones=None,
+            relacion_id=None,
+            datos=REGISTRO,
+            datos_detalle=None,
+        )
+        return TRANSACCION
+    else:
+        raise OperationalError(ERROR4)
