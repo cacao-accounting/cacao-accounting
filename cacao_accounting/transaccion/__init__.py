@@ -45,7 +45,7 @@ class Transaccion:
     # Estatus del documento al llevar a cabo la accion ejecutada por el usuario.
     nuevo_estatus: Union[str, None]
     # Identificador unico en la base de datos del registro.
-    uuid: Union[str, UUID]
+    uuid: Union[str, UUID, None]
     # Un registro puede tener otros registros relacionados en otros tablas del sistema.
     relaciones: Union[str, None]
     # Una cadena de texto que el usuario pueda identificar para identificar la transaccion.
