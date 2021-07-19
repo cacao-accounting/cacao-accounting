@@ -154,6 +154,11 @@ def test_listado_monedas(client, auth):
     responde = client.get("/currency/list")
 
 
+def test_listado_proyectos(client, auth):
+    auth.login()
+    responde = client.get("/accounts/project/list")
+
+
 def test_cambiar_status_entidad(client, auth):
     auth.login()
     response = client.get("/accounts/entities/set_inactive/cacao")
