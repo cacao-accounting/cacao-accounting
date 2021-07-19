@@ -100,9 +100,8 @@ class Registro:
                 registro.status = "activo"
                 db.session.add(registro)
                 db.session.commit()
-            registro_principal = self.tabla.query.filter_by(uuid=transaccion.uuid).first()
-            registro_principal.staus = "predeterminado"
-            db.session.add(registro_principal)
+            transaccion.datos.status = "predeterminado"
+            db.session.add(transaccion.datos)
             db.session.commit()
             return True
         else:

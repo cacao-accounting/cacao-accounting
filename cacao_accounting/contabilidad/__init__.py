@@ -31,6 +31,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
+from cacao_accounting.database import STATUS_WEB
 from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
@@ -82,7 +83,7 @@ def entidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
-        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Entidad.status_web
+        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS_WEB
     )
 
 
@@ -167,7 +168,9 @@ def predeterminar_entidad(id_entidad):
 
     REGISTRO = RegistroEntidad()
     TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION._replace(nuevo_estatus="predeterminado")
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "predeterminado"
     REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
     return redirect("/accounts/entity/list")
 

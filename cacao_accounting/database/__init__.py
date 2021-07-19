@@ -39,10 +39,16 @@ from sqlalchemy import UniqueConstraint
 
 
 db = SQLAlchemy()
-StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
+
 
 DBVERSION = "0.0.0dev"
 
+StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
+STATUS_WEB = {
+    "predeterminado": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
+    "activo": StatusWeb(color="Navy", texto="Entidad Activa"),
+    "inactivo": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+}
 
 # <---------------------------------------------------------------------------------------------> #
 # Defición de un tipo de columna para almacenar identificadores tipo UUID según el motor de base
@@ -248,11 +254,6 @@ class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
     # Información legal de la entidad
     entidad = db.Column(db.String(10), unique=True, index=True)
     status = db.Column(db.String(50), nullable=True)
-    status_web = {
-        "predeterminada": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
-        "activa": StatusWeb(color="Navy", texto="Entidad Activa"),
-        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
     razon_social = db.Column(db.String(100), unique=True, nullable=False)
     nombre_comercial = db.Column(db.String(50))
     id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
