@@ -35,7 +35,7 @@ Transaccion = namedtuple(
     [
         # Uno de: princinpal, secundario, transaccional.
         "tipo",
-        # Uno de: crear, actualizar, validar, autorizar, anular, cerrar.
+        # Uno de: crear, actualizar, validar, autorizar, anular, cerrar, consultar.
         "accion",
         # Tipo de registro sobre el que se realiza la transaccion.
         "registro",

@@ -19,6 +19,7 @@
 Modulo de Contabilidad.
 """
 
+from cacao_accounting.database import Entidad
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
 from cacao_accounting.contabilidad.auxiliares import (
@@ -31,7 +32,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
-from cacao_accounting.database.helpers import paginar_consulta
+from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
@@ -162,8 +163,14 @@ def inactivar_entidad(id_entidad):
 @modulo_activo("accounting")
 @login_required
 def predeterminar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION._replace(nuevo_estatus="predeterminado")
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
