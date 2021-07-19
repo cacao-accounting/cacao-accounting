@@ -20,7 +20,6 @@ from cacao_accounting.registro import Registro
 
 
 class RegistroUsuario(Registro):
-
     def __init__(self):
 
         self.tabla = Usuario
