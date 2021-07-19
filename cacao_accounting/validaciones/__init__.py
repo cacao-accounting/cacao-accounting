@@ -21,8 +21,8 @@ from cacao_accounting.transaccion import Transaccion
 
 
 def validar_entidad_activa(transaccion: Transaccion) -> bool:
-    if transaccion.datos.get("entidad", None):
-        entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()
+    if transaccion.datos.get("entidad", None):  # type: ignore[union-attr]
+        entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()  # type: ignore[index]
         if entidad.status != "inactiva":
             return True
         else:
