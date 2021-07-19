@@ -53,4 +53,4 @@ class Transaccion:
     # Un diccionario con los datos principales de la transacción.
     datos: Union[dict, tuple, None]
     # Una lista de transacciones secundarias relacionadas al registro principal.
-    datos_detalle: Union[List[dict, tuple], None]
+    datos_detalle: Union[List[dict], List[tuple], None]
