@@ -151,7 +151,7 @@ def test_catalogoctasent(client, auth):
 
 def test_listado_monedas(client, auth):
     auth.login()
-    responde = client.get("/currencies")
+    responde = client.get("/currency/list")
 
 
 def test_cambiar_status_entidad(client, auth):
