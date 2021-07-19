@@ -38,9 +38,3 @@ class OperationalError(CacaoAccountingException):
 
 class AccessDenied(CacaoAccountingException):
     """Clase para generar errores de acceso."""
-
-
-# <-------------------------------------------------------------------------> #
-# Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
-ERROR1 = "No se proporcionaron datos."
-ERROR2 = "Instancia de Flask requerida"

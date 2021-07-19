@@ -34,7 +34,8 @@ from typing import Union
 from flask import Flask
 from sqlalchemy_paginator import Paginator
 from cacao_accounting.database import db, DBVERSION, Metadata
-from cacao_accounting.exception import ERROR1, DataError
+from cacao_accounting.exceptions import DataError
+from cacao_accounting.exceptions.mensajes import ERROR1
 from cacao_accounting.loggin import log
 
 

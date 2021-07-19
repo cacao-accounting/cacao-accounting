@@ -21,21 +21,17 @@
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col">ID</th>
+        <th scope="col">Moneda</th>
         <th scope="col">Nombre</th>
-        <th scope="col">Código</th>
       </tr>
     </thead>
   {% for moneda in pagina.object_list -%}
   <tr>
-    <th>
-      {{ moneda.id }}
-    </th>
-    <th scope="row">
-      {{ moneda.nombre }}
-    </th>
     <td>
       {{ moneda.codigo }}
+    </td>
+    <td scope="row">
+      {{ moneda.nombre }}
     </td>
   </tr>
   {%- endfor %}

@@ -15,9 +15,9 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.exception import TransactionError
-from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.database import Entidad
+from cacao_accounting.exceptions import TransactionError
+from cacao_accounting.transaccion import Transaccion
 
 
 def validar_entidad_activa(transaccion: Transaccion) -> bool:

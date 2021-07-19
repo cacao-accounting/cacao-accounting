@@ -86,13 +86,13 @@ def entidades():
     )
 
 
-@contabilidad.route("/accounts/entity/<id_entidad>")
+@contabilidad.route("/accounts/entity/<entidad>")
 @modulo_activo("accounting")
 @login_required
-def entidad(id_entidad):
+def entidad(entidad):
     from cacao_accounting.database import Entidad
 
-    registro = Entidad.query.filter_by(id=id_entidad).first()
+    registro = Entidad.query.filter_by(entidad=entidad).first()
     return render_template("contabilidad/entidad.html", registro=registro)
 
 
@@ -183,13 +183,13 @@ def unidades():
     )
 
 
-@contabilidad.route("/accounts/unit/<id_unidad>")
+@contabilidad.route("/accounts/unit/<unidad>")
 @modulo_activo("accounting")
 @login_required
-def unidad(id_unidad):
+def unidad(unidad):
     from cacao_accounting.database import Unidad
 
-    registro = Unidad.query.filter_by(id=id_unidad).first()
+    registro = Unidad.query.filter_by(unidad=unidad).first()
     return render_template("contabilidad/unidad.html", registro=registro)
 
 

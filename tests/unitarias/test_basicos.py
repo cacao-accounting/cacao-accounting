@@ -212,7 +212,7 @@ class TestClasesHeredades(TestCase):
 
 class TestExection(TestCase):
     def test_querry_vacio(self):
-        from cacao_accounting.exception import DataError
+        from cacao_accounting.exceptions import DataError
         from cacao_accounting.database.helpers import paginar_consulta
 
         with pytest.raises(DataError):

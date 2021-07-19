@@ -38,7 +38,8 @@ Un registro:
 from typing import Union
 from flask_login import current_user
 from cacao_accounting.database import db
-from cacao_accounting.exception import TransactionError
+from cacao_accounting.exceptions import OperationalError, TransactionError
+from cacao_accounting.exceptions.mensajes import ERROR3, ERROR4
 from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.validaciones import VALIDACIONES_PREDETERMINADAS
 
@@ -54,11 +55,19 @@ class Registro:
     tabla_detalle = None
     LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
 
-    def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion) -> bool:
+    def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion):
         if transaccion.accion == "crear":
             return self._crear_transaccion_principal_en_la_db(transaccion)
+        if (
+            transaccion.accion == "actualizar"
+            and transaccion.tipo == "principal"
+            and transaccion.nuevo_estatus == "predeterminado"
+        ):
+            return self._estable_registro_maestro_como_predeterminado(transaccion)
+        if transaccion.accion == "actualizar" and transaccion.nuevo_estatus:
+            self._ejecuta_cambio_de_estatus(transaccion)
         else:
-            raise TransactionError("Tipo de Acción no Implementada.")
+            raise TransactionError(ERROR4)
 
     def _ejecutar_validacion_de_transaccion(self, transaccion: Transaccion):
         for validacion in self.LISTA_DE_VALIDACIONES_DE_TRANSACCION:
@@ -71,6 +80,33 @@ class Registro:
             self.DATABASE.session.add(self.tabla(**transaccion.datos))
             self.DATABASE.session.commit()
             return True
+
+    def _ejecuta_cambio_de_estatus(self, transaccion: Transaccion) -> bool:
+        if self.tabla:
+            registro = self.tabla.query.filter_by(uuid=transaccion.uuid).first()
+            registro.status = transaccion.nuevo_estatus
+            db.session.add(registro)
+            db.session.commit()
+            return True
+        else:
+            raise TransactionError(ERROR3)
+
+    def _estable_registro_maestro_como_predeterminado(self, transaccion: Transaccion) -> bool:
+        if self.tabla:
+            # Solo puede haber un registro predeterminado, en caso de haber un registro, o mas,
+            # establecidos como predeterminados establecerlos como activos.
+            registros = self.tabla.query.filter_by(status="predeterminado")
+            for registro in registros:
+                registro.status = "activo"
+                db.session.add(registro)
+                db.session.commit()
+            registro_principal = self.tabla.query.filter_by(uuid=transaccion.uuid).first()
+            registro_principal.staus = "predeterminado"
+            db.session.add(registro_principal)
+            db.session.commit()
+            return True
+        else:
+            raise OperationalError(ERROR3)
 
     def crear_registro_maestro(self, datos: None):
         """
@@ -97,14 +133,14 @@ class Registro:
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
         """
-        from sqlalchemy.exc import OperationalError
+        from sqlalchemy.exc import OperationalError as SAOperationalError
 
         if self.tabla:
             self.DATABASE.session.begin()
             self.DATABASE.session.query(self.tabla).filter(self.identidad == uuid).delete()
             try:
                 self.DATABASE.session.commit()
-            except OperationalError:
+            except SAOperationalError:
                 self.DATABASE.session.rollback()
 
     def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
