@@ -1,4 +1,3 @@
-# Copyright 2020 William José Moreno Reyes
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +14,9 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from cacao_accounting.database import Usuario
-from cacao_accounting.registro import Registro
-
-
-class RegistroUsuario(Registro):
-    def __init__(self):
-
-        self.tabla = Usuario
+# <-------------------------------------------------------------------------> #
+# Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
+ERROR1 = "No se proporcionaron datos."
+ERROR2 = "Instancia de Flask requerida"
+ERROR3 = "No se ha establecido una tabla para operacion."
+ERROR4 = "Tipo de Acción no Implementada."

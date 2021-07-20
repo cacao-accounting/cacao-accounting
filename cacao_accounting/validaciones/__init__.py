@@ -15,16 +15,14 @@
 # Contributors:
 # - William José Moreno Reyes
 
-from functools import cache
-from cacao_accounting.exception import TransactionError
-from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.database import Entidad
+from cacao_accounting.exceptions import TransactionError
+from cacao_accounting.transaccion import Transaccion
 
 
-@cache
 def validar_entidad_activa(transaccion: Transaccion) -> bool:
-    if transaccion.datos.get("entidad", None):
-        entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()
+    if transaccion.datos.get("entidad", None):  # type: ignore[union-attr]
+        entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()  # type: ignore[index, call-overload]
         if entidad.status != "inactiva":
             return True
         else:

@@ -82,7 +82,7 @@ ENTIDAD_DEMO1 = {
     "fax": "+505 8456 7545",
     "habilitada": True,
     "predeterminada": True,
-    "status": "predeterminada",
+    "status": "predeterminado",
 }
 
 
@@ -100,7 +100,7 @@ ENTIDAD_DEMO2 = {
     "fax": "+505 8456 7546",
     "habilitada": True,
     "predeterminada": False,
-    "status": "activa",
+    "status": "activo",
 }
 
 ENTIDAD_DEMO3 = {
@@ -117,7 +117,7 @@ ENTIDAD_DEMO3 = {
     "fax": "+505 8456 7545",
     "habilitada": False,
     "predeterminada": False,
-    "status": "inactiva",
+    "status": "inactivo",
 }
 
 

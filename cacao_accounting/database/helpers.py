@@ -34,8 +34,10 @@ from typing import Union
 from flask import Flask
 from sqlalchemy_paginator import Paginator
 from cacao_accounting.database import db, DBVERSION, Metadata
-from cacao_accounting.exception import ERROR1, DataError
+from cacao_accounting.exceptions import DataError, OperationalError
+from cacao_accounting.exceptions.mensajes import ERROR1, ERROR4
 from cacao_accounting.loggin import log
+from cacao_accounting.transaccion import Transaccion
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -148,3 +150,23 @@ def paginar_consulta(tabla=None, elementos=None):
         return consulta_paginada
     else:
         raise DataError(ERROR1)
+
+
+def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:
+    if tabla:
+        REGISTRO = tabla.query.filter_by(id=uuid).first()
+        TRANSACCION = Transaccion(
+            registro="Entidad",
+            tipo="principal",
+            accion="consultar",
+            estatus_actual=REGISTRO.status,
+            nuevo_estatus=None,
+            uuid=REGISTRO.id,
+            relaciones=None,
+            relacion_id=None,
+            datos=REGISTRO,
+            datos_detalle=None,
+        )
+        return TRANSACCION
+    else:
+        raise OperationalError(ERROR4)

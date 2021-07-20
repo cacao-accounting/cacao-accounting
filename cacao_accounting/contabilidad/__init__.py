@@ -31,7 +31,8 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
-from cacao_accounting.database.helpers import paginar_consulta
+from cacao_accounting.database import STATUS_WEB
+from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
@@ -82,17 +83,17 @@ def entidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
-        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Entidad.status_web
+        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS_WEB
     )
 
 
-@contabilidad.route("/accounts/entity/<id_entidad>")
+@contabilidad.route("/accounts/entity/<entidad>")
 @modulo_activo("accounting")
 @login_required
-def entidad(id_entidad):
+def entidad(entidad):
     from cacao_accounting.database import Entidad
 
-    registro = Entidad.query.filter_by(id=id_entidad).first()
+    registro = Entidad.query.filter_by(entidad=entidad).first()
     return render_template("contabilidad/entidad.html", registro=registro)
 
 
@@ -142,28 +143,67 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
+@contabilidad.route("/accounts/entity/set_active/<id_entidad>")
+@modulo_activo("accounting")
+@login_required
+def activar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "activo"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
+
+
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def eliminar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "eliminar"
+    TRANSACCION.tipo = "principal"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
 
 
 @contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def inactivar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "inactivo"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
 
 
 @contabilidad.route("/accounts/entity/set_default/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
 def predeterminar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "predeterminado"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -183,13 +223,13 @@ def unidades():
     )
 
 
-@contabilidad.route("/accounts/unit/<id_unidad>")
+@contabilidad.route("/accounts/unit/<unidad>")
 @modulo_activo("accounting")
 @login_required
-def unidad(id_unidad):
+def unidad(unidad):
     from cacao_accounting.database import Unidad
 
-    registro = Unidad.query.filter_by(id=id_unidad).first()
+    registro = Unidad.query.filter_by(unidad=unidad).first()
     return render_template("contabilidad/unidad.html", registro=registro)
 
 

@@ -37,7 +37,7 @@ from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
-from cacao_accounting.exception import ERROR2
+from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.tools import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS
