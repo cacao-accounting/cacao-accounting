@@ -58,13 +58,15 @@ class Registro:
     def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion):
         if transaccion.accion == "crear":
             return self._crear_transaccion_principal_en_la_db(transaccion)
-        if (
+        elif (
             transaccion.accion == "actualizar"
             and transaccion.tipo == "principal"
             and transaccion.nuevo_estatus == "predeterminado"
         ):
             return self._estable_registro_maestro_como_predeterminado(transaccion)
-        if transaccion.accion == "actualizar" and transaccion.nuevo_estatus:
+        elif transaccion.accion == "eliminar" and transaccion.tipo == "principal":
+            self._elimar_registro_principal(transaccion)
+        elif transaccion.accion == "actualizar" and transaccion.nuevo_estatus:
             self._ejecuta_cambio_de_estatus(transaccion)
         else:
             raise TransactionError(ERROR4)
@@ -126,20 +128,19 @@ class Registro:
             self.DATABASE.session.add(self.tabla(**datos))
             self.DATABASE.session.commit()
 
-    def elimar_registro_maestro(self, uuid=None):
+    def _elimar_registro_principal(self, transaccion: Transaccion) -> bool:
         """
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
         """
-        from sqlalchemy.exc import OperationalError as SAOperationalError
 
         if self.tabla:
-            self.DATABASE.session.begin()
-            self.DATABASE.session.query(self.tabla).filter(self.identidad == uuid).delete()
-            try:
-                self.DATABASE.session.commit()
-            except SAOperationalError:
-                self.DATABASE.session.rollback()
+            REGISTRO_A_ELIMINAR = self.tabla.query.filter_by(id=transaccion.uuid).one()
+            db.session.delete(REGISTRO_A_ELIMINAR)
+            db.session.commit()
+            return True
+        else:
+            raise TransactionError(ERROR4)
 
     def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
         """

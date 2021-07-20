@@ -143,14 +143,6 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
-@contabilidad.route("/accounts/entity/delete/<id_entidad>")
-@modulo_activo("accounting")
-@login_required
-def eliminar_entidad(id_entidad):
-    # TODO
-    return redirect("/app")
-
-
 @contabilidad.route("/accounts/entity/set_active/<id_entidad>")
 @modulo_activo("accounting")
 @login_required
@@ -163,6 +155,21 @@ def activar_entidad(id_entidad):
     TRANSACCION.accion = "actualizar"
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "activo"
+    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    return redirect("/accounts/entity/list")
+
+
+@contabilidad.route("/accounts/entity/delete/<id_entidad>")
+@modulo_activo("accounting")
+@login_required
+def eliminar_entidad(id_entidad):
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "eliminar"
+    TRANSACCION.tipo = "principal"
     REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
     return redirect("/accounts/entity/list")
 

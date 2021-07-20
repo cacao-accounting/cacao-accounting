@@ -121,3 +121,14 @@ def test_establece_entidad_como_abilitada(client, auth):
     response = client.get("/accounts/entity/set_active/" + dulce.id)
     check = Entidad.query.filter_by(entidad="dulce").first()
     assert check.status == "activo"
+
+
+def test_elimina_entidad(client, auth):
+    auth.login()
+    from cacao_accounting.database import Entidad
+
+    dulce = Entidad.query.filter_by(entidad="dulce").first()
+    response = client.get("/accounts/entity/delete/" + dulce.id)
+    assert response.status == "302 FOUND"
+    check = Entidad.query.filter_by(entidad="dulce").first()
+    assert check is None

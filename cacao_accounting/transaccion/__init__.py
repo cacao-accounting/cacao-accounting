@@ -36,7 +36,7 @@ class Transaccion:
 
     # Uno de: princinpal, secundario, transaccional.
     tipo: Union[str, None]
-    # Uno de: crear, actualizar, validar, autorizar, anular, cerrar, consultar.
+    # Uno de: crear, actualizar, validar, autorizar, anular, cerrar, consultar, eliminar.
     accion: Union[str, None]
     # Tipo de registro sobre el que se realiza la transaccion.
     registro: Union[str, None]
