@@ -20,7 +20,6 @@ Modulo para la configuración centralizada de la configuración de la aplicacion
 """
 
 from os import environ
-from flask import current_app
 from cacao_accounting.loggin import log
 
 # < --------------------------------------------------------------------------------------------- >
@@ -61,7 +60,7 @@ def valida_llave_secreta(llave: str) -> bool:
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
     CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
     CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
-    CONFIGURACION_DESARROLLO = current_app.config.get("ENV") == "development"
+    CONFIGURACION_DESARROLLO = environ.get("ENV") == "development"
     if CONFIGURACION_DESARROLLO:
         return True
     else:
