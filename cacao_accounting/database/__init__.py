@@ -31,6 +31,7 @@ Referencia:
 
 from collections import namedtuple
 from os import environ
+from typing import Dict
 from uuid import uuid4
 from flask import current_app
 from flask_login import UserMixin
@@ -43,11 +44,21 @@ db = SQLAlchemy()
 
 DBVERSION = "0.0.0dev"
 
-StatusWeb = namedtuple("StatusWeb", ["color", "texto"])
-STATUS_WEB = {
-    "predeterminado": StatusWeb(color="Lime", texto="Entidad Predeterminada"),
-    "activo": StatusWeb(color="Navy", texto="Entidad Activa"),
-    "inactivo": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
+StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
+
+STATUS: Dict[str, StatusWeb] = {
+    "abierto": StatusWeb(color="Lime", leyenda="Abierto"),
+    "activo": StatusWeb(color="Navy", leyenda="Activo"),
+    "actual": StatusWeb(color="DodgerBlue", leyenda="Actual"),
+    "atrasado": StatusWeb(color="DodgerBlue", leyenda="Atrasado"),
+    "cancelado": StatusWeb(color="DodgerBlue", leyenda="Cancelado"),
+    "cerrado": StatusWeb(color="LightSlateGray", leyenda="Cerrado"),
+    "inactivo": StatusWeb(color="LightSlateGray", leyenda="Inactivo"),
+    "indefinido": StatusWeb(color="LightSlateGray", leyenda="Status no definido"),
+    "inhabilitado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado"),
+    "habilitado": StatusWeb(color="LightSlateGray", leyenda="Habilitado"),
+    "pagado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado" "Pagado"),
+    "predeterminado": StatusWeb(color="Lime", leyenda="Predeterminado"),
 }
 
 # <---------------------------------------------------------------------------------------------> #
@@ -103,6 +114,7 @@ class BaseTabla:
 
     # Pistas de auditoria comunes a todas las tablas.
     id = COLUMNA_UUID
+    status = db.Column(db.String(50), nullable=True)
     creado = db.Column(db.DateTime, default=db.func.now(), nullable=False)
     creado_por = db.Column(db.String(15), nullable=True)
     modificado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
@@ -293,11 +305,6 @@ class Unidad(db.Model, BaseTabla):  # type: ignore[name-defined]
     telefono1 = db.Column(db.String(50))
     telefono2 = db.Column(db.String(50))
     fax = db.Column(db.String(50))
-    status = db.Column(db.String(50), nullable=True)
-    status_web = {
-        "activa": StatusWeb(color="Navy", texto="Entidad Activa"),
-        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
 
 
 class Direcciones(BaseDireccion):
@@ -336,11 +343,6 @@ class Cuentas(db.Model, BaseTabla):  # type: ignore[name-defined]
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
     tipo = db.Column(db.String(15))
-    status = db.Column(db.String(50), nullable=True)
-    status_web = {
-        "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
-        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
     UniqueConstraint("entidad", "codigo", name="cta_unica_entidad")
 
 
@@ -365,11 +367,6 @@ class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
     nombre = db.Column(db.String(100))
     grupo = db.Column(db.Boolean())
     padre = db.Column(db.String(100), nullable=True)
-    status = db.Column(db.String(50), nullable=True)
-    status_web = {
-        "activa": StatusWeb(color="Lime", texto="Entidad Activa"),
-        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
     UniqueConstraint("entidad", "codigo", name="cc_unico_entidad")
 
 
@@ -391,11 +388,6 @@ class Proyecto(db.Model, BaseTabla):  # type: ignore[name-defined]
     fechainicio = db.Column(db.Date())
     fechafin = db.Column(db.Date())
     presupuesto = db.Column(db.Float())
-    status = db.Column(db.String(50), nullable=True)
-    status_web = {
-        "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
-        "inactiva": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
     UniqueConstraint("entidad", "codigo", name="proyecto_unica_entidad")
 
 
@@ -410,11 +402,6 @@ class PeriodoContable(db.Model, BaseTabla):  # type: ignore[name-defined]
     habilitada = db.Column(db.Boolean(), index=True)
     inicio = db.Column(db.Date(), nullable=False)
     fin = db.Column(db.Date(), nullable=False)
-    status_web = {
-        "actual": StatusWeb(color="DodgerBlue", texto="Entidad Activa"),
-        "abierto": StatusWeb(color="Lime", texto="Entidad Activa"),
-        "cerrado": StatusWeb(color="LightSlateGray", texto="Entidad Inactiva"),
-    }
 
 
 # <---------------------------------------------------------------------------------------------> #

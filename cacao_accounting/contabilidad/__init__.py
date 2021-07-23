@@ -31,7 +31,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
 )
-from cacao_accounting.database import STATUS_WEB
+from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
@@ -83,7 +83,7 @@ def entidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
-        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS_WEB
+        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
     )
 
 
@@ -219,7 +219,7 @@ def unidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Unidades de Negocio - " + APPNAME
     return render_template(
-        "contabilidad/unidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Unidad.status_web
+        "contabilidad/unidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
     )
 
 
@@ -309,7 +309,7 @@ def cuenta(id_cta):
     from cacao_accounting.database import Cuentas
 
     registro = Cuentas.query.filter_by(codigo=id_cta).first()
-    return render_template("contabilidad/cuenta.html", registro=registro, statusweb=Cuentas.status_web)
+    return render_template("contabilidad/cuenta.html", registro=registro, statusweb=STATUS)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -348,7 +348,7 @@ def centro_costo(id_cc):
     from cacao_accounting.database import CentroCosto
 
     registro = CentroCosto.query.filter_by(codigo=id_cc).first()
-    return render_template("contabilidad/centro-costo.html", registro=registro, statusweb=CentroCosto.status_web)
+    return render_template("contabilidad/centro-costo.html", registro=registro, statusweb=STATUS)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -364,7 +364,7 @@ def proyectos():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listados de Proyectos - " + APPNAME
     return render_template(
-        "contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=Proyecto.status_web
+        "contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
     )
 
 
@@ -396,9 +396,5 @@ def periodo_contable():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Períodos Contables - " + APPNAME
     return render_template(
-        "contabilidad/periodo_lista.html",
-        titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
-        statusweb=PeriodoContable.status_web,
+        "contabilidad/periodo_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
     )
