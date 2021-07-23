@@ -61,11 +61,7 @@ def valida_llave_secreta(llave: str) -> bool:
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
     CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
     CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
-    try:
-        current_app.app_context().push()
-        CONFIGURACION_DESARROLLO = current_app.config.get("ENV") == "development"
-    except RuntimeError:
-        CONFIGURACION_DESARROLLO = False
+    CONFIGURACION_DESARROLLO = current_app.config.get("ENV") == "development"
     if CONFIGURACION_DESARROLLO:
         return True
     else:

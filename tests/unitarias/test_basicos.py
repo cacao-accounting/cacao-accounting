@@ -125,9 +125,16 @@ def test_validar_conexion_db():
 
 def test_valida_clave_secreta():
     from cacao_accounting.config import valida_llave_secreta
+    from flask import current_app
 
     assert valida_llave_secreta("gw(5g6qd$fM|MZJ{") == True
     assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
+    current_app.config["ENV"] = "Hola"
+    assert valida_llave_secreta("gw(5g6qd$fM|MZJ{") == True
+    assert valida_llave_secreta("d6VJxbVJBjQ3Z4yW") == True
+    assert valida_llave_secreta("hola") == False
+    assert valida_llave_secreta("1234") == False
+    assert valida_llave_secreta("hola123") == False
 
 
 class TestInstanciasDeClasesCorrectas(TestCase):
