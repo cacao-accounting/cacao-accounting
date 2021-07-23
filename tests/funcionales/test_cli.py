@@ -19,7 +19,7 @@
 import pytest
 from cacao_accounting import create_app as app_factory
 from cacao_accounting.database import db
-from cacao_accounting.datos import base_data, demo_data
+from cacao_accounting.datos import base_data, dev_data
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -39,7 +39,7 @@ def rapp():
         db.drop_all()
         db.create_all()
         base_data()
-        demo_data()
+        dev_data()
     app.app_context().push()
     yield app
 

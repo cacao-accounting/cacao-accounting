@@ -29,8 +29,7 @@ def crear_db():
     from cacao_accounting import create_app
     from cacao_accounting.config import configuracion
     from cacao_accounting.database import db
-    from cacao_accounting.datos.base import base_data
-    from cacao_accounting.datos.demo import demo_data
+    from cacao_accounting.datos import base_data, dev_data
 
     app = create_app(configuracion)
     app.app_context().push()
@@ -40,7 +39,7 @@ def crear_db():
     db.drop_all()
     db.create_all()
     base_data(carga_rapida=True)
-    demo_data()
+    dev_data()
 
 
 def test_run():

@@ -3,7 +3,7 @@ from unittest import TestCase
 from sqlalchemy import create_engine
 from cacao_accounting import create_app
 from cacao_accounting.database import db
-from cacao_accounting.datos import base_data, demo_data
+from cacao_accounting.datos import base_data, dev_data
 
 from .x_basicos import Basicos
 
@@ -97,7 +97,7 @@ class TestSQLite(TestCase, Basicos):
         with self.app.app_context():
             db.create_all()
             base_data(carga_rapida=True)
-            demo_data()
+            dev_data()
 
     def tearDown(self):
         with self.app.app_context():
@@ -128,7 +128,7 @@ class TestMySQL(TestCase, Basicos):
             if TEST_MYSQL:
                 db.create_all()
                 base_data(carga_rapida=True)
-                demo_data()
+                dev_data()
 
     def tearDown(self):
         with self.app.app_context():
@@ -160,7 +160,7 @@ class TestMariaDB(TestCase, Basicos):
             if TEST_MARIADB:
                 db.create_all()
                 base_data(carga_rapida=True)
-                demo_data()
+                dev_data()
 
     def tearDown(self):
         with self.app.app_context():
@@ -191,7 +191,7 @@ class TestPostgresql(TestCase, Basicos):
             if TEST_POSTGRESQL:
                 db.create_all()
                 base_data(carga_rapida=True)
-                demo_data()
+                dev_data()
 
     def tearDown(self):
         with self.app.app_context():
@@ -223,7 +223,7 @@ class TestMSSQL(TestCase, Basicos):
                 if TEST_MSSQL:
                     db.create_all()
                     base_data(carga_rapida=True)
-                    demo_data()
+                    dev_data()
         else:
             self.app = None
 

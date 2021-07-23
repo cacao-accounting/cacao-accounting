@@ -19,7 +19,7 @@
 import pytest
 from cacao_accounting import create_app as app_factory
 from cacao_accounting.database import db
-from cacao_accounting.datos import base_data, demo_data
+from cacao_accounting.datos import base_data, dev_data
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -39,7 +39,7 @@ def app():
         db.drop_all()
         db.create_all()
         base_data()
-        demo_data()
+        dev_data()
     app.app_context().push()
     yield app
 
@@ -90,7 +90,7 @@ def test_establece_entidad_como_predeterminada(client, auth):
     cafe = Entidad.query.filter_by(entidad="cafe").first()
 
     response = client.get("/accounts/entity/set_default/" + cafe.id)
-    assert "302 FOUND" == response.status
+    assert response.status == "302 FOUND"
     check = Entidad.query.filter_by(entidad="cafe").first()
     assert check.status == "predeterminado"
     # El estatus de la entidad cacao debe cambiar a "activo"
@@ -98,7 +98,7 @@ def test_establece_entidad_como_predeterminada(client, auth):
     assert check1.status == "activo"
     dulce = Entidad.query.filter_by(entidad="dulce").first()
     response1 = client.get("/accounts/entity/set_default/" + dulce.id)
-    assert "302 FOUND" == response1.status
+    assert response1.status == "302 FOUND"
 
 
 def test_establece_entidad_como_inabilitada(client, auth):

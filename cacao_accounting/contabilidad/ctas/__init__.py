@@ -56,7 +56,7 @@ def cargar_catalogos(catalogo, entidad):
             padre=cuenta["padre"],
             rubro=cuenta["rubro"],
             tipo=cuenta["tipo"],
-            status="activa",
+            status="activo",
         )
         db.session.add(registro)
         db.session.commit()
