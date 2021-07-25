@@ -31,6 +31,13 @@ class RegistroRol(Registro):
         self.tabla = Roles
 
 
+class RegistroRolUsuario(Registro):
+    def __init__(self) -> None:
+        from cacao_accounting.database import RolesUsuario
+
+        self.tabla = RolesUsuario  # type: ignore[assignment]
+
+
 # Tipos de acceso:
 ACCESO_COMPLETO = [
     "actualizar",
@@ -102,7 +109,7 @@ def crea_roles_predeterminados() -> None:
         REGISTRO = RegistroRol()
         REGISTRO.ejecutar_transaccion_a_la_db(
             Transaccion(
-                registro="Usuario",
+                registro="Rol",
                 tipo="principal",
                 estatus_actual=None,
                 nuevo_estatus=None,
@@ -114,3 +121,25 @@ def crea_roles_predeterminados() -> None:
                 relacion_id=None,
             )
         )
+
+
+def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
+    from cacao_accounting.database import Usuario, Roles
+
+    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+    ROL = Roles.query.filter_by(name=rol).first()
+    ROL_USUARIO = RegistroRolUsuario()
+    ROL_USUARIO.ejecutar_transaccion_a_la_db(
+        Transaccion(
+            registro="Rol Usuario",
+            tipo="principal",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            accion="crear",
+            datos={"user_id": USUARIO.id, "role_id": ROL.id},
+            datos_detalle=None,
+            relaciones=None,
+            relacion_id=None,
+        )
+    )

@@ -248,14 +248,14 @@ class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
     telefono = db.Column(db.String(50))
 
 
-class Roles(db.Model, BaseTabla, AllowancesMixin):
+class Roles(db.Model, BaseTabla, AllowancesMixin):  # type: ignore[name-defined]
     __tablename__ = "roles"
 
     name = db.Column(db.String(50), nullable=False, unique=True)
     detalle = db.Column(db.String(100), nullable=False, unique=True)
 
 
-class RolesUsuario(db.Model, BaseTabla):
+class RolesUsuario(db.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "user_role"
     user_id = db.Column(TIPO_UUID, db.ForeignKey("usuario.id"))
     role_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))

@@ -19,7 +19,7 @@
 Datos básicos para iniciar el sistema.
 """
 
-from cacao_accounting.auth.roles import crea_roles_predeterminados
+from cacao_accounting.auth.roles import crea_roles_predeterminados, asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.modulos import _init_modulos
 from cacao_accounting.transaccion import Transaccion
@@ -120,6 +120,7 @@ def crea_usuario_admin():
             relacion_id=None,
         )
     USUARIO.ejecutar_transaccion_a_la_db(usuario)
+    asigna_rol_a_usuario(environ.get("CACAO_USER", None) or "cacao", "admin")
 
 
 def base_data(carga_rapida=False):
@@ -127,8 +128,8 @@ def base_data(carga_rapida=False):
     Definición de metodo para cargar información base al sistema.
     """
     log.debug("Iniciando carga de datos base al sistema.")
+    crea_roles_predeterminados()
     crea_usuario_admin()
     registra_monedas(carga_rapida=carga_rapida)
     _init_modulos()
-    crea_roles_predeterminados()
     log.debug("Batos base cargados en la base de datos.")
