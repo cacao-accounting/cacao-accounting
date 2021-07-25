@@ -34,6 +34,7 @@ from os import environ
 from typing import Dict
 from uuid import uuid4
 from flask import current_app
+from flask_authorize import RestrictionsMixin, AllowancesMixin
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
@@ -66,7 +67,7 @@ STATUS: Dict[str, StatusWeb] = {
 # de datos establecido en la configuración.
 
 
-def obtiene_texto_unico():
+def obtiene_texto_unico() -> str:
     """
     A partir de un código UUID unico aleatorio devuelve una cadena de texto unica
     que se puede usar como identificador interno.
@@ -86,22 +87,26 @@ else:
 if DB_URI and DB_URI.startswith("postgresql"):
     from sqlalchemy.dialects.postgresql import UUID
 
-    COLUMNA_UUID = db.Column(UUID(as_uuid=False), primary_key=True, nullable=False, default=obtiene_texto_unico)
+    TIPO_UUID = UUID(as_uuid=False)
+    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
 
 elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
     from sqlalchemy.dialects.mysql import VARCHAR
 
-    COLUMNA_UUID = db.Column(VARCHAR(length=36), primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
+    TIPO_UUID = VARCHAR(length=36)
+    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
 
 elif DB_URI and DB_URI.startswith("mssql"):
     from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 
-    COLUMNA_UUID = db.Column(UNIQUEIDENTIFIER(), primary_key=True, nullable=False, default=obtiene_texto_unico)
+    TIPO_UUID = UNIQUEIDENTIFIER()
+    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
 
 else:
     from sqlalchemy.types import String
 
-    COLUMNA_UUID = db.Column(String(36), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    TIPO_UUID = String(36)
+    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -243,13 +248,26 @@ class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
     telefono = db.Column(db.String(50))
 
 
+class Roles(db.Model, BaseTabla, AllowancesMixin):
+    __tablename__ = "roles"
+
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    detalle = db.Column(db.String(100), nullable=False, unique=True)
+
+
+class RolesUsuario(db.Model, BaseTabla):
+    __tablename__ = "user_role"
+    user_id = db.Column(TIPO_UUID, db.ForeignKey("usuario.id"))
+    role_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Administración de módulos del sistema.
 class Modulos(db.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
-    __table_args__ = (db.UniqueConstraint("id", "modulo", name="modulo_unico"),)
-    modulo = db.Column(db.String(25), unique=True, index=True)
+    __table_args__ = (db.UniqueConstraint("modulo", name="modulo_unico"),)
+    modulo = db.Column(db.String(50), unique=True, index=True)
     estandar = db.Column(db.Boolean(), nullable=False)
     habilitado = db.Column(db.Boolean(), nullable=True)
 

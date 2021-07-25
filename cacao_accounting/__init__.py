@@ -27,6 +27,7 @@ from typing import Union
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
+from flask_authorize import Authorize
 from flask_talisman import Talisman
 from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
@@ -46,6 +47,7 @@ from cacao_accounting.ventas import ventas
 
 alembic = Alembic()
 talisman = Talisman()
+authorize = Authorize()
 
 
 def command() -> None:  # pragma: no cover
@@ -74,6 +76,7 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
     """
     if app and isinstance(app, Flask):
         alembic.init_app(app)
+        authorize.init_app(app)
         db.init_app(app)
         administrador_sesion.init_app(app)
         with app.app_context():
