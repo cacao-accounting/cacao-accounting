@@ -86,41 +86,29 @@ def crea_usuario_admin():
 
     log.info("Creando Usuario Administrador")
     USUARIO = RegistroUsuario()
-    try:
-        usuario = Transaccion(
-            registro="Usuario",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "usuario": environ["CACAO_USER"],
-                "clave_acceso": proteger_passwd(environ["CACAO_PWD"]),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-        log.info("Creando usuario administrador desde variables de entorno.")
-    except KeyError:
-        usuario = Transaccion(
-            registro="Usuario",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "usuario": "cacao",
-                "clave_acceso": proteger_passwd("cacao"),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
+    USER = environ.get("CACAO_USER", None) or "cacao"
+    PWD = environ.get("CACAO_PWD", None) or "cacao"
+    if environ.get("CACAO_USER", None) and environ.get("CACAO_PWD", None):
+        log.info("Creando Usuario Administrador desde variables de entorno")
+    else:
+        log.warning("No se encontrato valores para usuario administrador, usando predeterminados")
+    usuario = Transaccion(
+        registro="Usuario",
+        tipo="principal",
+        estatus_actual=None,
+        nuevo_estatus=None,
+        uuid=None,
+        accion="crear",
+        datos={
+            "usuario": USER,
+            "clave_acceso": proteger_passwd(PWD),
+        },
+        datos_detalle=None,
+        relaciones=None,
+        relacion_id=None,
+    )
     USUARIO.ejecutar_transaccion_a_la_db(usuario)
-    asigna_rol_a_usuario(environ.get("CACAO_USER", None) or "cacao", "admin")
+    asigna_rol_a_usuario(USER, "admin")
 
 
 def base_data(carga_rapida=False):
