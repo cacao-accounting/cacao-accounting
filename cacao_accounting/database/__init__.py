@@ -34,7 +34,6 @@ from os import environ
 from typing import Dict
 from uuid import uuid4
 from flask import current_app
-from flask_authorize import AllowancesMixin
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
@@ -248,7 +247,7 @@ class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
     telefono = db.Column(db.String(50))
 
 
-class Roles(db.Model, BaseTabla, AllowancesMixin):  # type: ignore[name-defined]
+class Roles(db.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "roles"
 
     name = db.Column(db.String(50), nullable=False, unique=True)

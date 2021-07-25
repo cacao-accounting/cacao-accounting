@@ -58,7 +58,6 @@ setup(
         "bcrypt",
         "flask",
         "flask-alembic",
-        "Flask-Authorize",
         "flask-babel",
         "flask-login",
         "flask-sqlalchemy",

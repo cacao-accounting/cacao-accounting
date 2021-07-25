@@ -38,66 +38,9 @@ class RegistroRolUsuario(Registro):
         self.tabla = RolesUsuario  # type: ignore[assignment]
 
 
-# Tipos de acceso:
-ACCESO_COMPLETO = [
-    "actualizar",
-    "anular",
-    "autorizar",
-    "consultar",
-    "cerrar",
-    "crear",
-    "eliminar",
-    "validar",
-]
-
-ACCESO_OPERATIVO = [
-    "actualizar",
-    "anular",
-    "autorizar",
-    "consultar",
-    "cerrar",
-    "crear",
-    "validar",
-]
-
-ACCESO_LECTURA = [
-    "consultar",
-]
-
-ACCESO_USUARIO = [
-    "actualizar",
-    "autorizar",
-    "consultar",
-    "cambiar_estado",
-    "crear",
-    "validar",
-]
-
 ADMINISTRADOR = {
     "name": "admin",
     "detalle": "Administrador del Sistema",
-    "allowances": {
-        "metadata": ACCESO_COMPLETO,
-        "moneda": ACCESO_COMPLETO,
-        "tasa_de_cambio": ACCESO_COMPLETO,
-        "usuario": ACCESO_COMPLETO,
-        "roles": ACCESO_COMPLETO,
-        "permisos_rol": ACCESO_COMPLETO,
-        "user_role": ACCESO_COMPLETO,
-        "modulos": ACCESO_COMPLETO,
-        "entidad": ACCESO_COMPLETO,
-        "unidad": ACCESO_COMPLETO,
-        "cuentas": ACCESO_COMPLETO,
-        "centro_costo": ACCESO_COMPLETO,
-        "proyecto": ACCESO_COMPLETO,
-        "periodo_contable": ACCESO_COMPLETO,
-        "cliente": ACCESO_COMPLETO,
-        "cliente_direccion": ACCESO_COMPLETO,
-        "cliente_contacto": ACCESO_COMPLETO,
-        "proveedor": ACCESO_COMPLETO,
-        "proveedor_direccion": ACCESO_COMPLETO,
-        "proveedor_contacto": ACCESO_COMPLETO,
-    },
 }
 
 ROLES_PREDETERMINADOS = [ADMINISTRADOR]
