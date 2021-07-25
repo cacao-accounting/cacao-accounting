@@ -68,3 +68,17 @@ class Basicos:
 
             with self.app.app_context():
                 assert bd_actual() is not None
+
+    def test_user_from_env(self):
+        from os import environ
+
+        environ["CACAO_USER"] = "wmoreno"
+        environ["CACAO_PWD"] = "wmoreno1A+"
+
+        from cacao_accounting.database import db
+        from cacao_accounting.database.helpers import inicia_base_de_datos
+
+        if self.dbengine:
+            with self.app.app_context():
+                db.drop_all()
+                assert inicia_base_de_datos(self.app) is True
