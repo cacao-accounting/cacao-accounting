@@ -19,7 +19,7 @@
 Inición de sesión de usuarios.
 """
 
-
+from os import environ
 from cacao_accounting.database import Usuario
 from flask import Blueprint, redirect, render_template, flash
 from flask_login import LoginManager, logout_user, login_user
@@ -91,3 +91,10 @@ def inicio_sesion():
 def cerrar_sesion():
     logout_user()
     return redirect("/login")
+
+
+if environ.get("CACAO_TEST") or environ.get("FLASK_ENV") == "development":
+
+    @login.route("/test_roles")
+    def test_roles():
+        return render_template("test_roles.html")
