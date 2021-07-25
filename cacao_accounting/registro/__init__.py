@@ -108,26 +108,6 @@ class Registro:
         else:
             raise OperationalError(ERROR3)
 
-    def crear_registro_maestro(self, datos: None):
-        """
-        Un registro principal no depende de otros, ejemplos de registros principales son:
-         Registros maestros como:
-          - Una entidad
-          - Un cliente
-          - Un proveedor
-        Registros principales de una transaccion como:
-          - Una factura
-          - Un comprobante de pago
-          - Un comprobante de diario
-
-        Por defecto los registros principales siempre deben crearse como borrador.
-        """
-        if self.tabla:
-            if current_user:
-                datos["creado_por"] = current_user.usuario
-            self.DATABASE.session.add(self.tabla(**datos))
-            self.DATABASE.session.commit()
-
     def _elimar_registro_principal(self, transaccion: Transaccion) -> bool:
         """
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
@@ -142,28 +122,7 @@ class Registro:
         else:
             raise TransactionError(ERROR4)
 
-    def crear_registro_transaccion(self, transaccion=None, transaccion_detalle=None):
-        """
-        Un registro secundario proporciona información adicional a un registro principal como:
-          - La lista de items de una factura.
-          - La lista de cuentas afectadas en un comprobantes de diario.
-        """
-
-        if self.tabla and self.tabla_detalle:
-            if current_user:
-                transaccion["creado_por"] = current_user.usuario
-                for i in transaccion_detalle:
-                    i["creado_por"] = current_user.usuario
-            self.DATABASE.session.add(self.tabla(**transaccion))
-            self.DATABASE.session.commit()
-            for i in transaccion_detalle:
-                self.DATABASE.session.add(self.tabla_detalle(**i))
-                self.DATABASE.session.commit()
-
     def ejecutar_transaccion_a_la_db(self, transaccion: Union[Transaccion, None] = None):
         if transaccion:
-            try:
-                self._ejecutar_validacion_de_transaccion(transaccion)
-                self._ejecutar_transaccion_por_tipo(transaccion)
-            except TransactionError:
-                pass
+            self._ejecutar_validacion_de_transaccion(transaccion)
+            self._ejecutar_transaccion_por_tipo(transaccion)
