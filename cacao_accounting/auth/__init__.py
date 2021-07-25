@@ -94,7 +94,12 @@ def cerrar_sesion():
 
 
 if environ.get("CACAO_TEST") or environ.get("FLASK_ENV") == "development":
+    from flask_login import login_required
 
     @login.route("/test_roles")
+    @login_required
     def test_roles():
-        return render_template("test_roles.html")
+        from flask_login import current_user
+        from cacao_accounting.auth.roles import obtener_roles_por_usuario
+
+        return render_template("test_roles.html", roles=obtener_roles_por_usuario(current_user.usuario))

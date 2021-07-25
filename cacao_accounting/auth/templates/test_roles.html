@@ -1,6 +1,23 @@
 <h1>Cacao Accounting</h1>
 <h2>Verificación de Permisos de Acceso del Usuario.</h2>
 
-Usuario actual: <strong>{{ current_user.usuario }}</strong> ID único: <strong>{{ current_user.id }}</strong>
+
+Usuario actual: <strong>{{ current_user.usuario }}</strong><br>
+ID único: <strong>{{ current_user.id }}</strong>
+<br>
 <br>
 Roles Actuales:
+<table>
+    <tr>
+      <th>Usuario</th>
+      <th>Rol</th>
+    </tr>
+{% for role in roles %}
+    <tr>
+      <td>{{ role.Usuario.usuario }}</td>
+      <td>{{ role.Roles.name }}</td>
+    </tr>
+{% endfor %}
+</table>
+<br>
+<br>

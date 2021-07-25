@@ -71,10 +71,10 @@ class Basicos:
 
     def test_obtener_lista_entidades_por_id_razonsocial(self):
         from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
         if self.dbengine:
             with self.app.app_context():
                 assert obtener_lista_entidades_por_id_razonsocial() is not None
-
 
     def test_user_from_env(self):
         from os import environ
