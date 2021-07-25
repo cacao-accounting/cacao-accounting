@@ -34,7 +34,7 @@ from os import environ
 from typing import Dict
 from uuid import uuid4
 from flask import current_app
-from flask_authorize import RestrictionsMixin, AllowancesMixin
+from flask_authorize import AllowancesMixin
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
