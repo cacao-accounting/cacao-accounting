@@ -248,16 +248,33 @@ class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class Roles(db.Model, BaseTabla):  # type: ignore[name-defined]
-    __tablename__ = "roles"
 
     name = db.Column(db.String(50), nullable=False, unique=True)
     detalle = db.Column(db.String(100), nullable=False, unique=True)
 
 
+class RolesPermisos(db.Model, BaseTabla):  # type: ignore[name-defined]
+    rol_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))
+    modulo_id = db.Column(TIPO_UUID, db.ForeignKey("modulos.id"))
+    # Usuario tiene acceso al múdulo
+    acceso = db.Column(db.Boolean, nullable=True, default=False)
+    # Usuario puede realizar determinadas acciones en el modulogit
+    actualizar = db.Column(db.Boolean, nullable=True, default=False)
+    anular = db.Column(db.Boolean, nullable=True, default=False)
+    autorizar = db.Column(db.Boolean, nullable=True, default=False)
+    bi = db.Column(db.Boolean, nullable=True, default=False)
+    cerrar = db.Column(db.Boolean, nullable=True, default=False)
+    crear = db.Column(db.Boolean, nullable=True, default=False)
+    consultar = db.Column(db.Boolean, nullable=True, default=False)
+    editar = db.Column(db.Boolean, nullable=True, default=False)
+    eliminar = db.Column(db.Boolean, nullable=True, default=False)
+    validar = db.Column(db.Boolean, nullable=True, default=False)
+
+
 class RolesUsuario(db.Model, BaseTabla):  # type: ignore[name-defined]
-    __tablename__ = "user_role"
     user_id = db.Column(TIPO_UUID, db.ForeignKey("usuario.id"))
     role_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))
+    activo = db.Column(db.Boolean, nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
