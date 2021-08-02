@@ -102,7 +102,8 @@ if environ.get("CACAO_TEST") or environ.get("FLASK_ENV") == "development":
         from flask_login import current_user
         from cacao_accounting.auth.roles import obtener_roles_por_usuario
         from cacao_accounting.database import Modulos
+        from cacao_accounting.auth.permisos import Permisos
 
         MODULOS = Modulos.query.all()
 
-        return render_template("test_roles.html", roles=obtener_roles_por_usuario(current_user.usuario), modulos=MODULOS)
+        return render_template("test_roles.html",permisos=Permisos ,roles=obtener_roles_por_usuario(current_user.usuario), modulos=MODULOS)
