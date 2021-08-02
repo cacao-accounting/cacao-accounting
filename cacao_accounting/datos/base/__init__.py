@@ -111,11 +111,14 @@ def crea_usuario_admin():
     USUARIO.ejecutar_transaccion_a_la_db(usuario)
     asigna_rol_a_usuario(USER, "admin")
 
+
 def __cargar_roles_al_sistema() -> None:
     crea_roles_predeterminados()
 
+
 def __cargar_permisos_al_sistema() -> None:
     from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
+
     cargar_permisos_predeterminados()
 
 
@@ -123,7 +126,7 @@ def base_data(carga_rapida=False):
     """
     Definición de metodo para cargar información base al sistema.
     """
-    
+
     log.debug("Iniciando carga de datos base al sistema.")
     _init_modulos()
     __cargar_roles_al_sistema()
