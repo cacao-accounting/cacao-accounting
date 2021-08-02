@@ -106,4 +106,6 @@ if environ.get("CACAO_TEST") or environ.get("FLASK_ENV") == "development":
 
         MODULOS = Modulos.query.all()
 
-        return render_template("test_roles.html",permisos=Permisos ,roles=obtener_roles_por_usuario(current_user.usuario), modulos=MODULOS)
+        return render_template(
+            "test_roles.html", permisos=Permisos, roles=obtener_roles_por_usuario(current_user.usuario), modulos=MODULOS
+        )

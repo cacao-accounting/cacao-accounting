@@ -70,7 +70,8 @@ class AdminLogin:
 def admin(client):
     return AdminLogin(client)
 
-@pytest.mark.skipif(not(environ.get("CACAO_TEST")), reason="Not testing enviroment")
+
+@pytest.mark.skipif(not (environ.get("CACAO_TEST")), reason="Not testing enviroment")
 def test_login(client, admin):
     admin.login()
     response = client.get("/test_roles")

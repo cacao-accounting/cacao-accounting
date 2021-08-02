@@ -121,6 +121,7 @@ def __cargar_permisos_al_sistema() -> None:
 
     cargar_permisos_predeterminados()
 
+
 def base_data(carga_rapida=False):
     """
     Definición de metodo para cargar información base al sistema.
