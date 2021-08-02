@@ -19,6 +19,7 @@
 Datos básicos para iniciar el sistema.
 """
 
+from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import crea_roles_predeterminados, asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.modulos import _init_modulos
@@ -117,6 +118,7 @@ def base_data(carga_rapida=False):
     """
     log.debug("Iniciando carga de datos base al sistema.")
     crea_roles_predeterminados()
+    cargar_permisos_predeterminados()
     crea_usuario_admin()
     registra_monedas(carga_rapida=carga_rapida)
     _init_modulos()

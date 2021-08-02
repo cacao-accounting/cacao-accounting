@@ -19,6 +19,7 @@
 Datos de ejemplo.
 """
 from datetime import date
+from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
 
@@ -50,6 +51,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
     USUARIO.ejecutar_transaccion_a_la_db(admin)
+    asigna_rol_a_usuario("administrador", "admin")
     contabilidad = Transaccion(
         registro="Usuario",
         tipo="principal",
@@ -68,6 +70,7 @@ def _demo_usuarios():
     )
 
     USUARIO.ejecutar_transaccion_a_la_db(contabilidad)
+    asigna_rol_a_usuario("contabilidad", "accounting_manager")
     compras = Transaccion(
         registro="Usuario",
         tipo="principal",
@@ -81,6 +84,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
     USUARIO.ejecutar_transaccion_a_la_db(compras)
+    asigna_rol_a_usuario("compras", "purchasing_manager")
     ventas = Transaccion(
         registro="Usuario",
         tipo="principal",
@@ -94,6 +98,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
     USUARIO.ejecutar_transaccion_a_la_db(ventas)
+    asigna_rol_a_usuario("ventas", "sales_manager")
     inventario = Transaccion(
         registro="Usuario",
         tipo="principal",
@@ -111,6 +116,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
     USUARIO.ejecutar_transaccion_a_la_db(inventario)
+    asigna_rol_a_usuario("inventario", "inventory_manager")
 
 
 def _demo_entidad():

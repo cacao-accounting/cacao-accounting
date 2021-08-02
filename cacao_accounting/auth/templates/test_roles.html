@@ -1,23 +1,170 @@
-<h1>Cacao Accounting</h1>
-<h2>Verificación de Permisos de Acceso del Usuario.</h2>
+<head>
+<!-- Bootstrap core CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+<script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
 
+<!-- Bootstrap Font -->
+<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+</head>
+<body>
+  <h2>Verificación de Permisos de Acceso del Usuario.</h2>
+  <p style="color: orangered;">
+    Nota: Cacao Accounting se esta ejecutando en modo de pruebas,
+    no se recomienda esta configuración en un entorno de producción.
+  </p>
+  Datos del Usuario Actual: 
+  <ul>
+    <li><strong>Nombre:</strong> {{ current_user.p_nombre }} {{ current_user.s_nombre }}</li>
+    <li><strong>Apellido:</strong> {{ current_user.p_apellido }} {{ current_user.s_apellido }}</li>
+    <li><strong>Correo Electronico:</strong> {{ current_user.correo_e }}</li>
+    <li><strong>Usuario:</strong> {{ current_user.usuario }}</li>
+    <li><strong>UUID:</strong> {{ current_user.id }}</li>
+  </ul>
+  
+  <br>
+  Roles Actuales:
+  <table class="table">
+      <tr>
+        <th>Usuario</th>
+        <th>Rol</th>
+      </tr>
+  {% for role in roles %}
+      <tr>
+        <td>{{ role.Usuario.usuario }}</td>
+        <td>{{ role.Roles.name }}</td>
+      </tr>
+  {% endfor %}
+  </table>
+  {% for modulo in modulos %}
+  <h3>Modulo {{ modulo.modulo | capitalize }}</h3>
+  <table class="table">
+    <tr>
+      <th>Permiso</th>
+      <th>Estatus</th>
+    </tr>
+    <tr>
+      <td>Autorizado*</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).usuario_autorizado() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Actualizar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).actualizar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Anular</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).anular() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Autorizar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).autorizar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>BI</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).bi() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Cerrar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).cerrar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Crear</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).crear() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Consultar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).consultar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Editar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).editar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Eliminar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).eliminar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Reportes</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).reportes() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Validar</td>
+      <td>
+        {% if permisos(modulo=modulo.modulo).validar() %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+  * Usuario autorizado a acceder al modulo.
+  <br>
+  {% endfor %}
+</body>
 
-Usuario actual: <strong>{{ current_user.usuario }}</strong><br>
-ID único: <strong>{{ current_user.id }}</strong>
-<br>
-<br>
-Roles Actuales:
-<table>
-    <tr>
-      <th>Usuario</th>
-      <th>Rol</th>
-    </tr>
-{% for role in roles %}
-    <tr>
-      <td>{{ role.Usuario.usuario }}</td>
-      <td>{{ role.Roles.name }}</td>
-    </tr>
-{% endfor %}
-</table>
-<br>
-<br>

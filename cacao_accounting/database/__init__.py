@@ -268,6 +268,7 @@ class RolesPermisos(db.Model, BaseTabla):  # type: ignore[name-defined]
     consultar = db.Column(db.Boolean, nullable=True, default=False)
     editar = db.Column(db.Boolean, nullable=True, default=False)
     eliminar = db.Column(db.Boolean, nullable=True, default=False)
+    reportes = db.Column(db.Boolean, nullable=True, default=False)
     validar = db.Column(db.Boolean, nullable=True, default=False)
 
 
