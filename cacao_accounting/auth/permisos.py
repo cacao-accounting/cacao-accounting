@@ -142,15 +142,13 @@ class Permisos(Acciones):
 
 
 def obtener_id_modulo(modulo) -> str:
-    with current_app.app_context():
-        MODULO = Modulos.query.filter_by(modulo=modulo).first()
-        return MODULO.id
+    MODULO = Modulos.query.filter_by(modulo=modulo).first()
+    return MODULO.id
 
 
 def obtener_id_rol(rol) -> str:
-    with current_app.app_context():
-        ROL = Roles.query.filter_by(name=rol).first()
-        return ROL.id
+    ROL = Roles.query.filter_by(name=rol).first()
+    return ROL.id
 
 
 JEFE_DE_COMPRAS = {
@@ -174,20 +172,20 @@ PERMISOS_PREDETERMINADOS = [JEFE_DE_COMPRAS]
 
 
 def cargar_permisos_predeterminados() -> None:
-    current_app.app_context().push()
     REGISTRO = RegistroPermisosRol()
     for PERMISO in PERMISOS_PREDETERMINADOS:
-        REGISTRO.ejecutar_transaccion_a_la_db(
-            Transaccion(
-                registro="Permisos Rol",
-                tipo="principal",
-                estatus_actual=None,
-                nuevo_estatus=None,
-                uuid=None,
-                accion="crear",
-                datos=PERMISO,
-                datos_detalle=None,
-                relaciones=None,
-                relacion_id=None,
+        with current_app.app_context():
+            REGISTRO.ejecutar_transaccion_a_la_db(
+                Transaccion(
+                    registro="Permisos Rol",
+                    tipo="principal",
+                    estatus_actual=None,
+                    nuevo_estatus=None,
+                    uuid=None,
+                    accion="crear",
+                    datos=PERMISO,
+                    datos_detalle=None,
+                    relaciones=None,
+                    relacion_id=None,
+                )
             )
-        )

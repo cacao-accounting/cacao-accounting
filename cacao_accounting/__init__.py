@@ -32,7 +32,6 @@ from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
-from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
@@ -131,7 +130,6 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
-            app.jinja_env.globals.update(permisos=Permisos)
     else:
         raise RuntimeError(ERROR2)
 
