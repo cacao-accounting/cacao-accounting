@@ -21,7 +21,6 @@ Modulo de Contabilidad.
 
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
-from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
@@ -33,7 +32,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
 )
 from cacao_accounting.database import STATUS
-from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid, obtener_id_modulo_por_monbre
+from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
@@ -58,7 +57,6 @@ def monedas():
         resultado=RESULTADO,
         pagina=PAGINA,
         titulo=TITULO,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -73,7 +71,8 @@ def conta():
     TITULO = "Módulo Contabilidad - " + APPNAME
     if validar_modulo_activo("accounting"):
         return render_template(
-            "contabilidad.html", titulo=TITULO, permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting"))
+            "contabilidad.html",
+            titulo=TITULO,
         )
     else:
         return redirect("/app")
@@ -97,7 +96,6 @@ def entidades():
         resultado=RESULTADO,
         pagina=PAGINA,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -111,7 +109,6 @@ def entidad(entidad):
     return render_template(
         "contabilidad/entidad.html",
         registro=registro,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -150,7 +147,6 @@ def nueva_entidad():
         "contabilidad/entidad_crear.html",
         form=formulario,
         titulo=TITULO,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -247,7 +243,6 @@ def unidades():
         resultado=RESULTADO,
         pagina=PAGINA,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -299,7 +294,6 @@ def nueva_unidad():
         "contabilidad/unidad_crear.html",
         titulo=TITULO,
         form=formulario,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -322,7 +316,6 @@ def cuentas():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,
-            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
     else:
@@ -333,7 +326,6 @@ def cuentas():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(),
             titulo=TITULO,
-            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
 
@@ -348,7 +340,6 @@ def cuenta(id_cta):
         "contabilidad/cuenta.html",
         registro=registro,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -368,7 +359,6 @@ def ccostos():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,
-            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
     else:
@@ -379,7 +369,6 @@ def ccostos():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(),
             titulo=TITULO,
-            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
 
@@ -394,7 +383,6 @@ def centro_costo(id_cc):
         "contabilidad/centro-costo.html",
         registro=registro,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -416,7 +404,6 @@ def proyectos():
         resultado=RESULTADO,
         pagina=PAGINA,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -437,7 +424,6 @@ def tasa_cambio():
         titulo=TITULO,
         resultado=RESULTADO,
         pagina=PAGINA,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -459,5 +445,4 @@ def periodo_contable():
         resultado=RESULTADO,
         pagina=PAGINA,
         statusweb=STATUS,
-        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )

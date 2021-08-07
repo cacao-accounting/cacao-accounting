@@ -104,6 +104,8 @@ class Permisos(Acciones):
     def __init__(self, modulo: Union[None, str] = None) -> None:
         self.modulo = modulo
         self.usuario = current_user
+        if current_user.is_authenticated and modulo:
+            self.administrador = self.valida_usuario_tiene_rol_administrativo()
 
     def obtener_roles_de_usuario(self) -> Union[tuple, None]:
         if self.usuario:

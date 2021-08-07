@@ -1,17 +1,8 @@
-<head>
-<!-- Bootstrap core CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
-<script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+{% extends "base.html" %}
+{% block contenido %}
 
-<!-- Bootstrap Font -->
-<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
-</head>
-<body>
+<section>
   <h2>Verificación de Permisos de Acceso del Usuario.</h2>
-  <p style="color: orangered;">
-    Nota: Cacao Accounting se esta ejecutando en modo de pruebas,
-    no se recomienda esta configuración en un entorno de producción.
-  </p>
   Datos del Usuario Actual: 
   <ul>
     <li><strong>Nombre:</strong> {{ current_user.p_nombre }} {{ current_user.s_nombre }}</li>
@@ -166,5 +157,5 @@
   * Usuario autorizado a acceder al modulo.
   <br>
   {% endfor %}
-</body>
-
+</section>
+{% endblock %}

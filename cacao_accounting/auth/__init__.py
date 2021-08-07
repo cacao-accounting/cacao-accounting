@@ -97,9 +97,9 @@ def cerrar_sesion():
 @login_required
 def test_roles():
     from flask_login import current_user
+    from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.auth.roles import obtener_roles_por_usuario
     from cacao_accounting.database import Modulos
-    from cacao_accounting.auth.permisos import Permisos
 
     MODULOS = Modulos.query.all()
 
