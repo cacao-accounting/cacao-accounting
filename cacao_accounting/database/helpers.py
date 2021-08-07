@@ -170,3 +170,10 @@ def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=
         return TRANSACCION
     else:
         raise OperationalError(ERROR4)
+
+
+def obtener_id_modulo_por_monbre(modulo: str) -> str:
+    from cacao_accounting.database import Modulos
+
+    MODULO = Modulos.query.filter_by(modulo=modulo).first()
+    return MODULO.id

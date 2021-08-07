@@ -116,12 +116,6 @@ def __cargar_roles_al_sistema() -> None:
     crea_roles_predeterminados()
 
 
-def __cargar_permisos_al_sistema() -> None:
-    from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
-
-    cargar_permisos_predeterminados()
-
-
 def base_data(carga_rapida=False):
     """
     Definición de metodo para cargar información base al sistema.
@@ -130,7 +124,6 @@ def base_data(carga_rapida=False):
     log.debug("Iniciando carga de datos base al sistema.")
     _init_modulos()
     __cargar_roles_al_sistema()
-    __cargar_permisos_al_sistema()
     crea_usuario_admin()
     registra_monedas(carga_rapida=carga_rapida)
     log.debug("Batos base cargados en la base de datos.")

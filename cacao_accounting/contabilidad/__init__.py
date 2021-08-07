@@ -21,6 +21,7 @@ Modulo de Contabilidad.
 
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
@@ -32,7 +33,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
 )
 from cacao_accounting.database import STATUS
-from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
+from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid, obtener_id_modulo_por_monbre
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
@@ -52,7 +53,13 @@ def monedas():
     RESULTADO = paginar_consulta(tabla=Moneda)
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Monedas - " + " - " + APPNAME
-    return render_template("contabilidad/moneda_lista.html", resultado=RESULTADO, pagina=PAGINA, titulo=TITULO)
+    return render_template(
+        "contabilidad/moneda_lista.html",
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        titulo=TITULO,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

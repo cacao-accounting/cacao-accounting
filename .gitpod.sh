@@ -1,4 +1,5 @@
 #!/bin/bash
+sudo apt install -y sqlite
 git config pull.rebase true
 python -m pip install --upgrade pip
 python -m pip install --upgrade pip
