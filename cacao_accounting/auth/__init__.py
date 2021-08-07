@@ -19,7 +19,6 @@
 Inición de sesión de usuarios.
 """
 
-from os import environ
 from cacao_accounting.database import Usuario
 from flask import Blueprint, redirect, render_template, flash
 from flask_login import LoginManager, logout_user, login_user, login_required
