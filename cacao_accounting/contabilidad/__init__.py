@@ -72,7 +72,9 @@ def monedas():
 def conta():
     TITULO = "Módulo Contabilidad - " + APPNAME
     if validar_modulo_activo("accounting"):
-        return render_template("contabilidad.html", titulo=TITULO)
+        return render_template(
+            "contabilidad.html", titulo=TITULO, permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting"))
+        )
     else:
         return redirect("/app")
 
@@ -90,7 +92,12 @@ def entidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
-        "contabilidad/entidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
+        "contabilidad/entidad_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -101,7 +108,11 @@ def entidad(entidad):
     from cacao_accounting.database import Entidad
 
     registro = Entidad.query.filter_by(entidad=entidad).first()
-    return render_template("contabilidad/entidad.html", registro=registro)
+    return render_template(
+        "contabilidad/entidad.html",
+        registro=registro,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 @contabilidad.route("/accounts/entity/new", methods=["GET", "POST"])
@@ -135,7 +146,12 @@ def nueva_entidad():
         e.crear_registro_maestro(datos=DATA)
         return redirect("/accounts/entities")
 
-    return render_template("contabilidad/entidad_crear.html", form=formulario, titulo=TITULO)
+    return render_template(
+        "contabilidad/entidad_crear.html",
+        form=formulario,
+        titulo=TITULO,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 @contabilidad.route("/accounts/entity/edit/<id_entidad>")
@@ -226,7 +242,12 @@ def unidades():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Unidades de Negocio - " + APPNAME
     return render_template(
-        "contabilidad/unidad_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
+        "contabilidad/unidad_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -274,7 +295,12 @@ def nueva_unidad():
         }
         e.crear_registro_maestro(datos=DATA)
         return redirect("/accounts/units")
-    return render_template("contabilidad/unidad_crear.html", titulo=TITULO, form=formulario)
+    return render_template(
+        "contabilidad/unidad_crear.html",
+        titulo=TITULO,
+        form=formulario,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -296,6 +322,7 @@ def cuentas():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,
+            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
     else:
@@ -306,6 +333,7 @@ def cuentas():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(),
             titulo=TITULO,
+            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
 
@@ -316,7 +344,12 @@ def cuenta(id_cta):
     from cacao_accounting.database import Cuentas
 
     registro = Cuentas.query.filter_by(codigo=id_cta).first()
-    return render_template("contabilidad/cuenta.html", registro=registro, statusweb=STATUS)
+    return render_template(
+        "contabilidad/cuenta.html",
+        registro=registro,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -335,6 +368,7 @@ def ccostos():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(ent=request.args.get("entidad")),
             titulo=TITULO,
+            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
     else:
@@ -345,6 +379,7 @@ def ccostos():
             entidades=obtener_entidades(),
             entidad=obtener_entidad(),
             titulo=TITULO,
+            permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
         )
 
 
@@ -355,7 +390,12 @@ def centro_costo(id_cc):
     from cacao_accounting.database import CentroCosto
 
     registro = CentroCosto.query.filter_by(codigo=id_cc).first()
-    return render_template("contabilidad/centro-costo.html", registro=registro, statusweb=STATUS)
+    return render_template(
+        "contabilidad/centro-costo.html",
+        registro=registro,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -371,7 +411,12 @@ def proyectos():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listados de Proyectos - " + APPNAME
     return render_template(
-        "contabilidad/proyecto_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
+        "contabilidad/proyecto_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
 
 
@@ -387,7 +432,13 @@ def tasa_cambio():
     RESULTADO = paginar_consulta(tabla=TasaDeCambio)
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Tasas de Cambio - " + APPNAME
-    return render_template("contabilidad/tc_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA)
+    return render_template(
+        "contabilidad/tc_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -403,5 +454,10 @@ def periodo_contable():
     PAGINA = RESULTADO.page(PAGE)
     TITULO = "Listado de Períodos Contables - " + APPNAME
     return render_template(
-        "contabilidad/periodo_lista.html", titulo=TITULO, resultado=RESULTADO, pagina=PAGINA, statusweb=STATUS
+        "contabilidad/periodo_lista.html",
+        titulo=TITULO,
+        resultado=RESULTADO,
+        pagina=PAGINA,
+        statusweb=STATUS,
+        permisos=Permisos(modulo=obtener_id_modulo_por_monbre(modulo="accounting")),
     )
