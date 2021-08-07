@@ -109,7 +109,7 @@ class Permisos(Acciones):
 
     def obtener_roles_de_usuario(self) -> Union[tuple, None]:
         if self.usuario:
-            return RolesUsuario.query.filter_by(user_id=self.usuario)
+            return RolesUsuario.query.filter_by(user_id=self.usuario.id)
         else:
             return None
 
@@ -119,7 +119,7 @@ class Permisos(Acciones):
 
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
         CONSULTA = RolesUsuario.query.filter(
-            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario
+            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario.id
         ).first()
         return CONSULTA is not None
 
