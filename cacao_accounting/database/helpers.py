@@ -177,3 +177,10 @@ def obtener_id_modulo_por_monbre(modulo: str) -> str:
 
     MODULO = Modulos.query.filter_by(modulo=modulo).first()
     return MODULO.id
+
+
+def obtener_id_rol_por_monbre(rol: str) -> str:
+    from cacao_accounting.database import Roles
+
+    ROL = Roles.query.filter_by(name=rol).first()
+    return ROL.id

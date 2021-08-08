@@ -17,7 +17,9 @@
 
 from typing import Union
 from flask_login import current_user
-from cacao_accounting.database import Modulos, RolesUsuario, Roles, RolesPermisos
+from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_rol_por_monbre
+from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
 
 
@@ -123,19 +125,45 @@ class Permisos(Acciones):
         ).first()
         return CONSULTA is not None
 
-    def probar_acceso_segun_rol(self) -> bool:
-        pass
-
     def usuario_autorizado(self) -> bool:
         if self.administrador:
             return True
+        else:
+            ACCESO = False
+            for ROL in self.obtener_roles_de_usuario():
+                PERMISOS = RolesPermisos.query.filter(RolesPermisos.rol_id == ROL.id, RolesPermisos.modulo_id == self.modulo)
+                for PERMISO in PERMISOS:
+                    if PERMISO.acceso is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
 
-def obtener_id_modulo(modulo) -> str:
-    MODULO = Modulos.query.filter_by(modulo=modulo).first()
-    return MODULO.id
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Permisos Predeterminados
 
 
-def obtener_id_rol(rol) -> str:
-    ROL = Roles.query.filter_by(name=rol).first()
-    return ROL.id
+def cargar_permisos_predeterminados() -> None:
+    from cacao_accounting.database import db
+
+    log.debug("Inicia craga permisos predeterminados.")
+    PURCHASING_MANAGER = RolesPermisos(
+        rol_id=obtener_id_rol_por_monbre("purchasing_manager"),
+        modulo_id=obtener_id_modulo_por_monbre("buying"),
+        acceso=True,
+        actualizar=True,
+        anular=True,
+        autorizar=True,
+        bi=True,
+        cerrar=True,
+        crear=True,
+        consultar=True,
+        editar=True,
+        eliminar=True,
+        reportes=True,
+        validar=True,
+    )
+    PERMISOS_PREDETERMINADOS = [PURCHASING_MANAGER]
+    for PERMISOS in PERMISOS_PREDETERMINADOS:
+        db.session.add(PERMISOS)
+        db.session.commit()
