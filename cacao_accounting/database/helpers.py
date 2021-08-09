@@ -184,3 +184,10 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
 
     ROL = Roles.query.filter_by(name=rol).first()
     return ROL.id
+
+
+def obtener_id_usuario_por_nombre(usuario: str) -> str:
+    from cacao_accounting.database import Usuario
+
+    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+    return USUARIO.id

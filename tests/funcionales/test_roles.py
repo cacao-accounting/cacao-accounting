@@ -16,10 +16,13 @@
 # - William José Moreno Reyes
 
 # pylint: disable=redefined-outer-name
+from unittest import TestCase
 from os import environ
 import pytest
 from cacao_accounting import create_app as app_factory
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import db
+from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_usuario_por_nombre
 from cacao_accounting.datos import base_data, dev_data
 
 
@@ -76,3 +79,18 @@ def test_login(client, admin):
     admin.login()
     response = client.get("/test_roles")
     assert b"cacao" in response.data
+
+
+class TestPurchaseManager(TestCase):
+    
+    permisos = Permisos(
+            modulo=obtener_id_modulo_por_monbre("buying"), usuario=obtener_id_usuario_por_nombre("compras")
+        )
+    
+    def test_iniciales(self):
+        from cacao_accounting.database import Modulos, Usuario
+        USUARIO = Usuario.query.filter_by(usuario="compras").first()
+        MODULO = Modulos.query.filter_by(modulo="buying").first()
+        assert self.permisos.usuario == USUARIO.id
+        assert self.permisos.modulo == MODULO.id
+        assert self.permisos.administrador is False
