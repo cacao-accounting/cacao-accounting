@@ -16,7 +16,6 @@
 # - William José Moreno Reyes
 
 from typing import Union
-from flask_login import current_user
 from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_rol_por_monbre
 from cacao_accounting.loggin import log
@@ -103,15 +102,22 @@ class Acciones:
 
 
 class Permisos(Acciones):
-    def __init__(self, modulo: Union[None, str] = None) -> None:
+    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:
         self.modulo = modulo
-        self.usuario = current_user
-        if current_user.is_authenticated and modulo:
+        if usuario:
+            self.usuario = usuario
+        else:
+            self.usuario = None
+        if self.usuario:
             self.administrador = self.valida_usuario_tiene_rol_administrativo()
+            self.roles = self.obtener_roles_de_usuario()
+        else:
+            self.administrador = None
+            self.roles = None
 
     def obtener_roles_de_usuario(self) -> Union[tuple, None]:
         if self.usuario:
-            return RolesUsuario.query.filter_by(user_id=self.usuario.id)
+            return RolesUsuario.query.filter_by(user_id=self.usuario)
         else:
             return None
 
@@ -121,7 +127,7 @@ class Permisos(Acciones):
 
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
         CONSULTA = RolesUsuario.query.filter(
-            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario.id
+            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario
         ).first()
         return CONSULTA is not None
 
@@ -130,12 +136,15 @@ class Permisos(Acciones):
             return True
         else:
             ACCESO = False
-            for ROL in self.obtener_roles_de_usuario():
-                PERMISOS = RolesPermisos.query.filter(RolesPermisos.rol_id == ROL.id, RolesPermisos.modulo_id == self.modulo)
-                for PERMISO in PERMISOS:
-                    if PERMISO.acceso is True:
-                        ACCESO = True
-                        break
+            if self.roles:
+                for ROL in self.roles:
+                    CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                        RolesPermisos.rol_id == ROL.id, RolesPermisos.modulo_id == self.modulo
+                    )
+                    for PERMISO in CONSULTA_PERMISOS:
+                        if PERMISO.acceso is True:
+                            ACCESO = True
+                            break
         return ACCESO
 
 
