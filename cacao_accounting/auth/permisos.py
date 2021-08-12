@@ -106,20 +106,19 @@ class Permisos(Acciones):
         self.modulo = modulo
         if usuario:
             self.usuario = usuario
-        else:
-            self.usuario = None
-        if self.usuario:
             self.administrador = self.valida_usuario_tiene_rol_administrativo()
             self.roles = self.obtener_roles_de_usuario()
         else:
-            self.administrador = None
+            self.usuario = None
+            self.administrador = False
             self.roles = None
 
-    def obtener_roles_de_usuario(self) -> Union[tuple, None]:
-        if self.usuario:
-            return RolesUsuario.query.filter_by(user_id=self.usuario)
-        else:
-            return None
+    def obtener_roles_de_usuario(self) -> Union[list, None]:
+        ROLES_USUARIO = RolesUsuario.query.filter_by(user_id=self.usuario)
+        ROLES = []
+        for ROL in ROLES_USUARIO:
+            ROLES.append(ROL.role_id)
+            return ROLES
 
     def obtener_id_rol_administrador(self) -> str:
         ID_ROL_ADMIN = Roles.query.filter_by(name="admin").first()
@@ -139,7 +138,7 @@ class Permisos(Acciones):
             if self.roles:
                 for ROL in self.roles:
                     CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                        RolesPermisos.rol_id == ROL.id, RolesPermisos.modulo_id == self.modulo
+                        RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
                     )
                     for PERMISO in CONSULTA_PERMISOS:
                         if PERMISO.acceso is True:
