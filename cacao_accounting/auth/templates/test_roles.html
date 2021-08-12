@@ -39,7 +39,7 @@
     <tr>
       <td>Autorizado*</td>
       <td>
-        {% if permisos(modulo=modulo.id).usuario_autorizado() %}
+        {% if permisos(modulo=modulo.id).autorizado %}
         <p style="color: green;">Permitido</p>
         {% else %}
         <p style="color: red;">No Permitido</p>
