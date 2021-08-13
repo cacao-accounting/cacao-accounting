@@ -30,6 +30,7 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from os import environ
+import re
 from typing import Union
 from flask import Flask
 from sqlalchemy_paginator import Paginator
@@ -172,11 +173,14 @@ def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=
         raise OperationalError(ERROR4)
 
 
-def obtener_id_modulo_por_monbre(modulo: str) -> str:
-    from cacao_accounting.database import Modulos
+def obtener_id_modulo_por_monbre(modulo: Union[str, None]) -> Union[str, None]:
+    if modulo:
+        from cacao_accounting.database import Modulos
 
-    MODULO = Modulos.query.filter_by(modulo=modulo).first()
-    return MODULO.id
+        MODULO = Modulos.query.filter_by(modulo=modulo).first()
+        return MODULO.id
+    else:
+        return None
 
 
 def obtener_id_rol_por_monbre(rol: str) -> str:
@@ -186,8 +190,11 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
     return ROL.id
 
 
-def obtener_id_usuario_por_nombre(usuario: str) -> str:
-    from cacao_accounting.database import Usuario
+def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]:
+    if usuario:
+        from cacao_accounting.database import Usuario
 
-    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
-    return USUARIO.id
+        USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+        return USUARIO.id
+    else:
+        return None
