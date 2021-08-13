@@ -33,7 +33,7 @@ from cacao_accounting.contabilidad.auxiliares import (
 )
 from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
 
@@ -43,8 +43,9 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
 @contabilidad.route("/currency/list")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def monedas():
     from cacao_accounting.database import Moneda
 
@@ -65,8 +66,9 @@ def monedas():
 @contabilidad.route("/contabilidad")
 @contabilidad.route("/conta")
 @contabilidad.route("/accounts")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def conta():
     TITULO = "Módulo Contabilidad - " + APPNAME
     if validar_modulo_activo("accounting"):
@@ -81,8 +83,9 @@ def conta():
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
 @contabilidad.route("/accounts/entity/list")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def entidades():
     from cacao_accounting.database import Entidad
 
@@ -100,8 +103,9 @@ def entidades():
 
 
 @contabilidad.route("/accounts/entity/<entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def entidad(entidad):
     from cacao_accounting.database import Entidad
 
@@ -113,8 +117,9 @@ def entidad(entidad):
 
 
 @contabilidad.route("/accounts/entity/new", methods=["GET", "POST"])
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def nueva_entidad():
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
@@ -151,8 +156,9 @@ def nueva_entidad():
 
 
 @contabilidad.route("/accounts/entity/edit/<id_entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def editar_entidad(id_entidad):
     from cacao_accounting.contabilidad.forms import FormularioEntidad
     from cacao_accounting.database import Entidad
@@ -163,8 +169,9 @@ def editar_entidad(id_entidad):
 
 
 @contabilidad.route("/accounts/entity/set_active/<id_entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def activar_entidad(id_entidad):
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
@@ -179,8 +186,9 @@ def activar_entidad(id_entidad):
 
 
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
@@ -194,8 +202,9 @@ def eliminar_entidad(id_entidad):
 
 
 @contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def inactivar_entidad(id_entidad):
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
@@ -210,8 +219,9 @@ def inactivar_entidad(id_entidad):
 
 
 @contabilidad.route("/accounts/entity/set_default/<id_entidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
@@ -228,8 +238,9 @@ def predeterminar_entidad(id_entidad):
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Unidades de Negocio
 @contabilidad.route("/accounts/unit/list")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def unidades():
     from cacao_accounting.database import Unidad
 
@@ -247,8 +258,9 @@ def unidades():
 
 
 @contabilidad.route("/accounts/unit/<unidad>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def unidad(unidad):
     from cacao_accounting.database import Unidad
 
@@ -265,8 +277,9 @@ def eliminar_unidad(id_unidad):
 
 
 @contabilidad.route("/accounts/unit/new", methods=["GET", "POST"])
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def nueva_unidad():
     from cacao_accounting.contabilidad.forms import FormularioUnidad
 
@@ -302,8 +315,9 @@ def nueva_unidad():
 
 
 @contabilidad.route("/accounts/accounts", methods=["GET", "POST"])
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def cuentas():
 
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
@@ -330,8 +344,9 @@ def cuentas():
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def cuenta(id_cta):
     from cacao_accounting.database import Cuentas
 
@@ -346,8 +361,9 @@ def cuenta(id_cta):
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Centros de Costos
 @contabilidad.route("/accounts/costs_center", methods=["GET", "POST"])
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def ccostos():
     TITULO = "Catalogo de Centros de Costos - " + APPNAME
 
@@ -373,8 +389,9 @@ def ccostos():
 
 
 @contabilidad.route("/accounts/costs_center/<id_cc>")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def centro_costo(id_cc):
     from cacao_accounting.database import CentroCosto
 
@@ -389,8 +406,9 @@ def centro_costo(id_cc):
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Proyectos
 @contabilidad.route("/accounts/project/list")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def proyectos():
     from cacao_accounting.database import Proyecto
 
@@ -410,8 +428,9 @@ def proyectos():
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Tipos de Cambio
 @contabilidad.route("/accounts/exchange")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def tasa_cambio():
     from cacao_accounting.database import TasaDeCambio
 
@@ -430,8 +449,9 @@ def tasa_cambio():
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Períodos Contables
 @contabilidad.route("/accounts/accounting_period")
-@modulo_activo("accounting")
 @login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def periodo_contable():
     from cacao_accounting.database import PeriodoContable
 

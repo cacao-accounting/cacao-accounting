@@ -27,6 +27,7 @@ from typing import Union
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
+from flask_login import current_user
 from flask_talisman import Talisman
 from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
@@ -93,8 +94,12 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         from flask import render_template
 
         @app.errorhandler(404)
-        def page_not_found(error):  # pylint: disable=W0613
+        def error_404(error):  # pylint: disable=W0613
             return render_template("404.html"), 404
+
+        @app.errorhandler(403)
+        def error_403(error):  # pylint: disable=W0613
+            return render_template("403.html"), 403
 
     else:
         raise RuntimeError(ERROR2)
@@ -134,6 +139,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
             app.jinja_env.globals.update(permisos=Permisos)
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_monbre)
+            app.jinja_env.globals.update(usuario=current_user)
     else:
         raise RuntimeError(ERROR2)
 
