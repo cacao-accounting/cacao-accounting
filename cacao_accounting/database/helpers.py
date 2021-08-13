@@ -30,7 +30,6 @@ Referencia:
 # pylint: disable=too-few-public-methods
 
 from os import environ
-import re
 from typing import Union
 from flask import Flask
 from sqlalchemy_paginator import Paginator
