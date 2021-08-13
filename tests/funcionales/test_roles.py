@@ -1056,3 +1056,39 @@ def test_permisos_rol_mix():
     assert permisos_ventas.importar is False
     assert permisos_ventas.corregir is False
     assert permisos_ventas.listar is True
+
+
+def test_permisos_rol_comptroller():
+    for MODULO in MODULOS:
+        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("auditor"))
+        assert permisos.autorizado is True
+        assert permisos.anular is False
+        assert permisos.actualizar is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.consultar is True
+        assert permisos.crear is False
+        assert permisos.reportes is True
+        assert permisos.validar is False
+        assert permisos.importar is False
+        assert permisos.corregir is False
+        assert permisos.listar is True
+
+
+def test_permisos_rol_analista():
+    for MODULO in MODULOS:
+        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("analista"))
+        assert permisos.autorizado is True
+        assert permisos.anular is False
+        assert permisos.actualizar is False
+        assert permisos.autorizar is False
+        assert permisos.bi is True
+        assert permisos.cerrar is False
+        assert permisos.consultar is True
+        assert permisos.crear is False
+        assert permisos.reportes is True
+        assert permisos.validar is False
+        assert permisos.importar is False
+        assert permisos.corregir is False
+        assert permisos.listar is True

@@ -95,6 +95,17 @@ CONTABILIDAD_JUNIOR = {
     "detalle": "Auxiliar de Contabilidad",
 }
 
+COMPTROLLER = {
+    "name": "comptroller",
+    "detalle": "Auditor Interno",
+}
+
+BUSINESS_ANALYST = {
+    "name": "business_analyst",
+    "detalle": "Analista de Negocios",
+}
+
+
 ROLES_PREDETERMINADOS = [
     ADMINISTRADOR,
     COMPRAS_SENIOR,
@@ -107,6 +118,8 @@ ROLES_PREDETERMINADOS = [
     TESORERIA_JUNIOR,
     VENTAS_SENIOR,
     VENTAS_JUNIOR,
+    COMPTROLLER,
+    BUSINESS_ANALYST,
 ]
 
 

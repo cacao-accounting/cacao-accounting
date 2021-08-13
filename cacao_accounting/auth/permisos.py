@@ -549,3 +549,48 @@ def cargar_permisos_predeterminados() -> None:
     for PERMISOS in PERMISOS_PREDETERMINADOS:
         db.session.add(PERMISOS)
         db.session.commit()
+
+    MODULOS = ["accounting", "cash", "buying", "inventory", "sales", "admin"]
+    for MODULO in MODULOS:
+        CONTROLLER = RolesPermisos(
+            rol_id=obtener_id_rol_por_monbre("comptroller"),
+            modulo_id=obtener_id_modulo_por_monbre(MODULO),
+            acceso=True,
+            actualizar=False,
+            anular=False,
+            autorizar=False,
+            bi=False,
+            cerrar=False,
+            crear=False,
+            consultar=True,
+            editar=False,
+            eliminar=False,
+            reportes=True,
+            validar=False,
+            listar=True,
+            importar=False,
+            corregir=False,
+        )
+        db.session.add(CONTROLLER)
+        db.session.commit()
+        CONTROLLER = RolesPermisos(
+            rol_id=obtener_id_rol_por_monbre("business_analyst"),
+            modulo_id=obtener_id_modulo_por_monbre(MODULO),
+            acceso=True,
+            actualizar=False,
+            anular=False,
+            autorizar=False,
+            bi=True,
+            cerrar=False,
+            crear=False,
+            consultar=True,
+            editar=False,
+            eliminar=False,
+            reportes=True,
+            validar=False,
+            listar=True,
+            importar=False,
+            corregir=False,
+        )
+        db.session.add(CONTROLLER)
+        db.session.commit()

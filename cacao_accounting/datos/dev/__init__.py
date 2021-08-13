@@ -52,6 +52,42 @@ def _demo_usuarios():
     )
     USUARIO.ejecutar_transaccion_a_la_db(admin)
     asigna_rol_a_usuario("administrador", "admin")
+    auditor = Transaccion(
+        registro="Usuario",
+        tipo="principal",
+        estatus_actual=None,
+        nuevo_estatus=None,
+        uuid=None,
+        accion="crear",
+        datos={
+            "usuario": "auditor",
+            "correo_e": "auditor@cacao_accounting.io",
+            "clave_acceso": proteger_passwd("auditor"),
+        },
+        datos_detalle=None,
+        relaciones=None,
+        relacion_id=None,
+    )
+    USUARIO.ejecutar_transaccion_a_la_db(auditor)
+    asigna_rol_a_usuario("auditor", "comptroller")
+    analista = Transaccion(
+        registro="Usuario",
+        tipo="principal",
+        estatus_actual=None,
+        nuevo_estatus=None,
+        uuid=None,
+        accion="crear",
+        datos={
+            "usuario": "analista",
+            "correo_e": "analista@cacao_accounting.io",
+            "clave_acceso": proteger_passwd("analista"),
+        },
+        datos_detalle=None,
+        relaciones=None,
+        relacion_id=None,
+    )
+    USUARIO.ejecutar_transaccion_a_la_db(analista)
+    asigna_rol_a_usuario("analista", "business_analyst")
     contabilidad = Transaccion(
         registro="Usuario",
         tipo="principal",
