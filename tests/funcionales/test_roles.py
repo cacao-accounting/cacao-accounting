@@ -77,6 +77,9 @@ def test_permisos_rol_admin():
         assert permisos.crear is True
         assert permisos.reportes is True
         assert permisos.validar is True
+        assert permisos.importar is True
+        assert permisos.corregir is True
+        assert permisos.listar is True
 
 
 def test_permisos_no_user():
@@ -93,6 +96,9 @@ def test_permisos_no_user():
         assert permisos.reportes is False
         assert permisos.validar is False
         assert permisos.usuario is None
+        assert permisos.importar is False
+        assert permisos.corregir is False
+        assert permisos.listar is False
 
 
 def test_permisos_user_invalido():
@@ -108,6 +114,9 @@ def test_permisos_user_invalido():
         assert permisos.crear is False
         assert permisos.reportes is False
         assert permisos.validar is False
+        assert permisos.importar is False
+        assert permisos.corregir is False
+        assert permisos.listar is False
 
 
 def test_permisos_no_modulo():
@@ -122,6 +131,9 @@ def test_permisos_no_modulo():
     assert permisos.crear is False
     assert permisos.reportes is False
     assert permisos.validar is False
+    assert permisos.importar is False
+    assert permisos.corregir is False
+    assert permisos.listar is False
 
 
 def test_permisos_modulo_invalido():
@@ -137,6 +149,9 @@ def test_permisos_modulo_invalido():
     assert permisos.reportes is False
     assert permisos.validar is False
     assert permisos.modulo is None
+    assert permisos.importar is False
+    assert permisos.corregir is False
+    assert permisos.listar is False
 
 
 def test_permisos_rol_purchase_manager():
@@ -154,6 +169,9 @@ def test_permisos_rol_purchase_manager():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -169,6 +187,9 @@ def test_permisos_rol_purchase_manager():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -184,6 +205,10 @@ def test_permisos_rol_purchase_manager():
     assert permisos_compras.crear is True
     assert permisos_compras.reportes is True
     assert permisos_compras.validar is True
+    assert permisos_compras.importar is True
+    assert permisos_compras.corregir is True
+    assert permisos_compras.listar is True
+
     # Modulo Almacen
     permisos_almacen = Permisos(
         modulo=obtener_id_modulo_por_monbre("inventory"), usuario=obtener_id_usuario_por_nombre("compras")
@@ -198,6 +223,10 @@ def test_permisos_rol_purchase_manager():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
+
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("compras"))
     assert permisos_ventas.autorizado is False
@@ -210,6 +239,9 @@ def test_permisos_rol_purchase_manager():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_purchase_auxiliar():
@@ -227,6 +259,9 @@ def test_permisos_rol_purchase_auxiliar():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -242,6 +277,9 @@ def test_permisos_rol_purchase_auxiliar():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -257,6 +295,9 @@ def test_permisos_rol_purchase_auxiliar():
     assert permisos_compras.crear is True
     assert permisos_compras.reportes is True
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is True
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -272,6 +313,9 @@ def test_permisos_rol_purchase_auxiliar():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("comprasj"))
@@ -285,6 +329,9 @@ def test_permisos_rol_purchase_auxiliar():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_accounting_manager():
@@ -302,6 +349,9 @@ def test_permisos_rol_accounting_manager():
     assert permisos_conta.crear is True
     assert permisos_conta.reportes is True
     assert permisos_conta.validar is True
+    assert permisos_conta.importar is True
+    assert permisos_conta.corregir is True
+    assert permisos_conta.listar is True
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -317,6 +367,9 @@ def test_permisos_rol_accounting_manager():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -332,6 +385,9 @@ def test_permisos_rol_accounting_manager():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -347,6 +403,9 @@ def test_permisos_rol_accounting_manager():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(
@@ -362,6 +421,9 @@ def test_permisos_rol_accounting_manager():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_accounting_auxiliar():
@@ -379,6 +441,9 @@ def test_permisos_rol_accounting_auxiliar():
     assert permisos_conta.crear is True
     assert permisos_conta.reportes is True
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is True
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -394,6 +459,9 @@ def test_permisos_rol_accounting_auxiliar():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -409,6 +477,9 @@ def test_permisos_rol_accounting_auxiliar():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -424,6 +495,9 @@ def test_permisos_rol_accounting_auxiliar():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(
@@ -439,6 +513,9 @@ def test_permisos_rol_accounting_auxiliar():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_sales_manager():
@@ -456,6 +533,9 @@ def test_permisos_rol_sales_manager():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(modulo=obtener_id_modulo_por_monbre("cash"), usuario=obtener_id_usuario_por_nombre("ventas"))
@@ -469,6 +549,9 @@ def test_permisos_rol_sales_manager():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(modulo=obtener_id_modulo_por_monbre("buying"), usuario=obtener_id_usuario_por_nombre("ventas"))
@@ -482,6 +565,9 @@ def test_permisos_rol_sales_manager():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -497,6 +583,9 @@ def test_permisos_rol_sales_manager():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("ventas"))
@@ -510,6 +599,9 @@ def test_permisos_rol_sales_manager():
     assert permisos_ventas.crear is True
     assert permisos_ventas.reportes is True
     assert permisos_ventas.validar is True
+    assert permisos_ventas.importar is True
+    assert permisos_ventas.corregir is True
+    assert permisos_ventas.listar is True
 
 
 def test_permisos_rol_sales_auxiliar():
@@ -527,6 +619,9 @@ def test_permisos_rol_sales_auxiliar():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -542,6 +637,9 @@ def test_permisos_rol_sales_auxiliar():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -557,6 +655,9 @@ def test_permisos_rol_sales_auxiliar():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -572,6 +673,9 @@ def test_permisos_rol_sales_auxiliar():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("ventasj"))
@@ -585,6 +689,9 @@ def test_permisos_rol_sales_auxiliar():
     assert permisos_ventas.crear is True
     assert permisos_ventas.reportes is True
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is True
 
 
 def test_permisos_rol_sale_auxiliar():
@@ -602,6 +709,9 @@ def test_permisos_rol_sale_auxiliar():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -617,6 +727,9 @@ def test_permisos_rol_sale_auxiliar():
     assert permisos_tesoreria.crear is False
     assert permisos_tesoreria.reportes is False
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is False
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -632,6 +745,9 @@ def test_permisos_rol_sale_auxiliar():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -647,6 +763,9 @@ def test_permisos_rol_sale_auxiliar():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("ventasj"))
@@ -660,6 +779,9 @@ def test_permisos_rol_sale_auxiliar():
     assert permisos_ventas.crear is True
     assert permisos_ventas.reportes is True
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is True
 
 
 def test_permisos_rol_head_of_treasury():
@@ -677,6 +799,9 @@ def test_permisos_rol_head_of_treasury():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -692,6 +817,9 @@ def test_permisos_rol_head_of_treasury():
     assert permisos_tesoreria.crear is True
     assert permisos_tesoreria.reportes is True
     assert permisos_tesoreria.validar is True
+    assert permisos_tesoreria.importar is True
+    assert permisos_tesoreria.corregir is True
+    assert permisos_tesoreria.listar is True
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -707,6 +835,9 @@ def test_permisos_rol_head_of_treasury():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -722,6 +853,9 @@ def test_permisos_rol_head_of_treasury():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(
@@ -737,6 +871,9 @@ def test_permisos_rol_head_of_treasury():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_auxiliar_of_treasury():
@@ -754,6 +891,9 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_conta.crear is False
     assert permisos_conta.reportes is False
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is False
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -769,6 +909,9 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_tesoreria.crear is True
     assert permisos_tesoreria.reportes is True
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is True
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -784,6 +927,9 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_compras.crear is False
     assert permisos_compras.reportes is False
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is False
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -799,6 +945,9 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_almacen.crear is False
     assert permisos_almacen.reportes is False
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is False
 
     # Modulo Ventas
     permisos_ventas = Permisos(
@@ -814,6 +963,9 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is False
 
 
 def test_permisos_rol_mix():
@@ -831,6 +983,9 @@ def test_permisos_rol_mix():
     assert permisos_conta.crear is True
     assert permisos_conta.reportes is True
     assert permisos_conta.validar is False
+    assert permisos_conta.importar is False
+    assert permisos_conta.corregir is False
+    assert permisos_conta.listar is True
 
     # Modulo Tesoreria
     permisos_tesoreria = Permisos(
@@ -846,6 +1001,9 @@ def test_permisos_rol_mix():
     assert permisos_tesoreria.crear is True
     assert permisos_tesoreria.reportes is True
     assert permisos_tesoreria.validar is False
+    assert permisos_tesoreria.importar is False
+    assert permisos_tesoreria.corregir is False
+    assert permisos_tesoreria.listar is True
 
     # Modulo Compras
     permisos_compras = Permisos(
@@ -861,6 +1019,9 @@ def test_permisos_rol_mix():
     assert permisos_compras.crear is True
     assert permisos_compras.reportes is True
     assert permisos_compras.validar is False
+    assert permisos_compras.importar is False
+    assert permisos_compras.corregir is False
+    assert permisos_compras.listar is True
 
     # Modulo Almacen
     permisos_almacen = Permisos(
@@ -876,6 +1037,9 @@ def test_permisos_rol_mix():
     assert permisos_almacen.crear is True
     assert permisos_almacen.reportes is True
     assert permisos_almacen.validar is False
+    assert permisos_almacen.importar is False
+    assert permisos_almacen.corregir is False
+    assert permisos_almacen.listar is True
 
     # Modulo Ventas
     permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("pasante"))
@@ -889,3 +1053,6 @@ def test_permisos_rol_mix():
     assert permisos_ventas.crear is True
     assert permisos_ventas.reportes is True
     assert permisos_ventas.validar is False
+    assert permisos_ventas.importar is False
+    assert permisos_ventas.corregir is False
+    assert permisos_ventas.listar is True

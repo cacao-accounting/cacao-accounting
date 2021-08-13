@@ -69,9 +69,12 @@ class Permisos:
                 self.bi: Union[bool, None] = True
                 self.cerrar: Union[bool, None] = True
                 self.consultar: Union[bool, None] = True
+                self.corregir: Union[bool, None] = True
                 self.crear: Union[bool, None] = True
                 self.editar: Union[bool, None] = True
                 self.eliminar: Union[bool, None] = True
+                self.importar: Union[bool, None] = True
+                self.listar: Union[bool, None] = True
                 self.reportes: Union[bool, None] = True
                 self.validar: Union[bool, None] = True
             else:
@@ -82,9 +85,12 @@ class Permisos:
                 self.bi = self.__bi()
                 self.cerrar = self.__cerrar()
                 self.consultar = self.__consultar()
+                self.corregir = self.__corregir()
                 self.crear = self.__crear()
                 self.editar = self.__editar()
                 self.eliminar = self.__eliminar()
+                self.importar = self.__importar()
+                self.listar = self.__listar()
                 self.reportes = self.__reportes()
                 self.validar = self.__validar()
         else:
@@ -99,9 +105,12 @@ class Permisos:
             self.bi = False
             self.cerrar = False
             self.consultar = False
+            self.corregir = False
             self.crear = False
             self.editar = False
             self.eliminar = False
+            self.importar = False
+            self.listar = False
             self.reportes = False
             self.validar = False
 
@@ -235,6 +244,19 @@ class Permisos:
                         break
         return ACCESO
 
+    def __corregir(self) -> bool:
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.corregir is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
     def __editar(self) -> bool:
         ACCESO = False
         if self.roles:
@@ -257,6 +279,32 @@ class Permisos:
                 )
                 for PERMISO in CONSULTA_PERMISOS:
                     if PERMISO.eliminar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
+    def __importar(self) -> bool:
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.importar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
+    def __listar(self) -> bool:
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.listar is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -311,6 +359,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=True,
         reportes=True,
         validar=True,
+        listar=True,
+        importar=True,
+        corregir=True,
     )
     PURCHASING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
@@ -327,6 +378,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=False,
         reportes=True,
         validar=False,
+        listar=True,
+        importar=False,
+        corregir=False,
     )
     ACCOUNTING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
@@ -343,6 +397,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=True,
         reportes=True,
         validar=True,
+        listar=True,
+        importar=True,
+        corregir=True,
     )
     ACCOUNTING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_auxiliar"),
@@ -359,6 +416,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=False,
         reportes=True,
         validar=False,
+        listar=True,
+        importar=False,
+        corregir=False,
     )
     INVENTORY_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
@@ -375,6 +435,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=True,
         reportes=True,
         validar=True,
+        listar=True,
+        importar=True,
+        corregir=True,
     )
     INVENTORY_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_auxiliar"),
@@ -391,6 +454,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=False,
         reportes=True,
         validar=False,
+        listar=True,
+        importar=False,
+        corregir=False,
     )
     HEAD_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("head_of_treasury"),
@@ -407,6 +473,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=True,
         reportes=True,
         validar=True,
+        listar=True,
+        importar=True,
+        corregir=True,
     )
     JUNIOR_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("junior_of_treasury"),
@@ -423,6 +492,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=False,
         reportes=True,
         validar=False,
+        listar=True,
+        importar=False,
+        corregir=False,
     )
     SALES_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_manager"),
@@ -439,6 +511,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=True,
         reportes=True,
         validar=True,
+        listar=True,
+        importar=True,
+        corregir=True,
     )
     SALES_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_auxiliar"),
@@ -455,6 +530,9 @@ def cargar_permisos_predeterminados() -> None:
         eliminar=False,
         reportes=True,
         validar=False,
+        listar=True,
+        importar=False,
+        corregir=False,
     )
     PERMISOS_PREDETERMINADOS = [
         PURCHASING_MANAGER,
