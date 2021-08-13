@@ -16,7 +16,7 @@
 # - William José Moreno Reyes
 
 from typing import Union
-from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos
+from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos, Modulos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_rol_por_monbre
 from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
@@ -56,24 +56,37 @@ class Permisos:
     """
 
     def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:
-        if modulo and usuario:
+        if self.valida_modulo(modulo) and usuario:
             self.modulo: Union[str, None] = modulo
             self.usuario: Union[str, None] = usuario
             self.administrador: Union[bool, None] = self.valida_usuario_tiene_rol_administrativo()
             self.roles: Union[list, None] = self.obtener_roles_de_usuario()
-            self.autorizado: Union[bool, None] = self.__usuario_autorizado()
-            self.actualizar: Union[bool, None] = self.__actualizar()
-            self.anular: Union[bool, None] = self.__anular()
-            self.autorizar: Union[bool, None] = self.__autorizar()
-            self.bi: Union[bool, None] = self.__bi()
-            self.cerrar: Union[bool, None] = self.__cerrar()
-            self.consultar: Union[bool, None] = self.__consultar()
-            self.crear: Union[bool, None] = self.__crear()
-            self.consultar: Union[bool, None] = self.__consultar()
-            self.editar: Union[bool, None] = self.__editar()
-            self.eliminar: Union[bool, None] = self.__eliminar()
-            self.reportes: Union[bool, None] = self.__reportes()
-            self.validar: Union[bool, None] = self.__validar()
+            if self.administrador:
+                self.autorizado: Union[bool, None] = True
+                self.actualizar: Union[bool, None] = True
+                self.anular: Union[bool, None] = True
+                self.autorizar: Union[bool, None] = True
+                self.bi: Union[bool, None] = True
+                self.cerrar: Union[bool, None] = True
+                self.consultar: Union[bool, None] = True
+                self.crear: Union[bool, None] = True
+                self.editar: Union[bool, None] = True
+                self.eliminar: Union[bool, None] = True
+                self.reportes: Union[bool, None] = True
+                self.validar: Union[bool, None] = True
+            else:
+                self.autorizado = self.__usuario_autorizado()
+                self.actualizar = self.__actualizar()
+                self.anular = self.__anular()
+                self.autorizar = self.__autorizar()
+                self.bi = self.__bi()
+                self.cerrar = self.__cerrar()
+                self.consultar = self.__consultar()
+                self.crear = self.__crear()
+                self.editar = self.__editar()
+                self.eliminar = self.__eliminar()
+                self.reportes = self.__reportes()
+                self.validar = self.__validar()
         else:
             self.modulo = None
             self.usuario = None
@@ -87,13 +100,24 @@ class Permisos:
             self.cerrar = False
             self.consultar = False
             self.crear = False
-            self.consultar = False
             self.editar = False
             self.eliminar = False
             self.reportes = False
             self.validar = False
 
-    def obtener_roles_de_usuario(self) -> Union[list, None]:
+    def valida_modulo(self, modulo: Union[str, None]) -> bool:
+        if modulo:
+            LISTA_MODULOS_ACTIVOS = []
+            CONSULTA = Modulos.query.filter_by(habilitado=True)
+            if CONSULTA:
+                for r in CONSULTA:
+                    LISTA_MODULOS_ACTIVOS.append(r.id)
+            return modulo in LISTA_MODULOS_ACTIVOS
+        else:
+            return False
+        
+
+    def obtener_roles_de_usuario(self):
         ROLES_USUARIO = RolesUsuario.query.filter_by(user_id=self.usuario)
         ROLES = []
         for ROL in ROLES_USUARIO:
@@ -111,232 +135,160 @@ class Permisos:
         return CONSULTA is not None
 
     def __usuario_autorizado(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.acceso is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.acceso is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __actualizar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.actualizar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.actualizar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __anular(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.anular is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.anular is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __autorizar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.autorizar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.autorizar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __bi(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.bi is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.bi is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __cerrar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.cerrar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.cerrar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __crear(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.crear is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.crear is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __consultar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.consultar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.consultar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __editar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.editar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.editar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __eliminar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.eliminar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.eliminar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __reportes(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.reportes is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.reportes is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
     def __validar(self) -> bool:
-        if self.modulo and self.usuario:
-            if self.administrador:
-                return True
-            else:
-                ACCESO = False
-                if self.roles:
-                    for ROL in self.roles:
-                        CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                            RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
-                        )
-                        for PERMISO in CONSULTA_PERMISOS:
-                            if PERMISO.validar is True:
-                                ACCESO = True
-                                break
-                return ACCESO
-        else:
-            return False
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.validar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
