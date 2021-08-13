@@ -101,7 +101,7 @@ def test_permisos_no_user():
             assert permisos.usuario is None
 
 
-def test_permisos_no_user():
+def test_permisos_no_modulo():
     app = app_factory(CONFIG)
     with app.app_context():
         db.drop_all()
