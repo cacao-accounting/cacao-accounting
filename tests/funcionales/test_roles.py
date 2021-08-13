@@ -814,3 +814,80 @@ def test_permisos_rol_auxiliar_of_treasury():
     assert permisos_ventas.crear is False
     assert permisos_ventas.reportes is False
     assert permisos_ventas.validar is False
+
+
+def test_permisos_rol_mix():
+    # Modulo Contabilidad
+    permisos_conta = Permisos(
+        modulo=obtener_id_modulo_por_monbre("accounting"), usuario=obtener_id_usuario_por_nombre("pasante")
+    )
+    assert permisos_conta.autorizado is True
+    assert permisos_conta.anular is False
+    assert permisos_conta.actualizar is True
+    assert permisos_conta.autorizar is False
+    assert permisos_conta.bi is True
+    assert permisos_conta.cerrar is False
+    assert permisos_conta.consultar is True
+    assert permisos_conta.crear is True
+    assert permisos_conta.reportes is True
+    assert permisos_conta.validar is False
+
+    # Modulo Tesoreria
+    permisos_tesoreria = Permisos(
+        modulo=obtener_id_modulo_por_monbre("cash"), usuario=obtener_id_usuario_por_nombre("pasante")
+    )
+    assert permisos_tesoreria.autorizado is True
+    assert permisos_tesoreria.anular is False
+    assert permisos_tesoreria.actualizar is True
+    assert permisos_tesoreria.autorizar is False
+    assert permisos_tesoreria.bi is True
+    assert permisos_tesoreria.cerrar is False
+    assert permisos_tesoreria.consultar is True
+    assert permisos_tesoreria.crear is True
+    assert permisos_tesoreria.reportes is True
+    assert permisos_tesoreria.validar is False
+
+    # Modulo Compras
+    permisos_compras = Permisos(
+        modulo=obtener_id_modulo_por_monbre("buying"), usuario=obtener_id_usuario_por_nombre("pasante")
+    )
+    assert permisos_compras.autorizado is True
+    assert permisos_compras.anular is False
+    assert permisos_compras.actualizar is True
+    assert permisos_compras.autorizar is False
+    assert permisos_compras.bi is True
+    assert permisos_compras.cerrar is False
+    assert permisos_compras.consultar is True
+    assert permisos_compras.crear is True
+    assert permisos_compras.reportes is True
+    assert permisos_compras.validar is False
+
+    # Modulo Almacen
+    permisos_almacen = Permisos(
+        modulo=obtener_id_modulo_por_monbre("inventory"), usuario=obtener_id_usuario_por_nombre("pasante")
+    )
+    assert permisos_almacen.autorizado is True
+    assert permisos_almacen.anular is False
+    assert permisos_almacen.actualizar is True
+    assert permisos_almacen.autorizar is False
+    assert permisos_almacen.bi is True
+    assert permisos_almacen.cerrar is False
+    assert permisos_almacen.consultar is True
+    assert permisos_almacen.crear is True
+    assert permisos_almacen.reportes is True
+    assert permisos_almacen.validar is False
+
+    # Modulo Ventas
+    permisos_ventas = Permisos(
+        modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("pasante")
+    )
+    assert permisos_ventas.autorizado is True
+    assert permisos_ventas.anular is False
+    assert permisos_ventas.actualizar is True
+    assert permisos_ventas.autorizar is False
+    assert permisos_ventas.bi is True
+    assert permisos_ventas.cerrar is False
+    assert permisos_ventas.consultar is True
+    assert permisos_ventas.crear is True
+    assert permisos_ventas.reportes is True
+    assert permisos_ventas.validar is False

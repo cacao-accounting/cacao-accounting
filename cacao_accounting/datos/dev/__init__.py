@@ -218,6 +218,28 @@ def _demo_usuarios():
     )
     USUARIO.ejecutar_transaccion_a_la_db(tesoreriaj)
     asigna_rol_a_usuario("tesoreriaj", "junior_of_treasury")
+    pasante = Transaccion(
+        registro="Usuario",
+        tipo="principal",
+        estatus_actual=None,
+        nuevo_estatus=None,
+        uuid=None,
+        accion="crear",
+        datos={
+            "usuario": "pasante",
+            "correo_e": "pasante@cacao_accounting.io",
+            "clave_acceso": proteger_passwd("pasante"),
+        },
+        datos_detalle=None,
+        relaciones=None,
+        relacion_id=None,
+    )
+    USUARIO.ejecutar_transaccion_a_la_db(pasante)
+    asigna_rol_a_usuario("pasante", "purchasing_auxiliar")
+    asigna_rol_a_usuario("pasante", "accounting_auxiliar")
+    asigna_rol_a_usuario("pasante", "junior_of_treasury")
+    asigna_rol_a_usuario("pasante", "inventory_auxiliar")
+    asigna_rol_a_usuario("pasante", "sales_auxiliar")
 
 
 def _demo_entidad():

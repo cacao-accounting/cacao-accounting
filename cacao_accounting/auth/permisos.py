@@ -118,10 +118,8 @@ class Permisos:
 
     def obtener_roles_de_usuario(self):
         ROLES_USUARIO = RolesUsuario.query.filter_by(user_id=self.usuario)
-        ROLES = []
-        for ROL in ROLES_USUARIO:
-            ROLES.append(ROL.role_id)
-            return ROLES
+        ROLES = [ROL.role_id for ROL in ROLES_USUARIO]
+        return ROLES
 
     def obtener_id_rol_administrador(self) -> str:
         ID_ROL_ADMIN = Roles.query.filter_by(name="admin").first()
