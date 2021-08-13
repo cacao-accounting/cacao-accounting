@@ -1058,8 +1058,11 @@ def test_permisos_rol_mix():
     assert permisos_ventas.listar is True
 
 
+MODULOS_ = ["accounting", "cash", "buying", "inventory", "sales"]
+
+
 def test_permisos_rol_comptroller():
-    for MODULO in MODULOS:
+    for MODULO in MODULOS_:
         permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("auditor"))
         assert permisos.autorizado is True
         assert permisos.anular is False
@@ -1074,10 +1077,25 @@ def test_permisos_rol_comptroller():
         assert permisos.importar is False
         assert permisos.corregir is False
         assert permisos.listar is True
+    # Modulo Administrativo
+    permisos = Permisos(modulo=obtener_id_modulo_por_monbre("admin"), usuario=obtener_id_usuario_por_nombre("auditor"))
+    assert permisos.autorizado is False
+    assert permisos.anular is False
+    assert permisos.actualizar is False
+    assert permisos.autorizar is False
+    assert permisos.bi is False
+    assert permisos.cerrar is False
+    assert permisos.consultar is False
+    assert permisos.crear is False
+    assert permisos.reportes is False
+    assert permisos.validar is False
+    assert permisos.importar is False
+    assert permisos.corregir is False
+    assert permisos.listar is False
 
 
 def test_permisos_rol_analista():
-    for MODULO in MODULOS:
+    for MODULO in MODULOS_:
         permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("analista"))
         assert permisos.autorizado is True
         assert permisos.anular is False
@@ -1092,3 +1110,18 @@ def test_permisos_rol_analista():
         assert permisos.importar is False
         assert permisos.corregir is False
         assert permisos.listar is True
+    # Modulo Administrativo
+    permisos = Permisos(modulo=obtener_id_modulo_por_monbre("admin"), usuario=obtener_id_usuario_por_nombre("analista"))
+    assert permisos.autorizado is False
+    assert permisos.anular is False
+    assert permisos.actualizar is False
+    assert permisos.autorizar is False
+    assert permisos.bi is False
+    assert permisos.cerrar is False
+    assert permisos.consultar is False
+    assert permisos.crear is False
+    assert permisos.reportes is False
+    assert permisos.validar is False
+    assert permisos.importar is False
+    assert permisos.corregir is False
+    assert permisos.listar is False
