@@ -878,9 +878,7 @@ def test_permisos_rol_mix():
     assert permisos_almacen.validar is False
 
     # Modulo Ventas
-    permisos_ventas = Permisos(
-        modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("pasante")
-    )
+    permisos_ventas = Permisos(modulo=obtener_id_modulo_por_monbre("sales"), usuario=obtener_id_usuario_por_nombre("pasante"))
     assert permisos_ventas.autorizado is True
     assert permisos_ventas.anular is False
     assert permisos_ventas.actualizar is True
