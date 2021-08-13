@@ -253,5 +253,5 @@ def test_no_autorizado(client):
             no_autorizado()
 
 
-def test_devpage_false(client, elimina_variable_entorno):
+def test_devpage_false(client):
     r = client.get("/info")

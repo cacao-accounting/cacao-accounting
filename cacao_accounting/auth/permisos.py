@@ -22,13 +22,13 @@ from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
 
 
-class RegistroPermisosRol(Registro):
+class RegistroPermisosRol(Registro):  # pylint: disable=R0903
     def __init__(self):
 
         self.tabla = RolesPermisos
 
 
-class Permisos:
+class Permisos:  # pylint: disable=R0902
     """
     Administración de Permisos
     ==========================
@@ -55,7 +55,7 @@ class Permisos:
     especificado, si uno de los roles del usuario otorga permiso se aprueba como valido.
     """
 
-    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:
+    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:  # pylint: disable=R0915
         if self.valida_modulo(modulo) and usuario:
             self.modulo: Union[str, None] = modulo
             self.usuario: Union[str, None] = usuario
@@ -114,7 +114,7 @@ class Permisos:
             self.reportes = False
             self.validar = False
 
-    def valida_modulo(self, modulo: Union[str, None]) -> bool:
+    def valida_modulo(self, modulo: Union[str, None]) -> bool:  # pylint: disable=R0201
         if modulo:
             LISTA_MODULOS_ACTIVOS = []
             CONSULTA = Modulos.query.filter_by(habilitado=True)
@@ -130,7 +130,7 @@ class Permisos:
         ROLES = [ROL.role_id for ROL in ROLES_USUARIO]
         return ROLES
 
-    def obtener_id_rol_administrador(self) -> str:
+    def obtener_id_rol_administrador(self) -> str:  # pylint: disable=R0201
         ID_ROL_ADMIN = Roles.query.filter_by(name="admin").first()
         return ID_ROL_ADMIN.id
 
@@ -340,7 +340,7 @@ class Permisos:
 # Permisos Predeterminados
 
 
-def cargar_permisos_predeterminados() -> None:
+def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     from cacao_accounting.database import db
 
     log.debug("Inicia craga permisos predeterminados.")
