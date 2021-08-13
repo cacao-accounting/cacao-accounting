@@ -115,7 +115,6 @@ class Permisos:
             return modulo in LISTA_MODULOS_ACTIVOS
         else:
             return False
-        
 
     def obtener_roles_de_usuario(self):
         ROLES_USUARIO = RolesUsuario.query.filter_by(user_id=self.usuario)
