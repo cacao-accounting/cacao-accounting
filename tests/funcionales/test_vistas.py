@@ -219,6 +219,12 @@ def test_periodo_contable(client, auth):
     responde = client.get("/accounts/accounting_period")
 
 
+def test_roles(client, auth):
+    auth.login()
+    r = client.get("/test_roles")
+    assert b"Permisos de Acceso del Usuario." in r.data
+
+
 # Dejar este test al final porque modifica los estatus de los modulos en la base de datos.
 def test_modulos_inactivos(client, auth):
     from cacao_accounting.database import Modulos
