@@ -215,6 +215,17 @@ class TestClasesHeredades(TestCase):
 
         self.assertTrue(issubclass(RegistroCentroCosto, Registro))
 
+    def test_Rol(self):
+        from cacao_accounting.registro import Registro
+        from cacao_accounting.auth.permisos import RegistroPermisosRol
+
+        r = RegistroPermisosRol()
+        self.assertTrue(issubclass(RegistroPermisosRol, Registro))
+        self.assertTrue(isinstance(r, RegistroPermisosRol))
+        from cacao_accounting.auth.permisos import Permisos
+
+        self.assertTrue(issubclass(Permisos, object))
+
 
 class TestExection(TestCase):
     def test_querry_vacio(self):
