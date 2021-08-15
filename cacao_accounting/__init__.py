@@ -94,7 +94,6 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         from flask import render_template
 
         @app.errorhandler(404)
-        permisos
         def error_404(error):  # pylint: disable=W0612
 
             return render_template("404.html"), 404
