@@ -6,5 +6,3 @@ echo "Flake8"
 flake8 cacao_accounting
 echo "Mypy"
 mypy cacao_accounting
-echo "Pytest"
-pytest

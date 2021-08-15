@@ -43,7 +43,84 @@ ADMINISTRADOR = {
     "detalle": "Administrador del Sistema",
 }
 
-ROLES_PREDETERMINADOS = [ADMINISTRADOR]
+COMPRAS_SENIOR = {
+    "name": "purchasing_manager",
+    "detalle": "Jefe de Compras",
+}
+
+COMPRAS_JUNIOR = {
+    "name": "purchasing_auxiliar",
+    "detalle": "Auxiliar de Compras",
+}
+
+INVENTARIO_SENIOR = {
+    "name": "inventory_manager",
+    "detalle": "Jefe de Inventarios",
+}
+
+INVENTARIO_JUNIOR = {
+    "name": "inventory_auxiliar",
+    "detalle": "Auxiliar de Inventarios",
+}
+
+VENTAS_SENIOR = {
+    "name": "sales_manager",
+    "detalle": "Jefe de Ventas",
+}
+
+VENTAS_JUNIOR = {
+    "name": "sales_auxiliar",
+    "detalle": "Auxiliar de Ventas",
+}
+
+
+TESORERIA_SENIOR = {
+    "name": "head_of_treasury",
+    "detalle": "Jefe de tesoreria",
+}
+
+
+TESORERIA_JUNIOR = {
+    "name": "junior_of_treasury",
+    "detalle": "Auxiliar de tesoreria",
+}
+
+CONTABILIDAD_SENIOR = {
+    "name": "accounting_manager",
+    "detalle": "Jefe de Contabilidad",
+}
+
+CONTABILIDAD_JUNIOR = {
+    "name": "accounting_auxiliar",
+    "detalle": "Auxiliar de Contabilidad",
+}
+
+COMPTROLLER = {
+    "name": "comptroller",
+    "detalle": "Auditor Interno",
+}
+
+BUSINESS_ANALYST = {
+    "name": "business_analyst",
+    "detalle": "Analista de Negocios",
+}
+
+
+ROLES_PREDETERMINADOS = [
+    ADMINISTRADOR,
+    COMPRAS_SENIOR,
+    COMPRAS_JUNIOR,
+    CONTABILIDAD_SENIOR,
+    CONTABILIDAD_JUNIOR,
+    INVENTARIO_SENIOR,
+    INVENTARIO_JUNIOR,
+    TESORERIA_SENIOR,
+    TESORERIA_JUNIOR,
+    VENTAS_SENIOR,
+    VENTAS_JUNIOR,
+    COMPTROLLER,
+    BUSINESS_ANALYST,
+]
 
 
 def crea_roles_predeterminados() -> None:

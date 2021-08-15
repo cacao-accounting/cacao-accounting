@@ -170,3 +170,30 @@ def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=
         return TRANSACCION
     else:
         raise OperationalError(ERROR4)
+
+
+def obtener_id_modulo_por_monbre(modulo: Union[str, None]) -> Union[str, None]:
+    if modulo:
+        from cacao_accounting.database import Modulos
+
+        MODULO = Modulos.query.filter_by(modulo=modulo).first()
+        return MODULO.id
+    else:
+        return None
+
+
+def obtener_id_rol_por_monbre(rol: str) -> str:
+    from cacao_accounting.database import Roles
+
+    ROL = Roles.query.filter_by(name=rol).first()
+    return ROL.id
+
+
+def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]:
+    if usuario:
+        from cacao_accounting.database import Usuario
+
+        USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+        return USUARIO.id
+    else:
+        return None

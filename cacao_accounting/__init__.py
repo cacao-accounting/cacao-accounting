@@ -27,14 +27,17 @@ from typing import Union
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
+from flask_login import current_user
 from flask_talisman import Talisman
 from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import db
+from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
 from cacao_accounting.exceptions.mensajes import ERROR2
@@ -91,8 +94,13 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         from flask import render_template
 
         @app.errorhandler(404)
-        def error_404(error): # pylint: disable=W0612
+        def error_404(error):  # pylint: disable=W0612
+
             return render_template("404.html"), 404
+
+        @app.errorhandler(403)
+        def error_403(error):  # pylint: disable=W0612
+            return render_template("403.html"), 403
 
     else:
         raise RuntimeError(ERROR2)
@@ -130,6 +138,9 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+            app.jinja_env.globals.update(permisos=Permisos)
+            app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_monbre)
+            app.jinja_env.globals.update(usuario=current_user)
     else:
         raise RuntimeError(ERROR2)
 

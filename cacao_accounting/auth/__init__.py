@@ -19,10 +19,10 @@
 Inición de sesión de usuarios.
 """
 
-from os import environ
 from cacao_accounting.database import Usuario
 from flask import Blueprint, redirect, render_template, flash
-from flask_login import LoginManager, logout_user, login_user
+from flask_login import LoginManager, logout_user, login_user, login_required
+
 
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
@@ -93,13 +93,16 @@ def cerrar_sesion():
     return redirect("/login")
 
 
-if environ.get("CACAO_TEST") or environ.get("FLASK_ENV") == "development":
-    from flask_login import login_required
+@login.route("/test_roles")
+@login_required
+def test_roles():
+    from flask_login import current_user
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.auth.roles import obtener_roles_por_usuario
+    from cacao_accounting.database import Modulos
 
-    @login.route("/test_roles")
-    @login_required
-    def test_roles():
-        from flask_login import current_user
-        from cacao_accounting.auth.roles import obtener_roles_por_usuario
+    MODULOS = Modulos.query.all()
 
-        return render_template("test_roles.html", roles=obtener_roles_por_usuario(current_user.usuario))
+    return render_template(
+        "test_roles.html", permisos=Permisos, roles=obtener_roles_por_usuario(current_user.usuario), modulos=MODULOS
+    )

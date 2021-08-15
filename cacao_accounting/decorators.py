@@ -16,7 +16,10 @@
 # - William José Moreno Reyes
 
 from functools import wraps
-from flask import flash, redirect, url_for
+from flask import flash, abort
+from flask_login import current_user
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
 from cacao_accounting.modulos import validar_modulo_activo
 
 
@@ -28,8 +31,24 @@ def modulo_activo(modulo):
                 return func(*args, **kwargs)
             else:
                 flash("El modulo que intenta acceder se encuentra inactivo")
-                return redirect(url_for("cacao_app.pagina_inicio"))
+                return abort(404)
 
         return wrapper
 
     return decorator_modulo_activo
+
+
+def verifica_acceso(modulo):
+    def decorator_verifica_acceso(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            PERMISOS = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=current_user.id)
+            if PERMISOS.autorizado:
+                return func(*args, **kwargs)
+            else:
+                flash("No se encuentra autorizado a acceder al recurso solicitado.")
+                return abort(403)
+
+        return wrapper
+
+    return decorator_verifica_acceso
