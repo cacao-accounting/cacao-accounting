@@ -186,9 +186,29 @@
         </td>
       </tr>
       <tr>
+        <td>Solicitar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).solicitar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
         <td>Validar</td>
         <td>
           {% if permisos(modulo=modulo.id, usuario=current_user.id).validar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Validar Solicitud</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).validar_solicitud %}
           <p style="color: green;">Permitido</p>
           {% else %}
           <p style="color: red;">No Permitido</p>

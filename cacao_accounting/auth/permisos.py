@@ -21,6 +21,10 @@ from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obte
 from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
 
+# Solo usuarios con Rol administrador tienen acceso al modulo administrativo
+# por eso no se incluye en esta lista.
+MODULOS = ["accounting", "cash", "buying", "inventory", "sales"]
+
 
 class RegistroPermisosRol(Registro):  # pylint: disable=R0903
     def __init__(self):
@@ -76,7 +80,9 @@ class Permisos:  # pylint: disable=R0902
                 self.importar: Union[bool, None] = True
                 self.listar: Union[bool, None] = True
                 self.reportes: Union[bool, None] = True
+                self.solicitar: Union[bool, None] = True
                 self.validar: Union[bool, None] = True
+                self.validar_solicitud: Union[bool, None] = True
             else:
                 self.autorizado = self.__usuario_autorizado()
                 self.actualizar = self.__actualizar()
@@ -92,7 +98,9 @@ class Permisos:  # pylint: disable=R0902
                 self.importar = self.__importar()
                 self.listar = self.__listar()
                 self.reportes = self.__reportes()
+                self.solicitar = self.__solicitar()
                 self.validar = self.__validar()
+                self.validar_solicitud = self.__validar_solicitud()
         else:
             self.modulo = None
             self.usuario = None
@@ -112,7 +120,9 @@ class Permisos:  # pylint: disable=R0902
             self.importar = False
             self.listar = False
             self.reportes = False
+            self.solicitar = False
             self.validar = False
+            self.validar_solicitud = False
 
     def valida_modulo(self, modulo: Union[str, None]) -> bool:  # pylint: disable=R0201
         if modulo:
@@ -322,6 +332,19 @@ class Permisos:  # pylint: disable=R0902
                         break
         return ACCESO
 
+    def __solicitar(self) -> bool:
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.solicitar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
     def __validar(self) -> bool:
         ACCESO = False
         if self.roles:
@@ -331,6 +354,19 @@ class Permisos:  # pylint: disable=R0902
                 )
                 for PERMISO in CONSULTA_PERMISOS:
                     if PERMISO.validar is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
+    def __validar_solicitud(self) -> bool:
+        ACCESO = False
+        if self.roles:
+            for ROL in self.roles:
+                CONSULTA_PERMISOS = RolesPermisos.query.filter(
+                    RolesPermisos.rol_id == ROL, RolesPermisos.modulo_id == self.modulo
+                )
+                for PERMISO in CONSULTA_PERMISOS:
+                    if PERMISO.validar_solicitud is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -362,6 +398,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=True,
         corregir=True,
+        solicitar=True,
+        validar_solicitud=True,
     )
     PURCHASING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
@@ -381,6 +419,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=False,
         corregir=False,
+        solicitar=True,
+        validar_solicitud=False,
     )
     ACCOUNTING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
@@ -400,6 +440,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=True,
         corregir=True,
+        solicitar=True,
+        validar_solicitud=True,
     )
     ACCOUNTING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_auxiliar"),
@@ -419,6 +461,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=False,
         corregir=False,
+        solicitar=True,
+        validar_solicitud=False,
     )
     INVENTORY_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
@@ -438,6 +482,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=True,
         corregir=True,
+        solicitar=True,
+        validar_solicitud=True,
     )
     INVENTORY_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_auxiliar"),
@@ -457,6 +503,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=False,
         corregir=False,
+        solicitar=True,
+        validar_solicitud=False,
     )
     HEAD_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("head_of_treasury"),
@@ -476,6 +524,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=True,
         corregir=True,
+        solicitar=True,
+        validar_solicitud=True,
     )
     JUNIOR_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("junior_of_treasury"),
@@ -495,6 +545,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=False,
         corregir=False,
+        solicitar=True,
+        validar_solicitud=False,
     )
     SALES_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_manager"),
@@ -514,6 +566,8 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=True,
         corregir=True,
+        solicitar=True,
+        validar_solicitud=True,
     )
     SALES_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_auxiliar"),
@@ -533,7 +587,60 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         listar=True,
         importar=False,
         corregir=False,
+        solicitar=True,
+        validar_solicitud=False,
     )
+    CONTROLLER = []
+    for MODULO in MODULOS:
+        CONTROLLER.append(
+            RolesPermisos(
+                rol_id=obtener_id_rol_por_monbre("comptroller"),
+                modulo_id=obtener_id_modulo_por_monbre(MODULO),
+                acceso=True,
+                actualizar=False,
+                anular=False,
+                autorizar=False,
+                bi=False,
+                cerrar=False,
+                crear=False,
+                consultar=True,
+                editar=False,
+                eliminar=False,
+                reportes=True,
+                validar=False,
+                listar=True,
+                importar=False,
+                corregir=False,
+                solicitar=True,
+                validar_solicitud=False,
+            )
+        )
+    BI = []
+    for MODULO in MODULOS:
+        BI.append(
+            RolesPermisos(
+                rol_id=obtener_id_rol_por_monbre("business_analyst"),
+                modulo_id=obtener_id_modulo_por_monbre(MODULO),
+                acceso=True,
+                actualizar=False,
+                anular=False,
+                autorizar=False,
+                bi=True,
+                cerrar=False,
+                crear=False,
+                consultar=True,
+                editar=False,
+                eliminar=False,
+                reportes=True,
+                validar=False,
+                listar=True,
+                importar=False,
+                corregir=False,
+                solicitar=True,
+                validar_solicitud=False,
+            )
+        )
+
     PERMISOS_PREDETERMINADOS = [
         PURCHASING_MANAGER,
         PURCHASING_AUXILIAR,
@@ -545,52 +652,14 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         JUNIOR_OF_TREASURY,
         SALES_MANAGER,
         SALES_AUXILIAR,
+        CONTROLLER,
+        BI,
     ]
     for PERMISOS in PERMISOS_PREDETERMINADOS:
-        db.session.add(PERMISOS)
-        db.session.commit()
-
-    MODULOS = ["accounting", "cash", "buying", "inventory", "sales"]
-    for MODULO in MODULOS:
-        CONTROLLER = RolesPermisos(
-            rol_id=obtener_id_rol_por_monbre("comptroller"),
-            modulo_id=obtener_id_modulo_por_monbre(MODULO),
-            acceso=True,
-            actualizar=False,
-            anular=False,
-            autorizar=False,
-            bi=False,
-            cerrar=False,
-            crear=False,
-            consultar=True,
-            editar=False,
-            eliminar=False,
-            reportes=True,
-            validar=False,
-            listar=True,
-            importar=False,
-            corregir=False,
-        )
-        db.session.add(CONTROLLER)
-        db.session.commit()
-        CONTROLLER = RolesPermisos(
-            rol_id=obtener_id_rol_por_monbre("business_analyst"),
-            modulo_id=obtener_id_modulo_por_monbre(MODULO),
-            acceso=True,
-            actualizar=False,
-            anular=False,
-            autorizar=False,
-            bi=True,
-            cerrar=False,
-            crear=False,
-            consultar=True,
-            editar=False,
-            eliminar=False,
-            reportes=True,
-            validar=False,
-            listar=True,
-            importar=False,
-            corregir=False,
-        )
-        db.session.add(CONTROLLER)
-        db.session.commit()
+        if isinstance(PERMISOS, list):
+            for MODULO in PERMISOS:
+                db.session.add(MODULO)
+                db.session.commit()
+        else:
+            db.session.add(PERMISOS)
+            db.session.commit()
