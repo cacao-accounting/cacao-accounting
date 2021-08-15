@@ -64,6 +64,7 @@ def test_logicos():
     assert isinstance(permisos.usuario, str)
     assert isinstance(permisos.solicitar, bool)
     assert isinstance(permisos.validar_solicitud, bool)
+    assert isinstance(permisos.permisos, list)
 
 
 def test_permisos_rol_admin():
@@ -84,6 +85,7 @@ def test_permisos_rol_admin():
         assert permisos.listar is True
         assert permisos.solicitar is True
         assert permisos.validar_solicitud is True
+        assert permisos.permisos is not None
 
 
 def test_permisos_no_user():
@@ -105,6 +107,7 @@ def test_permisos_no_user():
         assert permisos.listar is False
         assert permisos.solicitar is False
         assert permisos.validar_solicitud is False
+        assert permisos.permisos is None
 
 
 def test_permisos_user_invalido():
@@ -125,6 +128,7 @@ def test_permisos_user_invalido():
         assert permisos.listar is False
         assert permisos.solicitar is False
         assert permisos.validar_solicitud is False
+        assert permisos.permisos is None
 
 
 def test_permisos_no_modulo():
@@ -144,6 +148,7 @@ def test_permisos_no_modulo():
     assert permisos.listar is False
     assert permisos.solicitar is False
     assert permisos.validar_solicitud is False
+    assert permisos.permisos is None
 
 
 def test_permisos_modulo_invalido():
@@ -164,6 +169,7 @@ def test_permisos_modulo_invalido():
     assert permisos.listar is False
     assert permisos.solicitar is False
     assert permisos.validar_solicitud is False
+    assert permisos.permisos is None
 
 
 def test_permisos_rol_purchase_manager():
