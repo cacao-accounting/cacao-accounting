@@ -108,12 +108,6 @@ def test_listado_entidades(client, auth):
     assert b"Listado de Entidades." in response.data
 
 
-def test_nueva_entidad(client, auth):
-    auth.login()
-    response = client.get("/accounts/entity/new")
-    assert b"Crear Nueva Entidad." in response.data
-
-
 def test_entidad(client, auth):
     auth.login()
     response = client.get("/accounts/entity/cacao")
