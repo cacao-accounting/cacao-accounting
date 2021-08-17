@@ -181,7 +181,7 @@ def activar_entidad(id_entidad):
     TRANSACCION.accion = "actualizar"
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "activo"
-    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
     return redirect("/accounts/entity/list")
 
 
@@ -197,7 +197,7 @@ def eliminar_entidad(id_entidad):
     TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
     TRANSACCION.accion = "eliminar"
     TRANSACCION.tipo = "principal"
-    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
     return redirect("/accounts/entity/list")
 
 
@@ -214,7 +214,7 @@ def inactivar_entidad(id_entidad):
     TRANSACCION.accion = "actualizar"
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "inactivo"
-    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
     return redirect("/accounts/entity/list")
 
 
@@ -231,7 +231,7 @@ def predeterminar_entidad(id_entidad):
     TRANSACCION.accion = "actualizar"
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "predeterminado"
-    REGISTRO.ejecutar_transaccion_a_la_db(TRANSACCION)
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
     return redirect("/accounts/entity/list")
 
 
@@ -272,7 +272,6 @@ def unidad(unidad):
 @modulo_activo("accounting")
 @login_required
 def eliminar_unidad(id_unidad):
-    # TODO
     return redirect("/app")
 
 

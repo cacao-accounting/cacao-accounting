@@ -153,6 +153,7 @@ disable=print-statement,
         missing-class-docstring,
         invalid-name,
         cyclic-import,
+        duplicate-code,
         # No duplicar verificaciones con flake8
         bare-except,
         singleton-comparison,

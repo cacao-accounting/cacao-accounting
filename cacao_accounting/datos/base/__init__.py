@@ -60,8 +60,8 @@ def registra_monedas(carga_rapida=False):
             relaciones=None,
             relacion_id=None,
         )
-        MONEDA.ejecutar_transaccion_a_la_db(nio)
-        MONEDA.ejecutar_transaccion_a_la_db(usd)
+        MONEDA.ejecutar_transaccion(nio)
+        MONEDA.ejecutar_transaccion(usd)
     else:
         for currency in Currencies():
             moneda = Transaccion(
@@ -76,7 +76,7 @@ def registra_monedas(carga_rapida=False):
                 relaciones=None,
                 relacion_id=None,
             )
-            MONEDA.ejecutar_transaccion_a_la_db(moneda)
+            MONEDA.ejecutar_transaccion(moneda)
     log.debug("Monedas cargadas Correctamente")
 
 
@@ -108,7 +108,7 @@ def crea_usuario_admin():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(usuario)
+    USUARIO.ejecutar_transaccion(usuario)
     asigna_rol_a_usuario(USER, "admin")
 
 

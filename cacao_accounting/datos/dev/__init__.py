@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+# pylint: disable=too-many-lines
+
 """
 Datos de ejemplo.
 """
@@ -23,7 +25,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
 
-# pylint: disable=import-outside-toplevel
+# pylint: disable=import-outside-toplevel, too-many-locals, too-many-statements
 
 
 def _demo_usuarios():
@@ -50,7 +52,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(admin)
+    USUARIO.ejecutar_transaccion(admin)
     asigna_rol_a_usuario("administrador", "admin")
     auditor = Transaccion(
         registro="Usuario",
@@ -68,7 +70,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(auditor)
+    USUARIO.ejecutar_transaccion(auditor)
     asigna_rol_a_usuario("auditor", "comptroller")
     analista = Transaccion(
         registro="Usuario",
@@ -86,7 +88,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(analista)
+    USUARIO.ejecutar_transaccion(analista)
     asigna_rol_a_usuario("analista", "business_analyst")
     contabilidad = Transaccion(
         registro="Usuario",
@@ -105,7 +107,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
 
-    USUARIO.ejecutar_transaccion_a_la_db(contabilidad)
+    USUARIO.ejecutar_transaccion(contabilidad)
     asigna_rol_a_usuario("contabilidad", "accounting_manager")
     contabilidadj = Transaccion(
         registro="Usuario",
@@ -124,7 +126,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
 
-    USUARIO.ejecutar_transaccion_a_la_db(contabilidadj)
+    USUARIO.ejecutar_transaccion(contabilidadj)
     asigna_rol_a_usuario("contabilidadj", "accounting_auxiliar")
     compras = Transaccion(
         registro="Usuario",
@@ -138,7 +140,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(compras)
+    USUARIO.ejecutar_transaccion(compras)
     asigna_rol_a_usuario("compras", "purchasing_manager")
     compras_junior = Transaccion(
         registro="Usuario",
@@ -152,7 +154,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(compras_junior)
+    USUARIO.ejecutar_transaccion(compras_junior)
     asigna_rol_a_usuario("comprasj", "purchasing_auxiliar")
     ventas = Transaccion(
         registro="Usuario",
@@ -166,7 +168,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(ventas)
+    USUARIO.ejecutar_transaccion(ventas)
     asigna_rol_a_usuario("ventas", "sales_manager")
     ventasj = Transaccion(
         registro="Usuario",
@@ -180,7 +182,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(ventasj)
+    USUARIO.ejecutar_transaccion(ventasj)
     asigna_rol_a_usuario("ventasj", "sales_auxiliar")
     inventario = Transaccion(
         registro="Usuario",
@@ -198,7 +200,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(inventario)
+    USUARIO.ejecutar_transaccion(inventario)
     asigna_rol_a_usuario("inventario", "inventory_manager")
     inventarioj = Transaccion(
         registro="Usuario",
@@ -216,7 +218,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(inventarioj)
+    USUARIO.ejecutar_transaccion(inventarioj)
     asigna_rol_a_usuario("inventarioj", "inventory_auxiliar")
     tesoreria = Transaccion(
         registro="Usuario",
@@ -234,7 +236,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(tesoreria)
+    USUARIO.ejecutar_transaccion(tesoreria)
     asigna_rol_a_usuario("tesoreria", "head_of_treasury")
     tesoreriaj = Transaccion(
         registro="Usuario",
@@ -252,7 +254,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(tesoreriaj)
+    USUARIO.ejecutar_transaccion(tesoreriaj)
     asigna_rol_a_usuario("tesoreriaj", "junior_of_treasury")
     pasante = Transaccion(
         registro="Usuario",
@@ -270,7 +272,7 @@ def _demo_usuarios():
         relaciones=None,
         relacion_id=None,
     )
-    USUARIO.ejecutar_transaccion_a_la_db(pasante)
+    USUARIO.ejecutar_transaccion(pasante)
     asigna_rol_a_usuario("pasante", "purchasing_auxiliar")
     asigna_rol_a_usuario("pasante", "accounting_auxiliar")
     asigna_rol_a_usuario("pasante", "junior_of_treasury")
@@ -365,9 +367,9 @@ def _demo_entidad():
         relaciones=None,
         relacion_id=None,
     )
-    ENTIDAD.ejecutar_transaccion_a_la_db(ENTIDAD1)
-    ENTIDAD.ejecutar_transaccion_a_la_db(ENTIDAD2)
-    ENTIDAD.ejecutar_transaccion_a_la_db(ENTIDAD3)
+    ENTIDAD.ejecutar_transaccion(ENTIDAD1)
+    ENTIDAD.ejecutar_transaccion(ENTIDAD2)
+    ENTIDAD.ejecutar_transaccion(ENTIDAD3)
 
 
 def _demo_unidades():
@@ -377,7 +379,7 @@ def _demo_unidades():
     log.debug("Cargando unidades de negocio de prueba.")
     UNIDAD = RegistroUnidad()
 
-    UNIDAD.ejecutar_transaccion_a_la_db(
+    UNIDAD.ejecutar_transaccion(
         Transaccion(
             registro="Unidad",
             tipo="principal",
@@ -397,7 +399,7 @@ def _demo_unidades():
         )
     )
 
-    UNIDAD.ejecutar_transaccion_a_la_db(
+    UNIDAD.ejecutar_transaccion(
         Transaccion(
             registro="Unidad",
             tipo="principal",
@@ -417,7 +419,7 @@ def _demo_unidades():
         )
     )
 
-    UNIDAD.ejecutar_transaccion_a_la_db(
+    UNIDAD.ejecutar_transaccion(
         Transaccion(
             registro="Unidad",
             tipo="principal",
@@ -447,7 +449,7 @@ def _catalogo():
     cargar_catalogos(base, "dulce")
     cargar_catalogos(base, "cafe")
     CUENTA_CONTABLE = RegistroCuentaContable()
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -469,7 +471,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -491,7 +493,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -513,7 +515,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -535,7 +537,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -557,7 +559,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -579,7 +581,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -601,7 +603,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -623,7 +625,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -645,7 +647,7 @@ def _catalogo():
             relacion_id=None,
         )
     )
-    CUENTA_CONTABLE.ejecutar_transaccion_a_la_db(
+    CUENTA_CONTABLE.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -674,7 +676,7 @@ def _centros_de_costos():
 
     CENTRO_DE_COSTO = RegistroCentroCosto()
     log.debug("Cargando centros de costos.")
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -697,7 +699,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -720,7 +722,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -744,7 +746,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -768,7 +770,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -792,7 +794,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -816,7 +818,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -840,7 +842,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -863,7 +865,7 @@ def _centros_de_costos():
             relacion_id=None,
         )
     )
-    CENTRO_DE_COSTO.ejecutar_transaccion_a_la_db(
+    CENTRO_DE_COSTO.ejecutar_transaccion(
         Transaccion(
             registro="Centro de Costo",
             tipo="principal",
@@ -893,7 +895,7 @@ def _proyectos():
 
     PROYECTO = RegistroProyecto()
     log.debug("Creando proyectos de pruebas.")
-    PROYECTO.ejecutar_transaccion_a_la_db(
+    PROYECTO.ejecutar_transaccion(
         Transaccion(
             registro="Proyecto",
             tipo="principal",
@@ -932,7 +934,7 @@ def _monedas():
 
     MONEDA = RegistroMoneda()
     log.debug("Creando monedas de prueba.")
-    MONEDA.ejecutar_transaccion_a_la_db(
+    MONEDA.ejecutar_transaccion(
         Transaccion(
             registro="Moneda",
             tipo="principal",
@@ -959,7 +961,7 @@ def _tasas_de_cambio():
 
     TASA_CAMBIO = RegistroTasaCambio()
     log.debug("Creando tasas de cambio de pruebas.")
-    TASA_CAMBIO.ejecutar_transaccion_a_la_db(
+    TASA_CAMBIO.ejecutar_transaccion(
         Transaccion(
             registro="Tasa de Cambio",
             tipo="principal",
@@ -998,7 +1000,7 @@ def _periodo_contable():
 
     PERIODO = RegistroPeriodoContable()
     log.debug("Creando periodos contables de prueba.")
-    PERIODO.ejecutar_transaccion_a_la_db(
+    PERIODO.ejecutar_transaccion(
         Transaccion(
             registro="Periodo Contable",
             tipo="principal",
@@ -1020,7 +1022,7 @@ def _periodo_contable():
         )
     )
 
-    PERIODO.ejecutar_transaccion_a_la_db(
+    PERIODO.ejecutar_transaccion(
         Transaccion(
             registro="Periodo Contable",
             tipo="principal",
@@ -1041,7 +1043,7 @@ def _periodo_contable():
             relacion_id=None,
         )
     )
-    PERIODO.ejecutar_transaccion_a_la_db(
+    PERIODO.ejecutar_transaccion(
         Transaccion(
             registro="Periodo Contable",
             tipo="principal",

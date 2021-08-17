@@ -127,7 +127,7 @@ def crea_roles_predeterminados() -> None:
     log.debug("Iniciando creacion de Roles predeterminados.")
     for ROL in ROLES_PREDETERMINADOS:
         REGISTRO = RegistroRol()
-        REGISTRO.ejecutar_transaccion_a_la_db(
+        REGISTRO.ejecutar_transaccion(
             Transaccion(
                 registro="Rol",
                 tipo="principal",
@@ -149,7 +149,7 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROL = Roles.query.filter_by(name=rol).first()
     ROL_USUARIO = RegistroRolUsuario()
-    ROL_USUARIO.ejecutar_transaccion_a_la_db(
+    ROL_USUARIO.ejecutar_transaccion(
         Transaccion(
             registro="Rol Usuario",
             tipo="principal",

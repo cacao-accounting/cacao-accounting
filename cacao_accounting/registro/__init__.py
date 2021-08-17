@@ -37,6 +37,7 @@ Un registro:
 # pylint: disable=not-callable
 from typing import Union
 from flask_login import current_user
+from cacao_accounting.auth.permisos import ACCIONES
 from cacao_accounting.database import db
 from cacao_accounting.exceptions import OperationalError, TransactionError
 from cacao_accounting.exceptions.mensajes import ERROR3, ERROR4
@@ -54,6 +55,7 @@ class Registro:
     tabla = None
     tabla_detalle = None
     LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
+    acciones = ACCIONES
 
     def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion):
         if transaccion.accion == "crear":
@@ -122,7 +124,7 @@ class Registro:
         else:
             raise TransactionError(ERROR4)
 
-    def ejecutar_transaccion_a_la_db(self, transaccion: Union[Transaccion, None] = None):
+    def ejecutar_transaccion(self, transaccion: Union[Transaccion, None] = None):
         if transaccion:
             self._ejecutar_validacion_de_transaccion(transaccion)
             self._ejecutar_transaccion_por_tipo(transaccion)

@@ -86,9 +86,9 @@ def test_formulario_nueva_entidad(client, auth):
     response = client.get("/accounts/entity/new")
     assert b"Crear Nueva Entidad." in response.data
     post = client.post("/accounts/entity/new", data={
-        "entidad": "TestForm",
-        "razon_social": "Test Formulario",
-        "nombre_comercial": "Test Formulario",
-        "id_fiscal": "testform",
+        "id-entidad": "TestForm",
+        "razon-social": "Test Formulario",
+        "nombre-comercial": "Test Formulario",
+        "id-fiscal": "testform",
         "status": "activa",
     }, follow_redirects=True)

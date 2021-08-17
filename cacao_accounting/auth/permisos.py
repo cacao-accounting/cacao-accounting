@@ -23,10 +23,10 @@ from cacao_accounting.registro import Registro
 
 # Solo usuarios con el rol de administrador tienen acceso al modulo administrativo
 # por eso no se incluye en esta lista.
-MODULOS = ["accounting", "cash", "buying", "inventory", "sales"]
+MODULOS: list = ["accounting", "cash", "buying", "inventory", "sales"]
 
 
-ACCIONES = (
+ACCIONES: tuple = (
     # Si un usuario no tiene acceso a un modulo al intentar acceder a este  se debe generar un error 403.
     # Este es un permiso de nivel general y no es una accion que el usuario puede realizar en el sistema.
     "acceso",
