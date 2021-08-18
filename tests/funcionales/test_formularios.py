@@ -27,7 +27,7 @@ def app():
     app = app_factory(
         {
             "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///forms.db",
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///cacaoaccounting.db",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
@@ -55,7 +55,6 @@ def elimina_variable_entorno(app):
         pass
 
 
-
 @pytest.fixture
 def client(app):
     return app.test_client()
@@ -81,14 +80,23 @@ class AuthActions:
 def auth(client):
     return AuthActions(client)
 
+
 def test_formulario_nueva_entidad(client, auth):
     auth.login()
     response = client.get("/accounts/entity/new")
     assert b"Crear Nueva Entidad." in response.data
-    post = client.post("/accounts/entity/new", data={
-        "id-entidad": "TestForm",
-        "razon-social": "Test Formulario",
-        "nombre-comercial": "Test Formulario",
-        "id-fiscal": "testform",
-        "status": "activa",
-    }, follow_redirects=True)
+    post = client.post(
+        "/accounts/entity/new",
+        data={
+            "id-entidad": "TestForm",
+            "razon-social": "Test Formulario",
+            "nombre-comercial": "Test Formulario",
+            "id-fiscal": "testform",
+            "moneda": "NIO",
+            "tipo": "Sociedad",
+            "status": "activa",
+            "correo-e": "info@test.form",
+            "web-site": "test.form",
+        },
+        follow_redirects=True,
+    )

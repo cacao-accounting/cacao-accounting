@@ -36,6 +36,7 @@ from cacao_accounting.database.helpers import paginar_consulta, obtener_registro
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
+from cacao_accounting.transaccion import Transaccion
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
@@ -130,7 +131,7 @@ def nueva_entidad():
     if formulario.validate_on_submit():
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
-        e = RegistroEntidad()
+        ENTIDAD = RegistroEntidad()
         DATA = {
             "entidad": formulario.id.data,
             "razon_social": formulario.razon_social.data,
@@ -143,10 +144,24 @@ def nueva_entidad():
             "telefono1": formulario.telefono1.data,
             "telefono2": formulario.telefono2.data,
             "fax": formulario.fax.data,
-            "status": "activa",
+            "status": "activo",
+            "habilitada": True,
+            "predeterminada": True,
         }
-        e.crear_registro_maestro(datos=DATA)
-        return redirect("/accounts/entities")
+        TRANSACCION_NUEVA_ENTIDAD = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos=DATA,
+            registro="Entidad",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+        ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
+        return redirect("/accounts/entity/list")
 
     return render_template(
         "contabilidad/entidad_crear.html",
