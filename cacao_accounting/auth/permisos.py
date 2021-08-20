@@ -34,20 +34,19 @@ ACCIONES: tuple = (
     "actualizar",
     "anular",
     "autorizar",
-    "autorizar",
     "bi",
     "cerrar",
-    # Las transacciones siempre deberan crearse en estado borrador.
-    "crear",
+    "configurar",
     "consultar",
+    "corregir",
+    "crear",
     "editar",
     "eliminar",
-    "reportes",
-    "validar",
-    "listar",
     "importar",
-    "corregir",
+    "listar",
+    "reportes",
     "solicitar",
+    "validar",
     "validar_solicitud",
 )
 
@@ -74,11 +73,11 @@ class Permisos:  # pylint: disable=R0902
 
      - Permisos Roles: Lista de permisos que otorga un Rol en un modulo determinado.
 
-     - Acción: Es un acto realiado por un usuario que cambia el estado de una transacción, se han definido
-     las siguientes acciones: actualizar, anular, autorizar, bi, cerrar, consultar, crear, consultar, editar,
-     eliminar, reportes, validar.
+     - Acción: Es un acto realizado por un usuario que cambia el estado de una transacción, se han definido
+     las siguientes acciones: actualizar, anular, autorizar, bi, cerrar, configurar, consultar, corregir,
+     crear, editar, eliminar, importar, listar, reportes, solicitar, validar, validar_solicitud.
 
-    Los permisos de validad por usuario y por modulo, para inicializar la clase se debe inicializar pasando
+    Los permisos se validan por usuario y por modulo, para inicializar la clase se debe inicializar pasando
     como parametros un UUID valido de usuario y un UUID valido de modulo.
 
     Para cada acción se valida que el usuario posee un rol que da acceso a la apción determinada en el modulo
