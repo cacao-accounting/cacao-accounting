@@ -100,6 +100,7 @@ class Permisos:  # pylint: disable=R0902
                 self.autorizar: Union[bool, None] = True
                 self.bi: Union[bool, None] = True
                 self.cerrar: Union[bool, None] = True
+                self.configurar: Union[bool, None] = True
                 self.consultar: Union[bool, None] = True
                 self.corregir: Union[bool, None] = True
                 self.crear: Union[bool, None] = True
@@ -118,6 +119,7 @@ class Permisos:  # pylint: disable=R0902
                 self.autorizar = self.__autorizar()
                 self.bi = self.__bi()
                 self.cerrar = self.__cerrar()
+                self.configurar = self.__configurar()
                 self.consultar = self.__consultar()
                 self.corregir = self.__corregir()
                 self.crear = self.__crear()
@@ -141,6 +143,7 @@ class Permisos:  # pylint: disable=R0902
             self.autorizar = False
             self.bi = False
             self.cerrar = False
+            self.configurar = False
             self.consultar = False
             self.corregir = False
             self.crear = False
@@ -257,6 +260,16 @@ class Permisos:  # pylint: disable=R0902
             for PERMISOS in self.permisos:
                 for PERMISO in PERMISOS:
                     if PERMISO.crear is True:
+                        ACCESO = True
+                        break
+        return ACCESO
+
+    def __configurar(self) -> bool:
+        ACCESO = False
+        if self.__init_valido and self.permisos:
+            for PERMISOS in self.permisos:
+                for PERMISO in PERMISOS:
+                    if PERMISO.configurar is True:
                         ACCESO = True
                         break
         return ACCESO
