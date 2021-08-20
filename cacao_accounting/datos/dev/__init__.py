@@ -278,6 +278,24 @@ def _demo_usuarios():
     asigna_rol_a_usuario("pasante", "junior_of_treasury")
     asigna_rol_a_usuario("pasante", "inventory_auxiliar")
     asigna_rol_a_usuario("pasante", "sales_auxiliar")
+    usuario = Transaccion(
+        registro="Usuario",
+        tipo="principal",
+        estatus_actual=None,
+        nuevo_estatus=None,
+        uuid=None,
+        accion="crear",
+        datos={
+            "usuario": "usuario",
+            "correo_e": "usuario@cacao_accounting.io",
+            "clave_acceso": proteger_passwd("usuario"),
+        },
+        datos_detalle=None,
+        relaciones=None,
+        relacion_id=None,
+    )
+    USUARIO.ejecutar_transaccion(usuario)
+    asigna_rol_a_usuario("usuario", "purchasing_user")
 
 
 def _demo_entidad():

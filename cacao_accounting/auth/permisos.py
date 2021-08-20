@@ -426,6 +426,28 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         validar=False,
         validar_solicitud=False,
     )
+    PURCHASING_USER = RolesPermisos(
+        rol_id=obtener_id_rol_por_monbre("purchasing_user"),
+        modulo_id=obtener_id_modulo_por_monbre("buying"),
+        acceso=True,
+        actualizar=False,
+        anular=False,
+        autorizar=False,
+        bi=False,
+        cerrar=False,
+        configurar=False,
+        consultar=True,
+        corregir=False,
+        crear=False,
+        editar=False,
+        eliminar=False,
+        importar=False,
+        listar=True,
+        reportes=False,
+        solicitar=True,
+        validar=False,
+        validar_solicitud=False,
+    )
     ACCOUNTING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
         modulo_id=obtener_id_modulo_por_monbre("accounting"),
@@ -658,6 +680,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     PERMISOS_PREDETERMINADOS = [
         PURCHASING_MANAGER,
         PURCHASING_AUXILIAR,
+        PURCHASING_USER,
         ACCOUNTING_MANAGER,
         ACCOUNTING_AUXILIAR,
         INVENTORY_MANAGER,

@@ -53,6 +53,11 @@ COMPRAS_JUNIOR = {
     "detalle": "Auxiliar de Compras",
 }
 
+COMPRAS_USER = {
+    "name": "purchasing_user",
+    "detalle": "Usuario de Compras",
+}
+
 INVENTARIO_SENIOR = {
     "name": "inventory_manager",
     "detalle": "Jefe de Inventarios",
@@ -110,6 +115,7 @@ ROLES_PREDETERMINADOS = [
     ADMINISTRADOR,
     COMPRAS_SENIOR,
     COMPRAS_JUNIOR,
+    COMPRAS_USER,
     CONTABILIDAD_SENIOR,
     CONTABILIDAD_JUNIOR,
     INVENTARIO_SENIOR,
