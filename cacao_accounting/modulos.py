@@ -24,7 +24,7 @@ Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprin
 from pkgutil import iter_modules
 from typing import Union
 from flask import Flask
-from cacao_accounting.database import db, Modulos
+from cacao_accounting.database import database, Modulos
 
 
 contabilidad = {
@@ -84,8 +84,8 @@ def registrar_modulo(entrada: dict) -> None:
     Recibe un diccionario y lo inserta en la base de datos.
     """
     registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
-    db.session.add(registro)
-    db.session.commit()
+    database.session.add(registro)
+    database.session.commit()
 
 
 def _init_modulos() -> None:

@@ -19,7 +19,7 @@
 import pytest
 from cacao_accounting import create_app as app_factory
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_usuario_por_nombre
 from cacao_accounting.datos import base_data, dev_data
 
@@ -40,8 +40,8 @@ MODULOS = ["accounting", "cash", "buying", "inventory", "sales", "admin"]
 def app():
     app = app_factory(CONFIG)
     with app.app_context():
-        db.drop_all()
-        db.create_all()
+        database.drop_all()
+        database.create_all()
         base_data()
         dev_data()
     app.app_context().push()

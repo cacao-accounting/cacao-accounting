@@ -172,10 +172,13 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
 
 
 def obtener_roles_por_usuario(usuario: str) -> tuple:
-    from cacao_accounting.database import db, Usuario, RolesUsuario, Roles
+    from cacao_accounting.database import database, Usuario, RolesUsuario, Roles
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROLES_DE_USUARIO = (
-        db.session.query(RolesUsuario, Roles, Usuario).join(Roles).join(Usuario).filter(RolesUsuario.user_id == USUARIO.id)
+        database.session.query(RolesUsuario, Roles, Usuario)
+        .join(Roles)
+        .join(Usuario)
+        .filter(RolesUsuario.user_id == USUARIO.id)
     )
     return ROLES_DE_USUARIO

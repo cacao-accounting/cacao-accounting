@@ -15,6 +15,10 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""
+Definición de rutas para reponder a peticiones AJAX.
+"""
+
 from flask import Blueprint
 
 ajax = Blueprint("ajax", __name__)

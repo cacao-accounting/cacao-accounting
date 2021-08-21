@@ -37,7 +37,7 @@ Un registro:
 # pylint: disable=not-callable
 from typing import Union
 from flask_login import current_user
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.exceptions import OperationalError, TransactionError
 from cacao_accounting.exceptions.mensajes import ERROR3, ERROR4
 from cacao_accounting.transaccion import Transaccion
@@ -50,7 +50,7 @@ class Registro:
     una sere de metodos unificada para qe las transacciones modifiquen el estado de la base de datos.
     """
 
-    DATABASE = db
+    DATABASE = database
     tabla = None
     tabla_detalle = None
     LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
@@ -86,8 +86,8 @@ class Registro:
     def _ejecuta_cambio_de_estatus(self, transaccion: Transaccion) -> bool:
         if self.tabla:
             transaccion.datos.status = transaccion.nuevo_estatus
-            db.session.add(transaccion.datos)
-            db.session.commit()
+            database.session.add(transaccion.datos)
+            database.session.commit()
             return True
         else:
             raise TransactionError(ERROR3)
@@ -99,11 +99,11 @@ class Registro:
             registros = self.tabla.query.filter_by(status="predeterminado")
             for registro in registros:
                 registro.status = "activo"
-                db.session.add(registro)
-                db.session.commit()
+                database.session.add(registro)
+                database.session.commit()
             transaccion.datos.status = "predeterminado"
-            db.session.add(transaccion.datos)
-            db.session.commit()
+            database.session.add(transaccion.datos)
+            database.session.commit()
             return True
         else:
             raise OperationalError(ERROR3)
@@ -116,8 +116,8 @@ class Registro:
 
         if self.tabla:
             REGISTRO_A_ELIMINAR = self.tabla.query.filter_by(id=transaccion.uuid).one()
-            db.session.delete(REGISTRO_A_ELIMINAR)
-            db.session.commit()
+            database.session.delete(REGISTRO_A_ELIMINAR)
+            database.session.commit()
             return True
         else:
             raise TransactionError(ERROR4)

@@ -33,7 +33,7 @@ from os import environ
 from typing import Union
 from flask import Flask
 from sqlalchemy_paginator import Paginator
-from cacao_accounting.database import db, DBVERSION, Metadata
+from cacao_accounting.database import database, DBVERSION, Metadata
 from cacao_accounting.exceptions import DataError, OperationalError
 from cacao_accounting.exceptions.mensajes import ERROR1, ERROR4
 from cacao_accounting.loggin import log
@@ -105,8 +105,8 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
                 cacaoversion=VERSION,
                 dbversion=DBVERSION,
             )
-            db.session.add(METADATOS)
-            db.session.commit()
+            database.session.add(METADATOS)
+            database.session.commit()
 
 
 def inicia_base_de_datos(app):
@@ -119,7 +119,7 @@ def inicia_base_de_datos(app):
     with app.app_context():
         log.info("Intentando inicializar base de datos.")
         try:
-            db.create_all()
+            database.create_all()
             if current_app.config.get("ENV") == "development" or "CACAO_TEST" in environ:
 
                 base_data(carga_rapida=True)
@@ -145,7 +145,7 @@ def paginar_consulta(tabla=None, elementos=None):
     """
     if tabla:
         items = elementos or MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
-        consulta = db.session.query(tabla).order_by(tabla.id)
+        consulta = database.session.query(tabla).order_by(tabla.id)
         consulta_paginada = Paginator(consulta, items)
         return consulta_paginada
     else:

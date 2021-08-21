@@ -18,7 +18,7 @@
 # pylint: disable=redefined-outer-name
 import pytest
 from cacao_accounting import create_app as app_factory
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.datos import base_data, dev_data
 
 
@@ -36,8 +36,8 @@ def rapp():
         }
     )
     with app.app_context():
-        db.drop_all()
-        db.create_all()
+        database.drop_all()
+        database.create_all()
         base_data()
         dev_data()
     app.app_context().push()

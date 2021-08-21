@@ -153,9 +153,9 @@ class TestInstanciasDeClasesCorrectas(TestCase):
 
     def test_SQLAlchemy(self):
         from flask_sqlalchemy import SQLAlchemy
-        from cacao_accounting.database import db
+        from cacao_accounting.database import database
 
-        self.assertIsInstance(db, SQLAlchemy)
+        self.assertIsInstance(database, SQLAlchemy)
 
     def test_Alembic(self):
         from flask_alembic import Alembic

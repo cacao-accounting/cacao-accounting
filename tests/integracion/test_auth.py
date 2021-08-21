@@ -19,7 +19,7 @@
 from unittest import TestCase
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.datos import base_data, dev_data
 
 
@@ -36,8 +36,8 @@ class TestAutenticacion(TestCase):
         self.app = create_app(configuracion)
         self.app.config["LOGIN_DISABLED"] = True
         self.app.app_context().push()
-        db.drop_all()
-        db.create_all()
+        database.drop_all()
+        database.create_all()
         base_data(carga_rapida=True)
         dev_data()
 
@@ -84,8 +84,8 @@ def crear_db():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
     app.config["TESTING"] = True
     app.config["DEBUG"] = True
-    db.drop_all()
-    db.create_all()
+    database.drop_all()
+    database.create_all()
     base_data(carga_rapida=True)
     dev_data()
 

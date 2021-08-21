@@ -18,7 +18,7 @@
 from collections import namedtuple
 from csv import DictReader
 from os.path import join
-from cacao_accounting.database import db, Cuentas
+from cacao_accounting.database import database, Cuentas
 from cacao_accounting.tools import DIRECTORIO_APP
 
 
@@ -58,5 +58,5 @@ def cargar_catalogos(catalogo, entidad):
             tipo=cuenta["tipo"],
             status="activo",
         )
-        db.session.add(registro)
-        db.session.commit()
+        database.session.add(registro)
+        database.session.commit()

@@ -36,7 +36,7 @@ from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
@@ -65,9 +65,7 @@ def verifica_version_de_python() -> None:
     Requerimos al menos python 3.7 para la aplicación.
     """
     # pylint: disable=W0612
-    if version_info >= (3, 7):
-        pass
-    else:
+    if not version_info >= (3, 7):
         raise RuntimeError("Python >= 3.7 requerido.")
 
 
@@ -77,7 +75,7 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
     """
     if app and isinstance(app, Flask):
         alembic.init_app(app)
-        db.init_app(app)
+        database.init_app(app)
         administrador_sesion.init_app(app)
         with app.app_context():
             if not current_app.config.get("ENV") == "development":
@@ -201,7 +199,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         if current_app.config.get("ENV") == "development":
-            db.drop_all()
+            database.drop_all()
             inicia_base_de_datos(CACAO_APP)
 
     actualiza_variables_globales_jinja(app=CACAO_APP)

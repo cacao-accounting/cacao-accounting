@@ -18,7 +18,7 @@
 # pylint: disable=redefined-outer-name
 import pytest
 from cacao_accounting import create_app as app_factory
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.datos import base_data, dev_data
 
 
@@ -36,8 +36,8 @@ def app():
         }
     )
     with app.app_context():
-        db.drop_all()
-        db.create_all()
+        database.drop_all()
+        database.create_all()
         base_data()
         dev_data()
     app.app_context().push()
@@ -226,8 +226,8 @@ def test_modulos_inactivos(client, auth):
     for modulo in ["accounting", "cash", "buying", "inventory", "sales"]:
         modulo = Modulos.query.filter_by(modulo=modulo).first()
         modulo.habilitado = False
-        db.session.add(modulo)
-        db.session.commit()
+        database.session.add(modulo)
+        database.session.commit()
 
     auth.login()
     responde = client.get("/app")
