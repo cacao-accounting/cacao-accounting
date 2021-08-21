@@ -39,7 +39,7 @@ from cacao_accounting.modulos import validar_modulo_activo
 from cacao_accounting.transaccion import Transaccion
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
-
+LISTA_ENTIDADES = redirect("/accounts/entity/list")
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
@@ -161,7 +161,7 @@ def nueva_entidad():
             datos_detalle=None,
         )
         ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
-        return redirect("/accounts/entity/list")
+        return LISTA_ENTIDADES
 
     return render_template(
         "contabilidad/entidad_crear.html",
@@ -197,7 +197,7 @@ def activar_entidad(id_entidad):
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "activo"
     REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return redirect("/accounts/entity/list")
+    return LISTA_ENTIDADES
 
 
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")
@@ -213,7 +213,7 @@ def eliminar_entidad(id_entidad):
     TRANSACCION.accion = "eliminar"
     TRANSACCION.tipo = "principal"
     REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return redirect("/accounts/entity/list")
+    return LISTA_ENTIDADES
 
 
 @contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
@@ -230,7 +230,7 @@ def inactivar_entidad(id_entidad):
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "inactivo"
     REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return redirect("/accounts/entity/list")
+    return LISTA_ENTIDADES
 
 
 @contabilidad.route("/accounts/entity/set_default/<id_entidad>")
@@ -247,7 +247,7 @@ def predeterminar_entidad(id_entidad):
     TRANSACCION.tipo = "principal"
     TRANSACCION.nuevo_estatus = "predeterminado"
     REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return redirect("/accounts/entity/list")
+    return LISTA_ENTIDADES
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
