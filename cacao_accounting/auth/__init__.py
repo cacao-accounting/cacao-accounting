@@ -27,6 +27,8 @@ from flask_login import LoginManager, logout_user, login_user, login_required
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
 
+INICIO_SESION = redirect("/login")
+
 
 @administrador_sesion.user_loader
 def cargar_sesion(identidad):
@@ -38,7 +40,7 @@ def cargar_sesion(identidad):
 @administrador_sesion.unauthorized_handler
 def no_autorizado():
     flash("Favor iniciar sesión para acceder al sistema.")
-    return redirect("/login")
+    return INICIO_SESION
 
 
 def proteger_passwd(clave):
@@ -81,7 +83,7 @@ def inicio_sesion():
             return redirect("/app")
         else:
             flash("Inicio de Sesion Incorrecto.")
-            return redirect("/login")
+            return INICIO_SESION
     return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
@@ -90,7 +92,7 @@ def inicio_sesion():
 @login.route("/salir")
 def cerrar_sesion():
     logout_user()
-    return redirect("/login")
+    return INICIO_SESION
 
 
 @login.route("/test_roles")

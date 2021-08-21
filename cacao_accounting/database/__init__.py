@@ -57,7 +57,7 @@ STATUS: Dict[str, StatusWeb] = {
     "indefinido": StatusWeb(color="LightSlateGray", leyenda="Status no definido"),
     "inhabilitado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado"),
     "habilitado": StatusWeb(color="LightSlateGray", leyenda="Habilitado"),
-    "pagado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado" "Pagado"),
+    "pagado": StatusWeb(color="LightSlateGray", leyenda="Pagado"),
     "predeterminado": StatusWeb(color="Lime", leyenda="Predeterminado"),
 }
 

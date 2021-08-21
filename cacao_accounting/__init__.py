@@ -65,9 +65,7 @@ def verifica_version_de_python() -> None:
     Requerimos al menos python 3.7 para la aplicación.
     """
     # pylint: disable=W0612
-    if version_info >= (3, 7):
-        pass
-    else:
+    if not version_info >= (3, 7):
         raise RuntimeError("Python >= 3.7 requerido.")
 
 
