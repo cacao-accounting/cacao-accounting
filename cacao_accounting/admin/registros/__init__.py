@@ -14,3 +14,5 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+"""Administración de registros."""

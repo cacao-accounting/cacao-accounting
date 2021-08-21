@@ -3,17 +3,31 @@
 # A comma-separated list of package or module names from where C extensions may
 # be loaded. Extensions are loading into the active Python interpreter and may
 # run arbitrary code.
+extension-pkg-allow-list=
+
+# A comma-separated list of package or module names from where C extensions may
+# be loaded. Extensions are loading into the active Python interpreter and may
+# run arbitrary code. (This is an alternative name to extension-pkg-allow-list
+# for backward compatibility.)
 extension-pkg-whitelist=
 
-# Specify a score threshold to be exceeded before program exits with error.
-fail-under=7
+# Return non-zero exit code if any of these messages/categories are detected,
+# even if score is above --fail-under value. Syntax same as enable. Messages
+# specified are enabled, while categories only check already-enabled messages.
+fail-on=
 
-# Add files or directories to the blacklist. They should be base names, not
-# paths.
+# Specify a score threshold to be exceeded before program exits with error.
+fail-under=10.0
+
+# Files or directories to be skipped. They should be base names, not paths.
 ignore=CVS
 
-# Add files or directories matching the regex patterns to the blacklist. The
-# regex matches against base names, not paths.
+# Add files or directories matching the regex patterns to the ignore-list. The
+# regex matches against paths.
+ignore-paths=
+
+# Files or directories matching the regex patterns are skipped. The regex
+# matches against base names, not paths.
 ignore-patterns=
 
 # Python code to execute, usually for sys.path manipulation such as
@@ -44,7 +58,6 @@ suggestion-mode=yes
 # active Python interpreter and may run arbitrary code.
 unsafe-load-any-extension=no
 
-allow-global-unused-variables=yes
 
 [MESSAGES CONTROL]
 
@@ -140,24 +153,16 @@ disable=print-statement,
         deprecated-sys-function,
         exception-escape,
         comprehension-escape,
-        unused-variable,
-        # Personalizados
-        invalid-name,
-        no-member,
-        no-else-return,
-        inconsistent-return-statements,
+        # Por la naturaleza del proyecto no todos los import estan al inicio para evitar 
+        # importaciones circulares
         import-outside-toplevel,
-        missing-module-docstring,
-        missing-function-docstring,
-        wrong-import-order,
-        missing-class-docstring,
+        # De acuerdo a PEP8 utilizar nombre de variables en MAYUSCULAS es permitido
+        # https://www.python.org/dev/peps/pep-0008/#descriptive-naming-styles
         invalid-name,
-        cyclic-import,
+        # Sonarcloud es mas preciso determinar si un código un bloque de codigo es identio
+        # o similar o otro: https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting
         duplicate-code,
-        # No duplicar verificaciones con flake8
-        bare-except,
-        singleton-comparison,
-        
+
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -200,7 +205,7 @@ max-nested-blocks=5
 # inconsistent-return-statements if a never returning function is called then
 # it will be considered as an explicit return statement and no message will be
 # printed.
-never-returning-functions=sys.exit
+never-returning-functions=sys.exit,argparse.parse_error
 
 
 [BASIC]
@@ -237,6 +242,13 @@ class-attribute-naming-style=any
 # Regular expression matching correct class attribute names. Overrides class-
 # attribute-naming-style.
 #class-attribute-rgx=
+
+# Naming style matching correct class constant names.
+class-const-naming-style=UPPER_CASE
+
+# Regular expression matching correct class constant names. Overrides class-
+# const-naming-style.
+#class-const-rgx=
 
 # Naming style matching correct class names.
 class-naming-style=PascalCase
@@ -341,13 +353,6 @@ max-line-length=127
 # Maximum number of lines in a module.
 max-module-lines=1000
 
-# List of optional constructs for which whitespace checking is disabled. `dict-
-# separator` is used to allow tabulation in dicts, etc.: {1  : 1,\n222: 2}.
-# `trailing-comma` allows a space between comma and closing bracket: (a, ).
-# `empty-line` allows space-only lines.
-no-space-check=trailing-comma,
-               dict-separator
-
 # Allow the body of a class to be on the same line as the declaration if body
 # contains single statement.
 single-line-class-stmt=no
@@ -390,6 +395,9 @@ ignore-docstrings=yes
 # Ignore imports when computing similarities.
 ignore-imports=no
 
+# Ignore function signatures when computing similarities.
+ignore-signatures=no
+
 # Minimum lines number of a similarity.
 min-similarity-lines=4
 
@@ -400,8 +408,12 @@ min-similarity-lines=4
 max-spelling-suggestions=4
 
 # Spelling dictionary name. Available dictionaries: none. To make it work,
-# install the python-enchant package.
+# install the 'python-enchant' package.
 spelling-dict=
+
+# List of comma separated words that should be considered directives if they
+# appear and the beginning of a comment and should not be checked.
+spelling-ignore-comment-directives=fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:
 
 # List of comma separated words that should not be checked.
 spelling-ignore-words=
@@ -489,6 +501,9 @@ additional-builtins=
 # Tells whether unused global variables should be treated as a violation.
 allow-global-unused-variables=yes
 
+# List of names allowed to shadow builtins
+allowed-redefined-builtins=
+
 # List of strings which can identify a callback function by name. A callback
 # name must start or end with one of those strings.
 callbacks=cb_,
@@ -511,6 +526,9 @@ redefining-builtins-modules=six.moves,past.builtins,future.builtins,builtins,io
 
 
 [CLASSES]
+
+# Warn about protected attribute access inside special methods
+check-protected-access-in-special-methods=no
 
 # List of method names used to declare (i.e. assign) instance attributes.
 defining-attr-methods=__init__,
@@ -563,7 +581,7 @@ max-returns=6
 max-statements=50
 
 # Minimum number of public methods for a class (see R0903).
-min-public-methods=2
+min-public-methods=1
 
 
 [IMPORTS]
@@ -581,18 +599,19 @@ allow-wildcard-with-all=no
 analyse-fallback-blocks=no
 
 # Deprecated modules which should not be used, separated by a comma.
-deprecated-modules=optparse,tkinter.tix
+deprecated-modules=
 
-# Create a graph of external dependencies in the given file (report RP0402 must
-# not be disabled).
+# Output a graph (.gv or any supported image format) of external dependencies
+# to the given file (report RP0402 must not be disabled).
 ext-import-graph=
 
-# Create a graph of every (i.e. internal and external) dependencies in the
-# given file (report RP0402 must not be disabled).
+# Output a graph (.gv or any supported image format) of all (i.e. internal and
+# external) dependencies to the given file (report RP0402 must not be
+# disabled).
 import-graph=
 
-# Create a graph of internal dependencies in the given file (report RP0402 must
-# not be disabled).
+# Output a graph (.gv or any supported image format) of internal dependencies
+# to the given file (report RP0402 must not be disabled).
 int-import-graph=
 
 # Force import order to recognize a module as part of the standard

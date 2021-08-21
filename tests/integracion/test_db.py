@@ -2,7 +2,7 @@ from os import environ
 from unittest import TestCase
 from sqlalchemy import create_engine
 from cacao_accounting import create_app
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.datos import base_data, dev_data
 
 from .x_basicos import Basicos
@@ -95,13 +95,13 @@ class TestSQLite(TestCase, Basicos):
             }
         )
         with self.app.app_context():
-            db.create_all()
+            database.create_all()
             base_data(carga_rapida=True)
             dev_data()
 
     def tearDown(self):
         with self.app.app_context():
-            db.drop_all()
+            database.drop_all()
             environ.pop("CACAO_DB")
 
     def test_db(self):
@@ -126,14 +126,14 @@ class TestMySQL(TestCase, Basicos):
         )
         with self.app.app_context():
             if TEST_MYSQL:
-                db.create_all()
+                database.create_all()
                 base_data(carga_rapida=True)
                 dev_data()
 
     def tearDown(self):
         with self.app.app_context():
             if TEST_MYSQL:
-                db.drop_all()
+                database.drop_all()
                 environ.pop("CACAO_DB")
 
     def test_db(self):
@@ -158,14 +158,14 @@ class TestMariaDB(TestCase, Basicos):
         )
         with self.app.app_context():
             if TEST_MARIADB:
-                db.create_all()
+                database.create_all()
                 base_data(carga_rapida=True)
                 dev_data()
 
     def tearDown(self):
         with self.app.app_context():
             if TEST_MARIADB:
-                db.drop_all()
+                database.drop_all()
 
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
@@ -189,14 +189,14 @@ class TestPostgresql(TestCase, Basicos):
         )
         with self.app.app_context():
             if TEST_POSTGRESQL:
-                db.create_all()
+                database.create_all()
                 base_data(carga_rapida=True)
                 dev_data()
 
     def tearDown(self):
         with self.app.app_context():
             if TEST_POSTGRESQL:
-                db.drop_all()
+                database.drop_all()
 
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
@@ -221,7 +221,7 @@ class TestMSSQL(TestCase, Basicos):
             )
             with self.app.app_context():
                 if TEST_MSSQL:
-                    db.create_all()
+                    database.create_all()
                     base_data(carga_rapida=True)
                     dev_data()
         else:
@@ -230,7 +230,7 @@ class TestMSSQL(TestCase, Basicos):
     def tearDown(self):
         if self.app:
             with self.app.app_context():
-                db.drop_all()
+                database.drop_all()
 
     def test_db(self):
         if TestMSSQL and self.app is not None:

@@ -17,6 +17,8 @@
 
 # Fuente: https://github.com/pallets/flask/blob/master/src/flask/cli.py
 
+"""Interfaz de linea de comandos."""
+
 import sys
 from flask.cli import FlaskGroup
 
@@ -28,4 +30,5 @@ Interfaz de linea de comandos para la administración de Cacao Accounting.
 
 
 def linea_comandos(as_module=False):
+    """Linea de comandos para administración de la aplicacion."""
     LINEA_COMANDOS.main(args=sys.argv[1:], prog_name="python -m flask" if as_module else None)

@@ -37,7 +37,7 @@ Un registro:
 # pylint: disable=not-callable
 from typing import Union
 from flask_login import current_user
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.exceptions import OperationalError, TransactionError
 from cacao_accounting.exceptions.mensajes import ERROR3, ERROR4
 from cacao_accounting.transaccion import Transaccion
@@ -46,11 +46,13 @@ from cacao_accounting.validaciones import VALIDACIONES_PREDETERMINADAS
 
 class Registro:
     """
+    Define la clase principal para administrar registros en la base de datos.
+
     Las transacciones ejecutadas por los usuarios deben tener acceso en la base de datos, esta interfaz ofrece
     una sere de metodos unificada para qe las transacciones modifiquen el estado de la base de datos.
     """
 
-    DATABASE = db
+    DATABASE = database
     tabla = None
     tabla_detalle = None
     LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
@@ -86,8 +88,8 @@ class Registro:
     def _ejecuta_cambio_de_estatus(self, transaccion: Transaccion) -> bool:
         if self.tabla:
             transaccion.datos.status = transaccion.nuevo_estatus
-            db.session.add(transaccion.datos)
-            db.session.commit()
+            database.session.add(transaccion.datos)
+            database.session.commit()
             return True
         else:
             raise TransactionError(ERROR3)
@@ -99,30 +101,32 @@ class Registro:
             registros = self.tabla.query.filter_by(status="predeterminado")
             for registro in registros:
                 registro.status = "activo"
-                db.session.add(registro)
-                db.session.commit()
+                database.session.add(registro)
+                database.session.commit()
             transaccion.datos.status = "predeterminado"
-            db.session.add(transaccion.datos)
-            db.session.commit()
+            database.session.add(transaccion.datos)
+            database.session.commit()
             return True
         else:
             raise OperationalError(ERROR3)
 
     def _elimar_registro_principal(self, transaccion: Transaccion) -> bool:
         """
+        Elimina una transacción de la base de datos.
+
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
         """
-
         if self.tabla:
             REGISTRO_A_ELIMINAR = self.tabla.query.filter_by(id=transaccion.uuid).one()
-            db.session.delete(REGISTRO_A_ELIMINAR)
-            db.session.commit()
+            database.session.delete(REGISTRO_A_ELIMINAR)
+            database.session.commit()
             return True
         else:
             raise TransactionError(ERROR4)
 
     def ejecutar_transaccion(self, transaccion: Union[Transaccion, None] = None):
+        """Ejecuta una transacción en la base de datos."""
         if transaccion:
             self._ejecutar_validacion_de_transaccion(transaccion)
             self._ejecutar_transaccion_por_tipo(transaccion)

@@ -15,15 +15,16 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Registro para administración de tadas de cambio."""
+
 from cacao_accounting.registro import Registro
 
 
 class RegistroTasaCambio(Registro):
-    """
-    Registro para manejar los proyetos.
-    """
+    """Registro para manejar tasas de cambio."""
 
     def __init__(self):
+        """Tasa de cambio."""
         from cacao_accounting.database import TasaDeCambio
 
         self.tabla = TasaDeCambio

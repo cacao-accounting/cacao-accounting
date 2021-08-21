@@ -6,13 +6,13 @@
   <div class="container">
     <div class="row">
       <div class="col-md">
-        <p><b>Status: </b>{{ macros.render_status(status=registro.status, lista_status=statusweb) }} {{ registro.status }}</p>
-        <p><b>Codigo Centro Costo:</b> {{ registro.codigo }}</p>
-        <p><b>Nombre:</b> {{ registro.nombre }}</p>
+        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }} {{ registro.status }}</p>
+        <p><strong>Codigo Centro Costo:</strong> {{ registro.codigo }}</p>
+        <p><strong>Nombre:</strong> {{ registro.nombre }}</p>
       </div>
       <div class="col-md">
 
-        <p><b>Tipo:</b> 
+        <p><strong>Tipo:</strong> 
           {% if registro.grupo %}
           Grupo
           {% else %}

@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo para la configuración centralizada de la configuración de la aplicacion.
-"""
+"""Modulo para la configuración centralizada de la configuración de la aplicacion."""
 
 from os import environ
 from cacao_accounting.loggin import log
@@ -55,7 +53,7 @@ except KeyError:
 
 
 def valida_llave_secreta(llave: str) -> bool:
-
+    """Valida requisitos minimos para aceptar una contraseña."""
     CONTIENE_MAYUSCULAS = bool(any(chr.isupper() for chr in llave))
     CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
     CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
@@ -73,6 +71,7 @@ def valida_llave_secreta(llave: str) -> bool:
 
 
 def valida_direccion_base_datos(uri: str) -> bool:
+    """Verifica que la URI de la database este en el formato correcto."""
     DIRECCION = str(uri)
     MSSQL_URI = DIRECCION.startswith("mssql")
     MYSQL_URI = DIRECCION.startswith("mysql")
@@ -87,20 +86,17 @@ def valida_direccion_base_datos(uri: str) -> bool:
     return VALIDACION
 
 
-def probar_configuracion_por_variables_de_entorno():
-    """
-    Valida que las opciones requeridas para configuración la aplicacion desde variables del entorno
-    se encuentran correctamente configuradas.
-    """
-
+def probar_configuracion_por_variables_de_entorno() -> bool:
+    """Valida que las variables del entorno se encuentran correctamente configuradas."""
     if environ.get("CACAO_DB", None) and environ.get("CACAO_KEY", None):
         VALIDACION = valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
         if VALIDACION:
             log.info("Configuracion obtenida de variables de entorno")
-            return VALIDACION
         else:
             log.warning("No se encontro configuración valida.")
-            return VALIDACION
+        return VALIDACION
+    else:
+        return False
 
 
 if probar_configuracion_por_variables_de_entorno():
@@ -125,10 +121,7 @@ else:
 
 
 def probar_modo_escritorio() -> bool:
-    """
-    Función utilitaria para establecer nodo de escritorio.
-    """
-
+    """Función utilitaria para establecer nodo de escritorio."""
     # Probamos si estamos en un paquete SNAP
     # Referencias
     #  - https://snapcraft.io/docs/environment-variables

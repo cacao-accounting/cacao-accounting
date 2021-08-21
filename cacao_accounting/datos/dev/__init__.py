@@ -17,9 +17,8 @@
 
 # pylint: disable=too-many-lines
 
-"""
-Datos de ejemplo.
-"""
+"""Datos de ejemplo."""
+
 from datetime import date
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.loggin import log
@@ -29,7 +28,7 @@ from cacao_accounting.transaccion import Transaccion
 
 
 def _demo_usuarios():
-    """Usuarios para demostracion"""
+    """Usuarios para demostracion."""
     from cacao_accounting.auth.registros import RegistroUsuario
     from cacao_accounting.auth import proteger_passwd
 
@@ -299,7 +298,7 @@ def _demo_usuarios():
 
 
 def _demo_entidad():
-    """Entidad de demostración"""
+    """Entidad de demostración."""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
     log.debug("Creando entidades de prueba.")
@@ -391,7 +390,7 @@ def _demo_entidad():
 
 
 def _demo_unidades():
-    """Unidades de Negocio de Demostración"""
+    """Unidades de Negocio de Demostración."""
     from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
 
     log.debug("Cargando unidades de negocio de prueba.")
@@ -1001,6 +1000,7 @@ def _tasas_de_cambio():
 
 
 def master_data():
+    """Carga datos maestros de desarrollo a la base de datos."""
     log.debug("Iniciando carga de master data de pruebas.")
     _demo_usuarios()
     _demo_entidad()
@@ -1014,6 +1014,7 @@ def master_data():
 
 
 def _periodo_contable():
+    """Crea periodos contables para desarrollo."""
     from cacao_accounting.contabilidad.registros.periodo import RegistroPeriodoContable
 
     PERIODO = RegistroPeriodoContable()
@@ -1085,10 +1086,12 @@ def _periodo_contable():
 
 
 def transacciones():
+    """Crea transacciones de desarrollo en la base de datos."""
     _periodo_contable()
     log.debug("Transacciones de Pruebas Creadas correstamente.")
 
 
 def dev_data():
+    """Carga datos de desarrollo a la base de datos."""
     master_data()
     transacciones()

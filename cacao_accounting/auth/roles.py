@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Definicion de Roles para regular el acceso al sistema de los usuarios.
-"""
+"""Definicion de Roles para regular el acceso al sistema de los usuarios."""
 
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
@@ -25,14 +23,20 @@ from cacao_accounting.registro import Registro
 
 
 class RegistroRol(Registro):
+    """Adminisración de Roles de Usuario."""
+
     def __init__(self):
+        """Adminisración de Roles de Usuario."""
         from cacao_accounting.database import Roles
 
         self.tabla = Roles
 
 
 class RegistroRolUsuario(Registro):
+    """Administración de roles de usuario."""
+
     def __init__(self) -> None:
+        """Administración de roles de usuario."""
         from cacao_accounting.database import RolesUsuario
 
         self.tabla = RolesUsuario  # type: ignore[assignment]
@@ -130,6 +134,7 @@ ROLES_PREDETERMINADOS = [
 
 
 def crea_roles_predeterminados() -> None:
+    """Carga roles predeterminados a la base de datos."""
     log.debug("Iniciando creacion de Roles predeterminados.")
     for ROL in ROLES_PREDETERMINADOS:
         REGISTRO = RegistroRol()
@@ -150,6 +155,7 @@ def crea_roles_predeterminados() -> None:
 
 
 def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
+    """Asigna un rol determinado al usuario establecido."""
     from cacao_accounting.database import Usuario, Roles
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
@@ -172,10 +178,14 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
 
 
 def obtener_roles_por_usuario(usuario: str) -> tuple:
-    from cacao_accounting.database import db, Usuario, RolesUsuario, Roles
+    """Obtiene los roles de usuario de la base de datos."""
+    from cacao_accounting.database import database, Usuario, RolesUsuario, Roles
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROLES_DE_USUARIO = (
-        db.session.query(RolesUsuario, Roles, Usuario).join(Roles).join(Usuario).filter(RolesUsuario.user_id == USUARIO.id)
+        database.session.query(RolesUsuario, Roles, Usuario)
+        .join(Roles)
+        .join(Usuario)
+        .filter(RolesUsuario.user_id == USUARIO.id)
     )
     return ROLES_DE_USUARIO

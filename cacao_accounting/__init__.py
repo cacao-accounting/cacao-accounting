@@ -36,7 +36,7 @@ from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
-from cacao_accounting.database import db
+from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
@@ -52,32 +52,24 @@ talisman = Talisman()
 
 
 def command() -> None:  # pragma: no cover
-    """
-    Interfaz de linea de commandos.
-    """
+    """Interfaz de linea de commandos."""
     from cacao_accounting.cli import linea_comandos
 
     linea_comandos(as_module="cacao_accounting")
 
 
 def verifica_version_de_python() -> None:
-    """
-    Requerimos al menos python 3.7 para la aplicación.
-    """
+    """Requerimos al menos python 3.7 para la aplicación."""
     # pylint: disable=W0612
-    if version_info >= (3, 7):
-        pass
-    else:
+    if not version_info >= (3, 7):
         raise RuntimeError("Python >= 3.7 requerido.")
 
 
 def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
-    """
-    Inicializa extenciones.
-    """
+    """Inicializa extenciones."""
     if app and isinstance(app, Flask):
         alembic.init_app(app)
-        db.init_app(app)
+        database.init_app(app)
         administrador_sesion.init_app(app)
         with app.app_context():
             if not current_app.config.get("ENV") == "development":
@@ -87,19 +79,18 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
 
 
 def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
-    """
-    Registra rutas predeterminadas.
-    """
+    """Registra rutas predeterminadas."""
     if app and isinstance(app, Flask):
         from flask import render_template
 
         @app.errorhandler(404)
-        def error_404(error):  # pylint: disable=W0612
-
+        def error_404(error):
+            assert error is not None
             return render_template("404.html"), 404
 
         @app.errorhandler(403)
-        def error_403(error):  # pylint: disable=W0612
+        def error_403(error):
+            assert error is not None
             return render_template("403.html"), 403
 
     else:
@@ -107,9 +98,7 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
 
 
 def registrar_blueprints(app: Union[Flask, None] = None) -> None:
-    """
-    Registra blueprints por defecto.
-    """
+    """Registra blueprints por defecto."""
     if app and isinstance(app, Flask):
         with app.app_context():
             app.register_blueprint(admin)
@@ -127,10 +116,7 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
 
 
 def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
-    """
-    Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2.
-    """
-
+    """Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2."""
     if app and isinstance(app, Flask):
         with app.app_context():
             app.jinja_env.trim_blocks = True
@@ -154,58 +140,53 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     # pylint: disable=W0612
     verifica_version_de_python()
-    CACAO_APP = Flask(
+    cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
         static_folder=DIRECTORIO_ARCHIVOS,
     )
 
     if ajustes:
-        CACAO_APP.config.from_mapping(ajustes)
+        cacao_app.config.from_mapping(ajustes)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def initdb():  # pragma: no cover
         """Crea el esquema de la base de datos."""
-
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        inicia_base_de_datos(CACAO_APP)
+        inicia_base_de_datos(cacao_app)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
         if current_app.config.get("ENV") == "development":
-            db.drop_all()
+            database.drop_all()
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def version():  # pragma: no cover
         """Muestra la version actual instalada."""
         from cacao_accounting.version import VERSION
 
         print(VERSION)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def serve():  # pragma: no cover
-        """
-        Inicio la aplicacion con waitress como servidor WSGI por  defecto.
-        """
+        """Inicio la aplicacion con waitress como servidor WSGI por  defecto."""
         from cacao_accounting.server import server
 
         server()
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def setupdb():  # pragma: no cover
-        """
-        Define una base de datos de desarrollo nueva.
-        """
+        """Define una base de datos de desarrollo nueva."""
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         if current_app.config.get("ENV") == "development":
-            db.drop_all()
-            inicia_base_de_datos(CACAO_APP)
+            database.drop_all()
+            inicia_base_de_datos(cacao_app)
 
-    actualiza_variables_globales_jinja(app=CACAO_APP)
-    iniciar_extenciones(app=CACAO_APP)
-    registrar_blueprints(app=CACAO_APP)
-    registrar_rutas_predeterminadas(app=CACAO_APP)
-    return CACAO_APP
+    actualiza_variables_globales_jinja(app=cacao_app)
+    iniciar_extenciones(app=cacao_app)
+    registrar_blueprints(app=cacao_app)
+    registrar_rutas_predeterminadas(app=cacao_app)
+    return cacao_app

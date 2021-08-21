@@ -17,6 +17,7 @@
 
 """
 Definicion de base de datos.
+
 El objetivo es que el sistema contable pueda ser desplegado sin tener que depender
 de una base de datos especifica, la prioridad en soportar Postresql como base de datos
 primaria para entornos multiusuarios y Sqlite como base de datos para entornos de un
@@ -28,6 +29,7 @@ Referencia:
 """
 
 # pylint: disable=too-few-public-methods
+# pylint: disable=no-member
 
 from collections import namedtuple
 from os import environ
@@ -39,7 +41,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
 
 
-db = SQLAlchemy()
+database = SQLAlchemy()
 
 
 DBVERSION = "0.0.0dev"
@@ -57,7 +59,7 @@ STATUS: Dict[str, StatusWeb] = {
     "indefinido": StatusWeb(color="LightSlateGray", leyenda="Status no definido"),
     "inhabilitado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado"),
     "habilitado": StatusWeb(color="LightSlateGray", leyenda="Habilitado"),
-    "pagado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado" "Pagado"),
+    "pagado": StatusWeb(color="LightSlateGray", leyenda="Pagado"),
     "predeterminado": StatusWeb(color="Lime", leyenda="Predeterminado"),
 }
 
@@ -67,10 +69,7 @@ STATUS: Dict[str, StatusWeb] = {
 
 
 def obtiene_texto_unico() -> str:
-    """
-    A partir de un código UUID unico aleatorio devuelve una cadena de texto unica
-    que se puede usar como identificador interno.
-    """
+    """Genera un texto unico en base a una UUID."""
     return str(uuid4())
 
 
@@ -87,232 +86,228 @@ if DB_URI and DB_URI.startswith("postgresql"):
     from sqlalchemy.dialects.postgresql import UUID
 
     TIPO_UUID = UUID(as_uuid=False)
-    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
+    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
 
 elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
     from sqlalchemy.dialects.mysql import VARCHAR
 
     TIPO_UUID = VARCHAR(length=36)
-    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
+    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
 
 elif DB_URI and DB_URI.startswith("mssql"):
     from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 
     TIPO_UUID = UNIQUEIDENTIFIER()
-    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
+    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
 
 else:
     from sqlalchemy.types import String
 
     TIPO_UUID = String(36)
-    COLUMNA_UUID = db.Column(TIPO_UUID, primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
 # ellas.
 class BaseTabla:
-    """
-    Columnas estandar para todas las tablas de la base de datos.
-    """
+    """Columnas estandar para todas las tablas de la base de datos."""
 
     # Pistas de auditoria comunes a todas las tablas.
     id = COLUMNA_UUID
-    status = db.Column(db.String(50), nullable=True)
-    creado = db.Column(db.DateTime, default=db.func.now(), nullable=False)
-    creado_por = db.Column(db.String(15), nullable=True)
-    modificado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
-    modificado_por = db.Column(db.String(15), nullable=True)
+    status = database.Column(database.String(50), nullable=True)
+    creado = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    creado_por = database.Column(database.String(15), nullable=True)
+    modificado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    modificado_por = database.Column(database.String(15), nullable=True)
 
 
 class BaseTransaccion(BaseTabla):
-    registro = db.Column(db.String(50), nullable=True)
-    registro_id = db.Column(db.String(75), nullable=True)
-    validado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
-    validado_por = db.Column(db.String(15), nullable=True)
-    autorizado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
-    autorizado_por = db.Column(db.String(15), nullable=True)
-    anulado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
-    anulado_por = db.Column(db.String(15), nullable=True)
-    cerrado = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now(), nullable=True)
-    cerrado_por = db.Column(db.String(15), nullable=True)
+    """Base para crear transacciones en la entidad."""
+
+    registro = database.Column(database.String(50), nullable=True)
+    registro_id = database.Column(database.String(75), nullable=True)
+    validado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    validado_por = database.Column(database.String(15), nullable=True)
+    autorizado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    autorizado_por = database.Column(database.String(15), nullable=True)
+    anulado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    anulado_por = database.Column(database.String(15), nullable=True)
+    cerrado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    cerrado_por = database.Column(database.String(15), nullable=True)
 
 
 class BaseTransaccionDetalle(BaseTabla):
-    registro_padre = db.Column(db.String(50), nullable=True)
-    registro_padre_id = db.Column(db.String(75), nullable=True)
-    referencia = db.Column(db.String(50), nullable=True)
-    referencia_id = db.Column(db.String(75), nullable=True)
+    """Base para crear transacciones en la entidad."""
+
+    registro_padre = database.Column(database.String(50), nullable=True)
+    registro_padre_id = database.Column(database.String(75), nullable=True)
+    referencia = database.Column(database.String(50), nullable=True)
+    referencia_id = database.Column(database.String(75), nullable=True)
 
 
 class BaseTercero(BaseTabla):
-    """
-    Esta es clase contiene campos comunes para terceros, principalmente:
-     - Cliente
-     - Proveedor
-    """
+    """Base para crear terceros en la entidad."""
 
     # Requerisitos minimos para tener crear el registro.
-    razon_social = db.Column(db.String(150), nullable=False)
-    nombre = db.Column(db.String(150), nullable=False)
+    razon_social = database.Column(database.String(150), nullable=False)
+    nombre = database.Column(database.String(150), nullable=False)
     # Individual, Sociedad
-    tipo = db.Column(db.String(50), nullable=False)
-    grupo = db.Column(db.String(50), nullable=False)
-    habilitado = db.Column(db.Boolean(), nullable=True)
-    identificacion = db.Column(db.String(30), nullable=True)
-    id_fiscal = db.Column(db.String(30), nullable=True)
+    tipo = database.Column(database.String(50), nullable=False)
+    grupo = database.Column(database.String(50), nullable=False)
+    habilitado = database.Column(database.Boolean(), nullable=True)
+    identificacion = database.Column(database.String(30), nullable=True)
+    id_fiscal = database.Column(database.String(30), nullable=True)
 
 
 class BaseContacto(BaseTabla):
-    tipo = db.Column(db.String(25), nullable=True)
-    nombre = db.Column(db.String(50), nullable=True)
-    telefono = db.Column(db.String(30), nullable=True)
-    celular = db.Column(db.String(30), nullable=True)
-    correo_electronico = db.Column(db.String(30), nullable=True)
+    """Clase base para la creación de contactos."""
+
+    tipo = database.Column(database.String(25), nullable=True)
+    nombre = database.Column(database.String(50), nullable=True)
+    telefono = database.Column(database.String(30), nullable=True)
+    celular = database.Column(database.String(30), nullable=True)
+    correo_electronico = database.Column(database.String(30), nullable=True)
 
 
 class BaseDireccion(BaseTabla):
-    linea1 = db.Column(db.String(150), nullable=True)
-    linea2 = db.Column(db.String(150), nullable=True)
-    linea3 = db.Column(db.String(150), nullable=True)
-    pais = db.Column(db.String(30), nullable=True)
-    estado = db.Column(db.String(50), nullable=True)
-    ciudad = db.Column(db.String(50), nullable=True)
-    calle = db.Column(db.String(50), nullable=True)
-    avenida = db.Column(db.String(50), nullable=True)
-    numero = db.Column(db.String(10), nullable=True)
-    codigo_postal = db.Column(db.String(30), nullable=True)
+    """Clase base para la creación de direcciones."""
+
+    linea1 = database.Column(database.String(150), nullable=True)
+    linea2 = database.Column(database.String(150), nullable=True)
+    linea3 = database.Column(database.String(150), nullable=True)
+    pais = database.Column(database.String(30), nullable=True)
+    estado = database.Column(database.String(50), nullable=True)
+    ciudad = database.Column(database.String(50), nullable=True)
+    calle = database.Column(database.String(50), nullable=True)
+    avenida = database.Column(database.String(50), nullable=True)
+    numero = database.Column(database.String(10), nullable=True)
+    codigo_postal = database.Column(database.String(30), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Información sobre la instalación actual del sistema.
 # https://github.com/python/mypy/issues/8603
-class Metadata(db.Model):  # type: ignore[name-defined]
-    """
-    Informacion basica de la instalacion.
-    """
+class Metadata(database.Model):  # type: ignore[name-defined]
+    """Informacion basica de la instalacion."""
 
-    __table_args__ = (db.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
+    __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
     id = COLUMNA_UUID
-    cacaoversion = db.Column(db.String(50), nullable=False)
-    dbversion = db.Column(db.String(50), nullable=False)
-    fecha = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    cacaoversion = database.Column(database.String(50), nullable=False)
+    dbversion = database.Column(database.String(50), nullable=False)
+    fecha = database.Column(database.DateTime, default=database.func.now(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de monedas, localización, tasas de cambio y otras configuraciones regionales.
-class Moneda(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una moneda para los registros de la entidad.
-    """
+class Moneda(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Una moneda para los registros de la entidad."""
 
-    codigo = db.Column(db.String(10), index=True, nullable=False, unique=True)
-    nombre = db.Column(db.String(75), nullable=False)
-    decimales = db.Column(db.Integer(), nullable=True)
-    activa = db.Column(db.Boolean, nullable=True)
-    predeterminada = db.Column(db.Boolean, nullable=True)
+    codigo = database.Column(database.String(10), index=True, nullable=False, unique=True)
+    nombre = database.Column(database.String(75), nullable=False)
+    decimales = database.Column(database.Integer(), nullable=True)
+    activa = database.Column(database.Boolean, nullable=True)
+    predeterminada = database.Column(database.Boolean, nullable=True)
 
 
-class TasaDeCambio(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Tasa de conversión entre dos monedas distintas.
-    """
+class TasaDeCambio(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Tasa de conversión entre dos monedas distintas."""
 
-    base = db.Column(db.String(10), db.ForeignKey("moneda.codigo"), nullable=False)
-    destino = db.Column(db.String(10), db.ForeignKey("moneda.codigo"), nullable=False)
-    tasa = db.Column(db.Numeric(), nullable=False)
-    fecha = db.Column(db.Date(), nullable=False)
+    base = database.Column(database.String(10), database.ForeignKey("moneda.codigo"), nullable=False)
+    destino = database.Column(database.String(10), database.ForeignKey("moneda.codigo"), nullable=False)
+    tasa = database.Column(database.Numeric(), nullable=False)
+    fecha = database.Column(database.Date(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de usuario, roles, grupos y permisos.
-class Usuario(UserMixin, db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una entidad con acceso al sistema.
-    """
+class Usuario(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Una entidad con acceso al sistema."""
 
     # Información Básica
-    usuario = db.Column(db.String(15), nullable=False)
-    p_nombre = db.Column(db.String(80))
-    s_nombre = db.Column(db.String(80))
-    p_apellido = db.Column(db.String(80))
-    s_apellido = db.Column(db.String(80))
-    correo_e = db.Column(db.String(150), unique=True, nullable=True)
-    clave_acceso = db.Column(db.LargeBinary(), nullable=False)
-    tipo = db.Column(db.String(15))
-    activo = db.Column(db.Boolean())
+    usuario = database.Column(database.String(15), nullable=False)
+    p_nombre = database.Column(database.String(80))
+    s_nombre = database.Column(database.String(80))
+    p_apellido = database.Column(database.String(80))
+    s_apellido = database.Column(database.String(80))
+    correo_e = database.Column(database.String(150), unique=True, nullable=True)
+    clave_acceso = database.Column(database.LargeBinary(), nullable=False)
+    tipo = database.Column(database.String(15))
+    activo = database.Column(database.Boolean())
     # Información Complementaria
-    genero = db.Column(db.String(10))
-    nacimiento = db.Column(db.Date())
-    telefono = db.Column(db.String(50))
+    genero = database.Column(database.String(10))
+    nacimiento = database.Column(database.Date())
+    telefono = database.Column(database.String(50))
 
 
-class Roles(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Roles para las administración de permisos de usuario."""
 
-    name = db.Column(db.String(50), nullable=False, unique=True)
-    detalle = db.Column(db.String(100), nullable=False, unique=True)
+    name = database.Column(database.String(50), nullable=False, unique=True)
+    detalle = database.Column(database.String(100), nullable=False, unique=True)
 
 
-class RolesPermisos(db.Model, BaseTabla):  # type: ignore[name-defined]
-    rol_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))
-    modulo_id = db.Column(TIPO_UUID, db.ForeignKey("modulos.id"))
+class RolesPermisos(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Los roles definen una cantidad de permisos."""
+
+    rol_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
+    modulo_id = database.Column(TIPO_UUID, database.ForeignKey("modulos.id"))
     # Usuario tiene acceso al múdulo
-    acceso = db.Column(db.Boolean, nullable=False, default=False)
+    acceso = database.Column(database.Boolean, nullable=False, default=False)
     # Usuario puede realizar determinadas acciones en el modulogit
-    actualizar = db.Column(db.Boolean, nullable=False, default=False)
-    anular = db.Column(db.Boolean, nullable=False, default=False)
-    autorizar = db.Column(db.Boolean, nullable=False, default=False)
-    bi = db.Column(db.Boolean, nullable=False, default=False)
-    cerrar = db.Column(db.Boolean, nullable=False, default=False)
-    configurar = db.Column(db.Boolean, nullable=False, default=False)
-    consultar = db.Column(db.Boolean, nullable=False, default=False)
-    corregir = db.Column(db.Boolean, nullable=False, default=False)
-    crear = db.Column(db.Boolean, nullable=False, default=False)
-    editar = db.Column(db.Boolean, nullable=False, default=False)
-    eliminar = db.Column(db.Boolean, nullable=False, default=False)
-    importar = db.Column(db.Boolean, nullable=False, default=False)
-    listar = db.Column(db.Boolean, nullable=False, default=False)
-    reportes = db.Column(db.Boolean, nullable=False, default=False)
-    solicitar = db.Column(db.Boolean, nullable=False, default=False)
-    validar = db.Column(db.Boolean, nullable=False, default=False)
-    validar_solicitud = db.Column(db.Boolean, nullable=False, default=False)
+    actualizar = database.Column(database.Boolean, nullable=False, default=False)
+    anular = database.Column(database.Boolean, nullable=False, default=False)
+    autorizar = database.Column(database.Boolean, nullable=False, default=False)
+    bi = database.Column(database.Boolean, nullable=False, default=False)
+    cerrar = database.Column(database.Boolean, nullable=False, default=False)
+    configurar = database.Column(database.Boolean, nullable=False, default=False)
+    consultar = database.Column(database.Boolean, nullable=False, default=False)
+    corregir = database.Column(database.Boolean, nullable=False, default=False)
+    crear = database.Column(database.Boolean, nullable=False, default=False)
+    editar = database.Column(database.Boolean, nullable=False, default=False)
+    eliminar = database.Column(database.Boolean, nullable=False, default=False)
+    importar = database.Column(database.Boolean, nullable=False, default=False)
+    listar = database.Column(database.Boolean, nullable=False, default=False)
+    reportes = database.Column(database.Boolean, nullable=False, default=False)
+    solicitar = database.Column(database.Boolean, nullable=False, default=False)
+    validar = database.Column(database.Boolean, nullable=False, default=False)
+    validar_solicitud = database.Column(database.Boolean, nullable=False, default=False)
 
 
-class RolesUsuario(db.Model, BaseTabla):  # type: ignore[name-defined]
-    user_id = db.Column(TIPO_UUID, db.ForeignKey("usuario.id"))
-    role_id = db.Column(TIPO_UUID, db.ForeignKey("roles.id"))
-    activo = db.Column(db.Boolean, nullable=True)
+class RolesUsuario(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Roles dan permisos a los usuarios del sistema."""
+
+    user_id = database.Column(TIPO_UUID, database.ForeignKey("usuario.id"))
+    role_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
+    activo = database.Column(database.Boolean, nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de módulos del sistema.
-class Modulos(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Modulos(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
-    __table_args__ = (db.UniqueConstraint("modulo", name="modulo_unico"),)
-    modulo = db.Column(db.String(50), unique=True, index=True)
-    estandar = db.Column(db.Boolean(), nullable=False)
-    habilitado = db.Column(db.Boolean(), nullable=True)
+    __table_args__ = (database.UniqueConstraint("modulo", name="modulo_unico"),)
+    modulo = database.Column(database.String(50), unique=True, index=True)
+    estandar = database.Column(database.Boolean(), nullable=False)
+    habilitado = database.Column(database.Boolean(), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad.
-class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una entidad es una unidad de negocios de la que se lleva registros
-    en el sistema.
-    """
+class Entidad(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Todas las transacciones se deben grabar a una entidad."""
 
-    __table_args__ = (db.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
+    __table_args__ = (database.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
-    entidad = db.Column(db.String(10), unique=True, index=True)
-    status = db.Column(db.String(50), nullable=True)
-    razon_social = db.Column(db.String(100), unique=True, nullable=False)
-    nombre_comercial = db.Column(db.String(50))
-    id_fiscal = db.Column(db.String(50), unique=True, nullable=False)
-    moneda = db.Column(db.String(10), db.ForeignKey("moneda.codigo"))
+    entidad = database.Column(database.String(10), unique=True, index=True)
+    status = database.Column(database.String(50), nullable=True)
+    razon_social = database.Column(database.String(100), unique=True, nullable=False)
+    nombre_comercial = database.Column(database.String(50))
+    id_fiscal = database.Column(database.String(50), unique=True, nullable=False)
+    moneda = database.Column(database.String(10), database.ForeignKey("moneda.codigo"))
     # Individual, Sociedad, Sin Fines de Lucro
-    tipo_entidad = db.Column(db.String(50))
+    tipo_entidad = database.Column(database.String(50))
     tipo_entidad_lista = [
         "Asociación",
         "Compañia Limitada",
@@ -322,152 +317,144 @@ class Entidad(db.Model, BaseTabla):  # type: ignore[name-defined]
         "Persona Natural",
     ]
     # Información de contacto
-    correo_electronico = db.Column(db.String(50))
-    web = db.Column(db.String(50))
-    telefono1 = db.Column(db.String(50))
-    telefono2 = db.Column(db.String(50))
-    fax = db.Column(db.String(50))
-    habilitada = db.Column(db.Boolean())
-    predeterminada = db.Column(db.Boolean())
+    correo_electronico = database.Column(database.String(50))
+    web = database.Column(database.String(50))
+    telefono1 = database.Column(database.String(50))
+    telefono2 = database.Column(database.String(50))
+    fax = database.Column(database.String(50))
+    habilitada = database.Column(database.Boolean())
+    predeterminada = database.Column(database.Boolean())
 
 
-class Unidad(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
-    """
+class Unidad(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
 
-    __table_args__ = (db.UniqueConstraint("id", "nombre", name="unidad_unica"),)
+    __table_args__ = (database.UniqueConstraint("id", "nombre", name="unidad_unica"),)
     # Información legal de la entidad
-    unidad = db.Column(db.String(10), unique=True, index=True)
-    nombre = db.Column(db.String(50), nullable=False)
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.entidad"))
-    correo_electronico = db.Column(db.String(50))
-    web = db.Column(db.String(50))
-    telefono1 = db.Column(db.String(50))
-    telefono2 = db.Column(db.String(50))
-    fax = db.Column(db.String(50))
+    unidad = database.Column(database.String(10), unique=True, index=True)
+    nombre = database.Column(database.String(50), nullable=False)
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
+    correo_electronico = database.Column(database.String(50))
+    web = database.Column(database.String(50))
+    telefono1 = database.Column(database.String(50))
+    telefono2 = database.Column(database.String(50))
+    fax = database.Column(database.String(50))
 
 
 class Direcciones(BaseDireccion):
-    """
-    La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas.
-    """
+    """La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas."""
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
-class Cuentas(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    La base de contabilidad es el catalogo de cuentas.
-    """
+class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """La base de contabilidad es el catalogo de cuentas."""
 
     __table_args__ = (
-        db.UniqueConstraint("id"),
-        db.UniqueConstraint("entidad", "codigo", name="cta_unica"),
+        database.UniqueConstraint("id"),
+        database.UniqueConstraint("entidad", "codigo", name="cta_unica"),
     )
-    activa = db.Column(db.Boolean(), index=True)
+    activa = database.Column(database.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
-    habilitada = db.Column(db.Boolean(), index=True)
+    habilitada = database.Column(database.Boolean(), index=True)
     # Todas las cuentas deben estan vinculadas a una compañia
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.entidad"))
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(db.String(50), index=True)
-    nombre = db.Column(db.String(100))
+    codigo = database.Column(database.String(50), index=True)
+    nombre = database.Column(database.String(100))
     # Cuenta agrupador o cuenta que recibe movimientos
-    grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(50), nullable=True)
-    moneda = db.Column(db.String(10), db.ForeignKey("moneda.codigo"), nullable=True)
+    grupo = database.Column(database.Boolean())
+    padre = database.Column(database.String(50), nullable=True)
+    moneda = database.Column(database.String(10), database.ForeignKey("moneda.codigo"), nullable=True)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
-    rubro = db.Column(db.String(15), index=True)
+    rubro = database.Column(database.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
     # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
     # unicamente desde sus respectivo modulos
-    tipo = db.Column(db.String(15))
+    tipo = database.Column(database.String(15))
     UniqueConstraint("entidad", "codigo", name="cta_unica_entidad")
 
 
-class CentroCosto(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
-    """
+class CentroCosto(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC)."""
 
-    __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="cc_unico"),)
-    activa = db.Column(db.Boolean(), index=True)
-    predeterminado = db.Column(db.Boolean())
+    __table_args__ = (database.UniqueConstraint("entidad", "codigo", name="cc_unico"),)
+    activa = database.Column(database.Boolean(), index=True)
+    predeterminado = database.Column(database.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
-    habilitada = db.Column(db.Boolean(), index=True)
+    habilitada = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.entidad"))
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
     # Cuenta agrupador o cuenta que recibe movimientos
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(
-        db.String(50),
+    codigo = database.Column(
+        database.String(50),
     )
-    nombre = db.Column(db.String(100))
-    grupo = db.Column(db.Boolean())
-    padre = db.Column(db.String(100), nullable=True)
+    nombre = database.Column(database.String(100))
+    grupo = database.Column(database.Boolean())
+    padre = database.Column(database.String(100), nullable=True)
     UniqueConstraint("entidad", "codigo", name="cc_unico_entidad")
 
 
-class Proyecto(db.Model, BaseTabla):  # type: ignore[name-defined]
+class Proyecto(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
+    Clase para la adminstración de proyectos.
+
     Similar a un Centro de Costo pero con una vida mas efimera y normalmente con un presupuesto
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (db.UniqueConstraint("entidad", "codigo", name="py_unico"),)
+    __table_args__ = (database.UniqueConstraint("entidad", "codigo", name="py_unico"),)
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
-    habilitado = db.Column(db.Boolean(), index=True)
+    habilitado = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.entidad"))
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
-    codigo = db.Column(db.String(50), unique=True, index=True)
-    nombre = db.Column(db.String(100), unique=True)
-    fechainicio = db.Column(db.Date())
-    fechafin = db.Column(db.Date())
-    presupuesto = db.Column(db.Float())
+    codigo = database.Column(database.String(50), unique=True, index=True)
+    nombre = database.Column(database.String(100), unique=True)
+    fechainicio = database.Column(database.Date())
+    fechafin = database.Column(database.Date())
+    presupuesto = database.Column(database.Float())
     UniqueConstraint("entidad", "codigo", name="proyecto_unica_entidad")
 
 
-class PeriodoContable(db.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Todas las transaciones deben estar vinculadas a un periodo contable.
-    """
+class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Todas las transaciones deben estar vinculadas a un periodo contable."""
 
-    entidad = db.Column(db.String(10), db.ForeignKey("entidad.entidad"))
-    nombre = db.Column(db.String(50), nullable=False)
-    status = db.Column(db.String(50))
-    habilitada = db.Column(db.Boolean(), index=True)
-    inicio = db.Column(db.Date(), nullable=False)
-    fin = db.Column(db.Date(), nullable=False)
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
+    nombre = database.Column(database.String(50), nullable=False)
+    status = database.Column(database.String(50))
+    habilitada = database.Column(database.Boolean(), index=True)
+    inicio = database.Column(database.Date(), nullable=False)
+    fin = database.Column(database.Date(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Cobrar
-class Cliente(db.Model, BaseTercero):  # type: ignore[name-defined]
-    pass
+class Cliente(database.Model, BaseTercero):  # type: ignore[name-defined]
+    """Clase base para la administración de clientes."""
 
 
-class ClienteDireccion(db.Model, BaseDireccion):  # type: ignore[name-defined]
-    pass
+class ClienteDireccion(database.Model, BaseDireccion):  # type: ignore[name-defined]
+    """Un cliente puede tener varias direcciones."""
 
 
-class ClienteContacto(db.Model, BaseContacto):  # type: ignore[name-defined]
-    pass
+class ClienteContacto(database.Model, BaseContacto):  # type: ignore[name-defined]
+    """Un cliente puede tener varios contactos."""
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Pagar
-class Proveedor(db.Model, BaseTercero):  # type: ignore[name-defined]
-    pass
+class Proveedor(database.Model, BaseTercero):  # type: ignore[name-defined]
+    """Clase base para la administración de proveedores."""
 
 
-class ProveedorDireccion(db.Model, BaseDireccion):  # type: ignore[name-defined]
-    pass
+class ProveedorDireccion(database.Model, BaseDireccion):  # type: ignore[name-defined]
+    """Un proveedor puede tener varias direcciones."""
 
 
-class ProveedorContacto(db.Model, BaseContacto):  # type: ignore[name-defined]
-    pass
+class ProveedorContacto(database.Model, BaseContacto):  # type: ignore[name-defined]
+    """Un proveedor puede tener varios contactos."""

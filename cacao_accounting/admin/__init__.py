@@ -15,13 +15,11 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo administrativo.
-"""
+"""Modulo administrativo."""
 
-from flask import Blueprint, redirect, render_template
+from flask import Blueprint, render_template
 from flask_login import login_required
-from cacao_accounting.modulos import validar_modulo_activo
+from cacao_accounting.decorators import modulo_activo
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 
@@ -32,23 +30,15 @@ admin = Blueprint("admin", __name__, template_folder="templates")
 @admin.route("/configuracion")
 @admin.route("/settings")
 @login_required
+@modulo_activo("admin")
 def admin_():
-    """
-    Definición del modulo administrativo.
-    """
-    if validar_modulo_activo("admin"):
-        return render_template("admin.html")
-    else:
-        redirect("/app")
+    """Definición del modulo administrativo."""
+    return render_template("admin.html")
 
 
 @admin.route("/settings/modules")
 @login_required
+@modulo_activo("admin")
 def lista_modulos():
-    """
-    Define vista para listar modulos del sistema.
-    """
-    if validar_modulo_activo("admin"):
-        return render_template("admin/modulos.html")
-    else:
-        redirect("/app")
+    """Define vista para listar modulos del sistema."""
+    return render_template("admin/modulos.html")

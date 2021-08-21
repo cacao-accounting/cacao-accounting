@@ -1,3 +1,6 @@
+from cacao_accounting import database, datos
+
+
 class Basicos:
     def __init__(self) -> None:
         pass
@@ -10,7 +13,7 @@ class Basicos:
 
     def test_verifica_migracion_db_V(self):
         if self.dbengine:
-            from cacao_accounting.database import Metadata, db
+            from cacao_accounting.database import Metadata, database
             from cacao_accounting.database.helpers import requiere_migracion_db, db_metadata
 
             with self.app.app_context():
@@ -18,8 +21,8 @@ class Basicos:
                 meta = Metadata.query.first()
                 meta.dbversion = "hola"
                 meta.cacaoversion = "hola"
-                db.session.add(meta)
-                db.session.commit()
+                database.session.add(meta)
+                database.session.commit()
                 meta = Metadata.query.first()
                 assert meta.dbversion == "hola"
                 assert meta.cacaoversion == "hola"
@@ -40,12 +43,12 @@ class Basicos:
                 assert requiere_migracion_db(self.app) is False
 
     def test_inicia_base_de_datos_V(self):
-        from cacao_accounting.database import db
+        from cacao_accounting.database import database
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         if self.dbengine:
             with self.app.app_context():
-                db.drop_all()
+                database.drop_all()
                 assert inicia_base_de_datos(self.app) is True
 
     def test_inicia_base_de_datos_F(self):
@@ -82,10 +85,10 @@ class Basicos:
         environ["CACAO_USER"] = "wmoreno"
         environ["CACAO_PWD"] = "wmoreno1A+"
 
-        from cacao_accounting.database import db
+        from cacao_accounting.database import database
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         if self.dbengine:
             with self.app.app_context():
-                db.drop_all()
+                database.drop_all()
                 assert inicia_base_de_datos(self.app) is True

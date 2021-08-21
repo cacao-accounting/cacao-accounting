@@ -4,7 +4,7 @@
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 {% macro headertags() -%}
   {# Linea en blanco intencional #}
-<meta charset="utf-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Aplicación Contable.">
     <meta name="author" content="William Moreno Reyes">
@@ -38,24 +38,6 @@
     <meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
     <meta name="theme-color" content="#7952b3">
 
-    <style>
-      .bd-placeholder-img {
-        font-size: 1.125rem;
-        text-anchor: middle;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-      }
-      @media (min-width: 768px) {
-        .bd-placeholder-img-lg {
-          font-size: 3.5rem;
-        }
-      }
-    </style>
-    
-    <!-- Custom styles for this template -->
-    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
 
 {%- endmacro %}
 

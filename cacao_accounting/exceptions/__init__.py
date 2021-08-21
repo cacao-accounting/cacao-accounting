@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Definición central de errores del sistema."""
+
 
 class CacaoAccountingException(Exception):
     """Clase base para generar errores locales."""

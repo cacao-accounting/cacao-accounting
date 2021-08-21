@@ -15,13 +15,14 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Página principal de la aplicación.
-"""
+"""Página principal de la aplicación."""
 
-
-from flask import Blueprint, current_app, render_template
+from os import environ
+from flask import Blueprint, current_app, render_template, redirect
 from flask_login import login_required
+from cacao_accounting.database import DBVERSION
+from cacao_accounting.version import VERSION
+
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 
@@ -29,34 +30,30 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @cacao_app.route("/app")
 @login_required
 def pagina_inicio():
+    """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
     return render_template("app.html")
 
 
 def bd_actual():
-    """
-    Devuelve el motor de base de datos según la cadena de conexión establecida
-    en la configuración de la aplicación actual.
-    """
+    """Devuelve el motor de base de datos."""
     uri = str(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
     if uri.startswith("sqlite"):
-        db = "Sqlite"
+        db_engine = "Sqlite"
     elif uri.startswith("postgresql"):
-        db = "Postgresql"
+        db_engine = "Postgresql"
     elif uri.startswith("mysql"):
-        db = "MySQL"
+        db_engine = "MySQL"
     elif uri.startswith("mssql"):
-        db = "MS SQL Server"
+        db_engine = "MS SQL Server"
     elif uri.startswith("mariadb"):
-        db = "Mariadb"
+        db_engine = "Mariadb"
     else:
-        db = None
-    return db
+        db_engine = None
+    return db_engine
 
 
 def dev_info():
-    from cacao_accounting.version import VERSION
-    from cacao_accounting.database import DBVERSION
-
+    """Funcion auxiliar para obtener información del sistema."""
     info = {
         "app": {
             "version": VERSION,
@@ -69,11 +66,8 @@ def dev_info():
 @cacao_app.route("/development")
 @cacao_app.route("/info")
 def informacion_para_desarrolladores():
-    from os import environ
-
-    if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):
+    """Pagina con información para desarrolladores o administradores del sistema."""
+    if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):  # pylint: disable=no-else-return
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:
-        from flask import redirect
-
         return redirect("/login")

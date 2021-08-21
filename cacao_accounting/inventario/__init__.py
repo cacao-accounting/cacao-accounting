@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo de Inventarios.
-"""
+"""Modulo de Inventarios."""
 
 from flask import Blueprint, render_template
 from flask_login import login_required
@@ -31,7 +29,5 @@ inventario = Blueprint("inventario", __name__, template_folder="templates")
 @modulo_activo("inventory")
 @login_required
 def inventario_():
-    """
-    Definición de vista principal de inventarios.
-    """
+    """Definición de vista principal de inventarios."""
     return render_template("inventario.html")

@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Utilidad para iniciar el servidor local WSGI usando Waitress."""
+
 from waitress import serve  # type: ignore[import]
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion, PORT, THREADS
@@ -24,7 +26,7 @@ app = create_app(configuracion)
 
 
 def server() -> None:
-    """Ejecuta la aplicacion con Waitress como servidor WSGI"""
+    """Ejecuta la aplicacion con Waitress como servidor WSGI."""
     from cacao_accounting.database.helpers import inicia_base_de_datos, requiere_migracion_db, verifica_coneccion_db
 
     log.info("Iniciando Cacao Accounting.")

@@ -16,6 +16,9 @@
 # - William José Moreno Reyes
 
 # pylint: disable=too-many-instance-attributes
+
+"""Definicion principal de una transacción en el sistema."""
+
 from dataclasses import dataclass
 from typing import List, Union
 from uuid import UUID
@@ -24,6 +27,8 @@ from uuid import UUID
 @dataclass
 class Transaccion:
     """
+    Definición de transaccion.
+
     Una transacción es el reflejo en el sistema de una accion realizada por un usuario, normalmente:
       - Crear: Toda transacción grabada en el sistema debe grabarse es estado borrador.
       - Actualizar: Las transacciones en estado borrador pueden ser editadas sin cambiar el estado.

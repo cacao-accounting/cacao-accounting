@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Inición de sesión de usuarios.
-"""
+"""Inición de sesión de usuarios."""
 
 from cacao_accounting.database import Usuario
 from flask import Blueprint, redirect, render_template, flash
@@ -27,9 +25,12 @@ from flask_login import LoginManager, logout_user, login_user, login_required
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
 
+INICIO_SESION = redirect("/login")
+
 
 @administrador_sesion.user_loader
 def cargar_sesion(identidad):
+    """Devuelve la entrada correspondiente al usuario que inicio sesión."""
     if identidad is not None:
         return Usuario.query.get(identidad)
     return None
@@ -37,11 +38,13 @@ def cargar_sesion(identidad):
 
 @administrador_sesion.unauthorized_handler
 def no_autorizado():
+    """Redirecciona al inicio de sesión usuarios no autorizados."""
     flash("Favor iniciar sesión para acceder al sistema.")
-    return redirect("/login")
+    return INICIO_SESION
 
 
 def proteger_passwd(clave):
+    """Devuelve una contraseña salteada con bcrytp."""
     from bcrypt import hashpw, gensalt
 
     clave_encriptada = hashpw(clave.encode(), gensalt())
@@ -49,6 +52,7 @@ def proteger_passwd(clave):
 
 
 def validar_acceso(usuario, clave):
+    """Verifica el inicio de sesión del usuario."""
     from bcrypt import checkpw
 
     acceso = clave
@@ -66,11 +70,13 @@ def validar_acceso(usuario, clave):
 @login.route("/inicio")
 @login.route("/main")
 def home():
+    """Permite redireccionar direcciones comunes al inicio."""
     return redirect("/login")
 
 
 @login.route("/login", methods=["GET", "POST"])
 def inicio_sesion():
+    """Inicio de sesión del usuario."""
     from cacao_accounting.auth.forms import LoginForm
 
     form = LoginForm()
@@ -81,7 +87,7 @@ def inicio_sesion():
             return redirect("/app")
         else:
             flash("Inicio de Sesion Incorrecto.")
-            return redirect("/login")
+            return INICIO_SESION
     return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
@@ -89,13 +95,15 @@ def inicio_sesion():
 @login.route("/logout")
 @login.route("/salir")
 def cerrar_sesion():
+    """Finaliza la sesion actual."""
     logout_user()
-    return redirect("/login")
+    return INICIO_SESION
 
 
 @login.route("/test_roles")
 @login_required
 def test_roles():
+    """Verifica los permisos del usuario actual."""
     from flask_login import current_user
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.auth.roles import obtener_roles_por_usuario

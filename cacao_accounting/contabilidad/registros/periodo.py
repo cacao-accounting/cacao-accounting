@@ -15,15 +15,16 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Administración de periodos contables."""
+
 from cacao_accounting.registro import Registro
 
 
 class RegistroPeriodoContable(Registro):
-    """
-    Registro para administración de Períodos Contables
-    """
+    """Registro para administración de Períodos Contables."""
 
     def __init__(self):
+        """Registro para administración de períodos contables."""
         from cacao_accounting.database import PeriodoContable
 
         self.tabla = PeriodoContable

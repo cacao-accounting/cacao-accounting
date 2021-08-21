@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo de Caja y Bancos.
-"""
+"""Modulo de Caja y Bancos."""
 
 from flask import Blueprint, render_template
 from flask_login import login_required
@@ -33,4 +31,5 @@ bancos = Blueprint("bancos", __name__, template_folder="templates")
 @modulo_activo("cash")
 @login_required
 def bancos_():
+    """Pantalla principal del modulo de bancos."""
     return render_template("bancos.html")

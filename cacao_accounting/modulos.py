@@ -24,7 +24,7 @@ Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprin
 from pkgutil import iter_modules
 from typing import Union
 from flask import Flask
-from cacao_accounting.database import db, Modulos
+from cacao_accounting.database import database, Modulos
 
 
 contabilidad = {
@@ -80,18 +80,14 @@ for modulo in modulos:
 
 
 def registrar_modulo(entrada: dict) -> None:
-    """
-    Recibe un diccionario y lo inserta en la base de datos.
-    """
+    """Recibe un diccionario y lo inserta en la base de datos."""
     registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
-    db.session.add(registro)
-    db.session.commit()
+    database.session.add(registro)
+    database.session.commit()
 
 
 def _init_modulos() -> None:
-    """
-    Inserta en la base de datos los modulos predeterminados del sistema.
-    """
+    """Inserta en la base de datos los modulos predeterminados del sistema."""
     for i in MODULOS_STANDAR:
         i["ruta"] = None
         registrar_modulo(i)
@@ -121,9 +117,7 @@ def listado_modulos() -> dict:
 
 
 def validar_modulo_activo(modulo_a_validar: str) -> bool:
-    """
-    Se utiliza en las plantillas para determinar si un modulo se debe presentar o no en la interfas de usuario.
-    """
+    """Valida si el modulo se encuentra activo."""
     datos = listado_modulos()
     return modulo_a_validar in datos["modulos_activos"]
 
