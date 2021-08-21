@@ -16,19 +16,13 @@
 # - William José Moreno Reyes
 
 from cacao_accounting.database import Entidad
-from cacao_accounting.exceptions import TransactionError
 from cacao_accounting.transaccion import Transaccion
 
 
 def validar_entidad_activa(transaccion: Transaccion) -> bool:
     if transaccion.datos.get("entidad", None):  # type: ignore[union-attr]
         entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()  # type: ignore[index, call-overload]
-        if entidad.status != "inactiva":
-            return True
-        else:
-            raise TransactionError("Entidad se encuentra inactiva.")
-    else:
-        return True
+        return entidad.status != "inactiva"
 
 
 VALIDACIONES_PREDETERMINADAS: list = []
