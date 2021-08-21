@@ -82,8 +82,6 @@ jobs:
         twine check dist/* 
     - name: Lint with flake8
       run: flake8 cacao_accounting
-    - name: Analysing the code with pylint
-      run: pylint cacao_accounting 
     - name: Verificando tipos
       run: mypy cacao_accounting/
     - name: HTML Lint
