@@ -23,6 +23,8 @@ def validar_entidad_activa(transaccion: Transaccion) -> bool:
     if transaccion.datos.get("entidad", None):  # type: ignore[union-attr]
         entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()  # type: ignore[index, call-overload]
         return entidad.status != "inactiva"
+    else:
+        return False
 
 
 VALIDACIONES_PREDETERMINADAS: list = []
