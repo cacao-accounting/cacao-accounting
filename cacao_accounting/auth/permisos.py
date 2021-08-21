@@ -91,7 +91,7 @@ class Permisos:  # pylint: disable=R0902
             self.usuario: Union[str, None] = usuario
             self.administrador: Union[bool, None] = self.valida_usuario_tiene_rol_administrativo()
             self.roles: Union[list, None] = self.obtener_roles_de_usuario()
-            self.permisos: Union[list, None] = self.obtiene_lista_de_permisos()
+            self.permisos_usuario: Union[list, None] = self.obtiene_lista_de_permisos()
             if self.administrador:
                 self.autorizado: Union[bool, None] = True
                 self.actualizar: Union[bool, None] = True
@@ -135,7 +135,7 @@ class Permisos:  # pylint: disable=R0902
             self.usuario = None
             self.administrador = False
             self.roles = None
-            self.permisos = None
+            self.permisos_usuario = None
             self.autorizado = False
             self.actualizar = False
             self.anular = False
@@ -195,8 +195,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __usuario_autorizado(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.acceso is True:
                         ACCESO = True
@@ -205,8 +205,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __actualizar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.actualizar is True:
                         ACCESO = True
@@ -215,8 +215,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __anular(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.anular is True:
                         ACCESO = True
@@ -225,8 +225,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __autorizar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.autorizar is True:
                         ACCESO = True
@@ -235,8 +235,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __bi(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.bi is True:
                         ACCESO = True
@@ -245,8 +245,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __cerrar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.cerrar is True:
                         ACCESO = True
@@ -255,8 +255,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __crear(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.crear is True:
                         ACCESO = True
@@ -265,8 +265,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __configurar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.configurar is True:
                         ACCESO = True
@@ -275,8 +275,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __consultar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.consultar is True:
                         ACCESO = True
@@ -285,8 +285,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __corregir(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.corregir is True:
                         ACCESO = True
@@ -295,8 +295,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __editar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.editar is True:
                         ACCESO = True
@@ -305,8 +305,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __eliminar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.eliminar is True:
                         ACCESO = True
@@ -315,8 +315,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __importar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.importar is True:
                         ACCESO = True
@@ -325,8 +325,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __listar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.listar is True:
                         ACCESO = True
@@ -335,8 +335,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __reportes(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.reportes is True:
                         ACCESO = True
@@ -345,8 +345,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __solicitar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.solicitar is True:
                         ACCESO = True
@@ -355,8 +355,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __validar(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.validar is True:
                         ACCESO = True
@@ -365,8 +365,8 @@ class Permisos:  # pylint: disable=R0902
 
     def __validar_solicitud(self) -> bool:
         ACCESO = False
-        if self.__init_valido and self.permisos:
-            for PERMISOS in self.permisos:
+        if self.__init_valido and self.permisos_usuario:
+            for PERMISOS in self.permisos_usuario:
                 for PERMISO in PERMISOS:
                     if PERMISO.validar_solicitud is True:
                         ACCESO = True
