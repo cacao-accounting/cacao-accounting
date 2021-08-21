@@ -153,37 +153,37 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     # pylint: disable=W0612
     verifica_version_de_python()
-    CACAO_APP = Flask(
+    cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
         static_folder=DIRECTORIO_ARCHIVOS,
     )
 
     if ajustes:
-        CACAO_APP.config.from_mapping(ajustes)
+        cacao_app.config.from_mapping(ajustes)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def initdb():  # pragma: no cover
         """Crea el esquema de la base de datos."""
 
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        inicia_base_de_datos(CACAO_APP)
+        inicia_base_de_datos(cacao_app)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
         if current_app.config.get("ENV") == "development":
             database.drop_all()
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def version():  # pragma: no cover
         """Muestra la version actual instalada."""
         from cacao_accounting.version import VERSION
 
         print(VERSION)
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def serve():  # pragma: no cover
         """
         Inicio la aplicacion con waitress como servidor WSGI por  defecto.
@@ -192,7 +192,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
 
         server()
 
-    @CACAO_APP.cli.command()
+    @cacao_app.cli.command()
     def setupdb():  # pragma: no cover
         """
         Define una base de datos de desarrollo nueva.
@@ -201,10 +201,10 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
 
         if current_app.config.get("ENV") == "development":
             database.drop_all()
-            inicia_base_de_datos(CACAO_APP)
+            inicia_base_de_datos(cacao_app)
 
-    actualiza_variables_globales_jinja(app=CACAO_APP)
-    iniciar_extenciones(app=CACAO_APP)
-    registrar_blueprints(app=CACAO_APP)
-    registrar_rutas_predeterminadas(app=CACAO_APP)
-    return CACAO_APP
+    actualiza_variables_globales_jinja(app=cacao_app)
+    iniciar_extenciones(app=cacao_app)
+    registrar_blueprints(app=cacao_app)
+    registrar_rutas_predeterminadas(app=cacao_app)
+    return cacao_app
