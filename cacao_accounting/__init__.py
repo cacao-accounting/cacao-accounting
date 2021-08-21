@@ -92,13 +92,14 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         from flask import render_template
 
         @app.errorhandler(404)
-        def error_404(error):  # pylint: disable=W0612
-
-            return render_template("404.html"), 404
+        def error_404(error):
+            if error:
+                return render_template("404.html"), 404
 
         @app.errorhandler(403)
-        def error_403(error):  # pylint: disable=W0612
-            return render_template("403.html"), 403
+        def error_403(error):
+            if error:
+                return render_template("403.html"), 403
 
     else:
         raise RuntimeError(ERROR2)
@@ -173,7 +174,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
         if current_app.config.get("ENV") == "development":
-            db.drop_all()
+            database.drop_all()
 
     @CACAO_APP.cli.command()
     def version():  # pragma: no cover
