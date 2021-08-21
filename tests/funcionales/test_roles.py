@@ -72,7 +72,7 @@ def test_logicos():
     assert isinstance(permisos.roles, list)
     assert isinstance(permisos.administrador, bool)
     assert isinstance(permisos.modulo, str)
-    assert isinstance(permisos.permisos, list)
+    assert isinstance(permisos.permisos_usuario, list)
 
 
 def test_permisos_rol_admin():
