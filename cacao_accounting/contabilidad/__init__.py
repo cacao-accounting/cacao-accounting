@@ -41,6 +41,7 @@ from cacao_accounting.transaccion import Transaccion
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
 
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
 @contabilidad.route("/currency/list")
