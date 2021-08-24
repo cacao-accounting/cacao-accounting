@@ -11,7 +11,7 @@
 [![codecov](https://codecov.io/gh/cacao-accounting/cacao-accounting/branch/development/graph/badge.svg)](https://codecov.io/gh/cacao-accounting/cacao-accounting)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cacao-accounting_cacao-accounting&metric=alert_status)](https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting)
 
-Aplicacion contable para micro, pequeñas y medianas empresas (MiPymes).
+Aplicacion contable para el control de cuentas por cobrar, cuentas por pagar, inventarios y tesoreria. 
 
 Nota: 
 * Este es un proyecto en etapa temprana de desarrollo no apta para uso en producción.
