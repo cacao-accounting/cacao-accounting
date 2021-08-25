@@ -15,10 +15,11 @@
   <br>
   Roles Actuales:
   <table class="table">
+    <caption>Lista de Roles del usuario {{ current_user.usuario }}.</caption>
       <tr>
-        <th>Usuario</th>
-        <th>Rol</th>
-        <th>UUID</th>
+        <th scope="col">Usuario</th>
+        <th scope="col">Rol</th>
+        <th scope="col">Codigo Unico</th>
       </tr>
   {% for role in roles %}
       <tr>
@@ -32,9 +33,10 @@
   <h3>Modulo {{ modulo.modulo | capitalize }}</h3>
   UUID = {{ modulo.id }}
   <table class="table">
+    <caption>Lista de Permisos en el modulo {{ modulo.modulo }}.</caption>
     <tr>
-      <th>Permiso</th>
-      <th>Estatus</th>
+      <th scope="col">Permiso</th>
+      <th scope="col">Estatus</th>
     </tr>
     <tr>
       <td>Autorizado*</td>
