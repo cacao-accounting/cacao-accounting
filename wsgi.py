@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Modulo a ejecutar por defecto al ejecutar cacao_accounting."""
+
 from cacao_accounting.server import app, server
 
 
