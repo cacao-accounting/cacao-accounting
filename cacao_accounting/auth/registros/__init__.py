@@ -15,11 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Registros de usuario."""
+
 from cacao_accounting.database import Usuario
 from cacao_accounting.registro import Registro
 
 
 class RegistroUsuario(Registro):
-    def __init__(self):
+    """Administración de Usuarios."""
 
+    def __init__(self):
+        """Administración de registros de usuarios."""
         self.tabla = Usuario

@@ -46,6 +46,8 @@ from cacao_accounting.validaciones import VALIDACIONES_PREDETERMINADAS
 
 class Registro:
     """
+    Define la clase principal para administrar registros en la base de datos.
+
     Las transacciones ejecutadas por los usuarios deben tener acceso en la base de datos, esta interfaz ofrece
     una sere de metodos unificada para qe las transacciones modifiquen el estado de la base de datos.
     """
@@ -110,10 +112,11 @@ class Registro:
 
     def _elimar_registro_principal(self, transaccion: Transaccion) -> bool:
         """
+        Elimina una transacción de la base de datos.
+
         Eliminar un registro solo puede ser realizado por un usuario administrador, normalmente
         un usuario de sistema se limita a cancelar o anular una operacion.
         """
-
         if self.tabla:
             REGISTRO_A_ELIMINAR = self.tabla.query.filter_by(id=transaccion.uuid).one()
             database.session.delete(REGISTRO_A_ELIMINAR)
@@ -123,6 +126,7 @@ class Registro:
             raise TransactionError(ERROR4)
 
     def ejecutar_transaccion(self, transaccion: Union[Transaccion, None] = None):
+        """Ejecuta una transacción en la base de datos."""
         if transaccion:
             self._ejecutar_validacion_de_transaccion(transaccion)
             self._ejecutar_transaccion_por_tipo(transaccion)

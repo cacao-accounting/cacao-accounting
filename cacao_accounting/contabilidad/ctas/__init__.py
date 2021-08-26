@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Catalogos de Cuentas Contables."""
+
 from collections import namedtuple
 from csv import DictReader
 from os.path import join

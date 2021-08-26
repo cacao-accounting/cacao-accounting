@@ -15,15 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Formularios del modulo de administración de sesión."""
+
 from flask_wtf import FlaskForm
 from wtforms import PasswordField, StringField, SubmitField
 from wtforms.validators import DataRequired
 
 
 class LoginForm(FlaskForm):
-    """
-    Formulario de inicio de sesión.
-    """
+    """Formulario de inicio de sesión."""
 
     usuario = StringField(validators=[DataRequired()])
     acceso = PasswordField(validators=[DataRequired()])

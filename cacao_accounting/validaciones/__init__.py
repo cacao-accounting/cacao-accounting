@@ -15,11 +15,15 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Validaciones del modulo contable."""
+
+
 from cacao_accounting.database import Entidad
 from cacao_accounting.transaccion import Transaccion
 
 
 def validar_entidad_activa(transaccion: Transaccion) -> bool:
+    """Funcion para evitar se registren transacciones en entidades inactivas."""
     if transaccion.datos.get("entidad", None):  # type: ignore[union-attr]
         entidad = Entidad.query.filter_by(entidad=transaccion.datos["entidad"]).first()  # type: ignore[index, call-overload]
         return entidad.status != "inactiva"

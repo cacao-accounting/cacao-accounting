@@ -152,7 +152,17 @@ disable=print-statement,
         xreadlines-attribute,
         deprecated-sys-function,
         exception-escape,
-        comprehension-escape
+        comprehension-escape,
+        # Por la naturaleza del proyecto no todos los import estan al inicio para evitar 
+        # importaciones circulares
+        import-outside-toplevel,
+        # De acuerdo a PEP8 utilizar nombre de variables en MAYUSCULAS es permitido
+        # https://www.python.org/dev/peps/pep-0008/#descriptive-naming-styles
+        invalid-name,
+        # Sonarcloud es mas preciso determinar si un código un bloque de codigo es identio
+        # o similar o otro: https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting
+        duplicate-code,
+
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -571,7 +581,7 @@ max-returns=6
 max-statements=50
 
 # Minimum number of public methods for a class (see R0903).
-min-public-methods=2
+min-public-methods=1
 
 
 [IMPORTS]

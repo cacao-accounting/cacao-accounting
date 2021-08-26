@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Utilidad para iniciar la aplicacion como modulo en python."""
+
 from cacao_accounting.server import server
 
 

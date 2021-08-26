@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Página principal de la aplicación.
-"""
+"""Página principal de la aplicación."""
 
 from os import environ
 from flask import Blueprint, current_app, render_template, redirect
@@ -32,17 +30,12 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @cacao_app.route("/app")
 @login_required
 def pagina_inicio():
-    """
-    Esta es la primer pagina mostrada al usuario luego de iniciar sesion
-    """
+    """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
     return render_template("app.html")
 
 
 def bd_actual():
-    """
-    Devuelve el motor de base de datos según la cadena de conexión establecida
-    en la configuración de la aplicación actual.
-    """
+    """Devuelve el motor de base de datos."""
     uri = str(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
     if uri.startswith("sqlite"):
         db_engine = "Sqlite"
@@ -60,10 +53,7 @@ def bd_actual():
 
 
 def dev_info():
-    """
-    Funcion auxiliar para obtener información del sistema.
-    """
-
+    """Funcion auxiliar para obtener información del sistema."""
     info = {
         "app": {
             "version": VERSION,
@@ -76,10 +66,7 @@ def dev_info():
 @cacao_app.route("/development")
 @cacao_app.route("/info")
 def informacion_para_desarrolladores():
-    """
-    Pagina con información para desarrolladores o administradores del sistema.
-    """
-
+    """Pagina con información para desarrolladores o administradores del sistema."""
     if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):  # pylint: disable=no-else-return
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:

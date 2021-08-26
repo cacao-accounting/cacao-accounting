@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Definición de herramientas varias.
-"""
+"""Definición de herramientas varias."""
 
 from os import pardir, path
 

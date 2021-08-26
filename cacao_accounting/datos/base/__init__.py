@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Datos básicos para iniciar el sistema.
-"""
+"""Datos básicos para iniciar el sistema."""
 
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import crea_roles_predeterminados, asigna_rol_a_usuario
@@ -29,6 +27,7 @@ from cacao_accounting.transaccion import Transaccion
 
 
 def registra_monedas(carga_rapida=False):
+    """Carga de monedas al sistema."""
     from teritorio import Currencies
     from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
 
@@ -81,6 +80,13 @@ def registra_monedas(carga_rapida=False):
 
 
 def crea_usuario_admin():
+    """
+    Crea el usuario administrador.
+
+    Si no se encuentra definido a nivel de variables de entorno se crea utilizando valores
+    predeterminados, no se recomienda utilizar los valores predeterminados si la instancia va
+    a estar expuesta de forma publica a la internet.
+    """
     from os import environ
     from cacao_accounting.auth import proteger_passwd
     from cacao_accounting.auth.registros import RegistroUsuario
@@ -113,14 +119,12 @@ def crea_usuario_admin():
 
 
 def __cargar_roles_al_sistema() -> None:
+    """Carga roles de desarrollo a la base de datos."""
     crea_roles_predeterminados()
 
 
 def base_data(carga_rapida=False):
-    """
-    Definición de metodo para cargar información base al sistema.
-    """
-
+    """Definición de metodo para cargar información base al sistema."""
     log.debug("Iniciando carga de datos base al sistema.")
     _init_modulos()
     __cargar_roles_al_sistema()

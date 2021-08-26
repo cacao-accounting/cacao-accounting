@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Funciones auxiliares para usar en las rutas de la aplicación."""
+
 from functools import wraps
 from flask import flash, abort
 from flask_login import current_user
@@ -24,6 +26,8 @@ from cacao_accounting.modulos import validar_modulo_activo
 
 
 def modulo_activo(modulo):
+    """Verifica si el recurso solicitado pertenece a un modulo activo."""
+
     def decorator_modulo_activo(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -39,6 +43,8 @@ def modulo_activo(modulo):
 
 
 def verifica_acceso(modulo):
+    """Comprueba si un usuario tiene acceso a un recurso determinado."""
+
     def decorator_verifica_acceso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):

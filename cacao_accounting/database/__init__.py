@@ -17,6 +17,7 @@
 
 """
 Definicion de base de datos.
+
 El objetivo es que el sistema contable pueda ser desplegado sin tener que depender
 de una base de datos especifica, la prioridad en soportar Postresql como base de datos
 primaria para entornos multiusuarios y Sqlite como base de datos para entornos de un
@@ -68,10 +69,7 @@ STATUS: Dict[str, StatusWeb] = {
 
 
 def obtiene_texto_unico() -> str:
-    """
-    A partir de un código UUID unico aleatorio devuelve una cadena de texto unica
-    que se puede usar como identificador interno.
-    """
+    """Genera un texto unico en base a una UUID."""
     return str(uuid4())
 
 
@@ -113,9 +111,7 @@ else:
 # Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
 # ellas.
 class BaseTabla:
-    """
-    Columnas estandar para todas las tablas de la base de datos.
-    """
+    """Columnas estandar para todas las tablas de la base de datos."""
 
     # Pistas de auditoria comunes a todas las tablas.
     id = COLUMNA_UUID
@@ -127,6 +123,8 @@ class BaseTabla:
 
 
 class BaseTransaccion(BaseTabla):
+    """Base para crear transacciones en la entidad."""
+
     registro = database.Column(database.String(50), nullable=True)
     registro_id = database.Column(database.String(75), nullable=True)
     validado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
@@ -140,6 +138,8 @@ class BaseTransaccion(BaseTabla):
 
 
 class BaseTransaccionDetalle(BaseTabla):
+    """Base para crear transacciones en la entidad."""
+
     registro_padre = database.Column(database.String(50), nullable=True)
     registro_padre_id = database.Column(database.String(75), nullable=True)
     referencia = database.Column(database.String(50), nullable=True)
@@ -147,11 +147,7 @@ class BaseTransaccionDetalle(BaseTabla):
 
 
 class BaseTercero(BaseTabla):
-    """
-    Esta es clase contiene campos comunes para terceros, principalmente:
-     - Cliente
-     - Proveedor
-    """
+    """Base para crear terceros en la entidad."""
 
     # Requerisitos minimos para tener crear el registro.
     razon_social = database.Column(database.String(150), nullable=False)
@@ -165,6 +161,8 @@ class BaseTercero(BaseTabla):
 
 
 class BaseContacto(BaseTabla):
+    """Clase base para la creación de contactos."""
+
     tipo = database.Column(database.String(25), nullable=True)
     nombre = database.Column(database.String(50), nullable=True)
     telefono = database.Column(database.String(30), nullable=True)
@@ -173,6 +171,8 @@ class BaseContacto(BaseTabla):
 
 
 class BaseDireccion(BaseTabla):
+    """Clase base para la creación de direcciones."""
+
     linea1 = database.Column(database.String(150), nullable=True)
     linea2 = database.Column(database.String(150), nullable=True)
     linea3 = database.Column(database.String(150), nullable=True)
@@ -189,9 +189,7 @@ class BaseDireccion(BaseTabla):
 # Información sobre la instalación actual del sistema.
 # https://github.com/python/mypy/issues/8603
 class Metadata(database.Model):  # type: ignore[name-defined]
-    """
-    Informacion basica de la instalacion.
-    """
+    """Informacion basica de la instalacion."""
 
     __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
     id = COLUMNA_UUID
@@ -203,9 +201,7 @@ class Metadata(database.Model):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Administración de monedas, localización, tasas de cambio y otras configuraciones regionales.
 class Moneda(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una moneda para los registros de la entidad.
-    """
+    """Una moneda para los registros de la entidad."""
 
     codigo = database.Column(database.String(10), index=True, nullable=False, unique=True)
     nombre = database.Column(database.String(75), nullable=False)
@@ -215,9 +211,7 @@ class Moneda(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class TasaDeCambio(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Tasa de conversión entre dos monedas distintas.
-    """
+    """Tasa de conversión entre dos monedas distintas."""
 
     base = database.Column(database.String(10), database.ForeignKey("moneda.codigo"), nullable=False)
     destino = database.Column(database.String(10), database.ForeignKey("moneda.codigo"), nullable=False)
@@ -228,9 +222,7 @@ class TasaDeCambio(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Administración de usuario, roles, grupos y permisos.
 class Usuario(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una entidad con acceso al sistema.
-    """
+    """Una entidad con acceso al sistema."""
 
     # Información Básica
     usuario = database.Column(database.String(15), nullable=False)
@@ -249,12 +241,15 @@ class Usuario(UserMixin, database.Model, BaseTabla):  # type: ignore[name-define
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Roles para las administración de permisos de usuario."""
 
     name = database.Column(database.String(50), nullable=False, unique=True)
     detalle = database.Column(database.String(100), nullable=False, unique=True)
 
 
 class RolesPermisos(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Los roles definen una cantidad de permisos."""
+
     rol_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
     modulo_id = database.Column(TIPO_UUID, database.ForeignKey("modulos.id"))
     # Usuario tiene acceso al múdulo
@@ -280,6 +275,8 @@ class RolesPermisos(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class RolesUsuario(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Roles dan permisos a los usuarios del sistema."""
+
     user_id = database.Column(TIPO_UUID, database.ForeignKey("usuario.id"))
     role_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
     activo = database.Column(database.Boolean, nullable=True)
@@ -299,10 +296,7 @@ class Modulos(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad.
 class Entidad(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Una entidad es una unidad de negocios de la que se lleva registros
-    en el sistema.
-    """
+    """Todas las transacciones se deben grabar a una entidad."""
 
     __table_args__ = (database.UniqueConstraint("id", "razon_social", name="entidad_unica"),)
     # Información legal de la entidad
@@ -333,9 +327,7 @@ class Entidad(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class Unidad(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios.
-    """
+    """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
 
     __table_args__ = (database.UniqueConstraint("id", "nombre", name="unidad_unica"),)
     # Información legal de la entidad
@@ -350,17 +342,13 @@ class Unidad(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class Direcciones(BaseDireccion):
-    """
-    La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas.
-    """
+    """La entidad y sus diferentes unidades de negocios pueden tener o mas dirección fisicas."""
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
 class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    La base de contabilidad es el catalogo de cuentas.
-    """
+    """La base de contabilidad es el catalogo de cuentas."""
 
     __table_args__ = (
         database.UniqueConstraint("id"),
@@ -389,9 +377,7 @@ class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class CentroCosto(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC).
-    """
+    """La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC)."""
 
     __table_args__ = (database.UniqueConstraint("entidad", "codigo", name="cc_unico"),)
     activa = database.Column(database.Boolean(), index=True)
@@ -414,6 +400,8 @@ class CentroCosto(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 class Proyecto(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
+    Clase para la adminstración de proyectos.
+
     Similar a un Centro de Costo pero con una vida mas efimera y normalmente con un presupuesto
     definido ademas de fechas de inicio y fin.
     """
@@ -434,9 +422,7 @@ class Proyecto(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """
-    Todas las transaciones deben estar vinculadas a un periodo contable.
-    """
+    """Todas las transaciones deben estar vinculadas a un periodo contable."""
 
     entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
     nombre = database.Column(database.String(50), nullable=False)
@@ -449,26 +435,26 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Cobrar
 class Cliente(database.Model, BaseTercero):  # type: ignore[name-defined]
-    pass
+    """Clase base para la administración de clientes."""
 
 
 class ClienteDireccion(database.Model, BaseDireccion):  # type: ignore[name-defined]
-    pass
+    """Un cliente puede tener varias direcciones."""
 
 
 class ClienteContacto(database.Model, BaseContacto):  # type: ignore[name-defined]
-    pass
+    """Un cliente puede tener varios contactos."""
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Cuentas por Pagar
 class Proveedor(database.Model, BaseTercero):  # type: ignore[name-defined]
-    pass
+    """Clase base para la administración de proveedores."""
 
 
 class ProveedorDireccion(database.Model, BaseDireccion):  # type: ignore[name-defined]
-    pass
+    """Un proveedor puede tener varias direcciones."""
 
 
 class ProveedorContacto(database.Model, BaseContacto):  # type: ignore[name-defined]
-    pass
+    """Un proveedor puede tener varios contactos."""

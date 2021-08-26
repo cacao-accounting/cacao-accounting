@@ -15,6 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Datos para consulta."""
 
 from cacao_accounting.version import APPNAME, APPAUTHOR, VERSION
 

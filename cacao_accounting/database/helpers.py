@@ -15,17 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Definicion de base de datos.
-El objetivo es que el sistema contable pueda ser desplegado sin tener que depender
-de una base de datos especifica, la prioridad en soportar Postresql como base de datos
-primaria para entornos multiusuarios y Sqlite como base de datos para entornos de un
-solo usuario.
-Mysql en su versión comunitaria es una opción secundaria, Mariadb no es un opción debido
-a que por el momento no soportan el tipo de datos JSON.
-Referencia:
- - https://mariadb.com/kb/en/json-data-type/
-"""
+"""Funciones auxiliares relacionadas a la base de datos."""
 
 # pylint: disable=too-few-public-methods
 
@@ -43,9 +33,7 @@ from cacao_accounting.transaccion import Transaccion
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
 def requiere_migracion_db(app):
-    """
-    Utilidad para realizar migraciones en la base de datos.
-    """
+    """Utilidad para realizar migraciones en la base de datos."""
     from cacao_accounting.version import VERSION
 
     with app.app_context():
@@ -70,9 +58,7 @@ else:
 
 
 def verifica_coneccion_db(app):
-    """
-    Verifica si es posible conentarse a la base de datos.
-    """
+    """Verifica si es posible conentarse a la base de datos."""
     import time
 
     with app.app_context():
@@ -94,9 +80,7 @@ def verifica_coneccion_db(app):
 
 
 def db_metadata(app: Union[Flask, None] = None) -> None:
-    """
-    Actualiza metadatos en la base de datos.
-    """
+    """Actualiza metadatos en la base de datos."""
     from cacao_accounting.version import VERSION
 
     if app and isinstance(app, Flask):
@@ -110,9 +94,7 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
 
 
 def inicia_base_de_datos(app):
-    """
-    Inicia esquema de base datos.
-    """
+    """Inicia esquema de base datos."""
     from flask import current_app
     from cacao_accounting.datos import base_data, dev_data
 
@@ -140,9 +122,7 @@ MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
 
 
 def paginar_consulta(tabla=None, elementos=None):
-    """
-    Toma una consulta simple y la devuel como una consulta paginada.
-    """
+    """Toma una consulta simple y la devuel como una consulta paginada."""
     if tabla:
         items = elementos or MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
         consulta = database.session.query(tabla).order_by(tabla.id)
@@ -153,6 +133,7 @@ def paginar_consulta(tabla=None, elementos=None):
 
 
 def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:
+    """Inicia un registro a partir de su UUID en la tabla correspondiente."""
     if tabla:
         REGISTRO = tabla.query.filter_by(id=uuid).first()
         TRANSACCION = Transaccion(
@@ -173,6 +154,7 @@ def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=
 
 
 def obtener_id_modulo_por_monbre(modulo: Union[str, None]) -> Union[str, None]:
+    """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
         from cacao_accounting.database import Modulos
 
@@ -183,6 +165,7 @@ def obtener_id_modulo_por_monbre(modulo: Union[str, None]) -> Union[str, None]:
 
 
 def obtener_id_rol_por_monbre(rol: str) -> str:
+    """Devuelve el UUID de un rol en base a su nombre."""
     from cacao_accounting.database import Roles
 
     ROL = Roles.query.filter_by(name=rol).first()
@@ -190,6 +173,7 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
 
 
 def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]:
+    """Devuelve el UUID de un usuario en base a su id."""
     if usuario:
         from cacao_accounting.database import Usuario
 

@@ -14,3 +14,5 @@
 #
 # Contributors:
 # - William José Moreno Reyes
+
+"""Internacionalizacion de la aplicacion."""

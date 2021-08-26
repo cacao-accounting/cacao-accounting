@@ -15,9 +15,9 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo de Contabilidad.
-"""
+# pylint: disable=no-else-return
+
+"""Modulo de Contabilidad."""
 
 from flask import Blueprint, redirect, render_template, request
 from flask_login import login_required
@@ -49,6 +49,7 @@ LISTA_ENTIDADES = redirect("/accounts/entity/list")
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def monedas():
+    """Listado de monedas registradas en el sistema."""
     from cacao_accounting.database import Moneda
 
     PAGE = request.args.get("page", default=1, type=int)
@@ -72,6 +73,7 @@ def monedas():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def conta():
+    """Pantalla principal del modulo contabilidad."""
     TITULO = "Módulo Contabilidad - " + APPNAME
     if validar_modulo_activo("accounting"):
         return render_template(
@@ -89,6 +91,7 @@ def conta():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def entidades():
+    """Listado de entidades."""
     from cacao_accounting.database import Entidad
 
     PAGE = request.args.get("page", default=1, type=int)
@@ -109,6 +112,7 @@ def entidades():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def entidad(entidad):
+    """Entidad individual."""
     from cacao_accounting.database import Entidad
 
     registro = Entidad.query.filter_by(entidad=entidad).first()
@@ -123,6 +127,7 @@ def entidad(entidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def nueva_entidad():
+    """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
 
     formulario = FormularioEntidad()
@@ -176,6 +181,7 @@ def nueva_entidad():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def editar_entidad(id_entidad):
+    """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
     from cacao_accounting.database import Entidad
 
@@ -184,28 +190,12 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
-@contabilidad.route("/accounts/entity/set_active/<id_entidad>")
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def activar_entidad(id_entidad):
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-    from cacao_accounting.database import Entidad
-
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "actualizar"
-    TRANSACCION.tipo = "principal"
-    TRANSACCION.nuevo_estatus = "activo"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return LISTA_ENTIDADES
-
-
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
+    """Elimina una entidad de sistema."""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
@@ -222,6 +212,7 @@ def eliminar_entidad(id_entidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def inactivar_entidad(id_entidad):
+    """Estable una entidad como inactiva."""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
@@ -239,6 +230,7 @@ def inactivar_entidad(id_entidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
+    """Estblece una entidad como predeterminada."""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
@@ -258,6 +250,7 @@ def predeterminar_entidad(id_entidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def unidades():
+    """Listado de unidades de negocios."""
     from cacao_accounting.database import Unidad
 
     PAGE = request.args.get("page", default=1, type=int)
@@ -278,6 +271,7 @@ def unidades():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def unidad(unidad):
+    """Unidad de negocios."""
     from cacao_accounting.database import Unidad
 
     registro = Unidad.query.filter_by(unidad=unidad).first()
@@ -288,6 +282,7 @@ def unidad(unidad):
 @modulo_activo("accounting")
 @login_required
 def eliminar_unidad(id_unidad):
+    """Elimina una entidad de la base de datos."""
     return redirect("/app")
 
 
@@ -296,6 +291,7 @@ def eliminar_unidad(id_unidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def nueva_unidad():
+    """Formulario para crear una nueva unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
 
     formulario = FormularioUnidad()
@@ -334,7 +330,7 @@ def nueva_unidad():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def cuentas():
-
+    """Catalogo de cuentas contables."""
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
 
     if "entidad" in request.args:
@@ -363,6 +359,7 @@ def cuentas():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def cuenta(id_cta):
+    """Cuenta Contable."""
     from cacao_accounting.database import Cuentas
 
     registro = Cuentas.query.filter_by(codigo=id_cta).first()
@@ -380,6 +377,7 @@ def cuenta(id_cta):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def ccostos():
+    """Catalogo de centros de costos."""
     TITULO = "Catalogo de Centros de Costos - " + APPNAME
 
     if "entidad" in request.args:
@@ -408,6 +406,7 @@ def ccostos():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def centro_costo(id_cc):
+    """Centro de Costos."""
     from cacao_accounting.database import CentroCosto
 
     registro = CentroCosto.query.filter_by(codigo=id_cc).first()
@@ -425,6 +424,7 @@ def centro_costo(id_cc):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def proyectos():
+    """Listado de proyectos."""
     from cacao_accounting.database import Proyecto
 
     PAGE = request.args.get("page", default=1, type=int)
@@ -447,6 +447,7 @@ def proyectos():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def tasa_cambio():
+    """Listado de tasas de cambio."""
     from cacao_accounting.database import TasaDeCambio
 
     PAGE = request.args.get("page", default=1, type=int)
@@ -468,6 +469,7 @@ def tasa_cambio():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def periodo_contable():
+    """Lista de periodos contables."""
     from cacao_accounting.database import PeriodoContable
 
     PAGE = request.args.get("page", default=1, type=int)

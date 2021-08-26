@@ -15,15 +15,13 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Funciones auxiliares para el modulo de contabilidad.
-"""
+# pylint: disable=singleton-comparison
+
+"""Funciones auxiliares para el modulo de contabilidad."""
 
 
 def obtener_lista_entidades_por_id_razonsocial():
-    """
-    Devuelve la lista de unidades registrada en la base de datos.
-    """
+    """Devuelve la lista de unidades registrada en la base de datos."""
     from cacao_accounting.database import Entidad
 
     _entidades = []
@@ -36,9 +34,7 @@ def obtener_lista_entidades_por_id_razonsocial():
 
 
 def obtener_catalogo_base(entidad_=None):
-    """
-    Utilidad para devolver el catalogo de cuentas.
-    """
+    """Utilidad para devolver el catalogo de cuentas."""
     from cacao_accounting.database import Cuentas, Entidad
 
     if entidad_:
@@ -52,9 +48,7 @@ def obtener_catalogo_base(entidad_=None):
 
 
 def obtener_catalogo_centros_costo_base(entidad_=None):
-    """
-    Utilidad para devolver el catalogo de centros de costos.
-    """
+    """Utilidad para devolver el catalogo de centros de costos."""
     from cacao_accounting.database import CentroCosto, Entidad
 
     if entidad_:
@@ -70,9 +64,7 @@ def obtener_catalogo_centros_costo_base(entidad_=None):
 
 
 def obtener_catalogo(entidad_=None):
-    """
-    Utilidad para devolver el catalogo de cuentas.
-    """
+    """Utilidad para devolver el catalogo de cuentas."""
     from cacao_accounting.database import Cuentas, Entidad
 
     if entidad_:
@@ -86,9 +78,7 @@ def obtener_catalogo(entidad_=None):
 
 
 def obtener_catalogo_centros_costos(entidad_=None):
-    """
-    Utilidad para devolver el catalogo de centros de costos..
-    """
+    """Utilidad para devolver el catalogo de centros de costos."""
     from cacao_accounting.database import CentroCosto, Entidad
 
     if entidad_:
@@ -104,9 +94,7 @@ def obtener_catalogo_centros_costos(entidad_=None):
 
 
 def obtener_entidades():
-    """
-    Utilidad para obtener listado de entidades.
-    """
+    """Utilidad para obtener listado de entidades."""
     from cacao_accounting.database import Entidad
 
     _entidades = Entidad.query.all()
@@ -114,9 +102,7 @@ def obtener_entidades():
 
 
 def obtener_entidad(ent=None):
-    """
-    Obtiene la entidad actual o la entidad predeterminada.
-    """
+    """Obtiene la entidad actual o la entidad predeterminada."""
     from cacao_accounting.database import Entidad
 
     if ent:
@@ -127,9 +113,7 @@ def obtener_entidad(ent=None):
 
 
 def obtener_lista_monedas():
-    """
-    Devuelve la lista de monedas disponibles en la base de datos.
-    """
+    """Devuelve la lista de monedas disponibles en la base de datos."""
     from cacao_accounting.database import Moneda
 
     monedas = []

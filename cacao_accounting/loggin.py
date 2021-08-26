@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Configuración centralizada para logs del sistema.
-"""
+"""Configuración centralizada para logs del sistema."""
 
 from sys import stderr
 from loguru import logger as log

@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+"""Definición unica de la version de la aplicación."""
+
 from datetime import datetime
 
 

@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo de Ventas.
-"""
+"""Modulo de Ventas."""
 
 from flask import Blueprint, render_template
 from flask_login import login_required
@@ -32,4 +30,5 @@ ventas = Blueprint("ventas", __name__, template_folder="templates")
 @modulo_activo("sales")
 @login_required
 def ventas_():
+    """Modulo de ventas."""
     return render_template("ventas.html")

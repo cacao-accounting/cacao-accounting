@@ -15,9 +15,7 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""
-Modulo de Compras.
-"""
+"""Modulo de Compras."""
 
 from flask import Blueprint, render_template
 from flask_login import login_required
@@ -31,4 +29,5 @@ compras = Blueprint("compras", __name__, template_folder="templates")
 @modulo_activo("buying")
 @login_required
 def compras_():
+    """Pantalla principal del modulo de compras."""
     return render_template("compras.html")
