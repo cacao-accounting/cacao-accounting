@@ -206,7 +206,7 @@ def eliminar_entidad(id_entidad):
     REGISTRO.ejecutar_transaccion(TRANSACCION)
     return LISTA_ENTIDADES
 
-  
+
 @contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
 @login_required
 @modulo_activo("accounting")

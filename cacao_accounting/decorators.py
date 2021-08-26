@@ -27,6 +27,7 @@ from cacao_accounting.modulos import validar_modulo_activo
 
 def modulo_activo(modulo):
     """Verifica si el recurso solicitado pertenece a un modulo activo."""
+
     def decorator_modulo_activo(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -43,6 +44,7 @@ def modulo_activo(modulo):
 
 def verifica_acceso(modulo):
     """Comprueba si un usuario tiene acceso a un recurso determinado."""
+
     def decorator_verifica_acceso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
