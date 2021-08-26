@@ -190,24 +190,6 @@ def editar_entidad(id_entidad):
     return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
 
 
-@contabilidad.route("/accounts/entity/set_active/<id_entidad>")
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def activar_entidad(id_entidad):
-    """Establece una entidad como inactiva."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-    from cacao_accounting.database import Entidad
-
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "actualizar"
-    TRANSACCION.tipo = "principal"
-    TRANSACCION.nuevo_estatus = "activo"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
-    return LISTA_ENTIDADES
-
-
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
@@ -221,6 +203,24 @@ def eliminar_entidad(id_entidad):
     TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
     TRANSACCION.accion = "eliminar"
     TRANSACCION.tipo = "principal"
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    return LISTA_ENTIDADES
+
+  
+@contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def inactivar_entidad(id_entidad):
+    """Estable una entidad como inactiva."""
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "inactivo"
     REGISTRO.ejecutar_transaccion(TRANSACCION)
     return LISTA_ENTIDADES
 

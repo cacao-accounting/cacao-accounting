@@ -93,6 +93,7 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
             assert error is not None
             return render_template("403.html"), 403
 
+
     else:
         raise RuntimeError(ERROR2)
 
