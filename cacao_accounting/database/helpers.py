@@ -15,16 +15,18 @@
 # Contributors:
 # - William José Moreno Reyes
 
+# pylint: disable=no-member
+
 """Funciones auxiliares relacionadas a la base de datos."""
 
-# pylint: disable=too-few-public-methods
 
 from os import environ
 from typing import Union
 from flask import Flask
+from sqlalchemy.exc import OperationalError
 from sqlalchemy_paginator import Paginator
 from cacao_accounting.database import database, DBVERSION, Metadata
-from cacao_accounting.exceptions import DataError, OperationalError
+from cacao_accounting.exceptions import DataError
 from cacao_accounting.exceptions.mensajes import ERROR1, ERROR4
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
@@ -70,7 +72,7 @@ def verifica_coneccion_db(app):
                 DB_CONN = True
                 log.info("Conexión a la base de datos exitosa.")
                 break
-            except:  # noqa: E722
+            except OperationalError:
                 DB_CONN = False
                 log.warning("No se pudo establecer conexion a la base de datos.")
                 log.info("Reintentando conectar a la base de datos.")
@@ -112,7 +114,7 @@ def inicia_base_de_datos(app):
                 base_data(carga_rapida=False)
                 db_metadata(app=app)
                 DB_ESQUEMA = True
-        except:  # noqa: E722
+        except OperationalError:
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
     return DB_ESQUEMA

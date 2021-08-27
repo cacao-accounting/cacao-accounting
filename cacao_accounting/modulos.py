@@ -82,6 +82,7 @@ for modulo in modulos:
 def registrar_modulo(entrada: dict) -> None:
     """Recibe un diccionario y lo inserta en la base de datos."""
     registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
+    # pylint: disable=E1101
     database.session.add(registro)
     database.session.commit()
 

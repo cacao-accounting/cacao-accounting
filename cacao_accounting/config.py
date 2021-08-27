@@ -67,7 +67,7 @@ def valida_llave_secreta(llave: str) -> bool:
             log.info("Clave secreta valida.")
         else:
             log.warning("Clave secreta invalida.")
-        return VALIDACION
+        return VALIDACION  # pylint: disable=R1705
 
 
 def valida_direccion_base_datos(uri: str) -> bool:

@@ -162,6 +162,8 @@ disable=print-statement,
         # Sonarcloud es mas preciso determinar si un código un bloque de codigo es identio
         # o similar o otro: https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting
         duplicate-code,
+        # Existe inconsitencia entre esta regla y mypy, se desabilita en favor de mypy.
+        no-else-return,
 
 
 # Enable the message, report, category or checker with the given id(s). You can

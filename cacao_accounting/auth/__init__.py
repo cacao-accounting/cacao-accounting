@@ -17,9 +17,9 @@
 
 """Inición de sesión de usuarios."""
 
-from cacao_accounting.database import Usuario
 from flask import Blueprint, redirect, render_template, flash
 from flask_login import LoginManager, logout_user, login_user, login_required
+from cacao_accounting.database import Usuario
 
 
 login = Blueprint("login", __name__, template_folder="templates")

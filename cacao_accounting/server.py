@@ -33,12 +33,14 @@ def server() -> None:
     if verifica_coneccion_db(app):
         DATABASE = requiere_migracion_db(app) is False
     else:
+        from sqlalchemy.exc import OperationalError
+
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")
         try:
             inicia_base_de_datos(app)
             DATABASE = True
-        except:  # noqa: 722
+        except OperationalError:
             log.error("No se pudo inicilizar la base de datos.")
             DATABASE = False
 

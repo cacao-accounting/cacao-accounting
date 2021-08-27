@@ -183,6 +183,7 @@ def obtener_roles_por_usuario(usuario: str) -> tuple:
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROLES_DE_USUARIO = (
+        # pylint: disable=E1101
         database.session.query(RolesUsuario, Roles, Usuario)
         .join(Roles)
         .join(Usuario)

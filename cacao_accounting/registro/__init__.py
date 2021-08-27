@@ -15,6 +15,8 @@
 # Contributors:
 # - William José Moreno Reyes
 
+# pylint: disable=no-member
+
 """
 Base para las transacciones registradas en el sistema.
 
@@ -67,9 +69,9 @@ class Registro:
         ):
             return self._estable_registro_maestro_como_predeterminado(transaccion)
         elif transaccion.accion == "eliminar" and transaccion.tipo == "principal":
-            self._elimar_registro_principal(transaccion)
+            return self._elimar_registro_principal(transaccion)
         elif transaccion.accion == "actualizar" and transaccion.nuevo_estatus:
-            self._ejecuta_cambio_de_estatus(transaccion)
+            return self._ejecuta_cambio_de_estatus(transaccion)
         else:
             raise TransactionError(ERROR4)
 
@@ -84,6 +86,8 @@ class Registro:
             self.DATABASE.session.add(self.tabla(**transaccion.datos))
             self.DATABASE.session.commit()
             return True
+        else:
+            return False
 
     def _ejecuta_cambio_de_estatus(self, transaccion: Transaccion) -> bool:
         if self.tabla:

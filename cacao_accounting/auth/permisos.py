@@ -703,6 +703,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         BI,
     ]
     for permisos in PERMISOS_PREDETERMINADOS:
+        # pylint: disable=E1101
         if isinstance(permisos, list):
             for MODULO in permisos:
                 database.session.add(MODULO)
