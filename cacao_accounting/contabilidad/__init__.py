@@ -107,15 +107,15 @@ def entidades():
     )
 
 
-@contabilidad.route("/accounts/entity/<entidad>")
+@contabilidad.route("/accounts/entity/<entidad_id>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def entidad(entidad):
+def entidad(entidad_id):
     """Entidad individual."""
     from cacao_accounting.database import Entidad
 
-    registro = Entidad.query.filter_by(entidad=entidad).first()
+    registro = Entidad.query.filter_by(entidad=entidad_id).first()
     return render_template(
         "contabilidad/entidad.html",
         registro=registro,
@@ -225,6 +225,24 @@ def inactivar_entidad(id_entidad):
     return LISTA_ENTIDADES
 
 
+@contabilidad.route("/accounts/entity/set_active/<id_entidad>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def activar_entidad(id_entidad):
+    """Estable una entidad como inactiva."""
+    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+    from cacao_accounting.database import Entidad
+
+    REGISTRO = RegistroEntidad()
+    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
+    TRANSACCION.accion = "actualizar"
+    TRANSACCION.tipo = "principal"
+    TRANSACCION.nuevo_estatus = "activo"
+    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    return LISTA_ENTIDADES
+
+
 @contabilidad.route("/accounts/entity/set_default/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
@@ -266,15 +284,15 @@ def unidades():
     )
 
 
-@contabilidad.route("/accounts/unit/<unidad>")
+@contabilidad.route("/accounts/unit/<id_unidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def unidad(unidad):
+def unidad(id_unidad):
     """Unidad de negocios."""
     from cacao_accounting.database import Unidad
 
-    registro = Unidad.query.filter_by(unidad=unidad).first()
+    registro = Unidad.query.filter_by(unidad=id_unidad).first()
     return render_template("contabilidad/unidad.html", registro=registro)
 
 

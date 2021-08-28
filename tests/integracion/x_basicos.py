@@ -51,20 +51,6 @@ class Basicos:
                 database.drop_all()
                 assert inicia_base_de_datos(self.app) is True
 
-    def test_inicia_base_de_datos_F(self):
-        from flask import Flask
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
-        self.fapp = Flask(__name__)
-        self.fapp.config["SQLALCHEMY_DATABASE_URI"] = "hola"
-
-        if self.dbengine:
-            with self.fapp.app_context():
-                assert inicia_base_de_datos(self.fapp) is False
-                from cacao_accounting.app import bd_actual
-
-                assert bd_actual() is None
-
     def test_db_actual(self):
         if self.dbengine:
             from cacao_accounting.app import bd_actual

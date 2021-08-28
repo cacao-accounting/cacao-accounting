@@ -95,6 +95,7 @@ class TestSQLite(TestCase, Basicos):
             }
         )
         with self.app.app_context():
+            database.init_app(self.app)
             database.create_all()
             base_data(carga_rapida=True)
             dev_data()

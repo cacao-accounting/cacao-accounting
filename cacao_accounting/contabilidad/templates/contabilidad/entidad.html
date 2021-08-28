@@ -22,13 +22,13 @@
   </nav>
   <div class="pf-c-content">
     <h4>Entidad.</h4>
-    {% if registro.status != "inactivo" %}
+    {% if registro.status != "predeterminado" and registro.status == "activo" %}
     <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.predeterminar_entidad", id_entidad=registro.id) }}">Establecer como Predeterminada</a>
     {% endif %}
     {% if registro.status != "inactivo" %}
     <a class="btn btn-sm btn-secondary" href="{{ url_for("contabilidad.inactivar_entidad", id_entidad=registro.id) }}">Establecer como Inactiva</a>
     {% endif %}
-    {% if registro.status != "activo" %}
+    {% if registro.status != "activo" and registro.status != "predeterminado" %}
     <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.activar_entidad", id_entidad=registro.id) }}">Establecer como Activa</a>
     {% endif %}
     <a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_entidad", id_entidad=registro.id) }}"  type="link" >Eliminar Entidad</a>
