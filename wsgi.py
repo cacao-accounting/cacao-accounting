@@ -29,6 +29,6 @@ from cacao_accounting.version import PRERELEASE
 
 if __name__ == "__main__":
     if PRERELEASE:
-        app.run(debug=True, port=8000)
+        app.run(debug=True, port=8080)
     else:
         server()
