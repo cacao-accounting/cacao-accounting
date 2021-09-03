@@ -18,7 +18,11 @@
 """Modulo a ejecutar por defecto al ejecutar cacao_accounting."""
 
 from cacao_accounting.server import app, server
+from cacao_accounting.version import PRERELEASE
 
 
 if __name__ == "__main__":
-    server()
+    if PRERELEASE:
+        app.run(debug=True, port=8000)
+    else:
+        server()
