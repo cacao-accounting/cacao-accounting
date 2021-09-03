@@ -15,7 +15,13 @@
 # Contributors:
 # - William José Moreno Reyes
 
-"""Modulo a ejecutar por defecto al ejecutar cacao_accounting."""
+"""
+Ejecuta el servidor WSGI predeterminado.
+
+Si en la version de la aplicacion se establece cualquier valor para
+PRERELEASE que no sea NULL se ejecutara el servidor de desarrollo con
+la opción DEBUG habilitada.
+"""
 
 from cacao_accounting.server import app, server
 from cacao_accounting.version import PRERELEASE
