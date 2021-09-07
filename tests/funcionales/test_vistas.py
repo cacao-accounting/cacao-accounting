@@ -223,7 +223,7 @@ def test_roles(client, auth):
 def test_modulos_inactivos(client, auth):
     from cacao_accounting.database import Modulos
 
-    for modulo in ["accounting", "cash", "buying", "inventory", "sales"]:
+    for modulo in ["accounting", "cash", "purchases", "inventory", "sales"]:
         modulo = Modulos.query.filter_by(modulo=modulo).first()
         modulo.habilitado = False
         database.session.add(modulo)

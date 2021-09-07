@@ -38,7 +38,7 @@ bancos = {
     "habilitado": True,
 }
 compras = {
-    "modulo": "buying",
+    "modulo": "purchases",
     "estandar": True,
     "habilitado": True,
 }

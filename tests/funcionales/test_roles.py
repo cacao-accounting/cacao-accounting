@@ -33,7 +33,7 @@ CONFIG = {
     "DESKTOPMODE": False,
 }
 
-MODULOS = ["accounting", "cash", "buying", "inventory", "sales", "admin"]
+MODULOS = ["accounting", "cash", "purchases", "inventory", "sales", "admin"]
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -192,7 +192,7 @@ def test_permisos_modulo_invalido():
 # con correctos para cada modulo predeterminado.
 
 
-MODULOS_ = ["accounting", "cash", "buying", "inventory", "sales"]
+MODULOS_ = ["accounting", "cash", "purchases", "inventory", "sales"]
 
 
 def test_permisos_rol_comptroller():
@@ -279,7 +279,7 @@ def test_permisos_rol_bi():
 
 def test_rol_PURCHASING_MANAGER():
     USUARIO = "compras"
-    MODULO = "buying"
+    MODULO = "purchases"
     permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
     assert permisos.autorizado is True
     assert permisos.actualizar is True
@@ -323,7 +323,7 @@ def test_rol_PURCHASING_MANAGER():
 
 def test_rol_PURCHASING_AUXILIAR():
     USUARIO = "comprasj"
-    MODULO = "buying"
+    MODULO = "purchases"
     permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
     assert permisos.autorizado is True
     assert permisos.actualizar is True
@@ -367,7 +367,7 @@ def test_rol_PURCHASING_AUXILIAR():
 
 def test_rol_PURCHASING_USER():
     USUARIO = "usuario"
-    for modulo in ("buying",):
+    for modulo in ("purchases",):
         permisos = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
         assert permisos.autorizado is True
         assert permisos.actualizar is False

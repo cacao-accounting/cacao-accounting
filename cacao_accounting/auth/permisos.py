@@ -25,7 +25,7 @@ from cacao_accounting.registro import Registro
 
 # Solo usuarios con el rol de administrador tienen acceso al modulo administrativo
 # por eso no se incluye en esta lista.
-MODULOS: list = ["accounting", "cash", "buying", "inventory", "sales"]
+MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales"]
 
 
 ACCIONES: tuple = (
@@ -394,7 +394,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     log.debug("Inicia craga permisos predeterminados.")
     PURCHASING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_manager"),
-        modulo_id=obtener_id_modulo_por_monbre("buying"),
+        modulo_id=obtener_id_modulo_por_monbre("purchases"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -416,7 +416,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     PURCHASING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
-        modulo_id=obtener_id_modulo_por_monbre("buying"),
+        modulo_id=obtener_id_modulo_por_monbre("purchases"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -438,7 +438,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     PURCHASING_USER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_user"),
-        modulo_id=obtener_id_modulo_por_monbre("buying"),
+        modulo_id=obtener_id_modulo_por_monbre("purchases"),
         acceso=True,
         actualizar=False,
         anular=False,
