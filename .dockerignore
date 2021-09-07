@@ -4,6 +4,7 @@
 .gitignore
 .git-blame-ignore-revs
 .vscode
+.idea
 
 
 # Documentacion
