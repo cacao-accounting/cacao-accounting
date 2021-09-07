@@ -260,3 +260,6 @@ dmypy.json
 cython_debug/
 
 cacao_accounting/static/node_modules/*
+
+#PyCharm
+.idea/
