@@ -1,7 +1,7 @@
 # Mantener en orden alfabetico
 alembic
+bcrypt
 babel
-configobj
 Flask[async]
 Flask-Alembic
 flask-babel
