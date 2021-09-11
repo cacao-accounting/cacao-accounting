@@ -17,13 +17,21 @@
 
 """Modulo para la configuración centralizada de la configuración de la aplicacion."""
 
-from os import environ
+from os import environ, getcwd, name
 from cacao_accounting.loggin import log
+
+
+# < --------------------------------------------------------------------------------------------- >
+# Directorios de la aplicacion
+DIRECTORIO_APP = getcwd()
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
 # Free Open Source Databases
-SQLITE = "sqlite:///cacaoaccounting.db"
+if name == "nt":
+    SQLITE = "sqlite:///" + str(DIRECTORIO_APP) + "\\cacaoaccounting.db"
+else:
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PADRE) + "/cacaoaccounting.db"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
 POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 # Non Free Databases
