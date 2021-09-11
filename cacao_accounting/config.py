@@ -31,7 +31,7 @@ DIRECTORIO_APP = getcwd()
 if name == "nt":
     SQLITE = "sqlite:///" + str(DIRECTORIO_APP) + "\\cacaoaccounting.db"
 else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PADRE) + "/cacaoaccounting.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_APP) + "/cacaoaccounting.db"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
 POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 # Non Free Databases
