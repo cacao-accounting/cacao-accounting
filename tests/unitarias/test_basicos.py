@@ -163,12 +163,6 @@ class TestInstanciasDeClasesCorrectas(TestCase):
 
         self.assertIsInstance(alembic, Alembic)
 
-    def test_Talisman(self):
-        from flask_talisman import Talisman
-        from cacao_accounting import talisman
-
-        self.assertIsInstance(talisman, Talisman)
-
     def test_Blueprints(self):
         from flask.blueprints import Blueprint
         from cacao_accounting.contabilidad import contabilidad

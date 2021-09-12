@@ -155,7 +155,7 @@ def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=
         raise OperationalError(ERROR4)
 
 
-def obtener_id_modulo_por_monbre(modulo: Union[str, None]) -> Union[str, None]:
+def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
         from cacao_accounting.database import Modulos

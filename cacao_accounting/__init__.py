@@ -36,7 +36,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
-from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.compras import compras
 from cacao_accounting.exceptions.mensajes import ERROR2
@@ -122,7 +122,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
             app.jinja_env.globals.update(permisos=Permisos)
-            app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_monbre)
+            app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
     else:
         raise RuntimeError(ERROR2)

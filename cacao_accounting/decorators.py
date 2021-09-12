@@ -21,7 +21,7 @@ from functools import wraps
 from flask import flash, abort
 from flask_login import current_user
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.modulos import validar_modulo_activo
 
 
@@ -48,7 +48,7 @@ def verifica_acceso(modulo):
     def decorator_verifica_acceso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            PERMISOS = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=current_user.id)
+            PERMISOS = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
             if PERMISOS.autorizado:
                 return func(*args, **kwargs)
             else:

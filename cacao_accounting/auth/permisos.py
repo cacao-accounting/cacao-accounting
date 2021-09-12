@@ -19,7 +19,7 @@
 
 from typing import Union
 from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos, Modulos
-from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_rol_por_monbre
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
 from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
 
@@ -394,7 +394,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     log.debug("Inicia craga permisos predeterminados.")
     PURCHASING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_manager"),
-        modulo_id=obtener_id_modulo_por_monbre("purchases"),
+        modulo_id=obtener_id_modulo_por_nombre("purchases"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -416,7 +416,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     PURCHASING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
-        modulo_id=obtener_id_modulo_por_monbre("purchases"),
+        modulo_id=obtener_id_modulo_por_nombre("purchases"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -438,7 +438,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     PURCHASING_USER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("purchasing_user"),
-        modulo_id=obtener_id_modulo_por_monbre("purchases"),
+        modulo_id=obtener_id_modulo_por_nombre("purchases"),
         acceso=True,
         actualizar=False,
         anular=False,
@@ -460,7 +460,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     ACCOUNTING_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
-        modulo_id=obtener_id_modulo_por_monbre("accounting"),
+        modulo_id=obtener_id_modulo_por_nombre("accounting"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -482,7 +482,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     ACCOUNTING_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("accounting_auxiliar"),
-        modulo_id=obtener_id_modulo_por_monbre("accounting"),
+        modulo_id=obtener_id_modulo_por_nombre("accounting"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -504,7 +504,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     INVENTORY_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
-        modulo_id=obtener_id_modulo_por_monbre("inventory"),
+        modulo_id=obtener_id_modulo_por_nombre("inventory"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -526,7 +526,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     INVENTORY_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_auxiliar"),
-        modulo_id=obtener_id_modulo_por_monbre("inventory"),
+        modulo_id=obtener_id_modulo_por_nombre("inventory"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -548,7 +548,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     HEAD_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("head_of_treasury"),
-        modulo_id=obtener_id_modulo_por_monbre("cash"),
+        modulo_id=obtener_id_modulo_por_nombre("cash"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -570,7 +570,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     JUNIOR_OF_TREASURY = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("junior_of_treasury"),
-        modulo_id=obtener_id_modulo_por_monbre("cash"),
+        modulo_id=obtener_id_modulo_por_nombre("cash"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -592,7 +592,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     SALES_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_manager"),
-        modulo_id=obtener_id_modulo_por_monbre("sales"),
+        modulo_id=obtener_id_modulo_por_nombre("sales"),
         acceso=True,
         actualizar=True,
         anular=True,
@@ -614,7 +614,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
     )
     SALES_AUXILIAR = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("sales_auxiliar"),
-        modulo_id=obtener_id_modulo_por_monbre("sales"),
+        modulo_id=obtener_id_modulo_por_nombre("sales"),
         acceso=True,
         actualizar=True,
         anular=False,
@@ -639,7 +639,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         CONTROLLER.append(
             RolesPermisos(
                 rol_id=obtener_id_rol_por_monbre("comptroller"),
-                modulo_id=obtener_id_modulo_por_monbre(MODULO),
+                modulo_id=obtener_id_modulo_por_nombre(MODULO),
                 acceso=True,
                 actualizar=False,
                 anular=False,
@@ -665,7 +665,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         BI.append(
             RolesPermisos(
                 rol_id=obtener_id_rol_por_monbre("business_analyst"),
-                modulo_id=obtener_id_modulo_por_monbre(MODULO),
+                modulo_id=obtener_id_modulo_por_nombre(MODULO),
                 acceso=True,
                 actualizar=False,
                 anular=False,

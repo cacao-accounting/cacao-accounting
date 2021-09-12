@@ -20,7 +20,7 @@ import pytest
 from cacao_accounting import create_app as app_factory
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import database
-from cacao_accounting.database.helpers import obtener_id_modulo_por_monbre, obtener_id_usuario_por_nombre
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_usuario_por_nombre
 from cacao_accounting.datos import base_data, dev_data
 
 CONFIG = {
@@ -50,7 +50,7 @@ def app():
 
 # Estos test unitarios validan que la logica del sistema de roles este bien implementada,
 def test_logicos():
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre("accounting"), usuario=obtener_id_usuario_por_nombre("cacao"))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=obtener_id_usuario_por_nombre("cacao"))
     assert isinstance(permisos.autorizado, bool)
     assert isinstance(permisos.actualizar, bool)
     assert isinstance(permisos.anular, bool)
@@ -77,7 +77,7 @@ def test_logicos():
 
 def test_permisos_rol_admin():
     for MODULO in MODULOS:
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("cacao"))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre("cacao"))
         assert permisos.autorizado is True
         assert permisos.actualizar is True
         assert permisos.anular is True
@@ -100,7 +100,7 @@ def test_permisos_rol_admin():
 
 def test_permisos_no_user():
     for MODULO in MODULOS:
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre(None))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(None))
         assert permisos.autorizado is False
         assert permisos.actualizar is False
         assert permisos.anular is False
@@ -123,7 +123,7 @@ def test_permisos_no_user():
 
 def test_permisos_user_invalido():
     for MODULO in MODULOS:
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario="hola")
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario="hola")
         assert permisos.autorizado is False
         assert permisos.actualizar is False
         assert permisos.anular is False
@@ -145,7 +145,7 @@ def test_permisos_user_invalido():
 
 
 def test_permisos_no_modulo():
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre(None), usuario=obtener_id_usuario_por_nombre("cacao"))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(None), usuario=obtener_id_usuario_por_nombre("cacao"))
     assert permisos.autorizado is False
     assert permisos.actualizar is False
     assert permisos.anular is False
@@ -197,7 +197,7 @@ MODULOS_ = ["accounting", "cash", "purchases", "inventory", "sales"]
 
 def test_permisos_rol_comptroller():
     for MODULO in MODULOS_:
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("auditor"))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre("auditor"))
         assert permisos.autorizado is True
         assert permisos.anular is False
         assert permisos.actualizar is False
@@ -215,7 +215,7 @@ def test_permisos_rol_comptroller():
         assert permisos.validar_solicitud is False
         assert permisos.eliminar is False
     # Modulo Administrativo
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre("admin"), usuario=obtener_id_usuario_por_nombre("auditor"))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("admin"), usuario=obtener_id_usuario_por_nombre("auditor"))
     assert permisos.autorizado is False
     assert permisos.actualizar is False
     assert permisos.anular is False
@@ -238,7 +238,7 @@ def test_permisos_rol_comptroller():
 
 def test_permisos_rol_bi():
     for MODULO in MODULOS_:
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre("analista"))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre("analista"))
         assert permisos.autorizado is True
         assert permisos.anular is False
         assert permisos.actualizar is False
@@ -256,7 +256,7 @@ def test_permisos_rol_bi():
         assert permisos.validar_solicitud is False
         assert permisos.eliminar is False
     # Modulo Administrativo
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre("admin"), usuario=obtener_id_usuario_por_nombre("analista"))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("admin"), usuario=obtener_id_usuario_por_nombre("analista"))
     assert permisos.autorizado is False
     assert permisos.actualizar is False
     assert permisos.anular is False
@@ -280,7 +280,7 @@ def test_permisos_rol_bi():
 def test_rol_PURCHASING_MANAGER():
     USUARIO = "compras"
     MODULO = "purchases"
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
     assert permisos.autorizado is True
     assert permisos.actualizar is True
     assert permisos.anular is True
@@ -300,7 +300,7 @@ def test_rol_PURCHASING_MANAGER():
     assert permisos.validar is True
     assert permisos.validar_solicitud is True
     for modulo in ("accounting", "cash", "inventory", "sales"):
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
         assert permisos.autorizado is False
         assert permisos.actualizar is False
         assert permisos.anular is False
@@ -324,7 +324,7 @@ def test_rol_PURCHASING_MANAGER():
 def test_rol_PURCHASING_AUXILIAR():
     USUARIO = "comprasj"
     MODULO = "purchases"
-    permisos = Permisos(modulo=obtener_id_modulo_por_monbre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
     assert permisos.autorizado is True
     assert permisos.actualizar is True
     assert permisos.anular is False
@@ -344,7 +344,7 @@ def test_rol_PURCHASING_AUXILIAR():
     assert permisos.validar is False
     assert permisos.validar_solicitud is False
     for modulo in ("accounting", "cash", "inventory", "sales"):
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
         assert permisos.autorizado is False
         assert permisos.actualizar is False
         assert permisos.anular is False
@@ -368,7 +368,7 @@ def test_rol_PURCHASING_AUXILIAR():
 def test_rol_PURCHASING_USER():
     USUARIO = "usuario"
     for modulo in ("purchases",):
-        permisos = Permisos(modulo=obtener_id_modulo_por_monbre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
         assert permisos.autorizado is True
         assert permisos.actualizar is False
         assert permisos.anular is False
