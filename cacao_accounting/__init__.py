@@ -47,7 +47,6 @@ from cacao_accounting.ventas import ventas
 
 
 alembic = Alembic()
-talisman = Talisman()
 
 
 def command() -> None:  # pragma: no cover
