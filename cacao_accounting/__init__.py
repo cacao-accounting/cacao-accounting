@@ -28,7 +28,6 @@ from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
 from flask_login import current_user
-from flask_talisman import Talisman
 from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
@@ -71,9 +70,6 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
         alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
-        with app.app_context():
-            if not current_app.config.get("ENV") == "development":
-                talisman.init_app(app)
     else:
         raise RuntimeError(ERROR2)
 
