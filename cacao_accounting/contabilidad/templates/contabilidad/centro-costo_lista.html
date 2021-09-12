@@ -1,76 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<style>
-  /*
- * CSS Tree menu styles
- * Fuente: https://github.com/nanndoj/css-treeview/blob/master/dist/purecss-treeview.css
- */
-
- ol.tree
- {
-   padding: 0 0 0 30px;
-   width: 300px;
- }
-   li 
-   { 
-     position: relative; 
-     margin-left: -15px;
-     list-style: none;
-   }
-   li.file
-   {
-     margin-left: -1px !important;
-   }
-     li.file a
-     {	
-       padding-left: 15px;
-       text-decoration: none;
-       display: block;
-     }
-   li input
-   {
-     position: absolute;
-     left: 0;
-     margin-left: 0;
-     opacity: 0;
-     z-index: 2;
-     cursor: pointer;
-     height: 1em;
-     width: 1em;
-     top: 0;
-   }
-     li input + ol
-     {
-       background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAArklEQVRIie3SMWoCQRTG8Z+pld0YrQWLXEeSmwRyDMHCZi2svIUp9hyx8wQWXiDFvsBGNssskibMHwZm5n3v+97AkMlk+lihSNAVoR3EK2rsUfboytDUeOkSPPzSeMQnltjiqUMzi9oytB8Jg/9ggiqmO4Rh2/wQtQrjoebtkN1NyHyI+Sgh5BEbLHCOu+/9Gy73BtC8ZI3nOJ/wjmtifxKF5sfsIvBPmMbKZP4TXwxkGdbXwI5kAAAAAElFTkSuQmCC') 40px -5px no-repeat;
-       margin: -1.25em 0 0 -44px; /* 20px */
-       padding: 1.563em 0 0 80px;
-       overflow-y: hidden;
-       max-height: 0px;
-       height: auto;
-     }
-     li input + ol > li { 
-       margin-left: -14px !important; 
-       padding-left: 1px;
-     }
-   li label
-   {
-     cursor: pointer;
-     display: block;
-     padding-left: 1.5em;
-   }
- 
-   li input:checked + ol
-   {
-     background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAABWWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgpMwidZAAAA90lEQVRIDWNgGAWjIQAKAWZm5kAgxUOT0AAa7g/E+4F4BjmWMBNy1f///18wMTGZAdWpAmljIP8AkP2LkD6YPEELgAp/Ag09BDTcBshWglpyFMj+ATMEH02MBSD9P4CWHAYabgVkgyyxAPL3AtkEfUKsBSBLviFZIgf1yUFClpBiAcySI0DDQXGiDLXkGJD9HSSJDTBhEyQg9h9JngWJTRWmCDC5LoYm25lAE/mpYirUEGEkwxcAxXipabgAkuEglwtS03B+oOFzocECys0kuZxgJAMNdgAaqgTEN//+/VsKpD8DMXUB0JIgoIm0Keyo69RR0wYiBADDz0OLUVIh6wAAAABJRU5ErkJggg==') 40px 0px no-repeat;
-     margin: -1.25em 0 0 -44px; /* 20px */
-     padding: 1.563em 0 0 80px;
-     max-height: 999px;
-   }
-     li input:checked + ol > li { display: block; margin: 0 0 0.125em;  /* 2px */}
-     li input:checked + ol > li:last-child { margin: 0 0 0.063em; /* 1px */ }
- 
-</style>
 <div class="row">
   <div class="col">
     <nav aria-label="breadcrumb">
@@ -90,13 +20,14 @@
   </div>
 </div>
   <h4>Catalogo de Centros de Costos.</h4>
+<div class="row">
   <form>
     <h6>Seleccionar Entidad.</h6>
     <div class="row">
       <div class="col-8">
         <select class="form-control" id="entidad" name="entidad">
           {%- for entidad in entidades -%}
-          <option value="{{ entidad.id }}">{{ entidad.nombre_comercial }}</option>
+          <option value="{{ entidad.entidad }}">{{ entidad.nombre_comercial }}</option>
           {%- endfor -%}
         </select>
       </div>
@@ -108,67 +39,16 @@
     </div>
   </form>
   <p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
+  </div>
+<div class="row">
   <ol class="tree">
-  {%- for centrocostobase in base_centrocostos -%}
-      <li>
-        <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase.codigo) }}" class="link-dark">
-          {{ centrocostobase.codigo + " - " + centrocostobase.nombre }}
-        </a>
-        {% if centrocostobase.grupo == True %}
-        <ol>
-          {%- for centrocostonivel01 in centros_costo if centrocostonivel01.padre == centrocostobase.codigo -%}
-          <li>
-            <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel01.codigo) }}" class="link-dark">
-              {{ centrocostonivel01.codigo + " - " + centrocostonivel01.nombre }}
-            </a>
-            {% if centrocostonivel01.grupo == True %}
-            <ol>
-              {%- for centrocostonivel02 in centros_costo if centrocostonivel02.padre == centrocostonivel01.codigo -%}
-              <li>
-                <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel02.codigo) }}" class="link-dark">
-                  {{ centrocostonivel02.codigo + " - " + centrocostonivel02.nombre }}
-                </a>
-                {% if centrocostonivel02.grupo == True %}
-                <ol>
-                  {%- for centrocostonivel03 in centros_costo if centrocostonivel03.padre == centrocostonivel02.codigo -%}
-                  <li>
-                    <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel03.codigo) }}" class="link-dark">
-                      {{ centrocostonivel03.codigo + " - " + centrocostonivel03.nombre }}
-                    </a>
-                    {% if centrocostonivel03.grupo == True %}
-                    <ol>
-                    {%- for centrocostonivel04 in centros_costo if centrocostonivel04.padre == centrocostonivel03.codigo -%}
-                      <li>
-                        <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel04.codigo) }}" class="link-dark">
-                          {{ centrocostonivel04.codigo + " - " + centrocostonivel04.nombre }}
-                        </a>
-                        {% if centrocostonivel04.grupo == True%}
-                        <ol>
-                          {%- for centrocostonivel05 in centros_costo if centrocostonivel05.padre == centrocostonivel04.codigo -%}
-                            <li>
-                              <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostonivel05.codigo) }}" class="link-dark">
-                                {{ centrocostonivel05.codigo + " - " + centrocostonivel05.nombre }}
-                              </a>
-                            </li>
-                          {% endfor %}
-                        {% endif %}
-                      </li>
-                    {% endfor%}
-                    </ol>
-                    {% endif %}
-                  </li>
-                  {% endfor %}
-                </ol>
-                {% endif %}
-              </li>
-              {% endfor %}
-            </ol>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ol>
-        {% endif %}
-      </li>
+    {%- for centrocostobase in base_centrocostos -%}
+    <li>
+      <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase.codigo) }}" class="link-dark">
+        {{ centrocostobase.codigo + " - " + centrocostobase.nombre }}
+      </a>
+    </li>
     {%- endfor -%}
-    </ol>
+  </ol>
+</div>
 {% endblock %}

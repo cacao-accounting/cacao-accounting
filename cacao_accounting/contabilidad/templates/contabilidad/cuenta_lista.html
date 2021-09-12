@@ -1,229 +1,57 @@
-{% extends "base.html" %}
-{% block contenido %}
-
-<style>
-  /*
- * CSS Tree menu styles
- * Fuente: https://github.com/nanndoj/css-treeview/blob/master/dist/purecss-treeview.css
- */
-
- ol.tree
- {
-   padding: 0 0 0 30px;
-   width: 300px;
- }
-   li 
-   { 
-     position: relative; 
-     margin-left: -15px;
-     list-style: none;
-   }
-   li.file
-   {
-     margin-left: -1px !important;
-   }
-     li.file a
-     {	
-       padding-left: 15px;
-       text-decoration: none;
-       display: block;
-     }
-   li input
-   {
-     position: absolute;
-     left: 0;
-     margin-left: 0;
-     opacity: 0;
-     z-index: 2;
-     cursor: pointer;
-     height: 1em;
-     width: 1em;
-     top: 0;
-   }
-     li input + ol
-     {
-       background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAArklEQVRIie3SMWoCQRTG8Z+pld0YrQWLXEeSmwRyDMHCZi2svIUp9hyx8wQWXiDFvsBGNssskibMHwZm5n3v+97AkMlk+lihSNAVoR3EK2rsUfboytDUeOkSPPzSeMQnltjiqUMzi9oytB8Jg/9ggiqmO4Rh2/wQtQrjoebtkN1NyHyI+Sgh5BEbLHCOu+/9Gy73BtC8ZI3nOJ/wjmtifxKF5sfsIvBPmMbKZP4TXwxkGdbXwI5kAAAAAElFTkSuQmCC') 40px -5px no-repeat;
-       margin: -1.25em 0 0 -44px; /* 20px */
-       padding: 1.563em 0 0 80px;
-       overflow-y: hidden;
-       max-height: 0px;
-       height: auto;
-     }
-     li input + ol > li { 
-       margin-left: -14px !important; 
-       padding-left: 1px;
-     }
-   li label
-   {
-     cursor: pointer;
-     display: block;
-     padding-left: 1.5em;
-   }
- 
-   li input:checked + ol
-   {
-     background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAABWWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgpMwidZAAAA90lEQVRIDWNgGAWjIQAKAWZm5kAgxUOT0AAa7g/E+4F4BjmWMBNy1f///18wMTGZAdWpAmljIP8AkP2LkD6YPEELgAp/Ag09BDTcBshWglpyFMj+ATMEH02MBSD9P4CWHAYabgVkgyyxAPL3AtkEfUKsBSBLviFZIgf1yUFClpBiAcySI0DDQXGiDLXkGJD9HSSJDTBhEyQg9h9JngWJTRWmCDC5LoYm25lAE/mpYirUEGEkwxcAxXipabgAkuEglwtS03B+oOFzocECys0kuZxgJAMNdgAaqgTEN//+/VsKpD8DMXUB0JIgoIm0Keyo69RR0wYiBADDz0OLUVIh6wAAAABJRU5ErkJggg==') 40px 0px no-repeat;
-     margin: -1.25em 0 0 -44px; /* 20px */
-     padding: 1.563em 0 0 80px;
-     max-height: 999px;
-   }
-     li input:checked + ol > li { display: block; margin: 0 0 0.125em;  /* 2px */}
-     li input:checked + ol > li:last-child { margin: 0 0 0.063em; /* 1px */ }
- 
-</style>
+{% extends "base.html" %} {% block contenido %}
 <div class="row">
-  <div class="col">
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb lh-sm">
-        <li class="breadcrumb-item active" aria-current="page">
-          <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-            <i class="bi bi-house"></i> Inicio
-          </a>
-        </li>
-        <li class="breadcrumb-item active" aria-current="page">
-          <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-            Contabilidad
-          </a>
-        </li>
-      </ol>
-    </nav>
-  </div>
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb lh-sm">
+                <li class="breadcrumb-item active" aria-current="page">
+                    <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+                        <i class="bi bi-house"></i> Inicio
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+                      Contabilidad
+                    </a>
+                </li>
+            </ol>
+        </nav>
+    </div>
 </div>
-  <h4>Catalogo de Cuentas Contables.</h4>
-  <form>
-    <h6>Seleccionar Entidad.</h6>
-    <div class="row">
-      <div class="col-8">
-        <select class="form-control" id="entidad" name="entidad">
+
+<h4>Catalogo de Cuentas Contables.</h4>
+
+<div class="row">
+    <form>
+        <h6>Seleccionar Entidad.</h6>
+        <div class="row">
+            <div class="col-8">
+                <select class="form-control" id="entidad" name="entidad">
           {%- for entidad in entidades -%}
-          <option value="{{ entidad.id }}">{{ entidad.nombre_comercial }}</option>
+          <option value="{{ entidad.entidad }}">{{ entidad.nombre_comercial }}</option>
           {%- endfor -%}
         </select>
-      </div>
-      <div class="col-2">
-        <button type="submit" class="btn btn-primary btn-sm">
+            </div>
+            <div class="col-2">
+                <button type="submit" class="btn btn-primary btn-sm">
           Actualizar
         </button>
-      </div>
-    </div>
-  </form>
-  <p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
-  <ol class="tree">
-  {%- for ctabase in base_cuentas -%}
-      <li>
-        <a href="{{ url_for("contabilidad.cuenta", id_cta=ctabase.codigo) }}" class="link-dark">
-          {{ ctabase.codigo + " - " + ctabase.nombre }}
-        </a>
-        <ol>
-          {%- for cuentanivel01 in cuentas if cuentanivel01.padre == ctabase.codigo-%}
-          <li>
-            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel01.codigo) }}" class="link-dark">
-              {{ cuentanivel01.codigo + " - " + cuentanivel01.nombre}}
-            </a>
-            {% if cuentanivel01.grupo == True %}
-            <ol>
-              {% for cuentanivel02 in cuentas if cuentanivel02.padre == cuentanivel01.codigo  %}
-              <li>
-                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel02.codigo) }}" class="link-dark">
-                  {{ cuentanivel02.codigo + " - " + cuentanivel02.nombre}}
-                </a>
-                {% if cuentanivel02.grupo == True %}
-                <ol>
-                  {% for cuentanivel03 in cuentas if cuentanivel03.padre == cuentanivel02.codigo  %}
-                  <li>
-                    <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel03.codigo) }}" class="link-dark">
-                      {{ cuentanivel03.codigo + " - " + cuentanivel03.nombre}}
-                    </a>
-                    {% if cuentanivel03.grupo == True %}
-                    <ol>
-                      {% for cuentanivel04 in cuentas if cuentanivel04.padre == cuentanivel03.codigo %}
-                      <li>
-                        <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel04.codigo) }}" class="link-dark">
-                          {{ cuentanivel04.codigo + " - " + cuentanivel04.nombre}}
-                        </a>
-                        {% if cuentanivel04.grupo == True %}
-                        <ol>
-                          {% for cuentanivel05 in cuentas if cuentanivel05.padre == cuentanivel04.codigo %}
-                          <li>
-                            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel05.codigo) }}" class="link-dark">
-                              {{ cuentanivel05.codigo + " - " + cuentanivel05.nombre}}
-                            </a>
-                            {% if cuentanivel05.grupo == True %}
-                            <ol>
-                              {% for cuentanivel06 in cuentas if cuentanivel06.padre == cuentanivel05.codigo %}
-                              <li>
-                                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel06.codigo) }}" class="link-dark">
-                                  {{ cuentanivel06.codigo + " - " + cuentanivel06.nombre}}
-                                </a>
-                                {% if cuentanivel06.grupo == True %}
-                                <ol>
-                                  {% for cuentanivel07 in cuentas if cuentanivel07.padre == cuentanivel06.codigo %}
-                                  <li>
-                                    <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel07.codigo) }}" class="link-dark">
-                                      {{ cuentanivel07.codigo + " - " + cuentanivel07.nombre}}
-                                    </a>
-                                    {% if cuentanivel07.grupo == True %}
-                                    <ol>
-                                      {% for cuentanivel08 in cuentas if cuentanivel08.padre == cuentanivel07.codigo %}
-                                      <li>
-                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel08.codigo) }}" class="link-dark">
-                                          {{ cuentanivel08.codigo + " - " + cuentanivel08.nombre}}
-                                        </a>
-                                        {% if cuentanivel08.grupo == True %}
-                                        <ol>
-                                          {% for cuentanivel09 in cuentas if cuentanivel09.padre == cuentanivel08.codigo %}
-                                          <li>
-                                            <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel09.codigo) }}" class="link-dark">
-                                              {{ cuentanivel09.codigo + " - " + cuentanivel09.nombre}}
-                                            </a>
-                                            {% if cuentanivel09.grupo == True %}
-                                            <ol>
-                                            {% for cuentanivel10 in cuentas if cuentanivel10.padre == cuentanivel09.codigo %}
-                                              <li>
-                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=cuentanivel10.codigo) }}" class="link-dark">
-                                                  {{ cuentanivel10.codigo + " - " + cuentanivel10.nombre}}
-                                                </a>
-                                              </li>
-                                            {% endfor %}
-                                            </ol>
-                                            {% endif %}
-                                          </li>
-                                          {% endfor %}
-                                        </ol>
-                                        {% endif %}
-                                      </li>
-                                      {% endfor %}
-                                    </ol>
-                                    {% endif %}
-                                  </li>
-                                  {% endfor %}
-                                </ol>
-                                {% endif %}
-                              </li>
-                              {% endfor %}
-                            </ol>
-                            {% endif %}
-                          </li>
-                          {% endfor %}
-                        </ol>
-                        {% endif %}
-                      </li>
-                      {% endfor %}
-                    </ol>
-                    {% endif %}
-                  </li>
-                  {% endfor %}
-                </ol>
-                {% endif %}
-              </li>
-              {% endfor %}
-            </ol>
-            {% endif %}
-          </li> 
-          {%- endfor -%}
-        </ol>
-      </li>
-    {%- endfor -%}
-    </ol>
-{% endblock %}
+            </div>
+        </div>
+    </form>
 
+    <p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
+</div>
+<div class="row">
+    <link href="{{ url_for('static', filename='css/purecss-treeview.css') }}" rel="stylesheet">
+    <ol class="tree">
+        {%- for ctabase in base_cuentas -%}
+        <li>
+            <a href="{{ url_for("contabilidad.cuenta", id_cta=ctabase.codigo) }}" class="link-dark">
+              {{ ctabase.codigo + " - " + ctabase.nombre }}
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+</div>
+
+{% endblock %}

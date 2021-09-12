@@ -41,7 +41,7 @@ def obtener_catalogo_base(entidad_=None):
         ctas_base = Cuentas.query.filter(Cuentas.padre == None, Cuentas.entidad == entidad_).all()  # noqa: E711
     else:
         ctas_base = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre == None, Entidad.status == "predeterminada").all()  # noqa: E711
+            Cuentas.query.join(Entidad).filter(Cuentas.padre == None, Entidad.status == "predeterminado").all()  # noqa: E711
         )  # noqa: E711
 
     return ctas_base
@@ -56,7 +56,7 @@ def obtener_catalogo_centros_costo_base(entidad_=None):
     else:
         ctas_base = (
             CentroCosto.query.join(Entidad)
-            .filter(CentroCosto.padre == None, Entidad.status == "predeterminada")  # noqa: E711
+            .filter(CentroCosto.padre == None, Entidad.status == "predeterminado")  # noqa: E711
             .all()
         )
 
@@ -71,7 +71,7 @@ def obtener_catalogo(entidad_=None):
         ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad_).all()  # noqa: E711
     else:
         ctas = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminada").all()  # noqa: E711
+            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminado").all()  # noqa: E711
         )
 
     return ctas
