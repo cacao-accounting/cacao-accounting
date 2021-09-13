@@ -222,12 +222,6 @@ class TestClasesHeredades(TestCase):
 
 
 class TestExection(TestCase):
-    def test_querry_vacio(self):
-        from cacao_accounting.exceptions import DataError
-        from cacao_accounting.database.helpers import paginar_consulta
-
-        with pytest.raises(DataError):
-            paginar_consulta(tabla=None, elementos=None)
 
     def test_flask_app_as_parameter(self):
         from cacao_accounting import iniciar_extenciones

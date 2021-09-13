@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as macros %}
 {% set titulo = titulo %}
 {% block contenido %}
 <section>
@@ -26,7 +27,7 @@
         <th scope="col">Nombre</th>
       </tr>
     </thead>
-  {% for moneda in pagina.object_list -%}
+  {% for moneda in consulta.items -%}
   <tr>
     <td>
       {{ moneda.codigo }}
@@ -38,8 +39,5 @@
   {%- endfor %}
 </table>
 </section>
-<section>
-  {% import "macros.html" as macros %}
-  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
-</section>
+{{ macros.rendizar_paginacion(consulta=consulta) }}
 {% endblock %}

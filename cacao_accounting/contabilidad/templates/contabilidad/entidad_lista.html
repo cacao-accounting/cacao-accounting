@@ -29,7 +29,7 @@
         <th scope="col">ID Fiscal</th>
       </tr>
     </thead>
-      {% for item in pagina.object_list %}
+      {% for item in consulta.items %}
       <tr>
         <td>
           {{ macros.render_status(status=item.status, lista_status=statusweb) }}
@@ -59,6 +59,6 @@
   </table>
 </section>
 <section>
-  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
+  {{ macros.rendizar_paginacion(consulta=consulta) }}
 </section>
 {% endblock %}

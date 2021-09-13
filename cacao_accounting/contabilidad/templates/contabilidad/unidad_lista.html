@@ -28,7 +28,7 @@
         <th scope="col">Entidad</th>
       </tr>
     </thead>
-  {% for item in pagina.object_list -%}
+  {% for item in consulta.items -%}
   <tr>
     <td>
       {% import "macros.html" as macros %}
@@ -52,7 +52,6 @@
 </table>
 </section>
 <section>
-  {% import "macros.html" as macros %}
-  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
+  {{ macros.rendizar_paginacion(consulta=consulta) }}
 </section>
 {% endblock %}

@@ -25,10 +25,12 @@ from typing import Union
 from flask import Flask
 from sqlalchemy.exc import OperationalError
 from cacao_accounting.database import database, DBVERSION, Metadata
-from cacao_accounting.exceptions import DataError
-from cacao_accounting.exceptions.mensajes import ERROR1, ERROR4
+from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
+
+
+MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -117,20 +119,6 @@ def inicia_base_de_datos(app):
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
     return DB_ESQUEMA
-
-
-MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
-
-
-def paginar_consulta(tabla=None, elementos=None):
-    """Toma una consulta simple y la devuel como una consulta paginada."""
-    if tabla:
-        items = elementos or MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
-        consulta = database.session.query(tabla).order_by(tabla.id)
-        consulta_paginada = Paginator(consulta, items)
-        return consulta_paginada
-    else:
-        raise DataError(ERROR1)
 
 
 def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:

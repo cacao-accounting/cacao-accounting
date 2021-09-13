@@ -137,18 +137,17 @@
 {%- endmacro %}
 
 
-{% macro rendizar_paginacion(consulta_paginada=None, pagina_actual=None)%}
-{% if pagina_actual.has_other_pages() %}
-<p>Monstrando resultados {{ pagina_actual.start_index }} al {{ pagina_actual.end_index }} de {{ pagina_actual.paginator.count }} resultados encontrados. Página {{ pagina_actual.number }} de {{ pagina_actual.paginator.total_pages }}</p>
-<div class="btn-group btn-group-sm" role="group" aria-label="Basic example">
-  {% if pagina_actual.has_previous(): %}
-  <a type="button" href="{{ url_for("contabilidad.monedas", page=pagina_actual.previous_page_number) }}" class="btn btn-primary">Anterior</a>
+{% macro rendizar_paginacion(consulta=None)%}
+<p>{{ consulta.total }} items encontrados.</p>
+<p>
+  {% if consulta.has_prev %}
+  <a href="{{ url_for("contabilidad.monedas", page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
-  {% if pagina_actual.has_next(): %}
-  <a type="button" href="{{ url_for("contabilidad.monedas", page=pagina_actual.next_page_number) }}" class="btn btn-primary">Siguiente</a>
+  Página {{ consulta.page }} de {{ consulta.pages }}  
+  {% if consulta.has_next %} 
+  <a href="{{ url_for("contabilidad.monedas", page=consulta.next_num) }}" class="link-dark">Siguiente <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
-</div>
-{% endif %}
+</p>
 {% endmacro %}
 
 {% macro render_status(status=None, lista_status=None) %}

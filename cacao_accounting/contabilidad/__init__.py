@@ -32,7 +32,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
 )
 from cacao_accounting.database import STATUS
-from cacao_accounting.database.helpers import paginar_consulta, obtener_registro_desde_uuid
+from cacao_accounting.database.helpers import obtener_registro_desde_uuid, MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.metadata import APPNAME
 from cacao_accounting.modulos import validar_modulo_activo
@@ -52,14 +52,13 @@ def monedas():
     """Listado de monedas registradas en el sistema."""
     from cacao_accounting.database import Moneda
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=Moneda)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = Moneda.query.order_by(Moneda.codigo.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listado de Monedas - " + " - " + APPNAME
     return render_template(
         "contabilidad/moneda_lista.html",
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
         titulo=TITULO,
     )
 
@@ -94,15 +93,14 @@ def entidades():
     """Listado de entidades."""
     from cacao_accounting.database import Entidad
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=Entidad)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = Entidad.query.order_by(Entidad.entidad.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
         "contabilidad/entidad_lista.html",
         titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
         statusweb=STATUS,
     )
 
@@ -271,15 +269,14 @@ def unidades():
     """Listado de unidades de negocios."""
     from cacao_accounting.database import Unidad
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=Unidad)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = Unidad.query.order_by(Unidad.unidad.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listado de Unidades de Negocio - " + APPNAME
     return render_template(
         "contabilidad/unidad_lista.html",
         titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
         statusweb=STATUS,
     )
 
@@ -445,15 +442,14 @@ def proyectos():
     """Listado de proyectos."""
     from cacao_accounting.database import Proyecto
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=Proyecto)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = Proyecto.query.order_by(Proyecto.codigo.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listados de Proyectos - " + APPNAME
     return render_template(
         "contabilidad/proyecto_lista.html",
         titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
         statusweb=STATUS,
     )
 
@@ -468,15 +464,14 @@ def tasa_cambio():
     """Listado de tasas de cambio."""
     from cacao_accounting.database import TasaDeCambio
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=TasaDeCambio)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = TasaDeCambio.query.order_by(TasaDeCambio.fecha.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listado de Tasas de Cambio - " + APPNAME
     return render_template(
         "contabilidad/tc_lista.html",
         titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
     )
 
 
@@ -490,14 +485,13 @@ def periodo_contable():
     """Lista de periodos contables."""
     from cacao_accounting.database import PeriodoContable
 
-    PAGE = request.args.get("page", default=1, type=int)
-    RESULTADO = paginar_consulta(tabla=PeriodoContable)
-    PAGINA = RESULTADO.page(PAGE)
+    CONSULTA = PeriodoContable.query.order_by(PeriodoContable.nombre.desc()).paginate(
+        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    )
     TITULO = "Listado de Períodos Contables - " + APPNAME
     return render_template(
         "contabilidad/periodo_lista.html",
         titulo=TITULO,
-        resultado=RESULTADO,
-        pagina=PAGINA,
+        consulta=CONSULTA,
         statusweb=STATUS,
     )

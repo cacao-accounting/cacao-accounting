@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as macros %}
 {% block contenido %}
 <section>
   <nav aria-label="breadcrumb">
@@ -27,7 +28,7 @@
         <th scope="col">Fin</th>
       </tr>
     </thead>
-  {% for item in pagina.object_list -%}
+  {% for item in consulta.items -%}
   {% import "macros.html" as macros %}
   <tr>
     <th>
@@ -48,7 +49,6 @@
 </table>
 </section>
 <section>
-  {% import "macros.html" as macros %}
-  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
+  {{ macros.rendizar_paginacion(consulta=consulta) }}
 </section>
 {% endblock %}

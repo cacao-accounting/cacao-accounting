@@ -1,3 +1,4 @@
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 <section>
@@ -27,7 +28,7 @@
         <th scope="col">Fecha</th>
       </tr>
     </thead>
-  {% for item in pagina.object_list -%}
+  {% for item in consulta.items -%}
   <tr>
     <th>
       {{ item.base }}
@@ -36,7 +37,7 @@
       {{ item.destino }}
     </td>
     <td>
-      {{ item.tasa }}
+      {{ item.tasa | float }}
     </td>
     <td>
       {{ item.fecha }}
@@ -46,7 +47,7 @@
 </table>
 </section>
 <section>
-  {% import "macros.html" as macros %}
-  {{ macros.rendizar_paginacion(consulta_paginada=resultado, pagina_actual=pagina) }}
+  
+  {{ macros.rendizar_paginacion(consulta=consulta) }}
 </section>
 {% endblock %}
