@@ -66,7 +66,6 @@ setup(
         "flask-wtf",
         "loguru",
         "sqlalchemy",
-        "sqlalchemy-paginator",
         "teritorio",
         "waitress",
         "wtforms",
