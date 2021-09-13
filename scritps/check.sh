@@ -1,4 +1,4 @@
 #!/bin/bash
 
 echo "Pytest"
-CACAO_TEST=True pytest -x
+CACAO_TEST=True pytest -x -v
