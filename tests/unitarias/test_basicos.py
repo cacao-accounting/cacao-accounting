@@ -90,17 +90,17 @@ class TestBasicos(TestCase):
         self.app.test_cli_runner()
 
     def test_directorio_archivos(self):
-        from cacao_accounting.tools import DIRECTORIO_ARCHIVOS
+        from cacao_accounting.config import DIRECTORIO_ARCHIVOS
 
         assert self.app.static_folder == DIRECTORIO_ARCHIVOS
 
     def test_directorio_plantillas(self):
-        from cacao_accounting.tools import DIRECTORIO_PLANTILLAS
+        from cacao_accounting.config import DIRECTORIO_PLANTILLAS
 
         assert self.app.template_folder == DIRECTORIO_PLANTILLAS
 
     def test_directorio_principal(self):
-        from cacao_accounting.tools import DIRECTORIO_APP
+        from cacao_accounting.config import DIRECTORIO_APP
 
         assert self.app.root_path == DIRECTORIO_APP
 
