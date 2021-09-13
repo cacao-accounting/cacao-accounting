@@ -12,5 +12,4 @@ export CACAO_TEST=True
 export FLASK_APP=cacao_accounting
 export FLASK_DEBUG=True
 export FLASK_ENV=development
-$CACAO_TEST
-$FLASK_DEBUG
+python wsgi.py
