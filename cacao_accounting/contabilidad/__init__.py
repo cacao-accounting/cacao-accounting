@@ -348,25 +348,14 @@ def cuentas():
     """Catalogo de cuentas contables."""
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
 
-    if "entidad" in request.args:
-        return render_template(
-            "contabilidad/cuenta_lista.html",
-            base_cuentas=obtener_catalogo_base(entidad_=request.args.get("entidad")),
-            cuentas=obtener_catalogo(entidad_=request.args.get("entidad")),
-            entidades=obtener_entidades(),
-            entidad=obtener_entidad(ent=request.args.get("entidad")),
-            titulo=TITULO,
-        )
-
-    else:
-        return render_template(
-            "contabilidad/cuenta_lista.html",
-            base_cuentas=obtener_catalogo_base(),
-            cuentas=obtener_catalogo(),
-            entidades=obtener_entidades(),
-            entidad=obtener_entidad(),
-            titulo=TITULO,
-        )
+    return render_template(
+        "contabilidad/cuenta_lista.html",
+        base_cuentas=obtener_catalogo_base(entidad_=request.args.get("entidad", None)),
+        cuentas=obtener_catalogo(entidad_=request.args.get("entidad", None)),
+        entidades=obtener_entidades(),
+        entidad=obtener_entidad(ent=request.args.get("entidad")),
+        titulo=TITULO,
+    )
 
 
 @contabilidad.route("/accounts/accounts/<id_cta>")
