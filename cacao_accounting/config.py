@@ -17,13 +17,17 @@
 
 """Modulo para la configuración centralizada de la configuración de la aplicacion."""
 
-from os import environ, getcwd, name
+from os import environ, name, pardir, path
 from cacao_accounting.loggin import log
+
 
 
 # < --------------------------------------------------------------------------------------------- >
 # Directorios de la aplicacion
-DIRECTORIO_APP = getcwd()
+DIRECTORIO_PRINCIPAL = pardir
+DIRECTORIO_APP = path.abspath(path.dirname(__file__))
+DIRECTORIO_PLANTILLAS = path.join(DIRECTORIO_APP, "templates")
+DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
