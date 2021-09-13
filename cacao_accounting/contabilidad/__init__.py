@@ -25,7 +25,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
     obtener_catalogo,
-    obtener_catalogo_centros_costos,
+    obtener_centros_costos,
     obtener_entidad,
     obtener_entidades,
     obtener_lista_monedas,
@@ -395,25 +395,14 @@ def ccostos():
     """Catalogo de centros de costos."""
     TITULO = "Catalogo de Centros de Costos - " + APPNAME
 
-    if "entidad" in request.args:
-        return render_template(
-            "contabilidad/centro-costo_lista.html",
-            base_centrocostos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad")),
-            centros_costo=obtener_catalogo_centros_costos(entidad_=request.args.get("entidad")),
-            entidades=obtener_entidades(),
-            entidad=obtener_entidad(ent=request.args.get("entidad")),
-            titulo=TITULO,
-        )
-
-    else:
-        return render_template(
-            "contabilidad/centro-costo_lista.html",
-            base_centrocostos=obtener_catalogo_centros_costo_base(),
-            centros_costo=obtener_catalogo_centros_costos(),
-            entidades=obtener_entidades(),
-            entidad=obtener_entidad(),
-            titulo=TITULO,
-        )
+    return render_template(
+        "contabilidad/centro-costo_lista.html",
+        base_centrocostos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
+        ccostos=obtener_centros_costos(entidad_=request.args.get("entidad", None)),
+        entidades=obtener_entidades(),
+        entidad=obtener_entidad(ent=request.args.get("entidad", None)),
+        titulo=TITULO,
+    )
 
 
 @contabilidad.route("/accounts/costs_center/<id_cc>")

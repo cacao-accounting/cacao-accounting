@@ -77,20 +77,14 @@ def obtener_catalogo(entidad_=None):
     return ctas
 
 
-def obtener_catalogo_centros_costos(entidad_=None):
+def obtener_centros_costos(entidad_=None):
     """Utilidad para devolver el catalogo de centros de costos."""
     from cacao_accounting.database import CentroCosto, Entidad
 
     if entidad_:
-        ctas = CentroCosto.query.filter(CentroCosto.padre != None, CentroCosto.entidad == entidad_).all()  # noqa: E711
+        return CentroCosto.query.filter(CentroCosto.entidad == entidad_).all()
     else:
-        ctas = (
-            CentroCosto.query.join(Entidad)
-            .filter(CentroCosto.padre != None, Entidad.status == "predeterminada")  # noqa: E711
-            .all()
-        )
-
-    return ctas
+        return CentroCosto.query.join(Entidad).filter(Entidad.status == "predeterminado").all()
 
 
 def obtener_entidades():
