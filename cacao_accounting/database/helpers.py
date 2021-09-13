@@ -24,7 +24,6 @@ from os import environ
 from typing import Union
 from flask import Flask
 from sqlalchemy.exc import OperationalError
-from sqlalchemy_paginator import Paginator
 from cacao_accounting.database import database, DBVERSION, Metadata
 from cacao_accounting.exceptions import DataError
 from cacao_accounting.exceptions.mensajes import ERROR1, ERROR4

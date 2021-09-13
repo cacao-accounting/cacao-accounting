@@ -17,15 +17,15 @@
 
 """Modulo para la configuración centralizada de la configuración de la aplicacion."""
 
-from os import environ, name, pardir, path
+from os import environ, name, path
+from pathlib import Path
 from cacao_accounting.loggin import log
-
 
 
 # < --------------------------------------------------------------------------------------------- >
 # Directorios de la aplicacion
-DIRECTORIO_PRINCIPAL = pardir
 DIRECTORIO_APP = path.abspath(path.dirname(__file__))
+DIRECTORIO_PRINCICIPAL = Path(DIRECTORIO_APP).parent.absolute()
 DIRECTORIO_PLANTILLAS = path.join(DIRECTORIO_APP, "templates")
 DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")
 
@@ -33,9 +33,9 @@ DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")
 # URI de conexión a bases de datos por defecto
 # Free Open Source Databases
 if name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_APP) + "\\cacaoaccounting.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\cacaoaccounting.db"
 else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_APP) + "/cacaoaccounting.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/cacaoaccounting.db"
 MYSQL = "mysql+pymysql://cacao:cacao@localhost:3306/cacao"
 POSTGRESQL = "postgresql+pg8000://cacao:cacao@localhost:5432/cacao"
 # Non Free Databases
