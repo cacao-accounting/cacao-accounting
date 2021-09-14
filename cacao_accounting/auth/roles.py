@@ -72,6 +72,11 @@ INVENTARIO_JUNIOR = {
     "detalle": "Auxiliar de Inventarios",
 }
 
+INVENTARIO_USER = {
+    "name": "inventory_user",
+    "detalle": "Usuario de Inventarios",
+}
+
 VENTAS_SENIOR = {
     "name": "sales_manager",
     "detalle": "Jefe de Ventas",
@@ -82,6 +87,10 @@ VENTAS_JUNIOR = {
     "detalle": "Auxiliar de Ventas",
 }
 
+VENTAS_USER = {
+    "name": "sales_user",
+    "detalle": "Usuario de Ventas",
+}
 
 TESORERIA_SENIOR = {
     "name": "head_of_treasury",
@@ -90,8 +99,13 @@ TESORERIA_SENIOR = {
 
 
 TESORERIA_JUNIOR = {
-    "name": "junior_of_treasury",
+    "name": "auxiliar_of_treasury",
     "detalle": "Auxiliar de tesoreria",
+}
+
+TESORERIA_USER = {
+    "name": "user_of_treasury",
+    "detalle": "Usario de tesoreria",
 }
 
 CONTABILIDAD_SENIOR = {
@@ -102,6 +116,11 @@ CONTABILIDAD_SENIOR = {
 CONTABILIDAD_JUNIOR = {
     "name": "accounting_auxiliar",
     "detalle": "Auxiliar de Contabilidad",
+}
+
+CONTABILIDAD_USER = {
+    "name": "accounting_user",
+    "detalle": "Usuario de Contabilidad",
 }
 
 COMPTROLLER = {
@@ -122,12 +141,16 @@ ROLES_PREDETERMINADOS = [
     COMPRAS_USER,
     CONTABILIDAD_SENIOR,
     CONTABILIDAD_JUNIOR,
+    CONTABILIDAD_USER,
     INVENTARIO_SENIOR,
     INVENTARIO_JUNIOR,
+    INVENTARIO_USER,
     TESORERIA_SENIOR,
     TESORERIA_JUNIOR,
+    TESORERIA_USER,
     VENTAS_SENIOR,
     VENTAS_JUNIOR,
+    VENTAS_USER,
     COMPTROLLER,
     BUSINESS_ANALYST,
 ]

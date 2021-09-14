@@ -254,7 +254,7 @@ def _demo_usuarios():
         relacion_id=None,
     )
     USUARIO.ejecutar_transaccion(tesoreriaj)
-    asigna_rol_a_usuario("tesoreriaj", "junior_of_treasury")
+    asigna_rol_a_usuario("tesoreriaj", "auxiliar_of_treasury")
     pasante = Transaccion(
         registro="Usuario",
         tipo="principal",
@@ -274,7 +274,7 @@ def _demo_usuarios():
     USUARIO.ejecutar_transaccion(pasante)
     asigna_rol_a_usuario("pasante", "purchasing_auxiliar")
     asigna_rol_a_usuario("pasante", "accounting_auxiliar")
-    asigna_rol_a_usuario("pasante", "junior_of_treasury")
+    asigna_rol_a_usuario("pasante", "auxiliar_of_treasury")
     asigna_rol_a_usuario("pasante", "inventory_auxiliar")
     asigna_rol_a_usuario("pasante", "sales_auxiliar")
     usuario = Transaccion(
@@ -295,6 +295,7 @@ def _demo_usuarios():
     )
     USUARIO.ejecutar_transaccion(usuario)
     asigna_rol_a_usuario("usuario", "purchasing_user")
+    asigna_rol_a_usuario("usuario", "accounting_user")
 
 
 def _demo_entidad():

@@ -502,6 +502,28 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         validar=False,
         validar_solicitud=False,
     )
+    ACCOUNTING_USER = RolesPermisos(
+        rol_id=obtener_id_rol_por_monbre("accounting_user"),
+        modulo_id=obtener_id_modulo_por_nombre("accounting"),
+        acceso=True,
+        actualizar=False,
+        anular=False,
+        autorizar=False,
+        bi=False,
+        cerrar=False,
+        configurar=False,
+        consultar=True,
+        corregir=False,
+        crear=False,
+        editar=False,
+        eliminar=False,
+        importar=False,
+        listar=True,
+        reportes=False,
+        solicitar=True,
+        validar=False,
+        validar_solicitud=False,
+    )
     INVENTORY_MANAGER = RolesPermisos(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
         modulo_id=obtener_id_modulo_por_nombre("inventory"),
@@ -569,7 +591,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         validar_solicitud=True,
     )
     JUNIOR_OF_TREASURY = RolesPermisos(
-        rol_id=obtener_id_rol_por_monbre("junior_of_treasury"),
+        rol_id=obtener_id_rol_por_monbre("auxiliar_of_treasury"),
         modulo_id=obtener_id_modulo_por_nombre("cash"),
         acceso=True,
         actualizar=True,
@@ -693,6 +715,7 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         PURCHASING_USER,
         ACCOUNTING_MANAGER,
         ACCOUNTING_AUXILIAR,
+        ACCOUNTING_USER,
         INVENTORY_MANAGER,
         INVENTORY_AUXILIAR,
         HEAD_OF_TREASURY,
