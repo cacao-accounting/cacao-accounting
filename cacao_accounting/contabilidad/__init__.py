@@ -132,25 +132,25 @@ def nueva_entidad():
     formulario.moneda.choices = obtener_lista_monedas()
 
     TITULO = "Crear Nueva Entidad - " + APPNAME
-    if formulario.validate_on_submit():
+    if formulario.validate_on_submit() or request.method == "POST":
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
 
         ENTIDAD = RegistroEntidad()
         DATA = {
-            "entidad": formulario.id.data,
-            "razon_social": formulario.razon_social.data,
-            "nombre_comercial": formulario.nombre_comercial.data,
-            "id_fiscal": formulario.id_fiscal.data,
-            "moneda": formulario.moneda.data,
-            "tipo_entidad": formulario.tipo_entidad.data,
-            "correo_electronico": formulario.correo_electronico.data,
-            "web": formulario.web.data,
-            "telefono1": formulario.telefono1.data,
-            "telefono2": formulario.telefono2.data,
-            "fax": formulario.fax.data,
+            "entidad": request.form.get("id", None),
+            "razon_social": request.form.get("razon_social", None),
+            "nombre_comercial": request.form.get("nombre_comercial", None),
+            "id_fiscal": request.form.get("id_fiscal", None),
+            "moneda": request.form.get("moneda", None),
+            "tipo_entidad": request.form.get("tipo_entidad", None),
+            "correo_electronico": request.form.get("correo_electronico", None),
+            "web": request.form.get("web", None),
+            "telefono1": request.form.get("telefono1", None),
+            "telefono2": request.form.get("telefono2", None),
+            "fax": request.form.get("fax", None),
             "status": "activo",
             "habilitada": True,
-            "predeterminada": True,
+            "predeterminada": False,
         }
         TRANSACCION_NUEVA_ENTIDAD = Transaccion(
             tipo="principal",
