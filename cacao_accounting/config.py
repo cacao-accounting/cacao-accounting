@@ -128,7 +128,6 @@ else:
     # variable de entorno
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = "dev"
-    configuracion["EXPLAIN_TEMPLATE_LOADING"] = "True"
     configuracion["DEGUG"] = "True"
 
 
