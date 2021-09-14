@@ -222,7 +222,6 @@ class TestClasesHeredades(TestCase):
 
 
 class TestExection(TestCase):
-
     def test_flask_app_as_parameter(self):
         from cacao_accounting import iniciar_extenciones
 

@@ -27,7 +27,7 @@ def app():
     app = app_factory(
         {
             "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///cacaoaccounting.db",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
@@ -82,21 +82,31 @@ def auth(client):
 
 
 def test_formulario_nueva_entidad(client, auth):
+    from cacao_accounting.database import Entidad
+
     auth.login()
     response = client.get("/accounts/entity/new")
     assert b"Crear Nueva Entidad." in response.data
+    entidad = Entidad.query.filter_by(entidad="Test Form").first()
+    assert entidad is None
     post = client.post(
         "/accounts/entity/new",
         data={
-            "id-entidad": "TestForm",
-            "razon-social": "Test Formulario",
-            "nombre-comercial": "Test Formulario",
-            "id-fiscal": "testform",
+            "nombre_comercial": "Test Form",
+            "razon_social": "Test Form",
+            "id_fiscal": "Test Form",
+            "id": "Test Form",
             "moneda": "NIO",
-            "tipo": "Sociedad",
-            "status": "activa",
-            "correo-e": "info@test.form",
-            "web-site": "test.form",
+            "tipo_entidad": "Asociación",
+            "correo_electronico": "test@cacao.io",
+            "web": "https://cacao.io",
+            "telefono1": "+505 8771 0980",
+            "telefono2": "+505 8661 2108",
+            "fax": "+505 2273 0754",
         },
         follow_redirects=True,
     )
+    entidad = Entidad.query.filter_by(entidad="Test Form").first()
+    assert entidad is not None
+    assert entidad.moneda == "NIO"
+    assert entidad.entidad == "Test Form"
