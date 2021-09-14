@@ -138,8 +138,8 @@
 
 
 {% macro rendizar_paginacion(consulta=None)%}
-<p>{{ consulta.total }} items encontrados.</p>
-<p>
+<p>{{ consulta.total }} items encontrados.
+  <br>
   {% if consulta.has_prev %}
   <a href="{{ url_for("contabilidad.monedas", page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
