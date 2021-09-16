@@ -8,6 +8,7 @@
 ![GitHub issues](https://img.shields.io/github/issues/cacao-accounting/cacao-accounting)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/cacao-accounting/cacao-accounting)
 
+[![SonarCloud](https://sonarcloud.io/images/project_badges/sonarcloud-black.svg)](https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting)
 
 Gracias por su interes en colaborar con Cacao Accounting (el proyecto).
 
