@@ -499,3 +499,339 @@ def test_rol_CONTABILIDAD_USER():
         assert permisos.solicitar is True
         assert permisos.validar is False
         assert permisos.validar_solicitud is False
+
+
+def test_rol_INVENTORY_MANAGER():
+    USUARIO = "inventario"
+    MODULO = "inventory"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is True
+    assert permisos.autorizar is True
+    assert permisos.bi is True
+    assert permisos.cerrar is True
+    assert permisos.configurar is True
+    assert permisos.consultar is True
+    assert permisos.corregir is True
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is True
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is True
+    assert permisos.validar_solicitud is True
+    for modulo in ("accounting", "purchases", "cash", "sales"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_INVENTORY_AUXILIAR():
+    USUARIO = "inventarioj"
+    MODULO = "inventory"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is False
+    assert permisos.autorizar is False
+    assert permisos.bi is True
+    assert permisos.cerrar is False
+    assert permisos.configurar is False
+    assert permisos.consultar is True
+    assert permisos.corregir is False
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is False
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is False
+    assert permisos.validar_solicitud is False
+    for modulo in ("accounting", "purchases", "cash", "sales"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_INVENTORY_USER():
+    USUARIO = "usuario"
+    for modulo in ("inventory",):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is True
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is True
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is True
+        assert permisos.reportes is False
+        assert permisos.solicitar is True
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_HEAD_OF_TREASURY():
+    USUARIO = "tesoreria"
+    MODULO = "cash"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is True
+    assert permisos.autorizar is True
+    assert permisos.bi is True
+    assert permisos.cerrar is True
+    assert permisos.configurar is True
+    assert permisos.consultar is True
+    assert permisos.corregir is True
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is True
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is True
+    assert permisos.validar_solicitud is True
+    for modulo in ("accounting", "purchases", "sales", "inventory"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_JUNIOR_OF_TREASURY():
+    USUARIO = "tesoreriaj"
+    MODULO = "cash"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is False
+    assert permisos.autorizar is False
+    assert permisos.bi is True
+    assert permisos.cerrar is False
+    assert permisos.configurar is False
+    assert permisos.consultar is True
+    assert permisos.corregir is False
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is False
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is False
+    assert permisos.validar_solicitud is False
+    for modulo in ("accounting", "purchases", "sales", "inventory"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_USER_OF_TREASURY():
+    USUARIO = "usuario"
+    for modulo in ("cash",):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is True
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is True
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is True
+        assert permisos.reportes is False
+        assert permisos.solicitar is True
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_SALES_MANAGER():
+    USUARIO = "ventas"
+    MODULO = "sales"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is True
+    assert permisos.autorizar is True
+    assert permisos.bi is True
+    assert permisos.cerrar is True
+    assert permisos.configurar is True
+    assert permisos.consultar is True
+    assert permisos.corregir is True
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is True
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is True
+    assert permisos.validar_solicitud is True
+    for modulo in ("accounting", "purchases", "cash", "inventory"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_SALES_AUXILIAR():
+    USUARIO = "ventasj"
+    MODULO = "sales"
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(MODULO), usuario=obtener_id_usuario_por_nombre(USUARIO))
+    assert permisos.autorizado is True
+    assert permisos.actualizar is True
+    assert permisos.anular is False
+    assert permisos.autorizar is False
+    assert permisos.bi is True
+    assert permisos.cerrar is False
+    assert permisos.configurar is False
+    assert permisos.consultar is True
+    assert permisos.corregir is False
+    assert permisos.crear is True
+    assert permisos.editar is True
+    assert permisos.eliminar is False
+    assert permisos.importar is False
+    assert permisos.listar is True
+    assert permisos.reportes is True
+    assert permisos.solicitar is True
+    assert permisos.validar is False
+    assert permisos.validar_solicitud is False
+    for modulo in ("accounting", "purchases", "cash", "inventory"):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is False
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is False
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is False
+        assert permisos.reportes is False
+        assert permisos.solicitar is False
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False
+
+
+def test_rol_SALES_USER():
+    USUARIO = "usuario"
+    for modulo in ("sales",):
+        permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=obtener_id_usuario_por_nombre(USUARIO))
+        assert permisos.autorizado is True
+        assert permisos.actualizar is False
+        assert permisos.anular is False
+        assert permisos.autorizar is False
+        assert permisos.bi is False
+        assert permisos.cerrar is False
+        assert permisos.configurar is False
+        assert permisos.consultar is True
+        assert permisos.corregir is False
+        assert permisos.crear is False
+        assert permisos.editar is False
+        assert permisos.eliminar is False
+        assert permisos.importar is False
+        assert permisos.listar is True
+        assert permisos.reportes is False
+        assert permisos.solicitar is True
+        assert permisos.validar is False
+        assert permisos.validar_solicitud is False

@@ -296,6 +296,9 @@ def _demo_usuarios():
     USUARIO.ejecutar_transaccion(usuario)
     asigna_rol_a_usuario("usuario", "purchasing_user")
     asigna_rol_a_usuario("usuario", "accounting_user")
+    asigna_rol_a_usuario("usuario", "inventory_user")
+    asigna_rol_a_usuario("usuario", "user_of_treasury")
+    asigna_rol_a_usuario("usuario", "sales_user")
 
 
 def _demo_entidad():
