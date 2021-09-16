@@ -23,12 +23,12 @@ PRERELEASE que no sea NULL se ejecutara el servidor de desarrollo con
 la opción DEBUG habilitada.
 """
 
+from cacao_accounting.config import TESTING_MODE
 from cacao_accounting.server import app, server
-from cacao_accounting.version import PRERELEASE
 
 
 if __name__ == "__main__":
-    if PRERELEASE:
+    if TESTING_MODE:
         app.run(debug=True, port=8080)
     else:
         server()

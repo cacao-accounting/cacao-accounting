@@ -158,3 +158,7 @@ def probar_modo_escritorio() -> bool:
 
 
 MODO_ESCRITORIO = probar_modo_escritorio()
+
+TESTING_MODE = (
+    environ.get("FLASK_DEBUG", None) or environ.get("CACAO_TEST", None) or environ.get("FLASK_ENV", None) == "development"
+)
