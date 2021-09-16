@@ -52,7 +52,7 @@ def monedas():
     """Listado de monedas registradas en el sistema."""
     from cacao_accounting.database import Moneda
 
-    CONSULTA = Moneda.query.order_by(Moneda.codigo.desc()).paginate(
+    CONSULTA = Moneda.query.order_by(Moneda.codigo).paginate(
         request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
     )
     TITULO = "Listado de Monedas - " + " - " + APPNAME

@@ -137,15 +137,15 @@
 {%- endmacro %}
 
 
-{% macro rendizar_paginacion(consulta=None)%}
+{% macro rendizar_paginacion(consulta=None, vista=None)%}
 <p>{{ consulta.total }} items encontrados.
   <br>
   {% if consulta.has_prev %}
-  <a href="{{ url_for("contabilidad.monedas", page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i> Anterior</a>
+  <a href="{{ url_for(vista, page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
   Página {{ consulta.page }} de {{ consulta.pages }}  
   {% if consulta.has_next %} 
-  <a href="{{ url_for("contabilidad.monedas", page=consulta.next_num) }}" class="link-dark">Siguiente <i class="bi bi-arrow-right-short"></i></a>
+  <a href="{{ url_for(vista, page=consulta.next_num) }}" class="link-dark">Siguiente <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
 </p>
 {% endmacro %}
