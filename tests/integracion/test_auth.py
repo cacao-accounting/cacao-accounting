@@ -31,7 +31,7 @@ configuracion["WTF_CSRF_ENABLED"] = False
 configuracion["SESSION_PROTECTION "] = None
 
 
-class TestAutenticacion(TestCase):
+class TestAuth(TestCase):
     def setUp(self):
         self.app = create_app(configuracion)
         self.app.config["LOGIN_DISABLED"] = True
