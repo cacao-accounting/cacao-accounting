@@ -31,7 +31,7 @@
   {% for item in consulta.items -%}
   {% import "macros.html" as macros %}
   <tr>
-    <th>
+    <th id="{{ item.entidad }}">
       {{ macros.render_status(status=item.status, lista_status=statusweb) }}
       {{ item.nombre }}
     </th>

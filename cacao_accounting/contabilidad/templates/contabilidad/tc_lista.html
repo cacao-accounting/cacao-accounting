@@ -30,7 +30,7 @@
     </thead>
   {% for item in consulta.items -%}
   <tr>
-    <th>
+    <th id="{{ item.base }}-{{ item.destino }}">
       {{ item.base }}
     </th>
     <td>
