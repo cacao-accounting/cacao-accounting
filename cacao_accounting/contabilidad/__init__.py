@@ -246,7 +246,7 @@ def activar_entidad(id_entidad):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
-    """Estblece una entidad como predeterminada."""
+    """Establece una entidad como predeterminada."""
     from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
