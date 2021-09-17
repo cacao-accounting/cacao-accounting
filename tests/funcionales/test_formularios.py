@@ -24,10 +24,13 @@ from cacao_accounting.datos import base_data, dev_data
 
 @pytest.fixture(scope="module", autouse=True)
 def app():
+    from cacao_accounting.config import SQLITE
+
     app = app_factory(
         {
             "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_DATABASE_URI": SQLITE,
+            # "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
@@ -110,3 +113,30 @@ def test_formulario_nueva_entidad(client, auth):
     assert entidad is not None
     assert entidad.moneda == "NIO"
     assert entidad.entidad == "Test Form"
+
+
+def test_formulario_nueva_unidad(client, auth):
+    from cacao_accounting.database import Unidad
+
+    auth.login()
+    response = client.get("/accounts/unit/new")
+    assert b"Crear Nueva Unidad de Negocios." in response.data
+    unidad = Unidad.query.filter_by(unidad="Test Form").first()
+    assert unidad is None
+    post = client.post(
+        "/accounts/unit/new",
+        data={
+            "id": "test",
+            "nombre": "Test Form",
+            "entidad": "cacao",
+            "correo_electronico": "test@cacao.io",
+            "web": "https://cacao.io",
+            "telefono1": "+505 8771 0980",
+            "telefono2": "+505 8661 2108",
+            "fax": "+505 2273 0754",
+        },
+    )
+    unidad = Unidad.query.filter_by(unidad="test").first()
+    assert unidad is not None
+    assert unidad.entidad == "cacao"
+    assert unidad.unidad == "test"

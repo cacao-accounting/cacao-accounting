@@ -312,23 +312,35 @@ def nueva_unidad():
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     TITULO = "Crear Nueva Unidad de Negocios - " + APPNAME
-    if formulario.validate_on_submit():
+    if formulario.validate_on_submit() or request.method == "POST":
         from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
 
-        e = RegistroUnidad()
+        UNIDAD = RegistroUnidad()
         DATA = {
-            "unidad": formulario.id.data,
-            "nombre": formulario.nombre.data,
-            "entidad": formulario.entidad.data,
-            "correo_electronico": formulario.correo_electronico.data,
-            "web": formulario.web.data,
-            "telefono1": formulario.telefono1.data,
-            "telefono2": formulario.telefono2.data,
-            "fax": formulario.fax.data,
-            "status": "activa",
+            "unidad": request.form.get("id", None),
+            "nombre": request.form.get("nombre", None),
+            "entidad": request.form.get("entidad", None),
+            "correo_electronico": request.form.get("correo_electronico", None),
+            "web": request.form.get("web", None),
+            "telefono1": request.form.get("telefono1", None),
+            "telefono2": request.form.get("telefono2", None),
+            "fax": request.form.get("fax", None),
+            "status": "activo",
         }
-        e.crear_registro_maestro(datos=DATA)
-        return redirect("/accounts/units")
+        TRANSACCION_NUEVA_UNIDAD = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos=DATA,
+            registro="Unidad",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+        UNIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_UNIDAD)
+        return redirect("/accounts/unit/list")
     return render_template(
         "contabilidad/unidad_crear.html",
         titulo=TITULO,
