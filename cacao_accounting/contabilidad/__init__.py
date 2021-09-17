@@ -35,7 +35,6 @@ from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import obtener_registro_desde_uuid, MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.metadata import APPNAME
-from cacao_accounting.modulos import validar_modulo_activo
 from cacao_accounting.transaccion import Transaccion
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
@@ -74,13 +73,10 @@ def monedas():
 def conta():
     """Pantalla principal del modulo contabilidad."""
     TITULO = "Módulo Contabilidad - " + APPNAME
-    if validar_modulo_activo("accounting"):
-        return render_template(
-            "contabilidad.html",
-            titulo=TITULO,
-        )
-    else:
-        return redirect("/app")
+    return render_template(
+        "contabilidad.html",
+        titulo=TITULO,
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
