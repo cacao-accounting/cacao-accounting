@@ -115,6 +115,37 @@ def test_formulario_nueva_entidad(client, auth):
     assert entidad.entidad == "Test Form"
 
 
+def test_formulario_editar_entidad(client, auth):
+    from cacao_accounting.database import Entidad
+
+    auth.login()
+    get = client.get("/accounts/entity/edit/dulce")
+    assert b"Editar Entidad." in get.data
+    post = client.post(
+        "/accounts/entity/edit/dulce",
+        data={
+            "id_fiscal": "J08100000078",
+            "nombre_comercial": "Dulces Karla",
+            "razon_social": "Dulces Mundo Sabor Sociedad Anonima",
+            "telefono1": "+506 8771 0980",
+            "telefono2": "+506 8667 2108",
+            "correo_electronico": "hola@candy.org",
+            "fax": "+506 7242 2789",
+            "web": "candy.org",
+        },
+        follow_redirects=True,
+    )
+    assert b"Dulces Karla" in post.data
+    assert b"J08100000078" in post.data
+    assert b"Dulces Mundo Sabor Sociedad Anonima" in post.data
+    assert b"+506 8771 0980" in post.data
+    assert b"+506 8667 2108" in post.data
+    assert b"hola@candy.org" in post.data
+    assert b"+506 7242 2789" in post.data
+    assert b"candy.org" in post.data
+    assert b"dulce" in post.data
+
+
 def test_formulario_nueva_unidad(client, auth):
     from cacao_accounting.database import Unidad
 

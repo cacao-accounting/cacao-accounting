@@ -22,6 +22,7 @@
   </nav>
   <div class="pf-c-content">
     <h4>Entidad.</h4>
+    <a class="btn btn-sm btn-success" href="{{ url_for("contabilidad.editar_entidad", id_entidad=registro.entidad) }}">Editar</a>
     {% if registro.status != "predeterminado" and registro.status == "activo" %}
     <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.predeterminar_entidad", id_entidad=registro.id) }}">Establecer como Predeterminada</a>
     {% endif %}

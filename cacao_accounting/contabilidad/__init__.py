@@ -19,7 +19,8 @@
 
 """Modulo de Contabilidad."""
 
-from flask import Blueprint, redirect, render_template, request
+from flask import Blueprint, abort, redirect, render_template, request
+from flask.helpers import url_for
 from flask_login import login_required
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
@@ -170,18 +171,49 @@ def nueva_entidad():
     )
 
 
-@contabilidad.route("/accounts/entity/edit/<id_entidad>")
+@contabilidad.route("/accounts/entity/edit/<id_entidad>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import database, Entidad
 
-    e = Entidad.query.filter_by(id=id_entidad).first()
-    formulario = FormularioEntidad()
-    return render_template("contabilidad/entidad_editar.html", form=formulario, entidad=e)
+    ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
+
+    if request.method == "GET":
+        DATA = {
+            "nombre_comercial": ENTIDAD.nombre_comercial,
+            "razon_social": ENTIDAD.razon_social,
+            "id_fiscal": ENTIDAD.id_fiscal,
+            "correo_electronico": ENTIDAD.correo_electronico,
+            "telefono1": ENTIDAD.telefono1,
+            "telefono2": ENTIDAD.telefono2,
+            "fax": ENTIDAD.fax,
+            "web": ENTIDAD.web,
+        }
+
+        formulario = FormularioEntidad(data=DATA)
+        formulario.moneda.choices = obtener_lista_monedas()
+        return render_template("contabilidad/entidad_editar.html", form=formulario)
+    elif request.method == "POST":
+        from cacao_accounting.loggin import log
+
+        log.warning(request.form)
+        ENTIDAD.id_fiscal = request.form.get("id_fiscal", None)
+        ENTIDAD.nombre_comercial = request.form.get("nombre_comercial", None)
+        ENTIDAD.razon_social = request.form.get("razon_social", None)
+        ENTIDAD.telefono1 = request.form.get("telefono1", None)
+        ENTIDAD.telefono2 = request.form.get("telefono2", None)
+        ENTIDAD.correo_electronico = request.form.get("correo_electronico", None)
+        ENTIDAD.fax = request.form.get("fax", None)
+        ENTIDAD.web = request.form.get("web", None)
+        database.session.add(ENTIDAD)  # pylint: disable=no-member
+        database.session.commit()  # pylint: disable=no-member
+        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.entidad))
+    else:
+        return abort(status=400)
 
 
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")

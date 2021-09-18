@@ -89,6 +89,12 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
             assert error is not None
             return render_template("403.html"), 403
 
+        @app.errorhandler(400)
+        def error_400(error):
+            """Pagina personalizada para solicitar invalida."""
+            assert error is not None
+            return render_template("400.html"), 400
+
     else:
         raise RuntimeError(ERROR2)
 
