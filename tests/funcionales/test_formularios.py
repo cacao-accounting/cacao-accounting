@@ -29,8 +29,7 @@ def app():
     app = app_factory(
         {
             "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_DATABASE_URI": SQLITE,
-            # "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
