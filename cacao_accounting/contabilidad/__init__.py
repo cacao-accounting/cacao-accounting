@@ -183,9 +183,7 @@ def editar_entidad(id_entidad):
     ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
 
     if request.method == "POST":
-        from cacao_accounting.loggin import log
 
-        log.warning(request.form)
         ENTIDAD.id_fiscal = request.form.get("id_fiscal", None)
         ENTIDAD.nombre_comercial = request.form.get("nombre_comercial", None)
         ENTIDAD.razon_social = request.form.get("razon_social", None)
