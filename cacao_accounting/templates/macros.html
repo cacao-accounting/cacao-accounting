@@ -83,7 +83,7 @@
                 </a>
               </li>
               {%- endif %}
-              {% if validar_modulo_activo("buying") and permisos(modulo=id_modulo("buying"), usuario=usuario.id).autorizado %}
+              {% if validar_modulo_activo("purchases") and permisos(modulo=id_modulo("buying"), usuario=usuario.id).autorizado %}
 
               <li class="nav__item">
                 <a href="{{ url_for("compras.compras_") }}" class="nav-link">
