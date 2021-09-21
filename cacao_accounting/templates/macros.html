@@ -93,7 +93,6 @@
               </li>
               {%- endif %}
               {% if validar_modulo_activo("inventory") and permisos(modulo=id_modulo("inventory"), usuario=usuario.id).autorizado -%}
-
               <li class="nav__item">
                 <a href="{{ url_for("inventario.inventario_") }}" class="nav-link">
                   <i class="bi bi-shop"></i>
