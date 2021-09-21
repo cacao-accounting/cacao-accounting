@@ -1,3 +1,4 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}

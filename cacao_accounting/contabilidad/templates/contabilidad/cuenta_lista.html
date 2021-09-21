@@ -1,3 +1,4 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %} {% block contenido %}
 
 <nav aria-label="breadcrumb">

@@ -127,9 +127,20 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
             app.jinja_env.globals.update(permisos=Permisos)
+            app.jinja_env.globals.update(testing=TESTING_MODE)
+            # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
+            # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
+            # nivel del permiso de cada usuario agregando la siguiente linea:
+            # {% set acceso = permisos(modulo=id_modulo(modulo), usuario=usuario.id)%}
+            # donde modulo es uno de "accounting", "cash", "purchases", "inventory", "sales"
+            # puede ser que modulos adicionales se encuentren instalados en el sistema, pero esos
+            # son los 5 modulos predeterminados del sistema.
+            # El sistema de permisos verifica los siguientes accesos predeterminados:
+            # "actualizar", "anular", "autorizar", "bi", "cerrar", "configurar", "consultar",
+            # "corregir", "crear", "editar", "eliminar", "importar", "listar", "reportes",
+            # "solicitar", "validar" y "validar_solicitud"
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
-            app.jinja_env.globals.update(testing=TESTING_MODE)
     else:
         raise RuntimeError(ERROR2)
 

@@ -1,3 +1,4 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %}
 {% block contenido %}
 <section class="pf-c-page__main-section pf-m-light">
@@ -22,6 +23,7 @@
   </nav>
   <div class="pf-c-content">
     <h4>Entidad.</h4>
+    {% if acceso.configurar %}
     <a class="btn btn-sm btn-success" href="{{ url_for("contabilidad.editar_entidad", id_entidad=registro.entidad) }}">Editar</a>
     {% if registro.status != "predeterminado" and registro.status == "activo" %}
     <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.predeterminar_entidad", id_entidad=registro.id) }}">Establecer como Predeterminada</a>
@@ -33,6 +35,7 @@
     <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.activar_entidad", id_entidad=registro.id) }}">Establecer como Activa</a>
     {% endif %}
     <a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_entidad", id_entidad=registro.id) }}"  type="link" >Eliminar Entidad</a>
+    {% endif %}
     <div class="container">
       <div class="row">
         <h5 class="card-title">Información General</h5>
