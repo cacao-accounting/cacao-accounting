@@ -137,6 +137,14 @@ Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.986 | INFO     | ca
 Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | cacao_accounting.server:server:49 - Inician>
 ```
 
+Puede verificar que el servicio se esta ejecutando localmente con curl:
+
+```
+curl 127.0.0.1:8080
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<title>Redirecting...</title>
+```
+
 Si desea finalizar el servicio ejecute:
 
 ```
