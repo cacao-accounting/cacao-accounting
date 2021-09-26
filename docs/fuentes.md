@@ -175,3 +175,31 @@ sudo apt update
 sudo apt install nginx
 sudo ufw allow 'Nginx HTTPS'
 ```
+
+Debe crear el archivo de configuración en:
+
+```
+sudo vi /etc/nginx/sites-available/cacao
+```
+
+Y agregue el siguiente contenido:
+
+```
+server {
+    listen 8443;
+    server_name cacao;
+
+location / {
+  include proxy_params;
+  proxy_set_header Host $host;
+  proxy_pass proxy_pass http:s//127.0.0.1:8000;
+    }
+}
+```
+
+Ejecute:
+
+```
+sudo systemctl restart nginx
+```
+
