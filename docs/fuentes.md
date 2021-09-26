@@ -74,29 +74,71 @@ Si no tiene acceso de administrador al sistema aun puede utilizar systemd para
 administrar Cacoa Accounting, debe colocar en archivo .unit en:
 
 ```
-~/.config/systemd/user/cacao-accounting.service
+wget https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/misc/ejemplos/cacao-accounting.unit
+mkdir -p .config/systemd/user/
+mv cacao-accounting.unit .config/systemd/user/cacao-accounting.service
 ```
+
+Edite la plantilla, es importante que el Unit file apunte a la ubicación correcta del ejecutable "cacaoctl"
+
+
+```
+ cat .config/systemd/user/cacao-accounting.service
+# Se debe colocar en: /etc/systemd/system/cacao-accounting.service
+[Unit]
+Description=Cacao Accounting WSGI server
+After=syslog.target network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+PIDFile=/run/cacaoctl.pid
+# Ajustar de acuerdo a la ruta de su entorno virtual
+ExecStart=/home/wmoreno/Documentos/repositorios/cacao/venv/bin/cacaoctl serve
+# Utilizar esta ruta si la aplicación esta instalada a nivel de sistema
+# ExecStart=/usr/bin/cacaoctl serve
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+
+vi .config/systemd/user/cacao-accounting.service
+```
+
+La linea importante es indicarle a systemd el archivo executable correcto, en mi caso:
+
+```
+ExecStart=/home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
+```
+
 
 Puede administrar el servicio con:
 
 ```
 systemctl --user daemon-reload
-systemctl --user start cacao-accounting
+systemctl --user enable --now cacao-accounting
 
-systemctl --user status cacao-accounting
+ systemctl --user status cacao-accounting
 ● cacao-accounting.service - Cacao Accounting WSGI server
-     Loaded: loaded (/home/wmoreno/.config/systemd/user/cacao-accounting.service; disabled; vendor preset: disabled)
-     Active: active (running) since Sun 2020-11-01 15:12:52 CST; 5s ago
-   Main PID: 5471 (cacaoctl)
-      Tasks: 5 (limit: 3991)
-     Memory: 44.2M
-        CPU: 656ms
-     CGroup: /user.slice/user-1000.slice/user@1000.service/cacao-accounting.service
-             └─5471 /home/wmoreno/Documentos/repositorios/cacao/venv/bin/python /home/wmoreno/Documentos/repositorios/cacao/venv/bin/cacaoctl serve
+     Loaded: loaded (/home/ubuntu/.config/systemd/user/cacao-accounting.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sun 2021-09-26 20:58:14 UTC; 1min 11s ago
+   Main PID: 30482 (cacaoctl)
+     CGroup: /user.slice/user-1001.slice/user@1001.service/cacao-accounting.service
+             └─30482 /home/ubuntu/cacao-accounting/venv/bin/python3 /home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
 
-nov 01 15:12:52 thanos systemd[2002]: Started Cacao Accounting WSGI server.
-nov 01 15:12:53 thanos cacaoctl[5471]: 2020-11-01 15:12:53.798 | INFO     | cacao_accounting.__main__:run:34 - Iniciando servidor WSGI en puerto 8080
-nov 01 15:12:53 thanos cacaoctl[5471]: 2020-11-01T15:12:53.798290-0600 INFO Iniciando servidor WSGI en puerto 8080
+Sep 26 20:58:14 erpnext systemd[19701]: Started Cacao Accounting WSGI server.
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:<module>:122 - No s>
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:<module>:123 - Util>
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.server:server:32 - Inician>
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.database.helpers:verifica_>
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.986 | INFO     | cacao_accounting.database.helpers:verifica_>
+Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | cacao_accounting.server:server:49 - Inician>
+```
 
+Si desea finalizar el servicio ejecute:
+
+```
 systemctl --user stop cacao-accounting
 ```
