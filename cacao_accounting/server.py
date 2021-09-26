@@ -47,7 +47,7 @@ def server() -> None:
     if DATABASE:
         try:
             log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
-            serve(app, port=PORT, threads=THREADS, url_scheme='https')
+            serve(app, port=PORT, threads=THREADS)
         except OSError:
             log.error("Puerto 8080 actualmente en uso.")
     else:
