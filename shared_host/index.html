@@ -15,7 +15,7 @@
     
     
       
-        <title>Paquete Python - Cacao Accounting</title>
+        <title>Shared Hosting - Cacao Accounting</title>
       
     
     
@@ -63,6 +63,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#instalacion-de-cacao-accounting-en-servicios-de-hospedaje-compartido" class="md-skip">
+          Saltar a contenido
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -101,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Paquete Python
+              Shared Hosting
             
           </span>
         </div>
@@ -359,11 +364,70 @@
             
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../shared_host/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Shared Hosting
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Shared Hosting
       </a>
+      
+        
+<nav class="md-nav md-nav--secondary" aria-label="Tabla de contenidos">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Tabla de contenidos
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#iniciar-sesion-en-el-servidor-virtual-y-crear-un-entorno-virtual" class="md-nav__link">
+    Iniciar sesión en el servidor virtual y crear un entorno virtual.
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuramos-archivo-cacaocgi" class="md-nav__link">
+    Configuramos archivo cacao.cgi
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crear-archivo-cacaopy" class="md-nav__link">
+    Crear archivo cacao.py
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configurar-archivo-htaccess" class="md-nav__link">
+    Configurar archivo .htaccess
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -383,18 +447,11 @@
             
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../pypi/" class="md-nav__link">
         Paquete Python
       </a>
-      
     </li>
   
 
@@ -603,19 +660,174 @@
               </div>
             
             
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary" aria-label="Tabla de contenidos">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Tabla de contenidos
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#iniciar-sesion-en-el-servidor-virtual-y-crear-un-entorno-virtual" class="md-nav__link">
+    Iniciar sesión en el servidor virtual y crear un entorno virtual.
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuramos-archivo-cacaocgi" class="md-nav__link">
+    Configuramos archivo cacao.cgi
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crear-archivo-cacaopy" class="md-nav__link">
+    Crear archivo cacao.py
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configurar-archivo-htaccess" class="md-nav__link">
+    Configurar archivo .htaccess
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
           
           <div class="md-content" data-md-component="content">
             <article class="md-content__inner md-typeset">
               
                 
-                  <a href="https://github.com/cacao-accounting/cacao-accounting/edit/master/docs/pypi.md" title="Editar esta página" class="md-content__button md-icon">
+                  <a href="https://github.com/cacao-accounting/cacao-accounting/edit/master/docs/shared_host.md" title="Editar esta página" class="md-content__button md-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
                   </a>
                 
                 
-                  <h1>Paquete Python</h1>
-                
-                
+                <h1 id="instalacion-de-cacao-accounting-en-servicios-de-hospedaje-compartido">Instalación de Cacao Accounting en servicios de Hospedaje Compartido.</h1>
+<p>Es posible instalar Cacao Accounting en servicios de hospedaje compartido, siempre que el 
+servicio cumpla los siguientes requisitos:</p>
+<ol>
+<li>Python3, al menos <a href="https://www.python.org/downloads/release/python-370/">Python 3.7</a></li>
+<li><a href="https://httpd.apache.org/docs/current/mod/mod_cgi.html">Apache MOD CGI</a></li>
+<li>Acceso ssh al servidor.</li>
+</ol>
+<p>Normalmente la aplicación se instala en un sub dominio dejando el dominio principal para el sitio web
+principal de la empresa.</p>
+<h2 id="iniciar-sesion-en-el-servidor-virtual-y-crear-un-entorno-virtual">Iniciar sesión en el servidor virtual y crear un entorno virtual.</h2>
+<pre><code class="language-bash"># Verificamos que estamos en la raiz del sub dominio.
+ $pwd
+/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html
+
+# Creamos un directorio cgi-bin
+$mkdir cgi-bin
+$cd cgi-bin
+
+# Verificamos la versión de Python.
+$python3 --version
+Python 3.7.9
+
+# Creamos y ejecutamos un entorno virtual de Python.
+$python3 -m venv venv
+$source venv/bin/activate
+
+# Clonamos el repositorio del proyecto.
+$git clone https://github.com/cacao-accounting/cacao-accounting.git
+$cd cacao-accounting/
+$python3 -m pip install -r requirements.txt
+$python3 -m pip install .
+
+# Normalmente los servicios de shared host ofrecen MySQL, necesitamos estas librerias.
+$python3 -m pip install cryptography pymysql
+
+# Configuramos la aplicacion
+# Utilice una clave segura.
+$export CACAO_KEY=&quot;dW=BMIPE&amp;@M,M6s*qaRu&quot;
+# Conexión a la base de datos.
+$export CACAO_DB=mysql+pymysql://usuario:contraseña@localhost:3306/database
+# Usuario y Contraseña:
+$export CACAO_USER=usuario
+$export CACAO_PWD=contraseña
+
+# Verificamos que la instalación es funcional.
+$cacaoctl version
+0.0.1.dev20210715
+
+# Iniciamos la base de datos.
+$cacaoctl initdb
+</code></pre>
+<p>A este punto la aplicación esta instalada y la base de datos inicializada.</p>
+<h2 id="configuramos-archivo-cacaocgi">Configuramos archivo cacao.cgi</h2>
+<pre><code class="language-bash">$pwd
+/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html/cgi-bin
+$ls
+cacao-accounting  venv
+
+$vi cacao.cgi
+</code></pre>
+<pre><code>#!/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html/venv/bin/python
+from wsgiref.handlers import CGIHandler
+
+from cacao import app
+</code></pre>
+<h2 id="crear-archivo-cacaopy">Crear archivo cacao.py</h2>
+<pre><code class="language-bash">$cacao-accounting  venv
+
+vi cacao.cgi
+</code></pre>
+<p>Configuramos la aplicación cgi:</p>
+<pre><code>import os
+import sys
+sys.path.insert(0, '/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html/cgi-bin/venv/lib/python3.7/site-packages')
+sys.path.insert(1, '/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html/cgi-bin/venv/lib64/python3.7/site-packages')
+
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
+
+app = create_app(configuracion)
+</code></pre>
+<h2 id="configurar-archivo-htaccess">Configurar archivo .htaccess</h2>
+<pre><code class="language-bash">$pwd
+$/home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html
+
+$vi .htaccess
+</code></pre>
+<p>Y configuramos la aplicacion:</p>
+<pre><code>RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ /home/u350-nud6xqxi8gnk/www/cacao.bmogroup.solutions/public_html/cgi-bin/cacao.cgi/$1 [L]
+</code></pre>
+<p>Los persimos de ambos archivos deber 755</p>
+<pre><code>chmod 755 cacao.cgi
+chmod 755 .htaccess
+</code></pre>
+<p>La estructura final del archivo queda de la siguiente manera:</p>
+<pre><code>public_html
+  - .htaccess
+  - cgi-bin
+    - cacao.cgi 
+    - cacao.py
+    - cacao-accounting
+    - venv  
+</code></pre>
                 
               
               
