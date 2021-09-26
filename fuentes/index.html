@@ -912,6 +912,24 @@ como servidor Waitress son:</p>
 sudo apt install nginx
 sudo ufw allow 'Nginx HTTPS'
 </code></pre>
+<p>Debe crear el archivo de configuración en:</p>
+<pre><code>sudo vi /etc/nginx/sites-available/cacao
+</code></pre>
+<p>Y agregue el siguiente contenido:</p>
+<pre><code>server {
+    listen 8443;
+    server_name cacao;
+
+location / {
+  include proxy_params;
+  proxy_set_header Host $host;
+  proxy_pass proxy_pass http:s//127.0.0.1:8000;
+    }
+}
+</code></pre>
+<p>Ejecute:</p>
+<pre><code>sudo systemctl restart nginx
+</code></pre>
                 
               
               
