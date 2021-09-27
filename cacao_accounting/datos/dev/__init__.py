@@ -462,11 +462,11 @@ def _demo_unidades():
 
 
 def _catalogo():
-    from cacao_accounting.contabilidad.ctas import base, desarrollo, cargar_catalogos
+    from cacao_accounting.contabilidad.ctas import base, cargar_catalogos
     from cacao_accounting.contabilidad.registros.cuenta import RegistroCuentaContable
 
     log.debug("Cargando catalogos de cuentas.")
-    cargar_catalogos(desarrollo, "cacao")
+    cargar_catalogos(base, "cacao")
     cargar_catalogos(base, "dulce")
     cargar_catalogos(base, "cafe")
     CUENTA_CONTABLE = RegistroCuentaContable()

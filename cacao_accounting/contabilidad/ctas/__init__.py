@@ -29,7 +29,6 @@ DIRECTORIO_CTAS = join(DIRECTORIO_APP, "contabilidad", "ctas", "catalogos")
 
 # Inicia deficion de catalogos de cuentas.
 base = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base.csv"), pais=None, idioma="ES")
-desarrollo = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base-dev.csv"), pais=None, idioma="ES")
 
 
 def cargar_catalogos(catalogo, entidad):
