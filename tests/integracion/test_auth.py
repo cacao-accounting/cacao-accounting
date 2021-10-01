@@ -17,6 +17,8 @@
 
 # pylint: disable=redefined-outer-name,
 from unittest import TestCase
+import pytest
+from os import environ
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import database
@@ -31,6 +33,7 @@ configuracion["WTF_CSRF_ENABLED"] = False
 configuracion["SESSION_PROTECTION "] = None
 
 
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestAuth(TestCase):
     def setUp(self):
         self.app = create_app(configuracion)
@@ -44,32 +47,38 @@ class TestAuth(TestCase):
     def tearDown(self):
         pass
 
+    @pytest.mark.slow
     def test_without_login(self):
         response = self.app.test_client().get("/")
         assert response.status_code == 302
 
+    @pytest.mark.slow
     def test_loging(self):
         response = self.app.test_client().get("/login")
         assert response.status_code == 200
 
+    @pytest.mark.slow
     def test_login_valido(self):
         from cacao_accounting.auth import validar_acceso
 
         correcto = validar_acceso("cacao", "cacao")
         assert correcto == True
 
+    @pytest.mark.slow
     def test_contraseña_erronea(self):
         from cacao_accounting.auth import validar_acceso
 
         erroneo = validar_acceso("cacao", "hola")
         assert erroneo == False
 
+    @pytest.mark.slow
     def test_usuario_no_existe(self):
         from cacao_accounting.auth import validar_acceso
 
         erroneo = validar_acceso("hola", "hola")
         assert erroneo == False
 
+    @pytest.mark.slow
     def test_sesion_nula(self):
         from cacao_accounting.auth import cargar_sesion
 
@@ -90,6 +99,7 @@ def crear_db():
     dev_data()
 
 
+@pytest.mark.slow
 def test_valida_contraseña():
     from cacao_accounting.auth import validar_acceso
 
@@ -98,6 +108,7 @@ def test_valida_contraseña():
     assert validar_acceso("cacao", "prueba") == False
 
 
+@pytest.mark.slow
 def test_logea_usuario():
     from cacao_accounting.auth import cargar_sesion
 

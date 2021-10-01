@@ -1,3 +1,4 @@
+import pytest
 from cacao_accounting import database, datos
 
 
@@ -5,12 +6,14 @@ class Basicos:
     def __init__(self) -> None:
         pass
 
+    @pytest.mark.slow
     def test_verifica_db(self):
         if self.dbengine:
             from cacao_accounting.database.helpers import verifica_coneccion_db
 
             assert verifica_coneccion_db(self.app) is True
 
+    @pytest.mark.slow
     def test_verifica_migracion_db_V(self):
         if self.dbengine:
             from cacao_accounting.database import Metadata, database
@@ -28,6 +31,7 @@ class Basicos:
                 assert meta.cacaoversion == "hola"
                 assert requiere_migracion_db(self.app) is True
 
+    @pytest.mark.slow
     def test_verifica_migracion_db_F(self):
         if self.dbengine:
             from cacao_accounting.metadata import VERSION
@@ -42,6 +46,7 @@ class Basicos:
                 assert meta.cacaoversion == VERSION
                 assert requiere_migracion_db(self.app) is False
 
+    @pytest.mark.slow
     def test_inicia_base_de_datos_V(self):
         from cacao_accounting.database import database
         from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -51,6 +56,7 @@ class Basicos:
                 database.drop_all()
                 assert inicia_base_de_datos(self.app) is True
 
+    @pytest.mark.slow
     def test_db_actual(self):
         if self.dbengine:
             from cacao_accounting.app import bd_actual
@@ -58,6 +64,7 @@ class Basicos:
             with self.app.app_context():
                 assert bd_actual() is not None
 
+    @pytest.mark.slow
     def test_obtener_lista_entidades_por_id_razonsocial(self):
         from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
@@ -65,6 +72,7 @@ class Basicos:
             with self.app.app_context():
                 assert obtener_lista_entidades_por_id_razonsocial() is not None
 
+    @pytest.mark.slow
     def test_user_from_env(self):
         from os import environ
 

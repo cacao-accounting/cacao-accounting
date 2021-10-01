@@ -1,3 +1,4 @@
+import pytest
 from os import environ
 from unittest import TestCase
 from sqlalchemy import create_engine
@@ -82,6 +83,7 @@ TEST_MSSQL = verficar_conceccion_a_mssql()
 # Pruebas unitarias por tipo de base de datos:
 
 
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestSQLite(TestCase, Basicos):
     def setUp(self):
         environ["CACAO_DB"] = SQLITE
@@ -105,6 +107,7 @@ class TestSQLite(TestCase, Basicos):
             database.drop_all()
             environ.pop("CACAO_DB")
 
+    @pytest.mark.slow
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("sqlite://")
@@ -113,6 +116,8 @@ class TestSQLite(TestCase, Basicos):
         assert self.app.config["SQLALCHEMY_DATABASE_URI"] == SQLITE
 
 
+@pytest.mark.skipif(TEST_MYSQL is False, reason="MySQL Server no disponible")
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestMySQL(TestCase, Basicos):
     def setUp(self):
         environ["CACAO_DB"] = MYSQL
@@ -137,6 +142,7 @@ class TestMySQL(TestCase, Basicos):
                 database.drop_all()
                 environ.pop("CACAO_DB")
 
+    @pytest.mark.slow
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("mysql+pymysql://")
@@ -145,6 +151,8 @@ class TestMySQL(TestCase, Basicos):
         assert self.app.config["SQLALCHEMY_DATABASE_URI"] == MYSQL
 
 
+@pytest.mark.skipif(TEST_MARIADB is False, reason="MariaDB no disponible")
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestMariaDB(TestCase, Basicos):
     def setUp(self):
         environ["CACAO_DB"] = MARIADB
@@ -163,11 +171,13 @@ class TestMariaDB(TestCase, Basicos):
                 base_data(carga_rapida=True)
                 dev_data()
 
+    @pytest.mark.slow
     def tearDown(self):
         with self.app.app_context():
             if TEST_MARIADB:
                 database.drop_all()
 
+    @pytest.mark.slow
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("mariadb+pymysql://")
@@ -176,6 +186,8 @@ class TestMariaDB(TestCase, Basicos):
         assert self.app.config["SQLALCHEMY_DATABASE_URI"] == MARIADB
 
 
+@pytest.mark.skipif(TEST_POSTGRESQL is False, reason="Postgresql no disponible")
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestPostgresql(TestCase, Basicos):
     def setUp(self):
         environ["CACAO_DB"] = POSTGRESQL
@@ -199,6 +211,7 @@ class TestPostgresql(TestCase, Basicos):
             if TEST_POSTGRESQL:
                 database.drop_all()
 
+    @pytest.mark.slow
     def test_db(self):
         self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]
         assert self.URL.startswith("postgresql+pg8000://")
@@ -207,6 +220,8 @@ class TestPostgresql(TestCase, Basicos):
         assert self.app.config["SQLALCHEMY_DATABASE_URI"] == POSTGRESQL
 
 
+@pytest.mark.skipif(TEST_MSSQL is False, reason="MS SQL Server no disponible")
+@pytest.mark.skipif(environ.get("CACAO_TEST_SLOW", None) is None, reason="Variable de entorno CACAO_TEST_SLOW no definida")
 class TestMSSQL(TestCase, Basicos):
     def setUp(self):
         self.dbengine = TEST_MSSQL
@@ -233,6 +248,7 @@ class TestMSSQL(TestCase, Basicos):
             with self.app.app_context():
                 database.drop_all()
 
+    @pytest.mark.slow
     def test_db(self):
         if TestMSSQL and self.app is not None:
             self.URL = self.app.config["SQLALCHEMY_DATABASE_URI"]

@@ -115,8 +115,8 @@ jobs:
     - name: Test with pytest
       run: |
         sleep 5
-        export FLASK_ENV=development
         export CACAO_TEST=True
+        export CACAO_TEST_SLOW=True
         python -m pytest  -v --exitfirst --cov=cacao_accounting
 #        CACAO_TEST=True SQLALCHEMY_WARN_20=1 python -W always::DeprecationWarning -m pytest  -v --exitfirst --cov=cacao_accounting
 #    - name: Documentacion 
