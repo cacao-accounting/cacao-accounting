@@ -1,4 +1,4 @@
-# Usuario predeterminados para desarrollo
+# Usuarios predeterminados para desarrollo
 
 Una parte importante en la gestión del sistema es que los usuarios tienen acceso definidos por roles, los
 siguientes usuarios se crean para ayudar al desarrollador probar que el sistema de roles funciona correctamente.
