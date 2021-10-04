@@ -58,6 +58,10 @@ def cargar_catalogos(catalogo, entidad):
             padre=cuenta["padre"],
             rubro=cuenta["rubro"],
             tipo=cuenta["tipo"],
+            alternativo_codigo=cuenta["alternativo_codigo"],
+            alternativo=cuenta["alternativo"],
+            fiscal_codigo=cuenta["fiscal_codigo"],
+            fiscal=cuenta["fiscal"],
             status="activo",
         )
         # pylint: disable=E1101

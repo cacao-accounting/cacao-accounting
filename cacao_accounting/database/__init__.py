@@ -370,9 +370,11 @@ class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     rubro = database.Column(database.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
-    # las cuentas de tipo especial no deberan ser afectadas directamente en registros manuales
-    # unicamente desde sus respectivo modulos
-    tipo = database.Column(database.String(15))
+    tipo = database.Column(database.String(50))
+    alternativo_codigo = database.Column(database.String(10), index=True)
+    alternativo = database.Column(database.String(50), index=True)
+    fiscal_codigo = database.Column(database.String(50), index=True)
+    fiscal = database.Column(database.String(100))
     UniqueConstraint("entidad", "codigo", name="cta_unica_entidad")
 
 
