@@ -118,7 +118,7 @@ def _demo_usuarios():
         datos={
             "usuario": "contabilidadj",
             "correo_e": "contabilidadj@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("contabilidad"),
+            "clave_acceso": proteger_passwd("contabilidadj"),
         },
         datos_detalle=None,
         relaciones=None,

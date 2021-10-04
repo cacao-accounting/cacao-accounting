@@ -100,7 +100,7 @@ def cerrar_sesion():
     return INICIO_SESION
 
 
-@login.route("/test_roles")
+@login.route("/permisos_usuario")
 @login_required
 def test_roles():
     """Verifica los permisos del usuario actual."""
