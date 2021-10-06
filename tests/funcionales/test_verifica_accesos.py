@@ -56,7 +56,7 @@ class AuthActions:
         self.passwd = passwd
 
     def login(self):
-        return self._client.post("/login", data={"usuario": self.usuario, "acceso": self.passwd })
+        return self._client.post("/login", data={"usuario": self.usuario, "acceso": self.passwd})
 
     def logout(self):
         return self._client.get("/salir")
@@ -67,6 +67,7 @@ class AuthActions:
 @pytest.fixture
 def administrador(client):
     return AuthActions(client, "administrador", "administrador")
+
 
 def test_permisos_usuario_ADMINISTRADOR(client, administrador):
     administrador.login()
@@ -80,6 +81,7 @@ def test_permisos_usuario_ADMINISTRADOR(client, administrador):
 def contador(client):
     return AuthActions(client, "contabilidad", "contabilidad")
 
+
 def test_permisos_usuario_CONTABILIDAD(client, contador):
     contador.login()
     vista = client.get("/permisos_usuario")
@@ -91,6 +93,7 @@ def test_permisos_usuario_CONTABILIDAD(client, contador):
 @pytest.fixture
 def contadorj(client):
     return AuthActions(client, "contabilidadj", "contabilidadj")
+
 
 def test_permisos_usuario_CONTABILIDADJUNIOR(client, contadorj):
     contadorj.login()
@@ -104,16 +107,19 @@ def test_permisos_usuario_CONTABILIDADJUNIOR(client, contadorj):
 def pasante(client):
     return AuthActions(client, "pasante", "pasante")
 
+
 def test_permisos_usuario_PASANTE(client, pasante):
     pasante.login()
     vista = client.get("/permisos_usuario")
     assert b"<li><strong>Correo Electronico:</strong> pasante@cacao_accounting.io</li>" in vista.data
+
 
 # <-------------------------------------------------------------------------> #
 # Prueba vistas con el rol de usuario
 @pytest.fixture
 def usuario(client):
     return AuthActions(client, "usuario", "usuario")
+
 
 def test_permisos_usuario_USUARIO(client, usuario):
     usuario.login()

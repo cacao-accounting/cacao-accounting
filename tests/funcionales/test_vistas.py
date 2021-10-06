@@ -215,7 +215,7 @@ def test_periodo_contable(client, auth):
 
 def test_roles(client, auth):
     auth.login()
-    r = client.get("/test_roles")
+    r = client.get("/permisos_usuario")
     assert b"Permisos de Acceso del Usuario." in r.data
 
 
