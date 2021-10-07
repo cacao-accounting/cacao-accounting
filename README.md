@@ -26,7 +26,7 @@ el objetivo principal de este proyecto es proveeder de una herramienta confiable
 operaciones de una o varias entidades.
 
 Reconocemos que ya existen opciones de soluciones de software contable robustas desarrolladas en python como lo son
-[Odoo](https://www.odoo.com/es_ES/) y [ERPNext](https://erpnext.com/). Sin embargo estas herramientas requieren o
+[Odoo](https://www.odoo.com/es_ES/), [Tryton](https://www.tryton.org/) y [ERPNext](https://erpnext.com/). Sin embargo estas herramientas requieren o
 el pago de una suscripción o la instalación de un servidor web, por lo que mayoria de profesionales contables no
 podrian implementarlos sin requerir asistencia de un administrador de sistemas, por esto uno de los objetivos de
 este proyecto es ofrecer tanto una solución de escritorio para un solo usuario así como una solución web que
