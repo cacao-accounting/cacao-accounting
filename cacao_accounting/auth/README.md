@@ -6,6 +6,7 @@ siguientes usuarios se crean para ayudar al desarrollador probar que el sistema 
 | Usuario       | Contraseña    | Roles Asignados                                                                                          |
 |---------------|---------------|----------------------------------------------------------------------------------------------------------|  
 | administrador | administrador | admin                                                                                                    |
+| analista      | analista      | business_analyst                                                                                         |
 | auditor       | auditor       | comptroller                                                                                              |
 | contabilidad  | contabilidad  | accounting_manager                                                                                       |
 | contabilidadj | contabilidadj | accounting_auxiliar                                                                                      |
@@ -18,4 +19,4 @@ siguientes usuarios se crean para ayudar al desarrollador probar que el sistema 
 | tesoreria     | tesoreria     | head_of_treasury                                                                                         |
 | tesoreriaj    | tesoreriaj    | auxiliar_of_treasury                                                                                     |
 | pasante       | pasante       | purchasing_auxiliar , accounting_auxiliar , auxiliar_of_treasury ,   inventory_auxiliar , sales_auxiliar |
-| Usuario       | usuario       | purchasing_user , accounting_user , inventory_user , user_of_treasury ,   sales_user                     |
+| usuario       | usuario       | purchasing_user , accounting_user , inventory_user , user_of_treasury ,   sales_user                     |
