@@ -12,4 +12,5 @@ export CACAO_TEST=True
 export FLASK_APP=cacao_accounting
 export FLASK_DEBUG=True
 export FLASK_ENV=development
-python wsgi.py
+python -m pip install gunicorn
+gunicorn -w 4 wsgi:app
