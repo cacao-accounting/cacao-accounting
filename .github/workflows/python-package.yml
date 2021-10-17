@@ -122,4 +122,4 @@ jobs:
 #    - name: Documentacion 
 #      run: mkdocs build
     - name: Codecov
-      uses: codecov/codecov-action@v2
+      uses: codecov/codecov-action@v1
