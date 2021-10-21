@@ -12,5 +12,5 @@ export CACAO_TEST=True
 export FLASK_APP=cacao_accounting
 export FLASK_DEBUG=True
 export FLASK_ENV=development
-python -m pip install gunicorn inotify
-gunicorn --workers=4 --reload wsgi:app
+pip install hupper
+hupper -m waitress --listen=*:8080 wsgi:app
