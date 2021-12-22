@@ -16,7 +16,7 @@ Gracias por su interes en colaborar con Cacao Accounting (el proyecto).
 
 ## Licencia del Proyecto.
 
-Cacao Accounting es sofware libre y de código abierto liberado bajo la licencia Apache Versión 2 (la [licencia](https://github.com/cacao-accounting/cacao-accounting/blob/master/LICENSE) del proyecto), esto quiere decir que los usuarios del proyecto pueden:
+Cacao Accounting es software libre y de código abierto liberado bajo la licencia Apache Versión 2 (la [licencia](https://github.com/cacao-accounting/cacao-accounting/blob/master/LICENSE) del proyecto), esto quiere decir que los usuarios del proyecto pueden:
 
 * Usar el proyecto con o sin fines de lucro.
 * Modificar el proyecto para ajustarlo a sus necesidades especificas (definiendo claramente los cambios realizados al proyecto original).
