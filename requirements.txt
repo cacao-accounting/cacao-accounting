@@ -10,6 +10,9 @@ flask-login
 flask-sqlalchemy
 flask-wtf
 loguru
+lxml
+pdf_reports
+openpyxl
 sqlalchemy
 teritorio
 waitress
