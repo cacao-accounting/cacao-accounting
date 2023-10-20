@@ -83,6 +83,7 @@ jobs:
         python -m pip install --upgrade pip setuptools
         pip install -r development.txt
         python setup.py develop
+        python -m pip install git+https://github.com/maxcountryman/flask-login.git
     - name: Proyecto distribuible
       run: |
         python -m build
