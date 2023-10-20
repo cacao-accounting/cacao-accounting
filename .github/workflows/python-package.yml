@@ -13,17 +13,6 @@ jobs:
     if: |
       !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[skip ci]')
     services:
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2017-latest
-        env:
-            ACCEPT_EULA: Y 
-            SA_PASSWORD: cacao+SQLSERVER2019
-            MSSQL_PID: Express
-        ports:
-            - 1433:1433  
-        options: >-
-          --hostname=mssqlserver
-          --name=mssqlserver
       mysql:
         image: mysql
         env:
@@ -98,19 +87,6 @@ jobs:
       run: |
         python -m build
         twine check dist/* 
-    - name: Install pyodbc
-      run: |
-        sudo su -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - "
-        cat /etc/os-release
-        sudo su -c "curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list"
-        sudo apt-get update
-        sudo ACCEPT_EULA=Y apt-get install msodbcsql17 mssql-tools python3-pip unixodbc-dev python3-dev
-        echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
-        echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
-        source ~/.bashrc
-        pip install pyodbc
-    - name: Create SQL Server db
-      run: docker exec -t mssqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "cacao+SQLSERVER2019" -d master -Q 'CREATE DATABASE cacao'
     - name: Test with pytest
       run: |
         sleep 5
