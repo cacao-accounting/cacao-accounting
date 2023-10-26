@@ -19,3 +19,4 @@ waitress
 wtforms
 WTForms-SQLAlchemy
 pillow>=10.0.1 # not directly required, pinned by Snyk to avoid a vulnerability
+werkzeug>=3.0.1 # not directly required, pinned by Snyk to avoid a vulnerability
