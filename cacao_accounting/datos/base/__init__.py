@@ -79,7 +79,7 @@ def registra_monedas(carga_rapida=False):
     log.debug("Monedas cargadas Correctamente")
 
 
-def crea_usuario_admin():
+def crea_usuario_admin(user: str, passwd: str):
     """
     Crea el usuario administrador.
 
@@ -93,10 +93,12 @@ def crea_usuario_admin():
 
     log.info("Creando Usuario Administrador")
     USUARIO = RegistroUsuario()
-    USER = environ.get("CACAO_USER", None) or "cacao"
-    PWD = environ.get("CACAO_PWD", None) or "cacao"
-    if environ.get("CACAO_USER", None) and environ.get("CACAO_PWD", None):
+    USER = user or environ.get("CACAO_USER", None) or "cacao"
+    PWD = passwd or environ.get("CACAO_PWD", None) or "cacao"
+    if not user and not passwd and environ.get("CACAO_USER", None) and environ.get("CACAO_PWD", None):
         log.info("Creando Usuario Administrador desde variables de entorno")
+    elif user and passwd:
+        log.info("Creando Usuario Administrador")
     else:
         log.warning("No se encontrato valores para usuario administrador, usando predeterminados")
     usuario = Transaccion(
@@ -123,12 +125,12 @@ def __cargar_roles_al_sistema() -> None:
     crea_roles_predeterminados()
 
 
-def base_data(carga_rapida=False):
+def base_data(user, passwd, carga_rapida=False):
     """Definición de metodo para cargar información base al sistema."""
     log.debug("Iniciando carga de datos base al sistema.")
     _init_modulos()
     __cargar_roles_al_sistema()
     cargar_permisos_predeterminados()
-    crea_usuario_admin()
+    crea_usuario_admin(user, passwd)
     registra_monedas(carga_rapida=carga_rapida)
     log.debug("Batos base cargados en la base de datos.")

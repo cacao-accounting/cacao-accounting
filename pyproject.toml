@@ -1,3 +1,33 @@
+[project]
+name = "cacao_accounting"
+description = "Accounting app."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+  {name = "BMO Soluciones", email = "soluciones.bmo@gmail.com"},
+]
+classifiers = [
+  'Development Status :: 1 - Planning',
+  'Framework :: Flask',
+  'License :: OSI Approved :: Apache Software License',
+  'Natural Language :: Spanish',
+  'Operating System :: OS Independent',
+  'Programming Language :: Python :: 3 :: Only',
+  'Programming Language :: Python :: 3.8',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: Implementation :: CPython'
+]
+dynamic = ["version", "dependencies"]
+
+[project.scripts]
+cacaoctl="cacao_accounting:command"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
 [build-system]
 # Minimum requirements for the build system to execute.
 requires = ["setuptools", "wheel"]  # PEP 508 specifications.

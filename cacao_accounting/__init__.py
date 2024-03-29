@@ -65,7 +65,7 @@ def verifica_version_de_python() -> None:
 def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
-        alembic.init_app(app)
+        # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
     else:
