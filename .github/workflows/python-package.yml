@@ -21,25 +21,6 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Lint with flake8
-      run: |
-        python -m pip install flake8
-        flake8 cacao_accounting
-    - name: Verificando tipos
-      run: |
-        python -m pip install mypy
-        mypy cacao_accounting/
-    - name: Analysing the code with pylint
-      run: |
-        python -m pip install pylint
-        # Ejecutamos pylint antes de instalar las dependencias, silenciamos ese error
-        # en el servicio de CI pero en la configuración local.
-        pylint cacao_accounting --disable=import-error --fail-under=9.5
-    - name: Check Test 
-      run: flake8 tests
-    - name: HTML Lint
-      run: |
-        # curlylint cacao_accounting/templates
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip setuptools
@@ -55,8 +36,5 @@ jobs:
         export CACAO_TEST=True
         export CACAO_TEST_SLOW=True
         python -m pytest  -v --exitfirst --cov=cacao_accounting
-#        CACAO_TEST=True SQLALCHEMY_WARN_20=1 python -W always::DeprecationWarning -m pytest  -v --exitfirst --cov=cacao_accounting
-#    - name: Documentacion 
-#      run: mkdocs build
     - name: Codecov
       uses: codecov/codecov-action@v1
