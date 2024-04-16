@@ -38,7 +38,7 @@ def rapp():
     with app.app_context():
         database.drop_all()
         database.create_all()
-        base_data()
+        base_data(user="hello", passwd="hello")
         dev_data()
     app.app_context().push()
     yield app
