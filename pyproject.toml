@@ -1,11 +1,14 @@
 [project]
 name = "cacao_accounting"
-description = "Accounting app."
+description = "Accounting management system."
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
-  {name = "BMO Soluciones", email = "soluciones.bmo@gmail.com"},
+  {name = "William Moreno Reyes", email = "williamjmorenor@gmail.com"},
+  {name = "BMO Soluciones", email = "development@bmogroup.solutions"},
 ]
+license = {file = "LICENSE"}
+keywords = ["accounting"]
 classifiers = [
   'Development Status :: 1 - Planning',
   'Framework :: Flask',
@@ -28,6 +31,10 @@ cacaoctl="cacao_accounting:command"
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 version = {attr = "cacao_accounting.version.VERSION"}
+
+[tool.setuptools.packages.find]
+include = ["cacao_accounting"]
+namespaces = false
 
 [build-system]
 requires = ["setuptools", "wheel"]
