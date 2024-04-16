@@ -30,9 +30,6 @@ jobs:
         twine check dist/* 
     - name: Test with pytest
       run: |
-        sleep 5
-        export CACAO_TEST=True
-        export CACAO_TEST_SLOW=True
         python -m pytest  -v --exitfirst --cov=cacao_accounting
     - name: Codecov
       uses: codecov/codecov-action@v1
