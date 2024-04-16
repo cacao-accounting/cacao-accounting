@@ -3,7 +3,7 @@
 # Cacao Accounting
 
 ![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
-![Python package](https://github.com/cacao-accounting/cacao-accounting/workflows/Python%20package/badge.svg?branch=master)
+![Python package](https://github.com/cacao-accounting/cacao-accounting/workflows/Python%20package/badge.svg?branch=development)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=pypi)
 ![Pypi](https://img.shields.io/pypi/v/cacao-accounting?color=Blue&label=Version&logo=pypi)
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=pypi)
@@ -26,11 +26,11 @@ el objetivo principal de este proyecto es proveeder de una herramienta confiable
 operaciones de una o varias entidades.
 
 Reconocemos que ya existen opciones de soluciones de software contable robustas desarrolladas en python como lo son
-[Odoo](https://www.odoo.com/es_ES/), [Tryton](https://www.tryton.org/) y [ERPNext](https://erpnext.com/). Sin embargo estas herramientas requieren o
-el pago de una suscripción o la instalación de un servidor web, por lo que mayoria de profesionales contables no
-podrian implementarlos sin requerir asistencia de un administrador de sistemas, por esto uno de los objetivos de
-este proyecto es ofrecer tanto una solución de escritorio para un solo usuario así como una solución web que
-pueder ser usada por multiples usuarios al mismo tiempo.
+[Odoo](https://www.odoo.com/es_ES/), [Tryton](https://www.tryton.org/) y [ERPNext](https://erpnext.com/). Sin embargo
+estas herramientas requieren o el pago de una suscripción o la instalación de un servidor web, por lo que mayoria de
+profesionales contables no podrian implementarlos sin requerir asistencia de un administrador de sistemas, por esto uno
+de los objetivos de este proyecto es ofrecer tanto una solución de escritorio para un solo usuario así como una solución
+web que pueder ser usada por multiples usuarios al mismo tiempo.
 
 Consideramos que una ves el proyecto sea un producto usable puede tener potencial economico, no mediante el modelo
 de negocios de licenciamiento, si no con servicios conexos como implementación, capacitación, hospedaje en la nube y mantenimiento
@@ -41,7 +41,7 @@ Todos los aportes son bienvenidos, ver el archivo [CONTRIBUTING](https://cacao-a
 
 ## Licencia.
 
-Derechos de autor 2020 William José Moreno Reyes
+Derechos de autor 2024 William José Moreno Reyes
 
 Autorizado en virtud de la Licencia de Apache, Versión 2.0 (la "Licencia"); se
 prohíbe utilizar este archivo excepto en cumplimiento de la Licencia. Podrá
