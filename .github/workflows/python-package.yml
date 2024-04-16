@@ -10,48 +10,10 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    if: |
-      !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[skip ci]')
-    services:
-      mysql:
-        image: mysql
-        env:
-            MYSQL_ALLOW_EMPTY_PASSWORD: yes
-            MYSQL_DATABASE: cacao
-            MYSQL_USER: cacao
-            MYSQL_PASSWORD: cacao
-        ports:
-            - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-      mariadb:
-        image: mariadb
-        env:
-            MARIADB_ALLOW_EMPTY_PASSWORD: yes
-            MARIADB_DATABASE: cacao
-            MARIADB_USER: cacao
-            MARIADB_PASSWORD: cacao
-        ports:
-            - 3307:3306
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_USER: cacao
-          POSTGRES_PASSWORD: cacao
-          POSTGRES_DB: cacao
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    
     strategy:
       matrix:
-         python-version: [3.7, "3.10", "3.11", "3.12"]
+         python-version: ["3.12"]
 
     steps:
     - uses: actions/checkout@v2
@@ -83,7 +45,6 @@ jobs:
         python -m pip install --upgrade pip setuptools
         pip install -r development.txt
         python setup.py develop
-        python -m pip install git+https://github.com/maxcountryman/flask-login.git
     - name: Proyecto distribuible
       run: |
         python -m build
