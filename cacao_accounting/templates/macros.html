@@ -1,0 +1,156 @@
+{# Esta no es una página web, contiene funciones para que puedan ser usadas en otras páginas. #}
+{# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
+
+{# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
+{% macro headertags() -%}
+  {# Linea en blanco intencional #}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aplicación Contable.">
+    <meta name="author" content="William Moreno Reyes">
+
+    <!-- Código local -->
+    <link href="{{ url_for('static', filename='css/cacaoaccounting.css') }}" rel="stylesheet">
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+    <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+  
+    <!-- Bootstrap Font -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="57x57" href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
+    <link rel="apple-touch-icon" sizes="60x60" href="{{ url_for('static', filename='media/favicon/apple-icon-60x60.png') }}">
+    <link rel="apple-touch-icon" sizes="72x72" href="{{ url_for('static', filename='media/favicon/apple-icon-72x72.png') }}">
+    <link rel="apple-touch-icon" sizes="76x76" href="{{ url_for('static', filename='media/favicon/apple-icon-76x76.png') }}">
+    <link rel="apple-touch-icon" sizes="114x114" href="{{ url_for('static', filename='media/favicon/apple-icon-114x114.png') }}">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='media/favicon/apple-icon-120x120.png') }}">
+    <link rel="apple-touch-icon" sizes="144x144" href="{{ url_for('static', filename='media/favicon/apple-icon-144x144.png') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='media/favicon/apple-icon-152x152.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='media/favicon/apple-icon-180x180.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192"  href="{{ url_for('static', filename='media/favicon/android-icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='media/favicon/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='media/favicon/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
+    <meta name="theme-color" content="#7952b3">
+
+
+{%- endmacro %}
+
+{# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
+{% macro cabecera() %}
+<header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}"> 
+          <img height="25" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" class="d-inline-block align-top">
+        </a>
+        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <ul class="navbar-nav px-3">
+          <li class="nav-item text-nowrap">
+            <a class="nav-link" href="{{ url_for("login.cerrar_sesion") }}">
+              <i class="bi bi-power" style="font-size: 1.5rem; color:IndianRed"></i>
+            </a>
+          </li>
+        </ul>
+      </header>
+{%- endmacro %}
+
+{# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
+{% macro barralateral() -%}
+    <nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+          <div class="position-sticky pt-3">
+            <ul class="nav flex-column">
+              {% if validar_modulo_activo("accounting") and permisos(modulo=id_modulo("accounting"), usuario=usuario.id).autorizado -%}
+
+              <li class="nav__item">
+                <a href="{{ url_for("contabilidad.conta") }}" class="nav-link" >
+                  <i class="bi bi-bar-chart"></i>
+                  Contabilidad
+                </a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("cash") and permisos(modulo=id_modulo("cash"), usuario=usuario.id).autorizado %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("bancos.bancos_") }}" class="nav-link">
+                  <i class="bi bi-briefcase"></i>
+                  Caja y Bancos
+                </a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("purchases") and permisos(modulo=id_modulo("purchases"), usuario=usuario.id).autorizado %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("compras.compras_") }}" class="nav-link">
+                  <i class="bi bi-cart4"></i>
+                  Compras
+                </a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("inventory") and permisos(modulo=id_modulo("inventory"), usuario=usuario.id).autorizado -%}
+              <li class="nav__item">
+                <a href="{{ url_for("inventario.inventario_") }}" class="nav-link">
+                  <i class="bi bi-shop"></i>
+                  Inventarios
+                </a>
+              </li>
+              {%- endif %}
+              {% if validar_modulo_activo("sales") and permisos(modulo=id_modulo("sales"), usuario=usuario.id).autorizado %}
+
+              <li class="nav__item">
+                <a href="{{ url_for("ventas.ventas_") }}" class="nav-link">
+                  <i class="bi bi-handbag"></i>
+                  Ventas
+                </a>
+              </li>
+              {%- endif %}
+              {% if modulos_extra -%}
+              {% for modulo in modulos_extra -%}
+              {% if validar_modulo_activo(modulo.nombre_modulo) and permisos(modulo=id_modulo(modulo.nombre_modulo), usuario=usuario.id).autorizado -%}
+
+              <li class="nav__item">
+                <a href="{{ url_for( modulo.url ) }}" class="nav-link">
+                  {{ modulo.icon}}
+                  {{ modulo.nombre }}
+                </a>
+              </li>
+              {%- endif %}
+              {%- endfor %}
+              {%- endif %}
+              {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
+              <li class="nav__item">
+                <a href="{{ url_for("admin.admin_") }}" class="nav-link">
+                  <i class="bi bi-sliders"></i>
+                  Administración
+                </a>
+              </li>
+              {%- endif %}
+            </ul>
+          </div>
+        </nav>
+{%- endmacro %}
+
+
+{% macro rendizar_paginacion(consulta=None, vista=None)%}
+<p>{{ consulta.total }} items encontrados.
+  <br>
+  {% if consulta.has_prev %}
+  <a href="{{ url_for(vista, page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i> Anterior</a>
+  {% endif %}
+  Página {{ consulta.page }} de {{ consulta.pages }}  
+  {% if consulta.has_next %} 
+  <a href="{{ url_for(vista, page=consulta.next_num) }}" class="link-dark">Siguiente <i class="bi bi-arrow-right-short"></i></a>
+  {% endif %}
+</p>
+{% endmacro %}
+
+{% macro render_status(status=None, lista_status=None) %}
+<span class="badge" title="Tooltip on top">
+  <i class="bi bi-circle-fill" style="color:{{ lista_status[status].color }}"></i>
+</span> 
+{% endmacro %}

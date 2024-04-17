@@ -1,0 +1,28 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+  <section>
+    <h4>Módulo Contabilidad.</h4>
+    <div class="container">
+      <div class="row">
+        <div class="col-md">
+          <h5>Configuración</h5>
+          <p><a href="{{ url_for("contabilidad.entidades") }}" class="link-dark">Entidades</a></p>
+          <p><a href="{{ url_for("contabilidad.unidades") }}" class="link-dark">Unidades de Negocio</a></p>
+          <p><a href="{{ url_for("contabilidad.cuentas") }}" class="link-dark">Catálogo de Cuentas</a></p>
+          <p><a href="{{ url_for("contabilidad.ccostos") }}" class="link-dark">Centros de Costos</a></p>
+          <p><a href="{{ url_for("contabilidad.proyectos") }}" class="link-dark">Proyectos</a></p>
+          <p><a href="{{ url_for("contabilidad.monedas") }}" class="link-dark">Monedas</a></p>
+          <p><a href="{{ url_for("contabilidad.tasa_cambio") }}" class="link-dark">Tasas de Cambio</a></p>
+          <p><a href="{{ url_for("contabilidad.periodo_contable") }}" class="link-dark">Períodos Contables</a></p>
+        </div>
+        <div class="col-md">
+          <h5>Registros</h5>
+        </div>
+        <div class="col-md">
+          <h5>Reportes</h5>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

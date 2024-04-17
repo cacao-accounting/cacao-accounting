@@ -1,0 +1,141 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %} {% block contenido %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+                <i class="bi bi-house"></i> Inicio
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+                Contabilidad
+            </a>
+        </li>
+    </ol>
+</nav>
+
+<h4>Catalogo de Cuentas Contables.</h4>
+
+
+<form>
+    <h6>Seleccionar Entidad.</h6>
+    <select class="form-control" id="entidad" name="entidad">
+        {%- for entidad in entidades -%}
+        <option value="{{ entidad.entidad }}">{{ entidad.nombre_comercial }}</option>
+        {%- endfor -%}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">
+        Actualizar
+    </button>
+</form>
+
+<p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
+
+
+<link href="{{ url_for('static', filename='css/purecss-treeview.css') }}" rel="stylesheet">
+<div class="row">
+    <div class="col-12">
+        <ol class="tree">
+            {%- for ctabase in base_cuentas -%}
+            <li>
+                <a href="{{ url_for("contabilidad.cuenta", id_cta=ctabase.codigo) }}" class="link-dark">
+                    {{ ctabase.codigo + " - " + ctabase.nombre }}
+                </a>
+                <ol>
+                    {%- for subcuenta01 in cuentas if subcuenta01.padre == ctabase.codigo-%}
+                    <li>
+                        <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta01.codigo) }}" class="link-dark">
+                            {{ subcuenta01.codigo + " - " + subcuenta01.nombre }}
+                        </a>
+                        <ol>
+                            {%- for subcuenta02 in cuentas if subcuenta02.padre == subcuenta01.codigo-%}
+                            <li>
+                                <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta02.codigo) }}"
+                                    class="link-dark">
+                                    {{ subcuenta02.codigo + " - " + subcuenta02.nombre }}
+                                </a>
+                                <ol>
+                                    {%- for subcuenta03 in cuentas if subcuenta03.padre == subcuenta02.codigo-%}
+                                    <li>
+                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta03.codigo) }}"
+                                            class="link-dark">
+                                            {{ subcuenta03.codigo + " - " + subcuenta03.nombre }}
+                                        </a>
+                                        <ol>
+                                            {%- for subcuenta04 in cuentas if subcuenta04.padre == subcuenta03.codigo-%}
+                                            <li>
+                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta04.codigo) }}"
+                                                    class="link-dark">
+                                                    {{ subcuenta04.codigo + " - " + subcuenta04.nombre }}
+                                                </a>
+                                                <ol>
+                                                    {%- for subcuenta05 in cuentas if subcuenta05.padre == subcuenta04.codigo-%}
+                                                    <li>
+                                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta05.codigo) }}"
+                                                            class="link-dark">
+                                                            {{ subcuenta05.codigo + " - " + subcuenta05.nombre }}
+                                                        </a>
+                                                        <ol>
+                                                            {%- for subcuenta06 in cuentas if subcuenta06.padre == subcuenta05.codigo-%}
+                                                            <li>
+                                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta06.codigo) }}"
+                                                                    class="link-dark">
+                                                                    {{ subcuenta06.codigo + " - " + subcuenta06.nombre }}
+                                                                </a>
+                                                                <ol>
+                                                                    {%- for subcuenta07 in cuentas if subcuenta07.padre == subcuenta06.codigo-%}
+                                                                    <li>
+                                                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta07.codigo) }}"
+                                                                            class="link-dark">
+                                                                            {{ subcuenta07.codigo + " - " + subcuenta07.nombre }}
+                                                                        </a>
+                                                                        <ol>
+                                                                            {%- for subcuenta08 in cuentas if subcuenta08.padre == subcuenta07.codigo-%}
+                                                                            <li>
+                                                                                <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta08.codigo) }}"
+                                                                                    class="link-dark">
+                                                                                    {{ subcuenta08.codigo + " - " + subcuenta08.nombre }}
+                                                                                </a>
+                                                                                <ol>
+                                                                                    {%- for subcuenta09 in cuentas if subcuenta09.padre == subcuenta08.codigo-%}
+                                                                                    <li>
+                                                                                        <a href="{{ url_for("contabilidad.cuenta", id_cta=subcuenta09.codigo) }}"
+                                                                                            class="link-dark">
+                                                                                            {{ subcuenta09.codigo + " - " + subcuenta09.nombre }}
+                                                                                        </a>
+                                                                                    </li>
+                                                                                    {% endfor %}
+                                                                                </ol>
+                                                                            </li>
+                                                                            {% endfor %}
+                                                                        </ol>
+                                                                    </li>
+                                                                    {% endfor %}
+                                                                </ol>
+                                                            </li>
+                                                            {% endfor %}
+                                                        </ol>
+                                                    </li>
+                                                    {% endfor %}
+                                                </ol>
+                                            </li>
+                                            {% endfor %}
+                                        </ol>
+                                    </li>
+                                    {% endfor %}
+                                </ol>
+                            </li>
+                            {% endfor %}
+                        </ol>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </li>
+            {% endfor %}
+        </ol>
+    </div>
+</div>
+
+{% endblock %}
