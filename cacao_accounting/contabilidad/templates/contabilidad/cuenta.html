@@ -1,0 +1,27 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% import "macros.html" as macros %}
+{% extends "base.html" %}
+{% block contenido %}
+<section>
+  <h4>Cuenta Contable</h4>
+  <div class="container">
+    <div class="row">
+      <div class="col-md">
+        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }} {{ registro.status }}</p>
+        <p><strong>Codigo Cuenta:</strong> {{ registro.codigo }}</p>
+        <p><strong>Nombre:</strong> {{ registro.nombre }}</p>
+      </div>
+      <div class="col-md">
+
+        <p><strong>Tipo:</strong> 
+          {% if registro.grupo %}
+          Grupo
+          {% else %}
+          No Grupo
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

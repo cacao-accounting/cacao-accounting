@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="pf-c-wizard pf-m-compact-nav">
+    <div class="pf-c-wizard__header">
+      <button class="pf-c-button pf-m-plain pf-c-wizard__close" type="button" aria-label="Close">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+      <h1 class="pf-c-title pf-m-3xl pf-c-wizard__title">Configuración Inicial de Cacao Accounting.</h1>
+      <p class="pf-c-wizard__description">Ingrese los campos requeridos para iniciar a usar el sistema.</p>
+    </div>
+    <button aria-label="Wizard Header Toggle" class="pf-c-wizard__toggle" aria-expanded="false">
+      <ol class="pf-c-wizard__toggle-list">
+        <li class="pf-c-wizard__toggle-list-item">
+          <span class="pf-c-wizard__toggle-num">2</span>Configuration
+          <i class="fas fa-angle-right pf-c-wizard__toggle-separator" aria-hidden="true"></i>
+        </li>
+        <li class="pf-c-wizard__toggle-list-item">Substep B</li>
+      </ol>
+      <i class="fas fa-caret-down pf-c-wizard__toggle-icon" aria-hidden="true"></i>
+    </button>
+    <div class="pf-c-wizard__outer-wrap">
+      <div class="pf-c-wizard__inner-wrap">
+        <nav class="pf-c-wizard__nav" aria-label="Steps">
+          <ol class="pf-c-wizard__nav-list">
+            <li class="pf-c-wizard__nav-item">
+              <a href="#" class="pf-c-wizard__nav-link">Información de la Compañia.</a>
+            </li>
+            <li class="pf-c-wizard__nav-item">
+              <a href="#" class="pf-c-wizard__nav-link pf-m-current">Configuracion</a>
+              <ol class="pf-c-wizard__nav-list">
+                <li class="pf-c-wizard__nav-item">
+                  <a href="#" class="pf-c-wizard__nav-link">Configuración Regional.</a>
+                </li>
+                <li class="pf-c-wizard__nav-item">
+                  <a href="#" class="pf-c-wizard__nav-link pf-m-current" aria-current="page">Configuración Contabilidad.</a>
+                </li>
+              </ol>
+            </li>
+            <li class="pf-c-wizard__nav-item">
+              <a href="#" class="pf-c-wizard__nav-link">Personalización.</a>
+            </li>
+            <li class="pf-c-wizard__nav-item">
+              <a href="#" class="pf-c-wizard__nav-link pf-m-disabled" aria-disabled="true" tabindex="-1">Confirmación.</a>
+            </li>
+          </ol>
+        </nav>
+        <main class="pf-c-wizard__main">
+          <div class="pf-c-wizard__main-body">
+            <p>Wizard content goes here</p>
+          </div>
+        </main>
+      </div>
+      <footer class="pf-c-wizard__footer">
+        <button class="pf-c-button pf-m-primary" type="submit">Next</button>
+        <button class="pf-c-button pf-m-secondary" type="button">Back</button>
+        <button class="pf-c-button pf-m-danger" type="button">Cancel</button>
+      </footer>
+    </div>
+  </div>
+{% endblock %}

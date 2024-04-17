@@ -1,0 +1,17 @@
+<h1>Cacao Accounting</h1>
+<h2>Información para desarrolladores.</h2>
+
+<p>
+    Advertencia : esta ejecutando una version en desarrollo de Cacao Accounting o la
+    aplicación esta en modo de pruebas, no se recomienda esta configuración para su
+    uso en producción favor revisar su configuración.
+</p>
+
+<h3>Información de la aplicación</h3>
+<ul>
+<li>Versión de Cacao Accounting: {{ info["app"]["version"] }}</li>
+<li>Esquema de la base de datos: {{ info["app"]["dbversion"] }}</li>
+<li>Base de Datos: {{ db }}</li>
+<li>Modo Escritorio: {{ MODO_ESCRITORIO }}</li>
+<li>Ambiente: {{ current_app.config["ENV"] }}</li>
+</ul>

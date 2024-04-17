@@ -1,0 +1,24 @@
+# Mantener en orden alfabetico
+alembic
+bcrypt
+babel
+Flask
+Flask[async]
+Flask-Alembic
+flask-babel
+flask-login
+flask-sqlalchemy
+flask-wtf
+loguru
+lxml
+pdf_reports
+openpyxl
+sqlalchemy
+teritorio
+waitress
+wtforms
+WTForms-SQLAlchemy
+pillow
+pg8000
+PyMySQL
+cryptography

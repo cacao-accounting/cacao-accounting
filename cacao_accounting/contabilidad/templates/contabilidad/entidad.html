@@ -1,0 +1,62 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+<section class="pf-c-page__main-section pf-m-light">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.entidades") }}" class="link-dark">
+          Entidades
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <div class="pf-c-content">
+    <h4>Entidad.</h4>
+    {% if acceso.configurar %}
+    <a class="btn btn-sm btn-success" href="{{ url_for("contabilidad.editar_entidad", id_entidad=registro.entidad) }}">Editar</a>
+    {% if registro.status != "predeterminado" and registro.status == "activo" %}
+    <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.predeterminar_entidad", id_entidad=registro.id) }}">Establecer como Predeterminada</a>
+    {% endif %}
+    {% if registro.status != "inactivo" %}
+    <a class="btn btn-sm btn-secondary" href="{{ url_for("contabilidad.inactivar_entidad", id_entidad=registro.id) }}">Establecer como Inactiva</a>
+    {% endif %}
+    {% if registro.status != "activo" and registro.status != "predeterminado" %}
+    <a class="btn btn-sm btn-primary" href="{{ url_for("contabilidad.activar_entidad", id_entidad=registro.id) }}">Establecer como Activa</a>
+    {% endif %}
+    <a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_entidad", id_entidad=registro.id) }}"  type="link" >Eliminar Entidad</a>
+    {% endif %}
+    <div class="container">
+      <div class="row">
+        <h5 class="card-title">Información General</h5>
+        <div class="col-md">
+          <h6>Datos Generales:</h6>
+          <p>Identificador: {{ registro.entidad }} </p>
+          <p>Razón Social: {{ registro.razon_social }}</p>
+          <p>Nombre: {{ registro.nombre_comercial }}</p>
+          <p>ID Fiscal: {{ registro.id_fiscal }}</p>
+          <p>Tipo: {{ registro.tipo_entidad }}</p>
+        </div>
+        <div class="col-md">
+          <h6>Datos de Contacto:</h6>
+          <p>Página Web: {{ registro.web }}</p>
+          <p>Correo Electrónico: {{ registro.correo_electronico }}</p>
+          <p>Telefono: {{ registro.telefono1 }}</p>
+          <p>Telefono: {{ registro.telefono2 }}</p>
+          <p>Fax: {{ registro.fax }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

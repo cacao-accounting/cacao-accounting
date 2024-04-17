@@ -1,0 +1,55 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block contenido %}
+<section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <h4>Listado de Períodos Contables.</h4>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Período Contable</a>
+  <table class="table table-sm">
+    <caption style="display: none;">Listado de periodos contables.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nombre</th>
+        <th scope="col">Entidad</th>
+        <th scope="col">Inicio</th>
+        <th scope="col">Fin</th>
+      </tr>
+    </thead>
+  {% for item in consulta.items -%}
+  {% import "macros.html" as macros %}
+  <tr>
+    <th id="{{ item.entidad }}">
+      {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+      {{ item.nombre }}
+    </th>
+    <td>
+      {{ item.entidad }}
+    </td>
+    <td>
+      {{ item.inicio }}
+    </td>
+    <td>
+      {{ item.fin }}
+    </td>
+  </tr>
+  {%- endfor %}
+</table>
+</section>
+<section>
+  {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}
+</section>
+{% endblock %}
