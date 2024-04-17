@@ -1,0 +1,19 @@
+# Se debe colocar en: /etc/systemd/system/cacao-accounting.service
+[Unit]
+Description=Cacao Accounting WSGI server
+After=syslog.target network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+PIDFile=/run/cacaoctl.pid
+# Ajustar de acuerdo a la ruta de su entorno virtual 
+ExecStart=/home/wmoreno/Documentos/repositorios/cacao/venv/bin/cacaoctl serve
+# Utilizar esta ruta si la aplicación esta instalada a nivel de sistema
+# ExecStart=/usr/bin/cacaoctl serve
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+
+[Install]
+WantedBy=multi-user.target

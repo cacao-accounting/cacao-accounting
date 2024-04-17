@@ -1,0 +1,25 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.unidades") }}" class="link-dark">
+          Unidades de Negocio
+        </a>
+      </li>
+    </ol>
+  </nav>
+<h4>{{ registro.nombre }}</h4>
+<a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_unidad", id_unidad=registro.id) }}"  type="link" >Eliminar</a>
+{% endblock %}

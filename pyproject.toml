@@ -1,0 +1,50 @@
+[project]
+name = "cacao_accounting"
+description = "Accounting solution for the management of Accounts Payable, Accounts Receivable, Inventory, Treasury and General Accounting."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+  {name = "William Moreno Reyes", email = "williamjmorenor@gmail.com"},
+  {name = "BMO Soluciones", email = "development@bmogroup.solutions"},
+]
+license = {file = "LICENSE"}
+keywords = ["accounting"]
+classifiers = [
+  'Development Status :: 1 - Planning',
+  'Framework :: Flask',
+  'License :: OSI Approved :: Apache Software License',
+  'Natural Language :: Spanish',
+  'Operating System :: OS Independent',
+  'Programming Language :: Python :: 3 :: Only',
+  'Programming Language :: Python :: 3.8',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: Implementation :: CPython'
+]
+dynamic = ["version", "dependencies"]
+
+[project.scripts]
+cacaoctl="cacao_accounting:command"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+version = {attr = "cacao_accounting.version.VERSION"}
+
+[tool.setuptools.packages.find]
+include = ["cacao_accounting"]
+namespaces = false
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 127
+
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: Pruebas unitarias que tardan mucho en ejecurse, normalmente requieren un set de datos real.",
+]

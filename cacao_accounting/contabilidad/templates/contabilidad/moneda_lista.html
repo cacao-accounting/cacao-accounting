@@ -1,0 +1,44 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% set titulo = titulo %}
+{% block contenido %}
+<section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <h4>Listado de Monedas.</h4>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Moneda</a>
+  <table class="table table-sm">
+    <caption style="display: none;">Listado de monedas.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Moneda</th>
+        <th scope="col">Nombre</th>
+      </tr>
+    </thead>
+  {% for moneda in consulta.items -%}
+  <tr>
+    <td>
+      {{ moneda.codigo }}
+    </td>
+    <td>
+      {{ moneda.nombre }}
+    </td>
+  </tr>
+  {%- endfor %}
+</table>
+</section>
+{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.monedas") }}
+{% endblock %}

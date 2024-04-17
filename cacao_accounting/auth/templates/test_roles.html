@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<section>
+  <h2>Verificación de Permisos de Acceso del Usuario.</h2>
+  Datos del Usuario Actual: 
+  <ul>
+    <li><strong>Nombre:</strong> {{ current_user.p_nombre }} {{ current_user.s_nombre }}</li>
+    <li><strong>Apellido:</strong> {{ current_user.p_apellido }} {{ current_user.s_apellido }}</li>
+    <li><strong>Correo Electronico:</strong> {{ current_user.correo_e }}</li>
+    <li><strong>Usuario:</strong> {{ current_user.usuario }}</li>
+    <li><strong>UUID:</strong> {{ current_user.id }}</li>
+  </ul>
+  
+  <br>
+  Roles Actuales:
+  <table class="table">
+    <caption>Lista de Roles del usuario {{ current_user.usuario }}.</caption>
+      <tr>
+        <th scope="col">Usuario</th>
+        <th scope="col">Rol</th>
+        <th scope="col">Codigo Unico</th>
+      </tr>
+  {% for role in roles %}
+      <tr>
+        <td>{{ role.Usuario.usuario }}</td>
+        <td>{{ role.Roles.name }}</td>
+        <td>{{ role.Roles.id }}</td>
+      </tr>
+  {% endfor %}
+  </table>
+  {% for modulo in modulos %}
+  <h3>Modulo {{ modulo.modulo | capitalize }}</h3>
+  UUID = {{ modulo.id }}
+  <table class="table">
+    <caption>Lista de Permisos en el modulo {{ modulo.modulo }}.</caption>
+    <tr>
+      <th scope="col">Permiso</th>
+      <th scope="col">Estatus</th>
+    </tr>
+    <tr>
+      <td>Autorizado*</td>
+      <td>
+        {% if permisos(modulo=modulo.id, usuario=current_user.id).autorizado %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Actualizar</td>
+      <td>
+        {% if permisos(modulo=modulo.id, usuario=current_user.id).actualizar %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Anular</td>
+      <td>
+        {% if permisos(modulo=modulo.id, usuario=current_user.id).anular %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Autorizar</td>
+      <td>
+        {% if permisos(modulo=modulo.id, usuario=current_user.id).autorizar %}
+        <p style="color: green;">Permitido</p>
+        {% else %}
+        <p style="color: red;">No Permitido</p>
+        {% endif %}
+      </td>
+      <tr>
+        <td>BI</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).bi %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Cerrar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).cerrar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Crear</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).crear %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Consultar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).consultar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Corregir</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).corregir %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Eliminar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).eliminar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Editar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).editar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Eliminar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).eliminar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Importar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).importar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Listar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).listar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Reportar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).reportes %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Solicitar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).solicitar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Validar</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).validar %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Validar Solicitud</td>
+        <td>
+          {% if permisos(modulo=modulo.id, usuario=current_user.id).validar_solicitud %}
+          <p style="color: green;">Permitido</p>
+          {% else %}
+          <p style="color: red;">No Permitido</p>
+          {% endif %}
+        </td>
+      </tr>
+    </tr>
+  </table>
+  * Usuario autorizado a acceder al modulo.
+  <br>
+  {% endfor %}
+</section>
+{% endblock %}

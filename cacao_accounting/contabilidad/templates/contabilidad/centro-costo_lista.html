@@ -1,0 +1,101 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+        Contabilidad
+      </a>
+    </li>
+  </ol>
+</nav>
+
+<h4>Catalogo de Centros de Costos.</h4>
+
+<form>
+  <h6>Seleccionar Entidad.</h6>
+
+  <select class="form-control" id="entidad" name="entidad">
+    {%- for entidad in entidades -%}
+    <option value="{{ entidad.entidad }}">{{ entidad.nombre_comercial }}</option>
+    {%- endfor -%}
+  </select>
+  <button type="submit" class="btn btn-primary btn-sm">
+    Actualizar
+  </button>
+</form>
+<p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
+
+<ol class="tree">
+  {%- for centrocostobase in base_centrocostos -%}
+  <li>
+    <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase.codigo) }}" class="link-dark">
+      {{ centrocostobase.codigo + " - " + centrocostobase.nombre }}
+    </a>
+    {% if centrocostobase.grupo %}
+    <ol>
+      {% for ccosto01 in ccostos if ccosto01.padre == centrocostobase.codigo %}
+      <li>
+        <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto01.codigo) }}" class="link-dark">
+          {{ ccosto01.codigo + " - " + ccosto01.nombre }}
+        </a>
+        {% if ccosto01.grupo %}
+        <ol>
+          {% for ccosto02 in ccostos if ccosto02.padre == ccosto01.codigo %}
+          <li>
+            <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto02.codigo) }}" class="link-dark">
+              {{ ccosto02.codigo + " - " + ccosto02.nombre }}
+            </a>
+            {% if ccosto02.grupo %}
+            <ol>
+              {% for ccosto03 in ccostos if ccosto03.padre == ccosto02.codigo %}
+              <li>
+                <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto03.codigo) }}" class="link-dark">
+                  {{ ccosto03.codigo + " - " + ccosto03.nombre }}
+                </a>
+                {% if ccosto03.grupo %}
+                <ol>
+                  {% for ccosto04 in ccostos if ccosto04.padre == ccosto03.codigo %}
+                  <li>
+                    <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto04.codigo) }}" class="link-dark">
+                      {{ ccosto04.codigo + " - " + ccosto04.nombre }}
+                    </a>
+                    {% if ccosto04.grupo %}
+                    <ol>
+                      {% for ccosto05 in ccostos if ccosto05.padre == ccosto04.codigo %}
+                      <li>
+                        <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto05.codigo) }}" class="link-dark">
+                          {{ ccosto05.codigo + " - " + ccosto05.nombre }}
+                        </a>
+                      </li>
+                      {% endfor %}
+                    </ol>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ol>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ol>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </li>
+  {%- endfor -%}
+</ol>
+
+{% endblock %}

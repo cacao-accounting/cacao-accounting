@@ -1,0 +1,58 @@
+{% import "macros.html" as macros %}
+{% set title = titulo|default("Cacao Accounting") %}
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+
+    <!-- Inicio del macro headers -->
+    {{ macros.headertags() }}
+    <!-- Fin del macro headers -->
+    <style>
+      .bd-placeholder-img {
+        font-size: 1.125rem;
+        text-anchor: middle;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      @media (min-width: 768px) {
+        .bd-placeholder-img-lg {
+          font-size: 3.5rem;
+        }
+      }
+    </style>
+    
+    <!-- Custom styles for this template -->
+    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+       
+    <title> {{ title }} </title>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+
+        <!-- Inicio del macro cabecera -->
+        {{ macros.cabecera() }}
+        <!-- Fin del macro cabecera  -->
+    
+        <!-- Inicio del macro barra lateral  --> 
+        {{ macros.barralateral() }}
+        <!-- Fin del marcro barra lateral -->
+
+
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+          <!-- Inicio del bloque contenido -->
+
+
+          {% block contenido %}
+          {% endblock %}
+          
+          
+          <!-- Fin del bloque contenido -->
+        </main> 
+      </div>
+    </div>
+  </body>
+</html>

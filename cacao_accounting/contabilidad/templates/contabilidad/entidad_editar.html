@@ -1,0 +1,58 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+<section>
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-8">
+        <h4>Editar Entidad.</h4>
+        <form method="post">
+          <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
+          <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+          {{ form.csrf_token }}
+          <div class="row">
+            <h5>Informacion Basica:</h5>
+            <div class="col-6">
+              <label for="nombre-comercial" class="form-label">Nombre Comercial:</label>
+              {{ form.nombre_comercial(class="form-control", id="nombre-comercial") }}
+            </div>
+            <div class="col-6">
+              <label for="razon-social" class="form-label">Razon Social:</label>
+              {{ form.razon_social( id="razon-social", class="form-control")}}
+            </div>
+            <div class="col-6">
+              <label for="id-fiscal" class="form-label">ID Fiscal:</label>
+              {{ form.id_fiscal(id="id-fiscal", class="form-control") }}
+            </div>
+          </div>
+          <div class="row">
+            <h5>Informacion de Contacto:</h5>
+            <div class="col-6">
+              <label for="correo-e" class="form-label">Correo Electronico:</label>
+              {{form.correo_electronico(id="correo-e", class="form-control")}}
+            </div>
+            <div class="col-6">
+              <label for="web-site" class="form-label">Pagina Web:</label>
+              {{form.web( id="web-site", class="form-control")}}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-4">
+              <label for="tel1" class="form-label">Telefono 1:</label>
+              {{form.telefono1(id="tel1", class="form-control")}}
+            </div>
+            <div class="col-4">
+              <label for="tel2" class="form-label">Telefono 2:</label>
+              {{form.telefono2(id="tel2", class="form-control")}}
+            </div>
+            <div class="col-4">
+              <label class="form-label" for="fax">Numero Fax:</label>
+              {{form.fax(id="fax", class="form-control")}}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

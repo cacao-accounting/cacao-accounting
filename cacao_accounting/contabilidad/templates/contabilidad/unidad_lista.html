@@ -1,0 +1,57 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <h4>Listado de Unidades de Negocio.</h4>
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Unidad de Negocios</a>
+  <table class="table table-sm">
+    <caption style="display: none;">Listado de unidades de negocio.</caption>
+    <thead></thead>
+      <tr>
+        <th scope="col">Código de Entidad</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Entidad</th>
+      </tr>
+    </thead>
+  {% for item in consulta.items -%}
+  <tr>
+    <td>
+      {% import "macros.html" as macros %}
+      {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
+        {{ item.unidad }}
+      </a>
+    </td>
+    <td>
+      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
+        {{ item.nombre }}
+      </a>
+    </td>
+    <td>
+      <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+        {{ item.entidad }}
+      </a>
+    </td>
+  </tr>
+  {%- endfor %}
+</table>
+</section>
+<section>
+  {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.unidades" ) }}
+</section>
+{% endblock %}
