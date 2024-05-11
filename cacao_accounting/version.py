@@ -25,5 +25,6 @@ APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
 PATCH = "1"
-PRERELEASE = "dev" + datetime.today().strftime("%Y%m%d")
+DATE = "2024.05.11"
+PRERELEASE = "dev" + DATE
 VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
