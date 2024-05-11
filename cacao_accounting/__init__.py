@@ -24,6 +24,7 @@ WSGI.
 
 from sys import version_info
 from typing import Union
+from os import environ
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
@@ -167,8 +168,11 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     def initdb():  # pragma: no cover
         """Crea el esquema de la base de datos."""
         from cacao_accounting.database.helpers import inicia_base_de_datos
+        user = environ.get("CACAO_USER") or "cacao"
+        passwd = environ.get("CACAO_PWD") or "cacao"
 
-        inicia_base_de_datos(cacao_app)
+
+        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
@@ -197,7 +201,9 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
 
         if current_app.config.get("ENV") == "development":
             database.drop_all()
-            inicia_base_de_datos(cacao_app)
+            user = environ.get("CACAO_USER") or "cacao"
+            passwd = environ.get("CACAO_PWD") or "cacao"
+            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)
