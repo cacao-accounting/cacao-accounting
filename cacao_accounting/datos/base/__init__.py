@@ -87,37 +87,17 @@ def crea_usuario_admin(user: str, passwd: str):
     predeterminados, no se recomienda utilizar los valores predeterminados si la instancia va
     a estar expuesta de forma publica a la internet.
     """
-    from os import environ
+    from flask import current_app
     from cacao_accounting.auth import proteger_passwd
-    from cacao_accounting.auth.registros import RegistroUsuario
+    from cacao_accounting.database import Usuario, database
 
     log.info("Creando Usuario Administrador")
-    USUARIO = RegistroUsuario()
-    USER = user or environ.get("CACAO_USER", None) or "cacao"
-    PWD = passwd or environ.get("CACAO_PWD", None) or "cacao"
-    if not user and not passwd and environ.get("CACAO_USER", None) and environ.get("CACAO_PWD", None):
-        log.info("Creando Usuario Administrador desde variables de entorno")
-    elif user and passwd:
-        log.info("Creando Usuario Administrador")
-    else:
-        log.warning("No se encontrato valores para usuario administrador, usando predeterminados")
-    usuario = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": USER,
-            "clave_acceso": proteger_passwd(PWD),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(usuario)
-    asigna_rol_a_usuario(USER, "admin")
+
+    with current_app.app_context():
+        usuario = Usuario(usuario=user, clave_acceso=proteger_passwd(passwd))
+        database.session.add(usuario)
+        database.session.commit()
+        asigna_rol_a_usuario(usuario=user, rol="admin")
 
 
 def __cargar_roles_al_sistema() -> None:
