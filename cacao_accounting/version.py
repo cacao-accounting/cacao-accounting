@@ -25,6 +25,6 @@ APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
 PATCH = "1"
-DATE = "20240513"
+DATE = "202405131"
 PRERELEASE = "b" + DATE
 VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
