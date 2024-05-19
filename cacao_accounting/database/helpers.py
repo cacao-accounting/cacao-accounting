@@ -112,7 +112,7 @@ def inicia_base_de_datos(app, user, passwd):
                 db_metadata(app=app)
                 DB_ESQUEMA = True
             else:
-                base_data(carga_rapida=False)
+                base_data(user, passwd, carga_rapida=False)
                 db_metadata(app=app)
                 DB_ESQUEMA = True
         except OperationalError:
