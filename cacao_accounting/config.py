@@ -119,8 +119,6 @@ if probar_configuracion_por_variables_de_entorno():
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 else:
-    log.warning("No se encontro una fuente para la configuración, revise la documentacion")
-    log.warning("Utilizando configuración para desarrollo, no apta para uso en producción")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
