@@ -8,9 +8,7 @@ wheel
 
 # Control de calidad python
 black
-flake8
-pytest
-pylint
+ruff
 
 # Control de calidad html
 curlylint
