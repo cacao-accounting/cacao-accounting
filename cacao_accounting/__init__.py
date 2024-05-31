@@ -168,9 +168,9 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     def initdb():  # pragma: no cover
         """Crea el esquema de la base de datos."""
         from cacao_accounting.database.helpers import inicia_base_de_datos
+
         user = environ.get("CACAO_USER") or "cacao"
         passwd = environ.get("CACAO_PWD") or "cacao"
-
 
         inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
 

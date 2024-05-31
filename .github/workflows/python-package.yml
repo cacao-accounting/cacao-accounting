@@ -2,34 +2,36 @@ name: Pruebas de Integración Continua
 
 on:
   push:
-    branches: [ main, development ]
+    branches: [main, development]
   pull_request:
-    branches: [ main, development ]
+    branches: [main, development]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
       matrix:
-         python-version: ["3.12"]
+        python-version: ["3.12"]
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools
-        pip install -r development.txt
-    - name: Proyecto distribuible
-      run: |
-        python -m build
-        twine check dist/* 
-    - name: Test with pytest
-      run: |
-        python -m pytest  -v --exitfirst --cov=cacao_accounting
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install -r development.txt
+      - name: Proyecto distribuible
+        run: |
+          python -m build
+          twine check dist/*
+      - name: Lint with ruff
+        run: |
+          python -m ruff check cacao_accounting/
+      - name: Test with pytest
+        run: |
+          python -m pytest -v --exitfirst --slow=True --cov=cacao_accounting
+      - name: Codecov
+        uses: codecov/codecov-action@v1

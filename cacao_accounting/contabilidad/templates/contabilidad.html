@@ -1,28 +1,35 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %}
 {% block contenido %}
-  <section>
-    <h4>Módulo Contabilidad.</h4>
-    <div class="container">
-      <div class="row">
-        <div class="col-md">
-          <h5>Configuración</h5>
-          <p><a href="{{ url_for("contabilidad.entidades") }}" class="link-dark">Entidades</a></p>
-          <p><a href="{{ url_for("contabilidad.unidades") }}" class="link-dark">Unidades de Negocio</a></p>
-          <p><a href="{{ url_for("contabilidad.cuentas") }}" class="link-dark">Catálogo de Cuentas</a></p>
-          <p><a href="{{ url_for("contabilidad.ccostos") }}" class="link-dark">Centros de Costos</a></p>
-          <p><a href="{{ url_for("contabilidad.proyectos") }}" class="link-dark">Proyectos</a></p>
-          <p><a href="{{ url_for("contabilidad.monedas") }}" class="link-dark">Monedas</a></p>
-          <p><a href="{{ url_for("contabilidad.tasa_cambio") }}" class="link-dark">Tasas de Cambio</a></p>
-          <p><a href="{{ url_for("contabilidad.periodo_contable") }}" class="link-dark">Períodos Contables</a></p>
-        </div>
-        <div class="col-md">
-          <h5>Registros</h5>
-        </div>
-        <div class="col-md">
-          <h5>Reportes</h5>
-        </div>
+<section>
+  <h4>Módulo de Contabilidad.</h4>
+  <div class="container">
+    <div class="row">
+      <div class="col-md">
+        <h5>Configuración</h5>
+        <p style="font-size:14px">
+          <a href="{{ url_for("contabilidad.entidades") }}" class="text-decoration-none text-reset">Entidades</a><br>
+          <a href="{{ url_for("contabilidad.unidades") }}" class="text-decoration-none text-reset">Unidades de
+            Negocio</a><br>
+          <a href="{{ url_for("contabilidad.cuentas") }}" class="text-decoration-none text-reset">Catálogo de
+            Cuentas</a><br>
+          <a href="{{ url_for("contabilidad.ccostos") }}" class="text-decoration-none text-reset">Centros de
+            Costos</a><br>
+          <a href="{{ url_for("contabilidad.proyectos") }}" class="text-decoration-none text-reset">Proyectos</a><br>
+          <a href="{{ url_for("contabilidad.monedas") }}" class="text-decoration-none text-reset">Monedas</a><br>
+          <a href="{{ url_for("contabilidad.tasa_cambio") }}" class="text-decoration-none text-reset">Tasas de
+            Cambio</a><br>
+          <a href="{{ url_for("contabilidad.periodo_contable") }}" class="text-decoration-none text-reset">Períodos
+            Contables</a><br>
+        </p>
+      </div>
+      <div class="col-md">
+        <h5>Registros</h5>
+      </div>
+      <div class="col-md">
+        <h5>Reportes</h5>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 {% endblock %}

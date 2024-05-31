@@ -127,6 +127,7 @@ else:
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = "dev"
     configuracion["DEGUG"] = "True"
+    configuracion["TEMPLATES_AUTO_RELOAD"] = True
 
 
 def probar_modo_escritorio() -> bool:

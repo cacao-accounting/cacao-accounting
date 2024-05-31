@@ -17,14 +17,24 @@
 
 """Definición unica de la version de la aplicación."""
 
-from datetime import datetime
+# References:
+# - PEP
 
 
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
-PATCH = "1"
-DATE = "20240520"
-PRERELEASE = "b" + DATE
-VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
+PATCH = "2"
+DATE = "20240531"
+PRERELEASE = "rc" + DATE
+# POSTRELESE = "post" + DATE
+POSTRELESE = None
+
+if PRERELEASE:
+    VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
+else:
+    if POSTRELESE:
+        VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + POSTRELESE
+    else:
+        VERSION = MAYOR + "." + MENOR + "." + PATCH
