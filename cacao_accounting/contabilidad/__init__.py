@@ -11,11 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
-
-# pylint: disable=no-else-return
 
 """Modulo de Contabilidad."""
 
@@ -88,10 +83,13 @@ def conta():
 @verifica_acceso("accounting")
 def entidades():
     """Listado de entidades."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entidad, database
 
-    CONSULTA = Entidad.query.order_by(Entidad.entidad.desc()).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(Entidad),  # noqa: E712
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
     TITULO = "Listado de Entidades - " + APPNAME
     return render_template(
