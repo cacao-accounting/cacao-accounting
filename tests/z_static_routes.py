@@ -20,4 +20,13 @@ static_rutes = [
             "Entidades".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounts/entity/list",
+        text=[
+            "Listado de Entidades.".encode("utf-8"),
+            "Nueva Entidad".encode("utf-8"),
+            "Código de Entidad".encode("utf-8"),
+            "Razón Social".encode("utf-8"),
+        ],
+    ),
 ]
