@@ -17,11 +17,27 @@
 
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
-from waitress import serve  # type: ignore[import]
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+from waitress import serve
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion, PORT, THREADS
 from cacao_accounting.loggin import log
 
+
+# <---------------------------------------------------------------------------------------------> #
+# Esta es la aplicación por defecto.
+# Utiliza la configuración predeterminada, por lo tanto se recomienda establecer los parametros de
+# configuracíón desde las variables de entorno.
 app = create_app(configuracion)
 
 
