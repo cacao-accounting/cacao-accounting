@@ -40,7 +40,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
 )
 from cacao_accounting.database import STATUS
-from cacao_accounting.database.helpers import obtener_registro_desde_uuid, MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
+from cacao_accounting.database.helpers import obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.transaccion import Transaccion
 
