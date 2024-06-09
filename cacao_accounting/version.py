@@ -17,9 +17,6 @@
 
 """Definición unica de la version de la aplicación."""
 
-# References:
-# - PEP
-
 
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"

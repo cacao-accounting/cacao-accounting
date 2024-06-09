@@ -21,37 +21,56 @@ Intefaz para el control de los modulos del sistema.
 Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprint.
 """
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# ---------------------------------------------------------------------------------------
 from pkgutil import iter_modules
 from typing import Union
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask import Flask
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database, Modulos
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Módulos base del sistema e incluidos en el repositorio principal.
+# Módulos adicionales se deben declarar como paquetes adicionales.
 contabilidad = {
     "modulo": "accounting",
     "estandar": True,
     "habilitado": True,
 }
+
 bancos = {
     "modulo": "cash",
     "estandar": True,
-    "habilitado": True,
+    "habilitado": False,
 }
+
 compras = {
     "modulo": "purchases",
     "estandar": True,
-    "habilitado": True,
+    "habilitado": False,
 }
+
 inventario = {
     "modulo": "inventory",
     "estandar": True,
-    "habilitado": True,
+    "habilitado": False,
 }
+
 ventas = {
     "modulo": "sales",
     "estandar": True,
-    "habilitado": True,
+    "habilitado": False,
 }
+
 admin = {
     "modulo": "admin",
     "estandar": True,
@@ -67,18 +86,23 @@ MODULOS_STANDAR = [
     admin,
 ]
 
+
+# <---------------------------------------------------------------------------------------------> #
+# Interface para agregar módulos adicionales al sistema.
 MODULOS_ADICIONALES = None
 modulos = iter_modules()
 for modulo in modulos:
     MODULO_COMO_TEXTO = str(modulo.name)
     try:
-        if MODULO_COMO_TEXTO.startswith("cacao_accounting_modulo"):
+        if MODULO_COMO_TEXTO.startswith("cacao_accounting_modulo") or MODULO_COMO_TEXTO.startswith("cacao_accounting_module"):
             MODULOS_ADICIONALES = []
             MODULOS_ADICIONALES.append(MODULO_COMO_TEXTO)
     except AttributeError:
         pass
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Funciones auxiliares para la administración de módulos.
 def registrar_modulo(entrada: dict) -> None:
     """Recibe un diccionario y lo inserta en la base de datos."""
     registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
