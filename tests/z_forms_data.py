@@ -15,4 +15,15 @@ forms = [
         file=None,
         flash=None,
     ),
+    Form(
+        ruta="/accounts/unit/new",
+        data={
+            "nombre": "Unidad de Prueba",
+            "razon_social": "ciatesting, s.a.",
+            "entidad": "cacao",
+            "id": "E001",
+        },
+        file=None,
+        flash=None,
+    ),
 ]
