@@ -493,10 +493,13 @@ def proyectos():
 @verifica_acceso("accounting")
 def tasa_cambio():
     """Listado de tasas de cambio."""
-    from cacao_accounting.database import TasaDeCambio
+    from cacao_accounting.database import TasaDeCambio, database
 
-    CONSULTA = TasaDeCambio.query.order_by(TasaDeCambio.fecha.desc()).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(TasaDeCambio),  # noqa: E712
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
     TITULO = "Listado de Tasas de Cambio - " + APPNAME
     return render_template(
