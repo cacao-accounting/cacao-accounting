@@ -346,11 +346,6 @@ def nueva_unidad():
             "unidad": request.form.get("id", None),
             "nombre": request.form.get("nombre", None),
             "entidad": request.form.get("entidad", None),
-            "correo_electronico": request.form.get("correo_electronico", None),
-            "web": request.form.get("web", None),
-            "telefono1": request.form.get("telefono1", None),
-            "telefono2": request.form.get("telefono2", None),
-            "fax": request.form.get("fax", None),
             "status": "activo",
         }
         TRANSACCION_NUEVA_UNIDAD = Transaccion(
