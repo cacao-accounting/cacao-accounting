@@ -57,11 +57,15 @@ APPNAME = "Cacao Accounting"
 @verifica_acceso("accounting")
 def monedas():
     """Listado de monedas registradas en el sistema."""
-    from cacao_accounting.database import Moneda
+    from cacao_accounting.database import Moneda, database
 
-    CONSULTA = Moneda.query.order_by(Moneda.codigo).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(Moneda),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
+
     TITULO = "Listado de Monedas - " + " - " + APPNAME
     return render_template(
         "contabilidad/moneda_lista.html",
