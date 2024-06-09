@@ -66,4 +66,14 @@ static_rutes = [
             "Nueva Unidad de Negocios".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounts/project/list",
+        text=[
+            "Listado de Proyectos.".encode("utf-8"),
+            "Código de Proyecto".encode("utf-8"),
+            "Nombre".encode("utf-8"),
+            "Fecha Inicio".encode("utf-8"),
+            "Fecha Fin".encode("utf-8"),
+        ],
+    ),
 ]

@@ -463,11 +463,15 @@ def centro_costo(id_cc):
 @verifica_acceso("accounting")
 def proyectos():
     """Listado de proyectos."""
-    from cacao_accounting.database import Proyecto
+    from cacao_accounting.database import Proyecto, database
 
-    CONSULTA = Proyecto.query.order_by(Proyecto.codigo.desc()).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(Proyecto),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
+
     TITULO = "Listados de Proyectos - " + APPNAME
     return render_template(
         "contabilidad/proyecto_lista.html",
