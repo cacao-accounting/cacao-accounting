@@ -5,6 +5,8 @@
 .git-blame-ignore-revs
 .vscode
 .idea
+.coveragerc
+.coverage
 
 
 # Documentacion
@@ -23,9 +25,10 @@ codecov.yml
 venv
 tests
 development.txt
-requirements-databases.txt
 *.yml
 *.db
 .mypy.ini
 .gitpod.yml
 .gitpod.sh
+run_server.sh
+run_test.sh

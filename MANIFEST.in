@@ -3,9 +3,7 @@ include README.md
 include LICENSE
 include wsgi.py
 include pyproject.toml
-include Dockerfile
-include entrypoint.sh
-recursive-include cacao_accounting *.unit *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.py *.txt *.csv *.json
+recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.py *.csv *.json
 recursive-include docs *.py *.rst
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
