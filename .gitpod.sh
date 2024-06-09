@@ -8,4 +8,4 @@ python -m flask initdb
 cd cacao_accounting/static/
 cd ..
 cd ..
-flask run -p 8080 --debug --reload
+bash run_server.sh
