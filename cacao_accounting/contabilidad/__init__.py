@@ -517,11 +517,15 @@ def tasa_cambio():
 @verifica_acceso("accounting")
 def periodo_contable():
     """Lista de periodos contables."""
-    from cacao_accounting.database import PeriodoContable
+    from cacao_accounting.database import PeriodoContable, database
 
-    CONSULTA = PeriodoContable.query.order_by(PeriodoContable.nombre.desc()).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(PeriodoContable),  # noqa: E712
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
+
     TITULO = "Listado de Períodos Contables - " + APPNAME
     return render_template(
         "contabilidad/periodo_lista.html",
