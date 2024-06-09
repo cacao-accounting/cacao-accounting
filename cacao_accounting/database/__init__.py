@@ -17,32 +17,29 @@
 
 """
 Definicion de base de datos.
-
-El objetivo es que el sistema contable pueda ser desplegado sin tener que depender
-de una base de datos especifica, la prioridad en soportar Postresql como base de datos
-primaria para entornos multiusuarios y Sqlite como base de datos para entornos de un
-solo usuario.
-Mysql en su versión comunitaria es una opción secundaria, Mariadb no es un opción debido
-a que por el momento no soportan el tipo de datos JSON.
-Referencia:
- - https://mariadb.com/kb/en/json-data-type/
 """
 
-# pylint: disable=too-few-public-methods
-# pylint: disable=no-member
-
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# ---------------------------------------------------------------------------------------
 from collections import namedtuple
-from os import environ
 from typing import Dict
-from uuid import uuid4
-from flask import current_app
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
+from ulid import ULID
 
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 
+# < --------------------------------------------------------------------------------------------- >
+# Definición principal de la clase del ORM.
 database = SQLAlchemy()
-
 
 DBVERSION = "0.0.0dev"
 
@@ -64,47 +61,12 @@ STATUS: Dict[str, StatusWeb] = {
 }
 
 # <---------------------------------------------------------------------------------------------> #
-# Defición de un tipo de columna para almacenar identificadores tipo UUID según el motor de base
-# de datos establecido en la configuración.
+# Utilizamos U
 
 
 def obtiene_texto_unico() -> str:
     """Genera un texto unico en base a una UUID."""
-    return str(uuid4())
-
-
-if environ.get("CACAO_DB", None):
-    DB_URI = environ.get("CACAO_DB")
-else:
-    try:
-        DB_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI", None)
-    except RuntimeError:
-        DB_URI = None
-
-
-if DB_URI and DB_URI.startswith("postgresql"):
-    from sqlalchemy.dialects.postgresql import UUID
-
-    TIPO_UUID = UUID(as_uuid=False)
-    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
-
-elif DB_URI and (DB_URI.startswith("mysql") or DB_URI.startswith("mariadb")):
-    from sqlalchemy.dialects.mysql import VARCHAR
-
-    TIPO_UUID = VARCHAR(length=36)
-    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico, index=True)
-
-elif DB_URI and DB_URI.startswith("mssql"):
-    from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
-
-    TIPO_UUID = UNIQUEIDENTIFIER()
-    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, default=obtiene_texto_unico)
-
-else:
-    from sqlalchemy.types import String
-
-    TIPO_UUID = String(36)
-    COLUMNA_UUID = database.Column(TIPO_UUID, primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    return str(ULID())
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -114,7 +76,7 @@ class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
 
     # Pistas de auditoria comunes a todas las tablas.
-    id = COLUMNA_UUID
+    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
     status = database.Column(database.String(50), nullable=True)
     creado = database.Column(database.DateTime, default=database.func.now(), nullable=False)
     creado_por = database.Column(database.String(15), nullable=True)
@@ -192,7 +154,7 @@ class Metadata(database.Model):  # type: ignore[name-defined]
     """Informacion basica de la instalacion."""
 
     __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
-    id = COLUMNA_UUID
+    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
     cacaoversion = database.Column(database.String(50), nullable=False)
     dbversion = database.Column(database.String(50), nullable=False)
     fecha = database.Column(database.DateTime, default=database.func.now(), nullable=False)
@@ -250,8 +212,8 @@ class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesPermisos(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Los roles definen una cantidad de permisos."""
 
-    rol_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
-    modulo_id = database.Column(TIPO_UUID, database.ForeignKey("modulos.id"))
+    rol_id = database.Column(database.String(26), database.ForeignKey("roles.id"))
+    modulo_id = database.Column(database.String(26), database.ForeignKey("modulos.id"))
     # Usuario tiene acceso al múdulo
     acceso = database.Column(database.Boolean, nullable=False, default=False)
     # Usuario puede realizar determinadas acciones en el modulogit
@@ -277,8 +239,8 @@ class RolesPermisos(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesUsuario(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles dan permisos a los usuarios del sistema."""
 
-    user_id = database.Column(TIPO_UUID, database.ForeignKey("usuario.id"))
-    role_id = database.Column(TIPO_UUID, database.ForeignKey("roles.id"))
+    user_id = database.Column(database.String(26), database.ForeignKey("usuario.id"))
+    role_id = database.Column(database.String(26), database.ForeignKey("roles.id"))
     activo = database.Column(database.Boolean, nullable=True)
 
 
