@@ -21,3 +21,4 @@ pillow
 pg8000
 PyMySQL
 cryptography
+python-ulid

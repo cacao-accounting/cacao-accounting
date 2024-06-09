@@ -289,11 +289,15 @@ def predeterminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def unidades():
     """Listado de unidades de negocios."""
-    from cacao_accounting.database import Unidad
+    from cacao_accounting.database import Unidad, database
 
-    CONSULTA = Unidad.query.order_by(Unidad.unidad.desc()).paginate(
-        request.args.get("page", default=1, type=int), MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA, False
+    CONSULTA = database.paginate(
+        database.select(Unidad),  # noqa: E712
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
     )
+
     TITULO = "Listado de Unidades de Negocio - " + APPNAME
     return render_template(
         "contabilidad/unidad_lista.html",
