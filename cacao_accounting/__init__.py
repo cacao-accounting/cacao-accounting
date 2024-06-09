@@ -22,13 +22,24 @@ Aquí creamos la función que define la "app" que se ejecuta en el servidor
 WSGI.
 """
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# ---------------------------------------------------------------------------------------
 from sys import version_info
 from typing import Union
 from os import environ
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask import Flask
 from flask import current_app
 from flask_alembic import Alembic
 from flask_login import current_user
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.admin import admin
 from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
