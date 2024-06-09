@@ -33,42 +33,42 @@
 </form>
 <p><strong>Entidad Actual:</strong> {{ entidad.razon_social }}</p>
 
-<ol class="tree">
+<ul class="tree">
   {%- for centrocostobase in base_centrocostos -%}
   <li>
     <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase.codigo) }}" class="link-dark">
       {{ centrocostobase.codigo + " - " + centrocostobase.nombre }}
     </a>
     {% if centrocostobase.grupo %}
-    <ol>
+    <ul>
       {% for ccosto01 in ccostos if ccosto01.padre == centrocostobase.codigo %}
       <li>
         <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto01.codigo) }}" class="link-dark">
           {{ ccosto01.codigo + " - " + ccosto01.nombre }}
         </a>
         {% if ccosto01.grupo %}
-        <ol>
+        <ul>
           {% for ccosto02 in ccostos if ccosto02.padre == ccosto01.codigo %}
           <li>
             <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto02.codigo) }}" class="link-dark">
               {{ ccosto02.codigo + " - " + ccosto02.nombre }}
             </a>
             {% if ccosto02.grupo %}
-            <ol>
+            <ul>
               {% for ccosto03 in ccostos if ccosto03.padre == ccosto02.codigo %}
               <li>
                 <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto03.codigo) }}" class="link-dark">
                   {{ ccosto03.codigo + " - " + ccosto03.nombre }}
                 </a>
                 {% if ccosto03.grupo %}
-                <ol>
+                <ul>
                   {% for ccosto04 in ccostos if ccosto04.padre == ccosto03.codigo %}
                   <li>
                     <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto04.codigo) }}" class="link-dark">
                       {{ ccosto04.codigo + " - " + ccosto04.nombre }}
                     </a>
                     {% if ccosto04.grupo %}
-                    <ol>
+                    <ul>
                       {% for ccosto05 in ccostos if ccosto05.padre == ccosto04.codigo %}
                       <li>
                         <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto05.codigo) }}" class="link-dark">
@@ -76,26 +76,26 @@
                         </a>
                       </li>
                       {% endfor %}
-                    </ol>
+                    </ul>
                     {% endif %}
                   </li>
                   {% endfor %}
-                </ol>
+                </ul>
                 {% endif %}
               </li>
               {% endfor %}
-            </ol>
+            </ul>
             {% endif %}
           </li>
           {% endfor %}
-        </ol>
+        </ul>
         {% endif %}
       </li>
       {% endfor %}
-    </ol>
+    </ul>
     {% endif %}
   </li>
   {%- endfor -%}
-</ol>
+</ul>
 
 {% endblock %}
