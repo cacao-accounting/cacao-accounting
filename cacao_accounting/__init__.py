@@ -221,3 +221,8 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     registrar_blueprints(app=cacao_app)
     registrar_rutas_predeterminadas(app=cacao_app)
     return cacao_app
+
+
+# <---------------------------------------------------------------------------------------------> #
+# La logica de negocios se define en cada módulo respectivo.
+# <---------------------------------------------------------------------------------------------> #

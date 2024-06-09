@@ -14,9 +14,21 @@
 
 """Modulo de Contabilidad."""
 
+
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask import Blueprint, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import login_required
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
@@ -30,11 +42,11 @@ from cacao_accounting.contabilidad.auxiliares import (
 from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import obtener_registro_desde_uuid, MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
-from cacao_accounting.metadata import APPNAME
 from cacao_accounting.transaccion import Transaccion
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
+APPNAME = "Cacao Accounting"
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

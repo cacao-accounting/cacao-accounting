@@ -19,18 +19,28 @@
 
 """Funciones auxiliares relacionadas a la base de datos."""
 
-
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 from os import environ
 from typing import Union
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask import Flask
 from sqlalchemy.exc import OperationalError
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database, DBVERSION, Metadata
 from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
 
 
-MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 15
+MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 
 
 # <---------------------------------------------------------------------------------------------> #

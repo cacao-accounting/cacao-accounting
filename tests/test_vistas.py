@@ -32,6 +32,7 @@ def accounting_app():
 
 
 def test_visit_views(accounting_app, request):
+    from cacao_accounting.loggin import log
 
     if request.config.getoption("--slow") == "True":
 
@@ -51,7 +52,9 @@ def test_visit_views(accounting_app, request):
                 assert current_user.is_authenticated
 
                 for ruta in static_rutes:
+                    log.warning(ruta.url)
                     consulta = client.get(ruta.url)
+
                     assert consulta.status_code == 200
                     if ruta.text:
                         for text in ruta.text:
