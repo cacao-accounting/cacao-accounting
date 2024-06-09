@@ -85,4 +85,11 @@ static_rutes = [
             "Moneda".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounts/exchange",
+        text=[
+            "Listado de Tasas de Cambio.".encode("utf-8"),
+            "Nueva Tasa de Cambio".encode("utf-8"),
+        ],
+    ),
 ]
