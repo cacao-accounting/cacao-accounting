@@ -76,4 +76,13 @@ static_rutes = [
             "Fecha Fin".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/currency/list",
+        text=[
+            "Listado de Monedas.".encode("utf-8"),
+            "Nueva Moneda".encode("utf-8"),
+            "Nombre".encode("utf-8"),
+            "Moneda".encode("utf-8"),
+        ],
+    ),
 ]
