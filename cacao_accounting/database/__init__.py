@@ -296,11 +296,6 @@ class Unidad(database.Model, BaseTabla):  # type: ignore[name-defined]
     unidad = database.Column(database.String(10), unique=True, index=True)
     nombre = database.Column(database.String(50), nullable=False)
     entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
-    correo_electronico = database.Column(database.String(50))
-    web = database.Column(database.String(50))
-    telefono1 = database.Column(database.String(50))
-    telefono2 = database.Column(database.String(50))
-    fax = database.Column(database.String(50))
 
 
 class Direcciones(BaseDireccion):
