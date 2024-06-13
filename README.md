@@ -2,14 +2,13 @@
 
 # Cacao Accounting
 
-![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
 [![Pruebas de Integración Continua](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/python-package.yml/badge.svg)](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/python-package.yml)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=pypi)
-![Pypi](https://img.shields.io/pypi/v/cacao-accounting?color=Blue&label=Version&logo=pypi)
-![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=pypi)
-[![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
-[![codecov](https://codecov.io/gh/cacao-accounting/cacao-accounting/branch/development/graph/badge.svg)](https://codecov.io/gh/cacao-accounting/cacao-accounting)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cacao-accounting_cacao-accounting&metric=alert_status)](https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting)
+[![codecov](https://codecov.io/gh/cacao-accounting/cacao-accounting/branch/main/graph/badge.svg)](https://codecov.io/gh/cacao-accounting/cacao-accounting)
+![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/staging-cacao-accounting?logo=Python&color=gree&link=https%3A%2F%2Fpypi.org%2Fproject%2Fstaging-cacao-accounting%2F)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/staging-cacao-accounting?logo=Python)
+[![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 [![Gitter](https://badges.gitter.im/cacao-accounting/community.svg)](https://gitter.im/cacao-accounting/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General. 
