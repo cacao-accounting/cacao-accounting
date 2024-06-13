@@ -16,6 +16,21 @@ forms = [
         flash=None,
     ),
     Form(
+        ruta="/accounts/entity/edit/cacao",
+        data={
+            "nombre_comercial": "Choco Sonrisas edit",
+            "razon_social": "Choco Sonrisas, S.A.",
+            "id_fiscal": "J031000000000",
+            "correo_electronico": "info2@chocoworld.com",
+            "web": "chocoworld.com",
+            "telefono1": "+505 0000 0000",
+            "telefono2": "+505 1111 1111",
+            "fax": "+505 2222 2222",
+        },
+        file=None,
+        flash=None,
+    ),
+    Form(
         ruta="/accounts/unit/new",
         data={
             "nombre": "Unidad de Prueba",
