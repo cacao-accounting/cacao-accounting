@@ -9,5 +9,5 @@ python -m ruff check cacao_accounting/
 echo
 echo Testing code with pytest
 echo
-echomyp
+echo
 python -m pytest  -v --exitfirst --slow=True --cov=cacao_accounting
