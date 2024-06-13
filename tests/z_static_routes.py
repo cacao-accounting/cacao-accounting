@@ -35,9 +35,20 @@ static_rutes = [
             "Identificador: cacao".encode("utf-8"),
             "Página Web: chocoworld.com".encode("utf-8"),
             "Correo Electrónico: info@chocoworld.com".encode("utf-8"),
-            "Razón Social: Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Nombre: Choco Sonrisas".encode("utf-8"),
             "ID Fiscal: J0310000000000".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/entity/edit/cacao",
+        text=[
+            "Nombre Comercial:".encode("utf-8"),
+            "Choco Sonrisas".encode("utf-8"),
+            "Razon Social:".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "ID Fiscal:".encode("utf-8"),
+            "J0310000000000".encode("utf-8"),
         ],
     ),
     Route(
@@ -90,6 +101,13 @@ static_rutes = [
         text=[
             "Listado de Tasas de Cambio.".encode("utf-8"),
             "Nueva Tasa de Cambio".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/accounting_period",
+        text=[
+            "Listado de Períodos Contables.".encode("utf-8"),
+            "Nuevo Período Contable".encode("utf-8"),
         ],
     ),
     Route(

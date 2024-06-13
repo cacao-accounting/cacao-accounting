@@ -315,6 +315,7 @@ def _demo_entidad():
         uuid=None,
         accion="crear",
         datos={
+            "id": "01J092PXHEBF4M129A7GZZ48E2",
             "entidad": "cacao",
             "razon_social": "Choco Sonrisas Sociedad Anonima",
             "nombre_comercial": "Choco Sonrisas",
