@@ -20,6 +20,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -54,7 +55,7 @@ def server() -> None:
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")
         try:
-            inicia_base_de_datos(app)
+            inicia_base_de_datos(app, user=environ.get("CACAO_USER") or "cacao", passwd=environ.get("CACAO_PWD") or "cacao")
             DATABASE = True
         except OperationalError:
             log.error("No se pudo inicilizar la base de datos.")
