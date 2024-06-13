@@ -32,8 +32,6 @@ jobs:
           python -m ruff check cacao_accounting/
       - name: Test with pytest
         run: |
-          python -m pytest -v --exitfirst --slow=True --cov=cacao_accounting
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        with:
-            token: ${{ secrets.CODECOV_TOKEN }}
+          pip install coveralls
+          coverage run --source=cacao_accounting -m pytest -v --exitfirst --slow=True --cov=cacao_accounting
+          coveralls
