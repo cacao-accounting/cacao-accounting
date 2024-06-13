@@ -35,5 +35,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pip install coveralls
-          coverage run --source=cacao_accounting -m pytest -v --exitfirst --slow=True --cov=cacao_accounting
+          coverage run --source=cacao_accounting -m pytest -v --exitfirst --slow=True
+          coverage report -m
           coveralls
