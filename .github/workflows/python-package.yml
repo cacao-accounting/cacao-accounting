@@ -1,4 +1,4 @@
-name: Pruebas de Integración Continua
+name: CI
 
 on:
   push:
