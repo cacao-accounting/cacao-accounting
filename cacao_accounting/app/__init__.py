@@ -37,7 +37,7 @@ def pagina_inicio():
     return render_template("app.html")
 
 
-def bd_actual():
+def bd_actual():  # pragma: no cover
     """Devuelve el motor de base de datos."""
     uri = str(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
     if uri.startswith("sqlite"):
@@ -72,5 +72,5 @@ def informacion_para_desarrolladores():
 
     if "CACAO_TEST" in environ:
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
-    else:
+    else:  # pragma: no cover
         return redirect("/")
