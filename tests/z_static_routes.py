@@ -1,5 +1,4 @@
 from collections import namedtuple
-from tkinter import N
 
 Route = namedtuple(
     "Route",

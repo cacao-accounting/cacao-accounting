@@ -1,13 +1,7 @@
-import sys
-import os
 import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-
-sys.path.append(os.path.join(os.path.dirname(__file__)))
-
-from z_forms_data import forms
 
 
 @pytest.fixture

@@ -4,7 +4,6 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-import cacao_accounting
 from z_static_routes import static_rutes
 
 
