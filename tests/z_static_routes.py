@@ -1,4 +1,5 @@
 from collections import namedtuple
+from tkinter import N
 
 Route = namedtuple(
     "Route",
@@ -11,6 +12,10 @@ static_rutes = [
         text=[
             "Cacao Accounting".encode("utf-8"),
         ],
+    ),
+    Route(
+        url="/development",
+        text=["Información para desarrolladores.".encode("utf-8")],
     ),
     Route(
         url="/accounts",
@@ -135,5 +140,9 @@ static_rutes = [
         text=[
             "Centro de Costos.".encode("utf-8"),
         ],
+    ),
+    Route(
+        url="/settings",
+        text=["Administraión del Sistema.".encode("utf-8"), "Modulos".encode("utf-8")],
     ),
 ]
