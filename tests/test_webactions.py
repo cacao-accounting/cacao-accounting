@@ -89,6 +89,22 @@ def test_set_entity_active(accounting_app, request):
                 client.get("/accounts/entity/set_active/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
 
+def test_default_entity(accounting_app, request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with accounting_app.app_context():
+            from flask_login import current_user
+
+            with accounting_app.test_client() as client:
+                # Keep the session alive until the with clausule closes
+
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                client.get("/accounts/entity/set_default/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+
+
 def test_delete_entity(accounting_app, request):
 
     if request.config.getoption("--slow") == "True":

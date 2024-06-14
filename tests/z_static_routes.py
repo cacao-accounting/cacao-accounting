@@ -117,4 +117,23 @@ static_rutes = [
             "Nuevo Período Contable".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounts/accounting_period",
+        text=[
+            "Listado de Períodos Contables.".encode("utf-8"),
+            "Nuevo Período Contable".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/account/1",
+        text=[
+            "Cuenta Contable".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/costs_center/A00000",
+        text=[
+            "Centro de Costos.".encode("utf-8"),
+        ],
+    ),
 ]
