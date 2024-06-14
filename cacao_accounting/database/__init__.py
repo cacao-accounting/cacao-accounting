@@ -87,25 +87,31 @@ class BaseTabla:
 class BaseTransaccion(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
-    registro = database.Column(database.String(50), nullable=True)
-    registro_id = database.Column(database.String(75), nullable=True)
-    validado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
-    validado_por = database.Column(database.String(15), nullable=True)
-    autorizado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
-    autorizado_por = database.Column(database.String(15), nullable=True)
     anulado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
     anulado_por = database.Column(database.String(15), nullable=True)
+    autorizado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    autorizado_por = database.Column(database.String(15), nullable=True)
+    cancelado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    cancelado_por = database.Column(database.String(15), nullable=True)
     cerrado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
     cerrado_por = database.Column(database.String(15), nullable=True)
+    validado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    validado_por = database.Column(database.String(15), nullable=True)
+    serie = database.Column(database.String(15), nullable=True)
+    concec = database.Column(database.Integer(), nullable=True)
+    registro_id = database.Column(database.String(75), nullable=True)
+    comentario = database.Column(database.String(200), nullable=True)
 
 
 class BaseTransaccionDetalle(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
+    idx = database.Column(database.Integer(), nullable=True)
     registro_padre = database.Column(database.String(50), nullable=True)
     registro_padre_id = database.Column(database.String(75), nullable=True)
     referencia = database.Column(database.String(50), nullable=True)
     referencia_id = database.Column(database.String(75), nullable=True)
+    comentario_linea = database.Column(database.String(100), nullable=True)
 
 
 class BaseTercero(BaseTabla):
@@ -389,6 +395,31 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
     habilitada = database.Column(database.Boolean(), index=True)
     inicio = database.Column(database.Date(), nullable=False)
     fin = database.Column(database.Date(), nullable=False)
+
+
+class ComprobanteContable(BaseTransaccion):
+    """Comprobante contable manual."""
+
+    # No confundir con GL Entry
+
+
+class ComprobanteContableDetalle(BaseTransaccionDetalle):
+    """Comprobante contable manual detalle."""
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Libro Mayor
+class GLEntry(database.Model):
+    """Todos los registros que afecten estados financieros vienen de esta tabla."""
+
+    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    fecha = database.Column(database.Date, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    tipo = database.Column(database.String(50))
+    registro_id = database.Column(database.String(75))
+    idx = database.Column(database.Integer(), nullable=True)
+    comentario = database.Column(database.String(200))
+    comentario_linea = database.Column(database.String(200))
+    valor = database.Column(database.DECIMAL())
 
 
 # <---------------------------------------------------------------------------------------------> #
