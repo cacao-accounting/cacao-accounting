@@ -407,7 +407,7 @@ def cuentas():
     )
 
 
-@contabilidad.route("/accounts/accounts/<id_cta>")
+@contabilidad.route("/accounts/account/<id_cta>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
