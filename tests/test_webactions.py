@@ -32,29 +32,30 @@ def accounting_app():
 
 
 @pytest.fixture(scope="module", autouse=True)
-def setupdb():
+def setupdb(request):
+    if request.config.getoption("--slow") == "True":
 
-    app = create_app(configuracion)
+        app = create_app(configuracion)
 
-    app.config.update(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "DEBUG": True,
-            "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-            "SQLALCHEMY_ECHO": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
-        }
-    )
+        app.config.update(
+            {
+                "TESTING": True,
+                "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+                "WTF_CSRF_ENABLED": False,
+                "DEBUG": True,
+                "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+                "SQLALCHEMY_ECHO": True,
+                "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            }
+        )
 
-    with app.app_context():
-        from cacao_accounting.database import database
-        from cacao_accounting.database.helpers import inicia_base_de_datos
+        with app.app_context():
+            from cacao_accounting.database import database
+            from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        database.drop_all()
-        inicia_base_de_datos(app=app, user="cacao", passwd="cacao")
+            database.drop_all()
+            inicia_base_de_datos(app=app, user="cacao", passwd="cacao")
 
 
 def test_set_entity_inactive(accounting_app, request):
