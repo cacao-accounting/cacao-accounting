@@ -27,7 +27,10 @@ from cacao_accounting.version import VERSION
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 
 
+@cacao_app.route("/")
 @cacao_app.route("/app")
+@cacao_app.route("/home")
+@cacao_app.route("/index")
 @login_required
 def pagina_inicio():
     """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
@@ -64,10 +67,10 @@ def dev_info():
 
 
 @cacao_app.route("/development")
-@cacao_app.route("/info")
 def informacion_para_desarrolladores():
     """Pagina con información para desarrolladores o administradores del sistema."""
-    if (current_app.config.get("ENV") == "development") or ("CACAO_TEST" in environ):  # pylint: disable=no-else-return
+
+    if "CACAO_TEST" in environ:
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:
-        return redirect("/login")
+        return redirect("/")
