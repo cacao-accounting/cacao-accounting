@@ -1,18 +1,21 @@
 {% extends "base.html" %}
 {% block contenido %}
+
 <section>
-  <h4>Módulo Administración.</h4>
+  <h4>Administraión del Sistema.</h4>
   <div class="container">
     <div class="row">
       <div class="col-md">
-          <h5>Modulos</h5>
-          <a href="{{ url_for("admin.lista_modulos") }}" class="link-dark">Modulos</a>
+        <h5><i class="bi bi-sliders"></i> Configuración General</h5>
+        <p style="font-size:14px;font-weight: bold;">
+          <a href="{{ url_for("admin.lista_modulos") }}" class="text-decoration-none text-reset" ">Modulos</a><br>
+        </p>
+      </div>
+      <div class=" col-md">
+            <h5><i class="bi bi-card-list"></i> Registros</h5>
       </div>
       <div class="col-md">
-        
-      </div>
-      <div class="col-md">
-        
+        <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
       </div>
     </div>
   </div>
