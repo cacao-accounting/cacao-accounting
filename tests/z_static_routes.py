@@ -65,7 +65,21 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/accounts/accounts?entidad=cafe",
+        text=[
+            "Catalogo de Cuentas Contables.".encode("utf-8"),
+        ],
+    ),
+    Route(
         url="/accounts/costs_center",
+        text=[
+            "Catalogo de Centros de Costos.".encode("utf-8"),
+            "Seleccionar Entidad.".encode("utf-8"),
+            "Entidad Actual:".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/costs_center?entidad=cafe",
         text=[
             "Catalogo de Centros de Costos.".encode("utf-8"),
             "Seleccionar Entidad.".encode("utf-8"),
