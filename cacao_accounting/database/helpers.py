@@ -45,26 +45,8 @@ MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
-def requiere_migracion_db(app):
-    """Utilidad para realizar migraciones en la base de datos."""
-    from cacao_accounting.version import VERSION
 
-    with app.app_context():
-        meta = Metadata.query.all()
-
-    migrardb = False
-    while migrardb is False:
-        for i in meta:
-            if (i.dbversion == DBVERSION) and (i.cacaoversion == VERSION):
-                pass
-            else:
-                log.info("Se requiere actualizar esquema de base de datos.")
-                migrardb = True
-        break
-    return migrardb
-
-
-if environ.get("CACAO_TEST", None) or environ.get("CACAO_TEST", None):
+if environ.get("CACAO_TEST", None):
     TIEMPO_ESPERA = 2
 else:
     TIEMPO_ESPERA = 20
