@@ -1,5 +1,4 @@
 from collections import namedtuple
-from io import BytesIO
 
 Form = namedtuple("form", ["ruta", "data", "file", "flash"])
 
