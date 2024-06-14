@@ -64,31 +64,25 @@ def validar_acceso(usuario, clave):
     return clave_validada
 
 
-@login.route("/")
-@login.route("/home")
-@login.route("/index")
-@login.route("/inicio")
-@login.route("/main")
-def home():
-    """Permite redireccionar direcciones comunes al inicio."""
-    return redirect("/login")
-
-
 @login.route("/login", methods=["GET", "POST"])
 def inicio_sesion():
     """Inicio de sesión del usuario."""
     from cacao_accounting.auth.forms import LoginForm
+    from flask_login import current_user
 
     form = LoginForm()
-    if form.validate_on_submit():
-        if validar_acceso(form.usuario.data, form.acceso.data):
-            identidad = Usuario.query.filter_by(usuario=form.usuario.data).first()
-            login_user(identidad)
-            return redirect("/app")
-        else:
-            flash("Inicio de Sesion Incorrecto.")
-            return INICIO_SESION
-    return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
+    if current_user.is_authenticated:
+        return redirect("/app")
+    else:
+        if form.validate_on_submit():
+            if validar_acceso(form.usuario.data, form.acceso.data):
+                identidad = Usuario.query.filter_by(usuario=form.usuario.data).first()
+                login_user(identidad)
+                return redirect("/app")
+            else:
+                flash("Inicio de Sesion Incorrecto.")
+                return INICIO_SESION
+        return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
 @login.route("/exit")
