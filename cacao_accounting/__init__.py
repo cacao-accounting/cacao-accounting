@@ -41,7 +41,6 @@ from flask_login import current_user
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.admin import admin
-from cacao_accounting.ajax import ajax
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
@@ -123,7 +122,6 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
             app.register_blueprint(inventario)
             app.register_blueprint(login)
             app.register_blueprint(ventas)
-            app.register_blueprint(ajax)
             registrar_modulos_adicionales(app)
     else:
         raise RuntimeError(ERROR2)
@@ -160,9 +158,6 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
 def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     Aplication factory.
-
-    Referencias:
-     - https://flask.palletsprojects.com/en/1.1.x/patterns/appfactories/
     """
     # pylint: disable=W0612
     verifica_version_de_python()
