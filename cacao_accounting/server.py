@@ -44,11 +44,11 @@ app = create_app(configuracion)
 
 def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
-    from cacao_accounting.database.helpers import inicia_base_de_datos, requiere_migracion_db, verifica_coneccion_db
+    from cacao_accounting.database.helpers import inicia_base_de_datos, verifica_coneccion_db
 
     log.info("Iniciando Cacao Accounting.")
     if verifica_coneccion_db(app):
-        DATABASE = requiere_migracion_db(app) is False
+        DATABASE = True
     else:
         from sqlalchemy.exc import OperationalError
 
