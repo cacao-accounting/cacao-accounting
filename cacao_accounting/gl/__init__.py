@@ -26,3 +26,11 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+
+
+def agregar_entrada():
+    """Agrega una entrada al libro mayor"""
+
+
+def remover_entrada():
+    """Remnueve una entrada del libro mayor."""
