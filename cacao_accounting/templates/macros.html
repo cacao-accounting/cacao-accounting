@@ -14,17 +14,13 @@
 <meta name="description" content="Aplicación Contable.">
 <meta name="author" content="William Moreno Reyes">
 
-<!-- Código local -->
 <link href="{{ url_for('static', filename='css/cacaoaccounting.css') }}" rel="stylesheet">
 
-<!-- Bootstrap core CSS -->
 <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
 <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
 
-<!-- Bootstrap Font -->
 <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
 
-<!-- Favicons -->
 <link rel="apple-touch-icon" sizes="57x57"
   href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
 <link rel="apple-touch-icon" sizes="60x60"
@@ -68,10 +64,10 @@
     data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
     <span class="navbar-toggler-icon"></span>
   </button>
-  <ul class="navbar-nav px-3">
+  <ul class="navbar-nav d-none d-md-block">
     <li class="nav-item text-nowrap">
       <a class="nav-link" style="font-size: 1rem;" href="{{ url_for("login.cerrar_sesion") }}">
-        Cerrar Sesión <i class="bi bi-power"></i>
+        Cerrar Sesión <i class="bi bi-box-arrow-right"></i>
       </a>
     </li>
   </ul>
@@ -148,6 +144,12 @@
         </a>
       </li>
       {%- endif %}
+      <li class="nav__item d-md-none">
+        <a href="{{ url_for("login.cerrar_sesion") }}" class="nav-link">
+          <i class="bi bi-box-arrow-right"></i>
+          Cerrar Sesión
+        </a>
+      </li>
     </ul>
   </div>
 </nav>
