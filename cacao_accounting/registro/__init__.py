@@ -36,9 +36,21 @@ Un registro:
      - Vista modificación registro mostrando los datos actuales en el sistema permitiendo al usuario cambiarlos.
  - Un registro tiene estados, estos estados van a depender del documento.
 """
-# pylint: disable=not-callable
+
+
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 from typing import Union
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask_login import current_user
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database
 from cacao_accounting.exceptions import OperationalError, TransactionError
 from cacao_accounting.exceptions.mensajes import ERROR3, ERROR4
