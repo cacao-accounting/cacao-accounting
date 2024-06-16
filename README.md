@@ -13,6 +13,16 @@
 
 Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General. 
 
+```
+Live demo at:
+URL: https://cacao-accounting.onrender.com/login
+User: cacao
+Password: cacao
+
+Wait to the free render instance to wake up.
+```
+
+
 Nota: 
 * Este es un proyecto en etapa temprana de desarrollo no apta para uso en producción.
 * Hemos definido una serie de [metas y objetivos](https://cacao-accounting.github.io/cacao-accounting/ROAD_MAP/) para el proyecto.
