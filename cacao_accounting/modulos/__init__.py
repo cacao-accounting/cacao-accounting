@@ -35,7 +35,7 @@ from flask import Flask
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import database, Modulosq
+from cacao_accounting.database import database, Modulos
 
 
 # <---------------------------------------------------------------------------------------------> #
