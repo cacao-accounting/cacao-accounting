@@ -103,17 +103,6 @@ class BaseTransaccion(BaseTabla):
     comentario = database.Column(database.String(200), nullable=True)
 
 
-class BaseTransaccionDetalle(BaseTabla):
-    """Base para crear transacciones en la entidad."""
-
-    idx = database.Column(database.Integer(), nullable=True)
-    registro_padre = database.Column(database.String(50), nullable=True)
-    registro_padre_id = database.Column(database.String(75), nullable=True)
-    referencia = database.Column(database.String(50), nullable=True)
-    referencia_id = database.Column(database.String(75), nullable=True)
-    comentario_linea = database.Column(database.String(100), nullable=True)
-
-
 class BaseTercero(BaseTabla):
     """Base para crear terceros en la entidad."""
 
@@ -397,21 +386,9 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
     fin = database.Column(database.Date(), nullable=False)
 
 
-class ComprobanteContable(BaseTransaccion):
-    """Comprobante contable manual."""
-
-    # No confundir con GL Entry
-
-
-class ComprobanteContableDetalle(BaseTransaccionDetalle):
-    """Comprobante contable manual detalle."""
-
-
 # <---------------------------------------------------------------------------------------------> #
-# Libro Mayor
-class GLEntry(database.Model):
-    """Todos los registros que afecten estados financieros vienen de esta tabla."""
-
+# Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
+class GLBase:
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
     fecha = database.Column(database.Date, default=database.func.now(), onupdate=database.func.now(), nullable=True)
     tipo = database.Column(database.String(50))
@@ -419,7 +396,30 @@ class GLEntry(database.Model):
     idx = database.Column(database.Integer(), nullable=True)
     comentario = database.Column(database.String(200))
     comentario_linea = database.Column(database.String(200))
-    valor = database.Column(database.DECIMAL())
+    valor = database.Column(database.DECIMAL())  # Valor moneda Predeterminada
+    # Registro en multimoneda
+    id_moneda = database.Column(database.String(200))
+    tc = database.Column(database.DECIMAL())
+    valor_x = database.Column(database.DECIMAL())
+    # Terceras partes
+    tercero_tipo = database.Column(database.String(26))
+    tercero_id = database.Column(database.String(26))
+
+
+class ComprobanteContable(BaseTransaccion):
+    """Comprobante contable manual."""
+
+    # No confundir con GL Entry
+
+
+class ComprobanteContableDetalle(GLBase):
+    """Comprobante contable manual detalle."""
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Libro Mayor
+class GLEntry(database.Model, GLBase):
+    """Todos los registros que afecten estados financieros vienen de esta tabla."""
 
 
 # <---------------------------------------------------------------------------------------------> #

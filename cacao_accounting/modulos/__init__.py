@@ -35,7 +35,7 @@ from flask import Flask
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import database, Modulos
+from cacao_accounting.database import database, Modulosq
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -85,7 +85,6 @@ MODULOS_STANDAR = [
     ventas,
     admin,
 ]
-
 
 # <---------------------------------------------------------------------------------------------> #
 # Interface para agregar módulos adicionales al sistema.
