@@ -79,3 +79,13 @@ class FormularioUnidad(FlaskForm):
     telefono1 = StringField(validators=[])
     telefono2 = StringField(validators=[])
     fax = StringField(validators=[])
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Comprobantes Contables
+class ComprobanteContable(FlaskForm):
+    """Comprobante contable manual."""
+
+
+class ComprobanteContableDetalle(FlaskForm):
+    """Detalle de comprobante contable manual."""

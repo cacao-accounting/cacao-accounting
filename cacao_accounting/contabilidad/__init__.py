@@ -533,3 +533,29 @@ def periodo_contable():
         consulta=CONSULTA,
         statusweb=STATUS,
     )
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Comprobante contable
+@contabilidad.route("/accounts/journal/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_comprobante():
+    """Nuevo comprobante contable."""
+
+
+@contabilidad.route("/accounts/journal/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_comprobante():
+    """Nuevo comprobante contable."""
+
+
+@contabilidad.route("/accounts/journal/edit/<identifier>", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_comprobante():
+    """Editar comprobante contable."""

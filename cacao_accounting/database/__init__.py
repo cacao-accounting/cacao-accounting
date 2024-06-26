@@ -404,12 +404,11 @@ class GLBase:
     # Terceras partes
     tercero_tipo = database.Column(database.String(26))
     tercero_id = database.Column(database.String(26))
+    # Control de versiones
 
 
 class ComprobanteContable(BaseTransaccion):
     """Comprobante contable manual."""
-
-    # No confundir con GL Entry
 
 
 class ComprobanteContableDetalle(GLBase):
