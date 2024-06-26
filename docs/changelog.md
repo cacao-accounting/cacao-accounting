@@ -1,4 +1,28 @@
+# Changelog
 
-![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/development/cacao_accounting/static/media/cacao_accounting%20_logo.png)
+All notable changes to this project will be documented in this file.
 
-Lanzamiento inicial:
+- Based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+- This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased] - yyyy-mm-dd
+
+### Added
+
+- Accounting Module
+  - [x] Entity
+  - [x] Accounting Account
+  - [x] Cost Center
+  - [x] Bussiness Unit
+  - [x] Project
+  - [x] Currency
+  - [x] Exchange Rate
+  - [x] Accounting Period
+- System Administration
+  - [x] Module
+
+### Fixed
+
+### Changed
+
+### Removed
