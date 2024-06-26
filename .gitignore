@@ -263,3 +263,9 @@ cacao_accounting/static/node_modules/*
 
 #PyCharm
 .idea/
+
+# Cache files
+.mypy_cacha
+.pytest_cache
+.ruff_cache
+.venv
