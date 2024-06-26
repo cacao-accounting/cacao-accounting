@@ -32,3 +32,9 @@ development.txt
 .gitpod.sh
 run_server.sh
 run_test.sh
+
+# Cache files
+.mypy_cacha
+.pytest_cache
+.ruff_cache
+.venv
