@@ -31,9 +31,8 @@ from waitress import serve
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
-from cacao_accounting.config import configuracion, PORT, THREADS
+from cacao_accounting.config import PORT, THREADS, configuracion
 from cacao_accounting.loggin import log
-
 
 # <---------------------------------------------------------------------------------------------> #
 # Esta es la aplicación por defecto.

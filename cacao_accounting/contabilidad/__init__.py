@@ -30,14 +30,14 @@ from flask_login import login_required
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.contabilidad.auxiliares import (
+    obtener_catalogo,
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
-    obtener_catalogo,
     obtener_centros_costos,
     obtener_entidad,
     obtener_entidades,
-    obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
+    obtener_lista_monedas,
 )
 from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import obtener_registro_desde_uuid
@@ -215,7 +215,7 @@ def nueva_entidad():
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import database, Entidad
+    from cacao_accounting.database import Entidad, database
 
     ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
 
@@ -595,7 +595,7 @@ def editar_comprobante():
 def series():
     """Series e Identificadores."""
 
-    from cacao_accounting.database import database, Serie
+    from cacao_accounting.database import Serie, database
     from cacao_accounting.modulos import lista_tipos_documentos
 
     TITULO = "Series e Identificadores - " + APPNAME

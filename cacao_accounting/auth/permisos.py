@@ -11,17 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Administración de permisos de usuario."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 from typing import Union
-from cacao_accounting.database import RolesUsuario, Roles, RolesPermisos, Modulos
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
+from cacao_accounting.database import Modulos, Roles, RolesPermisos, RolesUsuario
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
 from cacao_accounting.loggin import log
 from cacao_accounting.registro import Registro
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
 
 # Solo usuarios con el rol de administrador tienen acceso al modulo administrativo
 # por eso no se incluye en esta lista.

@@ -25,14 +25,13 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField
+from wtforms import SelectField, StringField
 from wtforms.validators import DataRequired
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Entidad
-
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades

@@ -35,8 +35,7 @@ from flask import Flask
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import database, Modulos
-
+from cacao_accounting.database import Modulos, database
 
 # <---------------------------------------------------------------------------------------------> #
 # Módulos base del sistema e incluidos en el repositorio principal.

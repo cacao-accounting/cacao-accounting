@@ -23,15 +23,14 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from os import environ
 from sys import version_info
 from typing import Union
-from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask
-from flask import current_app
+from flask import Flask, current_app
 from flask_alembic import Alembic
 from flask_login import current_user
 
@@ -43,16 +42,15 @@ from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
+from cacao_accounting.compras import compras
+from cacao_accounting.config import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, MODO_ESCRITORIO, TESTING_MODE
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.config import MODO_ESCRITORIO, DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, TESTING_MODE
-from cacao_accounting.compras import compras
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.ventas import ventas
-
 
 alembic = Alembic()
 

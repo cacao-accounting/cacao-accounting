@@ -29,11 +29,10 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import database, DBVERSION, Metadata
+from cacao_accounting.database import DBVERSION, Metadata, database
 from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
-
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 
@@ -86,6 +85,7 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
 def inicia_base_de_datos(app, user, passwd):
     """Inicia esquema de base datos."""
     from flask import current_app
+
     from cacao_accounting.datos import base_data, dev_data
 
     with app.app_context():

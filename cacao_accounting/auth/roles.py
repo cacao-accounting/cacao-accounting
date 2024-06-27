@@ -11,15 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Definicion de Roles para regular el acceso al sistema de los usuarios."""
 
+
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.loggin import log
-from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.registro import Registro
+from cacao_accounting.transaccion import Transaccion
 
 
 class RegistroRol(Registro):
@@ -179,7 +188,7 @@ def crea_roles_predeterminados() -> None:
 
 def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     """Asigna un rol determinado al usuario establecido."""
-    from cacao_accounting.database import Usuario, Roles
+    from cacao_accounting.database import Roles, Usuario
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROL = Roles.query.filter_by(name=rol).first()
@@ -202,7 +211,7 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
 
 def obtener_roles_por_usuario(usuario: str) -> tuple:
     """Obtiene los roles de usuario de la base de datos."""
-    from cacao_accounting.database import database, Usuario, RolesUsuario, Roles
+    from cacao_accounting.database import Roles, RolesUsuario, Usuario, database
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROLES_DE_USUARIO = (

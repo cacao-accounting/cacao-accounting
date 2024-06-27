@@ -20,20 +20,20 @@
 from datetime import date
 
 # ---------------------------------------------------------------------------------------
-# Librerias de terceros
-# ---------------------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------------------
 # Recursos locales
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
 
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
 
 def _demo_usuarios():
     """Usuarios para demostracion."""
-    from cacao_accounting.auth.registros import RegistroUsuario
     from cacao_accounting.auth import proteger_passwd
+    from cacao_accounting.auth.registros import RegistroUsuario
 
     USUARIO = RegistroUsuario()
 
@@ -396,7 +396,7 @@ def _demo_entidad():
     ENTIDAD.ejecutar_transaccion(ENTIDAD2)
     ENTIDAD.ejecutar_transaccion(ENTIDAD3)
 
-    from cacao_accounting.database import database, Serie
+    from cacao_accounting.database import Serie, database
 
     serie1 = Serie(entidad="cacao", documento="journal", habilitada=True, predeterminada=True, serie="CD-CACAO")
     serie2 = Serie(entidad="cafe", documento="journal", habilitada=True, predeterminada=True, serie="CD-CAFE")

@@ -26,7 +26,7 @@ from functools import wraps
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import flash, abort
+from flask import abort, flash
 from flask_login import current_user
 
 # ---------------------------------------------------------------------------------------
