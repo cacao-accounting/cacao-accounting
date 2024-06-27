@@ -22,7 +22,7 @@ from datetime import date
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 from cacao_accounting.transaccion import Transaccion
 
 # ---------------------------------------------------------------------------------------

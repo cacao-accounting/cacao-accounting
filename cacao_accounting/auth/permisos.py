@@ -24,7 +24,7 @@ from typing import Union
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Modulos, Roles, RolesPermisos, RolesUsuario
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 from cacao_accounting.registro import Registro
 
 # ---------------------------------------------------------------------------------------

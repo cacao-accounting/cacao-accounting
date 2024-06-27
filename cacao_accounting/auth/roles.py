@@ -26,7 +26,7 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 from cacao_accounting.registro import Registro
 from cacao_accounting.transaccion import Transaccion
 

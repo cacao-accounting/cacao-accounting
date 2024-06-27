@@ -4,7 +4,7 @@ import pytest
 
 from flask import session
 
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 

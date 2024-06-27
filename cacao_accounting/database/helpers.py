@@ -31,7 +31,7 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import DBVERSION, Metadata, database
 from cacao_accounting.exceptions.mensajes import ERROR4
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 from cacao_accounting.transaccion import Transaccion
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10

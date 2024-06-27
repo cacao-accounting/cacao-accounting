@@ -19,7 +19,7 @@
 
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
-from cacao_accounting.loggin import log
+from cacao_accounting.logs import log
 from cacao_accounting.modulos import _init_modulos
 from cacao_accounting.transaccion import Transaccion
 
