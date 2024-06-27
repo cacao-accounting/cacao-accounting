@@ -11,20 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
-
-# pylint: disable=too-many-lines
 
 """Datos de ejemplo."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# ---------------------------------------------------------------------------------------
 from datetime import date
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.loggin import log
 from cacao_accounting.transaccion import Transaccion
-
-# pylint: disable=import-outside-toplevel, too-many-locals, too-many-statements
 
 
 def _demo_usuarios():
@@ -392,6 +395,17 @@ def _demo_entidad():
     ENTIDAD.ejecutar_transaccion(ENTIDAD1)
     ENTIDAD.ejecutar_transaccion(ENTIDAD2)
     ENTIDAD.ejecutar_transaccion(ENTIDAD3)
+
+    from cacao_accounting.database import database, Serie
+
+    serie1 = Serie(entidad="cacao", documento="journal", habilitada=True, predeterminada=True, serie="CD-CACAO")
+    serie2 = Serie(entidad="cafe", documento="journal", habilitada=True, predeterminada=True, serie="CD-CAFE")
+    serie3 = Serie(entidad="dulce", documento="journal", habilitada=True, predeterminada=True, serie="CD-DULCE")
+
+    database.session.add(serie1)
+    database.session.add(serie2)
+    database.session.add(serie3)
+    database.session.commit()
 
 
 def _demo_unidades():

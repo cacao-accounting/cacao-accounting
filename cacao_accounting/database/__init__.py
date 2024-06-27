@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """
 Definicion de base de datos.
@@ -387,6 +384,20 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 # <---------------------------------------------------------------------------------------------> #
+# Un mismo documento puede tener varias series para numerarlos
+
+
+class Serie(database.Model, BaseTabla):
+    id = database.Column(database.Integer, primary_key=True, autoincrement=True)
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
+    documento = database.Column(database.String(25))
+    habilitada = database.Column(database.Boolean())
+    serie = database.Column(database.String(15), database.ForeignKey("entidad.entidad"))
+    ultimo_valor = database.Column(database.Integer(), default=0)
+    predeterminada = database.Column(database.Boolean())
+
+
+# <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
@@ -403,8 +414,7 @@ class GLBase:
     valor_x = database.Column(database.DECIMAL())
     # Terceras partes
     tercero_tipo = database.Column(database.String(26))
-    tercero_id = database.Column(database.String(26))
-    # Control de versiones
+    tercero_code = database.Column(database.String(26))
 
 
 class ComprobanteContable(BaseTransaccion):

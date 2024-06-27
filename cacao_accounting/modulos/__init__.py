@@ -159,8 +159,23 @@ def registrar_modulos_adicionales(flaskapp: Flask) -> None:
         modulos_extra: Union[list, None] = []
         for i in MODULOS_ADICIONALES:
             paquete = import_module(i)
-            flaskapp.register_blueprint(paquete.blueprint)  # type: ignore[attr-defined]
-            modulos_extra.append(paquete)  # type: ignore[union-attr]
+            flaskapp.register_blueprint(paquete.blueprint)
+            modulos_extra.append(paquete)
     else:
         modulos_extra = None
-    flaskapp.add_template_global(modulos_extra, "modulos_extra")  # type: ignore[arg-type]
+    flaskapp.add_template_global(modulos_extra, "modulos_extra")
+
+
+def lista_tipos_documentos() -> list:
+    """Devuelve listado de documentos"""
+
+    DOCUMENTOS = [
+        ("journal", "Comprobante de Diario"),
+        ("sales-invoice", "Factura de Venta"),
+        ("purchase-invoice", "Factura de Compra"),
+    ]
+
+    # Fixme
+    # Pendiente logica para cargar documentos de modulos e
+
+    return DOCUMENTOS

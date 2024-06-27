@@ -145,6 +145,7 @@ def nueva_entidad():
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+        from cacao_accounting.contabilidad.registros.serie import RegistroSerie
 
         ENTIDAD = RegistroEntidad()
         DATA = {
@@ -176,6 +177,28 @@ def nueva_entidad():
             datos_detalle=None,
         )
         ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
+
+        SERIE = RegistroSerie()
+        TRANSACCION_NUEVA_SERIE = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos={
+                "entidad": request.form.get("id", None),
+                "documento": "journal",
+                "habilitada": True,
+                "predeterminada": True,
+                "serie": str("CDD-" + request.form.get("id", None)).upper(),
+            },
+            registro="Serie",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+        SERIE.ejecutar_transaccion(TRANSACCION_NUEVA_SERIE)
+
         return LISTA_ENTIDADES
 
     return render_template(
@@ -559,3 +582,50 @@ def ver_comprobante():
 @verifica_acceso("accounting")
 def editar_comprobante():
     """Editar comprobante contable."""
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Series e Identificadores
+
+
+@contabilidad.route("/accounts/series", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def series():
+    """Series e Identificadores."""
+
+    from cacao_accounting.database import database, Serie
+    from cacao_accounting.modulos import lista_tipos_documentos
+
+    TITULO = "Series e Identificadores - " + APPNAME
+
+    if request.args.get("doc", type=str):
+        consulta = consulta = database.paginate(
+            database.select(Serie).filter_by(documento=request.args.get("doc", type=str)),
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        )
+    else:
+        consulta = database.paginate(
+            database.select(Serie),
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        )
+
+    return render_template(
+        "contabilidad/serie_lista.html",
+        consulta=consulta,
+        documentos=lista_tipos_documentos(),
+        titulo=TITULO,
+    )
+
+
+@contabilidad.route("/accounts/series/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nueva_serie():
+    """Nueva Serie."""
