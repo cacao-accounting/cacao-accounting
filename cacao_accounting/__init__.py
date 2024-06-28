@@ -209,7 +209,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
             inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
 
     @cacao_app.before_request
-    def before_request():
+    def before_request():  # pragma: no cover
         session.permanent = True
         cacao_app.permanent_session_lifetime = timedelta(minutes=30)  # Timeout session after 30 minutes
 
