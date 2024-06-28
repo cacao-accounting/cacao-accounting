@@ -129,7 +129,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
     if app and isinstance(app, Flask):
         with app.app_context():
             app.jinja_env.trim_blocks = True
-            app.jinja_env.lstrop_blocks = True
+            app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)

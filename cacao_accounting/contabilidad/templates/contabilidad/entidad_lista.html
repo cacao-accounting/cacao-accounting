@@ -28,33 +28,42 @@
         <th scope="col">Razón Social</th>
         <th scope="col">Nombre Comercial</th>
         <th scope="col">ID Fiscal</th>
+        <th scope="col"></th>
       </tr>
     </thead>
-      {% for item in consulta.items %}
-      <tr>
-        <td>
-          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.entidad }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.razon_social }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.nombre_comercial }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.id_fiscal }}
-          </a>
-        </td>
-      </tr>
-      {% endfor %}
+    {% for item in consulta.items %}
+    <tr>
+      <td>
+        {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.entidad }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.razon_social }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.nombre_comercial }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.id_fiscal }}
+        </a>
+      </td>
+      <td>
+        {% if item.habilitada %}
+        <span class="badge text-bg-secondary">Inhabilitar</span>
+        {% else %}
+        <span class="badge text-bg-success">Habilitar</span>
+        {% endif %}
+
+      </td>
+    </tr>
+    {% endfor %}
     <tbody>
     </tbody>
   </table>

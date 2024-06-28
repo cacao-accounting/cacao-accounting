@@ -43,18 +43,19 @@ DBVERSION = "0.0.0dev"
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
 STATUS: Dict[str, StatusWeb] = {
-    "abierto": StatusWeb(color="Lime", leyenda="Abierto"),
-    "activo": StatusWeb(color="Navy", leyenda="Activo"),
+    "abierto": StatusWeb(color="LimeGreen", leyenda="Abierto"),
+    "activo": StatusWeb(color="LightSeaGreen", leyenda="Activo"),
     "actual": StatusWeb(color="DodgerBlue", leyenda="Actual"),
-    "atrasado": StatusWeb(color="DodgerBlue", leyenda="Atrasado"),
-    "cancelado": StatusWeb(color="DodgerBlue", leyenda="Cancelado"),
-    "cerrado": StatusWeb(color="LightSlateGray", leyenda="Cerrado"),
+    "anulado": StatusWeb(color="SlateGray", leyenda="Actual"),
+    "atrasado": StatusWeb(color="OrangeRed", leyenda="Atrasado"),
+    "cancelado": StatusWeb(color="Gainsboro", leyenda="Cancelado"),
+    "cerrado": StatusWeb(color="Silver", leyenda="Cerrado"),
     "inactivo": StatusWeb(color="LightSlateGray", leyenda="Inactivo"),
-    "indefinido": StatusWeb(color="LightSlateGray", leyenda="Status no definido"),
-    "inhabilitado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado"),
-    "habilitado": StatusWeb(color="LightSlateGray", leyenda="Habilitado"),
-    "pagado": StatusWeb(color="LightSlateGray", leyenda="Pagado"),
-    "predeterminado": StatusWeb(color="Lime", leyenda="Predeterminado"),
+    "indefinido": StatusWeb(color="WhiteSmoke", leyenda="Status no definido"),
+    "inhabilitado": StatusWeb(color="GhostWhite", leyenda="Inhabilitado"),
+    "habilitado": StatusWeb(color="PaleGreen", leyenda="Habilitado"),
+    "pagado": StatusWeb(color="SeaGreen", leyenda="Pagado"),
+    "predeterminado": StatusWeb(color="Goldenrod", leyenda="Predeterminado"),
 }
 
 # <---------------------------------------------------------------------------------------------> #

@@ -21,7 +21,7 @@
 Base para las transacciones registradas en el sistema.
 
 En contabilidad normalmente las transacciones registradas estas soportadas por un documento fisico
-o la intención de la transacción es imprimirse para sevir de soporte para futuro o ante terceros,
+o la intención de la transacción es imprimirse para sevir de soporte para referencia futura o ante terceros,
 por tal motivo en Cacao Accounting implementamos el concepto de REGISTRO para el ingreso de transacciones
 en el sistema de.
 
@@ -41,6 +41,7 @@ Un registro:
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from dataclasses import dataclass
 from typing import Union
 
 # ---------------------------------------------------------------------------------------
@@ -58,6 +59,7 @@ from cacao_accounting.transaccion import Transaccion
 from cacao_accounting.validaciones import VALIDACIONES_PREDETERMINADAS
 
 
+@dataclass()
 class Registro:
     """
     Define la clase principal para administrar registros en la base de datos.
@@ -69,6 +71,8 @@ class Registro:
     DATABASE = database
     tabla = None
     tabla_detalle = None
+    filtro = id
+    id = None
     LISTA_DE_VALIDACIONES_DE_TRANSACCION = VALIDACIONES_PREDETERMINADAS
 
     def _ejecutar_transaccion_por_tipo(self, transaccion: Transaccion):

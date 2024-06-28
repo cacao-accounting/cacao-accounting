@@ -11,11 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
-
-# pylint: disable=too-many-instance-attributes
 
 """Definicion principal de una transacción en el sistema."""
 
@@ -30,7 +25,7 @@ class Transaccion:
     Definición de transaccion.
 
     Una transacción es el reflejo en el sistema de una accion realizada por un usuario, normalmente:
-      - Crear: Toda transacción grabada en el sistema debe grabarse es estado borrador.
+      - Crear: Toda transacción grabada en el sistema debe grabarse en estado borrador.
       - Actualizar: Las transacciones en estado borrador pueden ser editadas sin cambiar el estado.
       - Validar: Según el flujo de trabajo de una transacción puede requerir revisión por un usuario distinto de
         quien la genero.
