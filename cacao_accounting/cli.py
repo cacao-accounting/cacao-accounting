@@ -11,11 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
-
-# Fuente: https://github.com/pallets/flask/blob/master/src/flask/cli.py
 
 """Interfaz de linea de comandos."""
 

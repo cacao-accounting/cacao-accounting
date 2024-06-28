@@ -30,14 +30,14 @@ from flask_login import login_required
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.contabilidad.auxiliares import (
+    obtener_catalogo,
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
-    obtener_catalogo,
     obtener_centros_costos,
     obtener_entidad,
     obtener_entidades,
-    obtener_lista_monedas,
     obtener_lista_entidades_por_id_razonsocial,
+    obtener_lista_monedas,
 )
 from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import obtener_registro_desde_uuid
@@ -145,6 +145,7 @@ def nueva_entidad():
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
         from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
+        from cacao_accounting.contabilidad.registros.serie import RegistroSerie
 
         ENTIDAD = RegistroEntidad()
         DATA = {
@@ -176,6 +177,28 @@ def nueva_entidad():
             datos_detalle=None,
         )
         ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
+
+        SERIE = RegistroSerie()
+        TRANSACCION_NUEVA_SERIE = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos={
+                "entidad": request.form.get("id", None),
+                "documento": "journal",
+                "habilitada": True,
+                "predeterminada": True,
+                "serie": str("CDD-" + request.form.get("id", None)).upper(),
+            },
+            registro="Serie",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+        SERIE.ejecutar_transaccion(TRANSACCION_NUEVA_SERIE)
+
         return LISTA_ENTIDADES
 
     return render_template(
@@ -192,7 +215,7 @@ def nueva_entidad():
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import database, Entidad
+    from cacao_accounting.database import Entidad, database
 
     ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
 
@@ -532,4 +555,124 @@ def periodo_contable():
         titulo=TITULO,
         consulta=CONSULTA,
         statusweb=STATUS,
+    )
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Comprobante contable
+@contabilidad.route("/accounts/journal/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_comprobante():
+    """Nuevo comprobante contable."""
+
+
+@contabilidad.route("/accounts/journal/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_comprobante():
+    """Nuevo comprobante contable."""
+
+
+@contabilidad.route("/accounts/journal/edit/<identifier>", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_comprobante():
+    """Editar comprobante contable."""
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Series e Identificadores
+
+
+@contabilidad.route("/accounts/series", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def series():
+    """Series e Identificadores."""
+
+    from cacao_accounting.database import Serie, database
+    from cacao_accounting.modulos import lista_tipos_documentos
+
+    TITULO = "Series e Identificadores - " + APPNAME
+
+    if request.args.get("doc", type=str):
+        consulta = consulta = database.paginate(
+            database.select(Serie).filter_by(documento=request.args.get("doc", type=str)),
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        )
+    else:
+        consulta = database.paginate(
+            database.select(Serie),
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        )
+
+    return render_template(
+        "contabilidad/serie_lista.html",
+        consulta=consulta,
+        documentos=lista_tipos_documentos(),
+        titulo=TITULO,
+    )
+
+
+@contabilidad.route("/accounts/serie/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nueva_serie():
+    """Nueva Serie."""
+
+    from cacao_accounting.contabilidad.forms import FormularioSerie
+    from cacao_accounting.contabilidad.registros.serie import RegistroSerie
+    from cacao_accounting.database import Entidad, database
+    from cacao_accounting.transaccion import Transaccion
+
+    form = FormularioSerie()
+
+    CONSULTA_ENTIDADES = database.session.execute(database.select(Entidad)).all()
+    LISTA_DE_ENTIDADES = []
+    SERIE = RegistroSerie()
+
+    for e in CONSULTA_ENTIDADES:
+        LISTA_DE_ENTIDADES.append((e[0].entidad, e[0].nombre_comercial))
+
+    form.entidad.choices = LISTA_DE_ENTIDADES
+
+    if form.validate_on_submit() or request.method == "POST":
+        DATA = {
+            "entidad": form.entidad.data,
+            "documento": form.documento.data,
+            "serie": form.serie.data,
+            "habilitada": True,
+            "predeterminada": False,
+        }
+
+        NUEVA_SERIE_TRANSACCION = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos=DATA,
+            registro="Serie",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+
+        SERIE.ejecutar_transaccion(NUEVA_SERIE_TRANSACCION)
+
+        return redirect(url_for("contabilidad.series"))
+
+    return render_template(
+        "contabilidad/serie_crear.html",
+        form=form,
     )

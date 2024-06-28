@@ -31,7 +31,7 @@ def accounting_app():
 
 
 def test_visit_views(accounting_app, request):
-    from cacao_accounting.loggin import log
+    from cacao_accounting.logs import log
 
     if request.config.getoption("--slow") == "True":
 

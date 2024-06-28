@@ -20,9 +20,9 @@
 from collections import namedtuple
 from csv import DictReader
 from os.path import join
-from cacao_accounting.database import database, Cuentas
-from cacao_accounting.config import DIRECTORIO_APP
 
+from cacao_accounting.config import DIRECTORIO_APP
+from cacao_accounting.database import Cuentas, database
 
 CatalogoCtas = namedtuple("CatalogoCtas", ["file", "pais", "idioma"])
 DIRECTORIO_CTAS = join(DIRECTORIO_APP, "contabilidad", "ctas", "catalogos")
