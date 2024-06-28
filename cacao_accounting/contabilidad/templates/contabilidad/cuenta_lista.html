@@ -21,7 +21,7 @@
 
 <form>
     <h6>Seleccionar Entidad.</h6>
-    <select class="form-contrul" id="entidad" name="entidad">
+    <select class="form-control" id="entidad" name="entidad">
         {%- for entidad in entidades -%}
         <option value="{{ entidad.entidad }}">{{ entidad.nombre_comercial }}</option>
         {%- endfor -%}

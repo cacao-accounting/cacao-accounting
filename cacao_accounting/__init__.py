@@ -11,9 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
+
 
 """
 Interface principal de la aplicacion.
@@ -25,15 +23,15 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from datetime import timedelta
+from os import environ
 from sys import version_info
 from typing import Union
-from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask
-from flask import current_app
+from flask import Flask, current_app, session
 from flask_alembic import Alembic
 from flask_login import current_user
 
@@ -45,16 +43,15 @@ from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
+from cacao_accounting.compras import compras
+from cacao_accounting.config import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, MODO_ESCRITORIO, TESTING_MODE
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.config import MODO_ESCRITORIO, DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, TESTING_MODE
-from cacao_accounting.compras import compras
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.ventas import ventas
-
 
 alembic = Alembic()
 
@@ -132,7 +129,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
     if app and isinstance(app, Flask):
         with app.app_context():
             app.jinja_env.trim_blocks = True
-            app.jinja_env.lstrop_blocks = True
+            app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
@@ -210,6 +207,11 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
             user = environ.get("CACAO_USER") or "cacao"
             passwd = environ.get("CACAO_PWD") or "cacao"
             inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+
+    @cacao_app.before_request
+    def before_request():  # pragma: no cover
+        session.permanent = True
+        cacao_app.permanent_session_lifetime = timedelta(minutes=30)  # Timeout session after 30 minutes
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)

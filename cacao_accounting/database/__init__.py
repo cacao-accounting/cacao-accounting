@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """
 Definicion de base de datos.
@@ -46,18 +43,19 @@ DBVERSION = "0.0.0dev"
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
 STATUS: Dict[str, StatusWeb] = {
-    "abierto": StatusWeb(color="Lime", leyenda="Abierto"),
-    "activo": StatusWeb(color="Navy", leyenda="Activo"),
+    "abierto": StatusWeb(color="LimeGreen", leyenda="Abierto"),
+    "activo": StatusWeb(color="LightSeaGreen", leyenda="Activo"),
     "actual": StatusWeb(color="DodgerBlue", leyenda="Actual"),
-    "atrasado": StatusWeb(color="DodgerBlue", leyenda="Atrasado"),
-    "cancelado": StatusWeb(color="DodgerBlue", leyenda="Cancelado"),
-    "cerrado": StatusWeb(color="LightSlateGray", leyenda="Cerrado"),
+    "anulado": StatusWeb(color="SlateGray", leyenda="Actual"),
+    "atrasado": StatusWeb(color="OrangeRed", leyenda="Atrasado"),
+    "cancelado": StatusWeb(color="Gainsboro", leyenda="Cancelado"),
+    "cerrado": StatusWeb(color="Silver", leyenda="Cerrado"),
     "inactivo": StatusWeb(color="LightSlateGray", leyenda="Inactivo"),
-    "indefinido": StatusWeb(color="LightSlateGray", leyenda="Status no definido"),
-    "inhabilitado": StatusWeb(color="LightSlateGray", leyenda="Inhabilitado"),
-    "habilitado": StatusWeb(color="LightSlateGray", leyenda="Habilitado"),
-    "pagado": StatusWeb(color="LightSlateGray", leyenda="Pagado"),
-    "predeterminado": StatusWeb(color="Lime", leyenda="Predeterminado"),
+    "indefinido": StatusWeb(color="WhiteSmoke", leyenda="Status no definido"),
+    "inhabilitado": StatusWeb(color="GhostWhite", leyenda="Inhabilitado"),
+    "habilitado": StatusWeb(color="PaleGreen", leyenda="Habilitado"),
+    "pagado": StatusWeb(color="SeaGreen", leyenda="Pagado"),
+    "predeterminado": StatusWeb(color="Goldenrod", leyenda="Predeterminado"),
 }
 
 # <---------------------------------------------------------------------------------------------> #
@@ -387,6 +385,22 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 # <---------------------------------------------------------------------------------------------> #
+# Un mismo documento puede tener varias series para numerarlos
+
+
+class Serie(database.Model, BaseTabla):
+    """Serie para numerar nuevas transacciones."""
+
+    id = database.Column(database.Integer, primary_key=True, autoincrement=True)
+    entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
+    documento = database.Column(database.String(25))
+    habilitada = database.Column(database.Boolean())
+    serie = database.Column(database.String(15), database.ForeignKey("entidad.entidad"))
+    ultimo_valor = database.Column(database.Integer(), default=0)
+    predeterminada = database.Column(database.Boolean())
+
+
+# <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
@@ -403,13 +417,11 @@ class GLBase:
     valor_x = database.Column(database.DECIMAL())
     # Terceras partes
     tercero_tipo = database.Column(database.String(26))
-    tercero_id = database.Column(database.String(26))
+    tercero_code = database.Column(database.String(26))
 
 
 class ComprobanteContable(BaseTransaccion):
     """Comprobante contable manual."""
-
-    # No confundir con GL Entry
 
 
 class ComprobanteContableDetalle(GLBase):

@@ -1,0 +1,36 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-8">
+      <h4>Crear Nueva Serie.</h4>
+      <form method="post">
+        <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
+        <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+        {{ form.csrf_token }}
+        <div class="row">
+          <h5>Datos de la nueva serie:</h5>
+          <div class="col-6">
+            <label class="form-label" for="entidad">Entidad:</label>
+            {{ form.entidad(class="form-control", id="entidad") }}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="documento">Documento:</label>
+            {{ form.documento(class="form-control", id="documento") }}
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-6">
+            <br>
+            <label class="form-label" for="serie">Nueva Serie:</label>
+            {{ form.serie(class="form-control", id="serie") }}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
