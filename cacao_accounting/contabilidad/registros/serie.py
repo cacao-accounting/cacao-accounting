@@ -11,24 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
-"""Modulo de Inventarios."""
+"""Administración de Registro de Series."""
 
-from flask import Blueprint, render_template
-from flask_login import login_required
-
-from cacao_accounting.decorators import modulo_activo
-
-inventario = Blueprint("inventario", __name__, template_folder="templates")
+from cacao_accounting.registro import Registro
 
 
-@inventario.route("/inventario")
-@inventario.route("/inventory")
-@modulo_activo("inventory")
-@login_required
-def inventario_():
-    """Definición de vista principal de inventarios."""
-    return render_template("inventario.html")
+class RegistroSerie(Registro):
+    """
+    Registro base para controlar diferentes numeros de serie.
+
+    Los números de seríe permiten llevar control del ingreso de las transacciones.
+    """
+
+    def __init__(self):
+        """Administración de Series."""
+        from cacao_accounting.database import Serie
+
+        self.tabla = Serie

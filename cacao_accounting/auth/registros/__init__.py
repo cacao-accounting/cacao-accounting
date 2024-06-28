@@ -11,12 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Registros de usuario."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Usuario
 from cacao_accounting.registro import Registro
 

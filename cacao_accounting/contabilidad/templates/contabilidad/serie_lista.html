@@ -1,0 +1,95 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% import "macros.html" as macros %}
+{% extends "base.html" %}
+{% block contenido %}
+
+<section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <h4>Listado de Series e Indetificadores.</h4>
+
+  <div>
+    <div class="row">
+      <div class="col">
+        <form>
+          <h6>Seleccionar Tipo de Documento.</h6>
+          <select class="form-control" id="doc" name="doc">
+            {%- for documento in documentos -%}
+            <option value="{{ documento[0] }}">{{ documento[1] }}</option>
+            {%- endfor -%}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm">
+            Filtrar por Documento
+          </button>
+        </form>
+      </div>
+      <div class="col">
+        <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_serie") }}" role="button">Nueva Serie</a>
+      </div>
+    </div>
+  </div>
+
+  <table class="table table-sm">
+    <caption style="display: none;">Listado de Series e Identificadores.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Documento</th>
+        <th scope="col">Entidad</th>
+        <th scope="col">Serie</th>
+        <th scope="col">Habilitado</th>
+        <th scope="col">Predeterminado</th>
+        <th scope="col"></th>
+      </tr>
+    </thead>
+    {% for item in consulta.items %}
+    <tr>
+      <td>
+        <a href="" class="link-dark">
+          {{ item.documento }}
+        </a>
+      </td>
+      <td>
+        <a href="" class="link-dark">
+          {{ item.entidad }}
+        </a>
+      </td>
+      <td>
+        <a href="" class="link-dark">
+          {{ item.serie }}
+        </a>
+      </td>
+      <td>
+        <a href="" class="link-dark">
+          {{ item.habilitado }}
+        </a>
+      </td>
+      <td>
+        <a href="" class="link-dark">
+          {{ item.predeterminado }}
+        </a>
+      </td>
+      <td>
+
+      </td>
+    </tr>
+    {% endfor %}
+    <tbody>
+    </tbody>
+  </table>
+</section>
+<section>
+  {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.entidades") }}
+</section>
+{% endblock %}

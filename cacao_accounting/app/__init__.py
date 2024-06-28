@@ -11,18 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
+
 
 """Página principal de la aplicación."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 from os import environ
-from flask import Blueprint, current_app, render_template, redirect
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+from flask import Blueprint, current_app, redirect, render_template
 from flask_login import login_required
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.database import DBVERSION
 from cacao_accounting.version import VERSION
-
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 

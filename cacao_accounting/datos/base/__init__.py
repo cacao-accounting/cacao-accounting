@@ -18,8 +18,8 @@
 """Datos básicos para iniciar el sistema."""
 
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
-from cacao_accounting.auth.roles import crea_roles_predeterminados, asigna_rol_a_usuario
-from cacao_accounting.loggin import log
+from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
+from cacao_accounting.logs import log
 from cacao_accounting.modulos import _init_modulos
 from cacao_accounting.transaccion import Transaccion
 
@@ -29,6 +29,7 @@ from cacao_accounting.transaccion import Transaccion
 def registra_monedas(carga_rapida=False):
     """Carga de monedas al sistema."""
     from teritorio import Currencies
+
     from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
 
     log.debug("Iniciando carga de base monedas a la base de datos.")
@@ -88,6 +89,7 @@ def crea_usuario_admin(user: str, passwd: str):
     a estar expuesta de forma publica a la internet.
     """
     from flask import current_app
+
     from cacao_accounting.auth import proteger_passwd
     from cacao_accounting.database import Usuario, database
 

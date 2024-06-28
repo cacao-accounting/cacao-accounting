@@ -11,14 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Modulo administrativo."""
 
+
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 from flask import Blueprint, render_template
 from flask_login import login_required
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.decorators import modulo_activo
 
 admin = Blueprint("admin", __name__, template_folder="templates")

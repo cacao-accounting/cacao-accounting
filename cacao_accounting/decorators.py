@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Funciones auxiliares para usar en las rutas de la aplicación."""
 
@@ -26,7 +23,7 @@ from functools import wraps
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import flash, abort
+from flask import abort, flash
 from flask_login import current_user
 
 # ---------------------------------------------------------------------------------------

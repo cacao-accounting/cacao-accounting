@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
@@ -31,9 +28,8 @@ from waitress import serve
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
-from cacao_accounting.config import configuracion, PORT, THREADS
-from cacao_accounting.loggin import log
-
+from cacao_accounting.config import PORT, THREADS, configuracion
+from cacao_accounting.logs import log
 
 # <---------------------------------------------------------------------------------------------> #
 # Esta es la aplicación por defecto.

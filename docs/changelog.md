@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
   - [x] Currency
   - [x] Exchange Rate
   - [x] Accounting Period
+  - [x] Series
 - System Administration
   - [x] Module
 

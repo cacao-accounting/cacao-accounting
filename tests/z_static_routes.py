@@ -158,4 +158,26 @@ static_rutes = [
         url="/settings",
         text=["Administraión del Sistema.".encode("utf-8"), "Modulos".encode("utf-8")],
     ),
+    Route(
+        url="/accounts/series",
+        text=[
+            "Listado de Series e Indetificadores.".encode("utf-8"),
+            "Nueva Serie".encode("utf-8"),
+            "Seleccionar Tipo de Documento.".encode("utf-8"),
+            "Filtrar por Documento".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/series?doc=journal",
+        text=["Listado de Series e Indetificadores.".encode("utf-8"), "Nueva Serie".encode("utf-8")],
+    ),
+    Route(
+        url="/accounts/serie/new",
+        text=[
+            "Crear Nueva Serie.".encode("utf-8"),
+            "Datos de la nueva serie:".encode("utf-8"),
+            "Nueva Serie:".encode("utf-8"),
+            "Documento:".encode("utf-8"),
+        ],
+    ),
 ]

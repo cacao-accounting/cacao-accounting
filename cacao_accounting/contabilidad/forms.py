@@ -25,14 +25,14 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField
+from wtforms import SelectField, StringField
 from wtforms.validators import DataRequired
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Entidad
-
+from cacao_accounting.modulos import lista_tipos_documentos
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
@@ -79,3 +79,25 @@ class FormularioUnidad(FlaskForm):
     telefono1 = StringField(validators=[])
     telefono2 = StringField(validators=[])
     fax = StringField(validators=[])
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Comprobantes Contables
+class ComprobanteContable(FlaskForm):
+    """Comprobante contable manual."""
+
+
+class ComprobanteContableDetalle(FlaskForm):
+    """Detalle de comprobante contable manual."""
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Series e Identificadores
+class FormularioSerie(FlaskForm):
+    """Serie."""
+
+    entidad = SelectField(
+        "Entidad",
+    )
+    documento = SelectField("Documento", choices=lista_tipos_documentos())
+    serie = StringField(validators=[])

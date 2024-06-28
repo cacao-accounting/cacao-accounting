@@ -11,16 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Inición de sesión de usuarios."""
 
-from flask import Blueprint, redirect, render_template, flash
-from flask_login import LoginManager, logout_user, login_user, login_required
-from cacao_accounting.database import Usuario
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+from flask import Blueprint, flash, redirect, render_template
+from flask_login import LoginManager, login_required, login_user, logout_user
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
+from cacao_accounting.database import Usuario
 
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
@@ -45,7 +52,7 @@ def no_autorizado():
 
 def proteger_passwd(clave):
     """Devuelve una contraseña salteada con bcrytp."""
-    from bcrypt import hashpw, gensalt
+    from bcrypt import gensalt, hashpw
 
     clave_encriptada = hashpw(clave.encode(), gensalt())
     return clave_encriptada
@@ -67,8 +74,9 @@ def validar_acceso(usuario, clave):
 @login.route("/login", methods=["GET", "POST"])
 def inicio_sesion():
     """Inicio de sesión del usuario."""
-    from cacao_accounting.auth.forms import LoginForm
     from flask_login import current_user
+
+    from cacao_accounting.auth.forms import LoginForm
 
     form = LoginForm()
     if current_user.is_authenticated:
@@ -99,6 +107,7 @@ def cerrar_sesion():
 def test_roles():
     """Verifica los permisos del usuario actual."""
     from flask_login import current_user
+
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.auth.roles import obtener_roles_por_usuario
     from cacao_accounting.database import Modulos
