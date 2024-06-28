@@ -171,4 +171,13 @@ static_rutes = [
         url="/accounts/series?doc=journal",
         text=["Listado de Series e Indetificadores.".encode("utf-8"), "Nueva Serie".encode("utf-8")],
     ),
+    Route(
+        url="/accounts/serie/new",
+        text=[
+            "Crear Nueva Serie.".encode("utf-8"),
+            "Datos de la nueva serie:".encode("utf-8"),
+            "Nueva Serie:".encode("utf-8"),
+            "Documento:".encode("utf-8"),
+        ],
+    ),
 ]

@@ -388,6 +388,8 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class Serie(database.Model, BaseTabla):
+    """Serie para numerar nuevas transacciones."""
+
     id = database.Column(database.Integer, primary_key=True, autoincrement=True)
     entidad = database.Column(database.String(10), database.ForeignKey("entidad.entidad"))
     documento = database.Column(database.String(25))

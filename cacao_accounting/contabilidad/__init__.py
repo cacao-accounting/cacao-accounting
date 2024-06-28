@@ -623,9 +623,56 @@ def series():
     )
 
 
-@contabilidad.route("/accounts/series/new", methods=["GET", "POST"])
+@contabilidad.route("/accounts/serie/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def nueva_serie():
     """Nueva Serie."""
+
+    from cacao_accounting.contabilidad.forms import FormularioSerie
+    from cacao_accounting.contabilidad.registros.serie import RegistroSerie
+    from cacao_accounting.database import Entidad, database
+    from cacao_accounting.transaccion import Transaccion
+
+    form = FormularioSerie()
+
+    CONSULTA_ENTIDADES = database.session.execute(database.select(Entidad)).all()
+    LISTA_DE_ENTIDADES = []
+    SERIE = RegistroSerie()
+
+    for e in CONSULTA_ENTIDADES:
+        LISTA_DE_ENTIDADES.append((e[0].entidad, e[0].nombre_comercial))
+
+    form.entidad.choices = LISTA_DE_ENTIDADES
+
+    if form.validate_on_submit() or request.method == "POST":
+        DATA = {
+            "entidad": form.entidad.data,
+            "documento": form.documento.data,
+            "serie": form.serie.data,
+            "habilitada": True,
+            "predeterminada": False,
+        }
+
+        NUEVA_SERIE_TRANSACCION = Transaccion(
+            tipo="principal",
+            accion="crear",
+            datos=DATA,
+            registro="Serie",
+            estatus_actual=None,
+            nuevo_estatus=None,
+            uuid=None,
+            relaciones=None,
+            relacion_id=None,
+            datos_detalle=None,
+        )
+
+        SERIE.ejecutar_transaccion(NUEVA_SERIE_TRANSACCION)
+
+        return redirect(url_for("contabilidad.series"))
+
+    return render_template(
+        "contabilidad/serie_crear.html",
+        form=form,
+    )

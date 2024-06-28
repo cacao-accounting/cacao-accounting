@@ -40,4 +40,14 @@ forms = [
         file=None,
         flash=None,
     ),
+    Form(
+        ruta="/accounts/serie/new",
+        data={
+            "entidad": "cacao",
+            "documento": "journal",
+            "serie": "JV-CCC",
+        },
+        file=None,
+        flash=None,
+    ),
 ]

@@ -32,6 +32,7 @@ from wtforms.validators import DataRequired
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Entidad
+from cacao_accounting.modulos import lista_tipos_documentos
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
@@ -88,3 +89,15 @@ class ComprobanteContable(FlaskForm):
 
 class ComprobanteContableDetalle(FlaskForm):
     """Detalle de comprobante contable manual."""
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
+# Series e Identificadores
+class FormularioSerie(FlaskForm):
+    """Serie."""
+
+    entidad = SelectField(
+        "Entidad",
+    )
+    documento = SelectField("Documento", choices=lista_tipos_documentos())
+    serie = StringField(validators=[])
