@@ -23,6 +23,7 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from datetime import timedelta
 from os import environ
 from sys import version_info
 from typing import Union
@@ -30,7 +31,7 @@ from typing import Union
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask, current_app
+from flask import Flask, current_app, session
 from flask_alembic import Alembic
 from flask_login import current_user
 
@@ -206,6 +207,11 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
             user = environ.get("CACAO_USER") or "cacao"
             passwd = environ.get("CACAO_PWD") or "cacao"
             inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+
+    @cacao_app.before_request
+    def before_request():
+        session.permanent = True
+        cacao_app.permanent_session_lifetime = timedelta(minutes=30)  # Timeout session after 30 minutes
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)
