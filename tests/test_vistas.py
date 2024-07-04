@@ -30,10 +30,11 @@ def accounting_app():
     yield app
 
 
+@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_visit_views(accounting_app, request):
     from cacao_accounting.logs import log
 
-    if request.config.getoption("--slow") == "True":
+    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
         from cacao_accounting.database import database
         from cacao_accounting.database.helpers import inicia_base_de_datos
