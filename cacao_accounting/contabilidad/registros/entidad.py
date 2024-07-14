@@ -27,9 +27,3 @@ class RegistroEntidad(Registro):
     Una entidad es la base contra la que se realizan las transacciones en el
     sistema.
     """
-
-    def __init__(self):
-        """Administración de entidades."""
-        from cacao_accounting.database import Entidad
-
-        self.tabla = Entidad

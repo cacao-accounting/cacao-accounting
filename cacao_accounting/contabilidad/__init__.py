@@ -42,7 +42,6 @@ from cacao_accounting.contabilidad.auxiliares import (
 from cacao_accounting.database import STATUS
 from cacao_accounting.database.helpers import obtener_registro_desde_uuid
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
-from cacao_accounting.transaccion import Transaccion
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
@@ -164,18 +163,7 @@ def nueva_entidad():
             "habilitada": True,
             "predeterminada": False,
         }
-        TRANSACCION_NUEVA_ENTIDAD = Transaccion(
-            tipo="principal",
-            accion="crear",
-            datos=DATA,
-            registro="Entidad",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            relaciones=None,
-            relacion_id=None,
-            datos_detalle=None,
-        )
+
         ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
 
         SERIE = RegistroSerie()

@@ -24,6 +24,7 @@ Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprin
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from collections import namedtuple
 from pkgutil import iter_modules
 from typing import Union
 
@@ -35,7 +36,7 @@ from flask import Flask
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Modulos, database
+from cacao_accounting.database import ComprobanteContable, ComprobanteContableDetalle, Modulos, Serie, database
 
 # <---------------------------------------------------------------------------------------------> #
 # Módulos base del sistema e incluidos en el repositorio principal.
@@ -175,6 +176,28 @@ def lista_tipos_documentos() -> list:
     ]
 
     # Fixme
-    # Pendiente logica para cargar documentos de modulos e
+    # Pendiente logica para cargar documentos de modulos adicionales
 
     return DOCUMENTOS
+
+
+DOCUMENTO_TABLA = namedtuple("DOCUMENTO_TABLA", ["t_principal", "requiere_detalle", "t_detalle", "filter_by"])
+
+JOURNAL_DOC = DOCUMENTO_TABLA(
+    t_principal=ComprobanteContable, requiere_detalle=True, t_detalle=ComprobanteContableDetalle, filter_by="registro_id"
+)
+SERIE_DOC = DOCUMENTO_TABLA(t_principal=Serie, requiere_detalle=False, t_detalle=False, filter_by=id)
+
+
+def mapping_documentos_a_tablas() -> dict:
+    """Devuelve un mapeo de tipos de documentos y sus asociaciones con sus respectivas tablas."""
+
+    DOC_MAPPING = {
+        "journal": JOURNAL_DOC,
+        "serie": SERIE_DOC,
+    }
+
+    # Fixme
+    # Pendiente logica para cargar documentos de modulos adicionales
+
+    return DOC_MAPPING

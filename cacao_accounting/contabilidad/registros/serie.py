@@ -18,14 +18,4 @@ from cacao_accounting.registro import Registro
 
 
 class RegistroSerie(Registro):
-    """
-    Registro base para controlar diferentes numeros de serie.
-
-    Los números de seríe permiten llevar control del ingreso de las transacciones.
-    """
-
-    def __init__(self):
-        """Administración de Series."""
-        from cacao_accounting.database import Serie
-
-        self.tabla = Serie
+    """Registro base para controlar diferentes numeros de serie."""

@@ -32,7 +32,6 @@ from sqlalchemy.exc import OperationalError
 from cacao_accounting.database import DBVERSION, Metadata, database
 from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.logs import log
-from cacao_accounting.transaccion import Transaccion
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 
@@ -108,7 +107,9 @@ def inicia_base_de_datos(app, user, passwd):
     return DB_ESQUEMA
 
 
-def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:
+def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None):
+    from cacao_accounting.transaccion import Transaccion
+
     """Inicia un registro a partir de su UUID en la tabla correspondiente."""
     if tabla:
         REGISTRO = tabla.query.filter_by(id=uuid).first()
