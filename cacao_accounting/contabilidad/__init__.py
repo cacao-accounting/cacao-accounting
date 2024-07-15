@@ -208,7 +208,6 @@ def editar_entidad(id_entidad):
     ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
 
     if request.method == "POST":
-
         ENTIDAD.id_fiscal = request.form.get("id_fiscal", None)
         ENTIDAD.nombre_comercial = request.form.get("nombre_comercial", None)
         ENTIDAD.razon_social = request.form.get("razon_social", None)
@@ -621,7 +620,6 @@ def nueva_serie():
     from cacao_accounting.contabilidad.forms import FormularioSerie
     from cacao_accounting.contabilidad.registros.serie import RegistroSerie
     from cacao_accounting.database import Entidad, database
-    from cacao_accounting.transaccion import Transaccion
 
     form = FormularioSerie()
 
@@ -643,20 +641,9 @@ def nueva_serie():
             "predeterminada": False,
         }
 
-        NUEVA_SERIE_TRANSACCION = Transaccion(
-            tipo="principal",
-            accion="crear",
-            datos=DATA,
-            registro="Serie",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            relaciones=None,
-            relacion_id=None,
-            datos_detalle=None,
-        )
-
-        SERIE.ejecutar_transaccion(NUEVA_SERIE_TRANSACCION)
+        SERIE.nuevo = True
+        SERIE.data = DATA
+        SERIE.crear_nuevo_registro()
 
         return redirect(url_for("contabilidad.series"))
 

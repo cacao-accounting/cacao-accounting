@@ -16,7 +16,6 @@
 
 """Listado unificado de mensajes de error."""
 
-
 # <-------------------------------------------------------------------------> #
 # Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
 ERROR1 = "No se proporcionaron datos."

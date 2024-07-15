@@ -14,7 +14,6 @@
 
 """Definición unica de la version de la aplicación."""
 
-
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"

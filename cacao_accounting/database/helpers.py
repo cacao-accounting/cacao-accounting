@@ -92,7 +92,6 @@ def inicia_base_de_datos(app, user, passwd):
         try:
             database.create_all()
             if current_app.config.get("ENV") == "development" or "CACAO_TEST" in environ:
-
                 base_data(user, passwd, carga_rapida=True)
                 dev_data()
                 db_metadata(app=app)

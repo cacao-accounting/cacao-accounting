@@ -23,7 +23,6 @@ from datetime import date
 # Recursos locales
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.logs import log
-from cacao_accounting.transaccion import Transaccion
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -32,271 +31,114 @@ from cacao_accounting.transaccion import Transaccion
 
 def _demo_usuarios():
     """Usuarios para demostracion."""
-    from cacao_accounting.auth import proteger_passwd
+    from cacao_accounting.auth import proteger_passwd as pg
     from cacao_accounting.auth.registros import RegistroUsuario
 
     USUARIO = RegistroUsuario()
 
     log.debug("Creando usuarios de prueba.")
-    admin = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "administrador",
-            "correo_e": "administrador@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("administrador"),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(admin)
-    asigna_rol_a_usuario("administrador", "admin")
-    auditor = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "auditor",
-            "correo_e": "auditor@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("auditor"),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(auditor)
-    asigna_rol_a_usuario("auditor", "comptroller")
-    analista = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "analista",
-            "correo_e": "analista@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("analista"),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(analista)
-    asigna_rol_a_usuario("analista", "business_analyst")
-    contabilidad = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "contabilidad",
-            "correo_e": "contabilidad@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("contabilidad"),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
 
-    USUARIO.ejecutar_transaccion(contabilidad)
-    asigna_rol_a_usuario("contabilidad", "accounting_manager")
-    contabilidadj = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "contabilidadj",
-            "correo_e": "contabilidadj@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("contabilidadj"),
+    BASE_USUARIOS = [
+        {
+            "usuario": "admin",
+            "correo_e": "a@dm.com",
+            "clave_acceso": pg("admin"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-
-    USUARIO.ejecutar_transaccion(contabilidadj)
-    asigna_rol_a_usuario("contabilidadj", "accounting_auxiliar")
-    compras = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={"usuario": "compras", "correo_e": "compras@cacao_accounting.io", "clave_acceso": proteger_passwd("compras")},
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(compras)
-    asigna_rol_a_usuario("compras", "purchasing_manager")
-    compras_junior = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={"usuario": "comprasj", "correo_e": "comprasj@cacao_accounting.io", "clave_acceso": proteger_passwd("comprasj")},
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(compras_junior)
-    asigna_rol_a_usuario("comprasj", "purchasing_auxiliar")
-    ventas = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={"usuario": "ventas", "correo_e": "ventas@cacao_accounting.io", "clave_acceso": proteger_passwd("ventas")},
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(ventas)
-    asigna_rol_a_usuario("ventas", "sales_manager")
-    ventasj = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={"usuario": "ventasj", "correo_e": "ventasj@cacao_accounting.io", "clave_acceso": proteger_passwd("ventasj")},
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(ventasj)
-    asigna_rol_a_usuario("ventasj", "sales_auxiliar")
-    inventario = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
+        {
+            "usuario": "audit",
+            "correo_e": "au@dm.com",
+            "clave_acceso": pg("audit"),
+        },
+        {
+            "usuario": "analist",
+            "correo_e": "an@dm.com",
+            "clave_acceso": pg("analist"),
+        },
+        {
+            "usuario": "conta",
+            "correo_e": "con@dm.com",
+            "clave_acceso": pg("conta"),
+        },
+        {
+            "usuario": "contaj",
+            "correo_e": "conj@dm.com",
+            "clave_acceso": pg("contaj"),
+        },
+        {
+            "usuario": "compras",
+            "correo_e": "compras@dm.com",
+            "clave_acceso": pg("compras"),
+        },
+        {
+            "usuario": "comprasj",
+            "correo_e": "comprasj@dm.com",
+            "clave_acceso": pg("comprasj"),
+        },
+        {
+            "usuario": "ventas",
+            "correo_e": "ventas@dm.com",
+            "clave_acceso": pg("ventas"),
+        },
+        {
+            "usuario": "ventasj",
+            "correo_e": "ventasj@dm.com",
+            "clave_acceso": pg("ventasj"),
+        },
+        {
             "usuario": "inventario",
-            "correo_e": "inventario@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("inventario"),
+            "correo_e": "in@dm.com",
+            "clave_acceso": pg("inventario"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(inventario)
-    asigna_rol_a_usuario("inventario", "inventory_manager")
-    inventarioj = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
+        {
             "usuario": "inventarioj",
-            "correo_e": "inventarioj@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("inventarioj"),
+            "correo_e": "inj@dm.com",
+            "clave_acceso": pg("inventarioj"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(inventarioj)
-    asigna_rol_a_usuario("inventarioj", "inventory_auxiliar")
-    tesoreria = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
+        {
             "usuario": "tesoreria",
-            "correo_e": "tesoreria@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("tesoreria"),
+            "correo_e": "t@dm.com",
+            "clave_acceso": pg("tesoreria"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(tesoreria)
-    asigna_rol_a_usuario("tesoreria", "head_of_treasury")
-    tesoreriaj = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
+        {
             "usuario": "tesoreriaj",
-            "correo_e": "tesoreriaj@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("tesoreriaj"),
+            "correo_e": "tj@dm.com",
+            "clave_acceso": pg("tesoreriaj"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(tesoreriaj)
-    asigna_rol_a_usuario("tesoreriaj", "auxiliar_of_treasury")
-    pasante = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
+        {
             "usuario": "pasante",
-            "correo_e": "pasante@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("pasante"),
+            "correo_e": "p@dm.com",
+            "clave_acceso": pg("pasante"),
         },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(pasante)
+        {
+            "usuario": "usuario",
+            "correo_e": "u@dm.com",
+            "clave_acceso": pg("usuario"),
+        },
+    ]
+
+    for u in BASE_USUARIOS:
+        USUARIO.nuevo = True
+        USUARIO.data = u
+        USUARIO.crear_nuevo_registro()
+
+    asigna_rol_a_usuario("administrador", "admin")
+    asigna_rol_a_usuario("auditor", "comptroller")
+    asigna_rol_a_usuario("analista", "business_analyst")
+    asigna_rol_a_usuario("contabilidad", "accounting_manager")
+    asigna_rol_a_usuario("contabilidadj", "accounting_auxiliar")
+    asigna_rol_a_usuario("compras", "purchasing_manager")
+    asigna_rol_a_usuario("comprasj", "purchasing_auxiliar")
+    asigna_rol_a_usuario("ventas", "sales_manager")
+    asigna_rol_a_usuario("ventasj", "sales_auxiliar")
+    asigna_rol_a_usuario("inventario", "inventory_manager")
+    asigna_rol_a_usuario("inventarioj", "inventory_auxiliar")
+    asigna_rol_a_usuario("tesoreria", "head_of_treasury")
+    asigna_rol_a_usuario("tesoreriaj", "auxiliar_of_treasury")
     asigna_rol_a_usuario("pasante", "purchasing_auxiliar")
     asigna_rol_a_usuario("pasante", "accounting_auxiliar")
     asigna_rol_a_usuario("pasante", "auxiliar_of_treasury")
     asigna_rol_a_usuario("pasante", "inventory_auxiliar")
     asigna_rol_a_usuario("pasante", "sales_auxiliar")
-    usuario = Transaccion(
-        registro="Usuario",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "usuario": "usuario",
-            "correo_e": "usuario@cacao_accounting.io",
-            "clave_acceso": proteger_passwd("usuario"),
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    USUARIO.ejecutar_transaccion(usuario)
     asigna_rol_a_usuario("usuario", "purchasing_user")
     asigna_rol_a_usuario("usuario", "accounting_user")
     asigna_rol_a_usuario("usuario", "inventory_user")
@@ -398,9 +240,27 @@ def _demo_entidad():
 
     from cacao_accounting.database import Serie, database
 
-    serie1 = Serie(entidad="cacao", documento="journal", habilitada=True, predeterminada=True, serie="CD-CACAO")
-    serie2 = Serie(entidad="cafe", documento="journal", habilitada=True, predeterminada=True, serie="CD-CAFE")
-    serie3 = Serie(entidad="dulce", documento="journal", habilitada=True, predeterminada=True, serie="CD-DULCE")
+    serie1 = Serie(
+        entidad="cacao",
+        documento="journal",
+        habilitada=True,
+        predeterminada=True,
+        serie="CD-CACAO",
+    )
+    serie2 = Serie(
+        entidad="cafe",
+        documento="journal",
+        habilitada=True,
+        predeterminada=True,
+        serie="CD-CAFE",
+    )
+    serie3 = Serie(
+        entidad="dulce",
+        documento="journal",
+        habilitada=True,
+        predeterminada=True,
+        serie="CD-DULCE",
+    )
 
     database.session.add(serie1)
     database.session.add(serie2)

@@ -40,7 +40,10 @@ app = create_app(configuracion)
 
 def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
-    from cacao_accounting.database.helpers import inicia_base_de_datos, verifica_coneccion_db
+    from cacao_accounting.database.helpers import (
+        inicia_base_de_datos,
+        verifica_coneccion_db,
+    )
 
     log.info("Iniciando Cacao Accounting.")
     if verifica_coneccion_db(app):
@@ -51,7 +54,11 @@ def server() -> None:
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")
         try:
-            inicia_base_de_datos(app, user=environ.get("CACAO_USER") or "cacao", passwd=environ.get("CACAO_PWD") or "cacao")
+            inicia_base_de_datos(
+                app,
+                user=environ.get("CACAO_USER") or "cacao",
+                passwd=environ.get("CACAO_PWD") or "cacao",
+            )
             DATABASE = True
         except OperationalError:
             log.error("No se pudo inicilizar la base de datos.")

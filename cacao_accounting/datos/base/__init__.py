@@ -21,7 +21,6 @@ from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.logs import log
 from cacao_accounting.modulos import _init_modulos
-from cacao_accounting.transaccion import Transaccion
 
 # pylint: disable=import-outside-toplevel
 
@@ -35,48 +34,27 @@ def registra_monedas(carga_rapida=False):
     log.debug("Iniciando carga de base monedas a la base de datos.")
     MONEDA = RegistroMoneda()
     if carga_rapida:
-
-        nio = Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2},
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
+        MONEDAS = (
+            {"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2},
+            {
+                "codigo": "USD",
+                "nombre": "Dolares de los Estados Unidos",
+                "decimales": 2,
+            },
         )
-        usd = Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={"codigo": "USD", "nombre": "Dolares de los Estados Unidos", "decimales": 2},
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-        MONEDA.ejecutar_transaccion(nio)
-        MONEDA.ejecutar_transaccion(usd)
+        for m in MONEDAS:
+            MONEDA.nuevo = True
+            MONEDA.data = m
+            MONEDA.crear_nuevo_registro()
     else:
         for currency in Currencies():
-            moneda = Transaccion(
-                registro="Moneda",
-                tipo="principal",
-                estatus_actual=None,
-                nuevo_estatus=None,
-                uuid=None,
-                accion="crear",
-                datos={"codigo": currency.code, "nombre": currency.name, "decimales": currency.minor_units},
-                datos_detalle=None,
-                relaciones=None,
-                relacion_id=None,
-            )
-            MONEDA.ejecutar_transaccion(moneda)
+            MONEDA.nuevo = True
+            MONEDA.data = {
+                "codigo": currency.code,
+                "nombre": currency.name,
+                "decimales": currency.minor_units,
+            }
+            MONEDA.crear_nuevo_registro()
     log.debug("Monedas cargadas Correctamente")
 
 

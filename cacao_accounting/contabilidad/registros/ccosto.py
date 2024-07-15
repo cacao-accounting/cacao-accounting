@@ -20,11 +20,5 @@
 from cacao_accounting.registro import Registro
 
 
-class RegistroCentroCosto(Registro):
+class RegistroCentroCosto(Registro, tipo="ccosto"):
     """Registro para la administración de Centros de Costos."""
-
-    def __init__(self):
-        """Administración centros de costos."""
-        from cacao_accounting.database import CentroCosto
-
-        self.tabla = CentroCosto

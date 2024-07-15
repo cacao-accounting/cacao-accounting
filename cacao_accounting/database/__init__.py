@@ -74,26 +74,62 @@ class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
 
     # Pistas de auditoria comunes a todas las tablas.
-    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    id = database.Column(
+        database.String(26),
+        primary_key=True,
+        nullable=False,
+        index=True,
+        default=obtiene_texto_unico,
+    )
     status = database.Column(database.String(50), nullable=True)
     creado = database.Column(database.DateTime, default=database.func.now(), nullable=False)
     creado_por = database.Column(database.String(15), nullable=True)
-    modificado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    modificado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     modificado_por = database.Column(database.String(15), nullable=True)
 
 
 class BaseTransaccion(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
-    anulado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    anulado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     anulado_por = database.Column(database.String(15), nullable=True)
-    autorizado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    autorizado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     autorizado_por = database.Column(database.String(15), nullable=True)
-    cancelado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    cancelado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     cancelado_por = database.Column(database.String(15), nullable=True)
-    cerrado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    cerrado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     cerrado_por = database.Column(database.String(15), nullable=True)
-    validado = database.Column(database.DateTime, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    validado = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     validado_por = database.Column(database.String(15), nullable=True)
     serie = database.Column(database.String(15), nullable=True)
     concec = database.Column(database.Integer(), nullable=True)
@@ -147,7 +183,13 @@ class Metadata(database.Model):  # type: ignore[name-defined]
     """Informacion basica de la instalacion."""
 
     __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
-    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    id = database.Column(
+        database.String(26),
+        primary_key=True,
+        nullable=False,
+        index=True,
+        default=obtiene_texto_unico,
+    )
     cacaoversion = database.Column(database.String(50), nullable=False)
     dbversion = database.Column(database.String(50), nullable=False)
     fecha = database.Column(database.DateTime, default=database.func.now(), nullable=False)
@@ -301,7 +343,7 @@ class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
     __table_args__ = (
-        database.UniqueConstraint("id"),
+        database.UniqueConstraint("codigo"),
         database.UniqueConstraint("entidad", "codigo", name="cta_unica"),
     )
     activa = database.Column(database.Boolean(), index=True)
@@ -403,8 +445,19 @@ class Serie(database.Model, BaseTabla):
 # <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
-    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
-    fecha = database.Column(database.Date, default=database.func.now(), onupdate=database.func.now(), nullable=True)
+    id = database.Column(
+        database.String(26),
+        primary_key=True,
+        nullable=False,
+        index=True,
+        default=obtiene_texto_unico,
+    )
+    fecha = database.Column(
+        database.Date,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=True,
+    )
     tipo = database.Column(database.String(50))
     registro_id = database.Column(database.String(75))
     idx = database.Column(database.Integer(), nullable=True)

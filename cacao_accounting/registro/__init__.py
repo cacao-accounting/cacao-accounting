@@ -21,13 +21,14 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from tkinter import N
 from flask_login import current_user
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database
-from cacao_accounting.modulos import mapping_documentos_a_tablas
+from cacao_accounting.database.docs_mapping import mapping_documentos_a_tablas
 
 DOC_MAPPING = mapping_documentos_a_tablas()
 
@@ -35,8 +36,7 @@ DOC_MAPPING = mapping_documentos_a_tablas()
 class Registro:
     """Definición de un registro en el sistema."""
 
-    def __init__(self, tipo=None, nuevo=None, id=None, serie=None, data=None, detalle=None, **kwargs):
-
+    def __init__(self, tipo=None, nuevo=False, id=None, serie=None, data=None, detalle=None):
         self.tipo = DOC_MAPPING.get(tipo)
         self.nuevo = nuevo
 
@@ -52,16 +52,42 @@ class Registro:
             self.data = self.obtener_datos_por_id()
             self.detalle = self.obtener_datos_detalle()
 
-        self.tabla = self.tipo.t_principal
-
-        if self.tipo.requiere_detalle:
-            self.tabla_detalle = self.tipo.t_principal.t_detalle
+        if self.tipo:
+            self.tabla = self.tipo.t_principal
+            if self.tipo.requiere_detalle:
+                self.tabla_detalle = self.tipo.t_detalle
+            else:
+                self.tabla_detalle = None
         else:
-            self.tabla_detalle = None
+            self.tabla = None
+            self.detalle = None
 
     @classmethod
-    def __init_subclass__(cls, tipo=None, nuevo=None, id=None, serie=None, data=None, detalle=None, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
+    def __init_subclass__(cls, tipo=None, nuevo=False, id=None, serie=None, data=None, detalle=None) -> None:
+        cls.tipo = DOC_MAPPING.get(tipo)
+        cls.nuevo = nuevo
+
+        if cls.nuevo:
+            cls.id = None
+            cls.serie = serie
+            cls.data = data
+            cls.detalle = detalle
+            # Usuario actual como creador del registro.
+            cls.data["creado_por"] = current_user.usuario
+        else:
+            cls.id = id
+            cls.data = cls.obtener_datos_por_id()
+            cls.detalle = cls.obtener_datos_detalle()
+
+        if cls.tipo:
+            cls.tabla = cls.tipo.t_principal
+            if cls.tipo.requiere_detalle:
+                cls.tabla_detalle = cls.tipo.t_detalle
+            else:
+                cls.tabla_detalle = None
+        else:
+            cls.tabla = None
+            cls.detalle = None
 
     @classmethod
     def obtener_datos_por_id(self):
@@ -79,19 +105,15 @@ class Registro:
         pass
 
     @classmethod
-    def crear_grabar_registro(self):
-        """Crea una nueva transacción en la tabla."""
-        pass
-
-    @classmethod
-    def ejecutar_transaccion(self):
+    def crear_nuevo_registro(self):
         """Persiste los datos en la base de datos."""
-        database.session.add(self.tabla(**self.data))
-        if self.detalle:
-            order = 0
-            for i in self.detalle:
-                order += 1
-                i["idx"] = order
-                database.session.add(self.tabla_detalle(*i))
+        if self.nuevo:
+            database.session.add(self.tabla(**self.data))
+            if self.detalle:
+                order = 0
+                for i in self.detalle:
+                    order += 1
+                    i["idx"] = order
+                    database.session.add(self.tabla_detalle(*i))
 
-        database.session.commit()
+            database.session.commit()

@@ -23,7 +23,10 @@ from typing import Union
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Modulos, Roles, RolesPermisos, RolesUsuario
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
+from cacao_accounting.database.helpers import (
+    obtener_id_modulo_por_nombre,
+    obtener_id_rol_por_monbre,
+)
 from cacao_accounting.logs import log
 from cacao_accounting.registro import Registro
 
@@ -62,12 +65,8 @@ ACCIONES: tuple = (
 )
 
 
-class RegistroPermisosRol(Registro):  # pylint: disable=R0903
+class RegistroPermisosRol(Registro, tipo="permiso"):  # pylint: disable=R0903
     """Administracion de Permisos por rol."""
-
-    def __init__(self):
-        """Administracion de Permisos por rol."""
-        self.tabla = RolesPermisos
 
 
 class Permisos:  # pylint: disable=R0902
@@ -194,7 +193,8 @@ class Permisos:  # pylint: disable=R0902
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
         """Retorno verdadero o falso según si el usuario es miembro del grupo admin."""
         CONSULTA = RolesUsuario.query.filter(
-            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario
+            RolesUsuario.role_id == self.obtener_id_rol_administrador(),
+            RolesUsuario.user_id == self.usuario,
         ).first()
         return CONSULTA is not None
 

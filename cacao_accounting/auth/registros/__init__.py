@@ -25,13 +25,8 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Usuario
 from cacao_accounting.registro import Registro
 
 
-class RegistroUsuario(Registro):
+class RegistroUsuario(Registro, tipo="usuario"):
     """Administración de Usuarios."""
-
-    def __init__(self):
-        """Administración de registros de usuarios."""
-        self.tabla = Usuario
