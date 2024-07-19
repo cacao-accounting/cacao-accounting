@@ -71,13 +71,6 @@ def command() -> None:  # pragma: no cover
     linea_comandos(as_module="cacao_accounting")
 
 
-def verifica_version_de_python() -> None:
-    """Requerimos al menos python 3.7 para la aplicación."""
-    # pylint: disable=W0612
-    if not version_info >= (3, 7):
-        raise RuntimeError("Python >= 3.7 requerido.")
-
-
 def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
@@ -164,8 +157,6 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     Aplication factory.
     """
-    # pylint: disable=W0612
-    verifica_version_de_python()
     cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,

@@ -216,8 +216,8 @@ def editar_entidad(id_entidad):
         ENTIDAD.correo_electronico = request.form.get("correo_electronico", None)
         ENTIDAD.fax = request.form.get("fax", None)
         ENTIDAD.web = request.form.get("web", None)
-        database.session.add(ENTIDAD)  # pylint: disable=no-member
-        database.session.commit()  # pylint: disable=no-member
+        database.session.add(ENTIDAD)
+        database.session.commit()
         return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.entidad))
     else:
         DATA = {

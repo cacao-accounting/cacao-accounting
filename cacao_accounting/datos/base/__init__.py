@@ -20,9 +20,7 @@
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.logs import log
-from cacao_accounting.modulos import _init_modulos
-
-# pylint: disable=import-outside-toplevel
+from cacao_accounting.modulos import init_modulos
 
 
 def registra_monedas(carga_rapida=False):
@@ -80,16 +78,11 @@ def crea_usuario_admin(user: str, passwd: str):
         asigna_rol_a_usuario(usuario=user, rol="admin")
 
 
-def __cargar_roles_al_sistema() -> None:
-    """Carga roles de desarrollo a la base de datos."""
-    crea_roles_predeterminados()
-
-
 def base_data(user, passwd, carga_rapida=False):
     """Definición de metodo para cargar información base al sistema."""
     log.debug("Iniciando carga de datos base al sistema.")
-    _init_modulos()
-    __cargar_roles_al_sistema()
+    init_modulos()
+    crea_roles_predeterminados()
     cargar_permisos_predeterminados()
     crea_usuario_admin(user, passwd)
     registra_monedas(carga_rapida=carga_rapida)

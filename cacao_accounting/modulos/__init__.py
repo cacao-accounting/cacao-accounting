@@ -111,12 +111,11 @@ def registrar_modulo(entrada: dict) -> None:
         estandar=entrada["estandar"],
         habilitado=entrada["habilitado"],
     )
-    # pylint: disable=E1101
     database.session.add(registro)
     database.session.commit()
 
 
-def _init_modulos() -> None:
+def init_modulos() -> None:
     """Inserta en la base de datos los modulos predeterminados del sistema."""
     for i in MODULOS_STANDAR:
         i["ruta"] = None
