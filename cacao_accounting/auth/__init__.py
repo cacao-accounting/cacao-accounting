@@ -52,20 +52,28 @@ def no_autorizado():
 
 def proteger_passwd(clave):
     """Devuelve una contraseña salteada con bcrytp."""
-    from bcrypt import gensalt, hashpw
+    from argon2 import PasswordHasher
 
-    clave_encriptada = hashpw(clave.encode(), gensalt())
-    return clave_encriptada
+    hashpw = PasswordHasher()
+
+    clave_encriptada = hashpw.hash(clave.encode())
+    return clave_encriptada.encode()
 
 
-def validar_acceso(usuario, clave):
+def validar_acceso(usuario, clave) -> bool:
     """Verifica el inicio de sesión del usuario."""
-    from bcrypt import checkpw
+    from argon2 import PasswordHasher
+    from argon2.exceptions import VerifyMismatchError
 
     acceso = clave
     registro = Usuario.query.filter_by(usuario=usuario).first()
     if registro is not None:
-        clave_validada = checkpw(acceso.encode(), registro.clave_acceso)
+        ph = PasswordHasher()
+        try:
+            ph.verify(registro.clave_acceso, acceso)
+        except VerifyMismatchError:
+            clave_validada = False
+        clave_validada = True
     else:
         clave_validada = False
     return clave_validada
