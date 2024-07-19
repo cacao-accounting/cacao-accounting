@@ -1,7 +1,7 @@
 # Mantener en orden alfabetico
 alembic
 bcrypt
-babel
+cryptography
 Flask
 Flask-Alembic
 flask-babel
@@ -9,16 +9,9 @@ flask-login
 flask-sqlalchemy
 flask-wtf
 loguru
-lxml
-pdf_reports
-openpyxl
-sqlalchemy
+pg8000
+PyMySQL
+python-ulid
 teritorio
 waitress
 wtforms
-WTForms-SQLAlchemy
-pillow
-pg8000
-PyMySQL
-cryptography
-python-ulid
