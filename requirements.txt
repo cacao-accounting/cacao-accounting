@@ -1,6 +1,6 @@
 # Mantener en orden alfabetico
 alembic
-bcrypt
+argon2-cffi
 babel
 Flask
 Flask-Alembic
