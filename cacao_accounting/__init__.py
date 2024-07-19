@@ -25,7 +25,6 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 from datetime import timedelta
 from os import environ
-from sys import version_info
 from typing import Union
 
 # ---------------------------------------------------------------------------------------
