@@ -66,28 +66,18 @@ class Registro:
     def __init_subclass__(cls, tipo=None, nuevo=False, id=None, serie=None, data=None, detalle=None) -> None:
         cls.tipo = DOC_MAPPING.get(tipo)
         cls.nuevo = nuevo
-
-        if cls.nuevo:
-            cls.id = None
-            cls.serie = serie
-            cls.data = data
-            cls.detalle = detalle
-            # Usuario actual como creador del registro.
+        cls.data = data
+        # Usuario actual como creador del registro.
+        if current_user:
             cls.data["creado_por"] = current_user.usuario
+        cls.detalle = detalle
+        cls.id = id
+        cls.serie = serie
+        cls.tabla = cls.tipo.t_principal
+        if cls.tipo.requiere_detalle:
+            cls.tabla_detalle = cls.tipo.t_detalle
         else:
-            cls.id = id
-            cls.data = cls.obtener_datos_por_id()
-            cls.detalle = cls.obtener_datos_detalle()
-
-        if cls.tipo:
-            cls.tabla = cls.tipo.t_principal
-            if cls.tipo.requiere_detalle:
-                cls.tabla_detalle = cls.tipo.t_detalle
-            else:
-                cls.tabla_detalle = None
-        else:
-            cls.tabla = None
-            cls.detalle = None
+            cls.tabla_detalle = None
 
     @classmethod
     def obtener_datos_por_id(self):
