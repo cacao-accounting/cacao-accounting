@@ -172,7 +172,7 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     log.trace(USUARIO[0].usuario)
     log.trace(ROL[0].id)
 
-    rol = RolesUsuario(user_id=USUARIO[0].usuario, role_id=ROL[0].id)
+    rol = RolesUsuario(user_id=USUARIO[0].id, role_id=ROL[0].id)
 
     database.session.add(rol)
     database.session.commit()
