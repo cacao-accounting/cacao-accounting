@@ -397,7 +397,7 @@ CENTROS_DE_COSTOS = (
         entidad="cafe",
         grupo=False,
         codigo="A00000",
-        nombre="Centro Costos Predeterminado",
+        nombre="Centro de Costos Predeterminado",
         status="activa",
     ),
     CentroCosto(
@@ -407,7 +407,7 @@ CENTROS_DE_COSTOS = (
         entidad="dulce",
         grupo=False,
         codigo="A00000",
-        nombre="Centro Costos Predeterminado",
+        nombre="Centro de Costos Predeterminados",
         status="activa",
     ),
 )
