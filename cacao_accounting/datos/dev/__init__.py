@@ -17,10 +17,14 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
-from datetime import date
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.database import database
 from cacao_accounting.datos.dev.data import (
@@ -36,10 +40,6 @@ from cacao_accounting.datos.dev.data import (
     USUARIO_ROLES,
 )
 from cacao_accounting.logs import log
-
-# ---------------------------------------------------------------------------------------
-# Librerias de terceros
-# ---------------------------------------------------------------------------------------
 
 
 def asignar_usuario_a_roles():
@@ -88,6 +88,7 @@ def demo_unidades():
 
 
 def cargar_catalogo_de_cuentas():
+    """Catalogo de cuentas de demostración."""
     from cacao_accounting.contabilidad.ctas import base, cargar_catalogos
 
     log.debug("Cargando catalogos de cuentas.")
@@ -101,12 +102,14 @@ def cargar_catalogo_de_cuentas():
 
 
 def cargar_centros_de_costos():
+    """Centros de Costos de demostración."""
     for cc in CENTROS_DE_COSTOS:
         database.session.add(cc)
     database.session.commit()
 
 
 def cargar_proyectos():
+    """Proyectos de demostración."""
 
     for p in PROYECTOS:
         database.session.add(p)
@@ -114,6 +117,7 @@ def cargar_proyectos():
 
 
 def tasas_de_cambio():
+    """Tasa de Cambio de demostración."""
     for t in TASAS_DE_CAMBIO:
         database.session.add(t)
     database.session.commit()
