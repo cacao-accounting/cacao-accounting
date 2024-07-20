@@ -28,7 +28,6 @@ from cacao_accounting.database.helpers import (
     obtener_id_rol_por_monbre,
 )
 from cacao_accounting.logs import log
-from cacao_accounting.registro import Registro
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -65,7 +64,7 @@ ACCIONES: tuple = (
 )
 
 
-class RegistroPermisosRol(Registro, tipo="permiso"):
+class RegistroPermisosRol:
     """Administracion de Permisos por rol."""
 
 

@@ -19,954 +19,135 @@
 # ---------------------------------------------------------------------------------------
 from datetime import date
 
-# ---------------------------------------------------------------------------------------
-# Recursos locales
-from cacao_accounting.auth.roles import asigna_rol_a_usuario
-from cacao_accounting.logs import log
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+from cacao_accounting.auth.roles import asigna_rol_a_usuario
+from cacao_accounting.logs import log
+from cacao_accounting.database import database
+from cacao_accounting.datos.dev.data import (
+    BASE_USUARIOS,
+    ENTIDADES,
+    USUARIO_ROLES,
+    UNIDADES,
+    SERIES,
+    CUENTAS,
+    CENTROS_DE_COSTOS,
+    PROYECTOS,
+    TASAS_DE_CAMBIO,
+    PERIODOS,
+)
 
-def _demo_usuarios():
+
+def asignar_usuario_a_roles():
+    """Asigna roles a usuarios."""
+
+    for r in USUARIO_ROLES:
+        asigna_rol_a_usuario(r[0], r[1])
+
+
+def demo_usuarios():
     """Usuarios para demostracion."""
-    from cacao_accounting.auth import proteger_passwd as pg
-    from cacao_accounting.auth.registros import RegistroUsuario
-
-    USUARIO = RegistroUsuario()
-
-    log.debug("Creando usuarios de prueba.")
-
-    BASE_USUARIOS = [
-        {
-            "usuario": "admin",
-            "correo_e": "a@dm.com",
-            "clave_acceso": pg("admin"),
-        },
-        {
-            "usuario": "audit",
-            "correo_e": "au@dm.com",
-            "clave_acceso": pg("audit"),
-        },
-        {
-            "usuario": "analist",
-            "correo_e": "an@dm.com",
-            "clave_acceso": pg("analist"),
-        },
-        {
-            "usuario": "conta",
-            "correo_e": "con@dm.com",
-            "clave_acceso": pg("conta"),
-        },
-        {
-            "usuario": "contaj",
-            "correo_e": "conj@dm.com",
-            "clave_acceso": pg("contaj"),
-        },
-        {
-            "usuario": "compras",
-            "correo_e": "compras@dm.com",
-            "clave_acceso": pg("compras"),
-        },
-        {
-            "usuario": "comprasj",
-            "correo_e": "comprasj@dm.com",
-            "clave_acceso": pg("comprasj"),
-        },
-        {
-            "usuario": "ventas",
-            "correo_e": "ventas@dm.com",
-            "clave_acceso": pg("ventas"),
-        },
-        {
-            "usuario": "ventasj",
-            "correo_e": "ventasj@dm.com",
-            "clave_acceso": pg("ventasj"),
-        },
-        {
-            "usuario": "inventario",
-            "correo_e": "in@dm.com",
-            "clave_acceso": pg("inventario"),
-        },
-        {
-            "usuario": "inventarioj",
-            "correo_e": "inj@dm.com",
-            "clave_acceso": pg("inventarioj"),
-        },
-        {
-            "usuario": "tesoreria",
-            "correo_e": "t@dm.com",
-            "clave_acceso": pg("tesoreria"),
-        },
-        {
-            "usuario": "tesoreriaj",
-            "correo_e": "tj@dm.com",
-            "clave_acceso": pg("tesoreriaj"),
-        },
-        {
-            "usuario": "pasante",
-            "correo_e": "p@dm.com",
-            "clave_acceso": pg("pasante"),
-        },
-        {
-            "usuario": "usuario",
-            "correo_e": "u@dm.com",
-            "clave_acceso": pg("usuario"),
-        },
-    ]
+    from cacao_accounting.database import Usuario
 
     for u in BASE_USUARIOS:
-        USUARIO.nuevo = True
-        USUARIO.data = u
-        USUARIO.crear_nuevo_registro()
-
-    asigna_rol_a_usuario("administrador", "admin")
-    asigna_rol_a_usuario("auditor", "comptroller")
-    asigna_rol_a_usuario("analista", "business_analyst")
-    asigna_rol_a_usuario("contabilidad", "accounting_manager")
-    asigna_rol_a_usuario("contabilidadj", "accounting_auxiliar")
-    asigna_rol_a_usuario("compras", "purchasing_manager")
-    asigna_rol_a_usuario("comprasj", "purchasing_auxiliar")
-    asigna_rol_a_usuario("ventas", "sales_manager")
-    asigna_rol_a_usuario("ventasj", "sales_auxiliar")
-    asigna_rol_a_usuario("inventario", "inventory_manager")
-    asigna_rol_a_usuario("inventarioj", "inventory_auxiliar")
-    asigna_rol_a_usuario("tesoreria", "head_of_treasury")
-    asigna_rol_a_usuario("tesoreriaj", "auxiliar_of_treasury")
-    asigna_rol_a_usuario("pasante", "purchasing_auxiliar")
-    asigna_rol_a_usuario("pasante", "accounting_auxiliar")
-    asigna_rol_a_usuario("pasante", "auxiliar_of_treasury")
-    asigna_rol_a_usuario("pasante", "inventory_auxiliar")
-    asigna_rol_a_usuario("pasante", "sales_auxiliar")
-    asigna_rol_a_usuario("usuario", "purchasing_user")
-    asigna_rol_a_usuario("usuario", "accounting_user")
-    asigna_rol_a_usuario("usuario", "inventory_user")
-    asigna_rol_a_usuario("usuario", "user_of_treasury")
-    asigna_rol_a_usuario("usuario", "sales_user")
-
-
-def _demo_entidad():
-    """Entidad de demostración."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-
-    log.debug("Creando entidades de prueba.")
-    ENTIDAD = RegistroEntidad()
-    ENTIDAD1 = Transaccion(
-        registro="Entidad",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "id": "01J092PXHEBF4M129A7GZZ48E2",
-            "entidad": "cacao",
-            "razon_social": "Choco Sonrisas Sociedad Anonima",
-            "nombre_comercial": "Choco Sonrisas",
-            "id_fiscal": "J0310000000000",
-            "moneda": "NIO",
-            "tipo_entidad": "Sociedad",
-            "correo_electronico": "info@chocoworld.com",
-            "web": "chocoworld.com",
-            "telefono1": "+505 8456 6543",
-            "telefono2": "+505 8456 7543",
-            "fax": "+505 8456 7545",
-            "habilitada": True,
-            "predeterminada": True,
-            "status": "predeterminado",
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    ENTIDAD2 = Transaccion(
-        registro="Entidad",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "entidad": "cafe",
-            "razon_social": "Mundo Cafe Sociedad Anonima",
-            "nombre_comercial": "Mundo Cafe",
-            "id_fiscal": "J0310000000001",
-            "moneda": "USD",
-            "tipo_entidad": "Sociedad",
-            "correo_electronico": "info@mundocafe.com",
-            "web": "mundocafe.com",
-            "telefono1": "+505 8456 6542",
-            "telefono2": "+505 8456 7542",
-            "fax": "+505 8456 7546",
-            "habilitada": True,
-            "predeterminada": False,
-            "status": "activo",
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    ENTIDAD3 = Transaccion(
-        registro="Entidad",
-        tipo="principal",
-        estatus_actual=None,
-        nuevo_estatus=None,
-        uuid=None,
-        accion="crear",
-        datos={
-            "entidad": "dulce",
-            "razon_social": "Mundo Sabor Sociedad Anonima",
-            "nombre_comercial": "Dulce Sabor",
-            "id_fiscal": "J0310000000002",
-            "moneda": "NIO",
-            "tipo_entidad": "Sociedad",
-            "correo_electronico": "info@chocoworld.com",
-            "web": "chocoworld.com",
-            "telefono1": "+505 8456 6543",
-            "telefono2": "+505 8456 7543",
-            "fax": "+505 8456 7545",
-            "habilitada": False,
-            "predeterminada": False,
-            "status": "inactivo",
-        },
-        datos_detalle=None,
-        relaciones=None,
-        relacion_id=None,
-    )
-    ENTIDAD.ejecutar_transaccion(ENTIDAD1)
-    ENTIDAD.ejecutar_transaccion(ENTIDAD2)
-    ENTIDAD.ejecutar_transaccion(ENTIDAD3)
-
-    from cacao_accounting.database import Serie, database
-
-    serie1 = Serie(
-        entidad="cacao",
-        documento="journal",
-        habilitada=True,
-        predeterminada=True,
-        serie="CD-CACAO",
-    )
-    serie2 = Serie(
-        entidad="cafe",
-        documento="journal",
-        habilitada=True,
-        predeterminada=True,
-        serie="CD-CAFE",
-    )
-    serie3 = Serie(
-        entidad="dulce",
-        documento="journal",
-        habilitada=True,
-        predeterminada=True,
-        serie="CD-DULCE",
-    )
-
-    database.session.add(serie1)
-    database.session.add(serie2)
-    database.session.add(serie3)
+        usuario = Usuario(
+            usuario=u.get("usuario"),
+            correo_e=u.get("correo_e"),
+            clave_acceso=u.get("clave_acceso"),
+            creado_por="system",
+        )
+        database.session.add(usuario)
     database.session.commit()
 
 
-def _demo_unidades():
+def demo_entidad():
+    """Entidad de demostración."""
+
+    for e in ENTIDADES:
+        database.session.add(e)
+    database.session.commit()
+
+
+def series_predeterminadas():
+    """Crear series predeterminadas."""
+    for s in SERIES:
+        database.session.add(s)
+    database.session.commit()
+
+
+def demo_unidades():
     """Unidades de Negocio de Demostración."""
-    from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
 
-    log.debug("Cargando unidades de negocio de prueba.")
-    UNIDAD = RegistroUnidad()
-
-    UNIDAD.ejecutar_transaccion(
-        Transaccion(
-            registro="Unidad",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "nombre": "Casa Matriz",
-                "entidad": "cacao",
-                "unidad": "matriz",
-                "status": "activo",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-
-    UNIDAD.ejecutar_transaccion(
-        Transaccion(
-            registro="Unidad",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "nombre": "Movil",
-                "entidad": "cacao",
-                "unidad": "movil",
-                "status": "activo",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-
-    UNIDAD.ejecutar_transaccion(
-        Transaccion(
-            registro="Unidad",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "nombre": "Masaya",
-                "entidad": "cacao",
-                "unidad": "masaya",
-                "status": "inactivo",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+    for u in UNIDADES:
+        database.session.add(u)
+    database.session.commit()
 
 
-def _catalogo():
+def cargar_catalogo_de_cuentas():
     from cacao_accounting.contabilidad.ctas import base, cargar_catalogos
-    from cacao_accounting.contabilidad.registros.cuenta import RegistroCuentaContable
 
     log.debug("Cargando catalogos de cuentas.")
     cargar_catalogos(base, "cacao")
     cargar_catalogos(base, "dulce")
     cargar_catalogos(base, "cafe")
-    CUENTA_CONTABLE = RegistroCuentaContable()
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6",
-                "nombre": "Cuenta Prueba Nivel 0",
-                "grupo": True,
-                "padre": None,
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1",
-                "nombre": "Cuenta Prueba Nivel 1",
-                "grupo": True,
-                "padre": "6",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1",
-                "nombre": "Cuenta Prueba Nivel 2",
-                "grupo": True,
-                "padre": "6.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 3",
-                "grupo": True,
-                "padre": "6.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 4",
-                "grupo": True,
-                "padre": "6.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 5",
-                "grupo": True,
-                "padre": "6.1.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 6",
-                "grupo": True,
-                "padre": "6.1.1.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 7",
-                "grupo": True,
-                "padre": "6.1.1.1.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 8",
-                "grupo": True,
-                "padre": "6.1.1.1.1.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CUENTA_CONTABLE.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "codigo": "6.1.1.1.1.1.1.1.1.1",
-                "nombre": "Cuenta Prueba Nivel 9",
-                "grupo": False,
-                "padre": "6.1.1.1.1.1.1.1.1",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+
+    for c in CUENTAS:
+        database.session.add(c)
+    database.session.commit()
 
 
-def _centros_de_costos():
-    from cacao_accounting.contabilidad.registros.ccosto import RegistroCentroCosto
-
-    CENTRO_DE_COSTO = RegistroCentroCosto()
-    log.debug("Cargando centros de costos.")
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": False,
-                "codigo": "A00000",
-                "nombre": "Centro Costos Predeterminado",
-                "status": "activo",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": True,
-                "codigo": "B00000",
-                "nombre": "Centro Costos Nivel 0",
-                "status": "activo",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": True,
-                "codigo": "B00001",
-                "nombre": "Centro Costos Nivel 1",
-                "status": "activo",
-                "padre": "B00000",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": True,
-                "codigo": "B00011",
-                "nombre": "Centro Costos Nivel 2",
-                "status": "activo",
-                "padre": "B00001",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": True,
-                "codigo": "B00111",
-                "nombre": "Centro Costos Nivel 3",
-                "status": "activo",
-                "padre": "B00011",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": True,
-                "codigo": "B01111",
-                "nombre": "Centro Costos Nivel 4",
-                "status": "activo",
-                "padre": "B00111",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cacao",
-                "grupo": False,
-                "codigo": "B11111",
-                "nombre": "Centro Costos Nivel 5",
-                "status": "activo",
-                "padre": "B01111",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "cafe",
-                "grupo": False,
-                "codigo": "A00000",
-                "nombre": "Centro Costos Predeterminado",
-                "status": "activa",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    CENTRO_DE_COSTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Centro de Costo",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "activa": True,
-                "predeterminado": True,
-                "habilitada": True,
-                "entidad": "dulce",
-                "grupo": False,
-                "codigo": "A00000",
-                "nombre": "Centro Costos Predeterminado",
-                "status": "activa",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+def cargar_centros_de_costos():
+    for cc in CENTROS_DE_COSTOS:
+        database.session.add(cc)
+    database.session.commit()
 
 
-def _proyectos():
-    from cacao_accounting.contabilidad.registros.proyecto import RegistroProyecto
+def cargar_proyectos():
 
-    PROYECTO = RegistroProyecto()
-    log.debug("Creando proyectos de pruebas.")
-    PROYECTO.ejecutar_transaccion(
-        Transaccion(
-            registro="Proyecto",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "habilitado": True,
-                "entidad": "cacao",
-                "codigo": "PTO001",
-                "nombre": "Proyecto Prueba",
-                "fechainicio": date(year=2020, month=6, day=5),
-                "fechafin": date(year=2020, month=9, day=5),
-                "presupuesto": 10000,
-                "status": "abierto",
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+    for p in PROYECTOS:
+        database.session.add(p)
+    database.session.commit()
 
 
-MONEDA01 = {
-    "codigo": "custom",
-    "nombre": "Dolar Paralelo",
-    "decimales": 4,
-    "activa": True,
-    "predeterminada": False,
-}
-
-
-def _monedas():
-    from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
-
-    MONEDA = RegistroMoneda()
-    log.debug("Creando monedas de prueba.")
-    MONEDA.ejecutar_transaccion(
-        Transaccion(
-            registro="Moneda",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "codigo": "custom",
-                "nombre": "Dolar Paralelo",
-                "decimales": 4,
-                "activa": True,
-                "predeterminada": False,
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-
-
-def _tasas_de_cambio():
-    from cacao_accounting.contabilidad.registros.tasa_cambio import RegistroTasaCambio
-
-    TASA_CAMBIO = RegistroTasaCambio()
-    log.debug("Creando tasas de cambio de pruebas.")
-    TASA_CAMBIO.ejecutar_transaccion(
-        Transaccion(
-            registro="Tasa de Cambio",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "base": "NIO",
-                "destino": "USD",
-                "tasa": 34.5984,
-                "fecha": date(year=2021, month=6, day=30),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+def tasas_de_cambio():
+    for t in TASAS_DE_CAMBIO:
+        database.session.add(t)
+    database.session.commit()
 
 
 def master_data():
     """Carga datos maestros de desarrollo a la base de datos."""
+
     log.debug("Iniciando carga de master data de pruebas.")
-    _demo_usuarios()
-    _demo_entidad()
-    _demo_unidades()
-    _centros_de_costos()
-    _proyectos()
-    _monedas()
-    _tasas_de_cambio()
-    _catalogo()
+
+    demo_usuarios()
+    asignar_usuario_a_roles()
+    demo_entidad()
+    demo_unidades()
+    cargar_centros_de_costos()
+    cargar_proyectos()
+    tasas_de_cambio()
+    cargar_catalogo_de_cuentas()
+
     log.debug("Master data de prueba creada correctamente.")
 
 
-def _periodo_contable():
+def periodo_contable():
     """Crea periodos contables para desarrollo."""
-    from cacao_accounting.contabilidad.registros.periodo import RegistroPeriodoContable
 
-    PERIODO = RegistroPeriodoContable()
-    log.debug("Creando periodos contables de prueba.")
-    PERIODO.ejecutar_transaccion(
-        Transaccion(
-            registro="Periodo Contable",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "entidad": "cacao",
-                "nombre": "2019",
-                "status": "cerrado",
-                "habilitada": False,
-                "inicio": date(year=2019, month=1, day=1),
-                "fin": date(year=2019, month=12, day=31),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-
-    PERIODO.ejecutar_transaccion(
-        Transaccion(
-            registro="Periodo Contable",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "entidad": "cacao",
-                "nombre": "2020",
-                "status": "actual",
-                "habilitada": False,
-                "inicio": date(year=2020, month=1, day=1),
-                "fin": date(year=2020, month=12, day=31),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
-    PERIODO.ejecutar_transaccion(
-        Transaccion(
-            registro="Periodo Contable",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={
-                "entidad": "cacao",
-                "nombre": "2021",
-                "status": "abierto",
-                "habilitada": False,
-                "inicio": date(year=2021, month=1, day=1),
-                "fin": date(year=2021, month=12, day=31),
-            },
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+    for p in PERIODOS:
+        database.session.add(p)
+    database.session.commit()
 
 
 def transacciones():
     """Crea transacciones de desarrollo en la base de datos."""
-    _periodo_contable()
+    periodo_contable()
     log.debug("Transacciones de Pruebas Creadas correstamente.")
 
 

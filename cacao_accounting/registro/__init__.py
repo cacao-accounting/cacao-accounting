@@ -32,7 +32,7 @@ from cacao_accounting.database.docs_mapping import mapping_documentos_a_tablas
 DOC_MAPPING = mapping_documentos_a_tablas()
 
 
-class Registro:
+class draftRegistro:
     """Definición de un registro en el sistema."""
 
     def __init__(self, tipo=None, nuevo=False, id=None, serie=None, data=None, detalle=None):

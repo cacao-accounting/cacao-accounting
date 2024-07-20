@@ -14,6 +14,17 @@
 
 """Datos básicos para iniciar el sistema."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.logs import log
@@ -23,33 +34,26 @@ from cacao_accounting.modulos import init_modulos
 def registra_monedas(carga_rapida=False):
     """Carga de monedas al sistema."""
     from teritorio import Currencies
+    from cacao_accounting.database import database, Moneda
 
-    from cacao_accounting.contabilidad.registros.moneda import RegistroMoneda
+    log.trace("Iniciando carga de base monedas a la base de datos.")
 
-    log.debug("Iniciando carga de base monedas a la base de datos.")
-    MONEDA = RegistroMoneda()
     if carga_rapida:
         MONEDAS = (
-            {"codigo": "NIO", "nombre": "Cordobas Oro", "decimales": 2},
-            {
-                "codigo": "USD",
-                "nombre": "Dolares de los Estados Unidos",
-                "decimales": 2,
-            },
+            Moneda(codigo="NIO", nombre="Cordobas", decimales=2),
+            Moneda(
+                codigo="USD",
+                nombre="Dolares",
+                decimales=2,
+            ),
         )
         for m in MONEDAS:
-            MONEDA.nuevo = True
-            MONEDA.data = m
-            MONEDA.crear_nuevo_registro()
+            database.session.add(m)
+            database.session.commit()
     else:
         for currency in Currencies():
-            MONEDA.nuevo = True
-            MONEDA.data = {
-                "codigo": currency.code,
-                "nombre": currency.name,
-                "decimales": currency.minor_units,
-            }
-            MONEDA.crear_nuevo_registro()
+            database.session.add(Moneda(codigo=currency.code, nombre=currency.name, decimales=currency.minor_units))
+            database.session.commit()
     log.debug("Monedas cargadas Correctamente")
 
 
@@ -73,6 +77,7 @@ def crea_usuario_admin(user: str, passwd: str):
         database.session.add(usuario)
         database.session.commit()
         asigna_rol_a_usuario(usuario=user, rol="admin")
+        log.trace("Usuario administrador creado correctamente.")
 
 
 def base_data(user, passwd, carga_rapida=False):

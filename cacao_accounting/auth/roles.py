@@ -27,14 +27,13 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
-from cacao_accounting.registro import Registro
 
 
-class RegistroRol(Registro, tipo="rol"):
+class RegistroRol:
     """Adminisración de Roles de Usuario."""
 
 
-class RegistroRolUsuario(Registro, tipo="rol_usuario"):
+class RegistroRolUsuario:
     """Administración de roles de usuario."""
 
 
@@ -154,24 +153,29 @@ ROLES_PREDETERMINADOS = [
 
 def crea_roles_predeterminados() -> None:
     """Carga roles predeterminados a la base de datos."""
-    log.debug("Iniciando creacion de Roles predeterminados.")
+    log.debug("Creando Roles Predeterminados.")
+    from cacao_accounting.database import database, Roles
+
     for r in ROLES_PREDETERMINADOS:
-        REGISTRO = RegistroRol()
-        REGISTRO.nuevo = True
-        REGISTRO.data = r
-        REGISTRO.crear_nuevo_registro()
+        rol = Roles(name=r.get("name"), detalle=r.get("detalle"))
+        database.session.add(rol)
+    database.session.commit()
 
 
 def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     """Asigna un rol determinado al usuario establecido."""
-    from cacao_accounting.database import Roles, Usuario
+    from cacao_accounting.database import database, Roles, RolesUsuario, Usuario
 
-    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
-    ROL = Roles.query.filter_by(name=rol).first()
-    ROL_USUARIO = RegistroRolUsuario()
-    ROL_USUARIO.nuevo = True
-    ROL_USUARIO.data = ({"user_id": USUARIO.id, "role_id": ROL.id},)
-    ROL_USUARIO.crear_nuevo_registro()
+    USUARIO = database.session.execute(database.select(Usuario).filter_by(usuario=usuario)).first()
+    ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).first()
+
+    log.trace(USUARIO[0].usuario)
+    log.trace(ROL[0].id)
+
+    rol = RolesUsuario(user_id=USUARIO[0].usuario, role_id=ROL[0].id)
+
+    database.session.add(rol)
+    database.session.commit()
 
 
 def obtener_roles_por_usuario(usuario: str):

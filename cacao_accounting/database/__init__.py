@@ -342,10 +342,7 @@ class Direcciones(BaseDireccion):
 class Cuentas(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
-    __table_args__ = (
-        database.UniqueConstraint("codigo"),
-        database.UniqueConstraint("entidad", "codigo", name="cta_unica"),
-    )
+    __table_args__ = (database.UniqueConstraint("entidad", "codigo", name="cta_unica"),)
     activa = database.Column(database.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     habilitada = database.Column(database.Boolean(), index=True)
@@ -408,7 +405,7 @@ class Proyecto(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     codigo = database.Column(database.String(50), unique=True, index=True)
-    nombre = database.Column(database.String(100), unique=True)
+    nombre = database.Column(database.String(100))
     fechainicio = database.Column(database.Date())
     fechafin = database.Column(database.Date())
     presupuesto = database.Column(database.Float())
