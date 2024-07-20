@@ -40,10 +40,7 @@ app = create_app(configuracion)
 
 def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
-    from cacao_accounting.database.helpers import (
-        inicia_base_de_datos,
-        verifica_coneccion_db,
-    )
+    from cacao_accounting.database.helpers import inicia_base_de_datos, verifica_coneccion_db
 
     log.info("Iniciando Cacao Accounting.")
     if verifica_coneccion_db(app):

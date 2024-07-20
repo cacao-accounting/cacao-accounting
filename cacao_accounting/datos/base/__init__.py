@@ -34,7 +34,8 @@ from cacao_accounting.modulos import init_modulos
 def registra_monedas(carga_rapida=False):
     """Carga de monedas al sistema."""
     from teritorio import Currencies
-    from cacao_accounting.database import database, Moneda
+
+    from cacao_accounting.database import Moneda, database
 
     log.trace("Iniciando carga de base monedas a la base de datos.")
 

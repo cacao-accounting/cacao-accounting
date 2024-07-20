@@ -19,28 +19,27 @@
 # ---------------------------------------------------------------------------------------
 from datetime import date
 
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+from cacao_accounting.auth.roles import asigna_rol_a_usuario
+from cacao_accounting.database import database
+from cacao_accounting.datos.dev.data import (
+    BASE_USUARIOS,
+    CENTROS_DE_COSTOS,
+    CUENTAS,
+    ENTIDADES,
+    PERIODOS,
+    PROYECTOS,
+    SERIES,
+    TASAS_DE_CAMBIO,
+    UNIDADES,
+    USUARIO_ROLES,
+)
+from cacao_accounting.logs import log
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------------------
-# Recursos locales
-from cacao_accounting.auth.roles import asigna_rol_a_usuario
-from cacao_accounting.logs import log
-from cacao_accounting.database import database
-from cacao_accounting.datos.dev.data import (
-    BASE_USUARIOS,
-    ENTIDADES,
-    USUARIO_ROLES,
-    UNIDADES,
-    SERIES,
-    CUENTAS,
-    CENTROS_DE_COSTOS,
-    PROYECTOS,
-    TASAS_DE_CAMBIO,
-    PERIODOS,
-)
 
 
 def asignar_usuario_a_roles():

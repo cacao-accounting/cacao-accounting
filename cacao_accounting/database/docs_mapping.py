@@ -20,10 +20,6 @@
 from collections import namedtuple
 
 # ---------------------------------------------------------------------------------------
-# Librerias de terceros
-# ---------------------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import (
@@ -31,12 +27,16 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     Cuentas,
-    Serie,
     Roles,
     RolesPermisos,
     RolesUsuario,
+    Serie,
     Usuario,
 )
+
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
 
 
 # Named Tuple para almacer mapping de un registro a sus tablas relacionadas.

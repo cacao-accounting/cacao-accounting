@@ -27,7 +27,7 @@ from datetime import date
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import proteger_passwd as _pg
-from cacao_accounting.database import Entidad, Unidad, Serie, Proyecto, Cuentas, CentroCosto, TasaDeCambio, PeriodoContable
+from cacao_accounting.database import CentroCosto, Cuentas, Entidad, PeriodoContable, Proyecto, Serie, TasaDeCambio, Unidad
 
 BASE_USUARIOS = [
     {
