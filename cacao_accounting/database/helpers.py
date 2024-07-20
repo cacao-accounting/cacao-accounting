@@ -107,6 +107,7 @@ def inicia_base_de_datos(app, user, passwd):
 
 
 def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None):
+    """Devuelve un registro a partir del id."""
     from cacao_accounting.transaccion import Transaccion
 
     """Inicia un registro a partir de su UUID en la tabla correspondiente."""
