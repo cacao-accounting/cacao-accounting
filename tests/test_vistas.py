@@ -4,34 +4,12 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
+from z_app import app
 from z_static_routes import static_rutes
 
 
-@pytest.fixture
-def accounting_app():
-    from cacao_accounting import create_app
-    from cacao_accounting.config import configuracion
-
-    app = create_app(configuracion)
-
-    app.config.update(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "DEBUG": True,
-            "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-            "SQLALCHEMY_ECHO": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
-        }
-    )
-
-    yield app
-
-
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
-def test_visit_views(accounting_app, request):
+def test_visit_views(request):
     from cacao_accounting.logs import log
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
@@ -39,13 +17,13 @@ def test_visit_views(accounting_app, request):
         from cacao_accounting.database import database
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        with accounting_app.app_context():
+        with app.app_context():
             from flask_login import current_user
 
             database.drop_all()
-            inicia_base_de_datos(app=accounting_app, user="cacao", passwd="cacao", with_examples=True)
+            inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
 
-            with accounting_app.test_client() as client:
+            with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})

@@ -1,29 +1,9 @@
 import pytest
-import os
+import os, sys
 
-from cacao_accounting import create_app
-from cacao_accounting.config import configuracion
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-app = create_app(configuracion)
-
-app.config.update(
-    {
-        "TESTING": True,
-        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "WTF_CSRF_ENABLED": False,
-        "DEBUG": True,
-        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_ECHO": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite://",
-    }
-)
-
-
-@pytest.fixture
-def accounting_app():
-
-    yield app
+from z_app import app
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -39,14 +19,14 @@ def setupdb(request):
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
-def test_set_entity_inactive(accounting_app, request):
+def test_set_entity_inactive(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        with accounting_app.app_context():
+        with app.app_context():
             from flask_login import current_user
 
-            with accounting_app.test_client() as client:
+            with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -60,7 +40,7 @@ def test_set_entity_active(accounting_app, request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        with accounting_app.app_context():
+        with app.app_context():
             from flask_login import current_user
 
             with accounting_app.test_client() as client:
@@ -73,14 +53,14 @@ def test_set_entity_active(accounting_app, request):
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
-def test_default_entity(accounting_app, request):
+def test_default_entity(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        with accounting_app.app_context():
+        with app.app_context():
             from flask_login import current_user
 
-            with accounting_app.test_client() as client:
+            with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -90,14 +70,14 @@ def test_default_entity(accounting_app, request):
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
-def test_delete_entity(accounting_app, request):
+def test_delete_entity(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        with accounting_app.app_context():
+        with app.app_context():
             from flask_login import current_user
 
-            with accounting_app.test_client() as client:
+            with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
