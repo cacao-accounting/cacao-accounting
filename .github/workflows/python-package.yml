@@ -36,5 +36,5 @@ jobs:
         run: |
           pip install coveralls
           CACAO_TEST=True coverage run --source=cacao_accounting -m pytest -v --exitfirst --slow=True
-          coverage report -m
-          coveralls
+          # coverage report -m
+          # coveralls
