@@ -30,7 +30,6 @@ from sqlalchemy.exc import OperationalError
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import DBVERSION, Metadata, database
-from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
@@ -111,8 +110,8 @@ def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     if modulo:
         from cacao_accounting.database import Modulos, database
 
-        MODULO = Modulos.query.filter_by(modulo=modulo).first()
-        return MODULO.id
+        MODULO = database.session.execute(database.select(Modulos).filter_by(modulo=modulo)).first()
+        return MODULO[0].id
     else:
         return None
 

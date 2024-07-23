@@ -40,9 +40,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
 )
 from cacao_accounting.database import STATUS, database
-from cacao_accounting.datos.dev import data
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
-from cacao_accounting.logs import log
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
