@@ -61,7 +61,7 @@ def demo_usuarios():
             creado_por="system",
         )
         database.session.add(usuario)
-    database.session.commit()
+        database.session.commit()
 
 
 def demo_entidad():
@@ -69,14 +69,14 @@ def demo_entidad():
 
     for e in ENTIDADES:
         database.session.add(e)
-    database.session.commit()
+        database.session.commit()
 
 
 def series_predeterminadas():
     """Crear series predeterminadas."""
     for s in SERIES:
         database.session.add(s)
-    database.session.commit()
+        database.session.commit()
 
 
 def demo_unidades():
@@ -84,7 +84,7 @@ def demo_unidades():
 
     for u in UNIDADES:
         database.session.add(u)
-    database.session.commit()
+        database.session.commit()
 
 
 def cargar_catalogo_de_cuentas():
@@ -98,14 +98,14 @@ def cargar_catalogo_de_cuentas():
 
     for c in CUENTAS:
         database.session.add(c)
-    database.session.commit()
+        database.session.commit()
 
 
 def cargar_centros_de_costos():
     """Centros de Costos de demostración."""
     for cc in CENTROS_DE_COSTOS:
         database.session.add(cc)
-    database.session.commit()
+        database.session.commit()
 
 
 def cargar_proyectos():
@@ -113,14 +113,14 @@ def cargar_proyectos():
 
     for p in PROYECTOS:
         database.session.add(p)
-    database.session.commit()
+        database.session.commit()
 
 
 def tasas_de_cambio():
     """Tasa de Cambio de demostración."""
     for t in TASAS_DE_CAMBIO:
         database.session.add(t)
-    database.session.commit()
+        database.session.commit()
 
 
 def master_data():
@@ -145,7 +145,7 @@ def periodo_contable():
 
     for p in PERIODOS:
         database.session.add(p)
-    database.session.commit()
+        database.session.commit()
 
 
 def transacciones():
