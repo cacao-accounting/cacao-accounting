@@ -31,7 +31,7 @@ from cacao_accounting.logs import log
 from cacao_accounting.modulos import init_modulos
 
 
-def registra_monedas(carga_rapida=False):
+def registra_monedas(carga_rapida):
     """Carga de monedas al sistema."""
     from teritorio import Currencies
 
@@ -81,7 +81,7 @@ def crea_usuario_admin(user: str, passwd: str):
         log.trace("Usuario administrador creado correctamente.")
 
 
-def base_data(user, passwd, carga_rapida=False):
+def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()

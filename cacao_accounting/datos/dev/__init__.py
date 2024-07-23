@@ -151,7 +151,7 @@ def periodo_contable():
 def transacciones():
     """Crea transacciones de desarrollo en la base de datos."""
     periodo_contable()
-    log.debug("Transacciones de Pruebas Creadas correstamente.")
+    log.debug("Transacciones de Pruebas Creadas correctamente.")
 
 
 def dev_data():

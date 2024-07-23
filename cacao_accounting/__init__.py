@@ -165,7 +165,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         user = environ.get("CACAO_USER") or "cacao"
         passwd = environ.get("CACAO_PWD") or "cacao"
 
-        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
@@ -196,7 +196,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
             database.drop_all()
             user = environ.get("CACAO_USER") or "cacao"
             passwd = environ.get("CACAO_PWD") or "cacao"
-            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.before_request
     def before_request():  # pragma: no cover

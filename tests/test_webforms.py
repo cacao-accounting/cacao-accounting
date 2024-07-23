@@ -46,7 +46,7 @@ def test_fill_all_forms(accounting_app, request):
             from flask_login import current_user
 
             database.drop_all()
-            inicia_base_de_datos(app=accounting_app, user="cacao", passwd="cacao")
+            inicia_base_de_datos(app=accounting_app, user="cacao", passwd="cacao", with_examples=True)
 
             with accounting_app.test_client() as client:
                 # Keep the session alive until the with clausule closes

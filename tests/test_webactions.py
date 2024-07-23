@@ -4,24 +4,24 @@ import os
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 
+app = create_app(configuracion)
+
+app.config.update(
+    {
+        "TESTING": True,
+        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "DEBUG": True,
+        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+        "SQLALCHEMY_ECHO": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+    }
+)
+
 
 @pytest.fixture
 def accounting_app():
-
-    app = create_app(configuracion)
-
-    app.config.update(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "DEBUG": True,
-            "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-            "SQLALCHEMY_ECHO": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
-        }
-    )
 
     yield app
 
@@ -30,27 +30,12 @@ def accounting_app():
 def setupdb(request):
     if request.config.getoption("--slow") == "True":
 
-        app = create_app(configuracion)
-
-        app.config.update(
-            {
-                "TESTING": True,
-                "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-                "WTF_CSRF_ENABLED": False,
-                "DEBUG": True,
-                "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-                "SQLALCHEMY_ECHO": True,
-                "SQLALCHEMY_DATABASE_URI": "sqlite://",
-            }
-        )
-
         with app.app_context():
             from cacao_accounting.database import database
             from cacao_accounting.database.helpers import inicia_base_de_datos
 
             database.drop_all()
-            inicia_base_de_datos(app=app, user="cacao", passwd="cacao")
+            inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
