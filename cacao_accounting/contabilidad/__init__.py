@@ -39,9 +39,10 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
     obtener_lista_monedas,
 )
-from cacao_accounting.database import STATUS
-from cacao_accounting.database.helpers import obtener_registro_desde_uuid
+from cacao_accounting.database import STATUS, database
+from cacao_accounting.datos.dev import data
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.logs import log
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
@@ -56,7 +57,7 @@ APPNAME = "Cacao Accounting"
 @verifica_acceso("accounting")
 def monedas():
     """Listado de monedas registradas en el sistema."""
-    from cacao_accounting.database import Moneda, database
+    from cacao_accounting.database import Moneda
 
     CONSULTA = database.paginate(
         database.select(Moneda),
@@ -98,7 +99,7 @@ def conta():
 @verifica_acceso("accounting")
 def entidades():
     """Listado de entidades."""
-    from cacao_accounting.database import Entidad, database
+    from cacao_accounting.database import Entidad
 
     CONSULTA = database.paginate(
         database.select(Entidad),  # noqa: E712
@@ -123,10 +124,11 @@ def entidad(entidad_id):
     """Entidad individual."""
     from cacao_accounting.database import Entidad
 
-    registro = Entidad.query.filter_by(entidad=entidad_id).first()
+    registro = database.session.execute(database.select(Entidad).filter_by(entidad=entidad_id)).first()
+
     return render_template(
         "contabilidad/entidad.html",
-        registro=registro,
+        registro=registro[0],
     )
 
 
@@ -137,55 +139,33 @@ def entidad(entidad_id):
 def nueva_entidad():
     """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
+    from cacao_accounting.database import Entidad
 
     formulario = FormularioEntidad()
     formulario.moneda.choices = obtener_lista_monedas()
 
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
-        from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
-        from cacao_accounting.contabilidad.registros.serie import RegistroSerie
 
-        ENTIDAD = RegistroEntidad()
-        DATA = {
-            "entidad": request.form.get("id", None),
-            "razon_social": request.form.get("razon_social", None),
-            "nombre_comercial": request.form.get("nombre_comercial", None),
-            "id_fiscal": request.form.get("id_fiscal", None),
-            "moneda": request.form.get("moneda", None),
-            "tipo_entidad": request.form.get("tipo_entidad", None),
-            "correo_electronico": request.form.get("correo_electronico", None),
-            "web": request.form.get("web", None),
-            "telefono1": request.form.get("telefono1", None),
-            "telefono2": request.form.get("telefono2", None),
-            "fax": request.form.get("fax", None),
-            "status": "activo",
-            "habilitada": True,
-            "predeterminada": False,
-        }
-
-        ENTIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_ENTIDAD)
-
-        SERIE = RegistroSerie()
-        TRANSACCION_NUEVA_SERIE = Transaccion(
-            tipo="principal",
-            accion="crear",
-            datos={
-                "entidad": request.form.get("id", None),
-                "documento": "journal",
-                "habilitada": True,
-                "predeterminada": True,
-                "serie": str("CDD-" + request.form.get("id", None)).upper(),
-            },
-            registro="Serie",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            relaciones=None,
-            relacion_id=None,
-            datos_detalle=None,
+        ENTIDAD = Entidad(
+            entidad=request.form.get("id", None),
+            razon_social=request.form.get("razon_social", None),
+            nombre_comercial=request.form.get("nombre_comercial", None),
+            id_fiscal=request.form.get("id_fiscal", None),
+            moneda=request.form.get("moneda", None),
+            tipo_entidad=request.form.get("tipo_entidad", None),
+            correo_electronico=request.form.get("correo_electronico", None),
+            web=request.form.get("web", None),
+            telefono1=request.form.get("telefono1", None),
+            telefono2=request.form.get("telefono2", None),
+            fax=request.form.get("fax", None),
+            status="activo",
+            habilitada=True,
+            predeterminada=False,
         )
-        SERIE.ejecutar_transaccion(TRANSACCION_NUEVA_SERIE)
+
+        database.session.add(ENTIDAD)
+        database.session.commit()
 
         return LISTA_ENTIDADES
 
@@ -203,9 +183,10 @@ def nueva_entidad():
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import Entidad, database
+    from cacao_accounting.database import Entidad
 
-    ENTIDAD = Entidad.query.filter_by(entidad=id_entidad).first()
+    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(entidad=id_entidad)).first()
+    ENTIDAD = ENTIDAD[0]
 
     if request.method == "POST":
         ENTIDAD.id_fiscal = request.form.get("id_fiscal", None)
@@ -242,14 +223,12 @@ def editar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
     """Elimina una entidad de sistema."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "eliminar"
-    TRANSACCION.tipo = "principal"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    database.session.delete(ENTIDAD[0])
+    database.session.commit()
+
     return LISTA_ENTIDADES
 
 
@@ -259,15 +238,12 @@ def eliminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def inactivar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "actualizar"
-    TRANSACCION.tipo = "principal"
-    TRANSACCION.nuevo_estatus = "inactivo"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD[0].habilitada = False
+    database.session.commit()
+
     return LISTA_ENTIDADES
 
 
@@ -277,15 +253,12 @@ def inactivar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def activar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "actualizar"
-    TRANSACCION.tipo = "principal"
-    TRANSACCION.nuevo_estatus = "activo"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD[0].habilitada = True
+    database.session.commit()
+
     return LISTA_ENTIDADES
 
 
@@ -295,15 +268,19 @@ def activar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
-    from cacao_accounting.contabilidad.registros.entidad import RegistroEntidad
     from cacao_accounting.database import Entidad
 
-    REGISTRO = RegistroEntidad()
-    TRANSACCION = obtener_registro_desde_uuid(tabla=Entidad, uuid=id_entidad)
-    TRANSACCION.accion = "actualizar"
-    TRANSACCION.tipo = "principal"
-    TRANSACCION.nuevo_estatus = "predeterminado"
-    REGISTRO.ejecutar_transaccion(TRANSACCION)
+    # Establece cualquier entidad establecida como predeterminada a falso
+    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entidad).filter_by(predeterminada=True)).all()
+
+    if ENTIDAD_PREDETERMINADA:
+        for e in ENTIDAD_PREDETERMINADA:
+            e[0].predeterminada = False
+
+    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD[0].predeterminada = True
+    database.session.commit()
+
     return LISTA_ENTIDADES
 
 
@@ -341,8 +318,8 @@ def unidad(id_unidad):
     """Unidad de negocios."""
     from cacao_accounting.database import Unidad
 
-    registro = Unidad.query.filter_by(unidad=id_unidad).first()
-    return render_template("contabilidad/unidad.html", registro=registro)
+    REGISTRO = database.session.execute(database.select(Unidad).filter_by(unidad=id_unidad)).first()
+    return render_template("contabilidad/unidad.html", registro=REGISTRO[0])
 
 
 @contabilidad.route("/accounts/unit/delete/<id_unidad>")
@@ -365,28 +342,17 @@ def nueva_unidad():
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     TITULO = "Crear Nueva Unidad de Negocios - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
-        from cacao_accounting.contabilidad.registros.unidad import RegistroUnidad
+        from cacao_accounting.database import Unidad
 
-        UNIDAD = RegistroUnidad()
-        DATA = {
-            "unidad": request.form.get("id", None),
-            "nombre": request.form.get("nombre", None),
-            "entidad": request.form.get("entidad", None),
-            "status": "activo",
-        }
-        TRANSACCION_NUEVA_UNIDAD = Transaccion(
-            tipo="principal",
-            accion="crear",
-            datos=DATA,
-            registro="Unidad",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            relaciones=None,
-            relacion_id=None,
-            datos_detalle=None,
+        DATA = Unidad(
+            unidad=request.form.get("id", None),
+            nombre=request.form.get("nombre", None),
+            entidad=request.form.get("entidad", None),
+            status="activo",
         )
-        UNIDAD.ejecutar_transaccion(TRANSACCION_NUEVA_UNIDAD)
+        database.session.add(DATA)
+        database.session.commit()
+
         return redirect("/accounts/unit/list")
     return render_template(
         "contabilidad/unidad_crear.html",
@@ -425,10 +391,11 @@ def cuenta(id_cta):
     """Cuenta Contable."""
     from cacao_accounting.database import Cuentas
 
-    registro = Cuentas.query.filter_by(codigo=id_cta).first()
+    registro = database.session.execute(database.select(Cuentas).filter_by(codigo=id_cta)).first()
+
     return render_template(
         "contabilidad/cuenta.html",
-        registro=registro,
+        registro=registro[0],
         statusweb=STATUS,
     )
 
@@ -461,10 +428,11 @@ def centro_costo(id_cc):
     """Centro de Costos."""
     from cacao_accounting.database import CentroCosto
 
-    registro = CentroCosto.query.filter_by(codigo=id_cc).first()
+    registro = database.session.execute(database.select(CentroCosto).filter_by(codigo=id_cc)).first()
+
     return render_template(
         "contabilidad/centro-costo.html",
-        registro=registro,
+        registro=registro[0],
         statusweb=STATUS,
     )
 
@@ -487,6 +455,7 @@ def proyectos():
     )
 
     TITULO = "Listados de Proyectos - " + APPNAME
+
     return render_template(
         "contabilidad/proyecto_lista.html",
         titulo=TITULO,
@@ -512,6 +481,7 @@ def tasa_cambio():
         count=True,
     )
     TITULO = "Listado de Tasas de Cambio - " + APPNAME
+
     return render_template(
         "contabilidad/tc_lista.html",
         titulo=TITULO,
@@ -537,6 +507,7 @@ def periodo_contable():
     )
 
     TITULO = "Listado de Períodos Contables - " + APPNAME
+
     return render_template(
         "contabilidad/periodo_lista.html",
         titulo=TITULO,
@@ -618,14 +589,12 @@ def nueva_serie():
     """Nueva Serie."""
 
     from cacao_accounting.contabilidad.forms import FormularioSerie
-    from cacao_accounting.contabilidad.registros.serie import RegistroSerie
-    from cacao_accounting.database import Entidad, database
+    from cacao_accounting.database import Entidad, Serie, database
 
     form = FormularioSerie()
 
     CONSULTA_ENTIDADES = database.session.execute(database.select(Entidad)).all()
     LISTA_DE_ENTIDADES = []
-    SERIE = RegistroSerie()
 
     for e in CONSULTA_ENTIDADES:
         LISTA_DE_ENTIDADES.append((e[0].entidad, e[0].nombre_comercial))
@@ -633,17 +602,17 @@ def nueva_serie():
     form.entidad.choices = LISTA_DE_ENTIDADES
 
     if form.validate_on_submit() or request.method == "POST":
-        DATA = {
-            "entidad": form.entidad.data,
-            "documento": form.documento.data,
-            "serie": form.serie.data,
-            "habilitada": True,
-            "predeterminada": False,
-        }
 
-        SERIE.nuevo = True
-        SERIE.data = DATA
-        SERIE.crear_nuevo_registro()
+        SERIE = Serie(
+            entidad=form.entidad.data,
+            documento=form.documento.data,
+            serie=form.serie.data,
+            habilitada=True,
+            predeterminada=False,
+        )
+
+        database.session.add(SERIE)
+        database.session.commit()
 
         return redirect(url_for("contabilidad.series"))
 

@@ -106,34 +106,10 @@ def inicia_base_de_datos(app, user, passwd):
     return DB_ESQUEMA
 
 
-def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None):
-    """Devuelve un registro a partir del id."""
-    from cacao_accounting.transaccion import Transaccion
-
-    """Inicia un registro a partir de su UUID en la tabla correspondiente."""
-    if tabla:
-        REGISTRO = tabla.query.filter_by(id=uuid).first()
-        TRANSACCION = Transaccion(
-            registro="Entidad",
-            tipo="principal",
-            accion="consultar",
-            estatus_actual=REGISTRO.status,
-            nuevo_estatus=None,
-            uuid=REGISTRO.id,
-            relaciones=None,
-            relacion_id=None,
-            datos=REGISTRO,
-            datos_detalle=None,
-        )
-        return TRANSACCION
-    else:
-        raise OperationalError(ERROR4)
-
-
 def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
-        from cacao_accounting.database import Modulos
+        from cacao_accounting.database import Modulos, database
 
         MODULO = Modulos.query.filter_by(modulo=modulo).first()
         return MODULO.id
