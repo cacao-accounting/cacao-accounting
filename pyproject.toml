@@ -1,5 +1,5 @@
 [project]
-name = "staging-cacao-accounting"
+name = "cacao-accounting"
 description = "Accounting solution for the management of Accounts Payable, Accounts Receivable, Inventory, Treasury and General Accounting."
 readme = "README.md"
 requires-python = ">=3.8"
