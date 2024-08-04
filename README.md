@@ -6,8 +6,8 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cacao-accounting_cacao-accounting&metric=alert_status)](https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting)
 [![Coverage Status](https://coveralls.io/repos/github/cacao-accounting/cacao-accounting/badge.svg?branch=main)](https://coveralls.io/github/cacao-accounting/cacao-accounting?branch=main)
 ![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/staging-cacao-accounting?logo=Python&color=gree&link=https%3A%2F%2Fpypi.org%2Fproject%2Fstaging-cacao-accounting%2F)
-![PyPI - Wheel](https://img.shields.io/pypi/wheel/staging-cacao-accounting?logo=Python)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=Python&color=gree&link=https%3A%2F%2Fpypi.org%2Fproject%2Fstaging-cacao-accounting%2F)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=Python)
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 [![Gitter](https://badges.gitter.im/cacao-accounting/community.svg)](https://gitter.im/cacao-accounting/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
