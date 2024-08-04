@@ -82,24 +82,22 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
 
 def inicia_base_de_datos(app, user, passwd, with_examples):
     """Inicia esquema de base datos."""
-    from flask import current_app
 
     from cacao_accounting.datos import base_data, dev_data
 
-    with current_app.app_context():
-        log.info("Intentando inicializar base de datos.")
-        try:
-            database.create_all()
-            if with_examples:
-                base_data(user, passwd, carga_rapida=False)
-                dev_data()
-            else:
-                base_data(user, passwd, carga_rapida=True)
-            db_metadata(app=app)
-            DB_ESQUEMA = True
-        except OperationalError:
-            log.error("No se pudo iniciliazar esquema de base de datos.")
-            DB_ESQUEMA = False
+    log.info("Intentando inicializar base de datos.")
+    try:
+        database.create_all()
+        if with_examples:
+            base_data(user, passwd, carga_rapida=False)
+            dev_data()
+        else:
+            base_data(user, passwd, carga_rapida=True)
+        db_metadata(app=app)
+        DB_ESQUEMA = True
+    except OperationalError:
+        log.error("No se pudo iniciliazar esquema de base de datos.")
+        DB_ESQUEMA = False
     return DB_ESQUEMA
 
 

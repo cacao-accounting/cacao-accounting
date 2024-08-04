@@ -10,4 +10,5 @@ echo
 echo Testing code with pytest
 echo
 echo
+rm *.db
 CACAO_TEST=True python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting

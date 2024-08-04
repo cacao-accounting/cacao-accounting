@@ -1,9 +1,30 @@
 import pytest
 import os, sys
 
+from cacao_accounting.datos.dev import data
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-from z_app import app
+from cacao_accounting import create_app
+from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
+
+if os.name == "nt":
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_acciones.db"
+else:
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_acciones.db"
+
+
+app = create_app(
+    {
+        "TESTING": True,
+        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "DEBUG": True,
+        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+        "SQLALCHEMY_DATABASE_URI": SQLITE,
+    }
+)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -36,14 +57,14 @@ def test_set_entity_inactive(request):
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
-def test_set_entity_active(accounting_app, request):
+def test_set_entity_active(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
         with app.app_context():
             from flask_login import current_user
 
-            with accounting_app.test_client() as client:
+            with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})

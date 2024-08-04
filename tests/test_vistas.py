@@ -4,8 +4,29 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-from z_app import app
 from z_static_routes import static_rutes
+
+from cacao_accounting import create_app
+from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
+
+
+if os.name == "nt":
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_forms.db"
+else:
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_forms.db"
+
+
+app = create_app(
+    {
+        "TESTING": True,
+        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "DEBUG": True,
+        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+        "SQLALCHEMY_DATABASE_URI": SQLITE,
+    }
+)
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
