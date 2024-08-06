@@ -27,28 +27,14 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
-from cacao_accounting.registro import Registro
-from cacao_accounting.transaccion import Transaccion
 
 
-class RegistroRol(Registro):
+class RegistroRol:
     """Adminisración de Roles de Usuario."""
 
-    def __init__(self):
-        """Adminisración de Roles de Usuario."""
-        from cacao_accounting.database import Roles
 
-        self.tabla = Roles
-
-
-class RegistroRolUsuario(Registro):
+class RegistroRolUsuario:
     """Administración de roles de usuario."""
-
-    def __init__(self) -> None:
-        """Administración de roles de usuario."""
-        from cacao_accounting.database import RolesUsuario
-
-        self.tabla = RolesUsuario  # type: ignore[assignment]
 
 
 ADMINISTRADOR = {
@@ -167,55 +153,37 @@ ROLES_PREDETERMINADOS = [
 
 def crea_roles_predeterminados() -> None:
     """Carga roles predeterminados a la base de datos."""
-    log.debug("Iniciando creacion de Roles predeterminados.")
-    for ROL in ROLES_PREDETERMINADOS:
-        REGISTRO = RegistroRol()
-        REGISTRO.ejecutar_transaccion(
-            Transaccion(
-                registro="Rol",
-                tipo="principal",
-                estatus_actual=None,
-                nuevo_estatus=None,
-                uuid=None,
-                accion="crear",
-                datos=ROL,
-                datos_detalle=None,
-                relaciones=None,
-                relacion_id=None,
-            )
-        )
+    log.debug("Creando Roles Predeterminados.")
+    from cacao_accounting.database import Roles, database
+
+    for r in ROLES_PREDETERMINADOS:
+        rol = Roles(name=r.get("name"), detalle=r.get("detalle"))
+        database.session.add(rol)
+    database.session.commit()
 
 
 def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     """Asigna un rol determinado al usuario establecido."""
-    from cacao_accounting.database import Roles, Usuario
+    from cacao_accounting.database import Roles, RolesUsuario, Usuario, database
 
-    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
-    ROL = Roles.query.filter_by(name=rol).first()
-    ROL_USUARIO = RegistroRolUsuario()
-    ROL_USUARIO.ejecutar_transaccion(
-        Transaccion(
-            registro="Rol Usuario",
-            tipo="principal",
-            estatus_actual=None,
-            nuevo_estatus=None,
-            uuid=None,
-            accion="crear",
-            datos={"user_id": USUARIO.id, "role_id": ROL.id},
-            datos_detalle=None,
-            relaciones=None,
-            relacion_id=None,
-        )
-    )
+    USUARIO = database.session.execute(database.select(Usuario).filter_by(usuario=usuario)).first()
+    ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).first()
+
+    log.trace(USUARIO[0].usuario)
+    log.trace(ROL[0].id)
+
+    rol = RolesUsuario(user_id=USUARIO[0].id, role_id=ROL[0].id)
+
+    database.session.add(rol)
+    database.session.commit()
 
 
-def obtener_roles_por_usuario(usuario: str) -> tuple:
+def obtener_roles_por_usuario(usuario: str):
     """Obtiene los roles de usuario de la base de datos."""
     from cacao_accounting.database import Roles, RolesUsuario, Usuario, database
 
     USUARIO = Usuario.query.filter_by(usuario=usuario).first()
     ROLES_DE_USUARIO = (
-        # pylint: disable=E1101
         database.session.query(RolesUsuario, Roles, Usuario)
         .join(Roles)
         .join(Usuario)

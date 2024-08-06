@@ -30,9 +30,7 @@ from sqlalchemy.exc import OperationalError
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import DBVERSION, Metadata, database
-from cacao_accounting.exceptions.mensajes import ERROR4
 from cacao_accounting.logs import log
-from cacao_accounting.transaccion import Transaccion
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 
@@ -82,60 +80,34 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
             database.session.commit()
 
 
-def inicia_base_de_datos(app, user, passwd):
+def inicia_base_de_datos(app, user, passwd, with_examples):
     """Inicia esquema de base datos."""
-    from flask import current_app
 
     from cacao_accounting.datos import base_data, dev_data
 
-    with app.app_context():
-        log.info("Intentando inicializar base de datos.")
-        try:
-            database.create_all()
-            if current_app.config.get("ENV") == "development" or "CACAO_TEST" in environ:
-
-                base_data(user, passwd, carga_rapida=True)
-                dev_data()
-                db_metadata(app=app)
-                DB_ESQUEMA = True
-            else:
-                base_data(user, passwd, carga_rapida=False)
-                db_metadata(app=app)
-                DB_ESQUEMA = True
-        except OperationalError:
-            log.error("No se pudo iniciliazar esquema de base de datos.")
-            DB_ESQUEMA = False
+    log.info("Intentando inicializar base de datos.")
+    try:
+        database.create_all()
+        if with_examples:
+            base_data(user, passwd, carga_rapida=False)
+            dev_data()
+        else:
+            base_data(user, passwd, carga_rapida=True)
+        db_metadata(app=app)
+        DB_ESQUEMA = True
+    except OperationalError:
+        log.error("No se pudo iniciliazar esquema de base de datos.")
+        DB_ESQUEMA = False
     return DB_ESQUEMA
-
-
-def obtener_registro_desde_uuid(tipo=None, tabla=None, tabla_detalle=None, uuid=None) -> Transaccion:
-    """Inicia un registro a partir de su UUID en la tabla correspondiente."""
-    if tabla:
-        REGISTRO = tabla.query.filter_by(id=uuid).first()
-        TRANSACCION = Transaccion(
-            registro="Entidad",
-            tipo="principal",
-            accion="consultar",
-            estatus_actual=REGISTRO.status,
-            nuevo_estatus=None,
-            uuid=REGISTRO.id,
-            relaciones=None,
-            relacion_id=None,
-            datos=REGISTRO,
-            datos_detalle=None,
-        )
-        return TRANSACCION
-    else:
-        raise OperationalError(ERROR4)
 
 
 def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
-        from cacao_accounting.database import Modulos
+        from cacao_accounting.database import Modulos, database
 
-        MODULO = Modulos.query.filter_by(modulo=modulo).first()
-        return MODULO.id
+        MODULO = database.session.execute(database.select(Modulos).filter_by(modulo=modulo)).first()
+        return MODULO[0].id
     else:
         return None
 

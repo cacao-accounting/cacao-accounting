@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """
 Intefaz para el control de los modulos del sistema.
@@ -103,13 +100,16 @@ for modulo in modulos:
 # Funciones auxiliares para la administración de módulos.
 def registrar_modulo(entrada: dict) -> None:
     """Recibe un diccionario y lo inserta en la base de datos."""
-    registro = Modulos(modulo=entrada["modulo"], estandar=entrada["estandar"], habilitado=entrada["habilitado"])
-    # pylint: disable=E1101
+    registro = Modulos(
+        modulo=entrada["modulo"],
+        estandar=entrada["estandar"],
+        habilitado=entrada["habilitado"],
+    )
     database.session.add(registro)
     database.session.commit()
 
 
-def _init_modulos() -> None:
+def init_modulos() -> None:
     """Inserta en la base de datos los modulos predeterminados del sistema."""
     for i in MODULOS_STANDAR:
         i["ruta"] = None
@@ -175,6 +175,6 @@ def lista_tipos_documentos() -> list:
     ]
 
     # Fixme
-    # Pendiente logica para cargar documentos de modulos e
+    # Pendiente logica para cargar documentos de modulos adicionales
 
     return DOCUMENTOS
