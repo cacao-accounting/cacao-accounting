@@ -32,5 +32,4 @@ jobs:
         cd ..
         python -m build --sdist --wheel --outdir dist/ .
     - name: Publish package distributions to PyPI
-      if: contains(github.event.head_commit.message, 'release:')
       uses: pypa/gh-action-pypi-publish@release/v1
