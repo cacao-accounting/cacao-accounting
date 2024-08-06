@@ -81,9 +81,10 @@ def valida_llave_secreta(llave: str) -> bool:
         VALIDACION = CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
         if VALIDACION:
             log.info("Clave secreta valida.")
+            return True
         else:
             log.warning("Clave secreta invalida.")
-        return VALIDACION  # pylint: disable=R1705
+            return False
 
 
 def valida_direccion_base_datos(uri: str) -> bool:

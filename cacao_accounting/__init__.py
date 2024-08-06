@@ -25,7 +25,6 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 from datetime import timedelta
 from os import environ
-from sys import version_info
 from typing import Union
 
 # ---------------------------------------------------------------------------------------
@@ -61,13 +60,6 @@ def command() -> None:  # pragma: no cover
     from cacao_accounting.cli import linea_comandos
 
     linea_comandos(as_module="cacao_accounting")
-
-
-def verifica_version_de_python() -> None:
-    """Requerimos al menos python 3.7 para la aplicación."""
-    # pylint: disable=W0612
-    if not version_info >= (3, 7):
-        raise RuntimeError("Python >= 3.7 requerido.")
 
 
 def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
@@ -156,8 +148,6 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     """
     Aplication factory.
     """
-    # pylint: disable=W0612
-    verifica_version_de_python()
     cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
@@ -175,7 +165,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         user = environ.get("CACAO_USER") or "cacao"
         passwd = environ.get("CACAO_PWD") or "cacao"
 
-        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
@@ -206,7 +196,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
             database.drop_all()
             user = environ.get("CACAO_USER") or "cacao"
             passwd = environ.get("CACAO_PWD") or "cacao"
-            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd)
+            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.before_request
     def before_request():  # pragma: no cover

@@ -14,13 +14,12 @@
 
 """Definición unica de la version de la aplicación."""
 
-
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
-PATCH = "2"
-DATE = "20240804"
+PATCH = "4"
+DATE = "20240805"
 PRERELEASE = "rc" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None

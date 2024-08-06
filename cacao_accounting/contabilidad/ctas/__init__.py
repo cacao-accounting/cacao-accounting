@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Contributors:
-# - William José Moreno Reyes
 
 """Catalogos de Cuentas Contables."""
 
@@ -37,7 +34,6 @@ def cargar_catalogos(catalogo, entidad):
 
     Debe ser un archivo .cvs con los encabezados iguales a la base de datos.
     """
-    # pylint: disable=R1732
     cuentas = DictReader(open(catalogo.file, "r", encoding="utf-8"))
     for cuenta in cuentas:
         if cuenta["grupo"] == "1":
@@ -64,6 +60,5 @@ def cargar_catalogos(catalogo, entidad):
             fiscal=cuenta["fiscal"],
             status="activo",
         )
-        # pylint: disable=E1101
         database.session.add(registro)
         database.session.commit()
