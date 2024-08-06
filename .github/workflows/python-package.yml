@@ -39,4 +39,4 @@ jobs:
           pip install coveralls
           bash run_test.sh
           coverage report -m
-          coveralls
+          coveralls --service=github-actions
