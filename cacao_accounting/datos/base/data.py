@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Registros de usuario."""
+"""Data predeterminada."""
 
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
@@ -25,8 +25,3 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.registro import Registro
-
-
-class RegistroUsuario(Registro, tipo="usuario"):
-    """Administración de Usuarios."""

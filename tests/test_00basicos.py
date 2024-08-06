@@ -30,7 +30,22 @@ class TestInstanciasClase(unittest.TestCase):
         self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         self.app.app_context().push()
 
-    def test_flask_subclass(self):
+    def test_flask(self):
         from flask import Flask
 
         self.assertIsInstance(self.app, Flask)
+
+    def test_flask_bluepints(self):
+        from flask import Blueprint
+
+        from cacao_accounting.admin import admin
+
+        self.assertIsInstance(admin, Blueprint)
+
+        from cacao_accounting.app import cacao_app
+
+        self.assertIsInstance(cacao_app, Blueprint)
+
+        from cacao_accounting.auth import login
+
+        self.assertIsInstance(login, Blueprint)

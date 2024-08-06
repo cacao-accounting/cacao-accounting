@@ -25,7 +25,6 @@ from typing import Union
 from cacao_accounting.database import Modulos, Roles, RolesPermisos, RolesUsuario
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
 from cacao_accounting.logs import log
-from cacao_accounting.registro import Registro
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -62,15 +61,11 @@ ACCIONES: tuple = (
 )
 
 
-class RegistroPermisosRol(Registro):  # pylint: disable=R0903
+class RegistroPermisosRol:
     """Administracion de Permisos por rol."""
 
-    def __init__(self):
-        """Administracion de Permisos por rol."""
-        self.tabla = RolesPermisos
 
-
-class Permisos:  # pylint: disable=R0902
+class Permisos:
     """
     Administración de Permisos.
 
@@ -96,7 +91,7 @@ class Permisos:  # pylint: disable=R0902
     especificado, si uno de los roles del usuario otorga permiso se aprueba como valido.
     """
 
-    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:  # pylint: disable=R0915
+    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:
         """Inicia la clase permisos."""
         self.__init_valido: Union[bool, str, None] = self.valida_modulo(modulo) and usuario
         if self.__init_valido:
@@ -168,7 +163,7 @@ class Permisos:  # pylint: disable=R0902
             self.validar = False
             self.validar_solicitud = False
 
-    def valida_modulo(self, modulo: Union[str, None]) -> bool:  # pylint: disable=R0201
+    def valida_modulo(self, modulo: Union[str, None]) -> bool:
         """Verifica si un modulo se encuentra activo."""
         if modulo:
             LISTA_MODULOS_ACTIVOS = []
@@ -176,7 +171,9 @@ class Permisos:  # pylint: disable=R0902
             if CONSULTA:
                 for r in CONSULTA:
                     LISTA_MODULOS_ACTIVOS.append(r.id)
-            return modulo in LISTA_MODULOS_ACTIVOS
+                return modulo in LISTA_MODULOS_ACTIVOS
+            else:
+                return False
         else:
             return False
 
@@ -186,7 +183,7 @@ class Permisos:  # pylint: disable=R0902
         ROLES = [ROL.role_id for ROL in ROLES_USUARIO]
         return ROLES
 
-    def obtener_id_rol_administrador(self) -> str:  # pylint: disable=R0201
+    def obtener_id_rol_administrador(self) -> str:
         """Devuelve el UUID asignado al rol administrador."""
         ID_ROL_ADMIN = Roles.query.filter_by(name="admin").first()
         return ID_ROL_ADMIN.id
@@ -194,7 +191,8 @@ class Permisos:  # pylint: disable=R0902
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
         """Retorno verdadero o falso según si el usuario es miembro del grupo admin."""
         CONSULTA = RolesUsuario.query.filter(
-            RolesUsuario.role_id == self.obtener_id_rol_administrador(), RolesUsuario.user_id == self.usuario
+            RolesUsuario.role_id == self.obtener_id_rol_administrador(),
+            RolesUsuario.user_id == self.usuario,
         ).first()
         return CONSULTA is not None
 
@@ -396,7 +394,7 @@ class Permisos:  # pylint: disable=R0902
 # Permisos Predeterminados
 
 
-def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
+def cargar_permisos_predeterminados() -> None:
     """Carga permisos predeterminados a la base de datos."""
     from cacao_accounting.database import database
 
@@ -804,7 +802,6 @@ def cargar_permisos_predeterminados() -> None:  # pylint: disable=R0914
         BI,
     ]
     for permisos in PERMISOS_PREDETERMINADOS:
-        # pylint: disable=E1101
         if isinstance(permisos, list):
             for MODULO in permisos:
                 database.session.add(MODULO)
