@@ -11,9 +11,9 @@ from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
 
 
 if os.name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_vistas.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_vistas.db"
 else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_vistas.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_vistas.db"
 
 
 app = create_app(
