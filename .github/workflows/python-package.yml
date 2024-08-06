@@ -38,7 +38,7 @@ jobs:
         run: |
           pip install coveralls
           bash run_test.sh
-          if test -f /opt/hostedtoolcache/Python/3.11.4/x64/bin/python3; then
+          if test -f /opt/hostedtoolcache/Python/3.11.9/x64/bin/python; then
             coverage report -m
             coveralls --service=github-actions
           fi
