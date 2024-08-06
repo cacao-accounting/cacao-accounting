@@ -11,9 +11,9 @@ from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
 
 
 if os.name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_forms.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_vistas.db"
 else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_forms.db"
+    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_vistas.db"
 
 
 app = create_app(
@@ -24,7 +24,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": SQLITE,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
     }
 )
 
@@ -60,3 +60,4 @@ def test_visit_views(request):
                             assert text in consulta.data
 
             client.get("/user/logout")
+            database.drop_all()

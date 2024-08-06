@@ -27,7 +27,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": SQLITE,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
     }
 )
 
@@ -52,9 +52,7 @@ def test_fill_all_forms(request):
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
                 assert current_user.is_authenticated
 
-                """for form in forms:
-                    consulta = client.get(form.ruta)
-                    assert consulta.status_code == 200
+                for form in forms:
 
                     log.warning(form.ruta)
 
@@ -69,4 +67,5 @@ def test_fill_all_forms(request):
                         assert session["_flashes"][0][0] == form.flash[1]
                         assert session["_flashes"][0][1] == form.flash[0]
 
-                    client.get("/user/logout")"""
+                    client.get("/user/logout")
+            database.drop_all()

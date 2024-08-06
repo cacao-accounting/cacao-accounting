@@ -22,7 +22,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": SQLITE,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
     }
 )
 
