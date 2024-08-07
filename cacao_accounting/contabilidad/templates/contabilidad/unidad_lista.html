@@ -18,40 +18,51 @@
     </ol>
   </nav>
   <h4>Listado de Unidades de Negocio.</h4>
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Unidad de Negocios</a>
+
+  {% if entidades_creadas %}
+
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Unidad de
+    Negocios</a>
   <table class="table table-sm">
     <caption style="display: none;">Listado de unidades de negocio.</caption>
     <thead></thead>
-      <tr>
-        <th scope="col">Código de Entidad</th>
-        <th scope="col">Nombre</th>
-        <th scope="col">Entidad</th>
-      </tr>
+    <tr>
+      <th scope="col">Código de Entidad</th>
+      <th scope="col">Nombre</th>
+      <th scope="col">Entidad</th>
+    </tr>
     </thead>
-  {% for item in consulta.items -%}
-  <tr>
-    <td>
-      {% import "macros.html" as macros %}
-      {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
-        {{ item.unidad }}
-      </a>
-    </td>
-    <td>
-      <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
-        {{ item.nombre }}
-      </a>
-    </td>
-    <td>
-      <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-        {{ item.entidad }}
-      </a>
-    </td>
-  </tr>
-  {%- endfor %}
-</table>
+    {% for item in consulta.items -%}
+    <tr>
+      <td>
+        {% import "macros.html" as macros %}
+        {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
+          {{ item.unidad }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
+          {{ item.nombre }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.entidad }}
+        </a>
+      </td>
+    </tr>
+    {%- endfor %}
+  </table>
 </section>
 <section>
   {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.unidades" ) }}
 </section>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
+
 {% endblock %}

@@ -156,7 +156,7 @@
 {%- endmacro %}
 
 
-{% macro rendizar_paginacion(consulta=None, vista=None)%}
+{% macro rendizar_paginacion(consulta=None, vista=None) %}
 <p>{{ consulta.total }} items encontrados.
   <br>
   {% if consulta.has_prev %}
@@ -175,4 +175,39 @@
 <span class="badge" title="">
   <i class="bi bi-circle-fill" style="color:{{ lista_status[status].color }}"></i>
 </span>
+{% endmacro %}
+
+{% macro crear_nueva_entidad() %}
+
+<div style="text-align: center;">
+  <p>
+    <img src="{{ url_for('static', filename='media/cacao_accounting.png') }}" height="50" width="50"
+      alt="Cacao Accounting Logo">
+    <br>
+    <strong>Bienvenido a Cacao Accounting</strong>
+  </p>
+  <p>Al parecer es la primera vez que accedes al sistema.</p>
+  <p>Para utilizar el sistema debes al menos haber creado una entidad a la que realizar registros:</p>
+  <p>
+    <a class="btn btn-success btn-sm" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button"><i
+        class="bi bi-plus-circle-fill" aria-hidden="true"></i> Crear Nueva
+      Entidad</a>
+  </p>
+  {% if not MODO_ESCRITORIO %}
+  <p>Los siguientes vinvulos pueden ser de su interes:</p>
+
+  <div class="d-flex justify-content-around">
+
+    <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
+      role="button"><i class="bi bi-book-fill" aria-hidden="true"></i> Manual de Usuario</a>
+
+    <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
+      role="button"><i class="bi bi-chat-left-dots" aria-hidden="true"></i> Sala de Chat</a>
+
+  </div>
+
+  {% endif %}
+
+</div>
+
 {% endmacro %}

@@ -46,7 +46,7 @@ from cacao_accounting.compras import compras
 from cacao_accounting.config import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, MODO_ESCRITORIO, TESTING_MODE
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, entidades_creadas
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
@@ -123,10 +123,9 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.trim_blocks = True
             app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
-            app.jinja_env.globals.update(DEVELOPMENT=current_app.config.get("ENV"))
-            app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
             app.jinja_env.globals.update(permisos=Permisos)
-            app.jinja_env.globals.update(testing=TESTING_MODE)
+            app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+            app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
             # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
             # nivel del permiso de cada usuario agregando la siguiente linea:
@@ -140,6 +139,8 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             # "solicitar", "validar" y "validar_solicitud"
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
+            app.jinja_env.globals.update(entidades_creada=entidades_creadas)
+
     else:
         raise RuntimeError(ERROR2)
 
