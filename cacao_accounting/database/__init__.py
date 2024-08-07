@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Definicion de base de datos.
-"""
+"""Definicion de base de datos."""
 
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
@@ -423,6 +421,8 @@ class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
+    """General Ledger Base."""
+
     id = database.Column(
         database.String(26),
         primary_key=True,

@@ -146,9 +146,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
 
 
 def create_app(ajustes: Union[dict, None] = None) -> Flask:
-    """
-    Aplication factory.
-    """
+    """Aplication factory."""
     cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,

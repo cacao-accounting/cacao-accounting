@@ -44,7 +44,6 @@ from cacao_accounting.logs import log
 
 def asignar_usuario_a_roles():
     """Asigna roles a usuarios."""
-
     for r in USUARIO_ROLES:
         asigna_rol_a_usuario(r[0], r[1])
 
@@ -66,7 +65,6 @@ def demo_usuarios():
 
 def demo_entidad():
     """Entidad de demostración."""
-
     for e in ENTIDADES:
         database.session.add(e)
         database.session.commit()
@@ -81,7 +79,6 @@ def series_predeterminadas():
 
 def demo_unidades():
     """Unidades de Negocio de Demostración."""
-
     for u in UNIDADES:
         database.session.add(u)
         database.session.commit()
@@ -110,7 +107,6 @@ def cargar_centros_de_costos():
 
 def cargar_proyectos():
     """Proyectos de demostración."""
-
     for p in PROYECTOS:
         database.session.add(p)
         database.session.commit()
@@ -125,7 +121,6 @@ def tasas_de_cambio():
 
 def master_data():
     """Carga datos maestros de desarrollo a la base de datos."""
-
     log.debug("Iniciando carga de master data de pruebas.")
 
     demo_usuarios()
@@ -142,7 +137,6 @@ def master_data():
 
 def periodo_contable():
     """Crea periodos contables para desarrollo."""
-
     for p in PERIODOS:
         database.session.add(p)
         database.session.commit()

@@ -82,7 +82,6 @@ def verifica_coneccion_db(app):
 
 def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
-
     from cacao_accounting.datos import base_data, dev_data
 
     log.info("Intentando inicializar base de datos.")

@@ -77,7 +77,6 @@ def dev_info():
 @cacao_app.route("/development")
 def informacion_para_desarrolladores():
     """Pagina con información para desarrolladores o administradores del sistema."""
-
     if "CACAO_TEST" in environ:
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:  # pragma: no cover

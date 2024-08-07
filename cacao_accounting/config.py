@@ -137,7 +137,6 @@ else:
 
 def probar_modo_escritorio() -> bool:
     """Función utilitaria para establecer nodo de escritorio."""
-
     # Probamos si estamos en un paquete SNAP
     # Referencias
     #  - https://snapcraft.io/docs/environment-variables
