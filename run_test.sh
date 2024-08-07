@@ -10,4 +10,4 @@ echo
 echo Testing code with pytest
 echo
 echo
-CACAO_TEST=True python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting
+CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting

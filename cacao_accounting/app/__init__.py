@@ -29,7 +29,6 @@ from flask_login import login_required
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import DBVERSION
 from cacao_accounting.version import VERSION
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
@@ -68,7 +67,6 @@ def dev_info():
     info = {
         "app": {
             "version": VERSION,
-            "dbversion": DBVERSION,
         }
     }
     return info

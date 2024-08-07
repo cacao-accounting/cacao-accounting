@@ -139,7 +139,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             # "solicitar", "validar" y "validar_solicitud"
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
-            app.jinja_env.globals.update(entidades_creada=entidades_creadas)
+            app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
 
     else:
         raise RuntimeError(ERROR2)

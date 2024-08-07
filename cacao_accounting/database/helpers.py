@@ -82,6 +82,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
     try:
         database.create_all()
         if with_examples:
+            log.trace("Creando base de datos datos de prueba.")
             base_data(user, passwd, carga_rapida=False)
             dev_data()
         else:
@@ -129,6 +130,7 @@ def entidades_creadas():
     from cacao_accounting.database import Entidad
 
     CONSULTA = database.session.execute(database.select(Entidad)).first()
+    log.warning(CONSULTA[0])
 
     if CONSULTA:
         return True
