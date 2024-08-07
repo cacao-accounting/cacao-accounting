@@ -29,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import DBVERSION, Metadata, database
+from cacao_accounting.database import DBVERSION, database
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
@@ -63,10 +63,10 @@ def verifica_coneccion_db(app):
                 log.info("Reintentando conectar a la base de datos.")
             time.sleep(3)
 
+        if not DB_CONN:
+            log.warning("No fue imposible establecer una conexión con la base de datos.")
+
     return DB_CONN
-
-
-def db_metadata(app: Union[Flask, None] = None) -> None:
     """Actualiza metadatos en la base de datos."""
     from cacao_accounting.version import VERSION
 
@@ -80,12 +80,13 @@ def db_metadata(app: Union[Flask, None] = None) -> None:
             database.session.commit()
 
 
-def inicia_base_de_datos(app, user, passwd, with_examples):
+def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
 
     from cacao_accounting.datos import base_data, dev_data
 
     log.info("Intentando inicializar base de datos.")
+
     try:
         database.create_all()
         if with_examples:
@@ -93,8 +94,8 @@ def inicia_base_de_datos(app, user, passwd, with_examples):
             dev_data()
         else:
             base_data(user, passwd, carga_rapida=True)
-        db_metadata(app=app)
         DB_ESQUEMA = True
+
     except OperationalError:
         log.error("No se pudo iniciliazar esquema de base de datos.")
         DB_ESQUEMA = False
