@@ -2,6 +2,8 @@ import sys
 import os
 import pytest
 
+from time import sleep
+
 from flask import session
 
 from cacao_accounting.logs import log
@@ -9,15 +11,9 @@ from cacao_accounting.logs import log
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_forms_data import forms
+from z_func import init_test_db
 
 from cacao_accounting import create_app
-from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
-
-
-if os.name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_forms.db"
-else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "db_test_forms.db"
 
 app = create_app(
     {
@@ -27,7 +23,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
     }
 )
 
@@ -37,14 +33,10 @@ def test_fill_all_forms(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        from cacao_accounting.database import database
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
         with app.app_context():
             from flask_login import current_user
 
-            database.drop_all()
-            inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
+            init_test_db(app)
 
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
@@ -68,4 +60,3 @@ def test_fill_all_forms(request):
                         assert session["_flashes"][0][1] == form.flash[0]
 
                     client.get("/user/logout")
-            database.drop_all()

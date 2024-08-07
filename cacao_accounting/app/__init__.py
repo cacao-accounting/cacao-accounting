@@ -29,7 +29,6 @@ from flask_login import login_required
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import DBVERSION
 from cacao_accounting.version import VERSION
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
@@ -68,7 +67,6 @@ def dev_info():
     info = {
         "app": {
             "version": VERSION,
-            "dbversion": DBVERSION,
         }
     }
     return info
@@ -77,7 +75,6 @@ def dev_info():
 @cacao_app.route("/development")
 def informacion_para_desarrolladores():
     """Pagina con información para desarrolladores o administradores del sistema."""
-
     if "CACAO_TEST" in environ:
         return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
     else:  # pragma: no cover

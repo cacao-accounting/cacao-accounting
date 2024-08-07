@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Comprobante Contable."""
+
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
@@ -19,17 +21,22 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import Blueprint, render_template
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 
-"""General Ledger."""
+gl = Blueprint("gl", __name__, template_folder="templates")
 
 
-def agregar_entrada():
-    """Agrega una entrada al libro mayor."""
+@gl.route("/accounting/gl/list")
+def gl_list():
+    """Lista de Comprobantes Contables."""
+    return render_template("gl/gl_lista.html")
 
 
-def remover_entrada():
-    """Remnueve una entrada del libro mayor."""
+@gl.route("/accounting/gl/new")
+def gl_new():
+    """Lista de Comprobantes Contables."""
+    return render_template("gl/gl_new.html")

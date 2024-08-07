@@ -29,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import DBVERSION, Metadata, database
+from cacao_accounting.database import database
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
@@ -53,9 +53,13 @@ def verifica_coneccion_db(app):
         while (time.time() - __inicio) < TIEMPO_ESPERA:
             log.info("Verificando conexión a la base de datos.")
             try:
-                Metadata.query.all()
-                DB_CONN = True
-                log.info("Conexión a la base de datos exitosa.")
+                from database import Usuario
+
+                QUERY = database.session.execute(database.select(Usuario)).first()
+
+                if QUERY:
+                    DB_CONN = True
+                    log.info("Conexión a la base de datos exitosa.")
                 break
             except OperationalError:
                 DB_CONN = False
@@ -63,38 +67,28 @@ def verifica_coneccion_db(app):
                 log.info("Reintentando conectar a la base de datos.")
             time.sleep(3)
 
+        if not DB_CONN:
+            log.warning("No fue imposible establecer una conexión con la base de datos.")
+
     return DB_CONN
 
 
-def db_metadata(app: Union[Flask, None] = None) -> None:
-    """Actualiza metadatos en la base de datos."""
-    from cacao_accounting.version import VERSION
-
-    if app and isinstance(app, Flask):
-        with app.app_context():
-            METADATOS = Metadata(
-                cacaoversion=VERSION,
-                dbversion=DBVERSION,
-            )
-            database.session.add(METADATOS)
-            database.session.commit()
-
-
-def inicia_base_de_datos(app, user, passwd, with_examples):
+def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
-
     from cacao_accounting.datos import base_data, dev_data
 
     log.info("Intentando inicializar base de datos.")
+
     try:
         database.create_all()
         if with_examples:
+            log.trace("Creando base de datos datos de prueba.")
             base_data(user, passwd, carga_rapida=False)
             dev_data()
         else:
             base_data(user, passwd, carga_rapida=True)
-        db_metadata(app=app)
         DB_ESQUEMA = True
+
     except OperationalError:
         log.error("No se pudo iniciliazar esquema de base de datos.")
         DB_ESQUEMA = False
@@ -136,6 +130,7 @@ def entidades_creadas():
     from cacao_accounting.database import Entidad
 
     CONSULTA = database.session.execute(database.select(Entidad)).first()
+    log.warning(CONSULTA[0])
 
     if CONSULTA:
         return True
