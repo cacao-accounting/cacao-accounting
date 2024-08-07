@@ -130,14 +130,13 @@ else:
     # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
     # variable de entorno
     configuracion["ENV"] = "development"
-    configuracion["SECRET_KEY"] = "dev"
+    configuracion["SECRET_KEY"] = "dev"  # nosec
     configuracion["DEGUG"] = "True"
-    configuracion["TEMPLATES_AUTO_RELOAD"] = True
+    configuracion["TEMPLATES_AUTO_RELOAD"] = "True"
 
 
 def probar_modo_escritorio() -> bool:
     """Función utilitaria para establecer nodo de escritorio."""
-
     # Probamos si estamos en un paquete SNAP
     # Referencias
     #  - https://snapcraft.io/docs/environment-variables

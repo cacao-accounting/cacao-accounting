@@ -30,7 +30,7 @@ from typing import Union
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask, current_app, session
+from flask import Flask, session
 from flask_alembic import Alembic
 from flask_login import current_user
 
@@ -46,7 +46,7 @@ from cacao_accounting.compras import compras
 from cacao_accounting.config import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, MODO_ESCRITORIO, TESTING_MODE
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, entidades_creadas
+from cacao_accounting.database.helpers import entidades_creadas, obtener_id_modulo_por_nombre
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
@@ -80,20 +80,20 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         @app.errorhandler(404)
         def error_404(error):
             """Pagina personalizada para recursos no encontrados."""
-            assert error is not None
-            return render_template("404.html"), 404
+            if error:
+                return render_template("404.html"), 404
 
         @app.errorhandler(403)
         def error_403(error):
             """Pagina personalizada para solicitar acceso a recursos no autorizados."""
-            assert error is not None
-            return render_template("403.html"), 403
+            if error:
+                return render_template("403.html"), 403
 
         @app.errorhandler(400)
         def error_400(error):
             """Pagina personalizada para solicitar invalida."""
-            assert error is not None
-            return render_template("400.html"), 400
+            if error:
+                return render_template("400.html"), 400
 
     else:
         raise RuntimeError(ERROR2)
@@ -139,16 +139,14 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             # "solicitar", "validar" y "validar_solicitud"
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
-            app.jinja_env.globals.update(entidades_creada=entidades_creadas)
+            app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
 
     else:
         raise RuntimeError(ERROR2)
 
 
 def create_app(ajustes: Union[dict, None] = None) -> Flask:
-    """
-    Aplication factory.
-    """
+    """Aplication factory."""
     cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
@@ -159,19 +157,9 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         cacao_app.config.from_mapping(ajustes)
 
     @cacao_app.cli.command()
-    def initdb():  # pragma: no cover
-        """Crea el esquema de la base de datos."""
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
-        user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PWD") or "cacao"
-
-        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
-
-    @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
-        if current_app.config.get("ENV") == "development":
+        if TESTING_MODE:
             database.drop_all()
 
     @cacao_app.cli.command()
@@ -193,10 +181,13 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         """Define una base de datos de desarrollo nueva."""
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        if current_app.config.get("ENV") == "development":
+        user = environ.get("CACAO_USER") or "cacao"
+        passwd = environ.get("CACAO_PWD") or "cacao"
+
+        if TESTING_MODE:
             database.drop_all()
-            user = environ.get("CACAO_USER") or "cacao"
-            passwd = environ.get("CACAO_PWD") or "cacao"
+            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=True)
+        else:
             inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.before_request
@@ -208,6 +199,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     iniciar_extenciones(app=cacao_app)
     registrar_blueprints(app=cacao_app)
     registrar_rutas_predeterminadas(app=cacao_app)
+
     return cacao_app
 
 

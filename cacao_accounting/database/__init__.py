@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Definicion de base de datos.
-"""
+"""Definicion de base de datos."""
 
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
@@ -36,10 +34,13 @@ from ulid import ULID
 
 # < --------------------------------------------------------------------------------------------- >
 # Definición principal de la clase del ORM.
+# < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-DBVERSION = "0.0.0dev"
 
+# < --------------------------------------------------------------------------------------------- >
+# Deficinición central de status web.
+# < --------------------------------------------------------------------------------------------- >
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
 STATUS: Dict[str, StatusWeb] = {
@@ -59,7 +60,8 @@ STATUS: Dict[str, StatusWeb] = {
 }
 
 # <---------------------------------------------------------------------------------------------> #
-# Utilizamos U
+# Textos unicos en base a ULID
+# <---------------------------------------------------------------------------------------------> #
 
 
 def obtiene_texto_unico() -> str:
@@ -70,6 +72,7 @@ def obtiene_texto_unico() -> str:
 # <---------------------------------------------------------------------------------------------> #
 # Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
 # ellas.
+# <---------------------------------------------------------------------------------------------> #
 class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
 
@@ -174,25 +177,6 @@ class BaseDireccion(BaseTabla):
     avenida = database.Column(database.String(50), nullable=True)
     numero = database.Column(database.String(10), nullable=True)
     codigo_postal = database.Column(database.String(30), nullable=True)
-
-
-# <---------------------------------------------------------------------------------------------> #
-# Información sobre la instalación actual del sistema.
-# https://github.com/python/mypy/issues/8603
-class Metadata(database.Model):  # type: ignore[name-defined]
-    """Informacion basica de la instalacion."""
-
-    __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
-    id = database.Column(
-        database.String(26),
-        primary_key=True,
-        nullable=False,
-        index=True,
-        default=obtiene_texto_unico,
-    )
-    cacaoversion = database.Column(database.String(50), nullable=False)
-    dbversion = database.Column(database.String(50), nullable=False)
-    fecha = database.Column(database.DateTime, default=database.func.now(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -427,7 +411,7 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 # Un mismo documento puede tener varias series para numerarlos
 
 
-class Serie(database.Model, BaseTabla):
+class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Serie para numerar nuevas transacciones."""
 
     id = database.Column(database.Integer, primary_key=True, autoincrement=True)
@@ -442,6 +426,8 @@ class Serie(database.Model, BaseTabla):
 # <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
+    """General Ledger Base."""
+
     id = database.Column(
         database.String(26),
         primary_key=True,
@@ -480,7 +466,7 @@ class ComprobanteContableDetalle(GLBase):
 
 # <---------------------------------------------------------------------------------------------> #
 # Libro Mayor
-class GLEntry(database.Model, GLBase):
+class GLEntry(database.Model, GLBase):  # type: ignore[name-defined]
     """Todos los registros que afecten estados financieros vienen de esta tabla."""
 
 

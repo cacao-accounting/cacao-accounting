@@ -92,7 +92,6 @@ static_rutes = [
             "Código de Entidad".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Entidad".encode("utf-8"),
-            "Nueva Unidad de Negocios".encode("utf-8"),
         ],
     ),
     Route(
@@ -118,28 +117,12 @@ static_rutes = [
         url="/accounts/exchange",
         text=[
             "Listado de Tasas de Cambio.".encode("utf-8"),
-            "Nueva Tasa de Cambio".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounts/accounting_period",
         text=[
             "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
-        ],
-    ),
-    Route(
-        url="/accounts/accounting_period",
-        text=[
-            "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
-        ],
-    ),
-    Route(
-        url="/accounts/accounting_period",
-        text=[
-            "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
         ],
     ),
     Route(
