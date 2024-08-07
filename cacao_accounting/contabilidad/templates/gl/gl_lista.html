@@ -1,0 +1,40 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+                <i class="bi bi-house"></i>Inicio
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+                Contabilidad
+            </a>
+        </li>
+    </ol>
+</nav>
+
+<div class=" justify-content-between">
+
+    <h4>Listado de Comprobantes Contables.</h4>
+
+    <a class="btn btn-success btn-sm" href="{{ url_for("contabilidad.gl.gl_new") }}" role="button"><i
+            class="bi bi-plus-circle-fill" aria-hidden="true"></i> Crear Nuevo Comprobante de Diario</a>
+
+</div>
+
+
+{% if entidades_creadas %}
+
+
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
+
+{% endblock %}

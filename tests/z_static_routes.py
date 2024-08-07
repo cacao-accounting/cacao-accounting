@@ -163,4 +163,34 @@ static_rutes = [
             "Documento:".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounts/unit/matriz",
+        text=[
+            "Casa Matriz".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/unit/new",
+        text=[
+            "Crear Nueva Unidad de Negocios.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/unit/new",
+        text=[
+            "Crear Nueva Unidad de Negocios.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/list",
+        text=[
+            "Listado de Comprobantes Contables.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/new",
+        text=[
+            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
+        ],
+    ),
 ]

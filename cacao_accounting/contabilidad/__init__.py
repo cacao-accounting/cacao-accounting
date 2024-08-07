@@ -22,6 +22,7 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+import imp
 from flask import Blueprint, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import login_required
@@ -39,10 +40,12 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
     obtener_lista_monedas,
 )
+from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.database import STATUS, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
+contabilidad.register_blueprint(gl)
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
 APPNAME = "Cacao Accounting"
 
