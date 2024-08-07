@@ -36,4 +36,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bash run_test.sh
+          CACAO_TEST=True python -m pytest  -v -s --exitfirst --slow=True
