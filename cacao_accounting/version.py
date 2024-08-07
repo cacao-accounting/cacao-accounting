@@ -20,7 +20,7 @@ MAYOR = "0"
 MENOR = "0"
 PATCH = "0"
 DATE = "20240807"
-PRERELEASE = "rc" + DATE
+PRERELEASE = "dev" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None
 
