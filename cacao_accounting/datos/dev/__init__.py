@@ -69,12 +69,6 @@ def demo_entidad():
     for e in ENTIDADES:
         database.session.add(e)
     database.session.commit()
-    if TESTING_MODE:
-        from cacao_accounting.database import Entidad
-
-        QUERY = database.session.execute(database.select(Entidad)).all()
-        for q in QUERY:
-            log.warning(q[0].entidad)
 
 
 def series_predeterminadas():
