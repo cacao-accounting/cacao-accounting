@@ -30,7 +30,7 @@ jobs:
       - name: Lint project code
         run: |
           python -m flake8 cacao_accounting/
-          python -m bandit cacao_accounting/
+          python -m bandit -r cacao_accounting/
           python -m ruff check cacao_accounting/
       - name: Test with pytest
         env:

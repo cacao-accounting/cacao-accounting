@@ -34,9 +34,9 @@ from ulid import ULID
 
 # < --------------------------------------------------------------------------------------------- >
 # Definición principal de la clase del ORM.
+# < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-DBVERSION = "0.0.0dev"
 
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 

@@ -80,20 +80,20 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         @app.errorhandler(404)
         def error_404(error):
             """Pagina personalizada para recursos no encontrados."""
-            assert error is not None
-            return render_template("404.html"), 404
+            if error:
+                return render_template("404.html"), 404
 
         @app.errorhandler(403)
         def error_403(error):
             """Pagina personalizada para solicitar acceso a recursos no autorizados."""
-            assert error is not None
-            return render_template("403.html"), 403
+            if error:
+                return render_template("403.html"), 403
 
         @app.errorhandler(400)
         def error_400(error):
             """Pagina personalizada para solicitar invalida."""
-            assert error is not None
-            return render_template("400.html"), 400
+            if error:
+                return render_template("400.html"), 400
 
     else:
         raise RuntimeError(ERROR2)

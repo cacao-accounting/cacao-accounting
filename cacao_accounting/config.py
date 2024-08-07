@@ -130,7 +130,7 @@ else:
     # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
     # variable de entorno
     configuracion["ENV"] = "development"
-    configuracion["SECRET_KEY"] = "dev"
+    configuracion["SECRET_KEY"] = "dev"  # nosec
     configuracion["DEGUG"] = "True"
     configuracion["TEMPLATES_AUTO_RELOAD"] = True
 
