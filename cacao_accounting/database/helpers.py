@@ -129,3 +129,15 @@ def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]
         return USUARIO.id
     else:
         return None
+
+
+def entidades_creadas():
+    """Verifica si al menos una entidad ha sido creado en el sistema."""
+    from cacao_accounting.database import Entidad
+
+    CONSULTA = database.session.execute(database.select(Entidad)).first()
+
+    if CONSULTA:
+        return True
+    else:
+        return False
