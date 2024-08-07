@@ -26,7 +26,6 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
-from cacao_accounting.config import TESTING_MODE
 from cacao_accounting.database import database
 from cacao_accounting.datos.dev.data import (
     BASE_USUARIOS,
