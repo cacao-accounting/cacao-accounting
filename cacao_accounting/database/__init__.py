@@ -38,6 +38,9 @@ from ulid import ULID
 database = SQLAlchemy()
 
 
+# < --------------------------------------------------------------------------------------------- >
+# Deficinición central de status web.
+# < --------------------------------------------------------------------------------------------- >
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
 STATUS: Dict[str, StatusWeb] = {
@@ -57,7 +60,8 @@ STATUS: Dict[str, StatusWeb] = {
 }
 
 # <---------------------------------------------------------------------------------------------> #
-# Utilizamos U
+# Textos unicos en base a ULID
+# <---------------------------------------------------------------------------------------------> #
 
 
 def obtiene_texto_unico() -> str:
@@ -68,6 +72,7 @@ def obtiene_texto_unico() -> str:
 # <---------------------------------------------------------------------------------------------> #
 # Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
 # ellas.
+# <---------------------------------------------------------------------------------------------> #
 class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
 
