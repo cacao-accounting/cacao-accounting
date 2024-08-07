@@ -19,6 +19,7 @@
     </ol>
   </nav>
   <h4>Listado de Entidades.</h4>
+  {% if entidades_creadas %}
   <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button">Nueva Entidad</a>
   <table class="table table-sm">
     <caption style="display: none;">Listado de entidades.</caption>
@@ -71,4 +72,10 @@
 <section>
   {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.entidades") }}
 </section>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
 {% endblock %}

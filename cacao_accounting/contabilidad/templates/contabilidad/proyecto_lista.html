@@ -19,6 +19,9 @@
     </ol>
   </nav>
   <h4>Listado de Proyectos.</h4>
+
+  {% if entidades_creadas %}
+
   <table class="table table-sm">
     <caption style="display: none;">Listado de Proyectos.</caption>
     <thead>
@@ -29,31 +32,31 @@
         <th scope="col">Fecha Fin</th>
       </tr>
     </thead>
-      {% for item in consulta.items %}
-      <tr>
-        <td>
-          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.codigo }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.nombre }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.fechainicio }}
-          </a>
-        </td>
-        <td>
-          <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-            {{ item.fechafin }}
-          </a>
-        </td>
-      </tr>
-      {% endfor %}
+    {% for item in consulta.items %}
+    <tr>
+      <td>
+        {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.codigo }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.nombre }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.fechainicio }}
+        </a>
+      </td>
+      <td>
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
+          {{ item.fechafin }}
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
     <tbody>
     </tbody>
   </table>
@@ -61,4 +64,11 @@
 <section>
   {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.proyectos") }}
 </section>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
+
 {% endblock %}

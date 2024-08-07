@@ -19,6 +19,8 @@
 
 <h4>Catalogo de Cuentas Contables.</h4>
 
+{% if entidades_creadas %}
+
 <form>
     <h6>Seleccionar Entidad.</h6>
     <select class="form-control" id="entidad" name="entidad">
@@ -130,5 +132,11 @@
     </li>
     {% endfor %}
 </ul>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
 
 {% endblock %}

@@ -19,6 +19,7 @@
     </ol>
   </nav>
   <h4>Listado de Series e Indetificadores.</h4>
+  {% if entidades_creadas %}
 
   <div>
     <div class="row">
@@ -92,4 +93,9 @@
 <section>
   {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.entidades") }}
 </section>
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
 {% endblock %}

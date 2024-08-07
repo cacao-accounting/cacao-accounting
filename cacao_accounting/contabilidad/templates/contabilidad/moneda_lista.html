@@ -19,6 +19,7 @@
     </ol>
   </nav>
   <h4>Listado de Monedas.</h4>
+  {% if entidades_creadas %}
   <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nueva Moneda</a>
   <table class="table table-sm">
     <caption style="display: none;">Listado de monedas.</caption>
@@ -28,17 +29,24 @@
         <th scope="col">Nombre</th>
       </tr>
     </thead>
-  {% for moneda in consulta.items -%}
-  <tr>
-    <td>
-      {{ moneda.codigo }}
-    </td>
-    <td>
-      {{ moneda.nombre }}
-    </td>
-  </tr>
-  {%- endfor %}
-</table>
-</section>
-{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.monedas") }}
-{% endblock %}
+    {% for moneda in consulta.items -%}
+    <tr>
+      <td>
+        {{ moneda.codigo }}
+      </td>
+      <td>
+        {{ moneda.nombre }}
+      </td>
+    </tr>
+    {%- endfor %}
+  </table>
+  <section>
+    {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.monedas") }}
+  </section>
+
+  {% else %}
+
+  {{ macros.crear_nueva_entidad() }}
+
+  {% endif %}
+  {% endblock %}

@@ -18,7 +18,11 @@
     </ol>
   </nav>
   <h4>Listado de Períodos Contables.</h4>
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Período Contable</a>
+
+  {% if entidades_creadas %}
+
+  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Período
+    Contable</a>
   <table class="table table-sm">
     <caption style="display: none;">Listado de periodos contables.</caption>
     <thead>
@@ -29,27 +33,34 @@
         <th scope="col">Fin</th>
       </tr>
     </thead>
-  {% for item in consulta.items -%}
-  {% import "macros.html" as macros %}
-  <tr>
-    <th id="{{ item.entidad }}">
-      {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-      {{ item.nombre }}
-    </th>
-    <td>
-      {{ item.entidad }}
-    </td>
-    <td>
-      {{ item.inicio }}
-    </td>
-    <td>
-      {{ item.fin }}
-    </td>
-  </tr>
-  {%- endfor %}
-</table>
+    {% for item in consulta.items -%}
+    {% import "macros.html" as macros %}
+    <tr>
+      <th id="{{ item.entidad }}">
+        {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+        {{ item.nombre }}
+      </th>
+      <td>
+        {{ item.entidad }}
+      </td>
+      <td>
+        {{ item.inicio }}
+      </td>
+      <td>
+        {{ item.fin }}
+      </td>
+    </tr>
+    {%- endfor %}
+  </table>
 </section>
 <section>
   {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}
 </section>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
+
 {% endblock %}
