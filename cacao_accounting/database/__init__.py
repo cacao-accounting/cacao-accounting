@@ -177,25 +177,6 @@ class BaseDireccion(BaseTabla):
 
 
 # <---------------------------------------------------------------------------------------------> #
-# Información sobre la instalación actual del sistema.
-# https://github.com/python/mypy/issues/8603
-class Metadata(database.Model):  # type: ignore[name-defined]
-    """Informacion basica de la instalacion."""
-
-    __table_args__ = (database.UniqueConstraint("cacaoversion", "dbversion", name="rev_unica"),)
-    id = database.Column(
-        database.String(26),
-        primary_key=True,
-        nullable=False,
-        index=True,
-        default=obtiene_texto_unico,
-    )
-    cacaoversion = database.Column(database.String(50), nullable=False)
-    dbversion = database.Column(database.String(50), nullable=False)
-    fecha = database.Column(database.DateTime, default=database.func.now(), nullable=False)
-
-
-# <---------------------------------------------------------------------------------------------> #
 # Administración de monedas, localización, tasas de cambio y otras configuraciones regionales.
 class Moneda(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Una moneda para los registros de la entidad."""
@@ -427,7 +408,7 @@ class PeriodoContable(database.Model, BaseTabla):  # type: ignore[name-defined]
 # Un mismo documento puede tener varias series para numerarlos
 
 
-class Serie(database.Model, BaseTabla):
+class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Serie para numerar nuevas transacciones."""
 
     id = database.Column(database.Integer, primary_key=True, autoincrement=True)
@@ -480,7 +461,7 @@ class ComprobanteContableDetalle(GLBase):
 
 # <---------------------------------------------------------------------------------------------> #
 # Libro Mayor
-class GLEntry(database.Model, GLBase):
+class GLEntry(database.Model, GLBase):  # type: ignore[name-defined]
     """Todos los registros que afecten estados financieros vienen de esta tabla."""
 
 

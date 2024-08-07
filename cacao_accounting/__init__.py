@@ -30,7 +30,7 @@ from typing import Union
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask, current_app, session
+from flask import Flask, session
 from flask_alembic import Alembic
 from flask_login import current_user
 
@@ -159,19 +159,9 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         cacao_app.config.from_mapping(ajustes)
 
     @cacao_app.cli.command()
-    def initdb():  # pragma: no cover
-        """Crea el esquema de la base de datos."""
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
-        user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PWD") or "cacao"
-
-        inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
-
-    @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
         """Elimina la base de datos, solo disponible para desarrollo."""
-        if current_app.config.get("ENV") == "development":
+        if TESTING_MODE:
             database.drop_all()
 
     @cacao_app.cli.command()
@@ -193,10 +183,13 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         """Define una base de datos de desarrollo nueva."""
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        if current_app.config.get("ENV") == "development":
+        user = environ.get("CACAO_USER") or "cacao"
+        passwd = environ.get("CACAO_PWD") or "cacao"
+
+        if TESTING_MODE:
             database.drop_all()
-            user = environ.get("CACAO_USER") or "cacao"
-            passwd = environ.get("CACAO_PWD") or "cacao"
+            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=True)
+        else:
             inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
 
     @cacao_app.before_request
@@ -208,6 +201,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     iniciar_extenciones(app=cacao_app)
     registrar_blueprints(app=cacao_app)
     registrar_rutas_predeterminadas(app=cacao_app)
+
     return cacao_app
 
 
