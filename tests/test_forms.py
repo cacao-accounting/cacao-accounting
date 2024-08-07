@@ -2,6 +2,8 @@ import sys
 import os
 import pytest
 
+from time import sleep
+
 from flask import session
 
 from cacao_accounting.logs import log
