@@ -193,7 +193,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     @cacao_app.before_request
     def before_request():  # pragma: no cover
         session.permanent = True
-        cacao_app.permanent_session_lifetime = timedelta(minutes=30)  # Timeout session after 30 minutes
+        cacao_app.permanent_session_lifetime = timedelta(minutes=30)
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)
