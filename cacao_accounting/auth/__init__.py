@@ -107,6 +107,7 @@ def inicio_sesion():  # pragma: no cover
                     assert identidad.token is not None
 
                 except Exception as e:
+                    assert e is not None
                     log.warning("No se pudo generar auth token.")
 
                 login_user(identidad)
