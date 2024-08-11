@@ -104,7 +104,7 @@ def inicio_sesion():  # pragma: no cover
                 try:
                     # token should expire after 24 hrs
                     identidad.token = encode({"user_id": identidad.id}, current_app.config["SECRET_KEY"], algorithm="HS256")
-                    assert identidad.token is not None
+                    assert identidad.token is not None  # nosec
 
                 except Exception as e:
                     assert e is not None  # nosec

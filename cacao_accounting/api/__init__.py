@@ -48,7 +48,7 @@ def token_requerido(f):  # pragma: no cover
 
         try:
             data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
-            assert data is not None
+            assert data is not None  # nosec
 
             if not current_user:
                 return {"message": "Invalid Authentication token!", "data": None, "error": "Unauthorized"}, 401
