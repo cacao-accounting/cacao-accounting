@@ -23,3 +23,6 @@ mkdocs-material
 
 # Verificación de tipos
 mypy
+
+# Test api rest
+requests

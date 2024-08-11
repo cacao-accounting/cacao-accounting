@@ -21,22 +21,30 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, flash, redirect, render_template
+from argon2 import PasswordHasher
+from flask import Blueprint, current_app, flash, redirect, render_template
 from flask_login import LoginManager, login_required, login_user, logout_user
+from jwt import encode
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Usuario
+from cacao_accounting.logs import log
 
+
+# <---------------------------------------------------------------------------------------------> #
+# Logica de inicio de sesión.
+# <---------------------------------------------------------------------------------------------> #
 login = Blueprint("login", __name__, template_folder="templates")
 administrador_sesion = LoginManager()
+ph = PasswordHasher()
 
 INICIO_SESION = redirect("/login")
 
 
 @administrador_sesion.user_loader
-def cargar_sesion(identidad):
+def cargar_sesion(identidad):  # pragma: no cover
     """Devuelve la entrada correspondiente al usuario que inicio sesión."""
     if identidad is not None:
         return Usuario.query.get(identidad)
@@ -44,7 +52,7 @@ def cargar_sesion(identidad):
 
 
 @administrador_sesion.unauthorized_handler
-def no_autorizado():
+def no_autorizado():  # pragma: no cover
     """Redirecciona al inicio de sesión usuarios no autorizados."""
     flash("Favor iniciar sesión para acceder al sistema.")
     return INICIO_SESION
@@ -52,35 +60,33 @@ def no_autorizado():
 
 def proteger_passwd(clave):
     """Devuelve una contraseña salteada con bcrytp."""
-    from argon2 import PasswordHasher
 
-    hashpw = PasswordHasher()
-
-    clave_encriptada = hashpw.hash(clave.encode())
+    clave_encriptada = ph.hash(clave.encode())
     return clave_encriptada.encode()
 
 
 def validar_acceso(usuario, clave) -> bool:
     """Verifica el inicio de sesión del usuario."""
-    from argon2 import PasswordHasher
     from argon2.exceptions import VerifyMismatchError
 
     acceso = clave
     registro = Usuario.query.filter_by(usuario=usuario).first()
-    if registro is not None:
-        ph = PasswordHasher()
+
+    if registro:
+
         try:
             ph.verify(registro.clave_acceso, acceso)
+            return True
+
         except VerifyMismatchError:
-            clave_validada = False
-        clave_validada = True
+            return False
+
     else:
-        clave_validada = False
-    return clave_validada
+        return False
 
 
 @login.route("/login", methods=["GET", "POST"])
-def inicio_sesion():
+def inicio_sesion():  # pragma: no cover
     """Inicio de sesión del usuario."""
     from flask_login import current_user
 
@@ -93,6 +99,16 @@ def inicio_sesion():
         if form.validate_on_submit():
             if validar_acceso(form.usuario.data, form.acceso.data):
                 identidad = Usuario.query.filter_by(usuario=form.usuario.data).first()
+
+                # Api rest auth token.
+                try:
+                    # token should expire after 24 hrs
+                    identidad.token = encode({"user_id": identidad.id}, current_app.config["SECRET_KEY"], algorithm="HS256")
+                    assert identidad.token is not None
+
+                except Exception as e:
+                    log.warning("No se pudo generar auth token.")
+
                 login_user(identidad)
                 return redirect("/app")
             else:
@@ -104,7 +120,7 @@ def inicio_sesion():
 @login.route("/exit")
 @login.route("/logout")
 @login.route("/salir")
-def cerrar_sesion():
+def cerrar_sesion():  # pragma: no cover
     """Finaliza la sesion actual."""
     logout_user()
     return INICIO_SESION
@@ -112,7 +128,7 @@ def cerrar_sesion():
 
 @login.route("/permisos_usuario")
 @login_required
-def test_roles():
+def test_roles():  # pragma: no cover
     """Verifica los permisos del usuario actual."""
     from flask_login import current_user
 

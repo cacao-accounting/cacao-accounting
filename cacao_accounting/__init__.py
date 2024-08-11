@@ -38,6 +38,7 @@ from flask_login import current_user
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.admin import admin
+from cacao_accounting.api import api
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
@@ -104,6 +105,7 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
     if app and isinstance(app, Flask):
         with app.app_context():
             app.register_blueprint(admin)
+            app.register_blueprint(api)
             app.register_blueprint(bancos)
             app.register_blueprint(main_app)
             app.register_blueprint(contabilidad)

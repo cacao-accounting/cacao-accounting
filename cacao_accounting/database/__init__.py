@@ -219,6 +219,8 @@ class Usuario(UserMixin, database.Model, BaseTabla):  # type: ignore[name-define
     genero = database.Column(database.String(10))
     nacimiento = database.Column(database.Date())
     telefono = database.Column(database.String(50))
+    # Api rest auth
+    token = None
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
