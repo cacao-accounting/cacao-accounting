@@ -18,9 +18,9 @@ APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
-PATCH = "4"
-DATE = "20240808"
-PRERELEASE = "rc" + DATE
+PATCH = "0"
+DATE = "20240815"
+PRERELEASE = "dev" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None
 
