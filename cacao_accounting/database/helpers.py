@@ -79,19 +79,20 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
 
     log.info("Intentando inicializar base de datos.")
 
-    try:
-        database.create_all()
-        if with_examples:
-            log.trace("Creando base de datos datos de prueba.")
-            base_data(user, passwd, carga_rapida=False)
-            dev_data()
-        else:
-            base_data(user, passwd, carga_rapida=True)
-        DB_ESQUEMA = True
-
-    except OperationalError:
-        log.error("No se pudo iniciliazar esquema de base de datos.")
-        DB_ESQUEMA = False
+    with app.app_context():
+        try:
+            database.create_all()
+            log.info("Esquema de base de datos creado correctamente.")
+            if with_examples:
+                log.trace("Creando datos de prueba.")
+                base_data(user, passwd, carga_rapida=False)
+                dev_data()
+            else:
+                base_data(user, passwd, carga_rapida=True)
+            DB_ESQUEMA = True
+        except OperationalError:
+            log.error("No se pudo iniciliazar esquema de base de datos.")
+            DB_ESQUEMA = False
     return DB_ESQUEMA
 
 
