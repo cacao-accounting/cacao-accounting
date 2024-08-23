@@ -53,7 +53,7 @@ def verifica_coneccion_db(app):
         while (time.time() - __inicio) < TIEMPO_ESPERA:
             log.info("Verificando conexión a la base de datos.")
             try:
-                from database import Usuario
+                from cacao_accounting.database import Usuario
 
                 QUERY = database.session.execute(database.select(Usuario)).first()
 
