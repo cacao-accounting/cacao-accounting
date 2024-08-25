@@ -1,17 +1,13 @@
 import pytest
-import os, sys
+import os
+import sys
 
-from cacao_accounting.datos.dev import data
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-from cacao_accounting import create_app
-from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
+from z_func import init_test_db
 
-if os.name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_acciones.db"
-else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/db_test_acciones.db"
+from cacao_accounting import create_app
 
 
 app = create_app(
@@ -22,7 +18,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
     }
 )
 
@@ -32,11 +28,22 @@ def setupdb(request):
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from cacao_accounting.database import database
-            from cacao_accounting.database.helpers import inicia_base_de_datos
 
-            database.drop_all()
-            inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
+            init_test_db(app)
+
+
+@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
+def test_check_passwd(request):
+
+    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+
+        with app.app_context():
+            from cacao_accounting.auth import validar_acceso
+
+            assert validar_acceso(usuario="cacao", clave="cacao") is True
+            assert validar_acceso(usuario="cacao", clave="holis") is False
+            assert validar_acceso(usuario="holis", clave="cacao") is False
+            assert validar_acceso(usuario="holis", clave="holis") is False
 
 
 @pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")

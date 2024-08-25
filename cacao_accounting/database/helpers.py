@@ -29,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import DBVERSION, database
+from cacao_accounting.database import database
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
@@ -53,9 +53,13 @@ def verifica_coneccion_db(app):
         while (time.time() - __inicio) < TIEMPO_ESPERA:
             log.info("Verificando conexión a la base de datos.")
             try:
-                Metadata.query.all()
-                DB_CONN = True
-                log.info("Conexión a la base de datos exitosa.")
+                from cacao_accounting.database import Usuario
+
+                QUERY = database.session.execute(database.select(Usuario)).first()
+
+                if QUERY:
+                    DB_CONN = True
+                    log.info("Conexión a la base de datos exitosa.")
                 break
             except OperationalError:
                 DB_CONN = False
@@ -67,22 +71,10 @@ def verifica_coneccion_db(app):
             log.warning("No fue imposible establecer una conexión con la base de datos.")
 
     return DB_CONN
-    """Actualiza metadatos en la base de datos."""
-    from cacao_accounting.version import VERSION
-
-    if app and isinstance(app, Flask):
-        with app.app_context():
-            METADATOS = Metadata(
-                cacaoversion=VERSION,
-                dbversion=DBVERSION,
-            )
-            database.session.add(METADATOS)
-            database.session.commit()
 
 
 def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
-
     from cacao_accounting.datos import base_data, dev_data
 
     log.info("Intentando inicializar base de datos.")
@@ -139,6 +131,7 @@ def entidades_creadas():
     from cacao_accounting.database import Entidad
 
     CONSULTA = database.session.execute(database.select(Entidad)).first()
+    log.warning(CONSULTA[0])
 
     if CONSULTA:
         return True

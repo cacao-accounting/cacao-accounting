@@ -24,9 +24,11 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 
+"""General Ledger."""
+
 
 def agregar_entrada():
-    """Agrega una entrada al libro mayor"""
+    """Agrega una entrada al libro mayor."""
 
 
 def remover_entrada():

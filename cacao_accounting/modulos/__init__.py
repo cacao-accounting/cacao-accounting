@@ -166,8 +166,7 @@ def registrar_modulos_adicionales(flaskapp: Flask) -> None:
 
 
 def lista_tipos_documentos() -> list:
-    """Devuelve listado de documentos"""
-
+    """Devuelve listado de documentos."""
     DOCUMENTOS = [
         ("journal", "Comprobante de Diario"),
         ("sales-invoice", "Factura de Venta"),

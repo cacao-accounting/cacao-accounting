@@ -44,7 +44,6 @@ from cacao_accounting.logs import log
 
 def asignar_usuario_a_roles():
     """Asigna roles a usuarios."""
-
     for r in USUARIO_ROLES:
         asigna_rol_a_usuario(r[0], r[1])
 
@@ -61,30 +60,28 @@ def demo_usuarios():
             creado_por="system",
         )
         database.session.add(usuario)
-        database.session.commit()
+    database.session.commit()
 
 
 def demo_entidad():
     """Entidad de demostración."""
-
     for e in ENTIDADES:
         database.session.add(e)
-        database.session.commit()
+    database.session.commit()
 
 
 def series_predeterminadas():
     """Crear series predeterminadas."""
     for s in SERIES:
         database.session.add(s)
-        database.session.commit()
+    database.session.commit()
 
 
 def demo_unidades():
     """Unidades de Negocio de Demostración."""
-
     for u in UNIDADES:
         database.session.add(u)
-        database.session.commit()
+    database.session.commit()
 
 
 def cargar_catalogo_de_cuentas():
@@ -98,35 +95,33 @@ def cargar_catalogo_de_cuentas():
 
     for c in CUENTAS:
         database.session.add(c)
-        database.session.commit()
+    database.session.commit()
 
 
 def cargar_centros_de_costos():
     """Centros de Costos de demostración."""
     for cc in CENTROS_DE_COSTOS:
         database.session.add(cc)
-        database.session.commit()
+    database.session.commit()
 
 
 def cargar_proyectos():
     """Proyectos de demostración."""
-
     for p in PROYECTOS:
         database.session.add(p)
-        database.session.commit()
+    database.session.commit()
 
 
 def tasas_de_cambio():
     """Tasa de Cambio de demostración."""
     for t in TASAS_DE_CAMBIO:
         database.session.add(t)
-        database.session.commit()
+    database.session.commit()
 
 
 def master_data():
     """Carga datos maestros de desarrollo a la base de datos."""
-
-    log.debug("Iniciando carga de master data de pruebas.")
+    log.warning("Iniciando carga de master data de pruebas.")
 
     demo_usuarios()
     asignar_usuario_a_roles()
@@ -142,10 +137,9 @@ def master_data():
 
 def periodo_contable():
     """Crea periodos contables para desarrollo."""
-
     for p in PERIODOS:
         database.session.add(p)
-        database.session.commit()
+    database.session.commit()
 
 
 def transacciones():
@@ -156,5 +150,6 @@ def transacciones():
 
 def dev_data():
     """Carga datos de desarrollo a la base de datos."""
+    log.trace("Iniciando carga de datos de prueba.")
     master_data()
     transacciones()

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Registros de usuario."""
+"""Comprobante Contable."""
 
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
@@ -21,12 +21,22 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import Blueprint, render_template
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.registro import Registro
+
+gl = Blueprint("gl", __name__, template_folder="templates")
 
 
-class RegistroUsuario(Registro, tipo="usuario"):
-    """Administración de Usuarios."""
+@gl.route("/accounting/gl/list")
+def gl_list():
+    """Lista de Comprobantes Contables."""
+    return render_template("gl/gl_lista.html")
+
+
+@gl.route("/accounting/gl/new")
+def gl_new():
+    """Lista de Comprobantes Contables."""
+    return render_template("gl/gl_new.html")
