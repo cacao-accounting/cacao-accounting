@@ -92,7 +92,6 @@ static_rutes = [
             "Código de Entidad".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Entidad".encode("utf-8"),
-            "Nueva Unidad de Negocios".encode("utf-8"),
         ],
     ),
     Route(
@@ -118,28 +117,12 @@ static_rutes = [
         url="/accounts/exchange",
         text=[
             "Listado de Tasas de Cambio.".encode("utf-8"),
-            "Nueva Tasa de Cambio".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounts/accounting_period",
         text=[
             "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
-        ],
-    ),
-    Route(
-        url="/accounts/accounting_period",
-        text=[
-            "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
-        ],
-    ),
-    Route(
-        url="/accounts/accounting_period",
-        text=[
-            "Listado de Períodos Contables.".encode("utf-8"),
-            "Nuevo Período Contable".encode("utf-8"),
         ],
     ),
     Route(
@@ -178,6 +161,36 @@ static_rutes = [
             "Datos de la nueva serie:".encode("utf-8"),
             "Nueva Serie:".encode("utf-8"),
             "Documento:".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/unit/matriz",
+        text=[
+            "Casa Matriz".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/unit/new",
+        text=[
+            "Crear Nueva Unidad de Negocios.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounts/unit/new",
+        text=[
+            "Crear Nueva Unidad de Negocios.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/list",
+        text=[
+            "Listado de Comprobantes Contables.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/new",
+        text=[
+            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
         ],
     ),
 ]

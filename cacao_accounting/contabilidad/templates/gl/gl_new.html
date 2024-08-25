@@ -1,0 +1,193 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+                <i class="bi bi-house"></i>Inicio
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+                Contabilidad
+            </a>
+        </li>
+    </ol>
+</nav>
+
+{% if entidades_creadas %}
+
+<div class="page-container" id="nuevo-GL">
+    <div class="page-head flex">
+        <div class="container">
+            <div class="row">
+                <div>
+                    <div class="flex">
+                        <h4>Crear un Nuevo Comprobante de Diario.</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="form-container">
+                <form>
+                    <div class="row">
+                        <div class="col">
+                            <p>Compañia:</p>
+                            <select name="" id=""></select>
+                            <br>
+                            <p>Serie:</p>
+                            <select name="" id=""></select>
+                        </div>
+                        <div class="col">
+                            <p>Fecha:</p>
+                            <input type="date" id="meeting-time" name="meeting-time" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <p></p>
+                        <p>Detalle de la transacción:</p>
+                        <textarea name="" id=""></textarea>
+                        <p></p>
+                    </div>
+                    <div class="row">
+                        <div class="input-group">
+                            <span class="input-group-addon col-sm-3" style="background-color: #D3D3D3"><strong>Cuenta
+                                    Contable</strong></span>
+                            <span class="input-group-addon col-sm-3" style="background-color: #D3D3D3"><strong>Centro de
+                                    Costos</strong></span>
+                            <span class="input-group-addon col-sm-1"
+                                style="background-color: #D3D3D3"><strong>Debito</strong></span>
+                            <span class="input-group-addon col-sm-1"
+                                style="background-color: #D3D3D3"><strong>Credito</strong></span>
+                            <span class="input-group-addon col-sm-2"
+                                style="background-color: #D3D3D3"><strong>Comentario</strong></span>
+                            <span class="input-group-addon col-sm-1"
+                                style="background-color: #D3D3D3"><strong></strong></span>
+                        </div>
+                        <div class="gl-row-container">
+                            <div class="gl-row">
+                                <div class="input-group">
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-2" id="tentacles" />
+                                    <div>
+                                        <span class="badge badge-pill badge-secondary">Secondary</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="gl-row">
+                                <div class="input-group">
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-2" id="tentacles" />
+                                    <div>
+                                        <span class="badge badge-pill badge-secondary">Secondary</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="gl-row">
+                                <div class="input-group">
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-2" id="tentacles" />
+                                    <div>
+                                        <span class="badge badge-pill badge-secondary">Secondary</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="gl-row">
+                                <div class="input-group">
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-2" id="tentacles" />
+                                    <div>
+                                        <span class="badge badge-pill badge-secondary">Secondary</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="gl-row">
+                                <div class="input-group">
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <select class="selectpicker col-sm-3" id="form-CtaContable0"
+                                        name="form-CtaContable0" data-live-search="true" title="Buscar Cuenta...">
+                                        <option value="0">Seleccione</option>
+                                    </select>
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-1" type="number" id="tentacles" />
+                                    <input class="col-sm-2" id="tentacles" />
+                                    <div>
+                                        <span class="badge badge-pill badge-secondary">Secondary</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-addon col-sm-3"
+                                style="background-color: #D3D3D3"><strong>Totales</strong></span>
+                            <span class="input-group-addon col-sm-3"
+                                style="background-color: #D3D3D3"><strong></strong></span>
+                            <span class="input-group-addon text-end col-sm-1"
+                                style="background-color: #D3D3D3"><strong>0.00</strong> </span>
+                            <span class="input-group-addon text-end col-sm-1"
+                                style="background-color: #D3D3D3"><strong>0.00</strong> </span>
+                            <span class="input-group-addon col-sm-2"
+                                style="background-color: #D3D3D3"><strong></strong></span>
+                            <span class="input-group-addon col-sm-1"
+                                style="background-color: #D3D3D3"><strong></strong></span>
+                        </div>
+                    </div>
+                    <div>
+                        <p></p>
+                        <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
+                        <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger"
+                            type="link">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+
+{{ macros.crear_nueva_entidad() }}
+
+{% endif %}
+
+{% endblock %}

@@ -8,7 +8,9 @@ wheel
 
 # Control de calidad python
 black
+flake8
 ruff
+bandit
 
 # Control de calidad html
 curlylint
@@ -23,3 +25,6 @@ mkdocs-material
 
 # Verificación de tipos
 mypy
+
+# Test api rest
+requests

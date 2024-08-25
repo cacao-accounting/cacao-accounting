@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Definicion de base de datos.
-"""
+"""Definicion de base de datos."""
 
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
@@ -36,10 +34,13 @@ from ulid import ULID
 
 # < --------------------------------------------------------------------------------------------- >
 # Definición principal de la clase del ORM.
+# < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-DBVERSION = "0.0.0dev"
 
+# < --------------------------------------------------------------------------------------------- >
+# Deficinición central de status web.
+# < --------------------------------------------------------------------------------------------- >
 StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
 STATUS: Dict[str, StatusWeb] = {
@@ -59,7 +60,8 @@ STATUS: Dict[str, StatusWeb] = {
 }
 
 # <---------------------------------------------------------------------------------------------> #
-# Utilizamos U
+# Textos unicos en base a ULID
+# <---------------------------------------------------------------------------------------------> #
 
 
 def obtiene_texto_unico() -> str:
@@ -70,6 +72,7 @@ def obtiene_texto_unico() -> str:
 # <---------------------------------------------------------------------------------------------> #
 # Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
 # ellas.
+# <---------------------------------------------------------------------------------------------> #
 class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
 
@@ -216,6 +219,8 @@ class Usuario(UserMixin, database.Model, BaseTabla):  # type: ignore[name-define
     genero = database.Column(database.String(10))
     nacimiento = database.Column(database.Date())
     telefono = database.Column(database.String(50))
+    # Api rest auth
+    token = None
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -423,6 +428,8 @@ class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Todos los registros que afecten el general ledger deben utilizar estar columnas como base.
 class GLBase:
+    """General Ledger Base."""
+
     id = database.Column(
         database.String(26),
         primary_key=True,

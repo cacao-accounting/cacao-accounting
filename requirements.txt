@@ -11,6 +11,7 @@ flask-sqlalchemy
 flask-wtf
 loguru
 pg8000
+pyjwt
 PyMySQL
 python-ulid
 teritorio
