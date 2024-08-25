@@ -38,6 +38,7 @@ from flask_login import current_user
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.admin import admin
+from cacao_accounting.api import api
 from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
@@ -46,7 +47,7 @@ from cacao_accounting.compras import compras
 from cacao_accounting.config import DIRECTORIO_ARCHIVOS, DIRECTORIO_PLANTILLAS, MODO_ESCRITORIO, TESTING_MODE
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, entidades_creadas
+from cacao_accounting.database.helpers import entidades_creadas, obtener_id_modulo_por_nombre
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
@@ -80,20 +81,20 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         @app.errorhandler(404)
         def error_404(error):
             """Pagina personalizada para recursos no encontrados."""
-            assert error is not None
-            return render_template("404.html"), 404
+            if error:
+                return render_template("404.html"), 404
 
         @app.errorhandler(403)
         def error_403(error):
             """Pagina personalizada para solicitar acceso a recursos no autorizados."""
-            assert error is not None
-            return render_template("403.html"), 403
+            if error:
+                return render_template("403.html"), 403
 
         @app.errorhandler(400)
         def error_400(error):
             """Pagina personalizada para solicitar invalida."""
-            assert error is not None
-            return render_template("400.html"), 400
+            if error:
+                return render_template("400.html"), 400
 
     else:
         raise RuntimeError(ERROR2)
@@ -104,6 +105,7 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
     if app and isinstance(app, Flask):
         with app.app_context():
             app.register_blueprint(admin)
+            app.register_blueprint(api)
             app.register_blueprint(bancos)
             app.register_blueprint(main_app)
             app.register_blueprint(contabilidad)
@@ -139,16 +141,14 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             # "solicitar", "validar" y "validar_solicitud"
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
-            app.jinja_env.globals.update(entidades_creada=entidades_creadas)
+            app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
 
     else:
         raise RuntimeError(ERROR2)
 
 
 def create_app(ajustes: Union[dict, None] = None) -> Flask:
-    """
-    Aplication factory.
-    """
+    """Aplication factory."""
     cacao_app = Flask(
         "cacao_accounting",
         template_folder=DIRECTORIO_PLANTILLAS,
@@ -195,7 +195,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
     @cacao_app.before_request
     def before_request():  # pragma: no cover
         session.permanent = True
-        cacao_app.permanent_session_lifetime = timedelta(minutes=30)  # Timeout session after 30 minutes
+        cacao_app.permanent_session_lifetime = timedelta(minutes=30)
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)

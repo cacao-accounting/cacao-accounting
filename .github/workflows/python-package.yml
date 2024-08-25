@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, development]
   pull_request:
-    branches: [main]
+    branches: [main, development]
 
 jobs:
   build:
@@ -30,10 +30,13 @@ jobs:
       - name: Lint project code
         run: |
           python -m flake8 cacao_accounting/
-          python -m bandit cacao_accounting/
+          python -m bandit -r cacao_accounting/
           python -m ruff check cacao_accounting/
       - name: Test with pytest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bash run_test.sh
+          CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_basicos.py
+          CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_forms.py
+          CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_vistas.py
+          CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_webactions.py

@@ -5,15 +5,9 @@ import pytest
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_static_routes import static_rutes
+from z_func import init_test_db
 
 from cacao_accounting import create_app
-from cacao_accounting.config import DIRECTORIO_PRINCICIPAL
-
-
-if os.name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_vistas.db"
-else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\db_test_vistas.db"
 
 
 app = create_app(
@@ -24,7 +18,7 @@ app = create_app(
         "WTF_CSRF_ENABLED": False,
         "DEBUG": True,
         "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
     }
 )
 
@@ -35,14 +29,10 @@ def test_visit_views(request):
 
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
-        from cacao_accounting.database import database
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
         with app.app_context():
             from flask_login import current_user
 
-            database.drop_all()
-            inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
+            init_test_db(app)
 
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
@@ -60,4 +50,3 @@ def test_visit_views(request):
                             assert text in consulta.data
 
             client.get("/user/logout")
-            database.drop_all()

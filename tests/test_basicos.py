@@ -49,3 +49,10 @@ class TestInstanciasClase(unittest.TestCase):
         from cacao_accounting.auth import login
 
         self.assertIsInstance(login, Blueprint)
+
+
+def test_encryp_passwd():
+    from cacao_accounting.auth import proteger_passwd
+
+    p = proteger_passwd("queonzabalanza")
+    assert p is not None

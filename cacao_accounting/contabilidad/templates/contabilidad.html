@@ -1,6 +1,17 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %}
 {% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+        <i class="bi bi-house"></i>Inicio
+      </a>
+    </li>
+  </ol>
+</nav>
+
 <section>
   <h4>Módulo de Contabilidad.</h4>
   <div class="container">
@@ -27,6 +38,10 @@
       </div>
       <div class="col-md">
         <h5><i class="bi bi-card-list"></i> Registros</h5>
+        <p style="font-size:14px;font-weight: bold;">
+          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Comprobantes
+            Contables</a><br>
+        </p>
       </div>
       <div class="col-md">
         <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
