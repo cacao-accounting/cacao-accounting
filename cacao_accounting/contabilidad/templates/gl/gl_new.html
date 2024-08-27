@@ -80,46 +80,52 @@
                                     <input class="col-sm-1" type="number" id="gl-row-1-credit" name="gl-row-1-credit" />
                                     <input class="col-sm-2" id="gl-row-1-comment" />
                                     <div class="d-flex align-items-center" id="gl-row-1-actions">
-                                        <span class="badge text-bg-secondary">
-                                            <ion-icon name="more"></ion-icon> Detalles
-                                        </span>
+                                        <a data-bs-toggle="collapse" href="#gl-row-1-aditional-data" role="button"
+                                            aria-expanded="false" aria-controls="collapseExample">
+                                            <span class="badge text-bg-secondary">
+                                                <ion-icon name="more"></ion-icon> Detalles
+                                            </span>
+                                        </a>
                                         <span class="badge text-bg-danger">
                                             <i class="bi bi-trash3" aria-hidden="true"></i>
                                         </span>
                                     </div>
                                 </div>
+                                <div class="collapse" id="gl-row-1-aditional-data">
+                                    <span><strong>Información Adicional:</strong></span>
+                                </div>
                             </div>
-                        </div>
-                        <div>
-                            <span class="badge text-bg-success">
-                                <i class="bi bi-plus-circle-fill" aria-hidden="true"></i> Agregar Linea
-                            </span>
-                        </div>
-                        <div class="input-group">
-                            <span class="input-group-addon col-sm-3"
-                                style="background-color: #addcbb"><strong>Totales</strong></span>
-                            <span class="input-group-addon col-sm-3"
-                                style="background-color: #addcbb"><strong></strong></span>
-                            <span class="input-group-addon text-end col-sm-1"
-                                style="background-color: #addcbb"><strong>0.00</strong> </span>
-                            <span class="input-group-addon text-end col-sm-1"
-                                style="background-color: #addcbb"><strong>0.00</strong> </span>
-                            <span class="input-group-addon col-sm-2"
-                                style="background-color: #addcbb"><strong></strong></span>
-                            <span class="input-group-addon col-sm-1"
-                                style="background-color: #addcbb"><strong></strong></span>
                         </div>
                     </div>
                     <div>
-                        <p></p>
-                        <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
-                        <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger"
-                            type="link">Cancelar</a>
+                        <span class="badge text-bg-success">
+                            <i class="bi bi-plus-circle-fill" aria-hidden="true"></i> Agregar Linea
+                        </span>
                     </div>
-                </form>
+                    <div class="input-group">
+                        <span class="input-group-addon col-sm-3"
+                            style="background-color: #addcbb"><strong>Totales</strong></span>
+                        <span class="input-group-addon col-sm-3"
+                            style="background-color: #addcbb"><strong></strong></span>
+                        <span class="input-group-addon text-end col-sm-1"
+                            style="background-color: #addcbb"><strong>0.00</strong> </span>
+                        <span class="input-group-addon text-end col-sm-1"
+                            style="background-color: #addcbb"><strong>0.00</strong> </span>
+                        <span class="input-group-addon col-sm-2"
+                            style="background-color: #addcbb"><strong></strong></span>
+                        <span class="input-group-addon col-sm-1"
+                            style="background-color: #addcbb"><strong></strong></span>
+                    </div>
             </div>
+            <div>
+                <p></p>
+                <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
+                <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+            </div>
+            </form>
         </div>
     </div>
+</div>
 </div>
 
 {% else %}
