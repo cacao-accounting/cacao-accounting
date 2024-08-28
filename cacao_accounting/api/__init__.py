@@ -35,8 +35,11 @@ api = Blueprint("api", __name__, template_folder="templates")
 
 
 def token_requerido(f):  # pragma: no cover
+    """Decorador para proteger el acceso a la API vía tokens."""
+
     @wraps(f)
     def wrapper(*args, **kwds):
+        """Protege la API con un token."""
 
         token = None
 
@@ -67,6 +70,7 @@ def token_requerido(f):  # pragma: no cover
 @api.route("/api/test")
 @token_requerido
 def test_appy():
+    """Vista de prueba para probar el API."""
 
     responde_data = {
         "Response": "Holis",

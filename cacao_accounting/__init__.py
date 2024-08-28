@@ -194,6 +194,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
 
     @cacao_app.before_request
     def before_request():  # pragma: no cover
+        """Establece un periodo de 30 minutos de valides de la sesión."""
         session.permanent = True
         cacao_app.permanent_session_lifetime = timedelta(minutes=30)
 
