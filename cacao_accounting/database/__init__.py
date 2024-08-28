@@ -463,8 +463,13 @@ class GLBase:
     tc = database.Column(database.DECIMAL())
     valor_x = database.Column(database.DECIMAL())
     # Informacion ingresada por el usuario
-    comentario = database.Column(database.String(200))
-    comentario_linea = database.Column(database.String(200))
+    # Global
+    comentario = database.Column(database.String(100))
+    referencia = database.Column(database.String(50))
+    # Detalle
+    comentario_linea = database.Column(database.String(50))
+    referencia1 = database.Column(database.String(50))
+    referencia2 = database.Column(database.String(50))
     # Terceras partes
     tercero_tipo = database.Column(database.String(26))
     tercero_code = database.Column(database.String(26))
