@@ -27,16 +27,16 @@ from flask import Blueprint, render_template
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 
-gl = Blueprint("gl", __name__, template_folder="templates")
+gl = Blueprint("gl", __name__, static_folder="static", template_folder="templates")
 
 
-@gl.route("/accounting/gl/list")
+@gl.route("/list")
 def gl_list():
     """Lista de Comprobantes Contables."""
-    return render_template("gl/gl_lista.html")
+    return render_template("gl_lista.html")
 
 
-@gl.route("/accounting/gl/new")
+@gl.route("/new")
 def gl_new():
     """Lista de Comprobantes Contables."""
-    return render_template("gl/gl_new.html")
+    return render_template("gl_new.html")
