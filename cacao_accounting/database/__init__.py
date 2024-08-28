@@ -74,9 +74,9 @@ def obtiene_texto_unico() -> str:
 
 def obtiene_texto_unico_cuid2() -> str:
     """Genera un texto unico en base a CUID2."""
-    # Genera un id unico de 15 caractes
+    # Genera un id unico de 10 caractes
     # Se utiliza para los registros detalle, principalmente las entradas del mayor general
-    GENERATOR: Cuid = Cuid(length=15)
+    GENERATOR: Cuid = Cuid(length=10)
 
     return str(GENERATOR.generate())
 
@@ -442,7 +442,7 @@ class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
 class GLBase:
     """General Ledger Base."""
 
-    id = database.Column(database.String(15), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico_cuid2)
+    id = database.Column(database.String(10), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico_cuid2)
     # Afectación contable
     entidad = database.Column(database.String(10), index=True)
     cta = database.Column(database.String(50), index=True)
