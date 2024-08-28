@@ -2,6 +2,7 @@
 alembic
 argon2-cffi
 argon2-cffi-bindings
+cuid2
 cryptography
 Flask
 Flask-Alembic
