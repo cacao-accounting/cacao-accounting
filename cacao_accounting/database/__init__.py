@@ -23,6 +23,7 @@ from typing import Dict
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint
@@ -60,13 +61,24 @@ STATUS: Dict[str, StatusWeb] = {
 }
 
 # <---------------------------------------------------------------------------------------------> #
-# Textos unicos en base a ULID
+# Textos unicos
 # <---------------------------------------------------------------------------------------------> #
 
 
 def obtiene_texto_unico() -> str:
-    """Genera un texto unico en base a una UUID."""
+    """Genera un texto unico en base a ULID."""
+    # Genera un id unico de 26 caracteres
+    # Es ID son URL SAFE y se utilizan en los registros principales
     return str(ULID())
+
+
+def obtiene_texto_unico_cuid2() -> str:
+    """Genera un texto unico en base a CUID2."""
+    # Genera un id unico de 15 caractes
+    # Se utiliza para los registros detalle, principalmente las entradas del mayor general
+    GENERATOR: Cuid = Cuid(length=15)
+
+    return str(GENERATOR.generate())
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -430,29 +442,29 @@ class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
 class GLBase:
     """General Ledger Base."""
 
-    id = database.Column(
-        database.String(26),
-        primary_key=True,
-        nullable=False,
-        index=True,
-        default=obtiene_texto_unico,
-    )
-    fecha = database.Column(
-        database.Date,
-        default=database.func.now(),
-        onupdate=database.func.now(),
-        nullable=True,
-    )
+    id = database.Column(database.String(15), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico_cuid2)
+    # Afectación contable
+    entidad = database.Column(database.String(10), index=True)
+    cta = database.Column(database.String(50), index=True)
+    cc = database.Column(database.String(50), index=True)
+    unidad = database.Column(database.String(10), index=True)
+    proyecto = database.Column(database.String(50), index=True)
+    # Fecha de registro
+    fecha = database.Column(database.Date)
+    # Referencia Cruzada
     tipo = database.Column(database.String(50))
     registro_id = database.Column(database.String(75))
-    idx = database.Column(database.Integer(), nullable=True)
-    comentario = database.Column(database.String(200))
-    comentario_linea = database.Column(database.String(200))
-    valor = database.Column(database.DECIMAL())  # Valor moneda Predeterminada
+    # Orden de los registros
+    order = database.Column(database.Integer(), nullable=True)
+    # Valor moneda Predeterminada
+    valor = database.Column(database.DECIMAL())
     # Registro en multimoneda
     id_moneda = database.Column(database.String(200))
     tc = database.Column(database.DECIMAL())
     valor_x = database.Column(database.DECIMAL())
+    # Informacion ingresada por el usuario
+    comentario = database.Column(database.String(200))
+    comentario_linea = database.Column(database.String(200))
     # Terceras partes
     tercero_tipo = database.Column(database.String(26))
     tercero_code = database.Column(database.String(26))
