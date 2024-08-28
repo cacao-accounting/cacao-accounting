@@ -44,7 +44,7 @@ from cacao_accounting.database import STATUS, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
-contabilidad.register_blueprint(gl)
+contabilidad.register_blueprint(gl, url_prefix="/accounting/gl")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
 APPNAME = "Cacao Accounting"
 
