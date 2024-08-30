@@ -21,9 +21,13 @@
 
 {% if entidades_creadas %}
 
-<div>
-    <div class="flex">
+<div class="d-flex justify-content-between">
+    <div>
         <h4>Crear un Nuevo Comprobante de Diario.</h4>
+    </div>
+    <div>
+        <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
+        <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
     </div>
 </div>
 
@@ -419,7 +423,7 @@
         <div>
             <p></p>
             <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
-            <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+            <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
         </div>
     </form>
 </div>
