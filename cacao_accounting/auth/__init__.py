@@ -32,7 +32,6 @@ from jwt import encode
 from cacao_accounting.database import Usuario
 from cacao_accounting.logs import log
 
-
 # <---------------------------------------------------------------------------------------------> #
 # Logica de inicio de sesión.
 # <---------------------------------------------------------------------------------------------> #

@@ -13,3 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+
+
+function update_form_from_entity() {
+   //pass
+}
+
+function add_new_gl_line() {
+   //pass
+}
+
+function delete_gl_line(x) {
+   //pass
+}
