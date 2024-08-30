@@ -23,7 +23,7 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
-from datetime import timedelta
+from datetime import datetime, timedelta
 from os import environ
 from typing import Union
 
@@ -142,6 +142,8 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
+            # now available globally in templates
+            app.jinja_env.globals.update(now=datetime.now)
 
     else:
         raise RuntimeError(ERROR2)
