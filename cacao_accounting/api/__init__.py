@@ -26,7 +26,6 @@ from flask import Blueprint, abort, current_app, jsonify, request
 from flask_login import current_user
 from jwt import decode
 
-
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
