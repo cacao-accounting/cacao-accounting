@@ -67,7 +67,8 @@
   <ul class="navbar-nav d-none d-md-block">
     <li class="nav-item text-nowrap">
       <a class="nav-link" style="font-size: 1rem;" href="{{ url_for("login.cerrar_sesion") }}">
-        Cerrar Sesión <i class="bi bi-box-arrow-right"></i>
+        Cerrar Sesión <ion-icon name="exit" style="font-size: 1rem;" aria-hidden="true"></ion-icon>
+        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
       </a>
     </li>
   </ul>
@@ -146,8 +147,8 @@
       {%- endif %}
       <li class="nav__item d-md-none">
         <a href="{{ url_for("login.cerrar_sesion") }}" class="nav-link">
-          <i class="bi bi-box-arrow-right"></i>
-          Cerrar Sesión
+          <ion-icon name="exit" aria-hidden="true"></ion-icon> Cerrar Sesión
+
         </a>
       </li>
     </ul>
