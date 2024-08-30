@@ -84,7 +84,7 @@
 
       <li class="nav__item">
         <a href="{{ url_for("contabilidad.conta") }}" class="nav-link">
-          <i class="bi bi-bar-chart"></i>
+          <i class="bi bi-book"></i>
           Contabilidad
         </a>
       </li>
@@ -140,7 +140,7 @@
       {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
       <li class="nav__item">
         <a href="{{ url_for("admin.admin_") }}" class="nav-link">
-          <i class="bi bi-sliders"></i>
+          <i class="bi bi-gear"></i>
           Administración
         </a>
       </li>
