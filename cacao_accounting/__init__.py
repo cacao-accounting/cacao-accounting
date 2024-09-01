@@ -52,6 +52,7 @@ from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import registrar_modulos_adicionales, validar_modulo_activo
 from cacao_accounting.ventas import ventas
+from cacao_accounting.version import PRERELEASE
 
 alembic = Alembic()
 
@@ -144,6 +145,9 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
+            if PRERELEASE:
+                app.jinja_env.globals.update(bdrul=app.config["SQLALCHEMY_DATABASE_URI"])
+                app.jinja_env.globals.update(development=True)
 
     else:
         raise RuntimeError(ERROR2)
