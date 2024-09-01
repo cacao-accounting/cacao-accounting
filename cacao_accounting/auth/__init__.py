@@ -29,7 +29,7 @@ from jwt import encode
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Usuario
+from cacao_accounting.database import Usuario, database
 from cacao_accounting.logs import log
 
 # <---------------------------------------------------------------------------------------------> #
@@ -69,9 +69,10 @@ def validar_acceso(usuario, clave) -> bool:
     from argon2.exceptions import VerifyMismatchError
 
     acceso = clave
-    registro = Usuario.query.filter_by(usuario=usuario).first()
+    consulta = database.session.execute(database.select(Usuario).filter_by(usuario=usuario)).first()
 
-    if registro:
+    if consulta:
+        registro = consulta[0]
 
         try:
             ph.verify(registro.clave_acceso, acceso)

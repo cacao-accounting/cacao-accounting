@@ -2,26 +2,28 @@
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <title> Cacao Accounting - Inicio de Sesión </title>
-{{ macros.headertags() }}
+  {{ macros.headertags() }}
 
-<style>
-  .bd-placeholder-img {
-    font-size: 1.125rem;
-    text-anchor: middle;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-  }
-
-  @media (min-width: 768px) {
-    .bd-placeholder-img-lg {
-      font-size: 3.5rem;
+  <style>
+    .bd-placeholder-img {
+      font-size: 1.125rem;
+      text-anchor: middle;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
     }
-  }
-</style>
+
+    @media (min-width: 768px) {
+      .bd-placeholder-img-lg {
+        font-size: 3.5rem;
+      }
+    }
+
+  </style>
 
   <!-- Custom styles for this template -->
   <link href="{{ url_for('static', filename='css/signin.css') }}" rel="stylesheet">
@@ -31,24 +33,43 @@
   <main class="form-signin">
     <form method="post">
       {{ form.csrf_token }}
-      <img class="mb-4" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting" height="75">
+      <img class="mb-4" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}"
+        alt="Cacao Accounting" height="75">
       <h1 class="h3 mb-3 font-weight-normal">Inicio de Sesión</h1>
       {% with messages = get_flashed_messages() %}
-        {% if messages %}
-          {% for message in messages %}
-            <div class="alert alert-success">
-              {{ message }}
-            </div>
-          {% endfor %}
-        {% endif %}
+      {% if messages %}
+      {% for message in messages %}
+      <div class="alert alert-success">
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
       {% endwith %}
       <label for="usuario" class="visually-hidden">Usuario</label>
       {{ form.usuario(class="form-control", id="usuario", placeholder="Usuario") }}
       <label for="contraseña" class="visually-hidden">Contraseña</label>
       {{ form.acceso(class="form-control", id="acceso", placeholder="Contraseña") }}
       <button class="w-100 btn btn-lg btn-primary btn-block" type="submit">Iniciar Sesión</button>
-      <p class="mt-5 mb-3 text-muted text-center">&copy; 2020 - 2021</p>
+
     </form>
-  </main> 
+    {% if MODO_ESCRITORIO and development %}
+    <div class="d-flex justify-content-center">
+      <button class="btn btn-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample"
+        aria-expanded="false" aria-controls="collapseExample">
+        Detalles
+      </button>
+      <div class="collapse" id="collapseExample">
+        <div class="card card-body">
+          <p>
+            <strong>Modo Escritorio Activado</strong><br>
+            Archivo de Base de Datos: {{bdrul}}
+          </p>
+        </div>
+      </div>
+      {% endif %}
+      <p class="mt-5 mb-3 text-muted text-center">&copy; 2020 - 2021</p>
+    </div>
+  </main>
 </body>
+
 </html>
