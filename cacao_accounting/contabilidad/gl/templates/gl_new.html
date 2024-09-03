@@ -36,6 +36,7 @@
     <form>
         <div class="row" id="new-GL-HEADER">
             <div class="col">
+                <input type="hidden" id="gl-ID" name="gl-row-2-ID" value="" />
                 <label for="selectENTITY" class="form-label">Entidad:</label>
                 <select onchange="update_form_from_entity()" class="form-control" name="selectENTITY" id="selectENTITY"
                     required>
@@ -137,6 +138,9 @@
                                 <label for="gl-row-1-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
                                 <select class="form-control" name="gl-row-1-PARTYTYPE" id="gl-row-1-PARTYTYPE"></select>
                                 <br>
+                                <label for="gl-row-1-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-1-REFTYPE" id="gl-row-1-REFTYPE"></select>
+                                <br>
                                 <label for="gl-row-1-REF1" class="form-label">Referencia 1:</label>
                                 <input class="form-control" name="gl-row-1-REF1" id="gl-row-1-REF1">
                                 <br>
@@ -154,6 +158,9 @@
                                 <br>
                                 <label for="gl-row-1-THIRDTYPE" class="form-label">Tercero:</label>
                                 <select class="form-control" name="gl-row-1-THIRDTYPE" id="gl-row-1-THIRDTYPE"></select>
+                                <br>
+                                <label for="gl-row-1-REF" class="form-label">Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-2-REF" id="gl-row-1-REF"></select>
                                 <br>
                                 <label for="gl-row-1-REF2" class="form-label">Referencia 2:</label>
                                 <input class="form-control" name="gl-row-1-REF2" id="gl-row-1-REF2">
@@ -218,6 +225,9 @@
                                 <label for="gl-row-2-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
                                 <select class="form-control" name="gl-row-2-PARTYTYPE" id="gl-row-2-PARTYTYPE"></select>
                                 <br>
+                                <label for="gl-row-2-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-2-REFTYPE" id="gl-row-2-REFTYPE"></select>
+                                <br>
                                 <label for="gl-row-2-REF1" class="form-label">Referencia 1:</label>
                                 <input class="form-control" name="gl-row-2-REF1" id="gl-row-2-REF1">
                                 <br>
@@ -235,6 +245,9 @@
                                 <br>
                                 <label for="gl-row-2-THIRDTYPE" class="form-label">Tercero:</label>
                                 <select class="form-control" name="gl-row-2-THIRDTYPE" id="gl-row-2-THIRDTYPE"></select>
+                                <br>
+                                <label for="gl-row-2-REF" class="form-label">Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-2-REF" id="gl-row-2-REF"></select>
                                 <br>
                                 <label for="gl-row-2-REF2" class="form-label">Referencia 2:</label>
                                 <input class="form-control" name="gl-row-2-REF2" id="gl-row-2-REF2">
@@ -299,6 +312,9 @@
                                 <label for="gl-row-3-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
                                 <select class="form-control" name="gl-row-3-PARTYTYPE" id="gl-row-3-PARTYTYPE"></select>
                                 <br>
+                                <label for="gl-row-3-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-3-REFTYPE" id="gl-row-3-REFTYPE"></select>
+                                <br>
                                 <label for="gl-row-3-REF1" class="form-label">Referencia 1:</label>
                                 <input class="form-control" name="gl-row-3-REF1" id="gl-row-3-REF1">
                                 <br>
@@ -316,6 +332,9 @@
                                 <br>
                                 <label for="gl-row-3-THIRDTYPE" class="form-label">Tercero:</label>
                                 <select class="form-control" name="gl-row-3-THIRDTYPE" id="gl-row-3-THIRDTYPE"></select>
+                                <br>
+                                <label for="gl-row-3-REF" class="form-label">Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-3-REF" id="gl-row-3-REF"></select>
                                 <br>
                                 <label for="gl-row-3-REF2" class="form-label">Referencia 2:</label>
                                 <input class="form-control" name="gl-row-3-REF2" id="gl-row-3-REF2">
@@ -380,6 +399,9 @@
                                 <label for="gl-row-4-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
                                 <select class="form-control" name="gl-row-4-PARTYTYPE" id="gl-row-4-PARTYTYPE"></select>
                                 <br>
+                                <label for="gl-row-4-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-4-REFTYPE" id="gl-row-4-REFTYPE"></select>
+                                <br>
                                 <label for="gl-row-4-REF1" class="form-label">Referencia 1:</label>
                                 <input class="form-control" name="gl-row-4-REF1" id="gl-row-4-REF1">
                                 <br>
@@ -397,6 +419,9 @@
                                 <br>
                                 <label for="gl-row-4-THIRDTYPE" class="form-label">Tercero:</label>
                                 <select class="form-control" name="gl-row-4-THIRDTYPE" id="gl-row-4-THIRDTYPE"></select>
+                                <br>
+                                <label for="gl-row-4-REF" class="form-label">Referencia Interna:</label>
+                                <select class="form-control" name="gl-row-4-REF" id="gl-row-4-REF"></select>
                                 <br>
                                 <label for="gl-row-4-REF2" class="form-label">Referencia 2:</label>
                                 <input class="form-control" name="gl-row-4-REF2" id="gl-row-4-REF2">
