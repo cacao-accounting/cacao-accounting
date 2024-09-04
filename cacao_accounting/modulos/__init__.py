@@ -52,19 +52,19 @@ bancos = {
 compras = {
     "modulo": "purchases",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 
 inventario = {
     "modulo": "inventory",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 
 ventas = {
     "modulo": "sales",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 
 admin = {
