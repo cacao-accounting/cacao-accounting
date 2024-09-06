@@ -16,11 +16,11 @@ COPY requirements.txt /tmp/
 WORKDIR /app
 
 RUN microdnf install -y --nodocs --best --refresh python39 python3-pip python3-cryptography \
+    && microdnf update -y --nodocs --best \
     && microdnf clean all \
     && /usr/bin/python3.9 --version \
     && chmod +x docker-entry-point.sh \
     && /usr/bin/python3.9 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && /usr/bin/python3.9 -m pip list --format=columns \
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3-pip
 
 ENV FLASK_APP="cacao_accounting"
