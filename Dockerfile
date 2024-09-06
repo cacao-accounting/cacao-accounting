@@ -15,8 +15,8 @@ COPY requirements.txt /tmp/
 
 WORKDIR /app
 
-RUN microdnf install -y --nodocs --best --refresh python39 python3-pip python3-cryptography \
-    && microdnf update -y --nodocs --best \
+RUN microdnf update -y --nodocs --best --refresh \
+    && microdnf install -y --nodocs --best --refresh python39 python3-pip python3-cryptography \ 
     && microdnf clean all \
     && /usr/bin/python3.9 --version \
     && chmod +x docker-entry-point.sh \
