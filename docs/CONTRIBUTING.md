@@ -18,13 +18,16 @@ Cacao Accounting es software libre y de código abierto liberado bajo la licenci
 
 * Usar el proyecto con o sin fines de lucro.
 * Modificar el proyecto para ajustarlo a sus necesidades especificas (definiendo claramente los cambios realizados al proyecto original).
+* Distribuir el software original o modificado. Si distribuyen versiones modificadas, deben incluir una copia de la licencia y un aviso de los cambios realizados.
 
 Sin embargo los usuarios no pueden:
 
-* Hacer uso de las marcas registradas del proyecto
-sin permiso explicito.
-* Requerir garantias de cualquier tipo; el proyecto se distribuye tal cual sin garantias
-de que pueda ser útil para algún fin especifico.
+* Hacer uso de las marcas registradas del proyecto sin permiso explicito.
+* Requerir garantias de cualquier tipo; el proyecto se distribuye tal cual sin garantias de que pueda ser útil para algún fin especifico.
+
+Adicionalmente los usuarios deben incluir un aviso de copyright y la renuncia de responsabilidad cuando distribuyen el software, asegurando que se reconozca la autoría original.
+
+La licencia Apache Versión 2 proporciona una concesión de derechos de patente, lo que significa que si un contribuyente aporta código, no puede demandar a los usuarios del software por infracción de patentes relacionadas con ese código, es porque que se solicita que los colaboradores del proyecto acepten el [Acuerdo de Aceptación de la Licencia](https://cla-assistant.io/cacao-accounting/cacao-accounting) antes de incluir sus aportes en el proyecto.
 
 ## Certifica el origen de tus aportes.
 
