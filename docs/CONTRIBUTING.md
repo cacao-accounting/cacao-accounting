@@ -68,7 +68,7 @@ para aportar el proyecto, para colaborar con el proyecto necesitas:
   * [Yarn](https://yarnpkg.com/lang/en/)
   * [Python](https://www.python.org/downloads/)
 
-La versión minima de Python soportada es: >=3.6
+La versión minima de Python soportada es: >=3.8
 
 Tecnologías utilizadas:
 
