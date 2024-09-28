@@ -42,11 +42,13 @@ from cacao_accounting.contabilidad.auxiliares import (
 from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.database import STATUS, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.version import APPNAME
 
+
+# <------------------------------------------------------------------------------------------------------------------------> #
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 contabilidad.register_blueprint(gl, url_prefix="/accounting/gl")
 LISTA_ENTIDADES = redirect("/accounts/entity/list")
-APPNAME = "Cacao Accounting"
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -57,10 +59,10 @@ APPNAME = "Cacao Accounting"
 @verifica_acceso("accounting")
 def monedas():
     """Listado de monedas registradas en el sistema."""
-    from cacao_accounting.database import Moneda
+    from cacao_accounting.database import Currency
 
     CONSULTA = database.paginate(
-        database.select(Moneda),
+        database.select(Currency),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -99,10 +101,10 @@ def conta():
 @verifica_acceso("accounting")
 def entidades():
     """Listado de entidades."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
     CONSULTA = database.paginate(
-        database.select(Entidad),  # noqa: E712
+        database.select(Entity),  # noqa: E712
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -122,9 +124,9 @@ def entidades():
 @verifica_acceso("accounting")
 def entidad(entidad_id):
     """Entidad individual."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    registro = database.session.execute(database.select(Entidad).filter_by(entidad=entidad_id)).first()
+    registro = database.session.execute(database.select(Entity).filter_by(code=entidad_id)).first()
 
     return render_template(
         "contabilidad/entidad.html",
@@ -139,29 +141,28 @@ def entidad(entidad_id):
 def nueva_entidad():
     """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
     formulario = FormularioEntidad()
     formulario.moneda.choices = obtener_lista_monedas()
 
     TITULO = "Crear Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
-
-        ENTIDAD = Entidad(
-            entidad=request.form.get("id", None),
-            razon_social=request.form.get("razon_social", None),
-            nombre_comercial=request.form.get("nombre_comercial", None),
-            id_fiscal=request.form.get("id_fiscal", None),
-            moneda=request.form.get("moneda", None),
-            tipo_entidad=request.form.get("tipo_entidad", None),
-            correo_electronico=request.form.get("correo_electronico", None),
+        ENTIDAD = Entity(
+            code=request.form.get("id", None),
+            company_name=request.form.get("razon_social", None),
+            name=request.form.get("nombre_comercial", None),
+            tax_id=request.form.get("id_fiscal", None),
+            currency=request.form.get("moneda", None),
+            entity_type=request.form.get("tipo_entidad", None),
+            e_mail=request.form.get("correo_electronico", None),
             web=request.form.get("web", None),
-            telefono1=request.form.get("telefono1", None),
-            telefono2=request.form.get("telefono2", None),
+            phone1=request.form.get("telefono1", None),
+            phone2=request.form.get("telefono2", None),
             fax=request.form.get("fax", None),
             status="activo",
-            habilitada=True,
-            predeterminada=False,
+            enabled=True,
+            default=False,
         )
 
         database.session.add(ENTIDAD)
@@ -189,12 +190,12 @@ def editar_entidad(id_entidad):
     ENTIDAD = ENTIDAD[0]
 
     if request.method == "POST":
-        ENTIDAD.id_fiscal = request.form.get("id_fiscal", None)
-        ENTIDAD.nombre_comercial = request.form.get("nombre_comercial", None)
-        ENTIDAD.razon_social = request.form.get("razon_social", None)
-        ENTIDAD.telefono1 = request.form.get("telefono1", None)
-        ENTIDAD.telefono2 = request.form.get("telefono2", None)
-        ENTIDAD.correo_electronico = request.form.get("correo_electronico", None)
+        ENTIDAD.tax_id = request.form.get("id_fiscal", None)
+        ENTIDAD.name = request.form.get("nombre_comercial", None)
+        ENTIDAD.company_name = request.form.get("razon_social", None)
+        ENTIDAD.phone1 = request.form.get("telefono1", None)
+        ENTIDAD.phone2 = request.form.get("telefono2", None)
+        ENTIDAD.e_mail = request.form.get("correo_electronico", None)
         ENTIDAD.fax = request.form.get("fax", None)
         ENTIDAD.web = request.form.get("web", None)
         database.session.add(ENTIDAD)
@@ -202,12 +203,12 @@ def editar_entidad(id_entidad):
         return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.entidad))
     else:
         DATA = {
-            "nombre_comercial": ENTIDAD.nombre_comercial,
-            "razon_social": ENTIDAD.razon_social,
-            "id_fiscal": ENTIDAD.id_fiscal,
-            "correo_electronico": ENTIDAD.correo_electronico,
-            "telefono1": ENTIDAD.telefono1,
-            "telefono2": ENTIDAD.telefono2,
+            "nombre_comercial": ENTIDAD.name,
+            "razon_social": ENTIDAD.company_name,
+            "id_fiscal": ENTIDAD.tax_id,
+            "correo_electronico": ENTIDAD.e_mail,
+            "telefono1": ENTIDAD.phone1,
+            "telefono2": ENTIDAD.phone2,
             "fax": ENTIDAD.fax,
             "web": ENTIDAD.web,
         }
@@ -223,9 +224,9 @@ def editar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
     """Elimina una entidad de sistema."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     database.session.delete(ENTIDAD[0])
     database.session.commit()
 
@@ -238,9 +239,9 @@ def eliminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def inactivar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     ENTIDAD[0].habilitada = False
     database.session.commit()
 
@@ -253,9 +254,9 @@ def inactivar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def activar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     ENTIDAD[0].habilitada = True
     database.session.commit()
 
@@ -268,16 +269,16 @@ def activar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
     # Establece cualquier entidad establecida como predeterminada a falso
-    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entidad).filter_by(predeterminada=True)).all()
+    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entity).filter_by(predeterminada=True)).all()
 
     if ENTIDAD_PREDETERMINADA:
         for e in ENTIDAD_PREDETERMINADA:
             e[0].predeterminada = False
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(id=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     ENTIDAD[0].predeterminada = True
     database.session.commit()
 
@@ -292,10 +293,10 @@ def predeterminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def unidades():
     """Listado de unidades de negocios."""
-    from cacao_accounting.database import Unidad, database
+    from cacao_accounting.database import Unit, database
 
     CONSULTA = database.paginate(
-        database.select(Unidad),  # noqa: E712
+        database.select(Unit),  # noqa: E712
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -316,9 +317,9 @@ def unidades():
 @verifica_acceso("accounting")
 def unidad(id_unidad):
     """Unidad de negocios."""
-    from cacao_accounting.database import Unidad
+    from cacao_accounting.database import Unit
 
-    REGISTRO = database.session.execute(database.select(Unidad).filter_by(unidad=id_unidad)).first()
+    REGISTRO = database.session.execute(database.select(Unit).filter_by(unidad=id_unidad)).first()
     return render_template("contabilidad/unidad.html", registro=REGISTRO[0])
 
 
@@ -345,9 +346,9 @@ def nueva_unidad():
         from cacao_accounting.database import Unidad
 
         DATA = Unidad(
-            unidad=request.form.get("id", None),
-            nombre=request.form.get("nombre", None),
-            entidad=request.form.get("entidad", None),
+            code=request.form.get("id", None),
+            name=request.form.get("nombre", None),
+            entity=request.form.get("entidad", None),
             status="activo",
         )
         database.session.add(DATA)
@@ -389,9 +390,9 @@ def cuentas():
 @verifica_acceso("accounting")
 def cuenta(id_cta):
     """Cuenta Contable."""
-    from cacao_accounting.database import Cuentas
+    from cacao_accounting.database import Accounts
 
-    registro = database.session.execute(database.select(Cuentas).filter_by(codigo=id_cta)).first()
+    registro = database.session.execute(database.select(Accounts).filter_by(codigo=id_cta)).first()
 
     return render_template(
         "contabilidad/cuenta.html",
@@ -426,9 +427,9 @@ def ccostos():
 @verifica_acceso("accounting")
 def centro_costo(id_cc):
     """Centro de Costos."""
-    from cacao_accounting.database import CentroCosto
+    from cacao_accounting.database import CostCenter
 
-    registro = database.session.execute(database.select(CentroCosto).filter_by(codigo=id_cc)).first()
+    registro = database.session.execute(database.select(CostCenter).filter_by(codigo=id_cc)).first()
 
     return render_template(
         "contabilidad/centro-costo.html",
@@ -445,10 +446,10 @@ def centro_costo(id_cc):
 @verifica_acceso("accounting")
 def proyectos():
     """Listado de proyectos."""
-    from cacao_accounting.database import Proyecto, database
+    from cacao_accounting.database import Project
 
     CONSULTA = database.paginate(
-        database.select(Proyecto),
+        database.select(Project),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -472,10 +473,10 @@ def proyectos():
 @verifica_acceso("accounting")
 def tasa_cambio():
     """Listado de tasas de cambio."""
-    from cacao_accounting.database import TasaDeCambio, database
+    from cacao_accounting.database import ExchangeRate
 
     CONSULTA = database.paginate(
-        database.select(TasaDeCambio),  # noqa: E712
+        database.select(ExchangeRate),  # noqa: E712
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -602,7 +603,6 @@ def nueva_serie():
     form.entidad.choices = LISTA_DE_ENTIDADES
 
     if form.validate_on_submit() or request.method == "POST":
-
         SERIE = Serie(
             entidad=form.entidad.data,
             documento=form.documento.data,

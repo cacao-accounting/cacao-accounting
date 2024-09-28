@@ -14,12 +14,22 @@
 
 """Catalogos de Cuentas Contables."""
 
+# ---------------------------------------------------------------------------------------
+# Libreria estandar
+# --------------------------------------------------------------------------------------
 from collections import namedtuple
 from csv import DictReader
 from os.path import join
 
+# ---------------------------------------------------------------------------------------
+# Librerias de terceros
+# ---------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------
+# Recursos locales
+# ---------------------------------------------------------------------------------------
 from cacao_accounting.config import DIRECTORIO_APP
-from cacao_accounting.database import Cuentas, database
+from cacao_accounting.database import Accounts, database
 
 CatalogoCtas = namedtuple("CatalogoCtas", ["file", "pais", "idioma"])
 DIRECTORIO_CTAS = join(DIRECTORIO_APP, "contabilidad", "ctas", "catalogos")
@@ -44,20 +54,15 @@ def cargar_catalogos(catalogo, entidad):
         if cuenta["padre"] == "":
             cuenta["padre"] = None
 
-        registro = Cuentas(
-            activa=True,
-            habilitada=True,
-            entidad=entidad,
-            codigo=cuenta["codigo"],
-            nombre=cuenta["nombre"],
-            grupo=cuenta["grupo"],
-            padre=cuenta["padre"],
-            rubro=cuenta["rubro"],
-            tipo=cuenta["tipo"],
-            alternativo_codigo=cuenta["alternativo_codigo"],
-            alternativo=cuenta["alternativo"],
-            fiscal_codigo=cuenta["fiscal_codigo"],
-            fiscal=cuenta["fiscal"],
+        registro = Accounts(
+            active=True,
+            enabled=True,
+            entity=entidad,
+            code=cuenta["codigo"],
+            name=cuenta["nombre"],
+            group=cuenta["grupo"],
+            parent=cuenta["padre"],
+            clasification=cuenta["rubro"],
             status="activo",
         )
         database.session.add(registro)
