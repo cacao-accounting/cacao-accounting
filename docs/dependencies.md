@@ -8,7 +8,7 @@
 | argon2-cffi          |          MIT license          |                                                                                   Argon2 for Python |
 | argon2-cffi-bindings |          MIT license          |                                                                  Low-level CFFI bindings for Argon2 |
 | Babel                |          BSD License          |                                                                      Internationalization utilities |
-| cuid2                |          MIT License          |    Next generation GUIDs. Collision-resistant ids optimized for horizontal scaling and performance. |
+| cuid2                |          MIT License          |                           Collision-resistant ids optimized for horizontal scaling and performance. |
 | cryptography         |  Apache-2.0 OR BSD-3-Clause   | cryptography is a package which provides cryptographic recipes and primitives to Python developers. |
 | Flask                |          BSD License          |                                           A simple framework for building complex web applications. |
 | Flask-Alembic        |          MIT License          |                                                                       Integrate Alembic with Flask. |
