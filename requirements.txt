@@ -2,6 +2,7 @@
 alembic
 argon2-cffi
 argon2-cffi-bindings
+babel
 cuid2
 cryptography
 Flask
@@ -15,6 +16,7 @@ pg8000
 pyjwt
 PyMySQL
 python-ulid
+sqlalchemy
 teritorio
 waitress
 wtforms
