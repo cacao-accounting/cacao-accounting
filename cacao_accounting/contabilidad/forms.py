@@ -28,7 +28,7 @@ from wtforms.validators import DataRequired
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Entidad
+from cacao_accounting.database import Entity
 from cacao_accounting.modulos import lista_tipos_documentos
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -50,7 +50,7 @@ class FormularioEntidad(FlaskForm):
     moneda = SelectField(
         "Tipo de Entidad",
     )
-    tipo_entidad = SelectField("Tipo de Entidad", choices=Entidad.tipo_entidad_lista)
+    tipo_entidad = SelectField("Tipo de Entidad", choices=Entity.tipo_entidad_lista)
     correo_electronico = StringField(validators=[])
     web = StringField(validators=[])
     telefono1 = StringField(validators=[])

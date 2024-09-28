@@ -157,19 +157,19 @@ def crea_roles_predeterminados() -> None:
     from cacao_accounting.database import Roles, database
 
     for r in ROLES_PREDETERMINADOS:
-        rol = Roles(name=r.get("name"), detalle=r.get("detalle"))
+        rol = Roles(name=r.get("name"), note=r.get("detalle"))
         database.session.add(rol)
     database.session.commit()
 
 
 def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     """Asigna un rol determinado al usuario establecido."""
-    from cacao_accounting.database import Roles, RolesUsuario, Usuario, database
+    from cacao_accounting.database import Roles, RolesUser, User, database
 
-    USUARIO = database.session.execute(database.select(Usuario).filter_by(usuario=usuario)).first()
+    USUARIO = database.session.execute(database.select(User).filter_by(user=usuario)).first()
     ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).first()
 
-    rol = RolesUsuario(user_id=USUARIO[0].id, role_id=ROL[0].id)
+    rol = RolesUser(user_id=USUARIO[0].id, role_id=ROL[0].id)
 
     database.session.add(rol)
     database.session.commit()

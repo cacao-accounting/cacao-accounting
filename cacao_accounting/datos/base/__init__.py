@@ -35,17 +35,17 @@ def registra_monedas(carga_rapida):
     """Carga de monedas al sistema."""
     from teritorio import Currencies
 
-    from cacao_accounting.database import Moneda, database
+    from cacao_accounting.database import Currency, database
 
     log.trace("Iniciando carga de base monedas a la base de datos.")
 
     if carga_rapida:
         MONEDAS = (
-            Moneda(codigo="NIO", nombre="Cordobas", decimales=2),
-            Moneda(
-                codigo="USD",
-                nombre="Dolares",
-                decimales=2,
+            Currency(code="NIO", name="Cordobas", decimals=2),
+            Currency(
+                code="USD",
+                name="Dolares",
+                decimals=2,
             ),
         )
         for m in MONEDAS:
@@ -53,7 +53,13 @@ def registra_monedas(carga_rapida):
             database.session.commit()
     else:
         for currency in Currencies():
-            database.session.add(Moneda(codigo=currency.code, nombre=currency.name, decimales=currency.minor_units))
+            database.session.add(
+                Currency(
+                    code=currency.code,
+                    name=currency.name,
+                    decimals=currency.minor_units,
+                )
+            )
             database.session.commit()
     log.debug("Monedas cargadas Correctamente")
 
@@ -69,12 +75,12 @@ def crea_usuario_admin(user: str, passwd: str):
     from flask import current_app
 
     from cacao_accounting.auth import proteger_passwd
-    from cacao_accounting.database import Usuario, database
+    from cacao_accounting.database import User, database
 
     log.info("Creando Usuario Administrador")
 
     with current_app.app_context():
-        usuario = Usuario(usuario=user, clave_acceso=proteger_passwd(passwd))
+        usuario = User(user=user, password=proteger_passwd(passwd))
         database.session.add(usuario)
         database.session.commit()
         asigna_rol_a_usuario(usuario=user, rol="admin")

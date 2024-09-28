@@ -53,9 +53,9 @@ def verifica_coneccion_db(app):
         while (time.time() - __inicio) < TIEMPO_ESPERA:
             log.info("Verificando conexión a la base de datos.")
             try:
-                from cacao_accounting.database import Usuario
+                from cacao_accounting.database import User
 
-                QUERY = database.session.execute(database.select(Usuario)).first()
+                QUERY = database.session.execute(database.select(User)).first()
 
                 if QUERY:
                     DB_CONN = True
@@ -99,9 +99,9 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
 def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
-        from cacao_accounting.database import Modulos, database
+        from cacao_accounting.database import Modules, database
 
-        MODULO = database.session.execute(database.select(Modulos).filter_by(modulo=modulo)).first()
+        MODULO = database.session.execute(database.select(Modules).filter_by(module=modulo)).first()
         return MODULO[0].id
     else:
         return None
@@ -118,9 +118,9 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
 def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]:
     """Devuelve el UUID de un usuario en base a su id."""
     if usuario:
-        from cacao_accounting.database import Usuario
+        from cacao_accounting.database import User
 
-        USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+        USUARIO = User.query.filter_by(user=usuario).first()
         return USUARIO.id
     else:
         return None
@@ -128,9 +128,9 @@ def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]
 
 def entidades_creadas():
     """Verifica si al menos una entidad ha sido creado en el sistema."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    CONSULTA = database.session.execute(database.select(Entidad)).first()
+    CONSULTA = database.session.execute(database.select(Entity)).first()
     log.warning(CONSULTA[0])
 
     if CONSULTA:
