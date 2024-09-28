@@ -12,9 +12,11 @@ python3 -m venv venv
 .\venv\Scripts\activate.bat
 # Linux y MAC: 
 source venv/bin/activate 
-python -m pip install -r requirements.txt
+cd cacao_accounting/static
+npm install
+cd ..
+cd ..
 python setup.py install
-yarn
 ```
 
 Se puede verificar si la instalación fue correcta ejecutando:
