@@ -1,4 +1,3 @@
-[![Contenedores](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml/badge.svg)](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/container.yml)
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 
 Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en [https://quay.io/repository/cacaoaccounting/cacaoaccounting](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
