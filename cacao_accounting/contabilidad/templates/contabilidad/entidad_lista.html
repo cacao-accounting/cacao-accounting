@@ -36,27 +36,27 @@
     <tr>
       <td>
         {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.entidad }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.code) }}" class="link-dark">
+          {{ item.code }}
         </a>
       </td>
       <td>
-        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.razon_social }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.code) }}" class="link-dark">
+          {{ item.company_name }}
         </a>
       </td>
       <td>
-        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.nombre_comercial }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.code) }}" class="link-dark">
+          {{ item.name }}
         </a>
       </td>
       <td>
-        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.id_fiscal }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.code) }}" class="link-dark">
+          {{ item.tax_id }}
         </a>
       </td>
       <td>
-        {% if item.habilitada %}
+        {% if item.enabled %}
         <span class="badge text-bg-secondary">Inhabilitar</span>
         {% else %}
         <span class="badge text-bg-success">Habilitar</span>

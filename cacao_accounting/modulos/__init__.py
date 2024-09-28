@@ -32,7 +32,7 @@ from flask import Flask
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Modulos, database
+from cacao_accounting.database import Modules, database
 
 # <---------------------------------------------------------------------------------------------> #
 # Módulos base del sistema e incluidos en el repositorio principal.
@@ -100,10 +100,10 @@ for modulo in modulos:
 # Funciones auxiliares para la administración de módulos.
 def registrar_modulo(entrada: dict) -> None:
     """Recibe un diccionario y lo inserta en la base de datos."""
-    registro = Modulos(
-        modulo=entrada["modulo"],
-        estandar=entrada["estandar"],
-        habilitado=entrada["habilitado"],
+    registro = Modules(
+        module=entrada["modulo"],
+        default=entrada["estandar"],
+        enabled=entrada["habilitado"],
     )
     database.session.add(registro)
     database.session.commit()
@@ -123,14 +123,14 @@ def listado_modulos() -> dict:
     - Una para modulos habilitados.
     - Una para modulos deshabilitados.
     """
-    _modulos = Modulos.query.order_by(Modulos.id).all()
+    _modulos = Modules.query.order_by(Modules.id).all()
     _modulos_activos = []
     _modulos_inactivos = []
     for i in _modulos:
-        if i.habilitado is True:
-            _modulos_activos.append(i.modulo)
+        if i.enabled is True:
+            _modulos_activos.append(i.module)
         else:
-            _modulos_inactivos.append(i.modulo)
+            _modulos_inactivos.append(i.module)
     lista_modulos = {
         "modulos_activos": list(_modulos_activos),
         "modulos_inactivos": list(_modulos_inactivos),

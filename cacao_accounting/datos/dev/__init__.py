@@ -50,14 +50,14 @@ def asignar_usuario_a_roles():
 
 def demo_usuarios():
     """Usuarios para demostracion."""
-    from cacao_accounting.database import Usuario
+    from cacao_accounting.database import User
 
     for u in BASE_USUARIOS:
-        usuario = Usuario(
-            usuario=u.get("usuario"),
-            correo_e=u.get("correo_e"),
-            clave_acceso=u.get("clave_acceso"),
-            creado_por="system",
+        usuario = User(
+            user=u.get("user"),
+            e_mail=u.get("e_mail"),
+            password=u.get("password"),
+            created_by="system",
         )
         database.session.add(usuario)
     database.session.commit()

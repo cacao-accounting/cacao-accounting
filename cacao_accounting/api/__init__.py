@@ -46,20 +46,32 @@ def token_requerido(f):  # pragma: no cover
             token = request.headers["Authorization"].split(" ")[1]
 
         if not token:
-            return {"message": "Authentication Token is missing!", "data": None, "error": "Unauthorized"}, 401
+            return {
+                "message": "Authentication Token is missing!",
+                "data": None,
+                "error": "Unauthorized",
+            }, 401
 
         try:
             data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
             assert data is not None  # nosec
 
             if not current_user:
-                return {"message": "Invalid Authentication token!", "data": None, "error": "Unauthorized"}, 401
+                return {
+                    "message": "Invalid Authentication token!",
+                    "data": None,
+                    "error": "Unauthorized",
+                }, 401
 
             if not current_user.is_authenticated:
                 abort(403)
 
         except Exception as e:
-            return {"message": "Something went wrong", "data": None, "error": str(e)}, 500
+            return {
+                "message": "Something went wrong",
+                "data": None,
+                "error": str(e),
+            }, 500
 
         return f(*args, **kwds)
 

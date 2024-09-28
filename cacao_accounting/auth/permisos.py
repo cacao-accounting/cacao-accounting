@@ -22,8 +22,11 @@ from typing import Union
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Modulos, Roles, RolesPermisos, RolesUsuario
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre, obtener_id_rol_por_monbre
+from cacao_accounting.database import Modules, Roles, RolesAccess, RolesUser
+from cacao_accounting.database.helpers import (
+    obtener_id_modulo_por_nombre,
+    obtener_id_rol_por_monbre,
+)
 from cacao_accounting.logs import log
 
 # ---------------------------------------------------------------------------------------
@@ -34,31 +37,6 @@ from cacao_accounting.logs import log
 # Solo usuarios con el rol de administrador tienen acceso al modulo administrativo
 # por eso no se incluye en esta lista.
 MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales"]
-
-
-ACCIONES: tuple = (
-    # Si un usuario no tiene acceso a un modulo al intentar acceder a este  se debe generar un error 403.
-    # Este es un permiso de nivel general y no es una accion que el usuario puede realizar en el sistema.
-    "acceso",
-    # Esta es la lista de acciones que un usuario puede realizar sobre los registros del sistema.
-    "actualizar",
-    "anular",
-    "autorizar",
-    "bi",
-    "cerrar",
-    "configurar",
-    "consultar",
-    "corregir",
-    "crear",
-    "editar",
-    "eliminar",
-    "importar",
-    "listar",
-    "reportes",
-    "solicitar",
-    "validar",
-    "validar_solicitud",
-)
 
 
 class RegistroPermisosRol:
@@ -114,11 +92,9 @@ class Permisos:
                 self.editar: Union[bool, None] = True
                 self.eliminar: Union[bool, None] = True
                 self.importar: Union[bool, None] = True
-                self.listar: Union[bool, None] = True
                 self.reportes: Union[bool, None] = True
                 self.solicitar: Union[bool, None] = True
                 self.validar: Union[bool, None] = True
-                self.validar_solicitud: Union[bool, None] = True
             else:
                 self.autorizado = self.__usuario_autorizado()
                 self.actualizar = self.__actualizar()
@@ -133,11 +109,9 @@ class Permisos:
                 self.editar = self.__editar()
                 self.eliminar = self.__eliminar()
                 self.importar = self.__importar()
-                self.listar = self.__listar()
                 self.reportes = self.__reportes()
                 self.solicitar = self.__solicitar()
                 self.validar = self.__validar()
-                self.validar_solicitud = self.__validar_solicitud()
         else:
             self.modulo = None
             self.usuario = None
@@ -157,17 +131,15 @@ class Permisos:
             self.editar = False
             self.eliminar = False
             self.importar = False
-            self.listar = False
             self.reportes = False
             self.solicitar = False
             self.validar = False
-            self.validar_solicitud = False
 
     def valida_modulo(self, modulo: Union[str, None]) -> bool:
         """Verifica si un modulo se encuentra activo."""
         if modulo:
             LISTA_MODULOS_ACTIVOS = []
-            CONSULTA = Modulos.query.filter_by(habilitado=True)
+            CONSULTA = Modules.query.filter_by(enabled=True)
             if CONSULTA:
                 for r in CONSULTA:
                     LISTA_MODULOS_ACTIVOS.append(r.id)
@@ -179,7 +151,7 @@ class Permisos:
 
     def obtener_roles_de_usuario(self) -> list:
         """Devuelve una lista con los roles del usuario."""
-        ROLES_USUARIO = RolesUsuario.query.filter_by(user_id=self.usuario)
+        ROLES_USUARIO = RolesUser.query.filter_by(user_id=self.usuario)
         ROLES = [ROL.role_id for ROL in ROLES_USUARIO]
         return ROLES
 
@@ -190,9 +162,9 @@ class Permisos:
 
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
         """Retorno verdadero o falso según si el usuario es miembro del grupo admin."""
-        CONSULTA = RolesUsuario.query.filter(
-            RolesUsuario.role_id == self.obtener_id_rol_administrador(),
-            RolesUsuario.user_id == self.usuario,
+        CONSULTA = RolesUser.query.filter(
+            RolesUser.role_id == self.obtener_id_rol_administrador(),
+            RolesUser.user_id == self.usuario,
         ).first()
         return CONSULTA is not None
 
@@ -201,9 +173,7 @@ class Permisos:
         if self.roles:
             PERMISOS = []
             for rol in self.roles:
-                CONSULTA_PERMISOS = RolesPermisos.query.filter(
-                    RolesPermisos.rol_id == rol, RolesPermisos.modulo_id == self.modulo
-                )
+                CONSULTA_PERMISOS = RolesAccess.query.filter(RolesAccess.rol_id == rol, RolesAccess.module_id == self.modulo)
                 PERMISOS.append(CONSULTA_PERMISOS)
             return PERMISOS
         else:
@@ -214,7 +184,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.acceso is True:
+                    if permiso.access is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -224,7 +194,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.actualizar is True:
+                    if permiso.update is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -234,7 +204,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.anular is True:
+                    if permiso.set_null is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -244,7 +214,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.autorizar is True:
+                    if permiso.approve is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -264,7 +234,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.cerrar is True:
+                    if permiso.close is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -274,7 +244,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.crear is True:
+                    if permiso.create is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -284,7 +254,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.configurar is True:
+                    if permiso.setup is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -294,7 +264,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.consultar is True:
+                    if permiso.view is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -304,7 +274,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.corregir is True:
+                    if permiso.update is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -314,7 +284,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.editar is True:
+                    if permiso.edit is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -324,7 +294,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.eliminar is True:
+                    if permiso.delete is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -334,17 +304,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.importar is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __listar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.listar is True:
+                    if permiso.import_ is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -354,7 +314,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.reportes is True:
+                    if permiso.report is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -364,7 +324,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.solicitar is True:
+                    if permiso.request is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -374,17 +334,7 @@ class Permisos:
         if self.__init_valido and self.permisos_usuario:
             for permisos in self.permisos_usuario:
                 for permiso in permisos:
-                    if permiso.validar is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __validar_solicitud(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.validar_solicitud is True:
+                    if permiso.validate is True:
                         ACCESO = True
                         break
         return ACCESO
@@ -399,386 +349,335 @@ def cargar_permisos_predeterminados() -> None:
     from cacao_accounting.database import database
 
     log.debug("Inicia craga permisos predeterminados.")
-    PURCHASING_MANAGER = RolesPermisos(
+    PURCHASING_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_manager"),
-        modulo_id=obtener_id_modulo_por_nombre("purchases"),
-        acceso=True,
-        actualizar=True,
-        anular=True,
-        autorizar=True,
+        module_id=obtener_id_modulo_por_nombre("purchases"),
+        access=True,
+        update=True,
+        set_null=True,
+        approve=True,
         bi=True,
-        cerrar=True,
-        configurar=True,
-        consultar=True,
-        corregir=True,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=True,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=True,
-        validar_solicitud=True,
+        close=True,
+        setup=True,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=True,
+        report=True,
+        request=True,
+        validate=True,
     )
-    PURCHASING_AUXILIAR = RolesPermisos(
+    PURCHASING_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
-        modulo_id=obtener_id_modulo_por_nombre("purchases"),
-        acceso=True,
-        actualizar=True,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("purchases"),
+        access=True,
+        update=True,
+        set_null=False,
+        approve=False,
         bi=True,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=False,
+        report=True,
+        request=True,
+        validate=False,
     )
-    PURCHASING_USER = RolesPermisos(
+    PURCHASING_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_user"),
-        modulo_id=obtener_id_modulo_por_nombre("purchases"),
-        acceso=True,
-        actualizar=False,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("purchases"),
+        access=True,
+        update=False,
+        set_null=False,
+        approve=False,
         bi=False,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=False,
-        editar=False,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=False,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=False,
+        edit=False,
+        delete=False,
+        import_=False,
+        report=False,
+        request=True,
+        validate=False,
     )
-    ACCOUNTING_MANAGER = RolesPermisos(
+    ACCOUNTING_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
-        modulo_id=obtener_id_modulo_por_nombre("accounting"),
-        acceso=True,
-        actualizar=True,
-        anular=True,
-        autorizar=True,
+        module_id=obtener_id_modulo_por_nombre("accounting"),
+        access=True,
+        update=True,
+        set_null=True,
+        approve=True,
         bi=True,
-        cerrar=True,
-        configurar=True,
-        consultar=True,
-        corregir=True,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=True,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=True,
-        validar_solicitud=True,
+        close=True,
+        setup=True,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=True,
+        report=True,
+        request=True,
+        validate=True,
     )
-    ACCOUNTING_AUXILIAR = RolesPermisos(
+    ACCOUNTING_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_auxiliar"),
-        modulo_id=obtener_id_modulo_por_nombre("accounting"),
-        acceso=True,
-        actualizar=True,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("accounting"),
+        access=True,
+        update=True,
+        set_null=False,
+        approve=False,
         bi=True,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=False,
+        report=True,
+        request=True,
+        validate=False,
     )
-    ACCOUNTING_USER = RolesPermisos(
+    ACCOUNTING_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_user"),
-        modulo_id=obtener_id_modulo_por_nombre("accounting"),
-        acceso=True,
-        actualizar=False,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("accounting"),
+        access=True,
+        update=False,
+        set_null=False,
+        approve=False,
         bi=False,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=False,
-        editar=False,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=False,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=False,
+        edit=False,
+        delete=False,
+        import_=False,
+        report=False,
+        request=True,
+        validate=False,
     )
-    INVENTORY_MANAGER = RolesPermisos(
+    INVENTORY_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
-        modulo_id=obtener_id_modulo_por_nombre("inventory"),
-        acceso=True,
-        actualizar=True,
-        anular=True,
-        autorizar=True,
+        module_id=obtener_id_modulo_por_nombre("inventory"),
+        access=True,
+        update=True,
+        set_null=True,
+        approve=True,
         bi=True,
-        cerrar=True,
-        configurar=True,
-        consultar=True,
-        corregir=True,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=True,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=True,
-        validar_solicitud=True,
+        close=True,
+        setup=True,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=True,
+        report=True,
+        request=True,
+        validate=True,
     )
-    INVENTORY_AUXILIAR = RolesPermisos(
+    INVENTORY_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_auxiliar"),
-        modulo_id=obtener_id_modulo_por_nombre("inventory"),
-        acceso=True,
-        actualizar=True,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("inventory"),
+        access=True,
+        update=True,
+        set_null=False,
+        approve=False,
         bi=True,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=False,
+        report=True,
+        request=True,
+        validate=False,
     )
-    INVENTORY_USER = RolesPermisos(
+    INVENTORY_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_user"),
-        modulo_id=obtener_id_modulo_por_nombre("inventory"),
-        acceso=True,
-        actualizar=False,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("inventory"),
+        access=True,
+        update=False,
+        set_null=False,
+        approve=False,
         bi=False,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=False,
-        editar=False,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=False,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=False,
+        edit=False,
+        delete=False,
+        import_=False,
+        report=False,
+        request=True,
+        validate=False,
     )
-    HEAD_OF_TREASURY = RolesPermisos(
+    HEAD_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("head_of_treasury"),
-        modulo_id=obtener_id_modulo_por_nombre("cash"),
-        acceso=True,
-        actualizar=True,
-        anular=True,
-        autorizar=True,
+        module_id=obtener_id_modulo_por_nombre("cash"),
+        access=True,
+        update=True,
+        set_null=True,
+        approve=True,
         bi=True,
-        cerrar=True,
-        configurar=True,
-        consultar=True,
-        corregir=True,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=True,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=True,
-        validar_solicitud=True,
+        close=True,
+        setup=True,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=True,
+        report=True,
+        request=True,
+        validate=True,
     )
-    JUNIOR_OF_TREASURY = RolesPermisos(
+    JUNIOR_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("auxiliar_of_treasury"),
-        modulo_id=obtener_id_modulo_por_nombre("cash"),
-        acceso=True,
-        actualizar=True,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("cash"),
+        access=True,
+        update=True,
+        set_null=False,
+        approve=False,
         bi=True,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=False,
+        report=True,
+        request=True,
+        validate=False,
     )
-    USER_OF_TREASURY = RolesPermisos(
+    USER_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("user_of_treasury"),
-        modulo_id=obtener_id_modulo_por_nombre("cash"),
-        acceso=True,
-        actualizar=False,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("cash"),
+        access=True,
+        update=False,
+        set_null=False,
+        approve=False,
         bi=False,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=False,
-        editar=False,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=False,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=False,
+        edit=False,
+        delete=False,
+        import_=False,
+        report=False,
+        request=True,
+        validate=False,
     )
-    SALES_MANAGER = RolesPermisos(
+    SALES_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_manager"),
-        modulo_id=obtener_id_modulo_por_nombre("sales"),
-        acceso=True,
-        actualizar=True,
-        anular=True,
-        autorizar=True,
+        module_id=obtener_id_modulo_por_nombre("sales"),
+        access=True,
+        update=True,
+        set_null=True,
+        approve=True,
         bi=True,
-        cerrar=True,
-        configurar=True,
-        consultar=True,
-        corregir=True,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=True,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=True,
-        validar_solicitud=True,
+        close=True,
+        setup=True,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=True,
+        report=True,
+        request=True,
+        validate=True,
     )
-    SALES_AUXILIAR = RolesPermisos(
+    SALES_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_auxiliar"),
-        modulo_id=obtener_id_modulo_por_nombre("sales"),
-        acceso=True,
-        actualizar=True,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("sales"),
+        access=True,
+        update=True,
+        set_null=False,
+        approve=False,
         bi=True,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=True,
-        editar=True,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=True,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=True,
+        edit=True,
+        delete=False,
+        import_=False,
+        report=True,
+        request=True,
+        validate=False,
     )
-    SALES_USER = RolesPermisos(
+    SALES_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_user"),
-        modulo_id=obtener_id_modulo_por_nombre("sales"),
-        acceso=True,
-        actualizar=False,
-        anular=False,
-        autorizar=False,
+        module_id=obtener_id_modulo_por_nombre("sales"),
+        access=True,
+        update=False,
+        set_null=False,
+        approve=False,
         bi=False,
-        cerrar=False,
-        configurar=False,
-        consultar=True,
-        corregir=False,
-        crear=False,
-        editar=False,
-        eliminar=False,
-        importar=False,
-        listar=True,
-        reportes=False,
-        solicitar=True,
-        validar=False,
-        validar_solicitud=False,
+        close=False,
+        setup=False,
+        view=True,
+        create=False,
+        edit=False,
+        delete=False,
+        import_=False,
+        report=False,
+        request=True,
+        validate=False,
     )
     CONTROLLER = []
     for MODULO in MODULOS:
         CONTROLLER.append(
-            RolesPermisos(
+            RolesAccess(
                 rol_id=obtener_id_rol_por_monbre("comptroller"),
-                modulo_id=obtener_id_modulo_por_nombre(MODULO),
-                acceso=True,
-                actualizar=False,
-                anular=False,
-                autorizar=False,
+                module_id=obtener_id_modulo_por_nombre(MODULO),
+                access=True,
+                update=False,
+                set_null=False,
+                approve=False,
                 bi=False,
-                cerrar=False,
-                configurar=False,
-                consultar=True,
-                corregir=False,
-                crear=False,
-                editar=False,
-                eliminar=False,
-                importar=False,
-                listar=True,
-                reportes=True,
-                solicitar=False,
-                validar=False,
-                validar_solicitud=False,
+                close=False,
+                setup=False,
+                view=True,
+                create=False,
+                edit=False,
+                delete=False,
+                import_=False,
+                report=True,
+                request=False,
+                validate=False,
             )
         )
     BI = []
     for MODULO in MODULOS:
         BI.append(
-            RolesPermisos(
+            RolesAccess(
                 rol_id=obtener_id_rol_por_monbre("business_analyst"),
-                modulo_id=obtener_id_modulo_por_nombre(MODULO),
-                acceso=True,
-                actualizar=False,
-                anular=False,
-                autorizar=False,
+                module_id=obtener_id_modulo_por_nombre(MODULO),
+                access=True,
+                update=False,
+                set_null=False,
+                approve=False,
                 bi=True,
-                cerrar=False,
-                configurar=False,
-                consultar=True,
-                corregir=False,
-                crear=False,
-                editar=False,
-                eliminar=False,
-                importar=False,
-                listar=True,
-                reportes=True,
-                solicitar=False,
-                validar=False,
-                validar_solicitud=False,
+                close=False,
+                setup=False,
+                view=True,
+                create=False,
+                edit=False,
+                delete=False,
+                import_=False,
+                report=True,
+                request=False,
+                validate=False,
             )
         )
 
