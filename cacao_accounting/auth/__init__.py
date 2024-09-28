@@ -29,7 +29,7 @@ from jwt import encode
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Usuario, database
+from cacao_accounting.database import User, database
 from cacao_accounting.logs import log
 
 # <---------------------------------------------------------------------------------------------> #
@@ -46,8 +46,13 @@ INICIO_SESION = redirect("/login")
 def cargar_sesion(identidad):  # pragma: no cover
     """Devuelve la entrada correspondiente al usuario que inicio sesión."""
     if identidad is not None:
-        return Usuario.query.get(identidad)
-    return None
+        QUERY = database.session.execute(database.select(User).filter_by(id=identidad)).first()
+        try:
+            return QUERY[0]
+        except TypeError:
+            return None
+    else:
+        return None
 
 
 @administrador_sesion.unauthorized_handler
@@ -69,13 +74,13 @@ def validar_acceso(usuario, clave) -> bool:
     from argon2.exceptions import VerifyMismatchError
 
     acceso = clave
-    consulta = database.session.execute(database.select(Usuario).filter_by(usuario=usuario)).first()
+    consulta = database.session.execute(database.select(User).filter_by(user=usuario)).first()
 
     if consulta:
         registro = consulta[0]
 
         try:
-            ph.verify(registro.clave_acceso, acceso)
+            ph.verify(registro.password, acceso)
             return True
 
         except VerifyMismatchError:
@@ -98,20 +103,32 @@ def inicio_sesion():  # pragma: no cover
     else:
         if form.validate_on_submit():
             if validar_acceso(form.usuario.data, form.acceso.data):
-                identidad = Usuario.query.filter_by(usuario=form.usuario.data).first()
+                query = database.session.execute(database.select(User).filter_by(user=form.usuario.data)).first()
+                identidad = query[0]
 
-                # Api rest auth token.
-                try:
-                    # token should expire after 24 hrs
-                    identidad.token = encode({"user_id": identidad.id}, current_app.config["SECRET_KEY"], algorithm="HS256")
-                    assert identidad.token is not None  # nosec
+                from cacao_accounting.config import MODO_ESCRITORIO
 
-                except Exception as e:
-                    assert e is not None  # nosec
-                    log.warning("No se pudo generar auth token.")
+                if MODO_ESCRITORIO and identidad.classification != "admin":
+                    flash("Solo un usuario administrador puede iniciar sesion.")
+                    return INICIO_SESION
 
-                login_user(identidad)
-                return redirect("/app")
+                else:
+                    # Api rest auth token.
+                    try:
+                        # token should expire after 24 hrs
+                        identidad.token = encode(
+                            {"user_id": identidad.id},
+                            current_app.config["SECRET_KEY"],
+                            algorithm="HS256",
+                        )
+                        assert identidad.token is not None  # nosec
+
+                    except Exception as e:
+                        assert e is not None  # nosec
+                        log.warning("No se pudo generar auth token.")
+
+                    login_user(identidad)
+                    return redirect("/app")
             else:
                 flash("Inicio de Sesion Incorrecto.")
                 return INICIO_SESION
