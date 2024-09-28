@@ -103,13 +103,11 @@ source venv/bin/activate
 #### Instalar las dependencias:
 
 ```bash
-python -m pip install -r requirements.txt
 python -m pip install -r development.txt
-python setup.py develop
-yarn
+python -m pip install -e .
+cd cacao_accounting/static
+npm install
 ```
-
-Yarn es necesario para no tener que incluir librerias JavaScritp de terceros en el repositorio principal del proyecto.
 
 Puede verificar que la instalación fue correcta ejecutando:
 
@@ -150,7 +148,7 @@ Para acceder al proyecto podemos utilizar el servidor web de desarrollo incluido
 ```bash
 FLASK_ENV=development  # Linux
 set FLASK_ENV="development"  # Windows
-cacaoctl run
+cacaoctl serve
 ```
 
 Para verficiar que el proyecto se ejecuta correctamente con un servidor WSGI acto para producción ejecutar:
@@ -176,9 +174,7 @@ Utilizamos [flake8](https://flake8.pycqa.org/en/latest/) y [pytest](https://docs
 Recomendamos ejecutar antes de enviar tus cambios:
 
 ```bash
-black cacao_accounting
-flake8 cacao_accounting
-pytest
+bash run_test.sh
 ```
 
 #### Escribe un buen mensaje en tu commit
@@ -235,9 +231,10 @@ Solicitamos su apoyo para adoptar [Commits Convencionales](https://www.conventio
  - refactor: Modificaciones que no agregan nuevas funciones o arreglan errores.
  - style: Correcciones de Estilo.
  - test: Cambios en pruebas unitarios.
+ - chore: Cambios que no afectan el funcionamiento del codigo fuente.
 ```
 
-Independientemente del tipo un commit con el texto BREAKING CHANGE, sin importar su tipo, se traducen a un cambio de versión MAJOR.
+Independientemente del tipo un commit si este contiene el texto BREAKING CHANGE, sin importar su tipo, se traducen a un cambio de versión MAJOR.
 
 #### Versionado semantico
 
@@ -256,8 +253,7 @@ Fix: Correción de errores criticos.
 #### Ejecutar pruebas unitarias:
 
 ```bash
-export CACAOTEST=True
-pytest
+bash run_test.sh
 ```
 
 ##### Configurar Base de datos para pruebas
@@ -285,39 +281,12 @@ CREATE USER cacao WITH PASSWORD 'cacao';
 GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
 ```
 
-###### Pruebas de integración 
-
-Para vaidar que las vases de datos fueron creadas correctamente y la conexión es correcta ejecutar:
-
-```bash
-python tests\database.py
-MySQL disponible
-Postgresql disponible
-```
-
-Para ejecutar las pruebas ejecutar:
-
-```bash
-pytest tests\database.py
-```
-
 #### Empaquetar para distribución:
 
-Para crear los archivos para distribuir el proyecto ejecutar:
+El proyecto se debe publicar de forma automatica en [PyPI](https://pypi.org/project/cacao-accounting/) si todas las pruebas automaticas pasan correctamente, solo se publica código de la rama `main`, el proceso fallara si no se actualizado la versión del proyecto (esto es un efecto esperado, no un error de configuración).
 
-```bash
-python -m build
-twine check dist/*
-# Solo usuario con permisos de cargar en Pypi.
-twine upload dist/*
-```
+Es un objetivo principal que el proyecto sea [pip instalable](https://pypi.org/project/cacao-accounting/) así como ofrecer una versión del proyecto que pueda ser utilizada como [aplicación de escritorio](https://pypi.org/project/cacao-accounting-desktop/).
 
-Es un objetivo principal que el proyecto sea [pip instalable](https://pypi.org/project/cacao-accounting/) así como ofrecer una versión del proyecto que pueda ser utilizada como [aplicación de escritorio](https://pypi.org/project/cacao-accounting-desktop/), para cumplir este objetivo hemos desarrollado [open marquesote](https://pypi.org/project/open-marquesote/).
-
-
-### Varios
-
-Estos son algunos tips a tomar en cuenta opcionalmente
 
 #### Ignorar correcciones de estilo en git blame
 
