@@ -125,7 +125,7 @@ if probar_configuracion_por_variables_de_entorno():
 
 else:
     configuracion = {}
-    configuracion["SQLALCHEMY_DATABASE_URI"] = SQLITE
+    configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB") or SQLITE  # Always prefer CACAO_DB
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
     # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
     # variable de entorno
