@@ -3,7 +3,7 @@ on:
   workflow_run:
     workflows: [Databases]
     types:
-      - completed
+      - success
     branches:
       - main
 
