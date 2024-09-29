@@ -20,6 +20,9 @@ $FLASK_ENV         # Modo de ejecución del proyecto puede ser "development" o "
                    # Si no se especifica se utiliza "production" por defecto.
                    # Referencias:
                    #  - https://flask.palletsprojects.com/en/2.0.x/config/
+$PYTHON_CPU_COUNT  # En entornos basados en contenedores se utilizan nucles de CPU
+                   # por defecto, puede establecer un valor por defecto, puede
+                   # establecer otro valor estableciendo esta variable de entorno. 
 ```
 
 ## Establecer variables del entorno requeridas:
@@ -46,7 +49,7 @@ ENV CACAO_KEY=SECRETKEY
 
 ## Conexion a la base de datos
 
-Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y MS SQL Server:
+Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y en buena teoría con MariaDB pero no realizamos pruebas automaticas con este motor de bases de datos:
 
 ### SQLite:
 No se requiere software adicional para trabajar con SQLite, sin embargo no se recomienda para
