@@ -6,8 +6,6 @@ on:
       - completed
     branches:
       - main
-    patch:
-      - 'cacao-accounting/cacao_accounting/version/*'
 
 jobs:
   pypi-publish:
