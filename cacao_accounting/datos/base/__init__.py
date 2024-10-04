@@ -95,19 +95,20 @@ def base_data(user, passwd, carga_rapida):
     if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
         with current_app.app_context():
             from cacao_accounting.database import database
+            from sqlalchemy.sql import text
 
             DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
             log.warning(DABATASE_URI)
 
             if DABATASE_URI.startswith("mysql+pymysql"):
                 log.info("Running on MySQL.")
-                log.info(database.session.execute("SELECT version();"))
+                log.info(database.session.execute(text("SELECT version();")))
             elif DABATASE_URI.startswith("postgresql+pg8000"):
                 log.info("Running on Postgresql.")
-                log.info(database.session.execute("SELECT VERSION();"))
+                log.info(database.session.execute(text("SELECT VERSION();")))
             else:
                 log.info("Running on SQLITE.")
-                log.info(database.session.execute("select sqlite_version();"))
+                log.info(database.session.execute(text("select sqlite_version();")))
 
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
