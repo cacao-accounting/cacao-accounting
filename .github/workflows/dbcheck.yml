@@ -28,7 +28,7 @@ jobs:
       - name: Test with Postgresql
         run: |
           sudo systemctl start postgresql.service
-          sudo -u postgres psql -f tests/setup_postgresl.sql
+          sudo -u postgres psql -f /home/runner/work/cacao-accounting/cacao-accounting/tests/setup_postgresl.sql
           CACAO_TEST=True CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao bash run_test.sh
       - name: Test with MySQL
         run: |
