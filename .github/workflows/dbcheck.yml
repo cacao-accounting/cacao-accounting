@@ -1,0 +1,51 @@
+name: Databases
+on:
+  workflow_run:
+    workflows: [Coverage]
+    types:
+      - completed
+    branches:
+      - main
+  pull_request:
+    branches: [main]
+
+jobs:
+  multiple_db_check:
+    name: Test with multiple databases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.12
+      - name: Install python package
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r development.txt
+          python -m pip install -e .
+          cacaoctl setupdb
+      - name: Test with Postgresql
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          # Enable postgresql serive
+          sudo systemctl start postgresql.service
+          # Create user and database
+          sudo -u postgres psql -c "CREATE DATABASE cacao;"
+          sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
+          # Run test on postgresql db.
+          CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
+      - name: Test with MySQL
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          sudo systemctl start mysql.service
+          mysql --user=root --password=root < tests/setup_mysql.sql
+          CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl setupdb

@@ -17,10 +17,12 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import current_app
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -89,6 +91,30 @@ def crea_usuario_admin(user: str, passwd: str):
 
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
+    if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
+        with current_app.app_context():
+            from cacao_accounting.database import database
+            from sqlalchemy.sql import text
+
+            DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+            log.warning(DABATASE_URI)
+
+            if DABATASE_URI.startswith("mysql+pymysql"):
+                log.info("Running on MySQL.")
+                Q = database.session.execute(text("SELECT version();"))
+                for i in Q:
+                    log.info("Versión de base de datos" + str(i))
+            elif DABATASE_URI.startswith("postgresql+pg8000"):
+                log.info("Running on Postgresql.")
+                Q = database.session.execute(text("SELECT VERSION();"))
+                for i in Q:
+                    log.info("Versión de base de datos" + str(i))
+            else:
+                log.info("Running on SQLITE.")
+                Q = database.session.execute(text("select sqlite_version();"))
+                for i in Q:
+                    log.info("Versión de base de datos" + str(i))
+
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
     crea_roles_predeterminados()
