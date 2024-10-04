@@ -17,10 +17,12 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import current_app
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -89,6 +91,8 @@ def crea_usuario_admin(user: str, passwd: str):
 
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
+    if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
+        log.warning(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
     crea_roles_predeterminados()
