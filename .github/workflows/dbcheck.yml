@@ -34,9 +34,9 @@ jobs:
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
           # Run test on postgresql db.
-          CACAO_TEST=True CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao bash run_test.sh
+          CACAO_TEST=True CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
       - name: Test with MySQL
         run: |
           sudo systemctl start mysql.service
-          mysql -u root -p root -h 127.0.0.1 source tests/setup_mysql.sql
-          CACAO_TEST=True CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao run_test.sh
+          mysql -u root -p root -h 127.0.0.1 < tests/setup_mysql.sql
+          CACAO_TEST=True CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl setupdb

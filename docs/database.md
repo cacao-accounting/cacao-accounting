@@ -1,6 +1,6 @@
 # Configuración de la base de datos.
 
-Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la 
+Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la
 aplicacion, la configuración de una linea de conección en la principal opción de configuración que requiere
 el sistema.
 
@@ -54,5 +54,5 @@ GO
 USE cacao;
 GO
 GRANT ALL ON dbo.cacao TO cacaouser;
-GO  
+GO
 ```
