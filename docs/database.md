@@ -28,6 +28,12 @@ GRANT ALL PRIVILEGES ON cacao.* TO 'cacao';
 FLUSH PRIVILEGES;
 ```
 
+El formato de clave de conexión correcta para utilizar con MySQL es:
+
+```
+mysql+pymysql://<username>:<password>@<host>/<dbname>
+```
+
 ## Postgresql:
 
 Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para crear la base de datos:
@@ -36,6 +42,12 @@ Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para cr
 CREATE DATABASE cacao;
 CREATE USER cacao WITH PASSWORD 'cacao';
 GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
+```
+
+El formato de clave de conexión correcta para utilizar con Postgresql es:
+
+```
+postgresql+pg8000://user:password@host:port/dbname
 ```
 
 ## MS SQL Server
