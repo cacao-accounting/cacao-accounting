@@ -29,6 +29,7 @@ from flask import current_app
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
+from cacao_accounting.datos.dev import data
 from cacao_accounting.logs import log
 from cacao_accounting.modulos import init_modulos
 
@@ -92,15 +93,21 @@ def crea_usuario_admin(user: str, passwd: str):
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
     if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
-        DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
-        log.warning(DABATASE_URI)
+        with current_app.app_context():
+            from cacao_accounting.database import database
 
-        if DABATASE_URI.startswith("mysql+pymysql"):
-            log.info("Running on MySQL.")
-        elif DABATASE_URI.startswith("postgresql+pg8000"):
-            log.info("Running on Postgresql.")
-        else:
-            log.info("Running on SQLITE.")
+            DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+            log.warning(DABATASE_URI)
+
+            if DABATASE_URI.startswith("mysql+pymysql"):
+                log.info("Running on MySQL.")
+                log.info(database.session.execute("SELECT version();"))
+            elif DABATASE_URI.startswith("postgresql+pg8000"):
+                log.info("Running on Postgresql.")
+                log.info(database.session.execute("SELECT VERSION();"))
+            else:
+                log.info("Running on SQLITE.")
+                log.info(database.session.execute("select sqlite_version();"))
 
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
