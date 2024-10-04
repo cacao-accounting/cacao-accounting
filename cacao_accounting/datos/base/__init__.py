@@ -29,7 +29,6 @@ from flask import current_app
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
-from cacao_accounting.datos.dev import data
 from cacao_accounting.logs import log
 from cacao_accounting.modulos import init_modulos
 
