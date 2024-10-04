@@ -90,14 +90,12 @@ def valida_llave_secreta(llave: str) -> bool:
 def valida_direccion_base_datos(uri: str) -> bool:
     """Verifica que la URI de la database este en el formato correcto."""
     DIRECCION = str(uri)
-    MSSQL_URI = DIRECCION.startswith("mssql")
-    MYSQL_URI = DIRECCION.startswith("mysql")
-    MARIADB_URI = DIRECCION.startswith("mariadb")
-    POSTGRESQL_URI = DIRECCION.startswith("postgresql")
+    MYSQL_URI = DIRECCION.startswith("mysql+pymysql")
+    POSTGRESQL_URI = DIRECCION.startswith("postgresql+pg8000")
     SQLITE_URI = DIRECCION.startswith("sqlite")
-    VALIDACION = MSSQL_URI or MYSQL_URI or POSTGRESQL_URI or SQLITE_URI or MARIADB_URI
+    VALIDACION = MYSQL_URI or POSTGRESQL_URI or SQLITE_URI
     if VALIDACION:
-        log.info("URL de Acceso a db validada correctamente.")
+        log.debug("URL de Acceso a db validada correctamente.")
     else:
         log.warning("URL de Acceso a db invalida.")
     return VALIDACION
@@ -117,18 +115,17 @@ def probar_configuracion_por_variables_de_entorno() -> bool:
 
 
 if probar_configuracion_por_variables_de_entorno():
-    log.info("Cargando configuracion en base a variables de entorno.")
+    log.debug("Cargando configuracion en base a variables de entorno.")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB")
     configuracion["SECRET_KEY"] = environ.get("CACAO_KEY")
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 else:
+    log.debug("Utilizando configuración preterminada.")
     configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB") or SQLITE  # Always prefer CACAO_DB
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
-    # Se evalua posterior al inicio de la aplicacion por lo que sobrescribe el valor establecido como
-    # variable de entorno
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = "dev"  # nosec
     configuracion["DEGUG"] = "True"

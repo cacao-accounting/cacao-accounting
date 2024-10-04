@@ -26,6 +26,10 @@ jobs:
       - name: Test with Postgresql
         run: |
           sudo systemctl start postgresql.service
+          psql -U postgres -a -f tests/setup_postgresl.sql
+          CACAO_TEST=True CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao bash run_test.sh
       - name: Test with MySQL
         run: |
           sudo systemctl start mysql.service
+          mysql -u root -p root source tests/setup_mysql.sql
+          CACAO_TEST=True CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao run_test.sh
