@@ -92,7 +92,16 @@ def crea_usuario_admin(user: str, passwd: str):
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
     if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
-        log.warning(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
+        DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+        log.warning(DABATASE_URI)
+
+        if DABATASE_URI.startswith("mysql+pymysql"):
+            log.info("Running on MySQL.")
+        elif DABATASE_URI.startswith("postgresql+pg8000"):
+            log.info("Running on Postgresql.")
+        else:
+            log.info("Running on SQLITE.")
+
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
     crea_roles_predeterminados()

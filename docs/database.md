@@ -15,11 +15,11 @@ En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distinto
 
 ## SQLite
 
-No se requiere pasos previos para utilizar SQLite como motor de base de datos.
+No se requiere pasos previos para utilizar [SQLite](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html) como motor de base de datos.
 
 ## MySQL:
 
-Una vez instalado MySQL puede ejecutar las siguientes sentencias SQL para crear la base de datos:
+Una vez instalado [MySQL](https://docs.sqlalchemy.org/en/20/dialects/mysql.html) puede ejecutar las siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS cacao;
@@ -30,7 +30,7 @@ FLUSH PRIVILEGES;
 
 ## Postgresql:
 
-Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para crear la base de datos:
+Una vez instalado [Postgresql](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html) puede ejeutar las siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE cacao;
