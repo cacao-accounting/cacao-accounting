@@ -38,5 +38,5 @@ jobs:
       - name: Test with MySQL
         run: |
           sudo systemctl start mysql.service
-          mysql -u root -p root -h 127.0.0.1 < tests/setup_mysql.sql
+          mysql -u root -p root < tests/setup_mysql.sql
           CACAO_TEST=True CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl setupdb
