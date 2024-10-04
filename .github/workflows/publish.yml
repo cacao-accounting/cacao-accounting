@@ -1,13 +1,11 @@
 name: Publish to PyPi
 on:
   workflow_run:
-    workflows: [Coverage]
+    workflows: [Databases]
     types:
       - completed
     branches:
       - main
-    patch:
-      - 'cacao-accounting/cacao_accounting/version/*'
 
 jobs:
   pypi-publish:

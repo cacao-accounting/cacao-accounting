@@ -18,6 +18,7 @@
 
 <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
 <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+<script src="{{ url_for('static', filename='node_modules/@popperjs/core/dist/umd/popper.min.js') }}"></script>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
 
@@ -64,11 +65,10 @@
     data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
     <span class="navbar-toggler-icon"></span>
   </button>
-  <ul class="navbar-nav d-none d-md-block">
+  <ul class="navbar-nav d-none d-md-block px-3">
     <li class="nav-item text-nowrap">
-      <a class="nav-link" style="font-size: 1rem;" href="{{ url_for("login.cerrar_sesion") }}">
-        Cerrar Sesión <ion-icon name="exit" style="font-size: 1rem;" aria-hidden="true"></ion-icon>
-        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+      <a class="nav-link" style="font-size: 1.3rem;color:#8B0000;" href="{{ url_for("login.cerrar_sesion") }}">
+        <ion-icon name="log-out"></ion-icon>
       </a>
     </li>
   </ul>

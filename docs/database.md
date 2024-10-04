@@ -1,6 +1,6 @@
 # Configuración de la base de datos.
 
-Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la 
+Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la
 aplicacion, la configuración de una linea de conección en la principal opción de configuración que requiere
 el sistema.
 
@@ -15,11 +15,11 @@ En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distinto
 
 ## SQLite
 
-No se requiere pasos previos para utilizar SQLite como motor de base de datos.
+No se requiere pasos previos para utilizar [SQLite](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html) como motor de base de datos.
 
 ## MySQL:
 
-Una vez instalado MySQL puede ejecutar las siguientes sentencias SQL para crear la base de datos:
+Una vez instalado [MySQL](https://docs.sqlalchemy.org/en/20/dialects/mysql.html) puede ejecutar las siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS cacao;
@@ -36,7 +36,7 @@ mysql+pymysql://<username>:<password>@<host>/<dbname>
 
 ## Postgresql:
 
-Una vez instalado Postgresql puede ejeutar las siguientes sentencias SQL para crear la base de datos:
+Una vez instalado [Postgresql](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html) puede ejeutar las siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE cacao;
@@ -66,5 +66,5 @@ GO
 USE cacao;
 GO
 GRANT ALL ON dbo.cacao TO cacaouser;
-GO  
+GO
 ```
