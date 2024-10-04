@@ -103,17 +103,17 @@ def base_data(user, passwd, carga_rapida):
                 log.info("Running on MySQL.")
                 Q = database.session.execute(text("SELECT version();"))
                 for i in Q:
-                    log.info("Versión de base de datos" + i)
+                    log.info("Versión de base de datos" + str(i))
             elif DABATASE_URI.startswith("postgresql+pg8000"):
                 log.info("Running on Postgresql.")
                 Q = database.session.execute(text("SELECT VERSION();"))
                 for i in Q:
-                    log.info("Versión de base de datos" + i)
+                    log.info("Versión de base de datos" + str(i))
             else:
                 log.info("Running on SQLITE.")
                 Q = database.session.execute(text("select sqlite_version();"))
                 for i in Q:
-                    log.info("Versión de base de datos" + i)
+                    log.info("Versión de base de datos" + str(i))
 
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
