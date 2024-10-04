@@ -27,9 +27,13 @@ jobs:
           cacaoctl version
       - name: Test with Postgresql
         run: |
+          # Enable postgresql serive
           sudo systemctl start postgresql.service
-          chmod 777 /home/runner/work/cacao-accounting/cacao-accounting/tests/setup_postgresl.sql
-          sudo -u postgres psql -f /home/runner/work/cacao-accounting/cacao-accounting/tests/setup_postgresl.sql
+          # Create user and database
+          sudo -u postgres psql -c "CREATE DATABASE cacao;"
+          sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
+          # Run test on postgresql db.
           CACAO_TEST=True CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao bash run_test.sh
       - name: Test with MySQL
         run: |
