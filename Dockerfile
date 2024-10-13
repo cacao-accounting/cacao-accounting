@@ -17,7 +17,7 @@ RUN microdnf update -y --nodocs --best \
     && /usr/bin/python3.12 --version \
     && chmod +x docker-entry-point.sh \
     && /usr/bin/python3.12 -m pip --no-cache-dir install -r /tmp/requirements.txt \
-    && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3-pip
+    && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip
 
 ENV FLASK_APP="cacao_accounting"
 ENV LANG=C.UTF-8
