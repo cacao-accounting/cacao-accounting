@@ -50,7 +50,7 @@ def obtener_catalogo_base(entidad_=None):
         ).all()
     else:
         ctas_base = database.session.execute(
-            database.select(Accounts).join(Entity).filter(Accounts.parent == None, Entity.status == "default")
+            database.select(Accounts).join(Entity).filter(Accounts.parent == None, Entity.status == "default")  # noqa: E711
         ).all()
 
     return ctas_base
@@ -82,7 +82,7 @@ def obtener_catalogo(entidad_=None):
         ).all()
     else:
         ctas = database.session.execute(
-            database.select(Accounts).join(Entity).filter(Accounts.parent != None, Entity.status == "default")
+            database.select(Accounts).join(Entity).filter(Accounts.parent != None, Entity.status == "default")  # noqa: E711
         ).all()
 
     return ctas
