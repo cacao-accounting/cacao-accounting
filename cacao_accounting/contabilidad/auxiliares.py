@@ -27,10 +27,6 @@
 # ---------------------------------------------------------------------------------------
 
 
-from re import A
-from xml.dom.minidom import Entity
-
-
 def obtener_lista_entidades_por_id_razonsocial():
     """Devuelve la lista de unidades registrada en la base de datos."""
     from cacao_accounting.database import Entidad
