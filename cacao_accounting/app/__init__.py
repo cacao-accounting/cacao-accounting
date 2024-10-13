@@ -23,7 +23,7 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, current_app, redirect, render_template
+from flask import Blueprint, current_app, render_template
 from flask_login import login_required
 
 # ---------------------------------------------------------------------------------------
