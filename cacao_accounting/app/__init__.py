@@ -72,10 +72,23 @@ def dev_info():
     return info
 
 
+@cacao_app.route("/info")
+@cacao_app.route("/dev")
 @cacao_app.route("/development")
+@login_required
 def informacion_para_desarrolladores():
     """Pagina con información para desarrolladores o administradores del sistema."""
-    if "CACAO_TEST" in environ:
-        return render_template("development.html", info=dev_info(), db=bd_actual(), current_app=current_app)
-    else:  # pragma: no cover
-        return redirect("/")
+    import platform
+    import sys
+    from cacao_accounting.database.helpers import db_version
+
+    return render_template(
+        "development.html",
+        info=dev_info(),
+        db=bd_actual(),
+        current_app=current_app,
+        os=platform.system(),
+        db_version=db_version(),
+        test="CACAO_TEST" in environ,
+        py_version=sys.version,
+    )

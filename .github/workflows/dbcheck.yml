@@ -39,8 +39,12 @@ jobs:
           sudo -u postgres psql -c "CREATE DATABASE cacao;"
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
-          # Run test on postgresql db.
+          # Run test on postgresql with pg8000.
           CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
+          # Run test on postgresql with psycopg2:
+          sudo -u postgres psql -c "DROP DATABASE cacao;"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
+          CACAO_DB=postgresql+psycopg2://cacao:cacao@localhost/cacao cacaoctl setupdb
       - name: Test with MySQL
         env:
           CACAO_PRINT_DATABASE_URI: "True"

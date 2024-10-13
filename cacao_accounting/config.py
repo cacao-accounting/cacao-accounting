@@ -80,10 +80,11 @@ def valida_llave_secreta(llave: str) -> bool:
     else:
         VALIDACION = CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
         if VALIDACION:
-            log.info("Clave secreta valida.")
+            log.debug("Clave secreta valida.")
             return True
         else:
-            log.warning("Clave secreta invalida.")
+            log.warning("Clave secreta insegura.")
+            log.info("Establesca una clave secreta más segura.")
             return False
 
 
@@ -91,13 +92,16 @@ def valida_direccion_base_datos(uri: str) -> bool:
     """Verifica que la URI de la database este en el formato correcto."""
     DIRECCION = str(uri)
     MYSQL_URI = DIRECCION.startswith("mysql+pymysql")
-    POSTGRESQL_URI = DIRECCION.startswith("postgresql+pg8000")
+    MARIADB_URI = DIRECCION.startswith("mariadb+mariadbconnector")
+    POSTGRESQL_URI = DIRECCION.startswith("postgresql+pg8000") or DIRECCION.startswith("postgresql+psycopg2")
     SQLITE_URI = DIRECCION.startswith("sqlite")
-    VALIDACION = MYSQL_URI or POSTGRESQL_URI or SQLITE_URI
+    VALIDACION = MYSQL_URI or POSTGRESQL_URI or SQLITE_URI or MARIADB_URI
     if VALIDACION:
         log.debug("URL de Acceso a db validada correctamente.")
+        if MARIADB_URI:
+            log.warning("El soporte a MariaDB es expimental.")
     else:
-        log.warning("URL de Acceso a db invalida.")
+        log.warning("Favor revise la configuración de acceso a la base de datos.")
     return VALIDACION
 
 
@@ -114,16 +118,16 @@ def probar_configuracion_por_variables_de_entorno() -> bool:
         return False
 
 
+configuracion = {}
+
 if probar_configuracion_por_variables_de_entorno():
     log.debug("Cargando configuracion en base a variables de entorno.")
-    configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB")
     configuracion["SECRET_KEY"] = environ.get("CACAO_KEY")
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 else:
     log.debug("Utilizando configuración preterminada.")
-    configuracion = {}
     configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB") or SQLITE  # Always prefer CACAO_DB
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
     configuracion["ENV"] = "development"
@@ -147,6 +151,8 @@ def probar_modo_escritorio() -> bool:
         return True
 
     # Probamos si se ha establecido la variable de entorno CACAO_ACCOUNTING-DESKTOP
+    # En el codigo fuente de la distribución de escritorio se establece esta opción
+    # previo a importar la aplicación principal.
     elif environ.get("CACAO_ACCOUNTING_DESKTOP", default=False):
         return True
 
