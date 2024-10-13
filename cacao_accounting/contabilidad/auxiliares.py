@@ -27,6 +27,10 @@
 # ---------------------------------------------------------------------------------------
 
 
+from re import A
+from xml.dom.minidom import Entity
+
+
 def obtener_lista_entidades_por_id_razonsocial():
     """Devuelve la lista de unidades registrada en la base de datos."""
     from cacao_accounting.database import Entidad
@@ -42,14 +46,16 @@ def obtener_lista_entidades_por_id_razonsocial():
 
 def obtener_catalogo_base(entidad_=None):
     """Utilidad para devolver el catalogo de cuentas."""
-    from cacao_accounting.database import Cuentas, Entidad
+    from cacao_accounting.database import database, Accounts, Entity
 
     if entidad_:
-        ctas_base = Cuentas.query.filter(Cuentas.padre == None, Cuentas.entidad == entidad_).all()  # noqa: E711
+        ctas_base = database.session.execute(
+            database.select(Accounts).filter(Accounts.parent == None, Accounts.entity == entidad_)
+        ).all()
     else:
-        ctas_base = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre == None, Entidad.status == "predeterminado").all()  # noqa: E711
-        )  # noqa: E711
+        ctas_base = database.session.execute(
+            database.select(Accounts).join(Entity).filter(Accounts.parent == None, Entity.status == "default")
+        ).all()
 
     return ctas_base
 
@@ -72,14 +78,16 @@ def obtener_catalogo_centros_costo_base(entidad_=None):
 
 def obtener_catalogo(entidad_=None):
     """Utilidad para devolver el catalogo de cuentas."""
-    from cacao_accounting.database import Cuentas, Entidad
+    from cacao_accounting.database import database, Accounts, Entity
 
     if entidad_:
-        ctas = Cuentas.query.filter(Cuentas.padre != None, Cuentas.entidad == entidad_).all()  # noqa: E711
+        ctas = database.session.execute(
+            database.select(Accounts).filter(Accounts.parent != None, Accounts.entity == entidad_)
+        ).all()
     else:
-        ctas = (
-            Cuentas.query.join(Entidad).filter(Cuentas.padre != None, Entidad.status == "predeterminado").all()  # noqa: E711
-        )
+        ctas = database.session.execute(
+            database.select(Accounts).join(Entity).filter(Accounts.parent != None, Entity.status == "default")
+        ).all()
 
     return ctas
 
@@ -96,20 +104,20 @@ def obtener_centros_costos(entidad_=None):
 
 def obtener_entidades():
     """Utilidad para obtener listado de entidades."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import database, Entity
 
-    _entidades = Entidad.query.all()
+    _entidades = database.session.execute(database.select(Entity)).all()
     return _entidades
 
 
 def obtener_entidad(ent=None):
     """Obtiene la entidad actual o la entidad predeterminada."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import database, Entity
 
     if ent:
-        _entidad = Entidad.query.filter(Entidad.id == ent).first()
+        _entidad = database.session.execute(database.select(Entity).filter(Entity.code == ent)).first()
     else:
-        _entidad = Entidad.query.filter(Entidad.predeterminada == True).first()  # noqa: E712
+        _entidad = database.session.execute(database.select(Entity).filter(Entity.status == "default")).first()
     return _entidad
 
 

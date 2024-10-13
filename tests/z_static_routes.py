@@ -84,13 +84,23 @@ static_rutes = [
         text=[
             "Catalogo de Cuentas Contables.".encode("utf-8"),
             "Seleccionar Entidad.".encode("utf-8"),
-            "Entidad Actual:".encode("utf-8"),
+            "<p><strong>Entidad Actual:</strong> Choco Sonrisas Sociedad Anonima</p>".encode("utf-8"),
+            "Actualizar".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Mundo Cafe Sociedad Anonima".encode("utf-8"),
+            "Mundo Sabor Sociedad Anonima".encode("utf-8"),
+            "cacao".encode("utf-8"),
+            "cafe".encode("utf-8"),
+            "dulce".encode("utf-8"),
+            "/accounts/account/11.01.001.002".encode("utf-8"),
+            "11.01.001.002 - Fondos por Depositar".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounts/accounts?entidad=cafe",
         text=[
             "Catalogo de Cuentas Contables.".encode("utf-8"),
+            "Mundo Cafe Sociedad Anonima".encode("utf-8"),
         ],
     ),
     Route(
