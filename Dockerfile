@@ -22,7 +22,7 @@ RUN microdnf update -y --nodocs --best \
     && /usr/bin/python3.12 -m pip --no-cache-dir install -r /tmp/requirements.txt \
     # Support for MariaDB is considered experimental.
     && /usr/bin/python3.12 -m pip --no-cache-dir install mariadb \
-    && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip
+    && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip python3.12-pip-wheel
 
 ENV FLASK_APP="cacao_accounting"
 ENV LANG=C.UTF-8
