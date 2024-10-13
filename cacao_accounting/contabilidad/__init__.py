@@ -184,9 +184,9 @@ def nueva_entidad():
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(entidad=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).first()
     ENTIDAD = ENTIDAD[0]
 
     if request.method == "POST":
@@ -215,7 +215,7 @@ def editar_entidad(id_entidad):
 
         formulario = FormularioEntidad(data=DATA)
         formulario.moneda.choices = obtener_lista_monedas()
-        return render_template("contabilidad/entidad_editar.html", form=formulario)
+        return render_template("contabilidad/entidad_editar.html", entidad=ENTIDAD, form=formulario)
 
 
 @contabilidad.route("/accounts/entity/delete/<id_entidad>")

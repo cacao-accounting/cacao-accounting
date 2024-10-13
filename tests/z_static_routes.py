@@ -1,5 +1,7 @@
 from collections import namedtuple
 
+"".encode("utf-8"),
+
 Route = namedtuple(
     "Route",
     ["url", "text"],
@@ -36,23 +38,45 @@ static_rutes = [
     Route(
         url="/accounts/entity/cacao",
         text=[
-            "Identificador: cacao".encode("utf-8"),
-            "Página Web: chocoworld.com".encode("utf-8"),
-            "Correo Electrónico: info@chocoworld.com".encode("utf-8"),
             "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Información General de la Entidad".encode("utf-8"),
+            "Datos Generales:".encode("utf-8"),
+            "Identificador: cacao".encode("utf-8"),
+            "Razón Social: Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Nombre: Choco Sonrisas".encode("utf-8"),
             "ID Fiscal: J0310000000000".encode("utf-8"),
+            "Tipo: Sociedad".encode("utf-8"),
+            "Datos de Contacto:".encode("utf-8"),
+            "Página Web: chocoworld.com".encode("utf-8"),
+            "Correo Electrónico: info@chocoworld.com".encode("utf-8"),
+            "Telefono: +505 8456 6543".encode("utf-8"),
+            "Telefono: +505 8456 7543".encode("utf-8"),
+            "Fax: +505 8456 7545".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounts/entity/edit/cacao",
         text=[
+            "/accounts/entity/cacao".encode("utf-8"),
+            "Editar Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Informacion Basica:".encode("utf-8"),
             "Nombre Comercial:".encode("utf-8"),
             "Choco Sonrisas".encode("utf-8"),
             "Razon Social:".encode("utf-8"),
             "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "ID Fiscal:".encode("utf-8"),
             "J0310000000000".encode("utf-8"),
+            "Informacion de Contacto:".encode("utf-8"),
+            "Correo Electronico:".encode("utf-8"),
+            "info@chocoworld.com".encode("utf-8"),
+            "Pagina Web:".encode("utf-8"),
+            "chocoworld.com".encode("utf-8"),
+            "Telefono 1:".encode("utf-8"),
+            "+505 8456 6543".encode("utf-8"),
+            "Telefono 2:".encode("utf-8"),
+            "+505 8456 7543".encode("utf-8"),
+            "Fax:".encode("utf-8"),
+            "+505 8456 7545".encode("utf-8"),
         ],
     ),
     Route(

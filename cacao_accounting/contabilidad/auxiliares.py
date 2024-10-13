@@ -115,11 +115,11 @@ def obtener_entidad(ent=None):
 
 def obtener_lista_monedas():
     """Devuelve la lista de monedas disponibles en la base de datos."""
-    from cacao_accounting.database import Moneda
+    from cacao_accounting.database import database, Currency
 
     monedas = []
-    consulta = Moneda.query.all()
+    consulta = database.session.execute(database.select(Currency)).all()
     for i in consulta:
-        moneda = (i.id, i.nombre)
+        moneda = (i[0].code, i[0].name)
         monedas.append(moneda)
     return monedas
