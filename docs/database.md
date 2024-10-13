@@ -97,4 +97,4 @@ la url de conexión correcta ya que Cacao Accounting no utiliza funciones especi
 mariadb+mariadbconnector://<user>:<password>@<host>[:<port>]/<dbname>
 ```
 
-La [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de Cacao Accounting incluye el Driver official de MariaDB
+La [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de Cacao Accounting no incluye el Driver official de MariaDB
