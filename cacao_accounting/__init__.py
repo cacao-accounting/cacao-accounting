@@ -43,6 +43,7 @@ from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
+from cacao_accounting.cache import cache
 from cacao_accounting.compras import compras
 from cacao_accounting.config import (
     DIRECTORIO_ARCHIVOS,
@@ -81,6 +82,7 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
+        cache.init_app(app)
     else:
         raise RuntimeError(ERROR2)
 

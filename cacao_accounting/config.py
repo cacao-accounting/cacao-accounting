@@ -135,6 +135,12 @@ else:
     configuracion["DEGUG"] = "True"
     configuracion["TEMPLATES_AUTO_RELOAD"] = "True"
 
+if environ.get("CACHE_REDIS_URL"):
+    configuracion["CACHE_TYPE"] = "RedisCache"
+    configuracion["CACHE_REDIS_URL"] = environ.get("CACHE_REDIS_URL")
+else:
+    configuracion["CACHE_TYPE"] = "SimpleCache"
+
 
 def probar_modo_escritorio() -> bool:
     """Función utilitaria para establecer nodo de escritorio."""

@@ -28,7 +28,7 @@ como motor de base de datos.
 La ruta de acceso configurada debe apuntar al archivo fisico de la base de datos:
 
 ```
-"sqlite:///path/to/cacaoaccounting.db"
+sqlite:///path/to/cacaoaccounting.db
 ```
 
 Para el desarrollo de Cacao Accounting se utiliza SQLite por defecto, al igual que en la [distribución para escritorio](https://github.com/cacao-accounting/cacao-accounting-desktop).
@@ -97,4 +97,4 @@ la url de conexión correcta ya que Cacao Accounting no utiliza funciones especi
 mariadb+mariadbconnector://<user>:<password>@<host>[:<port>]/<dbname>
 ```
 
-La [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de Cacao Accounting no incluye el Driver official de MariaDB
+La [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de Cacao Accounting NO incluye el Driver official de MariaDB
