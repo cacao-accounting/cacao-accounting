@@ -103,6 +103,7 @@ static_rutes = [
             "Mundo Cafe Sociedad Anonima".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/accounts/costs_center",
         text=[
@@ -227,4 +228,5 @@ static_rutes = [
             "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
         ],
     ),
+    """,
 ]
