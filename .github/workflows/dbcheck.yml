@@ -34,7 +34,7 @@ jobs:
           CACAO_TEST: "True"
         run: |
           cacaoctl setupdb
-      - name: Test with Postgresql
+      - name: Test with Postgresql + pg8000
         env:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"
@@ -46,12 +46,17 @@ jobs:
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
           CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
+      - name: Test with Postgresql + psycopg2
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
           # Run test on postgresql with psycopg2:
           sudo -u postgres psql -c "CREATE DATABASE cacao2;"
           sudo -u postgres psql -c "CREATE USER cacao2 WITH PASSWORD 'cacao2';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
           CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
-      - name: Test with MySQL
+      - name: Test with MySQL + pymysql
         env:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"
