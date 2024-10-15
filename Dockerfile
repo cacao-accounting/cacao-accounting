@@ -15,7 +15,8 @@ WORKDIR /app
 RUN microdnf update -y --nodocs --best \
     # Python 3.12 and binary libraries.
     # https://www.python.org/downloads/release/python-3120/
-    && microdnf install -y --nodocs --best --refresh python3.12 python3.12-cryptography python3.12-pip python3.12-psycopg2 \
+    && microdnf install -y --nodocs --best --refresh python3.12 \
+    python3.12-cryptography python3.12-pip python3.12-psycopg2 \
     && microdnf clean all \
     && /usr/bin/python3.12 --version \
     && chmod +x docker-entry-point.sh \
