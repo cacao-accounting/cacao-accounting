@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Modulo para la configuración centralizada de la configuración de la aplicacion."""
 
 # ---------------------------------------------------------------------------------------
@@ -29,7 +28,6 @@ from cacao_accounting.logs import log
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 
-
 # < --------------------------------------------------------------------------------------------- >
 # Directorios de la aplicacion
 DIRECTORIO_APP = path.abspath(path.dirname(__file__))
@@ -45,27 +43,23 @@ if name == "nt":
 else:
     SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/cacaoaccounting.db"
 
-
 # < --------------------------------------------------------------------------------------------- >
 # Permite al usuario establecer cuantos hilos utilizar para ejecutar el servidor WSGI por defecto,
 # util para instalaciones en un equipo dedicado, en otros entornos como contenedores se utiliza un
 # valor razonable por defecto.
-try:
-    THREADS = int(environ["CACAO_THREADS"])
-except KeyError:
-    THREADS = 4
+THREADS = environ.get("CACAO_THREADS") or environ.get("THREADS") or 4
 
 # < --------------------------------------------------------------------------------------------- >
 # Permite al usuario establecer en que puerto servir la aplicacion con el servidor WSGI por defecto
-try:
-    PORT = int(environ["CACAO_PORT"])
-except KeyError:
-    PORT = 8080
 
+PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 
 # < --------------------------------------------------------------------------------------------- >
 # En entornos de web y de contenedores es un patron recomendado utlizar variables del entorno para
 # configurar la aplicacion.
+
+DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("DATABASE_URL")
+SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
 def valida_llave_secreta(llave: str) -> bool:
@@ -107,10 +101,10 @@ def valida_direccion_base_datos(uri: str) -> bool:
 
 def probar_configuracion_por_variables_de_entorno() -> bool:
     """Valida que las variables del entorno se encuentran correctamente configuradas."""
-    if environ.get("CACAO_DB", None) and environ.get("CACAO_KEY", None):
-        VALIDACION = valida_direccion_base_datos(environ["CACAO_DB"]) and valida_llave_secreta(environ["CACAO_KEY"])
+    if DATABASE_URL and SECRET_KEY:
+        VALIDACION = valida_direccion_base_datos(DATABASE_URL) and valida_llave_secreta(SECRET_KEY)
         if VALIDACION:
-            log.info("Configuracion obtenida de variables de entorno")
+            log.info("Configuracion valida obtenida de variables de entorno")
         else:
             log.warning("No se encontro configuración valida.")
         return VALIDACION
@@ -122,16 +116,16 @@ configuracion = {}
 
 if probar_configuracion_por_variables_de_entorno():
     log.debug("Cargando configuracion en base a variables de entorno.")
-    configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB")
-    configuracion["SECRET_KEY"] = environ.get("CACAO_KEY")
+    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+    configuracion["SECRET_KEY"] = SECRET_KEY
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 else:
     log.debug("Utilizando configuración preterminada.")
-    configuracion["SQLALCHEMY_DATABASE_URI"] = environ.get("CACAO_DB") or SQLITE  # Always prefer CACAO_DB
+    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL or SQLITE  # Always prefer CACAO_DB
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
     configuracion["ENV"] = "development"
-    configuracion["SECRET_KEY"] = "dev"  # nosec
+    configuracion["SECRET_KEY"] = SECRET_KEY or "dev"  # nosec
     configuracion["DEGUG"] = "True"
     configuracion["TEMPLATES_AUTO_RELOAD"] = "True"
 
