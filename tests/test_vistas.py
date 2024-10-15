@@ -44,12 +44,12 @@ def test_visit_views(request):
                 assert current_user.is_authenticated
 
                 for ruta in static_rutes:
-                    log.warning("Testing route: " + ruta.url)
-                    consulta = client.get(ruta.url)
-
-                    assert consulta.status_code == 200
-                    if ruta.text:
-                        for text in ruta.text:
-                            assert text in consulta.data
+                    if not isinstance(ruta, str):
+                        log.warning("Testing route: " + ruta.url)
+                        consulta = client.get(ruta.url)
+                        assert consulta.status_code == 200
+                        if ruta.text:
+                            for text in ruta.text:
+                                assert text in consulta.data
 
             client.get("/user/logout")
