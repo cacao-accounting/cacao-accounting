@@ -28,6 +28,11 @@ jobs:
           python -m pip install -r development.txt
           python -m pip install -e .
           python -m pip install psycopg2-binary
+      - name: Test with SQLite
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
           cacaoctl setupdb
       - name: Test with Postgresql
         env:
