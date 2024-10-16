@@ -120,14 +120,15 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
         with app.app_context():
             app.register_blueprint(admin)
             app.register_blueprint(api)
-            app.register_blueprint(bancos)
             app.register_blueprint(main_app)
-            app.register_blueprint(contabilidad)
-            app.register_blueprint(compras)
-            app.register_blueprint(inventario)
             app.register_blueprint(login)
-            app.register_blueprint(ventas)
             registrar_modulos_adicionales(app)
+            # Main Modules
+            app.register_blueprint(bancos, url_prefix="/cash_management")
+            app.register_blueprint(contabilidad, url_prefix="/accounting")
+            app.register_blueprint(compras, url_prefix="/buying")
+            app.register_blueprint(inventario, url_prefix="/inventory")
+            app.register_blueprint(ventas, url_prefix="/sales")
     else:
         raise RuntimeError(ERROR2)
 
