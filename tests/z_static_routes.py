@@ -110,13 +110,50 @@ static_rutes = [
             "Mundo Sabor Sociedad Anonima".encode("utf-8"),
         ],
     ),
-    """
     Route(
         url="/accounting/costs_center",
         text=[
             "Catalogo de Centros de Costos.".encode("utf-8"),
             "Seleccionar Entidad.".encode("utf-8"),
             "Entidad Actual:".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Actualizar".encode("utf-8"),
+            "Mundo Cafe Sociedad Anonima".encode("utf-8"),
+            "Mundo Sabor Sociedad Anonima".encode("utf-8"),
+            "<p><strong>Entidad Actual:</strong> Choco Sonrisas Sociedad Anonima</p>".encode("utf-8"),
+            "A00000 - Centro Costos Predeterminado".encode("utf-8"),
+            "/accounting/costs_center/A00000".encode("utf-8"),
+            "B00000 - Centro Costos Nivel 0".encode("utf-8"),
+            "/accounting/costs_center/B00000".encode("utf-8"),
+            "B00001 - Centro Costos Nivel 1".encode("utf-8"),
+            "B00011 - Centro Costos Nivel 2".encode("utf-8"),
+            "B00111 - Centro Costos Nivel 3".encode("utf-8"),
+            "B01111 - Centro Costos Nivel 4".encode("utf-8"),
+            "B00011 - Centro Costos Nivel 2".encode("utf-8"),
+            "B11111 - Centro Costos Nivel 5".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/costs_center?entidad=cacao",
+        text=[
+            "Catalogo de Centros de Costos.".encode("utf-8"),
+            "Seleccionar Entidad.".encode("utf-8"),
+            "Entidad Actual:".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Actualizar".encode("utf-8"),
+            "Mundo Cafe Sociedad Anonima".encode("utf-8"),
+            "Mundo Sabor Sociedad Anonima".encode("utf-8"),
+            "<p><strong>Entidad Actual:</strong> Choco Sonrisas Sociedad Anonima</p>".encode("utf-8"),
+            "A00000 - Centro Costos Predeterminado".encode("utf-8"),
+            "/accounting/costs_center/A00000".encode("utf-8"),
+            "B00000 - Centro Costos Nivel 0".encode("utf-8"),
+            "/accounting/costs_center/B00000".encode("utf-8"),
+            "B00001 - Centro Costos Nivel 1".encode("utf-8"),
+            "B00011 - Centro Costos Nivel 2".encode("utf-8"),
+            "B00111 - Centro Costos Nivel 3".encode("utf-8"),
+            "B01111 - Centro Costos Nivel 4".encode("utf-8"),
+            "B00011 - Centro Costos Nivel 2".encode("utf-8"),
+            "B11111 - Centro Costos Nivel 5".encode("utf-8"),
         ],
     ),
     Route(
@@ -124,9 +161,18 @@ static_rutes = [
         text=[
             "Catalogo de Centros de Costos.".encode("utf-8"),
             "Seleccionar Entidad.".encode("utf-8"),
-            "Entidad Actual:".encode("utf-8"),
+            "<p><strong>Entidad Actual:</strong> Mundo Cafe Sociedad Anonima</p>".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounting/costs_center?entidad=dulce",
+        text=[
+            "Catalogo de Centros de Costos.".encode("utf-8"),
+            "Seleccionar Entidad.".encode("utf-8"),
+            "<p><strong>Entidad Actual:</strong> Mundo Sabor Sociedad Anonima</p>".encode("utf-8"),
+        ],
+    ),
+    """
     Route(
         url="/accounting/unit/list",
         text=[

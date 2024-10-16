@@ -411,7 +411,7 @@ def ccostos():
 
     return render_template(
         "contabilidad/centro-costo_lista.html",
-        base_centrocostos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
+        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
         ccostos=obtener_centros_costos(entidad_=request.args.get("entidad", None)),
         entidades=obtener_entidades(),
         entidad=obtener_entidad(ent=request.args.get("entidad", None)),
