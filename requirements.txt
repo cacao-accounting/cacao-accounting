@@ -8,6 +8,7 @@ cryptography
 Flask
 Flask-Alembic
 flask-babel
+flask-caching
 flask-login
 flask-sqlalchemy
 flask-wtf
@@ -16,6 +17,7 @@ pg8000
 pyjwt
 PyMySQL
 python-ulid
+redis
 sqlalchemy
 teritorio
 waitress

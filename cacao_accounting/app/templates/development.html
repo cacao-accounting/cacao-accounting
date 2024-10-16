@@ -1,17 +1,51 @@
-<h1>Cacao Accounting</h1>
-<h2>Información para desarrolladores.</h2>
+<!DOCTYPE html>
+<html lang="en">
 
-<p>
-    Advertencia : esta ejecutando una version en desarrollo de Cacao Accounting o la
-    aplicación esta en modo de pruebas, no se recomienda esta configuración para su
-    uso en producción favor revisar su configuración.
-</p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cacao Accounting System Info</title>
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+    <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+    <script src="{{ url_for('static', filename='node_modules/@popperjs/core/dist/umd/popper.min.js') }}"></script>
+</head>
 
-<h3>Información de la aplicación</h3>
-<ul>
-<li>Versión de Cacao Accounting: {{ info["app"]["version"] }}</li>
-<li>Esquema de la base de datos: {{ info["app"]["dbversion"] }}</li>
-<li>Base de Datos: {{ db }}</li>
-<li>Modo Escritorio: {{ MODO_ESCRITORIO }}</li>
-<li>Ambiente: {{ current_app.config["ENV"] }}</li>
-</ul>
+<body>
+    <a href="{{ url_for("cacao_app.pagina_inicio") }}">
+        <img height="50" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}"
+            alt="Cacao Accounting">
+    </a>
+    <h1>Cacao Accounting</h1>
+    <h2>Información para desarrolladores.</h2>
+
+    <h3>Información de la aplicación</h3>
+    <ul>
+        <li>Versión de Cacao Accounting: {{ info["app"]["version"] }}</li>
+        <li>Modo Escritorio: {{ MODO_ESCRITORIO }}</li>
+        <li>Ambiente: {{ current_app.config["ENV"] }}</li>
+        <li>Modo Pruebas: {{ test }}</li>
+    </ul>
+
+    <h3>Información de la base de datos.</h3>
+    <ul>
+        <li>Base de Datos: {{ db }}</li>
+        <li>Version: {{ db_version }}</li>
+    </ul>
+
+    <h3>Información del sistema</h3>
+    <ul>
+        <li>Systema: {{ os }}</li>
+        <li>Python: {{ py_version }}</li>
+    </ul>
+
+    <p class="lead">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="btn btn-success fw-bold "><i class="bi bi-house"
+                aria-hidden="true"></i> Regresar al inicio</a>
+    </p>
+</body>
+
+</html>

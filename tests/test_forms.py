@@ -46,7 +46,9 @@ def test_fill_all_forms(request):
 
                 for form in forms:
 
-                    log.warning(form.ruta)
+                    log.remove()
+                    log.add(sys.stderr, format="{message}")
+                    log.warning("Testing route: " + form.ruta)
 
                     if form.file:
                         data = {key: str(value) for key, value in form.data.items()}

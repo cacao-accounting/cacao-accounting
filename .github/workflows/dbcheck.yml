@@ -14,9 +14,9 @@ jobs:
     name: Test with multiple databases
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python 3
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: 3.12
       - name: Install python package
@@ -27,21 +27,36 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r development.txt
           python -m pip install -e .
+          python -m pip install psycopg2-binary
+      - name: Test with SQLite
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
           cacaoctl setupdb
-      - name: Test with Postgresql
+      - name: Test with Postgresql + pg8000
         env:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"
         run: |
           # Enable postgresql serive
           sudo systemctl start postgresql.service
-          # Create user and database
+          # Run test on postgresql with pg8000.
           sudo -u postgres psql -c "CREATE DATABASE cacao;"
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
-          # Run test on postgresql db.
           CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
-      - name: Test with MySQL
+      - name: Test with Postgresql + psycopg2
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          # Run test on postgresql with psycopg2:
+          sudo -u postgres psql -c "CREATE DATABASE cacao2;"
+          sudo -u postgres psql -c "CREATE USER cacao2 WITH PASSWORD 'cacao2';"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
+          CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
+      - name: Test with MySQL + pymysql
         env:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"

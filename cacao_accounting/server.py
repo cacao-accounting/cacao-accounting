@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
 # ---------------------------------------------------------------------------------------
@@ -68,8 +67,8 @@ def server() -> None:
     if DATABASE:
         try:
             log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
-            serve(app, port=PORT, threads=THREADS)
+            serve(app, port=int(PORT), threads=int(THREADS))
         except OSError:
-            log.error("Puerto 8080 actualmente en uso.")
+            log.error("Puerto {PORT} actualmente en uso.")
     else:
         log.error("No se logro establecer con la base de datos.")

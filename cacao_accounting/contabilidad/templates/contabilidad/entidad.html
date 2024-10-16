@@ -22,7 +22,7 @@
     </ol>
   </nav>
   <div class="pf-c-content">
-    <h4>Entidad.</h4>
+    <h4>{{ registro.company_name }}</h4>
     {% if acceso.configurar %}
     <a class="btn btn-sm btn-success"
       href="{{ url_for("contabilidad.editar_entidad", id_entidad=registro.code) }}">Editar</a>
@@ -44,21 +44,21 @@
     {% endif %}
     <div class="container">
       <div class="row">
-        <h5 class="card-title">Información General</h5>
+        <h5 class="card-title">Información General de la Entidad</h5>
         <div class="col-md">
           <h6>Datos Generales:</h6>
           <p>Identificador: {{ registro.code }} </p>
-          <p>Razón Social: {{ registro.razon_social }}</p>
-          <p>Nombre: {{ registro.nombre_comercial }}</p>
-          <p>ID Fiscal: {{ registro.id_fiscal }}</p>
-          <p>Tipo: {{ registro.tipo_entidad }}</p>
+          <p>Razón Social: {{ registro.company_name }}</p>
+          <p>Nombre: {{ registro.name }}</p>
+          <p>ID Fiscal: {{ registro.tax_id }}</p>
+          <p>Tipo: {{ registro.entity_type }}</p>
         </div>
         <div class="col-md">
           <h6>Datos de Contacto:</h6>
           <p>Página Web: {{ registro.web }}</p>
-          <p>Correo Electrónico: {{ registro.correo_electronico }}</p>
-          <p>Telefono: {{ registro.telefono1 }}</p>
-          <p>Telefono: {{ registro.telefono2 }}</p>
+          <p>Correo Electrónico: {{ registro.e_mail }}</p>
+          <p>Telefono: {{ registro.phone1 }}</p>
+          <p>Telefono: {{ registro.phone2 }}</p>
           <p>Fax: {{ registro.fax }}</p>
         </div>
       </div>

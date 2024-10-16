@@ -27,6 +27,9 @@ app = create_app(
 def test_visit_views(request):
     from cacao_accounting.logs import log
 
+    log.remove()
+    log.add(sys.stderr, format="{message}")
+
     if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
 
         with app.app_context():
@@ -41,12 +44,12 @@ def test_visit_views(request):
                 assert current_user.is_authenticated
 
                 for ruta in static_rutes:
-                    log.warning(ruta.url)
-                    consulta = client.get(ruta.url)
-
-                    assert consulta.status_code == 200
-                    if ruta.text:
-                        for text in ruta.text:
-                            assert text in consulta.data
+                    if not isinstance(ruta, str):
+                        log.warning("Testing route: " + ruta.url)
+                        consulta = client.get(ruta.url)
+                        assert consulta.status_code == 200
+                        if ruta.text:
+                            for text in ruta.text:
+                                assert text in consulta.data
 
             client.get("/user/logout")

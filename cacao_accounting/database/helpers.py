@@ -137,3 +137,28 @@ def entidades_creadas():
         return True
     else:
         return False
+
+
+def db_version():
+    """Return database version as text."""
+    from flask import current_app
+    from cacao_accounting.database import database
+    from sqlalchemy.sql import text
+
+    with current_app.app_context():
+        DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+
+        if DABATASE_URI.startswith("mysql+pymysql"):
+            Q = database.session.execute(text("SELECT version();"))
+            for i in Q:
+                db_version = str(i)
+        elif DABATASE_URI.startswith("postgresql+pg8000"):
+            Q = database.session.execute(text("SELECT VERSION();"))
+            for i in Q:
+                db_version = str(i)
+        else:
+            Q = database.session.execute(text("select sqlite_version();"))
+            for i in Q:
+                db_version = str(i)
+
+    return db_version
