@@ -2,13 +2,38 @@
 {% extends "base.html" %}
 {% block contenido %}
 <section>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i> Inicio
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.entidades") }}" class="link-dark">
+          Entidades
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=entidad.code) }}" class="link-dark">
+          {{ entidad.code }}
+        </a>
+      </li>
+    </ol>
+  </nav>
   <div class="container-fluid">
     <div class="row">
       <div class="col-8">
-        <h4>Editar Entidad.</h4>
+        <h4>Editar {{ entidad.company_name }}</h4>
         <form method="post">
           <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
-          <a href="{{ url_for("contabilidad.entidades") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+          <a href="{{ url_for("contabilidad.entidad", entidad_id=entidad.code) }}" class="btn btn-sm btn-danger"
+            type="link">Cancelar</a>
           {{ form.csrf_token }}
           <div class="row">
             <h5>Informacion Basica:</h5>
@@ -46,7 +71,7 @@
               {{form.telefono2(id="tel2", class="form-control")}}
             </div>
             <div class="col-4">
-              <label class="form-label" for="fax">Numero Fax:</label>
+              <label class="form-label" for="fax">Fax:</label>
               {{form.fax(id="fax", class="form-control")}}
             </div>
           </div>

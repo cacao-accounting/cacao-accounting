@@ -28,10 +28,9 @@ app = create_app(
 )
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_fill_all_forms(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user
@@ -46,7 +45,9 @@ def test_fill_all_forms(request):
 
                 for form in forms:
 
-                    log.warning(form.ruta)
+                    log.remove()
+                    log.add(sys.stderr, format="{message}")
+                    log.warning("Testing route: " + form.ruta)
 
                     if form.file:
                         data = {key: str(value) for key, value in form.data.items()}

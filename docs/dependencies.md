@@ -13,6 +13,7 @@
 | Flask                |          BSD License          |                                           A simple framework for building complex web applications. |
 | Flask-Alembic        |          MIT License          |                                                                       Integrate Alembic with Flask. |
 | flask-babel          |  BSD License (BSD-3-Clause)   |                                                      Adds i18n/l10n support for Flask applications. |
+| flask-caching        |          BSD License          |                                                      Adds caching support to your Flask aplication. |
 | flask-login          |          MIT License          |                                               User authentication and session management for Flask. |
 | flask-sqlalchemy     |          BSD License          |                                                   Add SQLAlchemy support to your Flask application. |
 | flask-wtf            |          BSD License          |                             Form rendering, validation, and CSRF protection for Flask with WTForms. |
@@ -21,6 +22,7 @@
 | pyjwt                |          MIT License          |                                                             JSON Web Token implementation in Python |
 | PyMySQL              |          MIT License          |                                                                            Pure Python MySQL Driver |
 | python-ulid          |          MIT License          |                                            Universally unique lexicographically sortable identifier |
+| redis                |          MIT License          |                                                Python client for Redis database and key-value store |
 | sqlalchemy           |          MIT License          |                                                                        Database Abstraction Library |
 | teritorio            |         BSD-3-Clause          |                                                        A library for country and currency ISO codes |
 | waitress             | Zope Public License (ZPL 2.1) |                                                                                Waitress WSGI server |
