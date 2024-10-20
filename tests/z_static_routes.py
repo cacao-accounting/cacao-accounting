@@ -239,11 +239,6 @@ static_rutes = [
             "Centro de Costos.".encode("utf-8"),
         ],
     ),
-    """
-    Route(
-        url="/settings",
-        text=["Administraión del Sistema.".encode("utf-8"), "Modulos".encode("utf-8")],
-    ),
     Route(
         url="/accounting/series",
         text=[
@@ -290,11 +285,4 @@ static_rutes = [
             "Listado de Comprobantes Contables.".encode("utf-8"),
         ],
     ),
-    Route(
-        url="/accounting/gl/new",
-        text=[
-            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
-        ],
-    ),
-    """,
 ]

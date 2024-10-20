@@ -317,7 +317,7 @@ def unidad(id_unidad):
     """Unidad de negocios."""
     from cacao_accounting.database import Unit
 
-    REGISTRO = database.session.execute(database.select(Unit).filter_by(unidad=id_unidad)).first()
+    REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
     return render_template("contabilidad/unidad.html", registro=REGISTRO[0])
 
 
@@ -561,7 +561,7 @@ def series():
 
     if request.args.get("doc", type=str):
         consulta = consulta = database.paginate(
-            database.select(Serie).filter_by(documento=request.args.get("doc", type=str)),
+            database.select(Serie).filter_by(doc=request.args.get("doc", type=str)),
             page=request.args.get("page", default=1, type=int),
             max_per_page=10,
             count=True,
@@ -590,25 +590,25 @@ def nueva_serie():
     """Nueva Serie."""
 
     from cacao_accounting.contabilidad.forms import FormularioSerie
-    from cacao_accounting.database import Entidad, Serie, database
+    from cacao_accounting.database import Entity, Serie, database
 
     form = FormularioSerie()
 
-    CONSULTA_ENTIDADES = database.session.execute(database.select(Entidad)).all()
+    CONSULTA_ENTIDADES = database.session.execute(database.select(Entity)).all()
     LISTA_DE_ENTIDADES = []
 
     for e in CONSULTA_ENTIDADES:
-        LISTA_DE_ENTIDADES.append((e[0].entidad, e[0].nombre_comercial))
+        LISTA_DE_ENTIDADES.append((e[0].code, e[0].name))
 
     form.entidad.choices = LISTA_DE_ENTIDADES
 
     if form.validate_on_submit() or request.method == "POST":
         SERIE = Serie(
-            entidad=form.entidad.data,
-            documento=form.documento.data,
+            entity=form.entidad.data,
+            doc=form.documento.data,
             serie=form.serie.data,
-            habilitada=True,
-            predeterminada=False,
+            enabled=True,
+            default=False,
         )
 
         database.session.add(SERIE)

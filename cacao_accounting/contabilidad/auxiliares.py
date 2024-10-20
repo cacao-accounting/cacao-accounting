@@ -30,13 +30,13 @@ from cacao_accounting.database import database
 
 def obtener_lista_entidades_por_id_razonsocial():
     """Devuelve la lista de unidades registrada en la base de datos."""
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
     _entidades = []
     _entidades.append(("", ""))
-    consulta = Entidad.query.all()
+    consulta = database.session.execute(database.select(Entity)).all()
     for i in consulta:
-        _entidad = (i.entidad, i.razon_social)
+        _entidad = (i[0].code, i[0].name)
         _entidades.append(_entidad)
     return _entidades
 
