@@ -183,6 +183,12 @@ static_rutes = [
             "Nombre".encode("utf-8"),
             "Entidad".encode("utf-8"),
             "/accounting/unit/new".encode("utf-8"),
+            "matriz".encode(),
+            "masaya".encode(),
+            "movil".encode(),
+            "Casa Matriz".encode(),
+            "Masaya".encode(),
+            "/accounting/entity/cacao".encode(),
         ],
     ),
     """

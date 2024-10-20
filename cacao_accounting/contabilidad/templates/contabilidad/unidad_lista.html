@@ -43,18 +43,18 @@
       <td>
         {% import "macros.html" as macros %}
         {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
-          {{ item.unidad }}
+        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.code) }}" class="link-dark">
+          {{ item.code }}
         </a>
       </td>
       <td>
-        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.unidad) }}" class="link-dark">
-          {{ item.nombre }}
+        <a href="{{ url_for("contabilidad.unidad", id_unidad=item.code) }}" class="link-dark">
+          {{ item.name }}
         </a>
       </td>
       <td>
-        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.entidad }}
+        <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entity) }}" class="link-dark">
+          {{ item.entity }}
         </a>
       </td>
     </tr>
