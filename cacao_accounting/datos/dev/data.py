@@ -148,19 +148,19 @@ UNIDADES = (
         name="Casa Matriz",
         entity="cacao",
         code="matriz",
-        status="activo",
+        status="active",
     ),
     Unit(
         name="Movil",
         entity="cacao",
         code="movil",
-        status="activo",
+        status="active",
     ),
     Unit(
         name="Masaya",
         entity="cacao",
         code="masaya",
-        status="inactivo",
+        status="inactive",
     ),
 )
 
@@ -346,7 +346,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro Costos Predeterminado",
-        status="activo",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -356,7 +356,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00000",
         name="Centro Costos Nivel 0",
-        status="activo",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -366,7 +366,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00001",
         name="Centro Costos Nivel 1",
-        status="activo",
+        status="active",
         parent="B00000",
     ),
     CostCenter(
@@ -377,8 +377,19 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00011",
         name="Centro Costos Nivel 2",
-        status="activo",
+        status="active",
         parent="B00001",
+    ),
+    CostCenter(
+        active=True,
+        default=True,
+        enabled=True,
+        entity="cacao",
+        group=True,
+        code="B00111",
+        name="Centro Costos Nivel 3",
+        status="active",
+        parent="B00011",
     ),
     CostCenter(
         active=True,
@@ -388,7 +399,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B01111",
         name="Centro Costos Nivel 4",
-        status="activo",
+        status="active",
         parent="B00111",
     ),
     CostCenter(
@@ -399,7 +410,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="B11111",
         name="Centro Costos Nivel 5",
-        status="activo",
+        status="active",
         parent="B01111",
     ),
     CostCenter(
@@ -410,7 +421,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro de Costos Predeterminado",
-        status="activa",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -420,7 +431,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro de Costos Predeterminados",
-        status="activa",
+        status="active",
     ),
 )
 
@@ -434,7 +445,7 @@ PROYECTOS = (
         start=date(year=2020, month=6, day=5),
         end=date(year=2020, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
     Project(
         enabled=True,
@@ -444,17 +455,17 @@ PROYECTOS = (
         start=date(year=2024, month=6, day=5),
         end=date(year=2024, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
     Project(
         enabled=True,
         entity="cacao",
         code="PTO003",
-        name="Proyecto Demo",
+        name="Proyecto Demostracion",
         start=date(year=2024, month=6, day=5),
         end=date(year=2024, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
 )
 

@@ -1,8 +1,8 @@
 # Configuración de la base de datos.
 
-Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan en la
-aplicacion, la configuración de una linea de conección en la principal opción de configuración que requiere
-el sistema.
+Cacao Accounting requiere acceso a una base de datos para almacencer los registros que se ingresan
+en la aplicacion, la configuración de una linea de conección es la principal opción de configuración
+que requiere el sistema.
 
 En general configurar la base de datos para uso en Cacao Accounting requiere:
 
@@ -11,15 +11,32 @@ En general configurar la base de datos para uso en Cacao Accounting requiere:
 3. Crear una base de datos.
 4. Dar acceso al usuario especificado a la base datos que acabamos de crear.
 
-En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distintos a los usados de ejemplo.
+En los ejemplos siguientes recomendamos utilizar nombres y contraseñas distintos a los usados de ejemplo,
+en depedencia de su configuración puede que el servidor de base de datos se encuentre en hospedado en una
+ubicación distinta a la aplicacion, es necesario tomar medidas de seguridad para evitar que terceros mal
+intencionados accedan a la base de datos del sistema, utilizar nombre de usuario y contraseñas seguras es
+un paso importante de seguridad, una contraseña es menos segura si utilizas "user" o "admin" como usuario
+de la base de datos.
 
-## SQLite
+## Bases de datos soportadas.
 
-No se requiere pasos previos para utilizar [SQLite](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html) como motor de base de datos.
+### SQLite
 
-## MySQL:
+No se requieren pasos previos para utilizar [SQLite](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html)
+como motor de base de datos.
 
-Una vez instalado [MySQL](https://docs.sqlalchemy.org/en/20/dialects/mysql.html) puede ejecutar las siguientes sentencias SQL para crear la base de datos:
+La ruta de acceso configurada debe apuntar al archivo fisico de la base de datos:
+
+```
+sqlite:///path/to/cacaoaccounting.db
+```
+
+Para el desarrollo de Cacao Accounting se utiliza SQLite por defecto, al igual que en la [distribución para escritorio](https://github.com/cacao-accounting/cacao-accounting-desktop).
+
+### MySQL:
+
+Una vez instalado [MySQL](https://docs.sqlalchemy.org/en/20/dialects/mysql.html) puede ejecutar las
+siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS cacao;
@@ -34,9 +51,10 @@ El formato de clave de conexión correcta para utilizar con MySQL es:
 mysql+pymysql://<username>:<password>@<host>/<dbname>
 ```
 
-## Postgresql:
+### Postgresql:
 
-Una vez instalado [Postgresql](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html) puede ejeutar las siguientes sentencias SQL para crear la base de datos:
+Una vez instalado [Postgresql](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html) puede
+ejecutar las siguientes sentencias SQL para crear la base de datos:
 
 ```sql
 CREATE DATABASE cacao;
@@ -44,27 +62,39 @@ CREATE USER cacao WITH PASSWORD 'cacao';
 GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
 ```
 
-El formato de clave de conexión correcta para utilizar con Postgresql es:
+Se puede utilizar tanto PG800 (Pure Python Driver) como psycopg2 (Compiled Driver), el formato de
+clave de conexión correcta para utilizar con Postgresql es:
+
+PG8000:
 
 ```
 postgresql+pg8000://user:password@host:port/dbname
 ```
 
-## MS SQL Server
+PSYCOPG2:
 
-Una vez instalado MS SQL Server puede ejecitar las siguientes setencias SQL para crear la base de datos:
-
-```sql
-USE master;
-GO
-CREATE DATABASE cacao;
-GO
-CREATE LOGIN cacao WITH PASSWORD = 'cacao';
-GO
-CREATE USER cacaouser login cacao;
-GO
-USE cacao;
-GO
-GRANT ALL ON dbo.cacao TO cacaouser;
-GO
 ```
+postgresql+psycopg2://user:password@host:port/dbname
+```
+
+Al estar escrito completamente en Python PG8000 puede ser un poco mas lento que psycopg2 el cual utiliza
+codigo en para ser eficiente, ambas son opciones validas y el usuario puede seleccionar la opción que mas
+se adapta en sus necesidades ya que para utilizar psycopg2 debe tener disponibles la librerias necesarias
+para compilar el driver versus postgresql, en cambio pg8000 puede instalarse sin requerir de depencias
+adicionales para su instalación y funcionamiento.
+
+Ambos drivers se incluyen en la [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de
+Cacao Accounting.
+
+## Otras bases de datos.
+
+### Mariadb
+
+No se realizan pruebas automaticas versus [MariaDB](https://docs.sqlalchemy.org/en/20/dialects/mysql.html#module-sqlalchemy.dialects.mysql.mariadbconnector) pero Cacao Accounting debería funcionar sin modificaciones utilizando
+la url de conexión correcta ya que Cacao Accounting no utiliza funciones especificas de MariaDB para su operación:
+
+```
+mariadb+mariadbconnector://<user>:<password>@<host>[:<port>]/<dbname>
+```
+
+La [imagen OCI](https://quay.io/repository/cacaoaccounting/cacaoaccounting) de Cacao Accounting NO incluye el Driver official de MariaDB

@@ -1,0 +1,12 @@
+modules = ["bash", "nodejs-20", "python-3.8", "web"]
+run = "python -m cacao_accounting"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "python -m cacao_accounting"]
+
+[[ports]]
+localPort = 8080
+externalPort = 80

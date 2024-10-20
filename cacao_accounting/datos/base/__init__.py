@@ -104,7 +104,7 @@ def base_data(user, passwd, carga_rapida):
                 Q = database.session.execute(text("SELECT version();"))
                 for i in Q:
                     log.info("Versión de base de datos" + str(i))
-            elif DABATASE_URI.startswith("postgresql+pg8000"):
+            elif DABATASE_URI.startswith("postgresql+pg8000") or DABATASE_URI.startswith("postgresql+psycopg2"):
                 log.info("Running on Postgresql.")
                 Q = database.session.execute(text("SELECT VERSION();"))
                 for i in Q:

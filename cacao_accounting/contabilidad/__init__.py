@@ -47,8 +47,8 @@ from cacao_accounting.version import APPNAME
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
-contabilidad.register_blueprint(gl, url_prefix="/accounting/gl")
-LISTA_ENTIDADES = redirect("/accounts/entity/list")
+contabilidad.register_blueprint(gl, url_prefix="/gl")
+LISTA_ENTIDADES = redirect("/accounting/entity/list")
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -78,9 +78,7 @@ def monedas():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Contabilidad
-@contabilidad.route("/contabilidad")
-@contabilidad.route("/conta")
-@contabilidad.route("/accounts")
+@contabilidad.route("/")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -95,7 +93,7 @@ def conta():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
-@contabilidad.route("/accounts/entity/list")
+@contabilidad.route("/entity/list")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -118,7 +116,7 @@ def entidades():
     )
 
 
-@contabilidad.route("/accounts/entity/<entidad_id>")
+@contabilidad.route("/entity/<entidad_id>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -134,7 +132,7 @@ def entidad(entidad_id):
     )
 
 
-@contabilidad.route("/accounts/entity/new", methods=["GET", "POST"])
+@contabilidad.route("/entity/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -177,16 +175,16 @@ def nueva_entidad():
     )
 
 
-@contabilidad.route("/accounts/entity/edit/<id_entidad>", methods=["GET", "POST"])
+@contabilidad.route("/entity/edit/<id_entidad>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
-    from cacao_accounting.database import Entidad
+    from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entidad).filter_by(entidad=id_entidad)).first()
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).first()
     ENTIDAD = ENTIDAD[0]
 
     if request.method == "POST":
@@ -215,10 +213,10 @@ def editar_entidad(id_entidad):
 
         formulario = FormularioEntidad(data=DATA)
         formulario.moneda.choices = obtener_lista_monedas()
-        return render_template("contabilidad/entidad_editar.html", form=formulario)
+        return render_template("contabilidad/entidad_editar.html", entidad=ENTIDAD, form=formulario)
 
 
-@contabilidad.route("/accounts/entity/delete/<id_entidad>")
+@contabilidad.route("/entity/delete/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -233,7 +231,7 @@ def eliminar_entidad(id_entidad):
     return LISTA_ENTIDADES
 
 
-@contabilidad.route("/accounts/entity/set_inactive/<id_entidad>")
+@contabilidad.route("/entity/set_inactive/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -248,7 +246,7 @@ def inactivar_entidad(id_entidad):
     return LISTA_ENTIDADES
 
 
-@contabilidad.route("/accounts/entity/set_active/<id_entidad>")
+@contabilidad.route("/entity/set_active/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -263,7 +261,7 @@ def activar_entidad(id_entidad):
     return LISTA_ENTIDADES
 
 
-@contabilidad.route("/accounts/entity/set_default/<id_entidad>")
+@contabilidad.route("/entity/set_default/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -287,7 +285,7 @@ def predeterminar_entidad(id_entidad):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Unidades de Negocio
-@contabilidad.route("/accounts/unit/list")
+@contabilidad.route("/unit/list")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -311,7 +309,7 @@ def unidades():
     )
 
 
-@contabilidad.route("/accounts/unit/<id_unidad>")
+@contabilidad.route("/unit/<id_unidad>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -319,11 +317,11 @@ def unidad(id_unidad):
     """Unidad de negocios."""
     from cacao_accounting.database import Unit
 
-    REGISTRO = database.session.execute(database.select(Unit).filter_by(unidad=id_unidad)).first()
+    REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
     return render_template("contabilidad/unidad.html", registro=REGISTRO[0])
 
 
-@contabilidad.route("/accounts/unit/delete/<id_unidad>")
+@contabilidad.route("/unit/delete/<id_unidad>")
 @modulo_activo("accounting")
 @login_required
 def eliminar_unidad(id_unidad):
@@ -331,7 +329,7 @@ def eliminar_unidad(id_unidad):
     return redirect("/app")
 
 
-@contabilidad.route("/accounts/unit/new", methods=["GET", "POST"])
+@contabilidad.route("/unit/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -354,7 +352,7 @@ def nueva_unidad():
         database.session.add(DATA)
         database.session.commit()
 
-        return redirect("/accounts/unit/list")
+        return redirect("/unit/list")
     return render_template(
         "contabilidad/unidad_crear.html",
         titulo=TITULO,
@@ -366,7 +364,7 @@ def nueva_unidad():
 # Cuentas Contables
 
 
-@contabilidad.route("/accounts/accounts", methods=["GET", "POST"])
+@contabilidad.route("/accounts", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -384,15 +382,17 @@ def cuentas():
     )
 
 
-@contabilidad.route("/accounts/account/<id_cta>")
+@contabilidad.route("/account/<entity>/<id_cta>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def cuenta(id_cta):
+def cuenta(entity, id_cta):
     """Cuenta Contable."""
     from cacao_accounting.database import Accounts
 
-    registro = database.session.execute(database.select(Accounts).filter_by(codigo=id_cta)).first()
+    registro = database.session.execute(
+        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
+    ).first()
 
     return render_template(
         "contabilidad/cuenta.html",
@@ -403,7 +403,7 @@ def cuenta(id_cta):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Centros de Costos
-@contabilidad.route("/accounts/costs_center", methods=["GET", "POST"])
+@contabilidad.route("/costs_center", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -413,7 +413,7 @@ def ccostos():
 
     return render_template(
         "contabilidad/centro-costo_lista.html",
-        base_centrocostos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
+        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
         ccostos=obtener_centros_costos(entidad_=request.args.get("entidad", None)),
         entidades=obtener_entidades(),
         entidad=obtener_entidad(ent=request.args.get("entidad", None)),
@@ -421,7 +421,7 @@ def ccostos():
     )
 
 
-@contabilidad.route("/accounts/costs_center/<id_cc>")
+@contabilidad.route("/costs_center/<id_cc>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -429,7 +429,7 @@ def centro_costo(id_cc):
     """Centro de Costos."""
     from cacao_accounting.database import CostCenter
 
-    registro = database.session.execute(database.select(CostCenter).filter_by(codigo=id_cc)).first()
+    registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).first()
 
     return render_template(
         "contabilidad/centro-costo.html",
@@ -440,7 +440,7 @@ def centro_costo(id_cc):
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Proyectos
-@contabilidad.route("/accounts/project/list")
+@contabilidad.route("/project/list")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -467,7 +467,7 @@ def proyectos():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Tipos de Cambio
-@contabilidad.route("/accounts/exchange")
+@contabilidad.route("/exchange")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -492,16 +492,16 @@ def tasa_cambio():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Períodos Contables
-@contabilidad.route("/accounts/accounting_period")
+@contabilidad.route("/accounting_period")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def periodo_contable():
     """Lista de periodos contables."""
-    from cacao_accounting.database import PeriodoContable, database
+    from cacao_accounting.database import AccountingPeriod
 
     CONSULTA = database.paginate(
-        database.select(PeriodoContable),  # noqa: E712
+        database.select(AccountingPeriod),  # noqa: E712
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -519,7 +519,7 @@ def periodo_contable():
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Comprobante contable
-@contabilidad.route("/accounts/journal/new", methods=["GET", "POST"])
+@contabilidad.route("/journal/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -527,7 +527,7 @@ def nuevo_comprobante():
     """Nuevo comprobante contable."""
 
 
-@contabilidad.route("/accounts/journal/<identifier>")
+@contabilidad.route("/journal/<identifier>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -535,7 +535,7 @@ def ver_comprobante():
     """Nuevo comprobante contable."""
 
 
-@contabilidad.route("/accounts/journal/edit/<identifier>", methods=["GET", "POST"])
+@contabilidad.route("/journal/edit/<identifier>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -547,7 +547,7 @@ def editar_comprobante():
 # Series e Identificadores
 
 
-@contabilidad.route("/accounts/series", methods=["GET", "POST"])
+@contabilidad.route("/series", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -561,7 +561,7 @@ def series():
 
     if request.args.get("doc", type=str):
         consulta = consulta = database.paginate(
-            database.select(Serie).filter_by(documento=request.args.get("doc", type=str)),
+            database.select(Serie).filter_by(doc=request.args.get("doc", type=str)),
             page=request.args.get("page", default=1, type=int),
             max_per_page=10,
             count=True,
@@ -582,7 +582,7 @@ def series():
     )
 
 
-@contabilidad.route("/accounts/serie/new", methods=["GET", "POST"])
+@contabilidad.route("/serie/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -590,25 +590,25 @@ def nueva_serie():
     """Nueva Serie."""
 
     from cacao_accounting.contabilidad.forms import FormularioSerie
-    from cacao_accounting.database import Entidad, Serie, database
+    from cacao_accounting.database import Entity, Serie, database
 
     form = FormularioSerie()
 
-    CONSULTA_ENTIDADES = database.session.execute(database.select(Entidad)).all()
+    CONSULTA_ENTIDADES = database.session.execute(database.select(Entity)).all()
     LISTA_DE_ENTIDADES = []
 
     for e in CONSULTA_ENTIDADES:
-        LISTA_DE_ENTIDADES.append((e[0].entidad, e[0].nombre_comercial))
+        LISTA_DE_ENTIDADES.append((e[0].code, e[0].name))
 
     form.entidad.choices = LISTA_DE_ENTIDADES
 
     if form.validate_on_submit() or request.method == "POST":
         SERIE = Serie(
-            entidad=form.entidad.data,
-            documento=form.documento.data,
+            entity=form.entidad.data,
+            doc=form.documento.data,
             serie=form.serie.data,
-            habilitada=True,
-            predeterminada=False,
+            enabled=True,
+            default=False,
         )
 
         database.session.add(SERIE)

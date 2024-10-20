@@ -24,7 +24,7 @@
   <table class="table table-sm">
     <caption style="display: none;">Listado de monedas.</caption>
     <thead>
-      <tr>
+      <tr {%- if TESTING -%} data-render-currency-ok="true" {%- endif -%}>
         <th scope="col">Moneda</th>
         <th scope="col">Nombre</th>
       </tr>
@@ -32,10 +32,10 @@
     {% for moneda in consulta.items -%}
     <tr>
       <td>
-        {{ moneda.codigo }}
+        {{ moneda.code }}
       </td>
       <td>
-        {{ moneda.nombre }}
+        {{ moneda.name }}
       </td>
     </tr>
     {%- endfor %}

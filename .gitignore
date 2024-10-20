@@ -269,3 +269,6 @@ cacao_accounting/static/node_modules/*
 .pytest_cache
 .ruff_cache
 .venv
+
+
+uv.lock

@@ -23,11 +23,13 @@ app = create_app(
 )
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_visit_views(request):
     from cacao_accounting.logs import log
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    log.remove()
+    log.add(sys.stderr, format="{message}")
+
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user
@@ -41,12 +43,12 @@ def test_visit_views(request):
                 assert current_user.is_authenticated
 
                 for ruta in static_rutes:
-                    log.warning(ruta.url)
-                    consulta = client.get(ruta.url)
-
-                    assert consulta.status_code == 200
-                    if ruta.text:
-                        for text in ruta.text:
-                            assert text in consulta.data
+                    if not isinstance(ruta, str):
+                        log.warning("Testing route: " + ruta.url)
+                        consulta = client.get(ruta.url)
+                        assert consulta.status_code == 200
+                        if ruta.text:
+                            for text in ruta.text:
+                                assert text in consulta.data
 
             client.get("/user/logout")

@@ -3,18 +3,40 @@
 {% extends "base.html" %}
 {% block contenido %}
 <section>
+
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb lh-sm">
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
+          <i class="bi bi-house"></i>Inicio
+        </a>
+      </li>
+      <li class="active breadcrumb-item" aria-current="page">
+        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
+          Contabilidad
+        </a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">
+        <a href="{{ url_for("contabilidad.cuentas") }}" class="link-dark">
+          Catalogo de Cuentas
+        </a>
+      </li>
+    </ol>
+  </nav>
+
   <h4>Cuenta Contable</h4>
   <div class="container">
     <div class="row">
       <div class="col-md">
-        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }} {{ registro.status }}</p>
-        <p><strong>Codigo Cuenta:</strong> {{ registro.codigo }}</p>
-        <p><strong>Nombre:</strong> {{ registro.nombre }}</p>
+        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }}
+          {{ registro.status }}</p>
+        <p><strong>Codigo Cuenta:</strong> {{ registro.code }}</p>
+        <p><strong>Nombre:</strong> {{ registro.name }}</p>
       </div>
       <div class="col-md">
 
-        <p><strong>Tipo:</strong> 
-          {% if registro.grupo %}
+        <p><strong>Tipo:</strong>
+          {% if registro.group %}
           Grupo
           {% else %}
           No Grupo

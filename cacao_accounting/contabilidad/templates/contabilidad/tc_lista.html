@@ -26,6 +26,7 @@
     <thead>
       <tr>
         <th scope="col">Base</th>
+        <th scope="col"></th>
         <th scope="col">Destino</th>
         <th scope="col">Tasa</th>
         <th scope="col">Fecha</th>
@@ -33,17 +34,18 @@
     </thead>
     {% for item in consulta.items -%}
     <tr>
-      <th id="{{ item.base }}-{{ item.destino }}">
-        {{ item.base }}
+      <th id="{{ item.origin }}-{{ item.destination }}">
+        {{ item.origin }}
       </th>
+      <td>-></td>
       <td>
-        {{ item.destino }}
+        {{ item.destination }}
       </td>
       <td>
-        {{ item.tasa | float }}
+        {{ item.rate | float }}
       </td>
       <td>
-        {{ item.fecha }}
+        {{ item.date }}
       </td>
     </tr>
     {%- endfor %}
