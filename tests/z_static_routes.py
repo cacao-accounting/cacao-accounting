@@ -205,16 +205,17 @@ static_rutes = [
             """class="bi bi-circle-fill" style="color:LimeGreen""".encode(),
         ],
     ),
-    """
     Route(
-        url="/currency/list",
+        url="/accounting/currency/list",
         text=[
             "Listado de Monedas.".encode("utf-8"),
             "Nueva Moneda".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Moneda".encode("utf-8"),
+            "data-render-currency-ok".encode(),
         ],
     ),
+    """
     Route(
         url="/accounting/exchange",
         text=[
