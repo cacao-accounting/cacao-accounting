@@ -121,7 +121,7 @@ def tasas_de_cambio():
 
 def master_data():
     """Carga datos maestros de desarrollo a la base de datos."""
-    log.warning("Iniciando carga de master data de pruebas.")
+    log.info("Iniciando carga de master data de pruebas.")
 
     demo_usuarios()
     asignar_usuario_a_roles()

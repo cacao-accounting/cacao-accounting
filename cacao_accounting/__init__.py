@@ -43,6 +43,7 @@ from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
+from cacao_accounting.cache import cache
 from cacao_accounting.compras import compras
 from cacao_accounting.config import (
     DIRECTORIO_ARCHIVOS,
@@ -81,6 +82,7 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
+        cache.init_app(app)
     else:
         raise RuntimeError(ERROR2)
 
@@ -118,14 +120,15 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
         with app.app_context():
             app.register_blueprint(admin)
             app.register_blueprint(api)
-            app.register_blueprint(bancos)
             app.register_blueprint(main_app)
-            app.register_blueprint(contabilidad)
-            app.register_blueprint(compras)
-            app.register_blueprint(inventario)
             app.register_blueprint(login)
-            app.register_blueprint(ventas)
             registrar_modulos_adicionales(app)
+            # Main Modules
+            app.register_blueprint(bancos, url_prefix="/cash_management")
+            app.register_blueprint(contabilidad, url_prefix="/accounting")
+            app.register_blueprint(compras, url_prefix="/buying")
+            app.register_blueprint(inventario, url_prefix="/inventory")
+            app.register_blueprint(ventas, url_prefix="/sales")
     else:
         raise RuntimeError(ERROR2)
 
