@@ -38,6 +38,9 @@ nav:
       - Información General: about.md
       - Preguntas Frecuentes: faq.md
 
+plugins:
+  - blog
+
 extra:
   social:
     - icon: fontawesome/brands/github
