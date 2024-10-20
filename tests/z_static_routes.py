@@ -215,13 +215,13 @@ static_rutes = [
             "data-render-currency-ok".encode(),
         ],
     ),
-    """
     Route(
         url="/accounting/exchange",
         text=[
             "Listado de Tasas de Cambio.".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/accounting/accounting_period",
         text=[
