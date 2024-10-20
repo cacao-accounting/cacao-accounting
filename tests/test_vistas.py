@@ -23,14 +23,13 @@ app = create_app(
 )
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_visit_views(request):
     from cacao_accounting.logs import log
 
     log.remove()
     log.add(sys.stderr, format="{message}")
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user

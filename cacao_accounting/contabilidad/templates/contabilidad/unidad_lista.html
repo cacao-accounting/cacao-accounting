@@ -2,6 +2,12 @@
 {% extends "base.html" %}
 {% block contenido %}
 
+{%- if TESTING -%}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html">
+</div>
+{%- endif -%}
+
 <section>
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb lh-sm">

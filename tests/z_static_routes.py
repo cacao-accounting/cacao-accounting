@@ -172,16 +172,20 @@ static_rutes = [
             "<p><strong>Entidad Actual:</strong> Mundo Sabor Sociedad Anonima</p>".encode("utf-8"),
         ],
     ),
-    """
     Route(
         url="/accounting/unit/list",
         text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html".encode(
+                "utf-8"
+            ),
             "Listado de Unidades de Negocio.".encode("utf-8"),
             "Código de Entidad".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Entidad".encode("utf-8"),
+            "/accounting/unit/new".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/accounting/project/list",
         text=[

@@ -148,19 +148,19 @@ UNIDADES = (
         name="Casa Matriz",
         entity="cacao",
         code="matriz",
-        status="activo",
+        status="active",
     ),
     Unit(
         name="Movil",
         entity="cacao",
         code="movil",
-        status="activo",
+        status="active",
     ),
     Unit(
         name="Masaya",
         entity="cacao",
         code="masaya",
-        status="inactivo",
+        status="inactive",
     ),
 )
 

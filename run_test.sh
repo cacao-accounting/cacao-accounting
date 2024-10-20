@@ -1,4 +1,5 @@
 #!/bin/bash
+black cacao_accounting
 echo Verificando con flake8
 python -m flake8 cacao_accounting/
 echo

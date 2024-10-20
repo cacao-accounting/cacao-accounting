@@ -32,10 +32,9 @@ def setupdb(request):
             init_test_db(app)
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_check_passwd(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from cacao_accounting.auth import validar_acceso
@@ -46,10 +45,9 @@ def test_check_passwd(request):
             assert validar_acceso(usuario="holis", clave="holis") is False
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_set_entity_inactive(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user
@@ -63,10 +61,9 @@ def test_set_entity_inactive(request):
                 client.get("/accounts/entity/set_inactive/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_set_entity_active(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user
@@ -80,10 +77,9 @@ def test_set_entity_active(request):
                 client.get("/accounts/entity/set_active/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_default_entity(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user
@@ -97,10 +93,9 @@ def test_default_entity(request):
                 client.get("/accounts/entity/set_default/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
 
-@pytest.mark.skipif(os.environ.get("CACAO_TEST") is None, reason="Set env to testing.")
 def test_delete_entity(request):
 
-    if request.config.getoption("--slow") == "True" or os.environ.get("CACAO_TEST"):
+    if request.config.getoption("--slow") == "True":
 
         with app.app_context():
             from flask_login import current_user

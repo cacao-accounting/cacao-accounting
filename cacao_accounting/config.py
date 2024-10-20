@@ -162,4 +162,4 @@ def probar_modo_escritorio() -> bool:
 
 MODO_ESCRITORIO = probar_modo_escritorio()
 
-TESTING_MODE = environ.get("CACAO_TEST", False)
+TESTING_MODE = environ.get("CACAO_TEST", False) or environ.get("CI", False) or environ.get("PYTEST_VERSION") is not None
