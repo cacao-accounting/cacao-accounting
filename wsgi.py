@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Ejecuta el servidor WSGI predeterminado.
-
-Si en la version de la aplicacion se establece cualquier valor para
-PRERELEASE que no sea NULL se ejecutara el servidor de desarrollo con
-la opción DEBUG habilitada.
-"""
+"""Ejecuta el servidor WSGI predeterminado."""
 
 from cacao_accounting.config import TESTING_MODE
 from cacao_accounting.server import app, server
