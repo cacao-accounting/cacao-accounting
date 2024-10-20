@@ -496,10 +496,10 @@ def tasa_cambio():
 @verifica_acceso("accounting")
 def periodo_contable():
     """Lista de periodos contables."""
-    from cacao_accounting.database import PeriodoContable, database
+    from cacao_accounting.database import AccountingPeriod
 
     CONSULTA = database.paginate(
-        database.select(PeriodoContable),  # noqa: E712
+        database.select(AccountingPeriod),  # noqa: E712
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,

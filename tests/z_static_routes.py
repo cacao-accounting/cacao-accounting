@@ -221,13 +221,13 @@ static_rutes = [
             "Listado de Tasas de Cambio.".encode("utf-8"),
         ],
     ),
-    """
     Route(
         url="/accounting/accounting_period",
         text=[
             "Listado de Períodos Contables.".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/accounting/account/1",
         text=[
