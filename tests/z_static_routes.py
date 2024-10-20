@@ -92,7 +92,7 @@ static_rutes = [
             "cacao".encode("utf-8"),
             "cafe".encode("utf-8"),
             "dulce".encode("utf-8"),
-            "/accounting/account/11.01.001.002".encode("utf-8"),
+            "/accounting/account/cacao/11.01.001.002".encode("utf-8"),
             "11.01.001.002 - Fondos por Depositar".encode("utf-8"),
         ],
     ),
@@ -228,18 +228,18 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/account/1",
+        url="/accounting/account/cacao/1",
         text=[
             "Cuenta Contable".encode("utf-8"),
         ],
     ),
-    """
     Route(
         url="/accounting/costs_center/A00000",
         text=[
             "Centro de Costos.".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/settings",
         text=["Administraión del Sistema.".encode("utf-8"), "Modulos".encode("utf-8")],

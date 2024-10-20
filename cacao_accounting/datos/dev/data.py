@@ -346,7 +346,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro Costos Predeterminado",
-        status="activo",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -356,7 +356,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00000",
         name="Centro Costos Nivel 0",
-        status="activo",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -366,7 +366,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00001",
         name="Centro Costos Nivel 1",
-        status="activo",
+        status="active",
         parent="B00000",
     ),
     CostCenter(
@@ -377,7 +377,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00011",
         name="Centro Costos Nivel 2",
-        status="activo",
+        status="active",
         parent="B00001",
     ),
     CostCenter(
@@ -388,7 +388,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B00111",
         name="Centro Costos Nivel 3",
-        status="activo",
+        status="active",
         parent="B00011",
     ),
     CostCenter(
@@ -399,7 +399,7 @@ CENTROS_DE_COSTOS = (
         group=True,
         code="B01111",
         name="Centro Costos Nivel 4",
-        status="activo",
+        status="active",
         parent="B00111",
     ),
     CostCenter(
@@ -410,7 +410,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="B11111",
         name="Centro Costos Nivel 5",
-        status="activo",
+        status="active",
         parent="B01111",
     ),
     CostCenter(
@@ -421,7 +421,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro de Costos Predeterminado",
-        status="activa",
+        status="active",
     ),
     CostCenter(
         active=True,
@@ -431,7 +431,7 @@ CENTROS_DE_COSTOS = (
         group=False,
         code="A00000",
         name="Centro de Costos Predeterminados",
-        status="activa",
+        status="active",
     ),
 )
 

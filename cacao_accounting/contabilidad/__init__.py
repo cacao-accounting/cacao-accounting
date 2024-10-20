@@ -429,7 +429,7 @@ def centro_costo(id_cc):
     """Centro de Costos."""
     from cacao_accounting.database import CostCenter
 
-    registro = database.session.execute(database.select(CostCenter).filter_by(codigo=id_cc)).first()
+    registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).first()
 
     return render_template(
         "contabilidad/centro-costo.html",
