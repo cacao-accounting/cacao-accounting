@@ -382,15 +382,17 @@ def cuentas():
     )
 
 
-@contabilidad.route("/account/<id_cta>")
+@contabilidad.route("/account/<entity>/<id_cta>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def cuenta(id_cta):
+def cuenta(entity, id_cta):
     """Cuenta Contable."""
     from cacao_accounting.database import Accounts
 
-    registro = database.session.execute(database.select(Accounts).filter_by(codigo=id_cta)).first()
+    registro = database.session.execute(
+        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
+    ).first()
 
     return render_template(
         "contabilidad/cuenta.html",

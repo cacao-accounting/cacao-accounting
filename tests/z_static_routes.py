@@ -227,13 +227,13 @@ static_rutes = [
             "Listado de Períodos Contables.".encode("utf-8"),
         ],
     ),
-    """
     Route(
         url="/accounting/account/1",
         text=[
             "Cuenta Contable".encode("utf-8"),
         ],
     ),
+    """
     Route(
         url="/accounting/costs_center/A00000",
         text=[
