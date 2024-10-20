@@ -445,7 +445,7 @@ PROYECTOS = (
         start=date(year=2020, month=6, day=5),
         end=date(year=2020, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
     Project(
         enabled=True,
@@ -455,17 +455,17 @@ PROYECTOS = (
         start=date(year=2024, month=6, day=5),
         end=date(year=2024, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
     Project(
         enabled=True,
         entity="cacao",
         code="PTO003",
-        name="Proyecto Demo",
+        name="Proyecto Demostracion",
         start=date(year=2024, month=6, day=5),
         end=date(year=2024, month=9, day=5),
         budget=10000,
-        status="abierto",
+        status="open",
     ),
 )
 

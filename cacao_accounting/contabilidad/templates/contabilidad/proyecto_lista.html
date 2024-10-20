@@ -37,22 +37,22 @@
       <td>
         {{ macros.render_status(status=item.status, lista_status=statusweb) }}
         <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.codigo }}
+          {{ item.code }}
         </a>
       </td>
       <td>
         <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.nombre }}
+          {{ item.name }}
         </a>
       </td>
       <td>
         <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.fechainicio }}
+          {{ item.start }}
         </a>
       </td>
       <td>
         <a href="{{ url_for("contabilidad.entidad", entidad_id=item.entidad) }}" class="link-dark">
-          {{ item.fechafin }}
+          {{ item.end }}
         </a>
       </td>
     </tr>

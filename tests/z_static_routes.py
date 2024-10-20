@@ -191,7 +191,6 @@ static_rutes = [
             "/accounting/entity/cacao".encode(),
         ],
     ),
-    """
     Route(
         url="/accounting/project/list",
         text=[
@@ -200,8 +199,13 @@ static_rutes = [
             "Nombre".encode("utf-8"),
             "Fecha Inicio".encode("utf-8"),
             "Fecha Fin".encode("utf-8"),
+            "Proyecto Demostracion".encode(),
+            "Proyecto Demo".encode(),
+            "Proyecto Prueba".encode(),
+            """class="bi bi-circle-fill" style="color:LimeGreen""".encode(),
         ],
     ),
+    """
     Route(
         url="/currency/list",
         text=[
