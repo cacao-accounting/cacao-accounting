@@ -17,10 +17,13 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import current_app
+from sqlalchemy.exc import ProgrammingError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -28,4 +31,16 @@
 from cacao_accounting.server import server
 
 if __name__ == "__main__":
-    server()
+
+        try:
+            server()
+
+        except ProgrammingError:
+            from cacao_accounting.database.helpers import inicia_base_de_datos
+
+            user = environ.get("CACAO_USER") or "cacao
+            passwd = environ.get("CACAO_PWD") or "cacao"
+
+            inicia_base_de_datos(app=current_app, user=user, passwd=passwd, with_examples=False)
+
+            server()
