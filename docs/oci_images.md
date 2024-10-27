@@ -4,8 +4,8 @@ Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en
 
 ## Instalar podman para la administración de contenedores.
 
-Recomendamos ```podman``` para ejecutar Cacao Accounting utilizando contenedores. Podman 
-permite ejecutar contenedores en ```pods```, un pod es un conjunto de contenedores que se ejecutan
+Recomendamos `podman` para ejecutar Cacao Accounting utilizando contenedores. Podman
+permite ejecutar contenedores en `pods`, un pod es un conjunto de contenedores que se ejecutan
 en conjunto con lo cual podemos facilitar la administración de aplicaciones que requieren mas de un
 contenedor para operar, para instalar podman debemos contar con acceso a instalar paquetes en su
 sistema operativo:
@@ -24,39 +24,98 @@ sudo zypper in podman
 Una vez podman esta instalado podemos ejecutar Cacao Accounting en un pod utilizando uno de
 los ejemplos siguientes.
 
-## Utilizando MySQL como motor de base de datos.
+## Crea un archivo de configuración de NGINX.
+
+En el directorio en el que desea iniciar el contenedor cree un archivo de configuración para nginx
 
 ```bash
+touch nginx.conf
+```
+
+Puede utilizar la siguiente configuración básica para configurar nginx:
+
+```
+events {
+    worker_connections  1024;
+}
+http{
+   server{
+     listen 80;
+     location / {
+       proxy_pass  http://localhost:8080;
+       }
+    }
+}
+```
+
+## Utilizando MySQL como motor de base de datos.
+
+Puede utilizar el siguiente conjunto de comandos para iniciar un pod para Cacao Accounting
+que utilice MySQL como servidor de base de datos y NGINX como servidor web.
+
+```bash
+#!/bin/bash
 # Creamos un pod:
-podman pod create --name cacao-mysql -p 8080:8080 -p 3306:3306 -p 9980:80 -p 9443:443
+podman pod create --name cacao-mysql -p 9980:80 -p 9443:443
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-mysql-backup
 
 # Creamos el contenedor para la base de datos:
-podman run --pod cacao-mysql --rm --name cacaodbmysql \
+podman run --pod cacao-mysql --rm --replace --init --name cacaomysqldb \
     --volume cacao-mysql-backup:/var/lib/mysql  \
     -e MYSQL_ROOT_PASSWORD=cacaodb \
     -e MYSQL_DATABASE=cacaodb \
     -e MYSQL_USER=cacaodb \
     -e MYSQL_PASSWORD=cacaodb \
-    -d mysql:8
+    -d docker.io/library/mysql:8
 
 # Creamos el contenedor de la aplicación:
-podman run --pod cacao-mysql --rm --init --name cacao1 \
-    -e CACAO_ACCOUNTING=True \
+podman run --pod cacao-mysql --rm --replace --init --name cacaoapp \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
-    -e CACAO_USER=cacaouser \ # Si no es especifica utiliza cacao por defecto
-    -e CACAO_PWD=cacappwd \ # Si no es especifica utiliza cacao por defecto
+    -e CACAO_USER=cacaouser \
+    -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
-``` 
+
+# Creamos el contenedor para el servidor web:
+podman run --pod cacao-mysql --rm --replace --init --name cacaoserver \
+    -v ./nginx.conf:/etc/nginx/nginx.conf:ro \
+    -d docker.io/library/nginx:stable-alpine-slim
+```
+
+Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
+de NGINX:
+
+```bash
+$ pwd
+/home/wmoreno/Documentos/code/container/mysql
+$ ls
+mysql.sh  nginx.conf
+```
+
+Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo ejecute los siguientes
+comandos para permitir al contenedor de NGINX leer el archivo de configuración:
+
+```bash
+$ ls
+mysql.sh  nginx.conf
+$ sudo ausearch -c 'nginx' --raw | audit2allow -M mi-nginx
+$ sudo semodule -X 300 -i mi-nginx.pp
+```
+
+Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:
+
+```bash
+$ bash mysql.sh
+```
 
 ## Utilizando Postgresql como motor de base de datos.
 
 ```bash
+#!/bin/bash
 # Creamos un pod:
-podman pod create --name cacao-psql -p 8080:8080 -p 5432:5432 -p 8980:80 -p 8443:443
+podman pod create --name cacao-psql -p 9980:80 -p 9443:443
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-postgresql-backup
@@ -67,11 +126,10 @@ podman run --pod cacao-psql --rm --name cacaodbpg \
     -e POSTGRES_DB=cacaodb \
     -e POSTGRES_USER=cacaodb \
     -e POSTGRES_PASSWORD=cacaodb \
-    -d postgres:13
+    -d docker.io/library/postgres:13
 
 # Creamos el contenedor de la aplicación:
 podman run --pod cacao-psql --rm --init --name cacao2 \
-    -e CACAO_ACCOUNTING=True \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
     -e CACAO_USER=cacaouser \ # Si no es especifica utiliza cacao por defecto
@@ -90,8 +148,8 @@ Cacao Accounting es software en desarrollo no apto para uso en producción.
 Para administrar el pod podemos ejecutar:
 
 ```bash
-podman pod stop 
-podman pod start 
+podman pod stop
+podman pod start
 ```
 
 Esta configuración es adecuada para uso en una red local, no se recomiendo el exponer
