@@ -38,7 +38,7 @@ if __name__ == "__main__":
         except ProgrammingError:
             from cacao_accounting.database.helpers import inicia_base_de_datos
 
-            user = environ.get("CACAO_USER") or "cacao
+            user = environ.get("CACAO_USER") or "cacao"
             passwd = environ.get("CACAO_PWD") or "cacao"
 
             inicia_base_de_datos(app=current_app, user=user, passwd=passwd, with_examples=False)
