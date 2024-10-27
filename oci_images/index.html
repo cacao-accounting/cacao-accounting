@@ -882,6 +882,11 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-db \
     -e MYSQL_PASSWORD=cacaodb \
     -d docker.io/library/mysql:8
 
+# Creamos el contenedor para el servidor web:
+podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-server \
+    -v ./nginx.conf:/etc/nginx/nginx.conf:z \
+    -d docker.io/library/nginx:stable-alpine-slim
+
 # Creamos el contenedor de la aplicación:
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
     -e CACAO_KEY=nsjksldknsdlkdsljdn \
@@ -889,11 +894,6 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
     -e CACAO_USER=cacaouser \
     -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
-
-# Creamos el contenedor para el servidor web:
-podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-server \
-    -v ./nginx.conf:/etc/nginx/nginx.conf:ro \
-    -d docker.io/library/nginx:stable-alpine-slim
 </code></pre>
 <p>Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
 de <code>NGINX</code>:</p>
@@ -928,19 +928,18 @@ podman run --pod cacao-psql --rm --name cacao-psql-db \
     -e POSTGRES_PASSWORD=cacaodb \
     -d docker.io/library/postgres:17-alpine
 
-# Creamos el contenedor de la aplicación:
-podman run --pod cacao-psql --rm --init --name cacao-psql-app \
-    -e CACAO_KEY=nsjksldknsdlkdsljdn \
-    -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
-    -e CACAO_USER=cacaouser \ # Si no es especifica utiliza cacao por defecto
-    -e CACAO_PWD=cacappwd \ # Si no es especifica utiliza cacao por defecto
-    -d quay.io/cacaoaccounting/cacaoaccounting
-
-
 # Creamos el contenedor para el servidor web:
 podman run --pod cacao-psql --rm --replace --init --name cacao-psql-server \
     -v ./nginx.conf:/etc/nginx/nginx.conf:ro \
     -d docker.io/library/nginx:stable-alpine-slim
+
+# Creamos el contenedor de la aplicación:
+podman run --pod cacao-psql --rm --init --name cacao-psql-app \
+    -e CACAO_KEY=nsjksldknsdlkdsljdn \
+    -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
+    -e CACAO_USER=cacaouser \
+    -e CACAO_PWD=cacappwd \
+    -d quay.io/cacaoaccounting/cacaoaccounting
 </code></pre>
 <p>Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
 de <code>NGINX</code>:</p>
@@ -959,6 +958,7 @@ $ sudo semodule -X 300 -i ni-nginx.pp
 <p>Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:</p>
 <pre><code class="language-bash">$ bash psql.sh
 </code></pre>
+<p>Lectura recomendada: https://www.redhat.com/en/blog/container-permission-denied-errors</p>
 
 
 
