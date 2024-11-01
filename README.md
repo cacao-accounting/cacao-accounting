@@ -5,6 +5,7 @@
 [![Pruebas de Integración Continua](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/python-package.yml/badge.svg)](https://github.com/cacao-accounting/cacao-accounting/actions/workflows/python-package.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cacao-accounting_cacao-accounting&metric=alert_status)](https://sonarcloud.io/dashboard?id=cacao-accounting_cacao-accounting)
 [![Coverage Status](https://coveralls.io/repos/github/cacao-accounting/cacao-accounting/badge.svg?branch=main)](https://coveralls.io/github/cacao-accounting/cacao-accounting?branch=main)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting?ref=badge_small)
 ![PyPI - License](https://img.shields.io/pypi/l/cacao-accounting?color=green&logo=apache)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=Python&color=gree&link=https%3A%2F%2Fpypi.org%2Fproject%2Fstaging-cacao-accounting%2F)
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=Python)
