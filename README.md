@@ -10,6 +10,7 @@
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=Python)
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 [![Gitter](https://badges.gitter.im/cacao-accounting/community.svg)](https://gitter.im/cacao-accounting/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting?ref=badge_shield)
 
 Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General. 
 
@@ -63,3 +64,6 @@ el software distribuido en virtud de la Licencia se distribuye “TAL CUAL”, S
 GARANTÍAS NI CONDICIONES DE NINGÚN TIPO, ya sean expresas o implícitas. Véase
 la Licencia para consultar el texto específico relativo a los permisos y
 limitaciones establecidos en la Licencia.
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcacao-accounting%2Fcacao-accounting?ref=badge_large)
