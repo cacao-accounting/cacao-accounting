@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Utilidad para iniciar la aplicacion como modulo en python."""
 
 # ---------------------------------------------------------------------------------------
@@ -31,16 +30,20 @@ from sqlalchemy.exc import ProgrammingError
 from cacao_accounting.server import server
 
 if __name__ == "__main__":
+    """Run as module python -m cacao_accounting."""
 
-        try:
-            server()
+    try:
+        server()
 
-        except ProgrammingError:
-            from cacao_accounting.database.helpers import inicia_base_de_datos
+    except ProgrammingError:
+        from cacao_accounting.database.helpers import inicia_base_de_datos
 
-            user = environ.get("CACAO_USER") or "cacao"
-            passwd = environ.get("CACAO_PWD") or "cacao"
+        user = environ.get("CACAO_USER") or "cacao"
+        passwd = environ.get("CACAO_PWD") or "cacao"
 
-            inicia_base_de_datos(app=current_app, user=user, passwd=passwd, with_examples=False)
+        inicia_base_de_datos(app=current_app,
+                             user=user,
+                             passwd=passwd,
+                             with_examples=False)
 
-            server()
+        server()
