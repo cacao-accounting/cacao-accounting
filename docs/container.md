@@ -1,6 +1,7 @@
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 
-Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
+Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores,
+la imagen esta alojada en [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting).
 
 ## Instalar podman para la administración de contenedores.
 
@@ -12,17 +13,31 @@ sistema operativo:
 
 ```bash
 # Fedora, Rocky Linux, Alma Linux, RHEL ...
-dnf -y install podman
+sudo dnf -y install podman
 
 # Debian, Ubuntu ...
-apt install -y podman
+sudo apt install -y podman
+```
 
-# OpenSUSE
-sudo zypper in podman
+### Cockpit
+
+Cockpit es una interfaz web para la administración de servidores que ofrece un interfaz grafica
+para la administración de Contenedores con Podman:
+
+```bash
+# Fedora, Rocky Linux, Alma Linux, RHEL ...
+sudo dnf install cockpit-podman cockpit
+sudo systemctl enable --now cockpit.socket
+
+# Debian, Ubuntu ...
+sudo apt install cockpit-podman cockpit
+sudo systemctl enable --now cockpit.socket
 ```
 
 Una vez `podman` esta instalado podemos ejecutar Cacao Accounting en un pod utilizando uno de
 los ejemplos siguientes.
+
+# Ejecutar Cacao Accounting utilizando la imagen OCI.
 
 ## Crea un archivo de configuración de [Caddy Server](https://caddyserver.com/).
 
@@ -32,7 +47,7 @@ En el directorio en el que desea iniciar el contenedor cree un archivo de config
 touch Caddyfile
 ```
 
-Puede utilizar la siguiente configuración básica para configurar `Caddy`:
+Puede utilizar la siguiente configuración básica para configurar `Caddy` como servidor web:
 
 ```
 localhost {
@@ -43,7 +58,7 @@ localhost {
 ## Utilizando MySQL como motor de base de datos.
 
 Puede utilizar el siguiente conjunto de comandos para iniciar un pod para Cacao Accounting
-que utilice MySQL como servidor de base de datos y NGINX como servidor web.
+que utilice MySQL como servidor de base de datos y Caddy como servidor web.
 
 ```bash
 #!/bin/bash
@@ -88,13 +103,16 @@ $ ls
 mysql.sh  Caddyfile
 ```
 
-Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:
+Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:
 
 ```bash
 $ bash mysql.sh
 ```
 
 ## Utilizando Postgresql como motor de base de datos.
+
+Puede utilizar el siguiente conjunto de comandos para iniciar un pod para Cacao Accounting
+que utilice Postgresql como servidor de base de datos y Caddy como servidor web.
 
 ```bash
 #!/bin/bash
@@ -129,7 +147,7 @@ podman run --pod cacao-psql --rm --init --name cacao-psql-app \
 ```
 
 Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
-de `NGINX`:
+de `Caddy`:
 
 ```bash
 $ pwd
@@ -138,10 +156,12 @@ $ ls
 psql.sh  Caddyfile
 ```
 
+#### Permitir que el contenedor acceda al archivo de configuración de `Caddy`.
+
 Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo la opción `:z`
 evita que SELinux bloquee el acceso al archivo de configuración, si utiliza otro host intente usar la opción `:ro`
 
-Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:
+Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:
 
 ```bash
 $ bash psql.sh
