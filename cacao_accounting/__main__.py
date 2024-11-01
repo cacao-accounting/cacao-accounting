@@ -30,7 +30,7 @@ from sqlalchemy.exc import ProgrammingError
 from cacao_accounting.server import server
 
 if __name__ == "__main__":
-"""Run as module python -m cacao_accounting."""
+    """Run as module python -m cacao_accounting."""
 
     try:
         server()
