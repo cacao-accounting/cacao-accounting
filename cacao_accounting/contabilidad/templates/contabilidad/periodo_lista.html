@@ -38,16 +38,16 @@
     <tr>
       <th id="{{ item.entidad }}">
         {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-        {{ item.nombre }}
+        {{ item.name }}
       </th>
       <td>
-        {{ item.entidad }}
+        {{ item.entity }}
       </td>
       <td>
-        {{ item.inicio }}
+        {{ item.start }}
       </td>
       <td>
-        {{ item.fin }}
+        {{ item.end }}
       </td>
     </tr>
     {%- endfor %}

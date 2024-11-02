@@ -22,12 +22,15 @@ $FLASK_ENV         # Modo de ejecución del proyecto puede ser "development" o "
                    #  - https://flask.palletsprojects.com/en/2.0.x/config/
 $PYTHON_CPU_COUNT  # En entornos basados en contenedores se utilizan nucles de CPU
                    # por defecto, puede establecer un valor por defecto, puede
-                   # establecer otro valor estableciendo esta variable de entorno. 
+                   # establecer otro valor estableciendo esta variable de entorno.
+$CACHE_REDIS_URL   # URL para utilizar REDIS/VALKEY como cache
+                   # Ejemplo: CACHE_REDIS_URL=redis://localhost:6379/0
 ```
 
 ## Establecer variables del entorno requeridas:
 
 En Linux se puede configurar Cacao Accounting ejecutando:
+
 ```bash
 # Para configurar Cacao Accounting en Linux ejecutar:
 export CACAO_DB=DATABASE_CONNECTION_URI
@@ -35,12 +38,14 @@ export CACAO_KEY=SECRETKEY
 ```
 
 En Windows ejecutar:
+
 ```powershell
 setx CACAO_DB "DATABASE_CONNECTION_URI"
 setx CACAO_KEY "SECRETKEY"
 ```
 
 En un Dockerfile o en un archivo Docker compose se pueden configurar de la siguiente forma:
+
 ```dockerfile
 ENV CACAO_ACCOUNTING=True
 ENV CACAO_DB=DATABASE_CONNECTION_URI
@@ -52,6 +57,7 @@ ENV CACAO_KEY=SECRETKEY
 Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y en buena teoría con MariaDB pero no realizamos pruebas automaticas con este motor de bases de datos:
 
 ### SQLite:
+
 No se requiere software adicional para trabajar con SQLite, sin embargo no se recomienda para
 entornos multi usuarios:
 
@@ -60,6 +66,7 @@ La linea de conección es por ejemplo:
 ```
 sqlite://cacaoaccounting.db
 ```
+
 ### MySQL:
 
 Para funcionar con MySQL asegurece de tener instalado el driver apropiado:

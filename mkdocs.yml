@@ -24,7 +24,6 @@ nav:
   - Guía de Instalación:
       - Instalación:
           - Introducción: despliegue.md
-          - Contenedores: contenedores.md
           - Paquete Python: pypi.md
           - Desde las Fuentes: fuentes.md
       - Configuración: configuracion.md
@@ -37,6 +36,9 @@ nav:
   - Sobre el Proyecto:
       - Información General: about.md
       - Preguntas Frecuentes: faq.md
+
+plugins:
+  - blog
 
 extra:
   social:
