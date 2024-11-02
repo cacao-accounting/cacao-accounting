@@ -10,3 +10,13 @@ run = ["sh", "-c", "python -m cacao_accounting"]
 [[ports]]
 localPort = 8080
 externalPort = 80
+exposeLocalhost = true
+
+[rules]
+
+[rules.formatter]
+
+[rules.formatter.fileExtensions]
+
+[rules.formatter.fileExtensions.".html"]
+id = "module:web/languageServer:html"
