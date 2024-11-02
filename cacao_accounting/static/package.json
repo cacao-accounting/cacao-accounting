@@ -6,7 +6,7 @@
   "scripts": {},
   "repository": "git+https://github.com/cacao-accounting/cacao-accounting.git",
   "author": "William Moreno Reyes",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/cacao-accounting/cacao-accounting/issues"
   },
