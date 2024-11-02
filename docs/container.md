@@ -37,6 +37,12 @@ sudo systemctl enable --now cockpit.socket
 Una vez `podman` esta instalado podemos ejecutar Cacao Accounting en un pod utilizando uno de
 los ejemplos siguientes.
 
+La siguiente imagen muestra un servidor Fedora Server ejecutando dos instancias de la imagen OCI de
+Cacao Accounting, una de ellas utilizando MySQL la otra utilizando PostgreSQL, en ambos casos se
+utiliza Caddy como servidor proxy:
+
+![OCI Image](https://bmogroup.solutions/imgs/Podman-containers-wmoreno-fedora.png)
+
 # Ejecutar Cacao Accounting utilizando la imagen OCI.
 
 ## Crea un archivo de configuración de [Caddy Server](https://caddyserver.com/).
@@ -93,19 +99,16 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
     -d quay.io/cacaoaccounting/cacaoaccounting
 ```
 
-Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
-de Caddy:
+Puede decargar el script, editarlo de acuerdo a sus necesidades y ejecutar los contenedores
+ejecutando lo siguiente:
 
 ```bash
 $ pwd
 /home/wmoreno/Documentos/code/container/mysql
+$ curl -O https://cacao-accounting.github.io/cacao-accounting/oci_files/Caddyfile
+$ curl -O https://cacao-accounting.github.io/cacao-accounting/oci_files/mysql.sh
 $ ls
 mysql.sh  Caddyfile
-```
-
-Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:
-
-```bash
 $ bash mysql.sh
 ```
 
@@ -146,25 +149,22 @@ podman run --pod cacao-psql --rm --init --name cacao-psql-app \
     -d quay.io/cacaoaccounting/cacaoaccounting
 ```
 
-Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
-de `Caddy`:
+Puede decargar el script, editarlo de acuerdo a sus necesidades y ejecutar los contenedores
+ejecutando lo siguiente:
 
 ```bash
 $ pwd
 /home/wmoreno/Documentos/code/container/psql
+$ curl -O https://cacao-accounting.github.io/cacao-accounting/oci_files/Caddyfile
+$ curl -O https://cacao-accounting.github.io/cacao-accounting/oci_files/psql.sh
 $ ls
 psql.sh  Caddyfile
+$ bash psql.sh
 ```
 
 #### Permitir que el contenedor acceda al archivo de configuración de `Caddy`.
 
 Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo la opción `:z`
-evita que SELinux bloquee el acceso al archivo de configuración, si utiliza otro host intente usar la opción `:ro`
-
-Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:
-
-```bash
-$ bash psql.sh
-```
+evita que SELinux bloquee el acceso al archivo de configuración, si utiliza otro host intente usar la opción `:ro`.
 
 Lectura recomendada: https://www.redhat.com/en/blog/container-permission-denied-errors
