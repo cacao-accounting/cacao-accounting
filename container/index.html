@@ -17,7 +17,7 @@
     
     
       
-        <title>Oci images - Cacao Accounting</title>
+        <title>Container - Cacao Accounting</title>
       
     
     
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Oci images
+              Container
             
           </span>
         </div>
@@ -778,18 +778,43 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#crea-un-archivo-de-configuracion-de-nginx" class="md-nav__link">
+    <nav class="md-nav" aria-label="Instalar podman para la administración de contenedores.">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cockpit" class="md-nav__link">
     <span class="md-ellipsis">
-      Crea un archivo de configuración de NGINX.
+      Cockpit
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
+  <a href="#ejecutar-cacao-accounting-utilizando-la-imagen-oci" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ejecutar Cacao Accounting utilizando la imagen OCI.
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ejecutar Cacao Accounting utilizando la imagen OCI.">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#crea-un-archivo-de-configuracion-de-caddy-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      Crea un archivo de configuración de Caddy Server.
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#utilizando-mysql-como-motor-de-base-de-datos" class="md-nav__link">
     <span class="md-ellipsis">
       Utilizando MySQL como motor de base de datos.
@@ -797,13 +822,33 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#utilizando-postgresql-como-motor-de-base-de-datos" class="md-nav__link">
     <span class="md-ellipsis">
       Utilizando Postgresql como motor de base de datos.
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Utilizando Postgresql como motor de base de datos.">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#permitir-que-el-contenedor-acceda-al-archivo-de-configuracion-de-caddy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Permitir que el contenedor acceda al archivo de configuración de Caddy.
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -825,10 +870,9 @@
   
 
 
-  <h1>Oci images</h1>
-
 <p><a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting"><img alt="Docker Repository on Quay" src="https://quay.io/repository/cacaoaccounting/cacaoaccounting/status" title="Docker Repository on Quay" /></a></p>
-<p>Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores en <a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting">Quay</a>.</p>
+<p>Existe una imagen de contenedor OCI disponible para ejecutar Cacao Accounting en entornos de contenedores,
+la imagen esta alojada en <a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting">Quay</a>.</p>
 <h2 id="instalar-podman-para-la-administracion-de-contenedores">Instalar podman para la administración de contenedores.</h2>
 <p>Recomendamos <code>podman</code> para ejecutar Cacao Accounting utilizando contenedores. Podman
 permite ejecutar contenedores en <code>pods</code>, un pod es un conjunto de contenedores que se ejecutan
@@ -836,39 +880,44 @@ en conjunto con lo cual podemos facilitar la administración de aplicaciones que
 contenedor para operar, para instalar podman debemos contar con acceso a instalar paquetes en su
 sistema operativo:</p>
 <pre><code class="language-bash"># Fedora, Rocky Linux, Alma Linux, RHEL ...
-dnf -y install podman
+sudo dnf -y install podman
 
 # Debian, Ubuntu ...
-apt install -y podman
+sudo apt install -y podman
+</code></pre>
+<h3 id="cockpit">Cockpit</h3>
+<p>Cockpit es una interfaz web para la administración de servidores que ofrece un interfaz grafica
+para la administración de Contenedores con Podman:</p>
+<pre><code class="language-bash"># Fedora, Rocky Linux, Alma Linux, RHEL ...
+sudo dnf install cockpit-podman cockpit
+sudo systemctl enable --now cockpit.socket
 
-# OpenSUSE
-sudo zypper in podman
+# Debian, Ubuntu ...
+sudo apt install cockpit-podman cockpit
+sudo systemctl enable --now cockpit.socket
 </code></pre>
 <p>Una vez <code>podman</code> esta instalado podemos ejecutar Cacao Accounting en un pod utilizando uno de
 los ejemplos siguientes.</p>
-<h2 id="crea-un-archivo-de-configuracion-de-nginx">Crea un archivo de configuración de NGINX.</h2>
-<p>En el directorio en el que desea iniciar el contenedor cree un archivo de configuración para nginx</p>
-<pre><code class="language-bash">touch nginx.conf
+<p>La siguiente imagen muestra un servidor Fedora Server ejecutando dos instancias de la imagen OCI de
+Cacao Accounting, una de ellas utilizando MySQL la otra utilizando PostgreSQL, en ambos casos se
+utiliza Caddy como servidor proxy:</p>
+<p><img alt="OCI Image" src="https://bmogroup.solutions/imgs/Podman-containers-wmoreno-fedora.png" /></p>
+<h1 id="ejecutar-cacao-accounting-utilizando-la-imagen-oci">Ejecutar Cacao Accounting utilizando la imagen OCI.</h1>
+<h2 id="crea-un-archivo-de-configuracion-de-caddy-server">Crea un archivo de configuración de <a href="https://caddyserver.com/">Caddy Server</a>.</h2>
+<p>En el directorio en el que desea iniciar el contenedor cree un archivo de configuración para Caddy Server:</p>
+<pre><code class="language-bash">touch Caddyfile
 </code></pre>
-<p>Puede utilizar la siguiente configuración básica para configurar <code>NGINX</code>:</p>
-<pre><code>events {
-    worker_connections  1024;
-}
-http{
-   server{
-     listen 80;
-     location / {
-       proxy_pass  http://localhost:8080;
-       }
-    }
+<p>Puede utilizar la siguiente configuración básica para configurar <code>Caddy</code> como servidor web:</p>
+<pre><code>localhost {
+    reverse_proxy localhost:8080
 }
 </code></pre>
 <h2 id="utilizando-mysql-como-motor-de-base-de-datos">Utilizando MySQL como motor de base de datos.</h2>
 <p>Puede utilizar el siguiente conjunto de comandos para iniciar un pod para Cacao Accounting
-que utilice MySQL como servidor de base de datos y NGINX como servidor web.</p>
+que utilice MySQL como servidor de base de datos y Caddy como servidor web.</p>
 <pre><code class="language-bash">#!/bin/bash
 # Creamos un pod:
-podman pod create --name cacao-mysql -p 9980:80 -p 9443:443
+podman pod create --name cacao-mysql -p 9980:80 -p 9443:443 -p 9443:443/udp
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-mysql-backup
@@ -884,38 +933,35 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-db \
 
 # Creamos el contenedor para el servidor web:
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-server \
-    -v ./nginx.conf:/etc/nginx/nginx.conf:z \
-    -d docker.io/library/nginx:stable-alpine-slim
+    -v ./Caddyfile:/etc/caddy/Caddyfile:z \
+    -v caddy_data:/data \
+    -v caddy_config:/config \
+    -d docker.io/library/caddy:alpine
 
 # Creamos el contenedor de la aplicación:
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
-    -e CACAO_KEY=nsjksldknsdlkdsljdn \
+    -e CACAO_KEY=nsjksldknsdlkd532445yryrgfhdyyreysljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
     -e CACAO_USER=cacaouser \
     -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
 </code></pre>
 <p>Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
-de <code>NGINX</code>:</p>
+de Caddy:</p>
 <pre><code class="language-bash">$ pwd
 /home/wmoreno/Documentos/code/container/mysql
 $ ls
-mysql.sh  nginx.conf
+mysql.sh  Caddyfile
 </code></pre>
-<p>Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo ejecute los siguientes
-comandos para permitir al contenedor de NGINX leer el archivo de configuración:</p>
-<pre><code class="language-bash">$ ls
-mysql.sh  nginx.conf
-$ sudo ausearch -c 'nginx' --raw | audit2allow -M mi-nginx
-$ sudo semodule -X 300 -i mi-nginx.pp
-</code></pre>
-<p>Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:</p>
+<p>Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:</p>
 <pre><code class="language-bash">$ bash mysql.sh
 </code></pre>
 <h2 id="utilizando-postgresql-como-motor-de-base-de-datos">Utilizando Postgresql como motor de base de datos.</h2>
+<p>Puede utilizar el siguiente conjunto de comandos para iniciar un pod para Cacao Accounting
+que utilice Postgresql como servidor de base de datos y Caddy como servidor web.</p>
 <pre><code class="language-bash">#!/bin/bash
 # Creamos un pod:
-podman pod create --name cacao-psql -p 9981:80 -p 9444:443
+podman pod create --name cacao-psql -p 9981:80 -p 9444:443 -p 9444:443/udp
 
 # Creamos un volumen para almacenar la base de datos fuera del contenedor:
 podman volume create cacao-postgresql-backup
@@ -930,32 +976,30 @@ podman run --pod cacao-psql --rm --name cacao-psql-db \
 
 # Creamos el contenedor para el servidor web:
 podman run --pod cacao-psql --rm --replace --init --name cacao-psql-server \
-    -v ./nginx.conf:/etc/nginx/nginx.conf:ro \
-    -d docker.io/library/nginx:stable-alpine-slim
+    -v ./Caddyfile:/etc/caddy/Caddyfile:z \
+    -v caddy_data:/data \
+    -v caddy_config:/config \
+    -d docker.io/library/caddy:alpine
 
 # Creamos el contenedor de la aplicación:
 podman run --pod cacao-psql --rm --init --name cacao-psql-app \
-    -e CACAO_KEY=nsjksldknsdlkdsljdn \
+    -e CACAO_KEY=nsjksldknsdlkdsljasfsadggfhhhhf5325364dn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
     -e CACAO_USER=cacaouser \
     -e CACAO_PWD=cacappwd \
     -d quay.io/cacaoaccounting/cacaoaccounting
 </code></pre>
 <p>Para que el script funcione debe estar guardado en el mismo directorio que el archivo de configuración
-de <code>NGINX</code>:</p>
+de <code>Caddy</code>:</p>
 <pre><code class="language-bash">$ pwd
 /home/wmoreno/Documentos/code/container/psql
 $ ls
-psql.sh  nginx.conf
+psql.sh  Caddyfile
 </code></pre>
-<p>Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo ejecute los siguientes
-comandos para permitir al contenedor de NGINX leer el archivo de configuración:</p>
-<pre><code class="language-bash">$ ls
-psql.sh  nginx.conf
-$ sudo ausearch -c 'nginx' --raw | audit2allow -M ni-nginx
-$ sudo semodule -X 300 -i ni-nginx.pp
-</code></pre>
-<p>Edite el contenido de script de acuerdo a sus nececidades y ejecutelo con:</p>
+<h4 id="permitir-que-el-contenedor-acceda-al-archivo-de-configuracion-de-caddy">Permitir que el contenedor acceda al archivo de configuración de <code>Caddy</code>.</h4>
+<p>Si esta ejecutando Cacao Accounting en Fedora, Rocky Linux, Alma Linux o similares con SELinux activo la opción <code>:z</code>
+evita que SELinux bloquee el acceso al archivo de configuración, si utiliza otro host intente usar la opción <code>:ro</code></p>
+<p>Edite el contenido del script de acuerdo a sus nececidades y ejecutelo con:</p>
 <pre><code class="language-bash">$ bash psql.sh
 </code></pre>
 <p>Lectura recomendada: https://www.redhat.com/en/blog/container-permission-denied-errors</p>
