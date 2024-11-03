@@ -1,11 +1,10 @@
 name: Databases
+
 on:
   workflow_run:
-    workflows: [Coverage]
+    workflows: [CI]
     types:
       - completed
-    branches:
-      - main
   pull_request:
     branches: [main]
 
