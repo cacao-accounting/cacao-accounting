@@ -11,21 +11,10 @@ black
 flake8
 ruff
 bandit
-pylint
-
-# Control de calidad html
-curlylint
 
 # Cobertura de código
 coverage
 pytest-cov
 
-# Docs
-mkdocs
-mkdocs-material
-
 # Verificación de tipos
 mypy
-
-# Test api rest
-requests
