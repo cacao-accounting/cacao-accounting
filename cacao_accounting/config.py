@@ -58,7 +58,7 @@ PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 # En entornos de web y de contenedores es un patron recomendado utlizar variables del entorno para
 # configurar la aplicacion.
 
-DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("DATABASE_URL")
+DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL") or SQLITE
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
@@ -122,7 +122,7 @@ if probar_configuracion_por_variables_de_entorno():
 
 else:
     log.debug("Utilizando configuración preterminada.")
-    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL or SQLITE  # Always prefer CACAO_DB
+    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL or SQLITE
     configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
     configuracion["ENV"] = "development"
     configuracion["SECRET_KEY"] = SECRET_KEY or "dev"  # nosec
