@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Definicion de base de datos."""
 
 # ---------------------------------------------------------------------------------------
@@ -42,7 +41,6 @@ from ulid import ULID
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-
 # < --------------------------------------------------------------------------------------------- >
 # Definición central de status web.
 # < --------------------------------------------------------------------------------------------- >
@@ -56,7 +54,8 @@ STATUS: Dict[str, StatusWeb] = {
     "overdue": StatusWeb(color="OrangeRed", leyenda="Atrasado"),
     "closed": StatusWeb(color="Silver", leyenda="Cerrado"),
     "inactive": StatusWeb(color="LightSlateGray", leyenda="Inactivo"),
-    "indeterminate": StatusWeb(color="WhiteSmoke", leyenda="Status no definido"),
+    "indeterminate": StatusWeb(color="WhiteSmoke",
+                               leyenda="Status no definido"),
     "disabled": StatusWeb(color="GhostWhite", leyenda="Inhabilitado"),
     "enabled": StatusWeb(color="PaleGreen", leyenda="Habilitado"),
     "paid": StatusWeb(color="SeaGreen", leyenda="Pagado"),
@@ -86,8 +85,24 @@ def obtiene_texto_unico_cuid2() -> str:
 
 
 # <---------------------------------------------------------------------------------------------> #
-# Estas clases contienen campos comunes que se pueden reutilizar en otras tablan que deriven de
-# ellas.
+# Key / Value config.
+# <---------------------------------------------------------------------------------------------> #
+class Config(database.Model):  # type: ignore[name-defined]
+    """Key / Value config."""
+
+    id = database.Column(
+        database.String(10),
+        primary_key=True,
+        nullable=False,
+        index=True,
+        default=obtiene_texto_unico_cuid2,
+    )
+    key = database.Column(database.String(20), nullable=False, index=True)
+    value = database.Column(database.String(100), nullable=False, index=True)
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Contiene campos comunes que se pueden reutilizar en otras tablan que deriven de ellas.
 # <---------------------------------------------------------------------------------------------> #
 class BaseTabla:
     """Columnas estandar para todas las tablas de la base de datos."""
@@ -101,7 +116,9 @@ class BaseTabla:
         default=obtiene_texto_unico,
     )
     status = database.Column(database.String(50), nullable=True)
-    created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created = database.Column(database.DateTime,
+                              default=database.func.now(),
+                              nullable=False)
     created_by = database.Column(database.String(15), nullable=True)
     modified = database.Column(
         database.DateTime,
@@ -155,7 +172,10 @@ class BaseTercero(BaseTabla):
 class Currency(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Una moneda para los registros de la entidad."""
 
-    code = database.Column(database.String(10), index=True, nullable=False, unique=True)
+    code = database.Column(database.String(10),
+                           index=True,
+                           nullable=False,
+                           unique=True)
     name = database.Column(database.String(75), nullable=False)
     decimals = database.Column(database.Integer(), nullable=True)
     active = database.Column(database.Boolean, nullable=True)
@@ -165,8 +185,12 @@ class Currency(database.Model, BaseTabla):  # type: ignore[name-defined]
 class ExchangeRate(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Tasa de conversión entre dos monedas distintas."""
 
-    origin = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=False)
-    destination = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=False)
+    origin = database.Column(database.String(10),
+                             database.ForeignKey("currency.code"),
+                             nullable=False)
+    destination = database.Column(database.String(10),
+                                  database.ForeignKey("currency.code"),
+                                  nullable=False)
     rate = database.Column(database.Numeric(), nullable=False)
     date = database.Column(database.Date(), nullable=False)
 
@@ -204,8 +228,10 @@ class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Los roles definen una cantidad de permisos."""
 
-    rol_id = database.Column(database.String(26), database.ForeignKey("roles.id"))
-    module_id = database.Column(database.String(26), database.ForeignKey("modules.id"))
+    rol_id = database.Column(database.String(26),
+                             database.ForeignKey("roles.id"))
+    module_id = database.Column(database.String(26),
+                                database.ForeignKey("modules.id"))
     # Usuario tiene acceso al múdulo
     access = database.Column(database.Boolean, nullable=False, default=False)
     # Usuario puede realizar determinadas acciones en el modulogit
@@ -229,8 +255,10 @@ class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles dan permisos a los usuarios del sistema."""
 
-    user_id = database.Column(database.String(26), database.ForeignKey("user.id"))
-    role_id = database.Column(database.String(26), database.ForeignKey("roles.id"))
+    user_id = database.Column(database.String(26),
+                              database.ForeignKey("user.id"))
+    role_id = database.Column(database.String(26),
+                              database.ForeignKey("roles.id"))
     active = database.Column(database.Boolean, nullable=True)
 
 
@@ -239,7 +267,8 @@ class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Modules(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
-    __table_args__ = (database.UniqueConstraint("module", name="modulo_unico"),)
+    __table_args__ = (database.UniqueConstraint("module",
+                                                name="modulo_unico"), )
     module = database.Column(database.String(50), unique=True, index=True)
     default = database.Column(database.Boolean(), nullable=False)
     enabled = database.Column(database.Boolean(), nullable=True)
@@ -250,14 +279,19 @@ class Modules(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Todas las transacciones se deben grabar a una entidad."""
 
-    __table_args__ = (database.UniqueConstraint("id", "company_name", name="entidad_unica"),)
+    __table_args__ = (database.UniqueConstraint("id",
+                                                "company_name",
+                                                name="entidad_unica"), )
     # Información legal de la entidad
     code = database.Column(database.String(10), unique=True, index=True)
     status = database.Column(database.String(50), nullable=True)
-    company_name = database.Column(database.String(100), unique=True, nullable=False)
+    company_name = database.Column(database.String(100),
+                                   unique=True,
+                                   nullable=False)
     name = database.Column(database.String(50))
     tax_id = database.Column(database.String(50), unique=True, nullable=False)
-    currency = database.Column(database.String(10), database.ForeignKey("currency.code"))
+    currency = database.Column(database.String(10),
+                               database.ForeignKey("currency.code"))
     # Individual, Sociedad, Sin Fines de Lucro
     entity_type = database.Column(database.String(50))
     tipo_entidad_lista = [
@@ -281,11 +315,14 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
 
-    __table_args__ = (database.UniqueConstraint("id", "name", name="unidad_unica"),)
+    __table_args__ = (database.UniqueConstraint("id",
+                                                "name",
+                                                name="unidad_unica"), )
     # Información legal de la entidad
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -293,12 +330,15 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="cta_unica"),)
+    __table_args__ = (database.UniqueConstraint("entity",
+                                                "code",
+                                                name="cta_unica"), )
     active = database.Column(database.Boolean(), index=True)
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todas las cuentas deben estan vinculadas a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     code = database.Column(database.String(50), index=True)
@@ -306,7 +346,9 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Cuenta agrupador o cuenta que recibe movimientos
     group = database.Column(database.Boolean())
     parent = database.Column(database.String(50), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=True)
+    currency = database.Column(database.String(10),
+                               database.ForeignKey("currency.code"),
+                               nullable=True)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     clasification = database.Column(database.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
@@ -317,16 +359,17 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
 class CostCenter(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La mejor forma de llegar los registros de una entidad es por Centros de Costos (CC)."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="cc_unico"),)
+    __table_args__ = (database.UniqueConstraint("entity",
+                                                "code",
+                                                name="cc_unico"), )
     active = database.Column(database.Boolean(), index=True)
     default = database.Column(database.Boolean())
     # Un CC puede estar activo pero deshabilitado temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
-    code = database.Column(
-        database.String(10),
-    )
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
+    code = database.Column(database.String(10), )
     name = database.Column(database.String(100))
     group = database.Column(database.Boolean())
     parent = database.Column(database.String(100), nullable=True)
@@ -341,11 +384,14 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     definido ademas de fechas de inicio y fin.
     """
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="py_unico"),)
+    __table_args__ = (database.UniqueConstraint("entity",
+                                                "code",
+                                                name="py_unico"), )
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100))
     start = database.Column(database.Date())
@@ -354,10 +400,12 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     UniqueConstraint("entity", "code", name="proyecto_unica_entidad")
 
 
-class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
+class AccountingPeriod(database.Model,
+                       BaseTabla):  # type: ignore[name-defined]
     """Todas las transaciones deben estar vinculadas a un periodo contable."""
 
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
     name = database.Column(database.String(50), nullable=False)
     status = database.Column(database.String(50))
     enabled = database.Column(database.Boolean(), index=True)
@@ -372,7 +420,8 @@ class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Serie para numerar nuevas transacciones."""
 
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10),
+                             database.ForeignKey("entity.code"))
     doc = database.Column(database.String(25))
     enabled = database.Column(database.Boolean())
     serie = database.Column(database.String(15))
