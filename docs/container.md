@@ -5,7 +5,7 @@ la imagen esta alojada en [Quay](https://quay.io/repository/cacaoaccounting/caca
 
 ## Instalar podman para la administración de contenedores.
 
-Recomendamos `podman` para ejecutar Cacao Accounting utilizando contenedores. Podman
+Recomendamos `podman` para ejecutar Cacao Accounting utilizando contenedores. Podman le
 permite ejecutar contenedores en `pods`, un pod es un conjunto de contenedores que se ejecutan
 en conjunto con lo cual podemos facilitar la administración de aplicaciones que requieren mas de un
 contenedor para operar, para instalar podman debemos contar con acceso a instalar paquetes en su
