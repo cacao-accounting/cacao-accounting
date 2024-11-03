@@ -15,17 +15,15 @@ from z_func import init_test_db
 
 from cacao_accounting import create_app
 
-app = create_app(
-    {
-        "TESTING": True,
-        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "WTF_CSRF_ENABLED": False,
-        "DEBUG": True,
-        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite://",
-    }
-)
+app = create_app({
+    "TESTING": True,
+    "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+    "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+    "WTF_CSRF_ENABLED": False,
+    "DEBUG": True,
+    "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+    "SQLALCHEMY_DATABASE_URI": "sqlite://",
+})
 
 
 def test_fill_all_forms(request):
@@ -40,8 +38,13 @@ def test_fill_all_forms(request):
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
-                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                client.post("/login",
+                            data={
+                                "usuario": "cacao",
+                                "acceso": "cacao"
+                            })
                 assert current_user.is_authenticated
+                log.warning("")
 
                 for form in forms:
 
@@ -50,11 +53,20 @@ def test_fill_all_forms(request):
                     log.warning("Testing route: " + form.ruta)
 
                     if form.file:
-                        data = {key: str(value) for key, value in form.data.items()}
+                        data = {
+                            key: str(value)
+                            for key, value in form.data.items()
+                        }
                         data[form.file.get("name")] = form.file.get("bytes")
-                        consulta = client.post(form.ruta, data=data, follow_redirects=True, content_type="multipart/form-data")
+                        consulta = client.post(
+                            form.ruta,
+                            data=data,
+                            follow_redirects=True,
+                            content_type="multipart/form-data")
                     else:
-                        consulta = client.post(form.ruta, data=form.data, follow_redirects=True)
+                        consulta = client.post(form.ruta,
+                                               data=form.data,
+                                               follow_redirects=True)
 
                     if form.flash:
                         assert session["_flashes"][0][0] == form.flash[1]
