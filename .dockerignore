@@ -38,3 +38,4 @@ run_test.sh
 .pytest_cache
 .ruff_cache
 .venv
+.replit
