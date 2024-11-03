@@ -27,10 +27,11 @@ from sqlalchemy.exc import ProgrammingError
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting import create_app, config
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
 from cacao_accounting.server import server
 
-app = create_app(ajustes=config)
+app = create_app(ajustes=configuracion)
 
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
