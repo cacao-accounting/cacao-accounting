@@ -1,11 +1,10 @@
 name: Publish to PyPi
+
 on:
   workflow_run:
     workflows: [Databases]
     types:
       - completed
-    branches:
-      - main
 
 jobs:
   pypi-publish:
