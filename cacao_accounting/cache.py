@@ -29,4 +29,6 @@ from flask_caching import Cache
 # ---------------------------------------------------------------------------------------
 
 cache = Cache()
-cache.init_app(current_app)
+
+with current_app.app_context():
+    cache.init_app(current_app)
