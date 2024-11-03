@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 """
 Interface principal de la aplicacion.
 
@@ -63,6 +61,7 @@ from cacao_accounting.modulos import (
     registrar_modulos_adicionales,
     validar_modulo_activo,
 )
+from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.version import PRERELEASE
 
@@ -129,6 +128,8 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
             app.register_blueprint(compras, url_prefix="/buying")
             app.register_blueprint(inventario, url_prefix="/inventory")
             app.register_blueprint(ventas, url_prefix="/sales")
+            app.register_blueprint(setup_wizard, url_prefix="/setup")
+
     else:
         raise RuntimeError(ERROR2)
 
