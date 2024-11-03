@@ -37,7 +37,6 @@ DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
-# Free Open Source Databases
 if name == "nt":
     SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\cacaoaccounting.db"
 else:
@@ -51,7 +50,6 @@ THREADS = environ.get("CACAO_THREADS") or environ.get("THREADS") or 4
 
 # < --------------------------------------------------------------------------------------------- >
 # Permite al usuario establecer en que puerto servir la aplicacion con el servidor WSGI por defecto
-
 PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 
 # < --------------------------------------------------------------------------------------------- >
@@ -60,26 +58,6 @@ PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 
 DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL") or SQLITE
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
-
-
-def valida_llave_secreta(llave: str) -> bool:
-    """Valida requisitos minimos para aceptar una contraseña."""
-    CONTIENE_MAYUSCULAS = bool(any(chr.isupper() for chr in llave))
-    CONTIENE_MINUSCULAS = bool(any(chr.islower() for chr in llave))
-    CONTIENE_NUMEROS = bool(any(chr.isnumeric() for chr in llave))
-    CONTIENE_CARACTERES_MINIMOS = bool(len(llave) >= 8)
-    CONFIGURACION_DESARROLLO = environ.get("ENV") == "development"
-    if CONFIGURACION_DESARROLLO:
-        return True
-    else:
-        VALIDACION = CONTIENE_MAYUSCULAS and CONTIENE_MINUSCULAS and CONTIENE_NUMEROS and CONTIENE_CARACTERES_MINIMOS
-        if VALIDACION:
-            log.debug("Clave secreta valida.")
-            return True
-        else:
-            log.warning("Clave secreta insegura.")
-            log.info("Establesca una clave secreta más segura.")
-            return False
 
 
 def valida_direccion_base_datos(uri: str) -> bool:
@@ -99,33 +77,14 @@ def valida_direccion_base_datos(uri: str) -> bool:
     return VALIDACION
 
 
-def probar_configuracion_por_variables_de_entorno() -> bool:
-    """Valida que las variables del entorno se encuentran correctamente configuradas."""
-    if DATABASE_URL and SECRET_KEY:
-        VALIDACION = valida_direccion_base_datos(DATABASE_URL) and valida_llave_secreta(SECRET_KEY)
-        if VALIDACION:
-            log.info("Configuracion valida obtenida de variables de entorno")
-        else:
-            log.warning("No se encontro configuración valida.")
-        return VALIDACION
-    else:
-        return False
-
-
 configuracion = {}
 
-if probar_configuracion_por_variables_de_entorno():
-    log.debug("Cargando configuracion en base a variables de entorno.")
+if valida_direccion_base_datos(DATABASE_URL):
     configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
-    configuracion["SECRET_KEY"] = SECRET_KEY
-    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
+configuracion["SECRET_KEY"] = SECRET_KEY
+configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
-else:
-    log.debug("Utilizando configuración preterminada.")
-    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL or SQLITE
-    configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
-    configuracion["ENV"] = "development"
-    configuracion["SECRET_KEY"] = SECRET_KEY or "dev"  # nosec
+if environ.get("CACAO_TEST"):
     configuracion["DEGUG"] = "True"
     configuracion["TEMPLATES_AUTO_RELOAD"] = "True"
 

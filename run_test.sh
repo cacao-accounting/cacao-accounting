@@ -14,7 +14,4 @@ echo
 echo Testing code with pytest
 echo
 echo
-CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_basicos.py
-CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_vistas.py
-CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_forms.py
-CACAO_TEST=True LOGURU_LEVEL=WARNING python -m pytest  -v -s --exitfirst --slow=True --cov=cacao_accounting tests/test_webactions.py
+CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -v -s --exitfirst --slow=True
