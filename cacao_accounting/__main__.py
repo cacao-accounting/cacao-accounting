@@ -28,9 +28,7 @@ from sqlalchemy.exc import ProgrammingError
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app, config
-from cacao_accounting.logs import log
 from cacao_accounting.server import server
-from cacao_accounting.version import PRERELEASE
 
 app = create_app(ajustes=config)
 
