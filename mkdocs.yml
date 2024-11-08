@@ -13,6 +13,7 @@ theme:
     - navigation.instant
     - navigation.tabs
     - navigation.sections
+    - content.tabs.link
 
 repo_url: https://github.com/cacao-accounting/cacao-accounting
 repo_name: cacao-accounting/cacao-accounting
@@ -24,6 +25,7 @@ nav:
   - Guía de Instalación:
       - Instalación:
           - Introducción: despliegue.md
+          - Contenedor: container.md
           - Paquete Python: pypi.md
           - Desde las Fuentes: fuentes.md
       - Configuración: configuracion.md
@@ -46,3 +48,12 @@ extra:
       link: https://github.com/cacao-accounting/cacao-accounting
     - icon: fontawesome/brands/docker
       link: https://quay.io/repository/cacaoaccounting/cacaoaccounting
+
+markdown_extensions:
+- attr_list
+- pymdownx.superfences
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.emoji:
+    emoji_index: !!python/name:material.extensions.emoji.twemoji
+    emoji_generator: !!python/name:material.extensions.emoji.to_svg
