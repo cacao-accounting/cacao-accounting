@@ -17,7 +17,7 @@
       
       
       <link rel="icon" href="../media/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.42">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.41">
     
     
       
@@ -408,6 +408,27 @@
   
   <span class="md-ellipsis">
     Introducción
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contenedor
   </span>
   
 
@@ -1006,35 +1027,35 @@ de la base de datos.</p>
 <p>No se requieren pasos previos para utilizar <a href="https://docs.sqlalchemy.org/en/20/dialects/sqlite.html">SQLite</a>
 como motor de base de datos.</p>
 <p>La ruta de acceso configurada debe apuntar al archivo fisico de la base de datos:</p>
-<pre><code>sqlite:///path/to/cacaoaccounting.db
-</code></pre>
+<div class="highlight"><pre><span></span><code>sqlite:///path/to/cacaoaccounting.db
+</code></pre></div>
 <p>Para el desarrollo de Cacao Accounting se utiliza SQLite por defecto, al igual que en la <a href="https://github.com/cacao-accounting/cacao-accounting-desktop">distribución para escritorio</a>.</p>
 <h3 id="mysql">MySQL:</h3>
 <p>Una vez instalado <a href="https://docs.sqlalchemy.org/en/20/dialects/mysql.html">MySQL</a> puede ejecutar las
 siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE IF NOT EXISTS cacao;
-CREATE USER IF NOT EXISTS 'cacao' IDENTIFIED BY 'cacao';
-GRANT ALL PRIVILEGES ON cacao.* TO 'cacao';
-FLUSH PRIVILEGES;
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="k">CREATE</span><span class="w"> </span><span class="k">DATABASE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">cacao</span><span class="p">;</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">USER</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="s1">&#39;cacao&#39;</span><span class="w"> </span><span class="n">IDENTIFIED</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="s1">&#39;cacao&#39;</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">ALL</span><span class="w"> </span><span class="k">PRIVILEGES</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">cacao</span><span class="p">.</span><span class="o">*</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;cacao&#39;</span><span class="p">;</span>
+<span class="n">FLUSH</span><span class="w"> </span><span class="k">PRIVILEGES</span><span class="p">;</span>
+</code></pre></div>
 <p>El formato de clave de conexión correcta para utilizar con MySQL es:</p>
-<pre><code>mysql+pymysql://&lt;username&gt;:&lt;password&gt;@&lt;host&gt;/&lt;dbname&gt;
-</code></pre>
+<div class="highlight"><pre><span></span><code>mysql+pymysql://&lt;username&gt;:&lt;password&gt;@&lt;host&gt;/&lt;dbname&gt;
+</code></pre></div>
 <h3 id="postgresql">Postgresql:</h3>
 <p>Una vez instalado <a href="https://docs.sqlalchemy.org/en/20/dialects/postgresql.html">Postgresql</a> puede
 ejecutar las siguientes sentencias SQL para crear la base de datos:</p>
-<pre><code class="language-sql">CREATE DATABASE cacao;
-CREATE USER cacao WITH PASSWORD 'cacao';
-GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="k">CREATE</span><span class="w"> </span><span class="k">DATABASE</span><span class="w"> </span><span class="n">cacao</span><span class="p">;</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">USER</span><span class="w"> </span><span class="n">cacao</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="n">PASSWORD</span><span class="w"> </span><span class="s1">&#39;cacao&#39;</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">ALL</span><span class="w"> </span><span class="k">PRIVILEGES</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">DATABASE</span><span class="w"> </span><span class="n">cacao</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="n">cacao</span><span class="p">;</span>
+</code></pre></div>
 <p>Se puede utilizar tanto PG800 (Pure Python Driver) como psycopg2 (Compiled Driver), el formato de
 clave de conexión correcta para utilizar con Postgresql es:</p>
 <p>PG8000:</p>
-<pre><code>postgresql+pg8000://user:password@host:port/dbname
-</code></pre>
+<div class="highlight"><pre><span></span><code>postgresql+pg8000://user:password@host:port/dbname
+</code></pre></div>
 <p>PSYCOPG2:</p>
-<pre><code>postgresql+psycopg2://user:password@host:port/dbname
-</code></pre>
+<div class="highlight"><pre><span></span><code>postgresql+psycopg2://user:password@host:port/dbname
+</code></pre></div>
 <p>Al estar escrito completamente en Python PG8000 puede ser un poco mas lento que psycopg2 el cual utiliza
 codigo en para ser eficiente, ambas son opciones validas y el usuario puede seleccionar la opción que mas
 se adapta en sus necesidades ya que para utilizar psycopg2 debe tener disponibles la librerias necesarias
@@ -1046,8 +1067,8 @@ Cacao Accounting.</p>
 <h3 id="mariadb">Mariadb</h3>
 <p>No se realizan pruebas automaticas versus <a href="https://docs.sqlalchemy.org/en/20/dialects/mysql.html#module-sqlalchemy.dialects.mysql.mariadbconnector">MariaDB</a> pero Cacao Accounting debería funcionar sin modificaciones utilizando
 la url de conexión correcta ya que Cacao Accounting no utiliza funciones especificas de MariaDB para su operación:</p>
-<pre><code>mariadb+mariadbconnector://&lt;user&gt;:&lt;password&gt;@&lt;host&gt;[:&lt;port&gt;]/&lt;dbname&gt;
-</code></pre>
+<div class="highlight"><pre><span></span><code>mariadb+mariadbconnector://&lt;user&gt;:&lt;password&gt;@&lt;host&gt;[:&lt;port&gt;]/&lt;dbname&gt;
+</code></pre></div>
 <p>La <a href="https://quay.io/repository/cacaoaccounting/cacaoaccounting">imagen OCI</a> de Cacao Accounting NO incluye el Driver official de MariaDB</p>
 
 
@@ -1066,6 +1087,8 @@ la url de conexión correcta ya que Cacao Accounting no utiliza funciones especi
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1125,7 +1148,7 @@ la url de conexión correcta ya que Cacao Accounting no utiliza funciones especi
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections", "content.tabs.link"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
     
     
       <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>

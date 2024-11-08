@@ -17,7 +17,7 @@
       
       
       <link rel="icon" href="../media/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.42">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.41">
     
     
       
@@ -410,6 +410,27 @@
   
   <span class="md-ellipsis">
     Introducción
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contenedor
   </span>
   
 
@@ -995,39 +1016,39 @@
 <p>Para instalar Cacao Accounting desde las fuentes se pueden seguir los siguientes pasos: </p>
 <h2 id="entorno-virtual-de-python">Entorno Virtual de Python</h2>
 <p>Para instalar Cacao Accounting desde las fuentes requiere <a href="https://git-scm.com/">git</a>, <a href="https://yarnpkg.com/lang/en/">yarn</a> y <a href="https://www.python.org/downloads/">python</a>. </p>
-<pre><code class="language-bash">git clone https://github.com/cacao-accounting/cacao-accounting.git
-cd cacao-accounting
-python3 -m venv venv
-# Windows:
-.\venv\Scripts\activate.bat
-# Linux y MAC: 
-source venv/bin/activate 
-cd cacao_accounting/static
-npm install
-cd ..
-cd ..
-python setup.py install
-</code></pre>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/cacao-accounting/cacao-accounting.git
+<span class="nb">cd</span><span class="w"> </span>cacao-accounting
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>venv
+<span class="c1"># Windows:</span>
+.<span class="se">\v</span>env<span class="se">\S</span>cripts<span class="se">\a</span>ctivate.bat
+<span class="c1"># Linux y MAC: </span>
+<span class="nb">source</span><span class="w"> </span>venv/bin/activate<span class="w"> </span>
+<span class="nb">cd</span><span class="w"> </span>cacao_accounting/static
+npm<span class="w"> </span>install
+<span class="nb">cd</span><span class="w"> </span>..
+<span class="nb">cd</span><span class="w"> </span>..
+python<span class="w"> </span>setup.py<span class="w"> </span>install
+</code></pre></div>
 <p>Se puede verificar si la instalación fue correcta ejecutando:</p>
-<pre><code class="language-bash">cacaoctl
-Usage: python -m flask [OPTIONS] COMMAND [ARGS]...
+<div class="highlight"><pre><span></span><code>cacaoctl
+Usage:<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>flask<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>COMMAND<span class="w"> </span><span class="o">[</span>ARGS<span class="o">]</span>...
 
-  Interfaz de linea de comandos para la administración de        
-  Cacao Accounting.
+<span class="w">  </span>Interfaz<span class="w"> </span>de<span class="w"> </span>linea<span class="w"> </span>de<span class="w"> </span>comandos<span class="w"> </span>para<span class="w"> </span>la<span class="w"> </span>administración<span class="w"> </span>de<span class="w">        </span>
+<span class="w">  </span>Cacao<span class="w"> </span>Accounting.
 
 Options:
-  --version  Show the flask version
-  --help     Show this message and exit.
+<span class="w">  </span>--version<span class="w">  </span>Show<span class="w"> </span>the<span class="w"> </span>flask<span class="w"> </span>version
+<span class="w">  </span>--help<span class="w">     </span>Show<span class="w"> </span>this<span class="w"> </span>message<span class="w"> </span>and<span class="w"> </span>exit.
 
 Commands:
-  cleandb  Elimina la base de datos, solo disponible para...     
-  db       Perform database migrations.
-  initdb   Crea el esquema de la base de datos.
-  routes   Show the routes for the app.
-  run      Run a development server.
-  serve    Inicio la aplicacion con waitress como servidor...    
-  shell    Run a shell in the app context.
-</code></pre>
+<span class="w">  </span>cleandb<span class="w">  </span>Elimina<span class="w"> </span>la<span class="w"> </span>base<span class="w"> </span>de<span class="w"> </span>datos,<span class="w"> </span>solo<span class="w"> </span>disponible<span class="w"> </span>para...<span class="w">     </span>
+<span class="w">  </span>db<span class="w">       </span>Perform<span class="w"> </span>database<span class="w"> </span>migrations.
+<span class="w">  </span>initdb<span class="w">   </span>Crea<span class="w"> </span>el<span class="w"> </span>esquema<span class="w"> </span>de<span class="w"> </span>la<span class="w"> </span>base<span class="w"> </span>de<span class="w"> </span>datos.
+<span class="w">  </span>routes<span class="w">   </span>Show<span class="w"> </span>the<span class="w"> </span>routes<span class="w"> </span><span class="k">for</span><span class="w"> </span>the<span class="w"> </span>app.
+<span class="w">  </span>run<span class="w">      </span>Run<span class="w"> </span>a<span class="w"> </span>development<span class="w"> </span>server.
+<span class="w">  </span>serve<span class="w">    </span>Inicio<span class="w"> </span>la<span class="w"> </span>aplicacion<span class="w"> </span>con<span class="w"> </span>waitress<span class="w"> </span>como<span class="w"> </span>servidor...<span class="w">    </span>
+<span class="w">  </span>shell<span class="w">    </span>Run<span class="w"> </span>a<span class="w"> </span>shell<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>app<span class="w"> </span>context.
+</code></pre></div>
 <p>Existe una entrada en <a href="https://pypi.org/project/cacao-accounting/">pypi</a> para el
 proyecto donde periodicamente se publican los avances del proyecto.</p>
 <p>Cacao Accounting es software en desarrollo no apto aún para su uso en producción.</p>
@@ -1038,22 +1059,22 @@ los procesos a iniciar en el arranque del sistema operativa.</p>
 <p>Para su conveniencia proveemos una plantilla de <a href="https://github.com/cacao-accounting/cacao-accounting/blob/development/cacao_accounting/misc/ejemplos/cacao-accounting.unit">archivo .unit</a>
 para utilizarla en el despliegue de Cacao Accounting.</p>
 <p>El archivo .unit se debe colocar en:</p>
-<pre><code class="language-bash">/etc/systemd/system/cacao-accounting.service
-</code></pre>
+<div class="highlight"><pre><span></span><code>/etc/systemd/system/cacao-accounting.service
+</code></pre></div>
 <p>Es importante editar las rutas al ejecutable cacaoctl, al aplicación se puede
 administrar con:</p>
-<pre><code class="language-bash">systemctl daemon-reload
-systemctl enable cacao-accounting.service --now
-</code></pre>
+<div class="highlight"><pre><span></span><code>systemctl<span class="w"> </span>daemon-reload
+systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>cacao-accounting.service<span class="w"> </span>--now
+</code></pre></div>
 <h3 id="usando-el-unit-file-sin-permisos-de-root">Usando el unit file sin permisos de root</h3>
 <p>Si no tiene acceso de administrador al sistema aun puede utilizar systemd para
 administrar Cacoa Accounting, debe colocar en archivo .unit en:</p>
-<pre><code>wget https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/misc/ejemplos/cacao-accounting.unit
+<div class="highlight"><pre><span></span><code>wget https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/misc/ejemplos/cacao-accounting.unit
 mkdir -p .config/systemd/user/
 mv cacao-accounting.unit .config/systemd/user/cacao-accounting.service
-</code></pre>
+</code></pre></div>
 <p>Edite la plantilla, es importante que el Unit file apunte a la ubicación correcta del ejecutable "cacaoctl"</p>
-<pre><code> cat .config/systemd/user/cacao-accounting.service
+<div class="highlight"><pre><span></span><code> cat .config/systemd/user/cacao-accounting.service
 # Se debe colocar en: /etc/systemd/system/cacao-accounting.service
 [Unit]
 Description=Cacao Accounting WSGI server
@@ -1075,12 +1096,12 @@ ExecStop=/bin/kill -s QUIT $MAINPID
 WantedBy=multi-user.target
 
 vi .config/systemd/user/cacao-accounting.service
-</code></pre>
+</code></pre></div>
 <p>La linea importante es indicarle a systemd el archivo executable correcto, en mi caso:</p>
-<pre><code>ExecStart=/home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
-</code></pre>
+<div class="highlight"><pre><span></span><code>ExecStart=/home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
+</code></pre></div>
 <p>Puede administrar el servicio con:</p>
-<pre><code>systemctl --user daemon-reload
+<div class="highlight"><pre><span></span><code>systemctl --user daemon-reload
 systemctl --user enable --now cacao-accounting
 
  systemctl --user status cacao-accounting
@@ -1098,15 +1119,15 @@ Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | ca
 Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.database.helpers:verifica_&gt;
 Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.986 | INFO     | cacao_accounting.database.helpers:verifica_&gt;
 Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | cacao_accounting.server:server:49 - Inician&gt;
-</code></pre>
+</code></pre></div>
 <p>Puede verificar que el servicio se esta ejecutando localmente con curl:</p>
-<pre><code>curl 127.0.0.1:8080
+<div class="highlight"><pre><span></span><code>curl 127.0.0.1:8080
 &lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 3.2 Final//EN&quot;&gt;
 &lt;title&gt;Redirecting...&lt;/title&gt;
-</code></pre>
+</code></pre></div>
 <p>Si desea finalizar el servicio ejecute:</p>
-<pre><code>systemctl --user stop cacao-accounting
-</code></pre>
+<div class="highlight"><pre><span></span><code>systemctl --user stop cacao-accounting
+</code></pre></div>
 <h2 id="uso-de-un-proxy-inverso">Uso de un proxy inverso</h2>
 <p>Cacao Accounting utiliza <a href="https://docs.pylonsproject.org/projects/waitress/en/latest/index.html">waitress</a> como servidor WSGI por defecto, las razones por la que se seleccion
 como servidor Waitress son:</p>
@@ -1120,15 +1141,15 @@ como servidor Waitress son:</p>
 <p>NGINX es un popular servidor web de código abierto que suele utilizarse como servidor proxy.</p>
 <h4 id="ubuntu">Ubuntu</h4>
 <p>Para utilizar NGINX como proxy inverso en Ubuntu utilizar:</p>
-<pre><code>sudo apt update
+<div class="highlight"><pre><span></span><code>sudo apt update
 sudo apt install nginx
-sudo ufw allow 'Nginx HTTPS'
-</code></pre>
+sudo ufw allow &#39;Nginx HTTPS&#39;
+</code></pre></div>
 <p>Debe crear el archivo de configuración en:</p>
-<pre><code>sudo vi /etc/nginx/sites-available/cacao
-</code></pre>
+<div class="highlight"><pre><span></span><code>sudo vi /etc/nginx/sites-available/cacao
+</code></pre></div>
 <p>Y agregue el siguiente contenido:</p>
-<pre><code>server {
+<div class="highlight"><pre><span></span><code>server {
     listen 8443;
     server_name cacao;
 
@@ -1138,10 +1159,10 @@ location / {
   proxy_pass proxy_pass http:s//127.0.0.1:8000;
     }
 }
-</code></pre>
+</code></pre></div>
 <p>Ejecute:</p>
-<pre><code>sudo systemctl restart nginx
-</code></pre>
+<div class="highlight"><pre><span></span><code>sudo systemctl restart nginx
+</code></pre></div>
 
 
 
@@ -1159,6 +1180,8 @@ location / {
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1218,7 +1241,7 @@ location / {
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections", "content.tabs.link"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
     
     
       <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>

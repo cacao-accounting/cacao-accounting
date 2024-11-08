@@ -17,7 +17,7 @@
       
       
       <link rel="icon" href="../media/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.42">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.41">
     
     
       
@@ -408,6 +408,27 @@
   
   <span class="md-ellipsis">
     Introducción
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contenedor
   </span>
   
 
@@ -973,78 +994,78 @@
 <h1 id="configuracion-de-la-aplicacion">Configuración de la aplicación:</h1>
 <p>Siguiendo las recomendaciones en <a href="https://12factor.net/config">the twelve factor app</a> Cacao Accounting puede leer la configuración desde variables del entorno, la configuración requerida
 es:</p>
-<pre><code class="language-bash"># Requeridas
-$CACAO_DB          # URI para conectarse a la base de datos.
-$CACAO_KEY         # Llave única para una ejecución segura.
-# Opcionales
-$CACAO_USER        # Identificador del usuario administrador.
-                   # Si no se establece se usa &quot;cacao&quot; por defecto.
-$CACAO_PWD         # Contraseña del usuario administrador.
-                   # Si no se establece se usa &quot;cacao&quot; por defecto.
-$CACAO_THREADS     # Numero de hilos para el servidor WSGI.
-                   # si no se establece se estable a 4 por defecto.
-$CACAO_PORT        # Puerto para servir la aplicacion a utilizar.
-                   # Si no se especifica se utiliza 8080 por defecto.
-$FLASK_ENV         # Modo de ejecución del proyecto puede ser &quot;development&quot; o &quot;production&quot;
-                   # Si no se especifica se utiliza &quot;production&quot; por defecto.
-                   # Referencias:
-                   #  - https://flask.palletsprojects.com/en/2.0.x/config/
-$PYTHON_CPU_COUNT  # En entornos basados en contenedores se utilizan nucles de CPU
-                   # por defecto, puede establecer un valor por defecto, puede
-                   # establecer otro valor estableciendo esta variable de entorno.
-$CACHE_REDIS_URL   # URL para utilizar REDIS/VALKEY como cache
-                   # Ejemplo: CACHE_REDIS_URL=redis://localhost:6379/0
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="c1"># Requeridas</span>
+<span class="nv">$CACAO_DB</span><span class="w">          </span><span class="c1"># URI para conectarse a la base de datos.</span>
+<span class="nv">$CACAO_KEY</span><span class="w">         </span><span class="c1"># Llave única para una ejecución segura.</span>
+<span class="c1"># Opcionales</span>
+<span class="nv">$CACAO_USER</span><span class="w">        </span><span class="c1"># Identificador del usuario administrador.</span>
+<span class="w">                   </span><span class="c1"># Si no se establece se usa &quot;cacao&quot; por defecto.</span>
+<span class="nv">$CACAO_PWD</span><span class="w">         </span><span class="c1"># Contraseña del usuario administrador.</span>
+<span class="w">                   </span><span class="c1"># Si no se establece se usa &quot;cacao&quot; por defecto.</span>
+<span class="nv">$CACAO_THREADS</span><span class="w">     </span><span class="c1"># Numero de hilos para el servidor WSGI.</span>
+<span class="w">                   </span><span class="c1"># si no se establece se estable a 4 por defecto.</span>
+<span class="nv">$CACAO_PORT</span><span class="w">        </span><span class="c1"># Puerto para servir la aplicacion a utilizar.</span>
+<span class="w">                   </span><span class="c1"># Si no se especifica se utiliza 8080 por defecto.</span>
+<span class="nv">$FLASK_ENV</span><span class="w">         </span><span class="c1"># Modo de ejecución del proyecto puede ser &quot;development&quot; o &quot;production&quot;</span>
+<span class="w">                   </span><span class="c1"># Si no se especifica se utiliza &quot;production&quot; por defecto.</span>
+<span class="w">                   </span><span class="c1"># Referencias:</span>
+<span class="w">                   </span><span class="c1">#  - https://flask.palletsprojects.com/en/2.0.x/config/</span>
+<span class="nv">$PYTHON_CPU_COUNT</span><span class="w">  </span><span class="c1"># En entornos basados en contenedores se utilizan nucles de CPU</span>
+<span class="w">                   </span><span class="c1"># por defecto, puede establecer un valor por defecto, puede</span>
+<span class="w">                   </span><span class="c1"># establecer otro valor estableciendo esta variable de entorno.</span>
+<span class="nv">$CACHE_REDIS_URL</span><span class="w">   </span><span class="c1"># URL para utilizar REDIS/VALKEY como cache</span>
+<span class="w">                   </span><span class="c1"># Ejemplo: CACHE_REDIS_URL=redis://localhost:6379/0</span>
+</code></pre></div>
 <h2 id="establecer-variables-del-entorno-requeridas">Establecer variables del entorno requeridas:</h2>
 <p>En Linux se puede configurar Cacao Accounting ejecutando:</p>
-<pre><code class="language-bash"># Para configurar Cacao Accounting en Linux ejecutar:
-export CACAO_DB=DATABASE_CONNECTION_URI
-export CACAO_KEY=SECRETKEY
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="c1"># Para configurar Cacao Accounting en Linux ejecutar:</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CACAO_DB</span><span class="o">=</span>DATABASE_CONNECTION_URI
+<span class="nb">export</span><span class="w"> </span><span class="nv">CACAO_KEY</span><span class="o">=</span>SECRETKEY
+</code></pre></div>
 <p>En Windows ejecutar:</p>
-<pre><code class="language-powershell">setx CACAO_DB &quot;DATABASE_CONNECTION_URI&quot;
-setx CACAO_KEY &quot;SECRETKEY&quot;
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="n">setx</span> <span class="n">CACAO_DB</span> <span class="s2">&quot;DATABASE_CONNECTION_URI&quot;</span>
+<span class="n">setx</span> <span class="n">CACAO_KEY</span> <span class="s2">&quot;SECRETKEY&quot;</span>
+</code></pre></div>
 <p>En un Dockerfile o en un archivo Docker compose se pueden configurar de la siguiente forma:</p>
-<pre><code class="language-dockerfile">ENV CACAO_ACCOUNTING=True
-ENV CACAO_DB=DATABASE_CONNECTION_URI
-ENV CACAO_KEY=SECRETKEY
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="k">ENV</span><span class="w"> </span><span class="nv">CACAO_ACCOUNTING</span><span class="o">=</span>True
+<span class="k">ENV</span><span class="w"> </span><span class="nv">CACAO_DB</span><span class="o">=</span>DATABASE_CONNECTION_URI
+<span class="k">ENV</span><span class="w"> </span><span class="nv">CACAO_KEY</span><span class="o">=</span>SECRETKEY
+</code></pre></div>
 <h2 id="conexion-a-la-base-de-datos">Conexion a la base de datos</h2>
 <p>Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y en buena teoría con MariaDB pero no realizamos pruebas automaticas con este motor de bases de datos:</p>
 <h3 id="sqlite">SQLite:</h3>
 <p>No se requiere software adicional para trabajar con SQLite, sin embargo no se recomienda para
 entornos multi usuarios:</p>
 <p>La linea de conección es por ejemplo:</p>
-<pre><code>sqlite://cacaoaccounting.db
-</code></pre>
+<div class="highlight"><pre><span></span><code>sqlite://cacaoaccounting.db
+</code></pre></div>
 <h3 id="mysql">MySQL:</h3>
 <p>Para funcionar con MySQL asegurece de tener instalado el driver apropiado:</p>
-<pre><code class="language-bash">pip install cryptography pymysql
-</code></pre>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>cryptography<span class="w"> </span>pymysql
+</code></pre></div>
 <p>La linea de conección es por ejemplo:</p>
-<pre><code>mysql+pymysql://ususario:contraseña@servidor:puerto/database
+<div class="highlight"><pre><span></span><code>mysql+pymysql://ususario:contraseña@servidor:puerto/database
 
 mysql+pymysql://cacao:cacao@localhost:3306/cacao
-</code></pre>
+</code></pre></div>
 <h3 id="postgresql">Postgresql:</h3>
 <p>Para funcionar con Postgresql asegurece de tener instalado el driver apropiado:</p>
-<pre><code class="language-bash">pip install psycopg2-binary
-</code></pre>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>psycopg2-binary
+</code></pre></div>
 <p>La linea de conección es por ejemplo:</p>
-<pre><code>postgresql+psycopg2://usuario:contraseña@servidor:puerto/database
+<div class="highlight"><pre><span></span><code>postgresql+psycopg2://usuario:contraseña@servidor:puerto/database
 
 postgresql+psycopg2://cacao:cacao@localhost:5432/cacao
-</code></pre>
+</code></pre></div>
 <h3 id="ms-sql-server">MS SQL Server:</h3>
 <p>Para funcionar con MS SQL Server asegurece de tener instalado el <a href="https://pypi.org/project/pyodbc/">driver de python</a> apropiado, adicionalmente debe configurar el cliente de <a href="https://docs.microsoft.com/en-us/sql/connect/python/pyodbc/python-sql-driver-pyodbc?view=sql-server-ver15">ODBC para su sistema operativo</a>.</p>
-<pre><code class="language-bash">pip install pyodbc
-</code></pre>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>pyodbc
+</code></pre></div>
 <p>La linea de conección es por ejemplo:</p>
-<pre><code>mssql+pyodbc://usuario:contraseña@servidor:puerto/database?driver=DRIVER
+<div class="highlight"><pre><span></span><code>mssql+pyodbc://usuario:contraseña@servidor:puerto/database?driver=DRIVER
 
 mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server
-</code></pre>
+</code></pre></div>
 <p>En el ejemplo anterior se usa la <a href="https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server?view=sql-server-ver15">version 17 del cliente ODBS para SQL Server</a></p>
 
 
@@ -1063,6 +1084,8 @@ mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1122,7 +1145,7 @@ mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections", "content.tabs.link"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}}</script>
     
     
       <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>
