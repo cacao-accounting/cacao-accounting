@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Inición de sesión de usuarios."""
 
 # ---------------------------------------------------------------------------------------
@@ -96,6 +95,7 @@ def inicio_sesion():  # pragma: no cover
     from flask_login import current_user
 
     from cacao_accounting.auth.forms import LoginForm
+    from cacao_accounting.database import database, Config
 
     form = LoginForm()
     if current_user.is_authenticated:
@@ -128,7 +128,18 @@ def inicio_sesion():  # pragma: no cover
                         log.warning("No se pudo generar auth token.")
 
                     login_user(identidad)
-                    return redirect("/app")
+
+                    setup_wizard = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
+
+                    if setup_wizard:
+                        setup_wizard = setup_wizard[0]
+
+                        if setup_wizard.value == "False":
+                            return redirect("/setup")
+                        else:
+                            return redirect("/app")
+                    else:
+                        return redirect("/app")
             else:
                 flash("Inicio de Sesion Incorrecto.")
                 return INICIO_SESION
