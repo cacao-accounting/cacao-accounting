@@ -1,4 +1,4 @@
-podman pod create --replace --name cacao-psql -p 9981:80 -p 9444:443 -p 9444:443/udp
+podman pod create --replace --name cacao-psql -p 7080:80 -p 9444:443 -p 9444:443/udp
 
 podman volume create --ignore cacao-postgresql-backup
 

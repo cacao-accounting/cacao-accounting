@@ -1,4 +1,4 @@
-podman pod create --replace --name cacao-mysql -p 9980:80 -p 9443:443 -p 9443:443/udp
+podman pod create --replace --name cacao-mysql -p 9080:80 -p 9443:443 -p 9443:443/udp
 
 podman volume create --ignore cacao-mysql-backup
 
