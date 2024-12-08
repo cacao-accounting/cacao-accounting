@@ -22,6 +22,6 @@ podman run --pod cacao-psql --rm --init --name cacao-psql-app \
     -e CACAO_KEY=nsjksldknsdlkLKJ,dsljasfsadggfhhhhf5325364dn \
     -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
     -e CACAO_USER=cacaouser \
-    -e CACAO_PWD=cacaopwd \
+    -e CACAO_PSWD=cacaopwd \
     -e redis:localhost:6379/1 \
     -d quay.io/cacaoaccounting/cacaoaccounting:main

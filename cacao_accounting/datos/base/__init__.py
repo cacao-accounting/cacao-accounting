@@ -96,24 +96,25 @@ def base_data(user, passwd, carga_rapida):
             from cacao_accounting.database import database
             from sqlalchemy.sql import text
 
-            DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
-            log.warning(DABATASE_URI)
+            if environ.get("CACAO_PRINT_DATABASE_URI"):
+                DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+                log.warning(DABATASE_URI)
 
-            if DABATASE_URI.startswith("mysql+pymysql"):
-                log.info("Running on MySQL.")
-                Q = database.session.execute(text("SELECT version();"))
-                for i in Q:
-                    log.info("Versión de base de datos" + str(i))
-            elif DABATASE_URI.startswith("postgresql+pg8000") or DABATASE_URI.startswith("postgresql+psycopg2"):
-                log.info("Running on Postgresql.")
-                Q = database.session.execute(text("SELECT VERSION();"))
-                for i in Q:
-                    log.info("Versión de base de datos" + str(i))
-            else:
-                log.info("Running on SQLITE.")
-                Q = database.session.execute(text("select sqlite_version();"))
-                for i in Q:
-                    log.info("Versión de base de datos" + str(i))
+                if DABATASE_URI.startswith("mysql+pymysql"):
+                    log.info("Running on MySQL.")
+                    Q = database.session.execute(text("SELECT version();"))
+                    for i in Q:
+                        log.info("Versión de base de datos" + str(i))
+                elif DABATASE_URI.startswith("postgresql+pg8000") or DABATASE_URI.startswith("postgresql+psycopg2"):
+                    log.info("Running on Postgresql.")
+                    Q = database.session.execute(text("SELECT VERSION();"))
+                    for i in Q:
+                        log.info("Versión de base de datos" + str(i))
+                else:
+                    log.info("Running on SQLITE.")
+                    Q = database.session.execute(text("select sqlite_version();"))
+                    for i in Q:
+                        log.info("Versión de base de datos" + str(i))
 
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
