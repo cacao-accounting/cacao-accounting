@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Funciones auxiliares relacionadas a la base de datos."""
 
 # ---------------------------------------------------------------------------------------
@@ -33,7 +32,6 @@ from cacao_accounting.database import database
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
-
 
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
@@ -93,6 +91,18 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
         except OperationalError:
             log.error("No se pudo iniciliazar esquema de base de datos.")
             DB_ESQUEMA = False
+
+        if not with_examples:
+            from cacao_accounting.database import Config
+
+            config = Config(
+                key="SETUP_COMPLETE",
+                value="False",
+            )
+
+            database.session.add(config)
+            database.session.commit()
+
     return DB_ESQUEMA
 
 
