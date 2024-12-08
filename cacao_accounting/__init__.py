@@ -205,7 +205,7 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
         user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PWD") or "cacao"
+        passwd = environ.get("CACAO_PSWD") or "cacao"
 
         if TESTING_MODE:
             database.drop_all()

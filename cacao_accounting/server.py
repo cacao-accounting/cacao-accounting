@@ -56,7 +56,7 @@ def server() -> None:
             inicia_base_de_datos(
                 app,
                 user=environ.get("CACAO_USER") or "cacao",
-                passwd=environ.get("CACAO_PWD") or "cacao",
+                passwd=environ.get("CACAO_PSWD") or "cacao",
                 with_examples=False,
             )
             DATABASE = True

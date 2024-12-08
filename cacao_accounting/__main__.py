@@ -31,10 +31,11 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.server import server
 
-app = create_app(ajustes=configuracion)
 
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
+
+    app = create_app(ajustes=configuracion)
 
     try:
         server()
@@ -42,9 +43,9 @@ if __name__ == "__main__":
     except ProgrammingError:
         from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PWD") or "cacao"
+        cacao_user = environ.get("CACAO_USER") or "cacao"
+        cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
 
-        inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
+        inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
 
         server()
