@@ -9,18 +9,15 @@ from z_func import init_test_db
 
 from cacao_accounting import create_app
 
-
-app = create_app(
-    {
-        "TESTING": True,
-        "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "WTF_CSRF_ENABLED": False,
-        "DEBUG": True,
-        "PRESERVE_CONTEXT_ON_EXCEPTION": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite://",
-    }
-)
+app = create_app({
+    "TESTING": True,
+    "SECRET_KEY": "jgjañlsldaksjdklasjfkjj",
+    "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+    "WTF_CSRF_ENABLED": False,
+    "DEBUG": True,
+    "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+    "SQLALCHEMY_DATABASE_URI": "sqlite://",
+})
 
 
 def test_visit_views(request):
@@ -39,8 +36,13 @@ def test_visit_views(request):
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
-                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                client.post("/login",
+                            data={
+                                "usuario": "cacao",
+                                "acceso": "cacao"
+                            })
                 assert current_user.is_authenticated
+                log.warning("")
 
                 for ruta in static_rutes:
                     if not isinstance(ruta, str):

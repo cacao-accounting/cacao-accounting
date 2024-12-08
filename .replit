@@ -8,6 +8,11 @@ channel = "stable-24_05"
 run = ["sh", "-c", "python -m cacao_accounting"]
 
 [[ports]]
+localPort = 8000
+externalPort = 8000
+exposeLocalhost = true
+
+[[ports]]
 localPort = 8080
 externalPort = 80
 exposeLocalhost = true
