@@ -1,6 +1,6 @@
-podman pod create --name cacao-mysql -p 9980:80 -p 9443:443 -p 9443:443/udp
+podman pod create --replace --name cacao-mysql -p 9080:80 -p 9443:443 -p 9443:443/udp
 
-podman volume create cacao-mysql-backup
+podman volume create --ignore cacao-mysql-backup
 
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-db \
     --volume cacao-mysql-backup:/var/lib/mysql  \
@@ -16,13 +16,9 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-server \
     -v caddy_config:/config \
     -d docker.io/library/caddy:alpine
 
-podman run --pod cacao-psql --rm --replace --init --name cacao-mysql-cache \
--d docker.io/library/valkey:alpine
-
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
-    -e CACAO_KEY=nsjksAAA.ldknsdlkd532445yryrgfhdyyreysljdn \
+    -e CACAO_KEY=nsjksAAA.ldknsdlkd532445yrVBNyrgfhdyyreys+++++ljdn \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
     -e CACAO_USER=cacaouser \
-    -e CACAO_PWD=cacaopwd \
-    -e CACHE_REDIS_URL=redis:localhost:6379/1 \
+    -e CACAO_PSWD=cacaopswd \
     -d quay.io/cacaoaccounting/cacaoaccounting:main
