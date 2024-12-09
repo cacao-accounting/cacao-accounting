@@ -21,4 +21,4 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \
     -e CACAO_DB=mysql+pymysql://cacaodb:cacaodb@localhost:3306/cacaodb \
     -e CACAO_USER=cacaouser \
     -e CACAO_PSWD=cacaopswd \
-    -d quay.io/cacaoaccounting/cacaoaccounting:main
+    quay.io/cacaoaccounting/cacaoaccounting:main
