@@ -83,7 +83,7 @@ def entidades_creadas():
         else:
             return False
 
-    except:
+    except:  # noqa: E722
         return False
 
 
