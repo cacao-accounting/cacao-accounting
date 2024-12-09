@@ -36,7 +36,7 @@ MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
 
-if environ.get("CACAO_TEST", None):
+if environ.get("CACAO_TEST", None):  # pragma: no cover
     TIEMPO_ESPERA = 0
 else:
     TIEMPO_ESPERA = 20
