@@ -1,4 +1,3 @@
-# https://quay.io/repository/cacaoaccounting/cacaoaccounting
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4 AS js
 RUN microdnf install -y nodejs npm
 WORKDIR /usr/app
@@ -6,12 +5,8 @@ COPY ./cacao_accounting/static/package.json /usr/app/package.json
 RUN npm install --ignore-scripts
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
-COPY . /app
-COPY --from=js /usr/app/node_modules /app/cacao_accounting/static/node_modules
 COPY requirements.txt /tmp/
-
-WORKDIR /app
-
+# Requirements layer
 RUN microdnf update -y --nodocs --best \
     # Python 3.12 and binary libraries.
     # https://www.python.org/downloads/release/python-3120/
@@ -19,11 +14,17 @@ RUN microdnf update -y --nodocs --best \
     python3.12-cryptography python3.12-pip python3.12-psycopg2 \
     && microdnf clean all \
     && /usr/bin/python3.12 --version \
-    && chmod +x docker-entry-point.sh \
     && /usr/bin/python3.12 -m pip --no-cache-dir install -r /tmp/requirements.txt \
     # Support for MariaDB is considered experimental.
     # && /usr/bin/python3.12 -m pip --no-cache-dir install mariadb \
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip
+
+# App layer
+COPY . /app
+COPY --from=js /usr/app/node_modules /app/cacao_accounting/static/node_modules
+
+WORKDIR /app
+RUN chmod +x docker-entry-point.sh
 
 ENV FLASK_APP="cacao_accounting"
 ENV LANG=C.UTF-8
