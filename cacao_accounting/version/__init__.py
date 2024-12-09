@@ -14,6 +14,10 @@
 
 """Definición unica de la version de la aplicación."""
 
+# Only update the version if all tests are passing.
+# PyPi will refuse to push two packages with the same version
+# Keep the version bump in a single commit without other changes included in it to ensure a clean release.
+
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
