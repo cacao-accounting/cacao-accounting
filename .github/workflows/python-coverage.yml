@@ -22,6 +22,6 @@ jobs:
           python -m pip install -r development.txt
       - name: Test with pytest
         run: |
-          SECRET_KEY=ASD123kljaAddS CACAO_TEST=True LOGURU_LEVEL=FATAL python -m pytest  -v -s --slow=True --cov=cacao_accounting
+          SECRET_KEY=ASD123kljaAddS CACAO_TEST=True python -m pytest  -v -s --slow=True --cov=cacao_accounting
       - name: Coveralls
         uses: coverallsapp/github-action@v2
