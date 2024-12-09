@@ -18,11 +18,11 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from os import environ
+from time import sleep
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import current_app
 from sqlalchemy.exc import ProgrammingError
 
 # ---------------------------------------------------------------------------------------
@@ -45,17 +45,24 @@ if __name__ == "__main__":
         server()
 
     else:
+        # Wait the database 5 senconds
+        sleep(5)
 
-        try:
-            from cacao_accounting.database.helpers import inicia_base_de_datos
-
-            log.info("Inicializando Cacao Accounting.")
-
-            cacao_user = environ.get("CACAO_USER") or "cacao"
-            cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
-
-            inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
+        if usuarios_creados():
             server()
 
-        except ProgrammingError:
-            log.warning("No se pudo iniciar Cacao Accounting.")
+        else:
+
+            try:
+                from cacao_accounting.database.helpers import inicia_base_de_datos
+
+                log.info("Inicializando Cacao Accounting.")
+
+                cacao_user = environ.get("CACAO_USER") or "cacao"
+                cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
+
+                inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
+                server()
+
+            except ProgrammingError:
+                log.warning("No se pudo iniciar Cacao Accounting.")
