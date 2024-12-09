@@ -307,7 +307,7 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
 
-    __table_args__ = (database.UniqueConstraint("id", "name", name="unidad_unica"),)
+    __table_args__ = (database.UniqueConstraint("id", "name", name="libro_unico"),)
     # Información legal de la entidad
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
