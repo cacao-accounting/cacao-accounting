@@ -304,6 +304,16 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
+class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
+
+    __table_args__ = (database.UniqueConstraint("id", "name", name="unidad_unica"),)
+    # Información legal de la entidad
+    code = database.Column(database.String(10), unique=True, index=True)
+    name = database.Column(database.String(50), nullable=False)
+    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+
+
 class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
@@ -412,6 +422,7 @@ class GLBase:
     cost_center = database.Column(database.String(50), index=True)
     unit = database.Column(database.String(10), index=True)
     project = database.Column(database.String(50), index=True)
+    book = database.Column(database.String(10), index=True)
     # Fecha de registro
     date = database.Column(database.Date)
     # Referencia Cruzada
