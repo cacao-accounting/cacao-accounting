@@ -2,7 +2,7 @@ site_name: Cacao Accounting
 theme:
   name: material
   custom_dir: docs/theme_override_home/
-  language: es
+  language: en
   favicon: media/favicon.png
   logo: media/cacao_accounting.png
   palette:
@@ -18,24 +18,24 @@ theme:
 repo_url: https://github.com/cacao-accounting/cacao-accounting
 repo_name: cacao-accounting/cacao-accounting
 
-copyright: Copyright &copy; 2020 - 2021 William Moreno Reyes
+copyright: Copyright &copy; 2024 - 2025 William Moreno Reyes
 
 nav:
   - Home: index.md
   - Setup:
-      - Introducción: setup.md
-      - Contenedor: container.md
-      - Paquete Python: pypi.md
-      - Desde las Fuentes: sources.md
-      - Configuración: set_up.md
-      - Base de Datos:
-          - Configuración de Base de Datos: database.md
+      - Introduction: setup.md
+      - OCI Image: container.md
+      - Python Package: pypi.md
+      - Sources: sources.md
+      - Setup: set_up.md
+      - Database:
+          - Database Setup: database.md
   - Contributors:
-      - Guía para Colaboradores: CONTRIBUTING.md
-      - Codigo de Conducta: CODE_OF_CONDUCT.md
+      - Contributing: CONTRIBUTING.md
+      - Code of Conduct: CODE_OF_CONDUCT.md
       - Changelog: changelog.md
   - About:
-      - General Information: about.md
+      - About: about.md
       - FAQ: faq.md
 
 plugins:
@@ -47,6 +47,8 @@ extra:
       link: https://github.com/cacao-accounting/cacao-accounting
     - icon: fontawesome/brands/docker
       link: https://quay.io/repository/cacaoaccounting/cacaoaccounting
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/cacao-accounting/
 
 markdown_extensions:
   - attr_list
@@ -56,3 +58,6 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
