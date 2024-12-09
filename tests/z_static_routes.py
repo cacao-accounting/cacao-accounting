@@ -262,6 +262,14 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/accounting/book/list",
+        text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html".encode(
+                "utf-8"
+            ),
+        ],
+    ),
+    Route(
         url="/accounting/unit/matriz",
         text=[
             "Casa Matriz".encode("utf-8"),

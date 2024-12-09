@@ -23,7 +23,7 @@ from typing import Union
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, InterfaceError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -37,7 +37,7 @@ MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
 
 if environ.get("CACAO_TEST", None):
-    TIEMPO_ESPERA = 2
+    TIEMPO_ESPERA = 0
 else:
     TIEMPO_ESPERA = 20
 
@@ -63,12 +63,22 @@ def verifica_coneccion_db(app):
                 DB_CONN = False
                 log.warning("No se pudo establecer conexion a la base de datos.")
                 log.info("Reintentando conectar a la base de datos.")
-            time.sleep(3)
+            except InterfaceError:
+                DB_CONN = False
+                log.warning("No se pudo establecer conexion a la base de datos.")
+                log.info("Reintentando conectar a la base de datos.")
 
-        if not DB_CONN:
-            log.warning("No fue imposible establecer una conexión con la base de datos.")
+            if environ.get("CACAO_TEST", None):
+                pass
+            else:
+                time.sleep(2)
 
-    return DB_CONN
+        try:
+            if not DB_CONN:
+                log.warning("No fue imposible establecer una conexión con la base de datos.")
+            return DB_CONN
+        except UnboundLocalError:
+            return False
 
 
 def entidades_creadas():
