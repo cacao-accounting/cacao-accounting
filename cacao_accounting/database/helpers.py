@@ -71,26 +71,46 @@ def verifica_coneccion_db(app):
     return DB_CONN
 
 
+def entidades_creadas():
+    """Verifica si al menos una entidad ha sido creado en el sistema."""
+    from cacao_accounting.database import Entity
+
+    try:
+        CONSULTA = database.session.execute(database.select(Entity)).first()
+
+        if CONSULTA:
+            return True
+        else:
+            return False
+
+    except OperationalError:
+        return False
+
+
 def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
     from cacao_accounting.datos import base_data, dev_data
 
-    log.info("Intentando inicializar base de datos.")
+    if entidades_creadas():
+        pass
 
-    with app.app_context():
-        try:
-            database.create_all()
-            log.info("Esquema de base de datos creado correctamente.")
-            if with_examples:
-                log.trace("Creando datos de prueba.")
-                base_data(user, passwd, carga_rapida=False)
-                dev_data()
-            else:
-                base_data(user, passwd, carga_rapida=True)
-            DB_ESQUEMA = True
-        except OperationalError:
-            log.error("No se pudo iniciliazar esquema de base de datos.")
-            DB_ESQUEMA = False
+    else:
+        log.info("Intentando inicializar base de datos.")
+
+        with app.app_context():
+            try:
+                database.create_all()
+                log.info("Esquema de base de datos creado correctamente.")
+                if with_examples:
+                    log.trace("Creando datos de prueba.")
+                    base_data(user, passwd, carga_rapida=False)
+                    dev_data()
+                else:
+                    base_data(user, passwd, carga_rapida=True)
+                DB_ESQUEMA = True
+            except OperationalError:
+                log.error("No se pudo iniciliazar esquema de base de datos.")
+                DB_ESQUEMA = False
 
         if not with_examples:
             from cacao_accounting.database import Config
@@ -134,19 +154,6 @@ def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]
         return USUARIO.id
     else:
         return None
-
-
-def entidades_creadas():
-    """Verifica si al menos una entidad ha sido creado en el sistema."""
-    from cacao_accounting.database import Entity
-
-    CONSULTA = database.session.execute(database.select(Entity)).first()
-    log.warning(CONSULTA[0])
-
-    if CONSULTA:
-        return True
-    else:
-        return False
 
 
 def db_version():
