@@ -29,23 +29,30 @@ from sqlalchemy.exc import ProgrammingError
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.database.helpers import entidades_creadas
+from cacao_accounting.logs import log
 from cacao_accounting.server import server
 
 
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
 
-    app = create_app(ajustes=configuracion)
-
-    try:
+    if entidades_creadas():
         server()
 
-    except ProgrammingError:
-        from cacao_accounting.database.helpers import inicia_base_de_datos
+    else:
 
-        cacao_user = environ.get("CACAO_USER") or "cacao"
-        cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
+        try:
+            from cacao_accounting.database.helpers import inicia_base_de_datos
 
-        inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
+            log.info("Inicializando Cacao Accounting.")
 
-        server()
+            app = create_app(ajustes=configuracion)
+            cacao_user = environ.get("CACAO_USER") or "cacao"
+            cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
+
+            inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
+            server()
+
+        except ProgrammingError:
+            log.warning("No se pudo iniciar Cacao Accounting.")
