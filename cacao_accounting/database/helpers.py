@@ -42,7 +42,7 @@ else:
     TIEMPO_ESPERA = 20
 
 
-def verifica_coneccion_db(app):
+def verifica_coneccion_db(app):  # pragma: no cover
     """Verifica si es posible conentarse a la base de datos."""
     import time
 
@@ -113,7 +113,7 @@ def usuarios_creados():
         return False
 
 
-def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
+def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:  # pragma: no cover
     """Inicia esquema de base datos."""
     from cacao_accounting.datos import base_data, dev_data
 
@@ -182,7 +182,7 @@ def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]
         return None
 
 
-def db_version():
+def db_version():  # pragma: no cover
     """Return database version as text."""
     from flask import current_app
     from cacao_accounting.database import database
