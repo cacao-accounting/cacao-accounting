@@ -28,7 +28,7 @@ PRERELEASE = "dev" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None
 
-if PRERELEASE:
+if PRERELEASE:  # pragma: no cover
     VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
 else:
     if POSTRELESE:
