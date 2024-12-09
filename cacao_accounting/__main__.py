@@ -22,6 +22,7 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from flask import current_app
 from sqlalchemy.exc import ProgrammingError
 
 # ---------------------------------------------------------------------------------------
@@ -37,6 +38,9 @@ from cacao_accounting.server import server
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
 
+    app = create_app(ajustes=configuracion)
+    app.app_context().push()
+
     if usuarios_creados():
         server()
 
@@ -47,7 +51,6 @@ if __name__ == "__main__":
 
             log.info("Inicializando Cacao Accounting.")
 
-            app = create_app(ajustes=configuracion)
             cacao_user = environ.get("CACAO_USER") or "cacao"
             cacao_passwd = environ.get("CACAO_PSWD") or "cacao"
 
