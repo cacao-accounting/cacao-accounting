@@ -83,7 +83,7 @@ def entidades_creadas():
         else:
             return False
 
-    except OperationalError:
+    except:
         return False
 
 
