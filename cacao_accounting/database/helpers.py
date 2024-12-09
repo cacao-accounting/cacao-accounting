@@ -87,6 +87,22 @@ def entidades_creadas():
         return False
 
 
+def usuarios_creados():
+    """Verifica si al menos un usuario ha sido creado en el sistema."""
+    from cacao_accounting.database import User
+
+    try:
+        CONSULTA = database.session.execute(database.select(User)).first()
+
+        if CONSULTA:
+            return True
+        else:
+            return False
+
+    except:  # noqa: E722
+        return False
+
+
 def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:
     """Inicia esquema de base datos."""
     from cacao_accounting.datos import base_data, dev_data

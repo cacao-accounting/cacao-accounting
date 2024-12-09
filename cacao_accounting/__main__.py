@@ -29,7 +29,7 @@ from sqlalchemy.exc import ProgrammingError
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database.helpers import entidades_creadas
+from cacao_accounting.database.helpers import usuarios_creados
 from cacao_accounting.logs import log
 from cacao_accounting.server import server
 
@@ -37,7 +37,7 @@ from cacao_accounting.server import server
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
 
-    if entidades_creadas():
+    if usuarios_creados():
         server()
 
     else:
