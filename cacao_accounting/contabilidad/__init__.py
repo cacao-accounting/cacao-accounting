@@ -361,6 +361,83 @@ def nueva_unidad():
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
+# Libro de Contabilidad
+@contabilidad.route("/book/list")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def libros():
+    """Listado de libros de contabilidad."""
+    from cacao_accounting.database import Book, database
+
+    CONSULTA = database.paginate(
+        database.select(Book),  # noqa: E712
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+    TITULO = "Listado de Libros de Contabilidad - " + APPNAME
+    return render_template(
+        "contabilidad/book_lista.html",
+        titulo=TITULO,
+        consulta=CONSULTA,
+        statusweb=STATUS,
+    )
+
+
+@contabilidad.route("/book/<id_unidad>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def libro(id_unidad):
+    """Libro de Contabilidad."""
+    from cacao_accounting.database import Book
+
+    REGISTRO = database.session.execute(database.select(Book).filter_by(code=id_unidad)).first()
+    return render_template("contabilidad/book.html", registro=REGISTRO[0])
+
+
+@contabilidad.route("/book/delete/<id_unidad>")
+@modulo_activo("accounting")
+@login_required
+def eliminar_libro(id_unidad):
+    """Elimina un libro de contabilidad de la base de datos."""
+    return redirect("/app")
+
+
+@contabilidad.route("/book/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_libro():
+    """Formulario para crear un nuevo libro de contabilidad."""
+    from cacao_accounting.contabilidad.forms import FormularioLibro
+
+    formulario = FormularioLibro()
+    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    TITULO = "Crear Nuevo Libro de Contabilidad- " + APPNAME
+    if formulario.validate_on_submit() or request.method == "POST":
+        from cacao_accounting.database import Unidad
+
+        DATA = Unidad(
+            code=request.form.get("id", None),
+            name=request.form.get("nombre", None),
+            entity=request.form.get("entidad", None),
+            status="activo",
+        )
+        database.session.add(DATA)
+        database.session.commit()
+
+        return redirect("/books/list")
+    return render_template(
+        "contabilidad/book_crear.html",
+        titulo=TITULO,
+        form=formulario,
+    )
+
+
+# <------------------------------------------------------------------------------------------------------------------------> #
 # Cuentas Contables
 
 

@@ -161,7 +161,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
             if PRERELEASE:
-                app.jinja_env.globals.update(bdrul=app.config["SQLALCHEMY_DATABASE_URI"])
+                app.jinja_env.globals.update(bdrul=app.config.get("SQLALCHEMY_DATABASE_URI"))
                 app.jinja_env.globals.update(development=True)
 
     else:
