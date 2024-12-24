@@ -24,10 +24,16 @@ nav:
   - Home: index.md
   - Setup:
       - Introduction: setup.md
-      - OCI Image: container.md
-      - Python Package: pypi.md
-      - Sources: sources.md
-      - Setup: set_up.md
+      - Containers Based Setup:
+        - OCI Image: container.md
+      - Python Package Based Setup:
+        - Install from Pypi: py_pypi.md
+        - Install from Sources: py_sources.md
+        - Setup a Database: py_database.md
+        - Setup a Redis Server: py_redis.md
+        - Setup a Web Server: py_server.md
+        - Setup Systemd: py_systemd.md
+      - Configuration: set_up.md
       - Database:
           - Database Setup: database.md
   - Contributors:

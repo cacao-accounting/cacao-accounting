@@ -1,3 +1,5 @@
+# Setup Cacao Accounting from the OCI image.
+
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 
 A OCI image :simple-docker: is available to execute Cacao Accounting in containers based deployments, the OCI image
@@ -10,8 +12,8 @@ is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) 
 
 !!! info
 
-    This guide uses `podman` and `cockpit` but you can use any tool you prefer to run the Cacao Accounting
-    OCI image.
+    This guide uses `podman` and `cockpit` as reference, but you can use any tool you prefer to run
+    the Cacao Accounting OCI image like [Docker CE](https://docs.docker.com/engine/install/).
 
 ## Install the `podman` tool.
 
