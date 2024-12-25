@@ -29,7 +29,9 @@ nav:
       - Python Package Based Setup:
         - Install from Pypi: py_pypi.md
         - Install from Sources: py_sources.md
-        - Setup a Database: py_database.md
+        - Setup a Database:
+            - Setup MySQL: py_database_mysql.md
+            - Setup PostgreSQL: py_database_psql.md
         - Setup a Redis Server: py_redis.md
         - Setup a Web Server: py_server.md
         - Setup Systemd: py_systemd.md
