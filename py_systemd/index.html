@@ -10,14 +10,14 @@
       
       
       
-        <link rel="prev" href="../py_server/">
+        <link rel="prev" href="../py_database_psql/">
       
       
-        <link rel="next" href="../set_up/">
+        <link rel="next" href="../py_server/">
       
       
       <link rel="icon" href="../media/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.49">
     
     
       
@@ -49,6 +49,8 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -73,7 +75,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#systemd" class="md-skip">
+        <a href="#setup-the-cacao-accounting-service-with-systemd" class="md-skip">
           Skip to content
         </a>
       
@@ -127,6 +129,69 @@
     
     
     
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Select language">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../es/py_systemd/" hreflang="es" class="md-select__link">
+              Español
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
     
     
       <div class="md-header__source">
@@ -225,6 +290,23 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../api/" class="md-tabs__link">
+        
+  
+    
+  
+  Api
+
+      </a>
+    </li>
   
 
       
@@ -523,20 +605,39 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../py_database/" class="md-nav__link">
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_3_3" id="__nav_2_3_3_label" tabindex="0">
+            
   
   <span class="md-ellipsis">
     Setup a Database
   </span>
   
 
-      </a>
-    </li>
-  
-
-              
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Setup a Database
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -545,11 +646,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../py_redis/" class="md-nav__link">
+      <a href="../py_database_mysql/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Setup a Redis Server
+    Setup MySQL
   </span>
   
 
@@ -566,15 +667,23 @@
   
   
     <li class="md-nav__item">
-      <a href="../py_server/" class="md-nav__link">
+      <a href="../py_database_psql/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Setup a Web Server
+    Setup PostgreSQL
   </span>
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -629,19 +738,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#systemd" class="md-nav__link">
+  <a href="#setup-the-cacao-accounting-service-with-systemd" class="md-nav__link">
     <span class="md-ellipsis">
-      Systemd
+      Setup the Cacao Accounting service with systemd.
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Systemd">
+    <nav class="md-nav" aria-label="Setup the Cacao Accounting service with systemd.">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#usando-el-unit-file-sin-permisos-de-root" class="md-nav__link">
+  <a href="#example-unit-file" class="md-nav__link">
     <span class="md-ellipsis">
-      Usando el unit file sin permisos de root
+      Example .unit file.
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reload-the-systemd-daemon-and-start-the-cacao-accounting-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reload the systemd daemon and start the Cacao Accounting service.
     </span>
   </a>
   
@@ -656,6 +774,69 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup a Web Server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py_https.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup a optional https sertificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py_redis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup a optional Redis Server
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -961,9 +1142,50 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dependencies/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dependecies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Api
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -993,19 +1215,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#systemd" class="md-nav__link">
+  <a href="#setup-the-cacao-accounting-service-with-systemd" class="md-nav__link">
     <span class="md-ellipsis">
-      Systemd
+      Setup the Cacao Accounting service with systemd.
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Systemd">
+    <nav class="md-nav" aria-label="Setup the Cacao Accounting service with systemd.">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#usando-el-unit-file-sin-permisos-de-root" class="md-nav__link">
+  <a href="#example-unit-file" class="md-nav__link">
     <span class="md-ellipsis">
-      Usando el unit file sin permisos de root
+      Example .unit file.
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reload-the-systemd-daemon-and-start-the-cacao-accounting-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reload the systemd daemon and start the Cacao Accounting service.
     </span>
   </a>
   
@@ -1036,82 +1267,63 @@
 
   <h1>Setup Systemd</h1>
 
-<h2 id="systemd">Systemd</h2>
-<p>En sistemas Linux systemd se ha vuelto la implementación predominante para
-el arranque del sistema operativo, systemd utiliza archivos .unit para describir
-los procesos a iniciar en el arranque del sistema operativa.</p>
-<p>Para su conveniencia proveemos una plantilla de <a href="https://github.com/cacao-accounting/cacao-accounting/blob/development/cacao_accounting/misc/ejemplos/cacao-accounting.unit">archivo .unit</a>
-para utilizarla en el despliegue de Cacao Accounting.</p>
-<p>El archivo .unit se debe colocar en:</p>
-<div class="highlight"><pre><span></span><code>/etc/systemd/system/cacao-accounting.service
-</code></pre></div>
-<p>Es importante editar las rutas al ejecutable cacaoctl, al aplicación se puede
-administrar con:</p>
-<div class="highlight"><pre><span></span><code>systemctl<span class="w"> </span>daemon-reload
-systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>cacao-accounting.service<span class="w"> </span>--now
-</code></pre></div>
-<h3 id="usando-el-unit-file-sin-permisos-de-root">Usando el unit file sin permisos de root</h3>
-<p>Si no tiene acceso de administrador al sistema aun puede utilizar systemd para
-administrar Cacoa Accounting, debe colocar en archivo .unit en:</p>
-<div class="highlight"><pre><span></span><code>wget https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/misc/ejemplos/cacao-accounting.unit
-mkdir -p .config/systemd/user/
-mv cacao-accounting.unit .config/systemd/user/cacao-accounting.service
-</code></pre></div>
-<p>Edite la plantilla, es importante que el Unit file apunte a la ubicación correcta del ejecutable "cacaoctl"</p>
-<div class="highlight"><pre><span></span><code> cat .config/systemd/user/cacao-accounting.service
-# Se debe colocar en: /etc/systemd/system/cacao-accounting.service
-[Unit]
-Description=Cacao Accounting WSGI server
+<h2 id="setup-the-cacao-accounting-service-with-systemd">Setup the Cacao Accounting service with systemd.</h2>
+<p>In most Linux systems systemd is the default init system, with systemd you can setup a
+autostart service to start Cacao Accounting on system boot. You will create a <code>.unit</code> file
+to configure a system service.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you follow the instructions to install Cacao Accounting from <a href="../py_sources/">sources</a> or from
+the <a href="../py_pypi/">Python Package Index</a> the <code>cacaoctl</code> tool should be instaled and available in
+<code>/opt/cacao-accounting/venv/bin/cacaoctl</code>.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You must configure and initialice the database for Cacao Accounting, you can shoose the database
+server you prefer <a href="../py_database_psql/">PostgreSQL</a> or <a href="../py_database_mysql/">MySQL</a>, you will need
+the connections string to configure your database service as a enviroment variable in the <code>.unit</code> file.</p>
+</div>
+<h3 id="example-unit-file">Example <code>.unit</code> file.</h3>
+<div class="highlight"><pre><span></span><code>[Unit]
+Description=Cacao Accounting service.
 After=syslog.target network.target
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=1
-PIDFile=/run/cacaoctl.pid
-# Ajustar de acuerdo a la ruta de su entorno virtual
-ExecStart=/home/wmoreno/Documentos/repositorios/cacao/venv/bin/cacaoctl serve
-# Utilizar esta ruta si la aplicación esta instalada a nivel de sistema
-# ExecStart=/usr/bin/cacaoctl serve
-ExecReload=/bin/kill -s HUP $MAINPID
-ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+Environment=&quot;CACAO_KEY=hajkañdkjda455654ASSDAFCAFADASDÑÑÑÑÑÑññññññlkadjasdkldaldkd&quot;
+Environment=&quot;CACAO_DB=protocol+driver://user:password@host:port/dbname&quot;
+ExecStart=/opt/cacao-accounting/venv/bin/cacaoctl serve
 
 [Install]
 WantedBy=multi-user.target
-
-vi .config/systemd/user/cacao-accounting.service
 </code></pre></div>
-<p>La linea importante es indicarle a systemd el archivo executable correcto, en mi caso:</p>
-<div class="highlight"><pre><span></span><code>ExecStart=/home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
+<p>Save the file in <code>/etc/systemd/system/cacao-accounting.service</code></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Cacao Accounting requires at less two required configuration options to run <code>CACAO_DB</code> and <code>CACAO_KEY</code>
+to run, you can read more about available configuration options in <a href="../set_up/">the configuration page</a>
+also you can find examples of the correct connection string format according to the database service you
+are using.</p>
+</div>
+<h3 id="reload-the-systemd-daemon-and-start-the-cacao-accounting-service">Reload the systemd daemon and start the Cacao Accounting service.</h3>
+<p>Once you have configured your Cacao Accounting <code>.unit</code> file you can start the service with</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>daemon-reload
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>cacao-accounting.service<span class="w"> </span>--now
+sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>cacao-accounting.service
 </code></pre></div>
-<p>Puede administrar el servicio con:</p>
-<div class="highlight"><pre><span></span><code>systemctl --user daemon-reload
-systemctl --user enable --now cacao-accounting
-
- systemctl --user status cacao-accounting
-● cacao-accounting.service - Cacao Accounting WSGI server
-     Loaded: loaded (/home/ubuntu/.config/systemd/user/cacao-accounting.service; enabled; vendor preset: enabled)
-     Active: active (running) since Sun 2021-09-26 20:58:14 UTC; 1min 11s ago
-   Main PID: 30482 (cacaoctl)
-     CGroup: /user.slice/user-1001.slice/user@1001.service/cacao-accounting.service
-             └─30482 /home/ubuntu/cacao-accounting/venv/bin/python3 /home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
-
-Sep 26 20:58:14 erpnext systemd[19701]: Started Cacao Accounting WSGI server.
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:&lt;module&gt;:122 - No s&gt;
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:&lt;module&gt;:123 - Util&gt;
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.server:server:32 - Inician&gt;
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.database.helpers:verifica_&gt;
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.986 | INFO     | cacao_accounting.database.helpers:verifica_&gt;
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | cacao_accounting.server:server:49 - Inician&gt;
-</code></pre></div>
-<p>Puede verificar que el servicio se esta ejecutando localmente con curl:</p>
-<div class="highlight"><pre><span></span><code>curl 127.0.0.1:8080
-&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 3.2 Final//EN&quot;&gt;
-&lt;title&gt;Redirecting...&lt;/title&gt;
-</code></pre></div>
-<p>Si desea finalizar el servicio ejecute:</p>
-<div class="highlight"><pre><span></span><code>systemctl --user stop cacao-accounting
-</code></pre></div>
+<p>Once configured your Cacao Accounting service you can visit <code>&lt;your_ip_address&gt;:8080</code> and access the
+Cacao Accounting loggin screen, you can loggin with the administrator user and password and follow the
+initial setup wizard.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>For small setups with a few users (&lt;= 2 users) this setup should work, but you are sposing
+the built in wsgi server to the internet, this is not the recommend setup if your are going to serve
+many users.</p>
+</div>
+<p>You can configure a web server to ensure your setup and do not spoce your wsgi server to the internet like
+nginx and Caddy Server, in the next step we will configure <a href="../py_server/">Caddy as reverse proxy</a>.</p>
 
 
 
@@ -1204,6 +1416,8 @@ Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | ca
     
     
       <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+        <script src="../js/open_in_new_tab.js"></script>
       
     
   </body>

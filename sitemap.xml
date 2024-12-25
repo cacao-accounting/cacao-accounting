@@ -1,3 +1,317 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>None./</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="None"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/"/>
+    </url>
+    <url>
+        <loc>NoneCODE_OF_CONDUCT/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="NoneCODE_OF_CONDUCT/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/CODE_OF_CONDUCT/"/>
+    </url>
+    <url>
+        <loc>NoneCONTRIBUTING/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="NoneCONTRIBUTING/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/CONTRIBUTING/"/>
+    </url>
+    <url>
+        <loc>Noneabout/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneabout/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/about/"/>
+    </url>
+    <url>
+        <loc>Noneapi/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneapi/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/api/"/>
+    </url>
+    <url>
+        <loc>Nonechangelog/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonechangelog/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/changelog/"/>
+    </url>
+    <url>
+        <loc>Noneci/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneci/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/ci/"/>
+    </url>
+    <url>
+        <loc>Nonecontainer/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecontainer/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/container/"/>
+    </url>
+    <url>
+        <loc>Nonedatabase/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonedatabase/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/database/"/>
+    </url>
+    <url>
+        <loc>Nonedependencies/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonedependencies/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/dependencies/"/>
+    </url>
+    <url>
+        <loc>Nonefaq/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefaq/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/faq/"/>
+    </url>
+    <url>
+        <loc>Nonepy_database_mysql/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_database_mysql/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_mysql/"/>
+    </url>
+    <url>
+        <loc>Nonepy_database_psql/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_database_psql/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_psql/"/>
+    </url>
+    <url>
+        <loc>Nonepy_os/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_os/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_os/"/>
+    </url>
+    <url>
+        <loc>Nonepy_pypi/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_pypi/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_pypi/"/>
+    </url>
+    <url>
+        <loc>Nonepy_redis/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_redis/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_redis/"/>
+    </url>
+    <url>
+        <loc>Nonepy_server/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_server/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_server/"/>
+    </url>
+    <url>
+        <loc>Nonepy_sources/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_sources/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_sources/"/>
+    </url>
+    <url>
+        <loc>Nonepy_systemd/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_systemd/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_systemd/"/>
+    </url>
+    <url>
+        <loc>Noneset_up/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneset_up/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/set_up/"/>
+    </url>
+    <url>
+        <loc>Nonesetup/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonesetup/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/setup/"/>
+    </url>
+    <url>
+        <loc>Noneblog/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneblog/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/blog/"/>
+    </url>
+    <url>
+        <loc>Nonees/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="None"/>
+    </url>
+    <url>
+        <loc>Nonees/CODE_OF_CONDUCT/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/CODE_OF_CONDUCT/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="NoneCODE_OF_CONDUCT/"/>
+    </url>
+    <url>
+        <loc>Nonees/CONTRIBUTING/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/CONTRIBUTING/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="NoneCONTRIBUTING/"/>
+    </url>
+    <url>
+        <loc>Nonees/about/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/about/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneabout/"/>
+    </url>
+    <url>
+        <loc>Nonees/api/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/api/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneapi/"/>
+    </url>
+    <url>
+        <loc>Nonees/changelog/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/changelog/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonechangelog/"/>
+    </url>
+    <url>
+        <loc>Nonees/ci/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/ci/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneci/"/>
+    </url>
+    <url>
+        <loc>Nonees/container/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/container/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecontainer/"/>
+    </url>
+    <url>
+        <loc>Nonees/database/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/database/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonedatabase/"/>
+    </url>
+    <url>
+        <loc>Nonees/dependencies/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/dependencies/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonedependencies/"/>
+    </url>
+    <url>
+        <loc>Nonees/faq%20/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/faq%20/"/>
+    </url>
+    <url>
+        <loc>Nonees/faq/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/faq/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefaq/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_database_mysql/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_mysql/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_database_mysql/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_database_psql/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_psql/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_database_psql/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_os/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_os/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_os/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_pypi/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_pypi/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_pypi/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_redis/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_redis/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_redis/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_server/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_server/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_server/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_sources/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_sources/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_sources/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_systemd/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_systemd/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_systemd/"/>
+    </url>
+    <url>
+        <loc>Nonees/set_up/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/set_up/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneset_up/"/>
+    </url>
+    <url>
+        <loc>Nonees/setup/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/setup/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonesetup/"/>
+    </url>
+    <url>
+        <loc>Nonees/blog/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/blog/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneblog/"/>
+    </url>
 </urlset>
