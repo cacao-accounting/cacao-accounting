@@ -32,9 +32,10 @@ nav:
         - Setup a Database:
             - Setup MySQL: py_database_mysql.md
             - Setup PostgreSQL: py_database_psql.md
-        - Setup a Redis Server: py_redis.md
-        - Setup a Web Server: py_server.md
         - Setup Systemd: py_systemd.md
+        - Setup a Web Server: py_server.md
+        - Setup a optional https sertificate: py_https.md
+        - Setup a optional Redis Server: py_redis.md
       - Configuration: set_up.md
       - Database:
           - Database Setup: database.md
@@ -45,9 +46,24 @@ nav:
   - About:
       - About: about.md
       - FAQ: faq.md
+      - Dependecies: dependencies.md
+  - Api: api.md
 
 plugins:
   - blog
+  - open-in-new-tab
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: es
+          name: Español
+          build: true
+  - mkdocstrings
 
 extra:
   social:

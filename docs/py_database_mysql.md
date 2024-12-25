@@ -68,7 +68,7 @@ and numbers.
 
 ```sql
 sudo export CACAO_DB=mysql+pymysql://cacaodbuser:cacaodbpswd@localhost/cacaoaccounting
-sudo export SECRET_KEY=sñldkñsadfmnskpfmskn1235aaaaaaAAAAAAA
+sudo export CACAO_KEY=sñldkñsadfmnskpfmskn1235aaaaaaAAAAAAA
 ```
 
 !!! note

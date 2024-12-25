@@ -99,7 +99,7 @@ and numbers.
 
 ```sql
 sudo export CACAO_DB=postgresql+pg8000://cacaodbuser:cacaodbpwsd@localhost/cacaoaccountingdb
-sudo export SECRET_KEY=sñldkñsadfmnskpfmskn1235aaaaaaAAAAAAA
+sudo export CACAO_KEY=sñldkñsadfmnskpfmskn1235aaaaaaAAAAAAA
 ```
 
 !!! note

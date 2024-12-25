@@ -1,106 +1,69 @@
 
-## Systemd
+## Setup the Cacao Accounting service with systemd.
 
-En sistemas Linux systemd se ha vuelto la implementación predominante para
-el arranque del sistema operativo, systemd utiliza archivos .unit para describir
-los procesos a iniciar en el arranque del sistema operativa.
+In most Linux systems systemd is the default init system, with systemd you can setup a
+autostart service to start Cacao Accounting on system boot. You will create a `.unit` file
+to configure a system service.
 
-Para su conveniencia proveemos una plantilla de [archivo .unit](https://github.com/cacao-accounting/cacao-accounting/blob/development/cacao_accounting/misc/ejemplos/cacao-accounting.unit)
-para utilizarla en el despliegue de Cacao Accounting.
+!!! note
 
-El archivo .unit se debe colocar en:
+    If you follow the instructions to install Cacao Accounting from [sources](py_sources.md) or from
+    the [Python Package Index](py_pypi.md) the `cacaoctl` tool should be instaled and available in
+    `/opt/cacao-accounting/venv/bin/cacaoctl`.
 
-```bash
-/etc/systemd/system/cacao-accounting.service
-```
+!!! tip
 
-Es importante editar las rutas al ejecutable cacaoctl, al aplicación se puede
-administrar con:
+    You must configure and initialice the database for Cacao Accounting, you can shoose the database
+    server you prefer [PostgreSQL](py_database_psql.md) or [MySQL](py_database_mysql.md), you will need
+    the connections string to configure your database service as a enviroment variable in the `.unit` file.
 
-```bash
-systemctl daemon-reload
-systemctl enable cacao-accounting.service --now
-```
-
-### Usando el unit file sin permisos de root
-
-Si no tiene acceso de administrador al sistema aun puede utilizar systemd para
-administrar Cacoa Accounting, debe colocar en archivo .unit en:
+### Example `.unit` file.
 
 ```
-wget https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/misc/ejemplos/cacao-accounting.unit
-mkdir -p .config/systemd/user/
-mv cacao-accounting.unit .config/systemd/user/cacao-accounting.service
-```
-
-Edite la plantilla, es importante que el Unit file apunte a la ubicación correcta del ejecutable "cacaoctl"
-
-
-```
- cat .config/systemd/user/cacao-accounting.service
-# Se debe colocar en: /etc/systemd/system/cacao-accounting.service
 [Unit]
-Description=Cacao Accounting WSGI server
+Description=Cacao Accounting service.
 After=syslog.target network.target
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=1
-PIDFile=/run/cacaoctl.pid
-# Ajustar de acuerdo a la ruta de su entorno virtual
-ExecStart=/home/wmoreno/Documentos/repositorios/cacao/venv/bin/cacaoctl serve
-# Utilizar esta ruta si la aplicación esta instalada a nivel de sistema
-# ExecStart=/usr/bin/cacaoctl serve
-ExecReload=/bin/kill -s HUP $MAINPID
-ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+Environment="CACAO_KEY=hajkañdkjda455654ASSDAFCAFADASDÑÑÑÑÑÑññññññlkadjasdkldaldkd"
+Environment="CACAO_DB=protocol+driver://user:password@host:port/dbname"
+ExecStart=/opt/cacao-accounting/venv/bin/cacaoctl serve
 
 [Install]
 WantedBy=multi-user.target
-
-vi .config/systemd/user/cacao-accounting.service
 ```
 
-La linea importante es indicarle a systemd el archivo executable correcto, en mi caso:
+Save the file in `/etc/systemd/system/cacao-accounting.service`
 
-```
-ExecStart=/home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
-```
+!!! note
 
+    Cacao Accounting requires at less two required configuration options to run `CACAO_DB` and `CACAO_KEY`
+    to run, you can read more about available configuration options in [the configuration page](set_up.md)
+    also you can find examples of the correct connection string format according to the database service you
+    are using.
 
-Puede administrar el servicio con:
+### Reload the systemd daemon and start the Cacao Accounting service.
 
-```
-systemctl --user daemon-reload
-systemctl --user enable --now cacao-accounting
+Once you have configured your Cacao Accounting `.unit` file you can start the service with
 
- systemctl --user status cacao-accounting
-● cacao-accounting.service - Cacao Accounting WSGI server
-     Loaded: loaded (/home/ubuntu/.config/systemd/user/cacao-accounting.service; enabled; vendor preset: enabled)
-     Active: active (running) since Sun 2021-09-26 20:58:14 UTC; 1min 11s ago
-   Main PID: 30482 (cacaoctl)
-     CGroup: /user.slice/user-1001.slice/user@1001.service/cacao-accounting.service
-             └─30482 /home/ubuntu/cacao-accounting/venv/bin/python3 /home/ubuntu/cacao-accounting/venv/bin/cacaoctl serve
-
-Sep 26 20:58:14 erpnext systemd[19701]: Started Cacao Accounting WSGI server.
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:<module>:122 - No s>
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.631 | WARNING  | cacao_accounting.config:<module>:123 - Util>
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.server:server:32 - Inician>
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.951 | INFO     | cacao_accounting.database.helpers:verifica_>
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.986 | INFO     | cacao_accounting.database.helpers:verifica_>
-Sep 26 20:58:15 erpnext cacaoctl[30482]: 2021-09-26 20:58:15.988 | INFO     | cacao_accounting.server:server:49 - Inician>
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable cacao-accounting.service --now
+sudo systemctl status cacao-accounting.service
 ```
 
-Puede verificar que el servicio se esta ejecutando localmente con curl:
+Once configured your Cacao Accounting service you can visit `<your_ip_address>:8080` and access the
+Cacao Accounting loggin screen, you can loggin with the administrator user and password and follow the
+initial setup wizard.
 
-```
-curl 127.0.0.1:8080
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
-<title>Redirecting...</title>
-```
+!!! note
 
-Si desea finalizar el servicio ejecute:
+    For small setups with a few users (<= 2 users) this setup should work, but you are sposing
+    the built in wsgi server to the internet, this is not the recommend setup if your are going to serve
+    many users.
 
-```
-systemctl --user stop cacao-accounting
-```
+You can configure a web server to ensure your setup and do not spoce your wsgi server to the internet like
+nginx and Caddy Server, in the next step we will configure [Caddy as reverse proxy](py_server.md).
