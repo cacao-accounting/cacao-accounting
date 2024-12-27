@@ -8,7 +8,7 @@ is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) 
 !!! note
 
     If you do not need a container based deployment you can install Cacao Accounting as a Python package
-    from the package hosted at [pypi](pypi.md) :material-language-python:.
+    from the package hosted at [pypi](py_pypi.md) :material-language-python:.
 
 !!! info
 

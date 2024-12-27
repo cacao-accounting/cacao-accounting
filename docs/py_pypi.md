@@ -60,4 +60,5 @@ cacaoctl version
 0.0.0.dev20241209
 ```
 
-Once Cacao Accounting is installed and the `cacaoctl` tool is available in `/opt/cacao-accounting/venv/bin/cacaoctl` you can continue to setup your [database](py_database.md).
+Once Cacao Accounting is installed and the `cacaoctl` tool is available in `/opt/cacao-accounting/venv/bin/cacaoctl` you can continue to setup your database server, you can choose 
+[PostgreSQL](py_database_psql.md) or [MySQL](py_database_mysql.md).

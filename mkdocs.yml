@@ -10,7 +10,6 @@ theme:
   icon:
     repo: fontawesome/brands/git-alt
   features:
-    - navigation.instant
     - navigation.tabs
     - navigation.sections
     - content.tabs.link
@@ -36,17 +35,18 @@ nav:
         - Setup a Web Server: py_server.md
         - Setup a optional https sertificate: py_https.md
         - Setup a optional Redis Server: py_redis.md
+        - Basic Operating System Hardening: py_os.md
       - Configuration: set_up.md
       - Database:
           - Database Setup: database.md
   - Contributors:
       - Contributing: CONTRIBUTING.md
       - Code of Conduct: CODE_OF_CONDUCT.md
-      - Changelog: changelog.md
   - About:
       - About: about.md
       - FAQ: faq.md
       - Dependecies: dependencies.md
+      - Changelog: changelog.md
   - Api: api.md
 
 plugins:
