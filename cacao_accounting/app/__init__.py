@@ -101,5 +101,5 @@ def ping():
 
     resp = jsonify(success=True)
     resp.status_code = 200
-    
+
     return resp
