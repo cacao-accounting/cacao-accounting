@@ -15,6 +15,11 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/ping",
+        text=[
+        ],
+    ),
+    Route(
         url="/development",
         text=["Información para desarrolladores.".encode("utf-8")],
     ),
