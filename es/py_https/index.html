@@ -10,10 +10,10 @@
       
       
       
-        <link rel="prev" href="../py_systemd/">
+        <link rel="prev" href="../py_server/">
       
       
-        <link rel="next" href="../py_https/">
+        <link rel="next" href="../py_redis/">
       
       
       <link rel="icon" href="../../media/favicon.png">
@@ -21,7 +21,7 @@
     
     
       
-        <title>Setup a Web Server - Cacao Accounting</title>
+        <title>Setup a optional https sertificate - Cacao Accounting</title>
       
     
     
@@ -77,7 +77,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#setup-a-reverse-proxy-server" class="md-skip">
+        <a href="#setup-a-ssl-certificate" class="md-skip">
           Saltar a contenido
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Setup a Web Server
+              Setup a optional https sertificate
             
           </span>
         </div>
@@ -141,7 +141,7 @@
       <ul class="md-select__list">
         
           <li class="md-select__item">
-            <a href="../../py_server/" hreflang="en" class="md-select__link">
+            <a href="../../py_https/" hreflang="en" class="md-select__link">
               English
             </a>
           </li>
@@ -716,6 +716,27 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../py_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup a Web Server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -732,33 +753,12 @@
         
   
   <span class="md-ellipsis">
-    Setup a Web Server
-  </span>
-  
-
-      </a>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../py_https/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
     Setup a optional https sertificate
   </span>
   
 
       </a>
+      
     </li>
   
 
@@ -1190,40 +1190,17 @@
   
 
 
-<h1 id="setup-a-reverse-proxy-server">Setup a reverse proxy server</h1>
-<p>In this step we will seutp Caddy as a proxy server, install Caddy Server with:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17.61.455a3.41 3.41 0 0 0-3.41 3.41 3.41 3.41 0 0 0 3.41 3.41 3.41 3.41 0 0 0 3.41-3.41 3.41 3.41 0 0 0-3.41-3.41M12.92.8C8.923.777 5.137 2.941 3.148 6.451a5 5 0 0 1 .26-.007 4.9 4.9 0 0 1 2.585.737A8.32 8.32 0 0 1 12.688 3.6 4.94 4.94 0 0 1 13.723.834 11 11 0 0 0 12.92.8m9.226 4.994a4.9 4.9 0 0 1-1.918 2.246 8.36 8.36 0 0 1-.273 8.303 4.9 4.9 0 0 1 1.632 2.54 11.16 11.16 0 0 0 .559-13.089M3.41 7.932A3.41 3.41 0 0 0 0 11.342a3.41 3.41 0 0 0 3.41 3.409 3.41 3.41 0 0 0 3.41-3.41 3.41 3.41 0 0 0-3.41-3.41zm2.027 7.866a4.9 4.9 0 0 1-2.915.358 11.1 11.1 0 0 0 7.991 6.698 11.2 11.2 0 0 0 2.422.249 4.88 4.88 0 0 1-.999-2.85 9 9 0 0 1-.836-.136 8.3 8.3 0 0 1-5.663-4.32zm11.405.928a3.41 3.41 0 0 0-3.41 3.41 3.41 3.41 0 0 0 3.41 3.41 3.41 3.41 0 0 0 3.41-3.41 3.41 3.41 0 0 0-3.41-3.41"/></svg></span> APT Based OS</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.001 0C5.376 0 .008 5.369.004 11.992H.002v9.287h.002A2.726 2.726 0 0 0 2.73 24h9.275c6.626-.004 11.993-5.372 11.993-11.997C23.998 5.375 18.628 0 12 0zm2.431 4.94c2.015 0 3.917 1.543 3.917 3.671 0 .197.001.395-.03.619a1 1 0 0 1-1.137.893 1 1 0 0 1-.842-1.175 3 3 0 0 0 .013-.337c0-1.207-.987-1.672-1.92-1.672-.934 0-1.775.784-1.777 1.672.016 1.027 0 2.046 0 3.07l1.732-.012c1.352-.028 1.368 2.009.016 1.998l-1.748.013c-.004.826.006.677.002 1.093 0 0 .015 1.01-.016 1.776-.209 2.25-2.124 4.046-4.424 4.046-2.438 0-4.448-1.993-4.448-4.437.073-2.515 2.078-4.492 4.603-4.469l1.409-.01v1.996l-1.409.013h-.007c-1.388.04-2.577.984-2.6 2.47a2.44 2.44 0 0 0 2.452 2.439c1.356 0 2.441-.987 2.441-2.437l-.001-7.557c0-.14.005-.252.02-.407.23-1.848 1.883-3.256 3.754-3.256"/></svg></span> RPM Based OS</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>curl<span class="w"> </span>-1sLf<span class="w"> </span><span class="s1">&#39;https://dl.cloudsmith.io/public/caddy/stable/gpg.key&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>gpg<span class="w"> </span>--dearmor<span class="w"> </span>-o<span class="w"> </span>/usr/share/keyrings/caddy-stable-archive-keyring.gpg
-sudo<span class="w"> </span>curl<span class="w"> </span>-1sLf<span class="w"> </span><span class="s1">&#39;https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/apt/sources.list.d/caddy-stable.list
-sudo<span class="w"> </span>apt<span class="w"> </span>update
-sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>caddy
-sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </span><span class="m">80</span>
-sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </span><span class="m">443</span>
-sudo<span class="w"> </span>ufw<span class="w"> </span>reload
-sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>caddy<span class="w"> </span>--now
-</code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="s1">&#39;dnf-command(copr)&#39;</span>
-sudo<span class="w"> </span>dnf<span class="w"> </span>copr<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>@caddy/caddy
-sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>caddy
-sudo<span class="w"> </span>firewall-cmd<span class="w"> </span>--permanent<span class="w"> </span>--zone<span class="o">=</span>public<span class="w"> </span>--add-service<span class="o">=</span>http
-sudo<span class="w"> </span>firewall-cmd<span class="w"> </span>--permanent<span class="w"> </span>--zone<span class="o">=</span>public<span class="w"> </span>--add-service<span class="o">=</span>https
-sudo<span class="w"> </span>firewall-cmd<span class="w"> </span>--reload
-sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>caddy<span class="w"> </span>--now
-</code></pre></div>
-</div>
-</div>
-</div>
-<p>Once installed Caddy will create the configuration file in <code>/etc/caddy/Caddyfile</code>, you can configure Caddy
-as reverse proxy with the following configuration:</p>
-<div class="highlight"><pre><span></span><code>:80 {
-  reverse_proxy localhost:8080
+<h1 id="setup-a-ssl-certificate">Setup a SSL certificate.</h1>
+<p>The Caddy server, will setup a automatic SSL certificate in most cases, to have a valid SSL
+certificate you will need a <a href="https://en.wikipedia.org/wiki/Domain_Name_System"><code>domain name</code></a>
+pointing to your server <code>ip</code> with a <code>A</code> or <code>AAA</code> DNS record.</p>
+<p>With a DNS record pointing to your server IP you can use the<a href="https://caddyserver.com/docs/automatic-https">automatic https</a>
+feature of the Caddy web server, for this you must update your Caddyfile in <code>/etc/caddy/Caddyfile</code>
+to list your domain name like this:</p>
+<div class="highlight"><pre><span></span><code>example.com, www.example.com {
+    ...
 }
 </code></pre></div>
-<p>With this setup the server server will recibe the request and past then to the wsgi in the backgroud.</p>
 
 
 

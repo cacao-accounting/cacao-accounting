@@ -92,6 +92,13 @@
         <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_psql/"/>
     </url>
     <url>
+        <loc>Nonepy_https/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_https/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_https/"/>
+    </url>
+    <url>
         <loc>Nonepy_os/</loc>
         <lastmod>1980-01-01</lastmod>
         <changefreq>daily</changefreq>
@@ -250,6 +257,13 @@
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_database_psql/"/>
         <xhtml:link rel="alternate" hreflang="en" href="Nonepy_database_psql/"/>
+    </url>
+    <url>
+        <loc>Nonees/py_https/</loc>
+        <lastmod>1980-01-01</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="Nonees/py_https/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonepy_https/"/>
     </url>
     <url>
         <loc>Nonees/py_os/</loc>
