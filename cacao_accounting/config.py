@@ -69,7 +69,6 @@ def valida_direccion_base_datos(uri: str) -> bool:
     SQLITE_URI = DIRECCION.startswith("sqlite")
     VALIDACION = MYSQL_URI or POSTGRESQL_URI or SQLITE_URI or MARIADB_URI
     if VALIDACION:
-        log.debug("URL de Acceso a db validada correctamente.")
         if MARIADB_URI:
             log.warning("El soporte a MariaDB es expimental.")
     else:
