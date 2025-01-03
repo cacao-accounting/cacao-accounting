@@ -1,0 +1,14 @@
+[Unit]
+Description=Cacao Accounting service.
+After=syslog.target network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+Environment="CACAO_KEY=hajkañdkjda455654ASSDAFCAFADASDÑÑÑÑÑÑññññññlkadjasdkldaldkd"
+Environment="CACAO_DB=protocol+driver://user:password@host:port/dbname"
+ExecStart=/opt/cacao-accounting/venv/bin/cacaoctl serve
+
+[Install]
+WantedBy=multi-user.target

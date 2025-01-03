@@ -14,17 +14,21 @@
 
 """Definición unica de la version de la aplicación."""
 
+# Only update the version if all tests are passing.
+# PyPi will refuse to push two packages with the same version
+# Keep the version bump in a single commit without other changes included in it to ensure a clean release.
+
 APPNAME = "Cacao Accounting"
 APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
 PATCH = "0"
-DATE = "20241210"
+DATE = "20250103"
 PRERELEASE = "dev" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None
 
-if PRERELEASE:
+if PRERELEASE:  # pragma: no cover
     VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
 else:
     if POSTRELESE:

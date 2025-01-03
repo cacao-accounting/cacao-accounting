@@ -96,7 +96,7 @@ def base_data(user, passwd, carga_rapida):
             from cacao_accounting.database import database
             from sqlalchemy.sql import text
 
-            if environ.get("CACAO_PRINT_DATABASE_URI"):
+            if environ.get("CACAO_PRINT_DATABASE_URI"):  # pragma: no cover
                 DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
                 log.warning(DABATASE_URI)
 

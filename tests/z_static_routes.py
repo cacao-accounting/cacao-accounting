@@ -15,6 +15,11 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/ping",
+        text=[
+        ],
+    ),
+    Route(
         url="/development",
         text=["Información para desarrolladores.".encode("utf-8")],
     ),
@@ -262,6 +267,14 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/accounting/book/list",
+        text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html".encode(
+                "utf-8"
+            ),
+        ],
+    ),
+    Route(
         url="/accounting/unit/matriz",
         text=[
             "Casa Matriz".encode("utf-8"),
@@ -283,6 +296,12 @@ static_rutes = [
         url="/accounting/gl/list",
         text=[
             "Listado de Comprobantes Contables.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/new",
+        text=[
+            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
         ],
     ),
 ]
