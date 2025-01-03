@@ -78,6 +78,16 @@ class FormularioUnidad(FlaskForm):
     fax = StringField(validators=[])
 
 
+class FormularioLibro(FlaskForm):
+    """
+    Formulario base para la administración de libros de contabilidad.
+    """
+
+    id = StringField(validators=[DataRequired()])
+    nombre = StringField(validators=[DataRequired()])
+    entidad = SelectField("Entidad")
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Comprobantes Contables
 class ComprobanteContable(FlaskForm):

@@ -1,97 +1,91 @@
-# Configuración de la aplicación:
+# Cacao Accounting setup:
 
-Siguiendo las recomendaciones en [the twelve factor app](https://12factor.net/config) Cacao Accounting puede leer la configuración desde variables del entorno, la configuración requerida
+Following the [the twelve factor app](https://12factor.net/config) recommendations Cacao Accounting can be configured with enviroment variables.
+
+This is a list of available options.
 es:
 
+## Required
+
+| Option    |          Description          |                            Examples / Comments |
+| --------- | :---------------------------: | ---------------------------------------------: |
+| CACAO_DB  |  Database connection string.  |                             See examples above |
+| CACAO_KEY | Unique key to secure cookies. | Must contains uppercase, lowercase and numbers |
+
+## Optional
+
+| Option           |            Description             |               Examples / Comments |
+| ---------------- | :--------------------------------: | --------------------------------: |
+| CACAO_THREADS    |        CPU threads to use.         |                         Default 4 |
+| CACAO_PORT       | POrt for the WSGI server to listen |                      Default 8080 |
+| PYTHON_CPU_COUNT |        Max CPU unit to use         |                    Container only |
+| CACHE_REDIS_URL  |  Redis service Connection String   | Example: redis://localhost:6379/1 |
+
+## Initial Setup
+
+The first time your run Cacao Accounting the following variables are used to set a custom master user, if not available
+default options will be used.
+
+| Option     |      Description       | Examples / Comments |
+| ---------- | :--------------------: | ------------------: |
+| CACAO_USER |    Master user `id`    |     Default `cacao` |
+| CACAO_PSWD | Master user `password` |     Default `cacao` |
+
+!!! warning
+
+    Default user and password are available in the app source code so it is advised always use custom user and password for
+    the system master user.
+
+## Setup enviroment variables:
+
+### Linux
+
 ```bash
-# Requeridas
-$CACAO_DB          # URI para conectarse a la base de datos.
-$CACAO_KEY         # Llave única para una ejecución segura.
-# Opcionales
-$CACAO_USER        # Identificador del usuario administrador.
-                   # Si no se establece se usa "cacao" por defecto.
-$CACAO_PWD         # Contraseña del usuario administrador.
-                   # Si no se establece se usa "cacao" por defecto.
-$CACAO_THREADS     # Numero de hilos para el servidor WSGI.
-                   # si no se establece se estable a 4 por defecto.
-$CACAO_PORT        # Puerto para servir la aplicacion a utilizar.
-                   # Si no se especifica se utiliza 8080 por defecto.
-$FLASK_ENV         # Modo de ejecución del proyecto puede ser "development" o "production"
-                   # Si no se especifica se utiliza "production" por defecto.
-                   # Referencias:
-                   #  - https://flask.palletsprojects.com/en/2.0.x/config/
-$PYTHON_CPU_COUNT  # En entornos basados en contenedores se utilizan nucles de CPU
-                   # por defecto, puede establecer un valor por defecto, puede
-                   # establecer otro valor estableciendo esta variable de entorno.
-$CACHE_REDIS_URL   # URL para utilizar REDIS/VALKEY como cache
-                   # Ejemplo: CACHE_REDIS_URL=redis://localhost:6379/0
-```
-
-## Establecer variables del entorno requeridas:
-
-En Linux se puede configurar Cacao Accounting ejecutando:
-
-```bash
-# Para configurar Cacao Accounting en Linux ejecutar:
 export CACAO_DB=DATABASE_CONNECTION_URI
 export CACAO_KEY=SECRETKEY
 ```
 
-En Windows ejecutar:
+### Windows:
 
 ```powershell
 setx CACAO_DB "DATABASE_CONNECTION_URI"
 setx CACAO_KEY "SECRETKEY"
 ```
 
-En un Dockerfile o en un archivo Docker compose se pueden configurar de la siguiente forma:
+### Dockerfile
 
 ```dockerfile
-ENV CACAO_ACCOUNTING=True
 ENV CACAO_DB=DATABASE_CONNECTION_URI
 ENV CACAO_KEY=SECRETKEY
 ```
 
-## Conexion a la base de datos
+## Database Connection String
 
-Cacao Accounting puede funcionar con SQLite, MySQL, Postgresql y en buena teoría con MariaDB pero no realizamos pruebas automaticas con este motor de bases de datos:
+!!! info
 
-### SQLite:
+    Cacao Accounting is tested with SQLite, Postgresql and MySQL8, the system should work with MariaDB without changes but
+    support for MariaDB must be considered experimental and not fully tested.
 
-No se requiere software adicional para trabajar con SQLite, sin embargo no se recomienda para
-entornos multi usuarios:
+### Postgresql :simple-postgresql::
 
-La linea de conección es por ejemplo:
+#### pg8000
 
-```
-sqlite://cacaoaccounting.db
-```
+pg8000 is a pure Python Postgresql driver, it is the default option because not requieres a compilation process.
 
-### MySQL:
-
-Para funcionar con MySQL asegurece de tener instalado el driver apropiado:
-
-```bash
-pip install cryptography pymysql
-```
-
-La linea de conección es por ejemplo:
+Examples:
 
 ```
-mysql+pymysql://ususario:contraseña@servidor:puerto/database
+postgresql+pg8000://usuario:contraseña@servidor:puerto/database
 
-mysql+pymysql://cacao:cacao@localhost:3306/cacao
+postgresql+pg8000://cacao:cacao@localhost:5432/cacao
 ```
 
-### Postgresql:
+#### psycopg2
 
-Para funcionar con Postgresql asegurece de tener instalado el driver apropiado:
+psycopg2 is a compiled Python Postgresql driver, it is recommend to compile the driver with the same version of
+Postgresql you will using in production. The OCI image includes a compiled version of psycopg2 by default.
 
-```bash
-pip install psycopg2-binary
-```
-
-La linea de conección es por ejemplo:
+Examples:
 
 ```
 postgresql+psycopg2://usuario:contraseña@servidor:puerto/database
@@ -99,20 +93,30 @@ postgresql+psycopg2://usuario:contraseña@servidor:puerto/database
 postgresql+psycopg2://cacao:cacao@localhost:5432/cacao
 ```
 
-### MS SQL Server:
+### MySQL :simple-mysql::
 
-Para funcionar con MS SQL Server asegurece de tener instalado el [driver de python](https://pypi.org/project/pyodbc/) apropiado, adicionalmente debe configurar el cliente de [ODBC para su sistema operativo](https://docs.microsoft.com/en-us/sql/connect/python/pyodbc/python-sql-driver-pyodbc?view=sql-server-ver15).
-
-```bash
-pip install pyodbc
-```
-
-La linea de conección es por ejemplo:
+Examples:
 
 ```
-mssql+pyodbc://usuario:contraseña@servidor:puerto/database?driver=DRIVER
+mysql+pymysql://ususario:contraseña@servidor:puerto/database
 
-mssql+pyodbc://SA:cacao+SQLSERVER2019@localhost:1433/cacao?driver=ODBC+Driver+17+for+SQL+Server
+mysql+pymysql://cacao:cacao@localhost:3306/cacao
 ```
 
-En el ejemplo anterior se usa la [version 17 del cliente ODBS para SQL Server](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server?view=sql-server-ver15)
+!!! note
+
+    The `pymysql` driver requieres the `pyca/cryptography` library to be available to connect to the database server, the required libraries
+    are incluyed by default in the OCI image, most of the time the `pip` with install the `cryptography` package apropiate for your
+    system you can check the [installation documentarion](https://cryptography.io/en/latest/installation/) for a list of all supported
+    platforms.
+
+### SQLite :simple-sqlite::
+
+!!! warning
+
+    Never uses SQLIte in continer based deplyment since SQLite files are stored in the container file system and always the
+    container file system is ephemeral and all the data stored in it will destroyed in the next deployment.
+
+```
+sqlite://cacaoaccounting.db
+```

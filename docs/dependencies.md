@@ -28,7 +28,7 @@
 | waitress             | Zope Public License (ZPL 2.1) |                                                                                Waitress WSGI server |
 | wtforms              |          BSD License          |                                           Form validation and rendering for Python web development. |
 
-## JavaScritp Pacakges
+## JavaScritp Packages
 
 | Package         | License |                                                                                   Comment |
 | --------------- | :-----: | ----------------------------------------------------------------------------------------: |
