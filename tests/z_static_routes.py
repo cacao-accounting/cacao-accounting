@@ -298,4 +298,10 @@ static_rutes = [
             "Listado de Comprobantes Contables.".encode("utf-8"),
         ],
     ),
+    Route(
+        url="/accounting/gl/new",
+        text=[
+            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
+        ],
+    ),
 ]
