@@ -8,7 +8,7 @@ channel = "stable-24_05"
 run = [
     "sh",
     "-c",
-    "source /home/runner/cacao-accounting/venv/bin/activate && SECRET_KEY=abcABC123 /home/runner/cacao-accounting/venv/bin/flask run --reload --debug",
+    "source /home/runner/cacao-accounting/venv/bin/activate && CACAO_TEST=True SECRET_KEY=abcABC123 /home/runner/cacao-accounting/venv/bin/flask run --reload --debug",
 ]
 
 [[ports]]
