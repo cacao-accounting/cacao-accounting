@@ -23,7 +23,7 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, current_app, render_template
+from flask import Blueprint, current_app, jsonify, render_template
 from flask_login import login_required
 
 # ---------------------------------------------------------------------------------------
@@ -92,3 +92,14 @@ def informacion_para_desarrolladores():
         test="CACAO_TEST" in environ,
         py_version=sys.version,
     )
+
+
+@cacao_app.route("/ping")
+@cacao_app.route("/check")
+def ping():
+    """Valida que la app se esta ejecutando."""
+
+    resp = jsonify(success=True)
+    resp.status_code = 200
+
+    return resp

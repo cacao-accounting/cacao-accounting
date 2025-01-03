@@ -56,3 +56,28 @@ def test_encryp_passwd():
 
     p = proteger_passwd("queonzabalanza")
     assert p is not None
+
+
+def test_falla_verificar_conn_db(request):
+    from cacao_accounting import create_app
+
+    if request.config.getoption("--slow") == "True":
+
+        app = create_app({"SQLALCHEMY_DATABASE_URI": "postgresql+pg8000://user:password@host"})
+        from cacao_accounting.database.helpers import verifica_coneccion_db
+
+        assert verifica_coneccion_db(app) is False
+
+
+def test_usuarios_compañias_no_creados(request):
+    from cacao_accounting import create_app
+
+    if request.config.getoption("--slow") == "True":
+
+        app = create_app({"SQLALCHEMY_DATABASE_URI": "postgresql+pg8000://user:password@host"})
+
+        from cacao_accounting.database.helpers import entidades_creadas, usuarios_creados
+
+        with app.app_context():
+            assert entidades_creadas() is False
+            assert usuarios_creados() is False

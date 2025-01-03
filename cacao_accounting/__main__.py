@@ -45,8 +45,8 @@ if __name__ == "__main__":
         server()
 
     else:
-        # Wait the database 5 senconds
-        sleep(5)
+        # Wait the database 15 senconds
+        sleep(15)
 
         if usuarios_creados():
             server()

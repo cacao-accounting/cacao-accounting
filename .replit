@@ -1,11 +1,20 @@
-modules = ["bash", "nodejs-20", "python-3.8", "web"]
-run = "python -m cacao_accounting"
+modules = ["web", "python-base-3.13", "nodejs-22"]
+run = "source /home/runner/cacao-accounting/venv/bin/activate && CACAO_TEST=True SECRET_KEY=abcABC123 /home/runner/cacao-accounting/venv/bin/flask run --reload --debug"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "python -m cacao_accounting"]
+run = [
+    "sh",
+    "-c",
+    "source /home/runner/cacao-accounting/venv/bin/activate && CACAO_TEST=True SECRET_KEY=abcABC123 /home/runner/cacao-accounting/venv/bin/flask run --reload --debug",
+]
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+exposeLocalhost = true
 
 [[ports]]
 localPort = 8000
@@ -15,13 +24,9 @@ exposeLocalhost = true
 [[ports]]
 localPort = 8080
 externalPort = 80
-exposeLocalhost = true
 
 [rules]
 
 [rules.formatter]
 
 [rules.formatter.fileExtensions]
-
-[rules.formatter.fileExtensions.".html"]
-id = "module:web/languageServer:html"

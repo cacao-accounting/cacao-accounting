@@ -129,6 +129,13 @@ class BaseTabla:
 class BaseTransaccion(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
+    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    book = database.Column(database.String(10), database.ForeignKey("book.code"))
+    serie = database.Column(database.String(10), database.ForeignKey("serie.serie"))
+    user_id = database.Column(database.String(75))
+    date = database.Column(database.Date())
+    reference = database.Column(database.String(50))
+    memo = database.Column(database.String(100))
     canceled = database.Column(
         database.DateTime,
         nullable=True,
@@ -304,6 +311,17 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 # <---------------------------------------------------------------------------------------------> #
 # Bases de la contabilidad
+class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Llamese sucursal, oficina o un aréa operativa una entidad puede tener muchas unidades de negocios."""
+
+    __table_args__ = (database.UniqueConstraint("id", "name", name="libro_unico"),)
+    # Información legal de la entidad
+    code = database.Column(database.String(10), unique=True, index=True)
+    name = database.Column(database.String(50), nullable=False)
+    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    default = database.Column(database.Boolean())
+
+
 class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
@@ -412,11 +430,12 @@ class GLBase:
     cost_center = database.Column(database.String(50), index=True)
     unit = database.Column(database.String(10), index=True)
     project = database.Column(database.String(50), index=True)
+    book = database.Column(database.String(10), index=True)
     # Fecha de registro
     date = database.Column(database.Date)
     # Referencia Cruzada
-    type_ = database.Column(database.String(50))
-    id_ = database.Column(database.String(75))
+    transaction = database.Column(database.String(50))
+    transaction_id = database.Column(database.String(75))
     # Orden de los registros
     order = database.Column(database.Integer(), nullable=True)
     # Valor moneda Predeterminada
@@ -431,6 +450,8 @@ class GLBase:
     reference = database.Column(database.String(50))
     # Detalle
     line_meno = database.Column(database.String(50))
+    internal_reference = database.Column(database.String(50))
+    internal_reference_id = database.Column(database.String(75))
     reference1 = database.Column(database.String(50))
     reference2 = database.Column(database.String(50))
     # Terceras partes
