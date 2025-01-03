@@ -68,9 +68,7 @@ def verifica_coneccion_db(app):  # pragma: no cover
                 log.warning("No se pudo establecer conexion a la base de datos.")
                 log.info("Reintentando conectar a la base de datos.")
 
-            if environ.get("CACAO_TEST", None):
-                pass
-            else:
+            if not environ.get("CACAO_TEST", None):
                 time.sleep(2)
 
         try:
