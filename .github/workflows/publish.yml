@@ -1,10 +1,13 @@
 name: Publish to PyPi
 
 on:
+  
   workflow_run:
     workflows: [Coverage]
     types:
       - completed
+    branches:
+      - main
 
 jobs:
   pypi-publish:
@@ -15,6 +18,7 @@ jobs:
       url: https://pypi.org/p/cacao-accounting
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3
