@@ -3,10 +3,11 @@ name: Publish to PyPi
 on:
   
   workflow_run:
-    branches: [main]
     workflows: [Coverage]
     types:
       - completed
+    branches:
+      - main
 
 jobs:
   pypi-publish:
