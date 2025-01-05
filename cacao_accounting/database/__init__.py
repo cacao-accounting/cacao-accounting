@@ -205,6 +205,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     last_name2 = database.Column(database.String(80))
     e_mail = database.Column(database.String(150), unique=True, nullable=True)
     password = database.Column(database.LargeBinary(), nullable=False)
+    # Classification: system, employe, customer, supplier
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
     # Información Complementaria

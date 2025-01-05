@@ -82,7 +82,14 @@ def crea_usuario_admin(user: str, passwd: str):
     log.info("Creando Usuario Administrador")
 
     with current_app.app_context():
-        usuario = User(user=user, password=proteger_passwd(passwd))
+        usuario = User(
+            user=user,
+            password=proteger_passwd(
+                passwd,
+            ),
+            active=True,
+            classification="system",
+        )
         database.session.add(usuario)
         database.session.commit()
         asigna_rol_a_usuario(usuario=user, rol="admin")
