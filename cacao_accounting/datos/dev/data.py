@@ -40,81 +40,33 @@ from cacao_accounting.database import (
 
 
 BASE_USUARIOS = [
-    {
-        "user": "admin",
-        "e_mail": "a@dm.com",
-        "password": _pg("admin"),
-    },
-    {
-        "user": "audit",
-        "e_mail": "au@dm.com",
-        "password": _pg("audit"),
-    },
-    {
-        "user": "analist",
-        "e_mail": "an@dm.com",
-        "password": _pg("analist"),
-    },
-    {
-        "user": "conta",
-        "e_mail": "con@dm.com",
-        "password": _pg("conta"),
-    },
-    {
-        "user": "contaj",
-        "e_mail": "conj@dm.com",
-        "password": _pg("contaj"),
-    },
-    {
-        "user": "compras",
-        "e_mail": "compras@dm.com",
-        "password": _pg("compras"),
-    },
+    {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": False, "classification": "system"},
+    {"user": "audit", "e_mail": "au@dm.com", "password": _pg("audit"), "active": False, "classification": "system"},
+    {"user": "analist", "e_mail": "an@dm.com", "password": _pg("analist"), "active": False, "classification": "system"},
+    {"user": "conta", "e_mail": "con@dm.com", "password": _pg("conta"), "active": False, "classification": "system"},
+    {"user": "contaj", "e_mail": "conj@dm.com", "password": _pg("contaj"), "active": False, "classification": "system"},
+    {"user": "compras", "e_mail": "compras@dm.com", "password": _pg("compras"), "active": False, "classification": "system"},
     {
         "user": "comprasj",
         "e_mail": "comprasj@dm.com",
         "password": _pg("comprasj"),
+        "active": False,
+        "classification": "system",
     },
-    {
-        "user": "ventas",
-        "e_mail": "ventas@dm.com",
-        "password": _pg("ventas"),
-    },
-    {
-        "user": "ventasj",
-        "e_mail": "ventasj@dm.com",
-        "password": _pg("ventasj"),
-    },
-    {
-        "user": "inventario",
-        "e_mail": "in@dm.com",
-        "password": _pg("inventario"),
-    },
+    {"user": "ventas", "e_mail": "ventas@dm.com", "password": _pg("ventas"), "active": False, "classification": "system"},
+    {"user": "ventasj", "e_mail": "ventasj@dm.com", "password": _pg("ventasj"), "active": False, "classification": "system"},
+    {"user": "inventario", "e_mail": "in@dm.com", "password": _pg("inventario"), "active": False, "classification": "system"},
     {
         "user": "inventarioj",
         "e_mail": "inj@dm.com",
         "password": _pg("inventarioj"),
+        "active": False,
+        "classification": "system",
     },
-    {
-        "user": "tesoreria",
-        "e_mail": "t@dm.com",
-        "password": _pg("tesoreria"),
-    },
-    {
-        "user": "tesoreriaj",
-        "e_mail": "tj@dm.com",
-        "password": _pg("tesoreriaj"),
-    },
-    {
-        "user": "pasante",
-        "e_mail": "p@dm.com",
-        "password": _pg("pasante"),
-    },
-    {
-        "user": "usuario",
-        "e_mail": "u@dm.com",
-        "password": _pg("usuario"),
-    },
+    {"user": "tesoreria", "e_mail": "t@dm.com", "password": _pg("tesoreria"), "active": False, "classification": "system"},
+    {"user": "tesoreriaj", "e_mail": "tj@dm.com", "password": _pg("tesoreriaj"), "active": False, "classification": "system"},
+    {"user": "pasante", "e_mail": "p@dm.com", "password": _pg("pasante"), "active": False, "classification": "system"},
+    {"user": "usuario", "e_mail": "u@dm.com", "password": _pg("usuario"), "active": False, "classification": "system"},
 ]
 
 USUARIO_ROLES = [

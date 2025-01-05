@@ -78,11 +78,15 @@ def validar_acceso(usuario, clave) -> bool:
     if consulta:
         registro = consulta[0]
 
-        try:
-            ph.verify(registro.password, acceso)
-            return True
+        if registro.active:
 
-        except VerifyMismatchError:
+            try:
+                ph.verify(registro.password, acceso)
+                return True
+
+            except VerifyMismatchError:
+                return False
+        else:
             return False
 
     else:
