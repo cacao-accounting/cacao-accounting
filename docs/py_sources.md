@@ -6,7 +6,7 @@ you can install Cacao Accounting from sources following the next steps:
 !!! success
 
     In order to successfully install Cacao Accounting from sources you need this tools available
-    in your system: [Python :material-language-python:](https://www.python.org/), [git :material-git:](https://git-scm.com/)
+    in your system: [Python :material-language-python:](https://www.python.org/)(>=3.9), [git :material-git:](https://git-scm.com/)
     and [npm :fontawesome-brands-npm:](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm).
 
 !!! tip
@@ -14,7 +14,7 @@ you can install Cacao Accounting from sources following the next steps:
     It is recommended to install Cacao Accounting in the `/opt` directory of your Linux system, this is the
     directory recommend by the [Linux FHS](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html) so
     you main Cacao Accounting installation directoty will be `/opt/cacao-accounting` and the `cacaoctl` tool
-    will be available in `/opt/cacao-accounting/venv/bin/cacaoctl`, this path will be used latter in this 
+    will be available in `/opt/cacao-accounting/venv/bin/cacaoctl`, this path will be used latter in this
     guide.
 
 ## Clone the git repository:
@@ -30,7 +30,7 @@ cd cacao-accounting
 ## Create a Python Virtual Enviroment:
 
 ```bash
-python3 -m venv venv 
+python3 -m venv venv
 source venv/bin/activate
 ```
 
