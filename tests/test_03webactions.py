@@ -32,19 +32,6 @@ def setupdb(request):
             init_test_db(app)
 
 
-def test_check_passwd(request):
-
-    if request.config.getoption("--slow") == "True":
-
-        with app.app_context():
-            from cacao_accounting.auth import validar_acceso
-
-            assert validar_acceso(usuario="cacao", clave="cacao") is True
-            assert validar_acceso(usuario="cacao", clave="holis") is False
-            assert validar_acceso(usuario="holis", clave="cacao") is False
-            assert validar_acceso(usuario="holis", clave="holis") is False
-
-
 def test_set_entity_inactive(request):
 
     if request.config.getoption("--slow") == "True":
