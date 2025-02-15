@@ -49,6 +49,10 @@ jobs:
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao2;"
           sudo -u postgres psql -c "CREATE DATABASE cacao2;"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
+          sudo -u postgres psql -c "ALTER DATABASE cacao2 OWNER TO cacao2;"
+          sudo -u postgres psql -c "ALTER ROLE cacao2 CREATEDB;"
+          sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao2;"
+          sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao2;"
           SECRET_KEY=ASD123klja+AddS CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
       - name: Test with Postgresql + pg8000
         env:
@@ -59,4 +63,8 @@ jobs:
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao;"
           sudo -u postgres psql -c "CREATE DATABASE cacao;"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
+          sudo -u postgres psql -c "ALTER DATABASE cacao OWNER TO cacao;"
+          sudo -u postgres psql -c "ALTER ROLE cacao CREATEDB;"
+          sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao;"
+          sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao;"
           SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
