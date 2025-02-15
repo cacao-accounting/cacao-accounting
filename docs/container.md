@@ -2,8 +2,7 @@
 
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 
-A OCI image :simple-docker: is available to execute Cacao Accounting in containers based deployments, the OCI image
-is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) :simple-redhat:.
+A [OCI image](https://github.com/opencontainers/image-spec) :simple-docker: is available is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) :simple-redhat: for executing Cacao Accounting in containers based deployments.
 
 !!! note
 
@@ -15,44 +14,48 @@ is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) 
     This guide uses `podman` and `cockpit` as reference, but you can use any tool you prefer to run
     the Cacao Accounting OCI image like [Docker CE](https://docs.docker.com/engine/install/).
 
+!!! info
+
+    There is a [Desktop Version](https://github.com/cacao-accounting/cacao-accounting-desktop) :desktop: of Cacao Accounting available.
+
 ## Install the `podman` tool.
 
-`Podman` :simple-podman: is a container administration tool that organice groups of containerized
-services in `pods`. Install podman in your server following these instructions:
+[`Podman`](https://podman.io/) :simple-podman: is a powerful and versatile container engine that provides a robust alternative to Docker. [`Cockpit`](https://cockpit-project.org/) is a server management tool that is available as a Linux plugin. It allows users to manage Linux systems using a web-based graphical interface and dashboard.
 
-=== ":simple-debian: Ubuntu / Debian and derivates"
+With `podman` and `cockpit` you can create `pods` to group many containers in a single unit.
+
+### Install the podman tool.
+
+=== ":simple-debian: Debian based operative systems."
 
     ``` bash
     sudo apt install -y podman
 
     ```
 
-=== ":simple-fedora: Fedora, Rocky Linux, Alma Linux, RHEL."
+=== ":simple-fedora: Fedora based operative systems."
 
     ```bash
     sudo dnf -y install podman
     ```
 
-### Cockpit Manager
+### Install the cockpit manager plugin.
 
-[Cockpit](https://cockpit-project.org/) is a web based Linux administration tool that can manage containers and pod with a web interface,
-you can perform another administrative tasks :
-
-=== ":simple-debian: Ubuntu / Debian and derivates"
+=== ":simple-debian: Debian based operative systems."
 
     ``` bash
     sudo apt -y install cockpit-podman cockpit
     sudo systemctl enable --now cockpit.socket
     ```
 
-=== ":simple-fedora: Fedora, Rocky Linux, Alma Linux, RHEL."
+=== ":simple-fedora: Fedora based operative systems."
 
     ```bash
     sudo dnf -y install cockpit-podman cockpit
     sudo systemctl enable --now cockpit.socket
     ```
 
-The next screenshot shows a Fedora Server host running multiple Cacao Accounting instances running in pods:
+The next screenshot shows a Fedora Server running multiple Cacao Accounting instances running in pods:
 
 ![OCI Image](https://bmogroup.solutions/imgs/Podman-containers-wmoreno-fedora.png)
 
@@ -70,7 +73,7 @@ To execute de Cacao Accounting OCI image you need to setup the following service
     This guide uses `caddy` because its simple configuration but Nginx is a another well documented web
     server option.
 
-## Create a :simple-caddy: [Caddy Server](https://caddyserver.com/) configuration file.
+## Create a [Caddy](https://caddyserver.com/) :simple-caddy: web server configuration file.
 
 Similar to working with `podman-compose` it is recommended to create a directory to store the configuration files needed to
 execute the services that a Cacao Accounting instance requires:
@@ -91,16 +94,16 @@ Copy this base configuration to the Caddyfile:
 
 !!! note
 
-    Additional details to use Caddy as a proxy server is available in the [Caddy website](https://caddyserver.com/docs/quick-starts/reverse-proxy).
+    Additional details to use the Caddy web server as a proxy server is available in the [Caddy website](https://caddyserver.com/docs/quick-starts/reverse-proxy).
 
 ## Create a `pod` to group Cacao Accounting services.
 
 !!! note
 
-    You can create pod and services with the Cockpit Web UI interface, but for the brevety of this guide we will create the inicial services
-    from the command line, once created the services can we handled with Cockpit.
+    You can create pod and services from the Cockpit Web interface, but for the brevety of this guide we will create the inicial services
+    from the command line, once created the services you can use Cockpit .
 
-Those are the commands required to setup a Cacao Accounting deploymen (chosee your prefered database service):
+Those are the commands required to setup a Cacao Accounting deployment (chosee your prefered database service):
 
 !!! tip
 
@@ -192,7 +195,7 @@ Those are the commands required to setup a Cacao Accounting deploymen (chosee yo
     $ bash psql.sh
     ```
 
-### Allow :simple-caddy: `Caddy Server` to read the `Caddyfile`.
+### Allow the `Caddy` :simple-caddy: web Server to read the `Caddyfile`.
 
 In Fedora, Rocky Linux, Alma Linux with active SELinux the `:z` option is required to grant the Caddy service read
 access to the Caddyfile, other operative system like Debian or Ubuntu try `:ro` to grant read access to the process running

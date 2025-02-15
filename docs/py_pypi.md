@@ -17,7 +17,7 @@ You can install Cacao Accounting in any Linux OS that supports:
 
 - A compatible database server: PostgreSQL or MySQL.
 - A web server like nginx
-- A supported version of Python (>=3.8)
+- A supported version of Python (>=3.9)
 
 !!! success
 
@@ -29,7 +29,7 @@ You can install Cacao Accounting in any Linux OS that supports:
     It is recommended to install Cacao Accounting in the `/opt` directory of your Linux system, this is the
     directory recommend by the [Linux FHS](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html) so
     you main Cacao Accounting installation directoty will be `/opt/cacao-accounting` and the `cacaoctl` tool
-    will be available in `/opt/cacao-accounting/venv/bin/cacaoctl`, this path will be used latter in this 
+    will be available in `/opt/cacao-accounting/venv/bin/cacaoctl`, this path will be used latter in this
     guide.
 
 ## Create a Python Virtual Enviroment:
@@ -38,7 +38,7 @@ You can install Cacao Accounting in any Linux OS that supports:
 cd /pot
 mkdir cacao-accounting
 cd cacao-accounting
-python3 -m venv venv 
+python3 -m venv venv
 sudo source venv/bin/activate
 ```
 
@@ -60,5 +60,5 @@ cacaoctl version
 0.0.0.dev20241209
 ```
 
-Once Cacao Accounting is installed and the `cacaoctl` tool is available in `/opt/cacao-accounting/venv/bin/cacaoctl` you can continue to setup your database server, you can choose 
+Once Cacao Accounting is installed and the `cacaoctl` tool is available in `/opt/cacao-accounting/venv/bin/cacaoctl` you can continue to setup your database server, you can choose
 [PostgreSQL](py_database_psql.md) or [MySQL](py_database_mysql.md).

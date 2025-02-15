@@ -32,17 +32,32 @@ def setupdb(request):
             init_test_db(app)
 
 
-def test_check_passwd(request):
+def test_login(request):
+    from cacao_accounting.logs import log
 
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from cacao_accounting.auth import validar_acceso
+            from flask_login import current_user
 
-            assert validar_acceso(usuario="cacao", clave="cacao") is True
-            assert validar_acceso(usuario="cacao", clave="holis") is False
-            assert validar_acceso(usuario="holis", clave="cacao") is False
-            assert validar_acceso(usuario="holis", clave="holis") is False
+            with app.test_client() as client:
+                # Keep the session alive until the with clausule closes
+
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+                client.get("/logout")
+
+                client.post("/login", data={"usuario": "cacao", "acceso": "hola"})
+                assert not current_user.is_authenticated
+                client.get("/logout")
+
+                client.post("/login", data={"usuario": "hola", "acceso": "cacao"})
+                assert not current_user.is_authenticated
+                client.get("/logout")
+
+                client.post("/login", data={"usuario": "hola", "acceso": "hola"})
+                assert not current_user.is_authenticated
+                client.get("/logout")
 
 
 def test_set_entity_inactive(request):

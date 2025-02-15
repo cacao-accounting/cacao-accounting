@@ -68,29 +68,71 @@ def proteger_passwd(clave):
     return clave_encriptada.encode()
 
 
+def validar_usuario_existe(usuario):
+
+    consulta = database.session.execute(database.select(User).filter_by(user=usuario)).first()
+
+    if consulta:
+
+        registro = consulta[0]
+
+        if registro.active:
+
+            return registro
+
+        else:
+            flash("Usuario se encuentra deshabilitado.")
+            return False
+
+    else:
+        flash("Usurio no existe en la base de datos.")
+        return False
+
+
 def validar_acceso(usuario, clave) -> bool:
     """Verifica el inicio de sesión del usuario."""
     from argon2.exceptions import VerifyMismatchError
 
     acceso = clave
-    consulta = database.session.execute(database.select(User).filter_by(user=usuario)).first()
+    registro = validar_usuario_existe(usuario)
 
-    if consulta:
-        registro = consulta[0]
+    if registro:
 
-        if registro.active:
+        try:
+            ph.verify(registro.password, acceso)
+            return True
 
-            try:
-                ph.verify(registro.password, acceso)
-                return True
-
-            except VerifyMismatchError:
-                return False
-        else:
+        except VerifyMismatchError:
+            flash("Contraseña incorrecta.")
             return False
 
     else:
         return False
+
+
+def validar_acceso_modo_escritorio():
+    from cacao_accounting.config import MODO_ESCRITORIO
+
+    if MODO_ESCRITORIO:
+        return True
+    else:
+        return False
+
+
+def verifica_setup_completo():
+    from cacao_accounting.database import database, Config
+
+    setup_wizard = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
+
+    if setup_wizard:
+        setup_wizard = setup_wizard[0]
+
+        if setup_wizard.value == "False":
+            return "/setup"
+        else:
+            return "/app"
+    else:
+        return "/app"
 
 
 @login.route("/login", methods=["GET", "POST"])
@@ -98,56 +140,48 @@ def inicio_sesion():  # pragma: no cover
     """Inicio de sesión del usuario."""
     from flask_login import current_user
 
-    from cacao_accounting.auth.forms import LoginForm
-    from cacao_accounting.database import database, Config
+    with current_app.app_context():
 
-    form = LoginForm()
-    if current_user.is_authenticated:
-        return redirect("/app")
-    else:
-        if form.validate_on_submit():
-            if validar_acceso(form.usuario.data, form.acceso.data):
-                query = database.session.execute(database.select(User).filter_by(user=form.usuario.data)).first()
-                identidad = query[0]
+        from cacao_accounting.auth.forms import LoginForm
 
-                from cacao_accounting.config import MODO_ESCRITORIO
+        form = LoginForm()
+        if current_user.is_authenticated:
+            flash("Ya ha iniciado sesión en el sistema.")
+            return redirect("/app")
+        else:
+            if form.validate_on_submit():
+                if validar_acceso(form.usuario.data, form.acceso.data):
 
-                if MODO_ESCRITORIO and identidad.classification != "admin":
-                    flash("Solo un usuario administrador puede iniciar sesion.")
-                    return INICIO_SESION
+                    identidad = validar_usuario_existe(form.usuario.data)
+
+                    if validar_acceso_modo_escritorio():
+                        if identidad.classification != "admin":
+                            flash("Solo un usuario administrador puede iniciar sesion.")
+                            return INICIO_SESION
+
+                    else:
+                        # Api rest auth token.
+                        try:
+                            # token should expire after 24 hrs
+                            identidad.token = encode(
+                                {"user_id": identidad.id},
+                                current_app.config["SECRET_KEY"],
+                                algorithm="HS256",
+                            )
+                            assert identidad.token is not None  # nosec
+
+                        except Exception as e:
+                            assert e is not None  # nosec
+                            log.warning("No se pudo generar auth token.")
+
+                        login_user(identidad)
+
+                        return redirect(verifica_setup_completo())
 
                 else:
-                    # Api rest auth token.
-                    try:
-                        # token should expire after 24 hrs
-                        identidad.token = encode(
-                            {"user_id": identidad.id},
-                            current_app.config["SECRET_KEY"],
-                            algorithm="HS256",
-                        )
-                        assert identidad.token is not None  # nosec
-
-                    except Exception as e:
-                        assert e is not None  # nosec
-                        log.warning("No se pudo generar auth token.")
-
-                    login_user(identidad)
-
-                    setup_wizard = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
-
-                    if setup_wizard:
-                        setup_wizard = setup_wizard[0]
-
-                        if setup_wizard.value == "False":
-                            return redirect("/setup")
-                        else:
-                            return redirect("/app")
-                    else:
-                        return redirect("/app")
-            else:
-                flash("Inicio de Sesion Incorrecto.")
-                return INICIO_SESION
-        return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
+                    flash("Inicio de Sesion Incorrecto.")
+                    return INICIO_SESION
+            return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
 
 
 @login.route("/exit")
