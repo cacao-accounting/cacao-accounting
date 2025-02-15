@@ -10,7 +10,6 @@ theme:
   icon:
     repo: fontawesome/brands/git-alt
   features:
-    - navigation.instant
     - navigation.tabs
     - navigation.sections
     - content.tabs.link
@@ -24,10 +23,20 @@ nav:
   - Home: index.md
   - Setup:
       - Introduction: setup.md
-      - OCI Image: container.md
-      - Python Package: pypi.md
-      - Sources: sources.md
-      - Setup: set_up.md
+      - Containers Based Setup:
+        - OCI Image: container.md
+      - Python Package Based Setup:
+        - Install from Pypi: py_pypi.md
+        - Install from Sources: py_sources.md
+        - Setup a Database:
+            - Setup MySQL: py_database_mysql.md
+            - Setup PostgreSQL: py_database_psql.md
+        - Setup Systemd: py_systemd.md
+        - Setup a Web Server: py_server.md
+        - Setup a optional https sertificate: py_https.md
+        - Setup a optional Redis Server: py_redis.md
+        - Basic Operating System Hardening: py_os.md
+      - Configuration: set_up.md
       - Database:
           - Database Setup: database.md
   - Contributors:
@@ -37,9 +46,25 @@ nav:
   - About:
       - About: about.md
       - FAQ: faq.md
+      - Dependecies: dependencies.md
+      - Changelog: changelog.md
+  - Api: api.md
 
 plugins:
   - blog
+  - open-in-new-tab
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: es
+          name: Español
+          build: true
+  - mkdocstrings
 
 extra:
   social:

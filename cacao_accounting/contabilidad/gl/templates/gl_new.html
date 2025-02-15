@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<script src="{{url_for("contabilidad.gl.static", filename="gl.js")}}"></script>
+<script src="{{url_for("contabilidad.gl.static", filename="gl.js" )}}"></script>
 
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb lh-sm">
@@ -50,10 +50,15 @@
                 <select class="form-control" name="selectSERIE" id="selectSERIE" required>
                     <option value="">Seleccione una serie..</option>
                 </select>
+                <br>
+                <label for="selectSERIE" class="form-book">Libro de Contabilidad:</label>
+                <select class="form-control" name="selectBOOK" id="selectBOOK" required>
+                    <option value="">Seleccione un libro de contabilidad..</option>
+                </select>
             </div>
             <div class="col">
                 <label for="selectDATE" class="form-label">Fecha:</label>
-                <input class="form-control" value="{{now().strftime("%Y-%m-%d")}}" type="date" id="selectDATE"
+                <input class="form-control" value="{{now().strftime(" %Y-%m-%d")}}" type="date" id="selectDATE"
                     name="selectDATE" {%if inicio_periodo%} min="{{inicio_periodo}}" {%endif%} />
                 <br>
                 <label for="insertREFERENCE" class="form-label">Referencia:</label>

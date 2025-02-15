@@ -15,6 +15,6 @@ you need:
 
 You can set up a Cacao Instance using:
 
-1. The :simple-docker: [OCI Image](container.md).
-2. From the :material-language-python: [Python Package Index](pypi.md).
-3. From :simple-git: [sources](sources.md).
+1. From the :simple-docker: [OCI Image](container.md).
+2. From the :material-language-python: [Python Package Index](py_pypi.md).
+3. From :simple-git: [sources](py_sources.md).

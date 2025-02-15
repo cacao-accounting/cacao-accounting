@@ -129,6 +129,13 @@ class BaseTabla:
 class BaseTransaccion(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
+    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    book = database.Column(database.String(10), database.ForeignKey("book.code"))
+    serie = database.Column(database.String(10), database.ForeignKey("serie.serie"))
+    user_id = database.Column(database.String(75))
+    date = database.Column(database.Date())
+    reference = database.Column(database.String(50))
+    memo = database.Column(database.String(100))
     canceled = database.Column(
         database.DateTime,
         nullable=True,
@@ -198,6 +205,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     last_name2 = database.Column(database.String(80))
     e_mail = database.Column(database.String(150), unique=True, nullable=True)
     password = database.Column(database.LargeBinary(), nullable=False)
+    # Classification: system, employe, customer, supplier
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
     # Información Complementaria
@@ -312,6 +320,7 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    default = database.Column(database.Boolean())
 
 
 class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -426,8 +435,8 @@ class GLBase:
     # Fecha de registro
     date = database.Column(database.Date)
     # Referencia Cruzada
-    type_ = database.Column(database.String(50))
-    id_ = database.Column(database.String(75))
+    transaction = database.Column(database.String(50))
+    transaction_id = database.Column(database.String(75))
     # Orden de los registros
     order = database.Column(database.Integer(), nullable=True)
     # Valor moneda Predeterminada
@@ -442,6 +451,8 @@ class GLBase:
     reference = database.Column(database.String(50))
     # Detalle
     line_meno = database.Column(database.String(50))
+    internal_reference = database.Column(database.String(50))
+    internal_reference_id = database.Column(database.String(75))
     reference1 = database.Column(database.String(50))
     reference2 = database.Column(database.String(50))
     # Terceras partes

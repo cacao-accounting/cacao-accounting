@@ -15,6 +15,11 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/ping",
+        text=[
+        ],
+    ),
+    Route(
         url="/development",
         text=["Información para desarrolladores.".encode("utf-8")],
     ),
@@ -291,6 +296,12 @@ static_rutes = [
         url="/accounting/gl/list",
         text=[
             "Listado de Comprobantes Contables.".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/accounting/gl/new",
+        text=[
+            "Crear un Nuevo Comprobante de Diario.".encode("utf-8"),
         ],
     ),
 ]

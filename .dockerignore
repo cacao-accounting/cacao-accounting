@@ -38,3 +38,6 @@ run_test.sh
 .pytest_cache
 .ruff_cache
 .venv
+.vscode
+*replit*
+docs.txt
