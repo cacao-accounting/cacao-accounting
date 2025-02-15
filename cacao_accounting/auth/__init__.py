@@ -95,7 +95,7 @@ def inicio_sesion():  # pragma: no cover
     from flask_login import current_user
 
     from cacao_accounting.auth.forms import LoginForm
-    from cacao_accounting.database import database, Config
+    from cacao_accounting.database import database, CacaoConfig as Config
 
     form = LoginForm()
     if current_user.is_authenticated:

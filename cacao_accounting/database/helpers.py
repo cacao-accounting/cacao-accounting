@@ -139,7 +139,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
                 DB_ESQUEMA = False
 
         if not with_examples:
-            from cacao_accounting.database import Config
+            from cacao_accounting.database import CacaoConfig as Config
 
             config = Config(
                 key="SETUP_COMPLETE",
