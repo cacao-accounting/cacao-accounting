@@ -31,30 +31,6 @@ jobs:
           CACAO_TEST: "True"
         run: |
           cacaoctl setupdb
-      - name: Test with Postgresql + pg8000
-        env:
-          CACAO_PRINT_DATABASE_URI: "True"
-          CACAO_TEST: "True"
-        run: |
-          # Enable postgresql serive
-          sudo systemctl start postgresql.service
-          # Run test on postgresql with pg8000.
-          sudo -u postgres psql -c "CREATE DATABASE cacao;"
-          sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
-          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
-          sudo -u postgres psql -c "GRANT ALL ON SCHEMA public TO cacao;"
-          SECRET_KEY=ASD123kljaAddS. CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
-      - name: Test with Postgresql + psycopg2
-        env:
-          CACAO_PRINT_DATABASE_URI: "True"
-          CACAO_TEST: "True"
-        run: |
-          # Run test on postgresql with psycopg2:
-          sudo -u postgres psql -c "CREATE DATABASE cacao2;"
-          sudo -u postgres psql -c "CREATE USER cacao2 WITH PASSWORD 'cacao2';"
-          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
-          sudo -u postgres psql -c "GRANT ALL ON SCHEMA public TO cacao2;"
-          SECRET_KEY=ASD123kljaAddS CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
       - name: Test with MySQL + pymysql
         env:
           CACAO_PRINT_DATABASE_URI: "True"
@@ -63,3 +39,24 @@ jobs:
           sudo systemctl start mysql.service
           mysql --user=root --password=root < tests/setup_mysql.sql
           SECRET_KEY=ASD123kljaAddS CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl setupdb
+      - name: Test with Postgresql + pg8000
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao;"
+          sudo -u postgres psql -c "CREATE DATABASE cacao;"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao TO cacao;"
+          SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
+      - name: Test with Postgresql + psycopg2
+        env:
+          CACAO_PRINT_DATABASE_URI: "True"
+          CACAO_TEST: "True"
+        run: |
+          sudo -u postgres psql -c "CREATE USER cacao2 WITH PASSWORD 'cacao2';"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao2;"
+          sudo -u postgres psql -c "CREATE DATABASE cacao2;"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
+          SECRET_KEY=ASD123klja+AddS CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
