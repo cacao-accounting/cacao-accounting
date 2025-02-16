@@ -41,3 +41,12 @@ run_test.sh
 .vscode
 *replit*
 docs.txt
+
+LICENSE
+README.md
+SECURITY.md
+pyproject.toml
+requirements.txt
+setup.cfg
+wsgi.py
+
