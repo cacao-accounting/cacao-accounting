@@ -42,6 +42,7 @@ nav:
   - Contributors:
       - Contributing: CONTRIBUTING.md
       - Code of Conduct: CODE_OF_CONDUCT.md
+      - Changelog: changelog.md
   - About:
       - About: about.md
       - FAQ: faq.md

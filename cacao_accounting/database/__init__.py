@@ -86,7 +86,7 @@ def obtiene_texto_unico_cuid2() -> str:
 # <---------------------------------------------------------------------------------------------> #
 # Key / Value config.
 # <---------------------------------------------------------------------------------------------> #
-class Config(database.Model):  # type: ignore[name-defined]
+class CacaoConfig(database.Model):  # type: ignore[name-defined]
     """Key / Value config."""
 
     id = database.Column(

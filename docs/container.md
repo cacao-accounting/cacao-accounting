@@ -8,6 +8,23 @@ is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) 
 !!! note
 
     If you do not need a container based deployment you can install Cacao Accounting as a Python package
+    from the package hosted at [pypi](pypi.md) :material-language-python:.
+
+!!! info
+
+    This guide uses `podman` and `cockpit` but you can use any tool you prefer to run the Cacao Accounting
+    OCI image.
+
+## Install the `podman` tool.
+
+`Podman` :simple-podman: is a container administration tool that organice groups of containerized
+services in `pods`. Install podman in your server following these instructions:
+
+=======
+
+!!! note
+
+    If you do not need a container based deployment you can install Cacao Accounting as a Python package
     from the package hosted at [pypi](py_pypi.md) :material-language-python:.
 
 !!! info
@@ -19,6 +36,7 @@ is hosted in [Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting) 
 
 `Podman` :simple-podman: is a container administration tool that organice groups of containerized
 services in `pods`. Install podman in your server following these instructions:
+
 
 === ":simple-debian: Ubuntu / Debian and derivates"
 
