@@ -1,7 +1,7 @@
 # Setup overview
 
-Cacao Accounting is a Python :material-language-python: based project with the [Flask](flask.palletsprojects.com) :simple-flask:
-microframework as base, Flask uses the [wsgi protocol](https://peps.python.org/pep-3333/), to setup a Cacao Accounting instance
+Cacao Accounting is a Python :material-language-python: based project with the [flask](flask.palletsprojects.com) :simple-flask:
+microframework as base, flask uses the [wsgi protocol](https://peps.python.org/pep-3333/), to setup a Cacao Accounting instance
 you need:
 
 1. A WSGI application server, [waitress](https://docs.pylonsproject.org/projects/waitress/en/latest/) is included by default.
