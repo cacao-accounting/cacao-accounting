@@ -26,7 +26,6 @@ Wait to the free render instance to wake up.
 
 Nota: 
 * Este es un proyecto en etapa temprana de desarrollo no apta para uso en producción.
-* Hemos definido una serie de [metas y objetivos](https://cacao-accounting.github.io/cacao-accounting/ROAD_MAP/) para el proyecto.
 
 Este proyecto surge de la necesidad observada en Nicaragua de contar con una solucion de software para que micro, pequeñas y medianas empresas (Pymes) cuenten con una herramienta para el procesamiento contable de sus actividades. 
 Dado el costo de soluciones de software ya existentes muchas Pymes obtan por usar software pirata que casi de forma
