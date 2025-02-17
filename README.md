@@ -12,7 +12,7 @@
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
 [![Gitter](https://badges.gitter.im/cacao-accounting/community.svg)](https://gitter.im/cacao-accounting/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General. 
+Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General.
 
 ```
 Live demo at:
