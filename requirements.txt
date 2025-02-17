@@ -1,4 +1,3 @@
-# Mantener en orden alfabetico
 alembic
 argon2-cffi
 argon2-cffi-bindings
