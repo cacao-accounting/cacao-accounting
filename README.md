@@ -10,6 +10,9 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cacao-accounting?logo=Python&color=gree&link=https%3A%2F%2Fpypi.org%2Fproject%2Fstaging-cacao-accounting%2F)
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/cacao-accounting?logo=Python)
 [![Docker Repository on Quay](https://quay.io/repository/cacaoaccounting/cacaoaccounting/status "Docker Repository on Quay")](https://quay.io/repository/cacaoaccounting/cacaoaccounting)
+[![Code style: black](https://img.shields.io/badge/Python%20code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Code style: Prettier](https://img.shields.io/badge/HTML%20code%20style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Gitter](https://badges.gitter.im/cacao-accounting/community.svg)](https://gitter.im/cacao-accounting/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Solución contable para la gestión de Cuentas por Cobrar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General.
