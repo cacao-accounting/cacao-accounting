@@ -107,7 +107,13 @@ def usuarios_creados():
         else:
             return False
 
-    except OperationalError():
+    except OperationalError:
+        return False
+
+    except TypeError:
+        return False
+
+    except InterfaceError:
         return False
 
 
