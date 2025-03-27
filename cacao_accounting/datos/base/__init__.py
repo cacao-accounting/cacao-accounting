@@ -129,4 +129,4 @@ def base_data(user, passwd, carga_rapida):
     cargar_permisos_predeterminados()
     crea_usuario_admin(user, passwd)
     registra_monedas(carga_rapida=carga_rapida)
-    log.debug("Batos base cargados en la base de datos.")
+    log.debug("Datos base cargados en la base de datos.")
