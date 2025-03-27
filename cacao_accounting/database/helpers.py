@@ -23,7 +23,7 @@ from typing import Union
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask
-from sqlalchemy.exc import OperationalError, InterfaceError
+from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -64,6 +64,10 @@ def verifica_coneccion_db(app):  # pragma: no cover
                 log.warning("No se pudo establecer conexion a la base de datos.")
                 log.info("Reintentando conectar a la base de datos.")
             except InterfaceError:
+                DB_CONN = False
+                log.warning("No se pudo establecer conexion a la base de datos.")
+                log.info("Reintentando conectar a la base de datos.")
+            except ProgrammingError:
                 DB_CONN = False
                 log.warning("No se pudo establecer conexion a la base de datos.")
                 log.info("Reintentando conectar a la base de datos.")
@@ -114,6 +118,9 @@ def usuarios_creados():
         return False
 
     except InterfaceError:
+        return False
+
+    except ProgrammingError:
         return False
 
 
