@@ -51,6 +51,8 @@ if verifica_coneccion_db(app=app):
                 db = False
         else:
             db = True
+else:
+    db = False
 
 
 if not db:
