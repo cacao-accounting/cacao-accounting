@@ -52,7 +52,13 @@ if verifica_coneccion_db(app=app):
         else:
             db = True
 else:
-    db = False
+    with app.app_context():
+        try:
+            inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
+            db = True
+        except OperationalError:
+            logger.warning("Hubo un error al inicializar la base de datos.")
+            db = False
 
 
 if not db:
