@@ -1,9 +1,9 @@
 podman pod create --replace --name cacao-mysql -p 9080:80 -p 9443:443 -p 9443:443/udp
 
-podman volume create --ignore cacao-mysql-backup
+podman volume create --ignore cacao-mysql-dbbackup
 
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-db \
-    --volume cacao-mysql-backup:/var/lib/mysql  \
+    --volume cacao-mysql-dbbackup:/var/lib/mysql  \
     -e MYSQL_ROOT_PASSWORD=cacaodb \
     -e MYSQL_DATABASE=cacaodb \
     -e MYSQL_USER=cacaodb \
@@ -12,8 +12,8 @@ podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-db \
 
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-server \
     -v ./Caddyfile:/etc/caddy/Caddyfile:z \
-    -v caddy_data:/data \
-    -v caddy_config:/config \
+    -v caddy_mysql_data:/data \
+    -v caddy_mysql_config:/config \
     -d docker.io/library/caddy:alpine
 
 podman run --pod cacao-mysql --rm --replace --init --name cacao-mysql-app \

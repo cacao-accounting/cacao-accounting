@@ -1,9 +1,9 @@
 podman pod create --replace --name cacao-psql -p 7080:80 -p 9444:443 -p 9444:443/udp
 
-podman volume create --ignore cacao-postgresql-backup
+podman volume create --ignore cacao-postgresql-dbbackup
 
 podman run --pod cacao-psql --rm --replace --init --name cacao-psql-db \
-    --volume cacao-postgresql-backup:/var/lib/postgresql/data \
+    --volume cacao-postgresql-dbbackup:/var/lib/postgresql/data \
     -e POSTGRES_DB=cacaodb \
     -e POSTGRES_USER=cacaodb \
     -e POSTGRES_PASSWORD=cacaodb \
@@ -11,8 +11,8 @@ podman run --pod cacao-psql --rm --replace --init --name cacao-psql-db \
 
 podman run --pod cacao-psql --rm --replace --init --name cacao-psql-server \
     -v ./Caddyfile:/etc/caddy/Caddyfile:z \
-    -v caddy_pg_data:/data \
-    -v caddy_pg_config:/config \
+    -v caddy_postgresql_data:/data \
+    -v caddy_postgresql_config:/config \
     -d docker.io/library/caddy:alpine
 
 podman run --pod cacao-psql --rm --replace --init --name cacao-psql-app \
