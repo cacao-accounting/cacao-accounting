@@ -53,7 +53,7 @@ def verifica_coneccion_db(app):  # pragma: no cover
             try:
                 from cacao_accounting.database import User
 
-                QUERY = database.session.execute(database.select(User)).first()
+                QUERY = database.session.execute(database.select(User))
 
                 if QUERY:
                     DB_CONN = True
@@ -102,12 +102,12 @@ def usuarios_creados():
     try:
         CONSULTA = database.session.execute(database.select(User)).first()
 
-        if CONSULTA:
+        if CONSULTA is not None:
             return True
         else:
             return False
 
-    except:  # noqa: E722
+    except OperationalError():
         return False
 
 
