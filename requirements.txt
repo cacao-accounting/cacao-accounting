@@ -20,4 +20,5 @@ redis
 sqlalchemy
 teritorio
 waitress
+weasyprint
 wtforms
