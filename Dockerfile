@@ -17,8 +17,9 @@ RUN microdnf install -y --nodocs --best nodejs npm && cd /app/cacao_accounting/s
 
 COPY requirements.txt /app/requirements.txt
 RUN microdnf install -y --nodocs --best --refresh python3.12 python3.12-cryptography python3.12-pip python3.12-psycopg2 \
-    && /usr/bin/python3.12 --version \
+    && microdnf install -y --nodocs --best pango \
     && /usr/bin/python3.12 -m pip --no-cache-dir install -r /app/requirements.txt \
+    && /usr/bin/python3.12 -m pip --no-cache-dir install weasyprint \
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip \
     && microdnf clean all
 
