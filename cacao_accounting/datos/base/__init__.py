@@ -88,7 +88,7 @@ def crea_usuario_admin(user: str, passwd: str):
                 passwd,
             ),
             active=True,
-            classification="system",
+            classification="admin",
         )
         database.session.add(usuario)
         database.session.commit()
