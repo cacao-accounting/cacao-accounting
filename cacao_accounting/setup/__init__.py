@@ -33,6 +33,7 @@ from cacao_accounting.setup.service import (
 # Configuración inicial.
 # <---------------------------------------------------------------------------------------------> #
 setup_ = Blueprint("setup", __name__, template_folder="templates")
+SETUP_ROUTE = "setup.setup"
 
 
 @setup_.route("/", methods=["GET", "POST"])
@@ -48,7 +49,7 @@ def setup():
         if action == "back" and step > 1:
             step -= 1
             session["setup_step"] = step
-            return redirect(url_for("setup.setup"))
+            return redirect(url_for(SETUP_ROUTE))
 
         if step == 1:
             form = SetupLanguageForm()
@@ -56,7 +57,7 @@ def setup():
                 save_language(form.idioma.data)
                 step = 2
                 session["setup_step"] = step
-                return redirect(url_for("setup.setup"))
+                return redirect(url_for(SETUP_ROUTE))
             flash("Seleccione un idioma válido.", "danger")
         elif step == 2:
             form = SetupRegionalForm()
@@ -64,7 +65,7 @@ def setup():
                 save_regional_settings(form.pais.data, form.moneda.data)
                 step = 3
                 session["setup_step"] = step
-                return redirect(url_for("setup.setup"))
+                return redirect(url_for(SETUP_ROUTE))
             flash("Complete los datos regionales correctamente.", "danger")
         elif step == 3:
             form = SetupCompanyForm()
