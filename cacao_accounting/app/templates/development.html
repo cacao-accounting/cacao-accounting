@@ -28,6 +28,10 @@
 
       <h6 class="mt-3"><i class="bi bi-app me-1"></i>Aplicación</h6>
       <table class="ca-table">
+        <caption class="visually-hidden">Detalles de la aplicación</caption>
+        <thead>
+          <tr><th scope="col">Propiedad</th><th scope="col">Valor</th></tr>
+        </thead>
         <tbody>
           <tr><td><strong>Versión</strong></td><td>{{ info["app"]["version"] }}</td></tr>
           <tr><td><strong>Modo Escritorio</strong></td><td>{{ MODO_ESCRITORIO }}</td></tr>
@@ -38,6 +42,10 @@
 
       <h6 class="mt-3"><i class="bi bi-database me-1"></i>Base de Datos</h6>
       <table class="ca-table">
+        <caption class="visually-hidden">Detalles del motor de base de datos</caption>
+        <thead>
+          <tr><th scope="col">Propiedad</th><th scope="col">Valor</th></tr>
+        </thead>
         <tbody>
           <tr><td><strong>Motor</strong></td><td>{{ db }}</td></tr>
           <tr><td><strong>Versión</strong></td><td>{{ db_version }}</td></tr>
@@ -46,6 +54,10 @@
 
       <h6 class="mt-3"><i class="bi bi-cpu me-1"></i>Sistema</h6>
       <table class="ca-table">
+        <caption class="visually-hidden">Información del sistema operativo y versión de Python</caption>
+        <thead>
+          <tr><th scope="col">Propiedad</th><th scope="col">Valor</th></tr>
+        </thead>
         <tbody>
           <tr><td><strong>Sistema Operativo</strong></td><td>{{ os }}</td></tr>
           <tr><td><strong>Python</strong></td><td>{{ py_version }}</td></tr>
