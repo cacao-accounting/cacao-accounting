@@ -5,8 +5,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
-from collections import namedtuple
-from typing import Dict
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -33,9 +32,17 @@ database = SQLAlchemy()
 # < --------------------------------------------------------------------------------------------- >
 # Definición central de status web.
 # < --------------------------------------------------------------------------------------------- >
-StatusWeb = namedtuple("StatusWeb", ["color", "leyenda"])
 
-STATUS: Dict[str, StatusWeb] = {
+
+@dataclass(frozen=True)
+class StatusWeb:
+    """Representa el estado visual de un elemento en la interfaz web."""
+
+    color: str
+    leyenda: str
+
+
+STATUS: dict[str, StatusWeb] = {
     "open": StatusWeb(color="LimeGreen", leyenda="Abierto"),
     "active": StatusWeb(color="LightSeaGreen", leyenda="Activo"),
     "current": StatusWeb(color="DodgerBlue", leyenda="Actual"),

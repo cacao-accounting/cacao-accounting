@@ -36,19 +36,19 @@ def pagina_inicio():
 def bd_actual():  # pragma: no cover
     """Devuelve el motor de base de datos."""
     uri = str(current_app.config.get("SQLALCHEMY_DATABASE_URI"))
-    if uri.startswith("sqlite"):
-        db_engine = "Sqlite"
-    elif uri.startswith("postgresql"):
-        db_engine = "Postgresql"
-    elif uri.startswith("mysql"):
-        db_engine = "MySQL"
-    elif uri.startswith("mssql"):
-        db_engine = "MS SQL Server"
-    elif uri.startswith("mariadb"):
-        db_engine = "Mariadb"
-    else:
-        db_engine = None
-    return db_engine
+    match uri:
+        case _ if uri.startswith("sqlite"):
+            return "Sqlite"
+        case _ if uri.startswith("postgresql"):
+            return "Postgresql"
+        case _ if uri.startswith("mysql"):
+            return "MySQL"
+        case _ if uri.startswith("mssql"):
+            return "MS SQL Server"
+        case _ if uri.startswith("mariadb"):
+            return "Mariadb"
+        case _:
+            return None
 
 
 def dev_info():

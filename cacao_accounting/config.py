@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
-from os import environ, name, path
+from os import environ, name
 from pathlib import Path
 
 # ---------------------------------------------------------------------------------------
@@ -19,17 +19,17 @@ from cacao_accounting.logs import log
 
 # < --------------------------------------------------------------------------------------------- >
 # Directorios de la aplicacion
-DIRECTORIO_APP = path.abspath(path.dirname(__file__))
-DIRECTORIO_PRINCICIPAL = Path(DIRECTORIO_APP).parent.absolute()
-DIRECTORIO_PLANTILLAS = path.join(DIRECTORIO_APP, "templates")
-DIRECTORIO_ARCHIVOS = path.join(DIRECTORIO_APP, "static")
+DIRECTORIO_APP = Path(__file__).parent
+DIRECTORIO_PRINCIPAL = DIRECTORIO_APP.parent
+DIRECTORIO_PLANTILLAS = str(DIRECTORIO_APP / "templates")
+DIRECTORIO_ARCHIVOS = str(DIRECTORIO_APP / "static")
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
 if name == "nt":
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "\\cacaoaccounting.db"
+    SQLITE = f"sqlite:///{DIRECTORIO_PRINCIPAL}\\cacaoaccounting.db"
 else:
-    SQLITE = "sqlite:///" + str(DIRECTORIO_PRINCICIPAL) + "/cacaoaccounting.db"
+    SQLITE = f"sqlite:///{DIRECTORIO_PRINCIPAL}/cacaoaccounting.db"
 
 # < --------------------------------------------------------------------------------------------- >
 # Permite al usuario establecer cuantos hilos utilizar para ejecutar el servidor WSGI por defecto,
@@ -51,21 +51,23 @@ SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or envi
 
 def valida_direccion_base_datos(uri: str) -> bool:
     """Verifica que la URI de la database este en el formato correcto."""
-    DIRECCION = str(uri)
-    MYSQL_URI = DIRECCION.startswith("mysql+pymysql")
-    MARIADB_URI = DIRECCION.startswith("mariadb+mariadbconnector")
-    POSTGRESQL_URI = DIRECCION.startswith("postgresql+pg8000") or DIRECCION.startswith("postgresql+psycopg2")
-    SQLITE_URI = DIRECCION.startswith("sqlite")
-    VALIDACION = MYSQL_URI or POSTGRESQL_URI or SQLITE_URI or MARIADB_URI
-    if VALIDACION:
-        if MARIADB_URI:
+    direccion = str(uri)
+    match direccion:
+        case _ if direccion.startswith("mysql+pymysql"):
+            return True
+        case _ if direccion.startswith("mariadb+mariadbconnector"):
             log.warning("El soporte a MariaDB es expimental.")
-    else:
-        log.warning("Favor revise la configuración de acceso a la base de datos.")
-    return VALIDACION
+            return True
+        case _ if direccion.startswith("postgresql+pg8000") or direccion.startswith("postgresql+psycopg2"):
+            return True
+        case _ if direccion.startswith("sqlite"):
+            return True
+        case _:
+            log.warning("Favor revise la configuración de acceso a la base de datos.")
+            return False
 
 
-configuracion = {}
+configuracion: dict[str, str] = {}
 
 if valida_direccion_base_datos(DATABASE_URL):
     configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
