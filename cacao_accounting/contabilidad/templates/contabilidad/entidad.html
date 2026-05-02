@@ -1,68 +1,72 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %}
 {% block contenido %}
-<section class="pf-c-page__main-section pf-m-light">
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb lh-sm">
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-          <i class="bi bi-house"></i> Inicio
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-          Contabilidad
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.entidades") }}" class="link-dark">
-          Entidades
-        </a>
-      </li>
-    </ol>
-  </nav>
-  <div class="pf-c-content">
-    <h4>{{ registro.company_name }}</h4>
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.entidades') }}" class="link-dark">Entidades</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.company_name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:860px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-building"></i> {{ registro.company_name }}</h5>
     {% if acceso.configurar %}
-    <a class="btn btn-sm btn-success"
-      href="{{ url_for("contabilidad.editar_entidad", id_entidad=registro.code) }}">Editar</a>
-    {% if registro.status != "predeterminado" and registro.status == "activo" %}
-    <a class="btn btn-sm btn-primary"
-      href="{{ url_for("contabilidad.predeterminar_entidad", id_entidad=registro.id) }}">Establecer como
-      Predeterminada</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.editar_entidad', id_entidad=registro.code) }}">
+        <i class="bi bi-pencil me-1"></i>Editar
+      </a>
+      {% if registro.status != "predeterminado" and registro.status == "activo" %}
+      <a class="btn btn-sm btn-secondary" href="{{ url_for('contabilidad.predeterminar_entidad', id_entidad=registro.id) }}">
+        Establecer como Predeterminada
+      </a>
+      {% endif %}
+      {% if registro.status != "inactivo" %}
+      <a class="btn btn-sm btn-secondary" href="{{ url_for('contabilidad.inactivar_entidad', id_entidad=registro.id) }}">
+        Inactivar
+      </a>
+      {% endif %}
+      {% if registro.status != "activo" and registro.status != "predeterminado" %}
+      <a class="btn btn-sm btn-secondary" href="{{ url_for('contabilidad.activar_entidad', id_entidad=registro.id) }}">
+        Activar
+      </a>
+      {% endif %}
+      <a class="btn btn-sm btn-danger" href="{{ url_for('contabilidad.eliminar_entidad', id_entidad=registro.id) }}">
+        <i class="bi bi-trash me-1"></i>Eliminar
+      </a>
+    </div>
     {% endif %}
-    {% if registro.status != "inactivo" %}
-    <a class="btn btn-sm btn-secondary"
-      href="{{ url_for("contabilidad.inactivar_entidad", id_entidad=registro.id) }}">Establecer como Inactiva</a>
-    {% endif %}
-    {% if registro.status != "activo" and registro.status != "predeterminado" %}
-    <a class="btn btn-sm btn-primary"
-      href="{{ url_for("contabilidad.activar_entidad", id_entidad=registro.id) }}">Establecer como Activa</a>
-    {% endif %}
-    <a class="btn btn-sm btn-danger" href="{{ url_for("contabilidad.eliminar_entidad", id_entidad=registro.id) }}"
-      type="link">Eliminar Entidad</a>
-    {% endif %}
-    <div class="container">
-      <div class="row">
-        <h5 class="card-title">Información General de la Entidad</h5>
-        <div class="col-md">
-          <h6>Datos Generales:</h6>
-          <p>Identificador: {{ registro.code }} </p>
-          <p>Razón Social: {{ registro.company_name }}</p>
-          <p>Nombre: {{ registro.name }}</p>
-          <p>ID Fiscal: {{ registro.tax_id }}</p>
-          <p>Tipo: {{ registro.entity_type }}</p>
-        </div>
-        <div class="col-md">
-          <h6>Datos de Contacto:</h6>
-          <p>Página Web: {{ registro.web }}</p>
-          <p>Correo Electrónico: {{ registro.e_mail }}</p>
-          <p>Telefono: {{ registro.phone1 }}</p>
-          <p>Telefono: {{ registro.phone2 }}</p>
-          <p>Fax: {{ registro.fax }}</p>
-        </div>
-      </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-md-6">
+      <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Datos Generales</p>
+      <table class="ca-table">
+        <tbody>
+          <tr><td style="color:#64748b;">Identificador</td><td>{{ registro.code }}</td></tr>
+          <tr><td style="color:#64748b;">Razón Social</td><td>{{ registro.company_name }}</td></tr>
+          <tr><td style="color:#64748b;">Nombre Comercial</td><td>{{ registro.name }}</td></tr>
+          <tr><td style="color:#64748b;">ID Fiscal</td><td>{{ registro.tax_id }}</td></tr>
+          <tr><td style="color:#64748b;">Tipo</td><td>{{ registro.entity_type }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-md-6">
+      <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Datos de Contacto</p>
+      <table class="ca-table">
+        <tbody>
+          <tr><td style="color:#64748b;">Página Web</td><td>{{ registro.web }}</td></tr>
+          <tr><td style="color:#64748b;">Correo</td><td>{{ registro.e_mail }}</td></tr>
+          <tr><td style="color:#64748b;">Teléfono 1</td><td>{{ registro.phone1 }}</td></tr>
+          <tr><td style="color:#64748b;">Teléfono 2</td><td>{{ registro.phone2 }}</td></tr>
+          <tr><td style="color:#64748b;">Fax</td><td>{{ registro.fax }}</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
-</section>
+</div>
+
 {% endblock %}

@@ -1,19 +1,47 @@
 {% extends "base.html" %}
 {% block contenido %}
-<section>
-  <h4>Módulo Ventas.</h4>
-  <div class="container">
-    <div class="row">
-      <div class="col-md">
-        
-      </div>
-      <div class="col-md">
-        
-      </div>
-      <div class="col-md">
-        
-      </div>
-    </div>
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-handbag me-2" style="color:#78BF30"></i>Módulo de Ventas</h4>
+</div>
+
+<div class="ca-module-grid">
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Clientes</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Lista de Precios</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Condiciones de Venta</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
   </div>
-</section>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Órdenes de Venta</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
+      <li><a href="#">Facturas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Notas de Crédito</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Ventas por Cliente</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="#">Cuentas por Cobrar</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+    </ul>
+  </div>
+
+</div>
 {% endblock %}

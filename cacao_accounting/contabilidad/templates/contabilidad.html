@@ -5,60 +5,52 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item active" aria-current="page">
-      <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-        <i class="bi bi-house"></i>Inicio
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
       </a>
     </li>
   </ol>
 </nav>
 
-<section>
-  <h4>Módulo de Contabilidad.</h4>
-  <div class="container">
-    <div class="row">
-      <div class="col-md">
-        <h5><i class="bi bi-sliders"></i> Configuración</h5>
-        <p style="font-size:14px;font-weight: bold;">
-          <a href="{{ url_for("contabilidad.entidades") }}" class="text-decoration-none text-reset">Entidades</a><br>
-          <a href="{{ url_for("contabilidad.cuentas") }}" class="text-decoration-none text-reset">Catálogo de
-            Cuentas</a><br>
-          <a href="{{ url_for("contabilidad.ccostos") }}" class="text-decoration-none text-reset">Centros de
-            Costos</a><br>
-          <a href="{{ url_for("contabilidad.unidades") }}" class="text-decoration-none text-reset">Unidades de
-            Negocio</a><br>
-          <a href="{{ url_for("contabilidad.libros") }}" class="text-decoration-none text-reset">Libros de
-            Contabilidad</a><br>
-          <a href="{{ url_for("contabilidad.proyectos") }}" class="text-decoration-none text-reset">Proyectos</a><br>
-          <a href="{{ url_for("contabilidad.monedas") }}" class="text-decoration-none text-reset">Monedas</a><br>
-          <a href="{{ url_for("contabilidad.tasa_cambio") }}" class="text-decoration-none text-reset">Tasas de
-            Cambio</a><br>
-          <a href="{{ url_for("contabilidad.periodo_contable") }}" class="text-decoration-none text-reset">Períodos
-            Contables</a><br>
-          <a href="{{ url_for("contabilidad.series") }}" class="text-decoration-none text-reset">Series e
-            Indentificadores</a><br>
-        </p>
-      </div>
-      <div class="col-md">
-        <h5><i class="bi bi-card-list"></i> Registros</h5>
-        <p style="font-size:14px;font-weight: bold;">
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Comprobantes
-            Contables</a><br>
-        </p>
-      </div>
-      <div class="col-md">
-        <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
-        <p style="font-size:14px;font-weight: bold;">
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Diario</a><br>
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Mayor</a><br>
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Balanza de
-            Comprobación</a><br>
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Balance
-            General</a><br>
-          <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="text-decoration-none text-reset">Ganancias y
-            Perdidas</a><br>
-        </p>
-      </div>
-    </div>
+<div class="ca-page-header">
+  <h4><i class="bi bi-book me-2" style="color:#78BF30"></i>Módulo de Contabilidad</h4>
+</div>
+
+<div class="ca-module-grid">
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <ul class="ca-module-links">
+      <li><a href="{{ url_for('contabilidad.entidades') }}">Entidades</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.cuentas') }}">Catálogo de Cuentas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.ccostos') }}">Centros de Costos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.unidades') }}">Unidades de Negocio</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.libros') }}">Libros de Contabilidad</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.proyectos') }}">Proyectos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.monedas') }}">Monedas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.tasa_cambio') }}">Tasas de Cambio</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
+      <li><a href="{{ url_for('contabilidad.periodo_contable') }}">Períodos Contables</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('contabilidad.series') }}">Series e Identificadores</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
   </div>
-</section>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <ul class="ca-module-links">
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Comprobantes Contables</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <ul class="ca-module-links">
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Diario</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Mayor</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Balanza de Comprobación</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Balance General</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Ganancias y Pérdidas</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+    </ul>
+  </div>
+
+</div>
 {% endblock %}

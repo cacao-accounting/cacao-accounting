@@ -1,19 +1,50 @@
 {% extends "base.html" %}
 {% block contenido %}
-<section>
-  <h4>Módulo de Control de Inventario.</h4>
-  <div class="container">
-    <div class="row">
-      <div class="col-md">
 
-      </div>
-      <div class="col-md">
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+  </ol>
+</nav>
 
-      </div>
-      <div class="col-md">
+<div class="ca-page-header">
+  <h4><i class="bi bi-shop me-2" style="color:#78BF30"></i>Módulo de Control de Inventario</h4>
+</div>
 
-      </div>
-    </div>
+<div class="ca-module-grid">
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Productos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Categorías</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Bodegas / Almacenes</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Unidades de Medida</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
   </div>
-</section>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Entradas de Inventario</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Salidas de Inventario</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="#">Ajustes de Inventario</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
+      <li><a href="#">Traslados</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <ul class="ca-module-links">
+      <li><a href="#">Existencias</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="#">Valorización de Inventario</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="#">Kardex</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+    </ul>
+  </div>
+
+</div>
 {% endblock %}
