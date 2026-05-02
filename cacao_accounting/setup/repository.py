@@ -1,7 +1,7 @@
 # Copyright 2026
 # Licensed under the Apache License, Version 2.0
 
-from typing import Any, Optional
+from typing import Any
 
 from cacao_accounting.database import CacaoConfig, Entity, database
 
@@ -39,5 +39,5 @@ def create_default_entity(data: dict) -> Entity:
     return entity
 
 
-def get_default_entity() -> Optional[Entity]:
+def get_default_entity() -> Entity | None:
     return database.session.execute(database.select(Entity).filter_by(status="default")).scalar_one_or_none()

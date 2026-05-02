@@ -6,7 +6,6 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
-from typing import Union
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -58,32 +57,32 @@ class Permisos:
     especificado, si uno de los roles del usuario otorga permiso se aprueba como valido.
     """
 
-    def __init__(self, modulo: Union[None, str] = None, usuario: Union[None, str] = None) -> None:
+    def __init__(self, modulo: str | None = None, usuario: str | None = None) -> None:
         """Inicia la clase permisos."""
-        self.__init_valido: Union[bool, str, None] = self.valida_modulo(modulo) and usuario
+        self.__init_valido: bool | str | None = self.valida_modulo(modulo) and usuario
         if self.__init_valido:
-            self.modulo: Union[str, None] = modulo
-            self.usuario: Union[str, None] = usuario
-            self.administrador: Union[bool, None] = self.valida_usuario_tiene_rol_administrativo()
-            self.roles: Union[list, None] = self.obtener_roles_de_usuario()
-            self.permisos_usuario: Union[list, None] = self.obtiene_lista_de_permisos()
+            self.modulo: str | None = modulo
+            self.usuario: str | None = usuario
+            self.administrador: bool | None = self.valida_usuario_tiene_rol_administrativo()
+            self.roles: list | None = self.obtener_roles_de_usuario()
+            self.permisos_usuario: list | None = self.obtiene_lista_de_permisos()
             if self.administrador:
-                self.autorizado: Union[bool, None] = True
-                self.actualizar: Union[bool, None] = True
-                self.anular: Union[bool, None] = True
-                self.autorizar: Union[bool, None] = True
-                self.bi: Union[bool, None] = True
-                self.cerrar: Union[bool, None] = True
-                self.configurar: Union[bool, None] = True
-                self.consultar: Union[bool, None] = True
-                self.corregir: Union[bool, None] = True
-                self.crear: Union[bool, None] = True
-                self.editar: Union[bool, None] = True
-                self.eliminar: Union[bool, None] = True
-                self.importar: Union[bool, None] = True
-                self.reportes: Union[bool, None] = True
-                self.solicitar: Union[bool, None] = True
-                self.validar: Union[bool, None] = True
+                self.autorizado: bool | None = True
+                self.actualizar: bool | None = True
+                self.anular: bool | None = True
+                self.autorizar: bool | None = True
+                self.bi: bool | None = True
+                self.cerrar: bool | None = True
+                self.configurar: bool | None = True
+                self.consultar: bool | None = True
+                self.corregir: bool | None = True
+                self.crear: bool | None = True
+                self.editar: bool | None = True
+                self.eliminar: bool | None = True
+                self.importar: bool | None = True
+                self.reportes: bool | None = True
+                self.solicitar: bool | None = True
+                self.validar: bool | None = True
             else:
                 self.autorizado = self.__usuario_autorizado()
                 self.actualizar = self.__actualizar()
@@ -124,7 +123,7 @@ class Permisos:
             self.solicitar = False
             self.validar = False
 
-    def valida_modulo(self, modulo: Union[str, None]) -> bool:
+    def valida_modulo(self, modulo: str | None) -> bool:
         """Verifica si un modulo se encuentra activo."""
         if modulo:
             LISTA_MODULOS_ACTIVOS = []
@@ -157,7 +156,7 @@ class Permisos:
         ).first()
         return CONSULTA is not None
 
-    def obtiene_lista_de_permisos(self) -> Union[list, None]:
+    def obtiene_lista_de_permisos(self) -> list | None:
         """Devuelve una lista con los permisos del usuario."""
         if self.roles:
             PERMISOS = []

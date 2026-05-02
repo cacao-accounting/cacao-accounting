@@ -6,7 +6,6 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from os import environ
-from typing import Union
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -84,7 +83,7 @@ def entidades_creadas():
         else:
             return False
 
-    except:  # noqa: E722
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -152,7 +151,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
     return DB_ESQUEMA
 
 
-def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
+def obtener_id_modulo_por_nombre(modulo: str | None) -> str | None:
     """Devuelve el UUID de un modulo por su nombre."""
     if modulo:
         from cacao_accounting.database import Modules, database
@@ -171,7 +170,7 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
     return ROL.id
 
 
-def obtener_id_usuario_por_nombre(usuario: Union[str, None]) -> Union[str, None]:
+def obtener_id_usuario_por_nombre(usuario: str | None) -> str | None:
     """Devuelve el UUID de un usuario en base a su id."""
     if usuario:
         from cacao_accounting.database import User
