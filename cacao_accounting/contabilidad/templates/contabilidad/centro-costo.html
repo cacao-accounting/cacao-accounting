@@ -2,48 +2,29 @@
 {% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
-<section>
 
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb lh-sm">
-      <li class="active breadcrumb-item" aria-current="page">
-        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-          <i class="bi bi-house"></i>Inicio
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-          Contabilidad
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.ccostos") }}" class="link-dark">
-          Centros de Costos
-        </a>
-      </li>
-    </ol>
-  </nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.ccostos') }}" class="link-dark">Centros de Costos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.codigo }}</li>
+  </ol>
+</nav>
 
-  <h4>Centro de Costos.</h4>
-  <div class="container">
-    <div class="row">
-      <div class="col-md">
-        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }}
-          {{ registro.status }}</p>
-        <p><strong>Codigo Centro Costo:</strong> {{ registro.codigo }}</p>
-        <p><strong>Nombre:</strong> {{ registro.nombre }}</p>
-      </div>
-      <div class="col-md">
-
-        <p><strong>Tipo:</strong>
-          {% if registro.grupo %}
-          Grupo
-          {% else %}
-          No Grupo
-          {% endif %}
-        </p>
-      </div>
-    </div>
+<div class="ca-card" style="max-width:680px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> Centro de Costos</h5>
+    {{ macros.render_status(status=registro.status, lista_status=statusweb) }}
   </div>
-</section>
+  <table class="ca-table">
+    <tbody>
+      <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.codigo }}</strong></td></tr>
+      <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.nombre }}</td></tr>
+      <tr><td style="color:#64748b;">Estado</td><td>{{ registro.status }}</td></tr>
+      <tr><td style="color:#64748b;">Tipo</td><td>{% if registro.grupo %}Grupo{% else %}Detalle{% endif %}</td></tr>
+    </tbody>
+  </table>
+</div>
+
 {% endblock %}

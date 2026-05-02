@@ -4,106 +4,107 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item active" aria-current="page">
-      <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
-      </a>
-    </li>
-    <li class="breadcrumb-item active" aria-current="page">
-      <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-        Contabilidad
-      </a>
-    </li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Centros de Costos</li>
   </ol>
 </nav>
 
-<h4>Catalogo de Centros de Costos.</h4>
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> Catálogo de Centros de Costos</h5>
+  </div>
 
-{% if entidades_creadas %}
+  {% if entidades_creadas %}
 
-<form>
-  <h6>Seleccionar Entidad.</h6>
+  <form class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label class="form-label" for="entidad">Entidad</label>
+      <select class="form-select form-select-sm" id="entidad" name="entidad" style="min-width:200px;">
+        {%- for entidad in entidades -%}
+        <option value="{{ entidad[0].code }}">{{ entidad[0].company_name }}</option>
+        {%- endfor -%}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+      </button>
+    </div>
+  </form>
 
-  <select class="form-control" id="entidad" name="entidad">
-    {%- for entidad in entidades -%}
-    <option value="{{ entidad[0].code }}">{{ entidad[0].company_name }}</option>
+  <p class="mb-2" style="font-size:.8rem;color:#64748b;"><strong>Entidad:</strong> {{ entidad[0].company_name }}</p>
+
+  <ul class="ca-tree">
+    {%- for centrocostobase in base_centro_costos -%}
+    <li>
+      <a href="{{ url_for('contabilidad.centro_costo', id_cc=centrocostobase[0].code) }}">
+        <i class="bi bi-chevron-down me-1" style="font-size:.7rem;color:#94a3b8;"></i>
+        <strong>{{ centrocostobase[0].code }}</strong>&nbsp;{{ centrocostobase[0].name }}
+      </a>
+      {% if centrocostobase[0].group %}
+      <ul>
+        {% for ccosto01 in ccostos if ccosto01[0].parent == centrocostobase[0].code %}
+        <li>
+          <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto01[0].code) }}">
+            {{ ccosto01[0].code }} — {{ ccosto01[0].name }}
+          </a>
+          {% if ccosto01[0].group %}
+          <ul>
+            {% for ccosto02 in ccostos if ccosto02[0].parent == ccosto01[0].code %}
+            <li>
+              <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto02[0].code) }}">
+                {{ ccosto02[0].code }} — {{ ccosto02[0].name }}
+              </a>
+              {% if ccosto02[0].group %}
+              <ul>
+                {% for ccosto03 in ccostos if ccosto03[0].parent == ccosto02[0].code %}
+                <li>
+                  <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto03[0].code) }}">
+                    {{ ccosto03[0].code }} — {{ ccosto03[0].name }}
+                  </a>
+                  {% if ccosto03[0].group %}
+                  <ul>
+                    {% for ccosto04 in ccostos if ccosto04[0].parent == ccosto03[0].code %}
+                    <li>
+                      <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto04[0].code) }}">
+                        {{ ccosto04[0].code }} — {{ ccosto04[0].name }}
+                      </a>
+                      {% if ccosto04[0].group %}
+                      <ul>
+                        {% for ccosto05 in ccostos if ccosto05[0].parent == ccosto04[0].code %}
+                        <li>
+                          <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto05[0].code) }}">
+                            {{ ccosto05[0].code }} — {{ ccosto05[0].name }}
+                          </a>
+                        </li>
+                        {% endfor %}
+                      </ul>
+                      {% endif %}
+                    </li>
+                    {% endfor %}
+                  </ul>
+                  {% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </li>
     {%- endfor -%}
-  </select>
-  <button type="submit" class="btn btn-primary btn-sm">
-    Actualizar
-  </button>
-</form>
-<p><strong>Entidad Actual:</strong> {{ entidad[0].company_name }}</p>
+  </ul>
 
-<ul class="tree">
-  {%- for centrocostobase in base_centro_costos -%}
-  <li>
-    <a href="{{ url_for("contabilidad.centro_costo", id_cc=centrocostobase[0].code) }}" class="link-dark">
-      {{ centrocostobase[0].code + " - " + centrocostobase[0].name }}
-    </a>
-    {% if centrocostobase[0].group %}
-    <ul>
-      {% for ccosto01 in ccostos if ccosto01[0].parent == centrocostobase[0].code %}
-      <li>
-        <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto01[0].code) }}" class="link-dark">
-          {{ ccosto01[0].code + " - " + ccosto01[0].name }}
-        </a>
-        {% if ccosto01[0].group %}
-        <ul>
-          {% for ccosto02 in ccostos if ccosto02[0].parent == ccosto01[0].code %}
-          <li>
-            <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto02[0].code) }}" class="link-dark">
-              {{ ccosto02[0].code + " - " + ccosto02[0].name }}
-            </a>
-            {% if ccosto02[0].group %}
-            <ul>
-              {% for ccosto03 in ccostos if ccosto03[0].parent == ccosto02[0].code %}
-              <li>
-                <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto03[0].code) }}" class="link-dark">
-                  {{ ccosto03[0].code + " - " + ccosto03[0].name }}
-                </a>
-                {% if ccosto03[0].group %}
-                <ul>
-                  {% for ccosto04 in ccostos if ccosto04[0].parent == ccosto03[0].code %}
-                  <li>
-                    <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto04[0].code) }}" class="link-dark">
-                      {{ ccosto04[0].code + " - " + ccosto04[0].name }}
-                    </a>
-                    {% if ccosto04[0].group %}
-                    <ul>
-                      {% for ccosto05 in ccostos if ccosto05[0].parent == ccosto04[0].code %}
-                      <li>
-                        <a href="{{ url_for("contabilidad.centro_costo", id_cc=ccosto05[0].code) }}" class="link-dark">
-                          {{ ccosto05[0].code + " - " + ccosto05[0].name }}
-                        </a>
-                      </li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-  </li>
-  {%- endfor -%}
-</ul>
+  {% else %}
+  {% import "macros.html" as macros %}
+  {{ macros.crear_nueva_entidad() }}
+  {% endif %}
 
-{% else %}
-
-{{ macros.crear_nueva_entidad() }}
-
-{% endif %}
-
+</div>
 {% endblock %}

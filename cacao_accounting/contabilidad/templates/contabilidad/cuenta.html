@@ -2,48 +2,29 @@
 {% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
-<section>
 
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb lh-sm">
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-          <i class="bi bi-house"></i>Inicio
-        </a>
-      </li>
-      <li class="active breadcrumb-item" aria-current="page">
-        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-          Contabilidad
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.cuentas") }}" class="link-dark">
-          Catalogo de Cuentas
-        </a>
-      </li>
-    </ol>
-  </nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.cuentas') }}" class="link-dark">Catálogo de Cuentas</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.code }}</li>
+  </ol>
+</nav>
 
-  <h4>Cuenta Contable</h4>
-  <div class="container">
-    <div class="row">
-      <div class="col-md">
-        <p><strong>Status: </strong>{{ macros.render_status(status=registro.status, lista_status=statusweb) }}
-          {{ registro.status }}</p>
-        <p><strong>Codigo Cuenta:</strong> {{ registro.code }}</p>
-        <p><strong>Nombre:</strong> {{ registro.name }}</p>
-      </div>
-      <div class="col-md">
-
-        <p><strong>Tipo:</strong>
-          {% if registro.group %}
-          Grupo
-          {% else %}
-          No Grupo
-          {% endif %}
-        </p>
-      </div>
-    </div>
+<div class="ca-card" style="max-width:680px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> Cuenta Contable</h5>
+    {{ macros.render_status(status=registro.status, lista_status=statusweb) }}
   </div>
-</section>
+  <table class="ca-table">
+    <tbody>
+      <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.code }}</strong></td></tr>
+      <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.name }}</td></tr>
+      <tr><td style="color:#64748b;">Estado</td><td>{{ registro.status }}</td></tr>
+      <tr><td style="color:#64748b;">Tipo</td><td>{% if registro.group %}Grupo{% else %}Detalle{% endif %}</td></tr>
+    </tbody>
+  </table>
+</div>
+
 {% endblock %}

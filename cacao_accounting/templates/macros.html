@@ -6,21 +6,28 @@
 {# Linea en blanco intencional #}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{# Anti-FOUC: apply saved theme before ANY paint #}
+<script>
+  (function(){
+    var t = localStorage.getItem('ca-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 
-
-<meta name="theme-color" content="#66d966">
-<meta name="msapplication-TileColor" content="#66d966">
+<meta name="theme-color" content="#2E7D32">
+<meta name="msapplication-TileColor" content="#2E7D32">
 
 <meta name="description" content="Aplicación Contable.">
 <meta name="author" content="William Moreno Reyes">
 
+{# Bootstrap first so our CSS can override it #}
+<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+{# Our design system last — wins over Bootstrap #}
 <link href="{{ url_for('static', filename='css/cacaoaccounting.css') }}" rel="stylesheet">
 
-<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
 <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
 <script src="{{ url_for('static', filename='node_modules/@popperjs/core/dist/umd/popper.min.js') }}"></script>
-
-<link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
 
 <link rel="apple-touch-icon" sizes="57x57"
   href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
@@ -56,120 +63,130 @@
 
 {%- endmacro %}
 
-{# Ayuda a renderizar la barre superior en las páginas de la aplicación #}
+{# Ayuda a renderizar la barra superior en las páginas de la aplicación #}
 {% macro cabecera() %}
-<header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0">
-  <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for("cacao_app.pagina_inicio") }}">
-    <img height="30" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting"
-      class="d-inline-block align-top">
-  </a>
-  <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse"
-    data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-  <ul class="navbar-nav d-none d-md-block px-3">
-    <li class="nav-item text-nowrap">
-      <a class="nav-link" style="font-size: 1.3rem;color:#8B0000;" href="{{ url_for("login.cerrar_sesion") }}">
-        <ion-icon name="log-out"></ion-icon>
-      </a>
-    </li>
-  </ul>
+<header class="ca-navbar">
+  <div class="ca-navbar-start">
+    <button class="ca-navbar-toggler d-md-none" type="button" data-bs-toggle="collapse"
+      data-bs-target="#BarraLateralMenu" aria-expanded="false" aria-controls="BarraLateralMenu">
+      <i class="bi bi-list"></i>
+    </button>
+    <a class="ca-navbar-brand" href="{{ url_for('cacao_app.pagina_inicio') }}">
+      <img height="30" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting"
+        class="d-inline-block align-middle">
+    </a>
+  </div>
+  <div class="ca-navbar-end">
+    <button class="ca-nav-btn" id="ca-theme-btn" onclick="caToggleTheme()" title="Cambiar tema" type="button">
+      <i class="bi bi-moon-stars-fill" id="ca-theme-icon"></i>
+    </button>
+    <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="Cerrar sesión">
+      <i class="bi bi-box-arrow-right"></i>
+    </a>
+  </div>
 </header>
+<script>
+  (function () {
+    var icon = document.getElementById('ca-theme-icon');
+    function syncIcon() {
+      var t = document.documentElement.getAttribute('data-theme');
+      if (icon) icon.className = (t === 'dark') ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+    }
+    syncIcon();
+    window.caToggleTheme = function () {
+      var current = document.documentElement.getAttribute('data-theme') || 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('ca-theme', next);
+      syncIcon();
+    };
+  })();
+</script>
 {%- endmacro %}
 
 {# Ayuda a renderizar la barra lateral en las páginas de la aplicación #}
 {% macro barralateral() -%}
-<nav id="BarraLateralMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
-  <div class="position-sticky pt-3">
-    <ul class="nav flex-column" style="font-size:16px">
-      {% if validar_modulo_activo("accounting") and permisos(modulo=id_modulo("accounting"), usuario=usuario.id).autorizado -%}
-
-      <li class="nav__item">
-        <a href="{{ url_for("contabilidad.conta") }}" class="nav-link">
-          <i class="bi bi-book"></i>
-          Contabilidad
-        </a>
-      </li>
-      {%- endif %}
-      {% if validar_modulo_activo("cash") and permisos(modulo=id_modulo("cash"), usuario=usuario.id).autorizado %}
-
-      <li class="nav__item">
-        <a href="{{ url_for("bancos.bancos_") }}" class="nav-link">
-          <i class="bi bi-briefcase"></i>
-          Caja y Bancos
-        </a>
-      </li>
-      {%- endif %}
-      {% if validar_modulo_activo("purchases") and permisos(modulo=id_modulo("purchases"), usuario=usuario.id).autorizado %}
-
-      <li class="nav__item">
-        <a href="{{ url_for("compras.compras_") }}" class="nav-link">
-          <i class="bi bi-cart4"></i>
-          Compras
-        </a>
-      </li>
-      {%- endif %}
-      {% if validar_modulo_activo("inventory") and permisos(modulo=id_modulo("inventory"), usuario=usuario.id).autorizado -%}
-      <li class="nav__item">
-        <a href="{{ url_for("inventario.inventario_") }}" class="nav-link">
-          <i class="bi bi-shop"></i>
-          Inventarios
-        </a>
-      </li>
-      {%- endif %}
-      {% if validar_modulo_activo("sales") and permisos(modulo=id_modulo("sales"), usuario=usuario.id).autorizado %}
-
-      <li class="nav__item">
-        <a href="{{ url_for("ventas.ventas_") }}" class="nav-link">
-          <i class="bi bi-handbag"></i>
-          Ventas
-        </a>
-      </li>
-      {%- endif %}
-      {% if modulos_extra -%}
-      {% for modulo in modulos_extra -%}
-      {% if validar_modulo_activo(modulo.nombre_modulo) and permisos(modulo=id_modulo(modulo.nombre_modulo), usuario=usuario.id).autorizado -%}
-
-      <li class="nav__item">
-        <a href="{{ url_for( modulo.url ) }}" class="nav-link">
-          {{ modulo.icon}}
-          {{ modulo.nombre }}
-        </a>
-      </li>
-      {%- endif %}
-      {%- endfor %}
-      {%- endif %}
-      {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
-      <li class="nav__item">
-        <a href="{{ url_for("admin.admin_") }}" class="nav-link">
-          <i class="bi bi-gear"></i>
-          Administración
-        </a>
-      </li>
-      {%- endif %}
-      <li class="nav__item d-md-none">
-        <a href="{{ url_for("login.cerrar_sesion") }}" class="nav-link">
-          <ion-icon name="exit" aria-hidden="true"></ion-icon> Cerrar Sesión
-
-        </a>
-      </li>
-    </ul>
-  </div>
+<nav id="BarraLateralMenu" class="ca-sidebar">
+  <ul class="nav">
+    {% if validar_modulo_activo("accounting") and permisos(modulo=id_modulo("accounting"), usuario=usuario.id).autorizado -%}
+    <li class="nav-item">
+      <a href="{{ url_for('contabilidad.conta') }}" class="nav-link {% if request.blueprint == 'contabilidad' %}active{% endif %}">
+        <i class="bi bi-book"></i>
+        Contabilidad
+      </a>
+    </li>
+    {%- endif %}
+    {% if validar_modulo_activo("cash") and permisos(modulo=id_modulo("cash"), usuario=usuario.id).autorizado %}
+    <li class="nav-item">
+      <a href="{{ url_for('bancos.bancos_') }}" class="nav-link {% if request.blueprint == 'bancos' %}active{% endif %}">
+        <i class="bi bi-bank"></i>
+        Caja y Bancos
+      </a>
+    </li>
+    {%- endif %}
+    {% if validar_modulo_activo("purchases") and permisos(modulo=id_modulo("purchases"), usuario=usuario.id).autorizado %}
+    <li class="nav-item">
+      <a href="{{ url_for('compras.compras_') }}" class="nav-link {% if request.blueprint == 'compras' %}active{% endif %}">
+        <i class="bi bi-cart4"></i>
+        Compras
+      </a>
+    </li>
+    {%- endif %}
+    {% if validar_modulo_activo("inventory") and permisos(modulo=id_modulo("inventory"), usuario=usuario.id).autorizado -%}
+    <li class="nav-item">
+      <a href="{{ url_for('inventario.inventario_') }}" class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}">
+        <i class="bi bi-shop"></i>
+        Inventarios
+      </a>
+    </li>
+    {%- endif %}
+    {% if validar_modulo_activo("sales") and permisos(modulo=id_modulo("sales"), usuario=usuario.id).autorizado %}
+    <li class="nav-item">
+      <a href="{{ url_for('ventas.ventas_') }}" class="nav-link {% if request.blueprint == 'ventas' %}active{% endif %}">
+        <i class="bi bi-handbag"></i>
+        Ventas
+      </a>
+    </li>
+    {%- endif %}
+    {% if modulos_extra -%}
+    {% for modulo in modulos_extra -%}
+    {% if validar_modulo_activo(modulo.nombre_modulo) and permisos(modulo=id_modulo(modulo.nombre_modulo), usuario=usuario.id).autorizado -%}
+    <li class="nav-item">
+      <a href="{{ url_for( modulo.url ) }}" class="nav-link">
+        {{ modulo.icon}}
+        {{ modulo.nombre }}
+      </a>
+    </li>
+    {%- endif %}
+    {%- endfor %}
+    {%- endif %}
+    {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
+    <li class="nav-item">
+      <a href="{{ url_for('admin.admin_') }}" class="nav-link {% if request.blueprint == 'admin' %}active{% endif %}">
+        <i class="bi bi-gear"></i>
+        Administración
+      </a>
+    </li>
+    {%- endif %}
+    <li class="nav-item d-md-none">
+      <a href="{{ url_for('login.cerrar_sesion') }}" class="nav-link">
+        <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+      </a>
+    </li>
+  </ul>
 </nav>
 {%- endmacro %}
 
 
 {% macro rendizar_paginacion(consulta=None, vista=None) %}
-<p>{{ consulta.total }} items encontrados.
+<p class="ca-pagination">{{ consulta.total }} items encontrados.
   <br>
   {% if consulta.has_prev %}
-  <a href="{{ url_for(vista, page=consulta.prev_num) }}" class="link-dark"><i class="bi bi-arrow-left-short"></i>
-    Anterior</a>
+  <a href="{{ url_for(vista, page=consulta.prev_num) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
   Página {{ consulta.page }} de {{ consulta.pages }}
   {% if consulta.has_next %}
-  <a href="{{ url_for(vista, page=consulta.next_num) }}" class="link-dark">Siguiente <i
-      class="bi bi-arrow-right-short"></i></a>
+  <a href="{{ url_for(vista, page=consulta.next_num) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
 </p>
 {% endmacro %}
@@ -182,7 +199,7 @@
 
 {% macro crear_nueva_entidad() %}
 
-<div style="text-align: center;">
+<div style="text-align: center; padding: 2rem 0;">
   <p>
     <img src="{{ url_for('static', filename='media/cacao_accounting.png') }}" height="50" width="50"
       alt="Cacao Accounting Logo">
@@ -192,14 +209,14 @@
   <p>Al parecer es la primera vez que accedes al sistema.</p>
   <p>Para utilizar el sistema debes al menos haber creado una entidad a la que realizar registros:</p>
   <p>
-    <a class="btn btn-success btn-sm" href="{{ url_for("contabilidad.nueva_entidad") }}" role="button"><i
+    <a class="btn btn-success btn-sm" href="{{ url_for('contabilidad.nueva_entidad') }}" role="button"><i
         class="bi bi-plus-circle-fill" aria-hidden="true"></i> Crear Nueva
       Entidad</a>
   </p>
   {% if not MODO_ESCRITORIO %}
-  <p>Los siguientes vinvulos pueden ser de su interes:</p>
+  <p>Los siguientes vínculos pueden ser de su interés:</p>
 
-  <div class="d-flex justify-content-around">
+  <div class="d-flex justify-content-center gap-2">
 
     <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
       role="button"><i class="bi bi-book-fill" aria-hidden="true"></i> Manual de Usuario</a>
