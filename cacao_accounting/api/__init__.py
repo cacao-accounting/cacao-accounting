@@ -28,7 +28,6 @@ def token_requerido(f):  # pragma: no cover
     @wraps(f)
     def wrapper(*args, **kwds):
         """Protege la API con un token."""
-
         token = None
 
         if "Authorization" in request.headers:
@@ -71,7 +70,6 @@ def token_requerido(f):  # pragma: no cover
 @token_requerido
 def test_appy():
     """Vista de prueba para probar el API."""
-
     responde_data = {
         "Response": "Holis",
     }

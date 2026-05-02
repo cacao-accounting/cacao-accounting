@@ -1,6 +1,8 @@
 # Copyright 2026
 # Licensed under the Apache License, Version 2.0
 
+"""Formularios para el asistente de configuración inicial."""
+
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, RadioField, SelectField, StringField
 from wtforms.validators import DataRequired
@@ -31,21 +33,28 @@ CATALOG_CHOICES = [
 
 
 class SetupLanguageForm(FlaskForm):
+    """Formulario para seleccionar el idioma de la aplicación."""
+
     idioma = SelectField("Idioma predeterminado", choices=LANGUAGE_CHOICES, validators=[DataRequired()])
     step = HiddenField(default="1")
 
 
 class SetupRegionalForm(FlaskForm):
+    """Formulario para seleccionar los valores regionales del asistente."""
+
     pais = SelectField("País predeterminado", choices=COUNTRY_CHOICES, validators=[DataRequired()])
     moneda = SelectField("Moneda predeterminada", choices=[], validators=[DataRequired()])
     step = HiddenField(default="2")
 
     def __init__(self, *args, **kwargs):
+        """Inicializa el formulario regional con las monedas disponibles."""
         super().__init__(*args, **kwargs)
         self.moneda.choices = obtener_lista_monedas()
 
 
 class SetupCompanyForm(FlaskForm):
+    """Formulario para capturar los datos de la entidad de la empresa."""
+
     id = StringField("Código de empresa", validators=[DataRequired()])
     razon_social = StringField("Razón social", validators=[DataRequired()])
     nombre_comercial = StringField("Nombre comercial")
@@ -61,9 +70,12 @@ class SetupCompanyForm(FlaskForm):
     step = HiddenField(default="3")
 
     def __init__(self, *args, **kwargs):
+        """Inicializa el formulario de empresa con las opciones de catálogo disponibles."""
         super().__init__(*args, **kwargs)
         self.catalogo_origen.choices = [("", "Seleccione un catálogo existente")] + available_catalog_files()
 
 
 class SetupConfirmationForm(FlaskForm):
+    """Formulario final de confirmación del proceso de configuración."""
+
     step = HiddenField(default="4")

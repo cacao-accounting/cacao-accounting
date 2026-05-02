@@ -68,9 +68,7 @@ class FormularioUnidad(FlaskForm):
 
 
 class FormularioLibro(FlaskForm):
-    """
-    Formulario base para la administración de libros de contabilidad.
-    """
+    """Formulario base para la administración de libros de contabilidad."""
 
     id = StringField(validators=[DataRequired()])
     nombre = StringField(validators=[DataRequired()])

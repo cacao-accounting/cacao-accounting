@@ -1,12 +1,15 @@
 # Copyright 2026
 # Licensed under the Apache License, Version 2.0
 
+"""Repositorios de datos para el asistente de configuración inicial."""
+
 from typing import Any
 
 from cacao_accounting.database import CacaoConfig, Entity, database
 
 
 def get_setup_value(key: str, default: Any = None) -> Any:
+    """Recupera un valor de configuración por clave."""
     record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).first()
     if record:
         return record[0].value
@@ -14,6 +17,7 @@ def get_setup_value(key: str, default: Any = None) -> Any:
 
 
 def set_setup_value(key: str, value: str) -> None:
+    """Establece o crea un valor de configuración."""
     record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).first()
     if record:
         config = record[0]
@@ -24,6 +28,7 @@ def set_setup_value(key: str, value: str) -> None:
 
 
 def create_default_entity(data: dict) -> Entity:
+    """Crea y añade una entidad predeterminada en la sesión de base de datos."""
     entity = Entity(
         code=data.get("id"),
         company_name=data.get("razon_social"),
@@ -40,4 +45,5 @@ def create_default_entity(data: dict) -> Entity:
 
 
 def get_default_entity() -> Entity | None:
+    """Recupera la entidad predeterminada si existe."""
     return database.session.execute(database.select(Entity).filter_by(status="default")).scalar_one_or_none()
