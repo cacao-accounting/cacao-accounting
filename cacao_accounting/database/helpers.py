@@ -20,6 +20,8 @@ from cacao_accounting.database import database
 from cacao_accounting.logs import log
 
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
+DB_CONNECTION_FAILED = "No se pudo establecer conexion a la base de datos."
+DB_RETRYING_CONNECTION = "Reintentando conectar a la base de datos."
 
 # <---------------------------------------------------------------------------------------------> #
 # Herramientas auxiliares para verificar la ejecución de la base de datos.
@@ -49,16 +51,16 @@ def verifica_coneccion_db(app):  # pragma: no cover
                 break
             except OperationalError:
                 DB_CONN = False
-                log.warning("No se pudo establecer conexion a la base de datos.")
-                log.info("Reintentando conectar a la base de datos.")
+                log.warning(DB_CONNECTION_FAILED)
+                log.info(DB_RETRYING_CONNECTION)
             except InterfaceError:
                 DB_CONN = False
-                log.warning("No se pudo establecer conexion a la base de datos.")
-                log.info("Reintentando conectar a la base de datos.")
+                log.warning(DB_CONNECTION_FAILED)
+                log.info(DB_RETRYING_CONNECTION)
             except ProgrammingError:
                 DB_CONN = False
-                log.warning("No se pudo establecer conexion a la base de datos.")
-                log.info("Reintentando conectar a la base de datos.")
+                log.warning(DB_CONNECTION_FAILED)
+                log.info(DB_RETRYING_CONNECTION)
 
             if not environ.get("CACAO_TEST", None):
                 time.sleep(2)

@@ -29,6 +29,9 @@ from ulid import ULID
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
+ENTITY_CODE = "entity.code"
+CURRENCY_CODE = "currency.code"
+
 # < --------------------------------------------------------------------------------------------- >
 # Definición central de status web.
 # < --------------------------------------------------------------------------------------------- >
@@ -125,7 +128,7 @@ class BaseTabla:
 class BaseTransaccion(BaseTabla):
     """Base para crear transacciones en la entidad."""
 
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     book = database.Column(database.String(10), database.ForeignKey("book.code"))
     serie = database.Column(database.String(10), database.ForeignKey("serie.serie"))
     user_id = database.Column(database.String(75))
@@ -182,8 +185,8 @@ class Currency(database.Model, BaseTabla):  # type: ignore[name-defined]
 class ExchangeRate(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Tasa de conversión entre dos monedas distintas."""
 
-    origin = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=False)
-    destination = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=False)
+    origin = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=False)
+    destination = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=False)
     rate = database.Column(database.Numeric(), nullable=False)
     date = database.Column(database.Date(), nullable=False)
 
@@ -275,7 +278,7 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     company_name = database.Column(database.String(100), unique=True, nullable=False)
     name = database.Column(database.String(50))
     tax_id = database.Column(database.String(50), unique=True, nullable=False)
-    currency = database.Column(database.String(10), database.ForeignKey("currency.code"))
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE))
     # Individual, Sociedad, Sin Fines de Lucro
     entity_type = database.Column(database.String(50))
     tipo_entidad_lista = [
@@ -303,7 +306,7 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Información legal de la entidad
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -315,7 +318,7 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Información legal de la entidad
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     default = database.Column(database.Boolean())
 
 
@@ -327,7 +330,7 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Una cuenta puede estar activa pero deshabilitada temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todas las cuentas deben estan vinculadas a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     # Suficiente para un código de cuenta muy extenso y en la practica poco practico:
     # 11.01.001.001.001.001.00001.0001.0001.00001.000001
     code = database.Column(database.String(50), index=True)
@@ -335,7 +338,7 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Cuenta agrupador o cuenta que recibe movimientos
     group = database.Column(database.Boolean())
     parent = database.Column(database.String(50), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey("currency.code"), nullable=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     clasification = database.Column(database.String(15), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
@@ -352,7 +355,7 @@ class CostCenter(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Un CC puede estar activo pero deshabilitado temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     code = database.Column(
         database.String(10),
     )
@@ -374,7 +377,7 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     # Un centro_costo puede estar activo pero deshabilitado temporalmente.
     enabled = database.Column(database.Boolean(), index=True)
     # Todos los CC deben estan vinculados a una compañia
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100))
     start = database.Column(database.Date())
@@ -386,7 +389,7 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
 class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Todas las transaciones deben estar vinculadas a un periodo contable."""
 
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     name = database.Column(database.String(50), nullable=False)
     status = database.Column(database.String(50))
     enabled = database.Column(database.Boolean(), index=True)
@@ -401,7 +404,7 @@ class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Serie(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Serie para numerar nuevas transacciones."""
 
-    entity = database.Column(database.String(10), database.ForeignKey("entity.code"))
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     doc = database.Column(database.String(25))
     enabled = database.Column(database.Boolean())
     serie = database.Column(database.String(15))
