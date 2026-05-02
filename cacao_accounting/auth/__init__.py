@@ -18,7 +18,6 @@ from flask_login import LoginManager, login_required, login_user, logout_user
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
-from cacao_accounting.logs import log
 
 # <---------------------------------------------------------------------------------------------> #
 # Logica de inicio de sesión.
