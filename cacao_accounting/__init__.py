@@ -12,7 +12,6 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 from datetime import datetime, timedelta
 from os import environ
-from typing import Union
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -65,7 +64,7 @@ def command() -> None:  # pragma: no cover
     linea_comandos(as_module="cacao_accounting")
 
 
-def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
+def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
         # alembic.init_app(app)
@@ -76,7 +75,7 @@ def iniciar_extenciones(app: Union[Flask, None] = None) -> None:
         raise RuntimeError(ERROR2)
 
 
-def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
+def registrar_rutas_predeterminadas(app: Flask | None = None) -> None:
     """Registra rutas predeterminadas."""
     if app and isinstance(app, Flask):
         from flask import render_template
@@ -103,7 +102,7 @@ def registrar_rutas_predeterminadas(app: Union[Flask, None] = None) -> None:
         raise RuntimeError(ERROR2)
 
 
-def registrar_blueprints(app: Union[Flask, None] = None) -> None:
+def registrar_blueprints(app: Flask | None = None) -> None:
     """Registra blueprints por defecto."""
     if app and isinstance(app, Flask):
         with app.app_context():
@@ -124,7 +123,7 @@ def registrar_blueprints(app: Union[Flask, None] = None) -> None:
         raise RuntimeError(ERROR2)
 
 
-def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
+def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
     """Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2."""
     if app and isinstance(app, Flask):
         with app.app_context():
@@ -158,7 +157,7 @@ def actualiza_variables_globales_jinja(app: Union[Flask, None] = None) -> None:
         raise RuntimeError(ERROR2)
 
 
-def create_app(ajustes: Union[dict, None] = None) -> Flask:
+def create_app(ajustes: dict | None = None) -> Flask:
     """Aplication factory."""
     cacao_app = Flask(
         "cacao_accounting",

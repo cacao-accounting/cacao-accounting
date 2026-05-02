@@ -3,7 +3,7 @@
 
 from os import listdir
 from os.path import isfile, join
-from typing import Any, Dict, Optional
+from typing import Any
 
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
@@ -35,7 +35,7 @@ def available_catalog_files() -> list[tuple[str, str]]:
     return choices
 
 
-def choose_catalog_file(country: str, idioma: str, catalog_name: Optional[str] = None) -> Optional[Any]:
+def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
     if catalog_name:
         catalog_file = join(DIRECTORIO_CTAS, catalog_name)
         if isfile(catalog_file):
@@ -64,7 +64,7 @@ def mark_setup_complete() -> None:
     set_setup_value(SETUP_COMPLETED, "True")
 
 
-def get_setup_configuration() -> Dict[str, Any]:
+def get_setup_configuration() -> dict[str, Any]:
     return {
         "idioma": get_setup_value(SETUP_LANGUAGE, "es"),
         "pais": get_setup_value(SETUP_COUNTRY, "NI"),
@@ -81,7 +81,7 @@ def finalize_setup(
     catalogo_tipo: str,
     country: str,
     idioma: str,
-    catalogo_archivo: Optional[str] = None,
+    catalogo_archivo: str | None = None,
 ) -> None:
     session = database.session()
     transaction_context = session.begin_nested() if session.in_transaction() else session.begin()
