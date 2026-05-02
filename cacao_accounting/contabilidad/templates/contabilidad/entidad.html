@@ -45,6 +45,10 @@
     <div class="col-md-6">
       <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Datos Generales</p>
       <table class="ca-table">
+        <caption class="visually-hidden">Datos generales de la entidad</caption>
+        <thead>
+          <tr><th scope="col">Campo</th><th scope="col">Valor</th></tr>
+        </thead>
         <tbody>
           <tr><td style="color:#64748b;">Identificador</td><td>{{ registro.code }}</td></tr>
           <tr><td style="color:#64748b;">Razón Social</td><td>{{ registro.company_name }}</td></tr>
@@ -57,6 +61,10 @@
     <div class="col-md-6">
       <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Datos de Contacto</p>
       <table class="ca-table">
+        <caption class="visually-hidden">Datos de contacto de la entidad</caption>
+        <thead>
+          <tr><th scope="col">Campo</th><th scope="col">Valor</th></tr>
+        </thead>
         <tbody>
           <tr><td style="color:#64748b;">Página Web</td><td>{{ registro.web }}</td></tr>
           <tr><td style="color:#64748b;">Correo</td><td>{{ registro.e_mail }}</td></tr>

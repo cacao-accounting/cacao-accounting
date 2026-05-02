@@ -18,6 +18,10 @@
     {{ macros.render_status(status=registro.status, lista_status=statusweb) }}
   </div>
   <table class="ca-table">
+    <caption class="visually-hidden">Detalle de la cuenta contable</caption>
+    <thead>
+      <tr><th scope="col">Campo</th><th scope="col">Valor</th></tr>
+    </thead>
     <tbody>
       <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.code }}</strong></td></tr>
       <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.name }}</td></tr>
