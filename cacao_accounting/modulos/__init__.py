@@ -22,7 +22,7 @@ Un modulo puede ser estandar o un añadido, todo modulo debe definir un blueprin
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
 from pkgutil import iter_modules
-from typing import Union
+from typing import Any, Union
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -155,14 +155,15 @@ def registrar_modulos_adicionales(flaskapp: Flask) -> None:
     from importlib import import_module
 
     if MODULOS_ADICIONALES:
-        modulos_extra: Union[list, None] = []
+        modulos_extra_list: list[Any] = []
         for i in MODULOS_ADICIONALES:
             paquete = import_module(i)
             flaskapp.register_blueprint(paquete.blueprint)
-            modulos_extra.append(paquete)
+            modulos_extra_list.append(paquete)
+        modulos_extra: Union[list[Any], None] = modulos_extra_list
     else:
         modulos_extra = None
-    flaskapp.add_template_global(modulos_extra, "modulos_extra")
+    flaskapp.jinja_env.globals["modulos_extra"] = modulos_extra
 
 
 def lista_tipos_documentos() -> list:

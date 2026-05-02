@@ -34,7 +34,6 @@ from cacao_accounting.database.helpers import usuarios_creados
 from cacao_accounting.logs import log
 from cacao_accounting.server import server
 
-
 if __name__ == "__main__":
     """Run as module python -m cacao_accounting."""
 

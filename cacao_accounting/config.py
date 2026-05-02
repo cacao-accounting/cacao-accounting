@@ -80,7 +80,7 @@ configuracion = {}
 
 if valida_direccion_base_datos(DATABASE_URL):
     configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
-configuracion["SECRET_KEY"] = SECRET_KEY
+configuracion["SECRET_KEY"] = SECRET_KEY or ""
 configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 
 if environ.get("CACAO_TEST"):
@@ -89,7 +89,7 @@ if environ.get("CACAO_TEST"):
 
 if environ.get("CACHE_REDIS_URL"):
     configuracion["CACHE_TYPE"] = "RedisCache"
-    configuracion["CACHE_REDIS_URL"] = environ.get("CACHE_REDIS_URL")
+    configuracion["CACHE_REDIS_URL"] = environ.get("CACHE_REDIS_URL") or ""
 else:
     configuracion["CACHE_TYPE"] = "SimpleCache"
 

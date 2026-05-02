@@ -40,6 +40,47 @@ build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 127
+target-version = ["py312"]
+include = "\\.pyi?$"
+extend-exclude = "(^|/)(build|dist|venv|\\.venv)/"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 127
+extend-exclude = ["build", "dist", "venv", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["I001"]
+
+[tool.flake8]
+max-line-length = 127
+extend-ignore = ["E203", "W503"]
+exclude = [
+	".git",
+	"__pycache__",
+	".venv",
+	"venv",
+	"build",
+	"dist",
+	".mypy_cache",
+	".ruff_cache",
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+follow_imports = "silent"
+exclude = "(?x)(^build/|^dist/|^venv/|^\\.venv/)"
+disable_error_code = [
+	"import-untyped",
+	"attr-defined",
+	"name-defined",
+	"union-attr",
+	"arg-type",
+	"index",
+	"return-value",
+]
 
 [tool.pytest.ini_options]
 markers = [

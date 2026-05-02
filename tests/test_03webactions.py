@@ -45,6 +45,72 @@ def test_check_passwd(request):
             assert validar_acceso(usuario="holis", clave="holis") is False
 
 
+def test_login_redirects_to_setup_on_initial_setup(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.database import CacaoConfig as Config, database
+
+        with app.app_context():
+            existing = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
+            original_value = None
+            config = None
+            if existing:
+                config = existing[0]
+                original_value = config.value
+                config.value = "False"
+            else:
+                config = Config(key="SETUP_COMPLETE", value="False")
+                database.session.add(config)
+            database.session.commit()
+
+            with app.test_client() as client:
+                response = client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert response.status_code == 302
+                assert response.headers["Location"].endswith("/setup") or response.headers["Location"].endswith("/setup/")
+
+            if original_value is None:
+                database.session.delete(config)
+            else:
+                config.value = original_value
+            database.session.commit()
+
+
+def test_setup_wizard_flow(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.database import CacaoConfig as Config, database
+
+        with app.app_context():
+            existing = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
+            original_value = None
+            config = None
+            if existing:
+                config = existing[0]
+                original_value = config.value
+                config.value = "False"
+            else:
+                config = Config(key="SETUP_COMPLETE", value="False")
+                database.session.add(config)
+            database.session.commit()
+
+            with app.test_client() as client:
+                response = client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert response.status_code == 302
+                assert response.headers["Location"].endswith("/setup") or response.headers["Location"].endswith("/setup/")
+
+                get_response = client.get("/setup/")
+                assert get_response.status_code == 200
+                assert b"Idioma predeterminado" in get_response.data
+
+            if original_value is None:
+                database.session.delete(config)
+            else:
+                config.value = original_value
+            database.session.commit()
+
+
 def test_set_entity_inactive(request):
 
     if request.config.getoption("--slow") == "True":

@@ -45,6 +45,7 @@ def cargar_catalogos(catalogo, entidad):
     Debe ser un archivo .cvs con los encabezados iguales a la base de datos.
     """
     cuentas = DictReader(open(catalogo.file, "r", encoding="utf-8"))
+    entity_code = entidad.code if hasattr(entidad, "code") else entidad
     for cuenta in cuentas:
         if cuenta["grupo"] == "1":
             cuenta["grupo"] = True
@@ -57,7 +58,7 @@ def cargar_catalogos(catalogo, entidad):
         registro = Accounts(
             active=True,
             enabled=True,
-            entity=entidad,
+            entity=entity_code,
             code=cuenta["codigo"],
             name=cuenta["nombre"],
             group=cuenta["grupo"],
@@ -66,4 +67,7 @@ def cargar_catalogos(catalogo, entidad):
             status="active",
         )
         database.session.add(registro)
+
+    session = database.session()
+    if not session.in_transaction():
         database.session.commit()

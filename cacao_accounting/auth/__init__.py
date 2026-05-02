@@ -21,7 +21,7 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, current_app, flash, redirect, render_template
+from flask import Blueprint, current_app, flash, redirect, render_template, session, url_for
 from flask_login import LoginManager, login_required, login_user, logout_user
 from jwt import encode
 
@@ -139,7 +139,8 @@ def inicio_sesion():  # pragma: no cover
                         setup_wizard = setup_wizard[0]
 
                         if setup_wizard.value == "False":
-                            return redirect("/setup")
+                            session["setup_step"] = 1
+                            return redirect(url_for("setup.setup"))
                         else:
                             return redirect("/app")
                     else:

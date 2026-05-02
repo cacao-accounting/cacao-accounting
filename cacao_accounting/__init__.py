@@ -31,6 +31,7 @@ from typing import Union
 from flask import Flask, session
 from flask_alembic import Alembic
 from flask_login import current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -175,6 +176,8 @@ def create_app(ajustes: Union[dict, None] = None) -> Flask:
         template_folder=DIRECTORIO_PLANTILLAS,
         static_folder=DIRECTORIO_ARCHIVOS,
     )
+
+    setattr(cacao_app, "wsgi_app", ProxyFix(cacao_app.wsgi_app, x_for=1, x_proto=1, x_host=1))
 
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
