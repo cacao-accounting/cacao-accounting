@@ -10,13 +10,13 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, current_app, flash, redirect, render_template, session, url_for
+from flask import Blueprint, flash, redirect, render_template
 from flask_login import LoginManager, login_required, login_user, logout_user
-from jwt import encode
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
 from cacao_accounting.logs import log
 
@@ -59,27 +59,7 @@ def proteger_passwd(clave):
 
 def validar_acceso(usuario, clave) -> bool:
     """Verifica el inicio de sesión del usuario."""
-    from argon2.exceptions import VerifyMismatchError
-
-    acceso = clave
-    consulta = database.session.execute(database.select(User).filter_by(user=usuario)).first()
-
-    if consulta:
-        registro = consulta[0]
-
-        if registro.active:
-
-            try:
-                ph.verify(registro.password, acceso)
-                return True
-
-            except VerifyMismatchError:
-                return False
-        else:
-            return False
-
-    else:
-        return False
+    return helpers.validar_acceso(usuario, clave)
 
 
 @login.route("/login", methods=["GET", "POST"])
@@ -88,56 +68,26 @@ def inicio_sesion():  # pragma: no cover
     from flask_login import current_user
 
     from cacao_accounting.auth.forms import LoginForm
-    from cacao_accounting.database import database, CacaoConfig as Config
 
     form = LoginForm()
     if current_user.is_authenticated:
         return redirect("/app")
-    else:
-        if form.validate_on_submit():
-            if validar_acceso(form.usuario.data, form.acceso.data):
-                query = database.session.execute(database.select(User).filter_by(user=form.usuario.data)).first()
-                identidad = query[0]
 
-                from cacao_accounting.config import MODO_ESCRITORIO
-
-                if MODO_ESCRITORIO and identidad.classification != "admin":
-                    flash("Solo un usuario administrador puede iniciar sesion.")
-                    return INICIO_SESION
-
-                else:
-                    # Api rest auth token.
-                    try:
-                        # token should expire after 24 hrs
-                        identidad.token = encode(
-                            {"user_id": identidad.id},
-                            current_app.config["SECRET_KEY"],
-                            algorithm="HS256",
-                        )
-                        assert identidad.token is not None  # nosec
-
-                    except Exception as e:
-                        assert e is not None  # nosec
-                        log.warning("No se pudo generar auth token.")
-
-                    login_user(identidad)
-
-                    setup_wizard = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()
-
-                    if setup_wizard:
-                        setup_wizard = setup_wizard[0]
-
-                        if setup_wizard.value == "False":
-                            session["setup_step"] = 1
-                            return redirect(url_for("setup.setup"))
-                        else:
-                            return redirect("/app")
-                    else:
-                        return redirect("/app")
-            else:
-                flash("Inicio de Sesion Incorrecto.")
-                return INICIO_SESION
+    if not form.validate_on_submit():
         return render_template("login.html", form=form, titulo="Inicio de Sesion - Cacao Accounting")
+
+    identidad = helpers.autenticar_usuario(form.usuario.data, form.acceso.data)
+    if identidad is None:
+        flash("Inicio de Sesion Incorrecto.")
+        return INICIO_SESION
+
+    if not helpers.puede_iniciar_en_escritorio(identidad):
+        flash("Solo un usuario administrador puede iniciar sesion.")
+        return INICIO_SESION
+
+    helpers.asignar_token_para_usuario(identidad)
+    login_user(identidad)
+    return helpers.redireccion_despues_de_login()
 
 
 @login.route("/exit")
