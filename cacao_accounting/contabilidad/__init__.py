@@ -617,7 +617,6 @@ def editar_comprobante():
 @verifica_acceso("accounting")
 def series():
     """Series e Identificadores."""
-
     from cacao_accounting.database import Serie, database
     from cacao_accounting.modulos import lista_tipos_documentos
 
@@ -652,7 +651,6 @@ def series():
 @verifica_acceso("accounting")
 def nueva_serie():
     """Nueva Serie."""
-
     from cacao_accounting.contabilidad.forms import FormularioSerie
     from cacao_accounting.database import Entity, Serie, database
 

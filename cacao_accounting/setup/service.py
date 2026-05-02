@@ -1,6 +1,8 @@
 # Copyright 2026
 # Licensed under the Apache License, Version 2.0
 
+"""Servicios del asistente de configuración inicial."""
+
 from os import listdir
 from os.path import isfile, join
 from typing import Any
@@ -27,6 +29,7 @@ SETUP_ENTITY = "SETUP_DEFAULT_ENTITY"
 
 
 def available_catalog_files() -> list[tuple[str, str]]:
+    """Devuelve los archivos de catálogo disponibles para el asistente de configuración."""
     choices: list[tuple[str, str]] = []
     for filename in sorted(listdir(DIRECTORIO_CTAS), key=str.lower):
         path = join(DIRECTORIO_CTAS, filename)
@@ -36,6 +39,7 @@ def available_catalog_files() -> list[tuple[str, str]]:
 
 
 def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
+    """Selecciona el catálogo contable adecuado según país, idioma y nombre de archivo."""
     if catalog_name:
         catalog_file = join(DIRECTORIO_CTAS, catalog_name)
         if isfile(catalog_file):
@@ -48,23 +52,28 @@ def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = No
 
 
 def save_language(language: str) -> None:
+    """Guarda el idioma de configuración seleccionado."""
     set_setup_value(SETUP_LANGUAGE, language)
 
 
 def save_regional_settings(country: str, currency: str) -> None:
+    """Guarda los valores regionales de país y moneda."""
     set_setup_value(SETUP_COUNTRY, country)
     set_setup_value(SETUP_CURRENCY, currency)
 
 
 def save_company_details(company_data: dict) -> None:
+    """Almacena los datos de la entidad configurada."""
     set_setup_value(SETUP_ENTITY, company_data.get("id", ""))
 
 
 def mark_setup_complete() -> None:
+    """Marca el proceso de configuración como finalizado."""
     set_setup_value(SETUP_COMPLETED, "True")
 
 
 def get_setup_configuration() -> dict[str, Any]:
+    """Recupera la configuración guardada del asistente de instalación."""
     return {
         "idioma": get_setup_value(SETUP_LANGUAGE, "es"),
         "pais": get_setup_value(SETUP_COUNTRY, "NI"),
@@ -73,6 +82,7 @@ def get_setup_configuration() -> dict[str, Any]:
 
 
 def available_currencies() -> list[tuple[str, str]]:
+    """Devuelve las monedas disponibles para el formulario de configuración."""
     return obtener_lista_monedas()
 
 
@@ -83,6 +93,7 @@ def finalize_setup(
     idioma: str,
     catalogo_archivo: str | None = None,
 ) -> None:
+    """Completa el proceso de configuración inicial y crea la entidad por defecto."""
     session = database.session()
     transaction_context = session.begin_nested() if session.in_transaction() else session.begin()
     with transaction_context:

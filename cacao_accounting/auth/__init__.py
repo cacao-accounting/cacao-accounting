@@ -51,8 +51,7 @@ def no_autorizado():  # pragma: no cover
 
 
 def proteger_passwd(clave):
-    """Devuelve una contraseña salteada con bcrytp."""
-
+    """Devuelve una contraseña salteada con bcrypt."""
     clave_encriptada = ph.hash(clave.encode())
     return clave_encriptada.encode()
 

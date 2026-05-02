@@ -87,7 +87,6 @@ def informacion_para_desarrolladores():
 @cacao_app.route("/check")
 def ping():
     """Valida que la app se esta ejecutando."""
-
     resp = jsonify(success=True)
     resp.status_code = 200
 
