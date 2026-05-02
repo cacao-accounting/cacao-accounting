@@ -10,6 +10,13 @@
     <h5 class="ca-card-title"><i class="bi bi-person-circle"></i> Usuario Actual</h5>
   </div>
   <table class="ca-table">
+    <caption class="visually-hidden">Información del usuario actualmente autenticado</caption>
+    <thead>
+      <tr>
+        <th scope="col">Campo</th>
+        <th scope="col">Valor</th>
+      </tr>
+    </thead>
     <tbody>
       <tr><td style="color:#64748b;">Nombre</td><td>{{ current_user.p_nombre }} {{ current_user.s_nombre }}</td></tr>
       <tr><td style="color:#64748b;">Apellido</td><td>{{ current_user.p_apellido }} {{ current_user.s_apellido }}</td></tr>
@@ -25,6 +32,7 @@
     <h5 class="ca-card-title"><i class="bi bi-person-badge"></i> Roles Asignados</h5>
   </div>
   <table class="ca-table">
+    <caption class="visually-hidden">Roles asignados al usuario actual</caption>
     <thead>
       <tr>
         <th>Usuario</th>
@@ -51,6 +59,7 @@
     <span style="font-size:.75rem;color:#64748b;font-family:monospace;">{{ modulo.id }}</span>
   </div>
   <table class="ca-table">
+    <caption class="visually-hidden">Permisos disponibles para el módulo mostrado</caption>
     <thead>
       <tr>
         <th>Permiso</th>
