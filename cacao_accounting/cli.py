@@ -31,11 +31,9 @@ from flask.cli import FlaskGroup
 
 # <---------------------------------------------------------------------------------------------> #
 # Definición de interfaz de linea de comandos.
-LINEA_COMANDOS = FlaskGroup(
-    help="""\
+LINEA_COMANDOS = FlaskGroup(help="""\
 Interfaz de linea de comandos para la administración de Cacao Accounting.
-"""
-)
+""")
 
 
 def linea_comandos(as_module=False):

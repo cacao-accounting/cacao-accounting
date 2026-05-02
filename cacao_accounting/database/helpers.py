@@ -168,8 +168,10 @@ def obtener_id_modulo_por_nombre(modulo: Union[str, None]) -> Union[str, None]:
     if modulo:
         from cacao_accounting.database import Modules, database
 
-        MODULO = database.session.execute(database.select(Modules).filter_by(module=modulo)).first()
-        return MODULO[0].id
+        MODULO = database.session.execute(
+            database.select(Modules).filter_by(module=modulo)
+        ).scalar_one_or_none()
+        return MODULO.id if MODULO is not None else None
     else:
         return None
 

@@ -14,7 +14,6 @@
 
 """Definicion de Roles para regular el acceso al sistema de los usuarios."""
 
-
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
@@ -166,10 +165,13 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     """Asigna un rol determinado al usuario establecido."""
     from cacao_accounting.database import Roles, RolesUser, User, database
 
-    USUARIO = database.session.execute(database.select(User).filter_by(user=usuario)).first()
-    ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).first()
+    USUARIO = database.session.execute(database.select(User).filter_by(user=usuario)).scalar_one_or_none()
+    ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).scalar_one_or_none()
 
-    rol = RolesUser(user_id=USUARIO[0].id, role_id=ROL[0].id)
+    if USUARIO is None or ROL is None:
+        raise ValueError("Usuario o rol no encontrado")
+
+    rol = RolesUser(user_id=USUARIO.id, role_id=ROL.id)
 
     database.session.add(rol)
     database.session.commit()
@@ -177,13 +179,16 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
 
 def obtener_roles_por_usuario(usuario: str):
     """Obtiene los roles de usuario de la base de datos."""
-    from cacao_accounting.database import Roles, RolesUsuario, Usuario, database
+    from cacao_accounting.database import Roles, RolesUser, User, database
 
-    USUARIO = Usuario.query.filter_by(usuario=usuario).first()
+    USUARIO = User.query.filter_by(user=usuario).first()
+    if USUARIO is None:
+        return []
+
     ROLES_DE_USUARIO = (
-        database.session.query(RolesUsuario, Roles, Usuario)
+        database.session.query(RolesUser, Roles, User)
         .join(Roles)
-        .join(Usuario)
-        .filter(RolesUsuario.user_id == USUARIO.id)
+        .join(User)
+        .filter(RolesUser.user_id == USUARIO.id)
     )
     return ROLES_DE_USUARIO

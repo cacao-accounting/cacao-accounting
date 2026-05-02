@@ -1,0 +1,69 @@
+# Copyright 2026
+# Licensed under the Apache License, Version 2.0
+
+from flask_wtf import FlaskForm
+from wtforms import HiddenField, RadioField, SelectField, StringField
+from wtforms.validators import DataRequired
+
+from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
+from cacao_accounting.database import Entity
+from cacao_accounting.setup.service import available_catalog_files
+
+LANGUAGE_CHOICES = [
+    ("es", "Español"),
+    ("en", "English"),
+    ("pt", "Português"),
+]
+
+COUNTRY_CHOICES = [
+    ("NI", "Nicaragua"),
+    ("US", "Estados Unidos"),
+    ("MX", "México"),
+    ("ES", "España"),
+    ("CO", "Colombia"),
+    ("PA", "Panamá"),
+]
+
+CATALOG_CHOICES = [
+    ("preexistente", "Usar catálogo contable preexistente"),
+    ("en_cero", "Crear catálogo contable en cero"),
+]
+
+
+class SetupLanguageForm(FlaskForm):
+    idioma = SelectField("Idioma predeterminado", choices=LANGUAGE_CHOICES, validators=[DataRequired()])
+    step = HiddenField(default="1")
+
+
+class SetupRegionalForm(FlaskForm):
+    pais = SelectField("País predeterminado", choices=COUNTRY_CHOICES, validators=[DataRequired()])
+    moneda = SelectField("Moneda predeterminada", choices=[], validators=[DataRequired()])
+    step = HiddenField(default="2")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.moneda.choices = obtener_lista_monedas()
+
+
+class SetupCompanyForm(FlaskForm):
+    id = StringField("Código de empresa", validators=[DataRequired()])
+    razon_social = StringField("Razón social", validators=[DataRequired()])
+    nombre_comercial = StringField("Nombre comercial")
+    id_fiscal = StringField("Identificación fiscal", validators=[DataRequired()])
+    tipo_entidad = SelectField("Tipo de entidad", choices=Entity.tipo_entidad_lista, validators=[DataRequired()])
+    catalogo = RadioField(
+        "Catálogo contable",
+        choices=CATALOG_CHOICES,
+        default="preexistente",
+        validators=[DataRequired()],
+    )
+    catalogo_origen = SelectField("Catálogo existente", choices=[], validators=[])
+    step = HiddenField(default="3")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.catalogo_origen.choices = [("", "Seleccione un catálogo existente")] + available_catalog_files()
+
+
+class SetupConfirmationForm(FlaskForm):
+    step = HiddenField(default="4")

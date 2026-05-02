@@ -14,7 +14,6 @@
 
 """Modulo de Contabilidad."""
 
-
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
@@ -43,7 +42,6 @@ from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.database import STATUS, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.version import APPNAME
-
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
