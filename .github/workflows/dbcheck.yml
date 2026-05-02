@@ -1,14 +1,15 @@
 name: Databases
 
 on:
-  push:
-    branches: [main, development]
-  pull_request:
-    branches: [main, development]
+  workflow_run:
+    workflows: [CI]
+    types:
+      - completed
 
 jobs:
   multiple_db_check:
     name: Test with multiple databases
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
