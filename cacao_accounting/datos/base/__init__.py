@@ -85,32 +85,41 @@ def crea_usuario_admin(user: str, passwd: str):
         log.trace("Usuario administrador creado correctamente.")
 
 
+def _debe_imprimir_uri_database() -> bool:
+    return environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST")
+
+
+def _consultar_version_database(uri: str) -> tuple[str, str]:
+    match uri:
+        case s if s.startswith("mysql+pymysql"):
+            return "SELECT version();", "Running on MySQL."
+        case s if s.startswith("postgresql+pg8000") or s.startswith("postgresql+psycopg2"):
+            return "SELECT VERSION();", "Running on Postgresql."
+        case _:
+            return "select sqlite_version();", "Running on SQLITE."
+
+
+def _log_database_version() -> None:
+    from cacao_accounting.database import database
+    from sqlalchemy.sql import text
+
+    database_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if not database_uri:
+        return
+
+    log.warning(database_uri)
+    query, info_message = _consultar_version_database(database_uri)
+    log.info(info_message)
+
+    for row in database.session.execute(text(query)):
+        log.info("Versión de base de datos" + str(row))
+
+
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
-    if environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"):
+    if _debe_imprimir_uri_database():
         with current_app.app_context():
-            from cacao_accounting.database import database
-            from sqlalchemy.sql import text
-
-            if environ.get("CACAO_PRINT_DATABASE_URI"):  # pragma: no cover
-                DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
-                log.warning(DABATASE_URI)
-
-                if DABATASE_URI.startswith("mysql+pymysql"):
-                    log.info("Running on MySQL.")
-                    Q = database.session.execute(text("SELECT version();"))
-                    for i in Q:
-                        log.info("Versión de base de datos" + str(i))
-                elif DABATASE_URI.startswith("postgresql+pg8000") or DABATASE_URI.startswith("postgresql+psycopg2"):
-                    log.info("Running on Postgresql.")
-                    Q = database.session.execute(text("SELECT VERSION();"))
-                    for i in Q:
-                        log.info("Versión de base de datos" + str(i))
-                else:
-                    log.info("Running on SQLITE.")
-                    Q = database.session.execute(text("select sqlite_version();"))
-                    for i in Q:
-                        log.info("Versión de base de datos" + str(i))
+            _log_database_version()
 
     log.debug("Iniciando carga de datos base al sistema.")
     init_modulos()
