@@ -196,6 +196,8 @@ class ExchangeRate(database.Model, BaseTabla):  # type: ignore[name-defined]
 class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     """Una entidad con acceso al sistema."""
 
+    __allow_unmapped__ = True
+
     # Información Básica
     user = database.Column(database.String(15), nullable=False)
     name = database.Column(database.String(80))
@@ -212,7 +214,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
     # Api rest auth
-    token = None
+    token: str | None = None
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]

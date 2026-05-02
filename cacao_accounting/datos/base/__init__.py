@@ -86,7 +86,7 @@ def crea_usuario_admin(user: str, passwd: str):
 
 
 def _debe_imprimir_uri_database() -> bool:
-    return environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST")
+    return bool(environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"))
 
 
 def _consultar_version_database(uri: str) -> tuple[str, str]:
