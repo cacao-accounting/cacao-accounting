@@ -1,29 +1,25 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
-{% extends "base.html" %}
 {% import "macros.html" as macros %}
+{% extends "base.html" %}
 {% block contenido %}
-<section>
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb lh-sm">
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-          <i class="bi bi-house"></i> Inicio
-        </a>
-      </li>
-      <li class="breadcrumb-item active" aria-current="page">
-        <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-          Contabilidad
-        </a>
-      </li>
-    </ol>
-  </nav>
-  <h4>Listado de Períodos Contables.</h4>
 
-  {% if entidades_creadas %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Períodos Contables</li>
+  </ol>
+</nav>
 
-  <a class="btn btn-primary btn-sm" href="{{ url_for("contabilidad.nueva_unidad") }}" role="button">Nuevo Período
-    Contable</a>
-  <table class="table table-sm">
+{% if entidades_creadas %}
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-calendar-range"></i> Listado de Períodos Contables</h5>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.nueva_unidad') }}" role="button">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo Período
+    </a>
+  </div>
+  <table class="ca-table">
     <caption style="display: none;">Listado de periodos contables.</caption>
     <thead>
       <tr>
@@ -33,34 +29,24 @@
         <th scope="col">Fin</th>
       </tr>
     </thead>
-    {% for item in consulta.items -%}
-    {% import "macros.html" as macros %}
-    <tr>
-      <th id="{{ item.entidad }}">
-        {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-        {{ item.name }}
-      </th>
-      <td>
-        {{ item.entity }}
-      </td>
-      <td>
-        {{ item.start }}
-      </td>
-      <td>
-        {{ item.end }}
-      </td>
-    </tr>
-    {%- endfor %}
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>
+          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
+          {{ item.name }}
+        </td>
+        <td>{{ item.entity }}</td>
+        <td>{{ item.start }}</td>
+        <td>{{ item.end }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
   </table>
-</section>
-<section>
-  {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}
-</section>
-
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}</div>
+</div>
 {% else %}
-
 {{ macros.crear_nueva_entidad() }}
-
 {% endif %}
 
 {% endblock %}

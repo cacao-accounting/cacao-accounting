@@ -1,51 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cacao Accounting System Info</title>
-    <link rel="icon" type="image/png" sizes="16x16"
-        href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
-    <link rel="stylesheet"
-        href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
-    <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
-    <script src="{{ url_for('static', filename='node_modules/@popperjs/core/dist/umd/popper.min.js') }}"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cacao Accounting — Información del Sistema</title>
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap-icons/font/bootstrap-icons.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.css') }}">
+  <script src="{{ url_for('static', filename='node_modules/bootstrap/dist/js/bootstrap.bundle.js') }}"></script>
+  <link href="{{ url_for('static', filename='css/cacaoaccounting.css') }}" rel="stylesheet">
 </head>
+<body style="background:#f1f5f9;padding:2rem;">
+  <div style="max-width:700px;margin:0 auto;">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <div class="ca-card-title">
+          <a href="{{ url_for('cacao_app.pagina_inicio') }}">
+            <img height="32" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting">
+          </a>
+          <span style="margin-left:.75rem;">Información para desarrolladores</span>
+        </div>
+        <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-house me-1"></i>Inicio
+        </a>
+      </div>
 
-<body>
-    <a href="{{ url_for("cacao_app.pagina_inicio") }}">
-        <img height="50" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}"
-            alt="Cacao Accounting">
-    </a>
-    <h1>Cacao Accounting</h1>
-    <h2>Información para desarrolladores.</h2>
+      <h6 class="mt-3"><i class="bi bi-app me-1"></i>Aplicación</h6>
+      <table class="ca-table">
+        <tbody>
+          <tr><td><strong>Versión</strong></td><td>{{ info["app"]["version"] }}</td></tr>
+          <tr><td><strong>Modo Escritorio</strong></td><td>{{ MODO_ESCRITORIO }}</td></tr>
+          <tr><td><strong>Ambiente</strong></td><td>{{ current_app.config["ENV"] }}</td></tr>
+          <tr><td><strong>Modo Pruebas</strong></td><td>{{ test }}</td></tr>
+        </tbody>
+      </table>
 
-    <h3>Información de la aplicación</h3>
-    <ul>
-        <li>Versión de Cacao Accounting: {{ info["app"]["version"] }}</li>
-        <li>Modo Escritorio: {{ MODO_ESCRITORIO }}</li>
-        <li>Ambiente: {{ current_app.config["ENV"] }}</li>
-        <li>Modo Pruebas: {{ test }}</li>
-    </ul>
+      <h6 class="mt-3"><i class="bi bi-database me-1"></i>Base de Datos</h6>
+      <table class="ca-table">
+        <tbody>
+          <tr><td><strong>Motor</strong></td><td>{{ db }}</td></tr>
+          <tr><td><strong>Versión</strong></td><td>{{ db_version }}</td></tr>
+        </tbody>
+      </table>
 
-    <h3>Información de la base de datos.</h3>
-    <ul>
-        <li>Base de Datos: {{ db }}</li>
-        <li>Version: {{ db_version }}</li>
-    </ul>
-
-    <h3>Información del sistema</h3>
-    <ul>
-        <li>Systema: {{ os }}</li>
-        <li>Python: {{ py_version }}</li>
-    </ul>
-
-    <p class="lead">
-        <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="btn btn-success fw-bold "><i class="bi bi-house"
-                aria-hidden="true"></i> Regresar al inicio</a>
-    </p>
+      <h6 class="mt-3"><i class="bi bi-cpu me-1"></i>Sistema</h6>
+      <table class="ca-table">
+        <tbody>
+          <tr><td><strong>Sistema Operativo</strong></td><td>{{ os }}</td></tr>
+          <tr><td><strong>Python</strong></td><td>{{ py_version }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </body>
-
 </html>
