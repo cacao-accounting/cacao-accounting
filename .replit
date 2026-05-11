@@ -3,6 +3,7 @@ run = "source /home/runner/cacao-accounting/venv/bin/activate && CACAO_TEST=True
 
 [nix]
 channel = "stable-24_05"
+packages = ["cargo", "fontconfig", "ghostscript", "glib", "harfbuzz", "libiconv", "libxcrypt", "openssl", "pango", "pkg-config", "rustc"]
 
 [deployment]
 run = [
