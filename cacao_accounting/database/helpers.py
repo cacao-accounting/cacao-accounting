@@ -356,6 +356,8 @@ def generate_identifier(
         if seq is None:
             raise ValueError(f"Sequence con id '{sequence_id}' no encontrada.")
 
+        if should_reset_sequence(sequence_id, posting_date):
+            reset_sequence(sequence_id)
         next_val = get_next_sequence_value(sequence_id)
         suffix = format_sequence_value(next_val, seq.padding)
         full_identifier = f"{prefix}{suffix}"

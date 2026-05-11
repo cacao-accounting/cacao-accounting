@@ -1,5 +1,49 @@
 # ESTADO ACTUAL DEL PROYECTO
 
+## Actualizacion incremental - 2026-05-11 (menu cierre mensual)
+
+- El menu de transacciones de Contabilidad ahora incluye `Comprobante Recurrente` y `Asistente de Cierre Mensual`.
+- Se agregaron rutas iniciales `/accounting/journal/recurring` y `/accounting/period-close/monthly` con pantallas informativas alineadas al requerimiento tecnico de `requerimiento.md`.
+- Las nuevas pantallas documentan el contrato funcional esperado: plantillas recurrentes que no impactan GL al aprobarse, aplicacion por periodo desde cierre mensual, estados, elegibilidad, prevencion de duplicados y trazabilidad.
+
+## Actualizacion incremental - 2026-05-11 (FIXME reportes y cierre)
+
+- El modulo de contabilidad incluye acceso directo a `Comprobantes Contables de Cierre`, abriendo `/accounting/journal/new?isclosing=true` y preseleccionando la etapa `Cierre`.
+- Los reportes financieros ajustan la UX de filtros: `Comprobante` vive en filtros avanzados, el toggle avanzado controla todo el bloque, se eliminaron botones finales duplicados de vistas guardadas y `Columnas visibles` queda oculto en Balanza, Balance General y Estado de Resultado.
+- Los filtros financieros precargan libro predeterminado/primario y periodo contable segun la fecha actual cuando existe configuracion activa.
+- La busqueda de tipo de tercero muestra etiquetas `Cliente`/`Proveedor` con valores tecnicos `customer`/`supplier`, y la busqueda de terceros dependiente vuelve a filtrar correctamente.
+- La agrupacion de Detalle de Movimiento por tipo de comprobante funciona aunque la columna agrupadora no este visible.
+
+## Actualizacion incremental - 2026-05-11 (CI Smart Select JS)
+
+- El workflow `.github/workflows/python-package.yml` ahora instala dependencias JavaScript en `cacao_accounting/static` y ejecuta `npm test`, cubriendo `static/test/smart-select.test.js`.
+- El script `npm test` del paquete estatico es portable para Windows/CI al usar comillas dobles en el patron de Mocha.
+
+## Actualizacion incremental - 2026-05-11 (validacion CI)
+
+- Los checks del workflow `.github/workflows/python-package.yml` pasan correctamente usando `venv` con Python 3.13.
+- La Balanza de Comprobacion ya no expone la columna tecnica `Level` ni en la tabla ni en el modal `Columnas visibles`.
+- Las pruebas quedaron alineadas con dos reglas vigentes: los reportes financieros requieren `apply_filters=1` para cargar datos y el Journal Entry manual solo bloquea cuentas de inventario.
+
+## Actualizacion incremental - 2026-05-11 (columnas de reportes)
+
+- El modal `Columnas visibles` de reportes financieros ahora muestra etiquetas amigables para todas las columnas disponibles, incluyendo campos tecnicos extendidos como tipo de referencia, reversa y comprobante reversado.
+
+## Actualizacion incremental - 2026-05-11 (UX vistas guardadas)
+
+- En reportes financieros, el campo `Vista guardada` ahora muestra sus acciones (`Cargar`, `Guardar`, `Eliminar`) debajo del input para mejorar la legibilidad del panel lateral y evitar una fila demasiado apretada.
+
+## Actualización incremental — 2026-05-10 (presentación jerárquica financiera)
+
+- Se mejoró la presentación visual de los reportes financieros principales (`Balanza de Comprobación`, `Balance General`, `Estado de Resultado`) con un renderer jerárquico por cuentas, nodos expandibles/colapsables y subtotales por agrupador.
+- La `Balanza de Comprobación` deja de mostrar la columna técnica `Level` en la UI.
+- Se mantuvo el backend común de cálculo financiero; los cambios se concentraron en capa de renderización.
+
+## Actualización incremental — 2026-05-10
+
+- Se corrigió la normalización de `Accounts.classification` en reportes financieros GL (`Estado de Resultado` y `Balance General`) para soportar alias en plural (`ingresos`, `gastos`, etc.) sin perder movimientos en resultados.
+- La cobertura de pruebas del framework financiero ahora valida explícitamente clasificaciones plurales creadas desde formularios contables.
+
 **Fecha de análisis:** 2026-05-07
 **Rama analizada:** `copilot/analyze-modules-and-create-docs`
 
@@ -44,7 +88,7 @@ El sistema está diseñado con soporte nativo para:
 | Posting contable | `cacao_accounting/contabilidad/posting.py` | Servicio de contabilización GL, AR/AP, bancos e inventario |
 | Conciliación de Compras | `cacao_accounting/compras/purchase_reconciliation_service.py` | Motor de matching 2-way/3-way, eventos económicos, tolerancias configurables por compañía y panel operativo |
 | Conciliación bancaria | `cacao_accounting/bancos/reconciliation_service.py` | Servicio de matching parcial contra pagos y GL |
-| Reportes operativos | `cacao_accounting/reportes/` | Subledger, aging, Kardex y reconciliaciones |
+| Reportes contables y operativos | `cacao_accounting/reportes/` | Framework financiero base (Detalle Movimiento, Balanza, Estado de Resultado, Balance General) + reportes operativos |
 | Datos demo | `cacao_accounting/datos/` | Datos de carga inicial y desarrollo |
 | Pruebas | `tests/` | Suite de pruebas con pytest |
 
@@ -85,8 +129,17 @@ Rutas implementadas:
 - **Tipo de cambio:** lista.
 - **Períodos contables:** lista.
 - **Monedas:** lista.
-- **Comprobante Contable (Journal Entry):** nuevo formulario backend-first en `/journal/new`, guarda borrador en `ComprobanteContable` + `ComprobanteContableDetalle`, permite ver `/journal/<id>` y contabilizar con `/journal/<id>/submit`. El formulario permite seleccionar por checkboxes uno o varios libros activos de la compañía; si todos quedan marcados, el posting afecta todos los libros activos.
+- **Comprobante Contable (Journal Entry):** nuevo formulario backend-first en `/journal/new`, guarda borrador en `ComprobanteContable` + `ComprobanteContableDetalle`, permite ver `/journal/<id>` y contabilizar con `/journal/<id>/submit`. El formulario permite seleccionar por checkboxes uno o varios libros activos de la compañía; si todos quedan marcados, el posting afecta todos los libros activos. La moneda del comprobante usa SmartSelect (`doctype=currency`).
 - **Edición de borradores de Comprobante Contable:** `/journal/edit/<id>` rehidrata cabecera, libros y líneas del borrador para modificarlo antes de contabilizar.
+- **Validaciones del comprobante manual:** exige balance, líneas de un solo lado, centro de costo para cuentas de gasto y moneda única por comprobante. El modal avanzado ya no expone moneda de línea ni cuenta bancaria; mantiene captura de anticipo y dimensiones contables.
+- **Estados operativos del comprobante manual:** soporte de `draft` -> `rejected` sin impacto en ledger y `submitted` -> `cancelled` con reversa contable append-only.
+- **Vista de detalle del comprobante manual:** rediseñada en patrón visual nativo Cacao (`ca-card`/`ca-table`), mostrando alias de usuario (`User.user`) y doble modo de detalle de línea (panel + modal).
+- **Política UX de legibilidad (Journal Entry):** en UI se prioriza formato `codigo - descripcion` para cuenta contable, centro de costos, libros y moneda; los códigos puros se reservan al payload técnico.
+- **Duplicación de comprobantes manuales:** disponible para estados `draft`, `rejected` y `submitted`, creando siempre un nuevo comprobante en estado `draft` mediante acción dedicada en vista de detalle.
+- **Edición post-duplicación/reversión:** `Duplicar` y `Revertir` abren directamente el formulario de edición del nuevo borrador para permitir ajuste de fecha de contabilización y serie en el periodo destino.
+- **Revertir comprobante manual:** variante de duplicación que invierte débitos y créditos de cada línea y genera borrador editable para registrar la reversión contable con nueva fecha/serie.
+- **Numeración diferida en duplicar/revertir:** los borradores creados por estas acciones nacen sin `document_no`; el identificador se asigna al primer guardado de edición (o como fallback al submit) usando la fecha/serie activa del borrador.
+- **Contabilizar con caja/banco en Journal Entry:** el asiento manual ahora puede postear cuentas `cash` y `bank`; los errores de contabilización también se muestran con flash global en la UI.
 - **Series (legacy `Serie`):** lista y crear.
 - **NamingSeries:** lista, nueva, toggle-default, toggle-active.
 - **Contadores externos (`ExternalCounter`):** lista, nuevo, ajuste con auditoría, log de auditoría.
@@ -102,15 +155,16 @@ El posting contable actual:
 - Usa `PartyAccount`, `ItemAccount` y `CompanyDefaultAccount` para resolver cuentas.
 - Valida `Accounts.account_type` de forma estricta antes de persistir `GLEntry`: cuentas sin tipo explícito permiten afectación libre; cuentas tipadas se restringen al módulo/origen autorizado.
 - Mantiene trazabilidad con `voucher_type`, `voucher_id`, `document_no`, `naming_series_id`, tercero y período.
+- Conserva en GL metadatos operativos de línea usados por conciliación/manual journal (`bank_account_id`, `is_advance`) cuando el comprobante manual los captura.
 
 Pendiente en contabilidad:
 - No hay reportes financieros construidos sobre `GLEntry`.
 - Dimensiones adicionales y reglas diferenciales entre libros aún no están conectadas al posting.
-- La edición del borrador ya existe, pero aún no recalcula el identificador documental cuando cambia la serie seleccionada antes del submit.
+- La edición del borrador ya existe y asigna identificador al primer guardado cuando el comprobante no estaba numerado; aún falta política formal para renumerar cuando ya existe `document_no` y luego se cambia serie/fecha.
 - Impuestos/cargos ya tienen configuración admin, cálculo de plantilla y posting GL básico en facturas de compra/venta.
 - `CompanyDefaultAccount` cubre efectivo, bancos, AR, AP, ingresos, gastos, inventario, COGS, ajustes de inventario, cuenta puente de compras, anticipos, diferencias bancarias, impuestos, redondeo, diferencias cambiarias, diferidos, descuentos de pago, resultado del período y resultados acumulados.
 
-Modelos en DB disponibles (implementados pero sin UI completa):  
+Modelos en DB disponibles (implementados pero sin UI completa):
 `GLEntry`, `ComprobanteContable`, `ComprobanteContableDetalle`, `GLEntryDimension`, `DimensionType`, `DimensionValue`, `LedgerMappingRule`, `ExchangeRevaluation`, `ExchangeRevaluationItem`, `PeriodCloseRun`, `PeriodCloseCheck`, `ItemAccount`, `PartyAccount`, `CompanyDefaultAccount`, `Tax`, `TaxTemplate`, `TaxTemplateItem`, `AccountBalanceSnapshot`.
 
 ### `compras` — Compras (Source to Pay)
@@ -179,11 +233,15 @@ Rutas implementadas:
 - **Recepción/Entrega directa:** el submit de `PurchaseReceipt` y `DeliveryNote` ahora genera `StockLedgerEntry` y GL de forma directa (cuenta puente / conciliación de compras y COGS respectivamente), y el cancelado guarda reversos append-only en stock y GL.
 - **Servicios de inventario:** conversión UOM por ítem, validación obligatoria de lote/serial, actualización de seriales y reconstrucción de `StockBin` desde `StockLedgerEntry`.
 
-Modelos en DB disponibles pero sin funcionalidad completa:  
+Modelos en DB disponibles pero sin funcionalidad completa:
 `StockBalanceSnapshot`. `Batch` y `SerialNumber` ya tienen validación operativa básica; `StockLedgerEntry`, `StockBin` y `StockValuationLayer` ya están conectados para `StockEntry`, `PurchaseReceipt` y `DeliveryNote`, pero falta gestión visual completa de lotes/seriales y recalculo histórico avanzado.
 
-### `reportes` — Reportes operativos
+### `reportes` — Reportes contables y operativos
 - Blueprint global con rutas HTML:
+  - `/reports/account-movement`
+  - `/reports/trial-balance`
+  - `/reports/income-statement`
+  - `/reports/balance-sheet`
   - `/reports/subledger`
   - `/reports/aging`
   - `/reports/kardex`
@@ -198,7 +256,11 @@ Modelos en DB disponibles pero sin funcionalidad completa:
   - `/reports/batches`
   - `/reports/serials`
 - Servicios derivados desde GL/documentos, `PaymentReference`, `StockLedgerEntry` y reconciliaciones.
-- Estado actual: reportes operativos MVP con filtros básicos y totales; pendiente pulir UX, exportación y reportes financieros formales.
+- Estado actual:
+  - Reportes financieros base derivados del GL con filtros por compañía/libro/período, paginación server-side y exportación CSV/XLSX para Detalle de Movimiento.
+  - Layout ERP de reportes (panel lateral de filtros + panel derecho de resultados con sticky headers y scroll independiente).
+  - Reportes operativos MVP existentes se mantienen activos.
+  - Pendiente: profundizar jerarquías/drill-down universal, exportación avanzada para todos los reportes y endurecimiento de seguridad por compañía/libro a nivel de permisos.
 
 ### `document_flow` — Flujo Documental
 - Registro de relaciones entre documentos (`DocumentRelation`).
@@ -295,3 +357,97 @@ Modelos en DB disponibles pero sin funcionalidad completa:
 - Formulario de comprobante (`journal_nuevo.html`):
   - solo el campo **Compañía** mantiene apertura/carga por foco (`preloadOnFocus: true`).
 - Cobertura JS agregada en `cacao_accounting/static/test/smart-select.test.js` con escenarios del bug.
+
+## Actualización 2026-05-09 — Validación de comprobante contable
+
+- Validación integral ejecutada contra build + lint + pytest del workflow CI local:
+  - `python -m build`
+  - `python -m flake8 cacao_accounting/`
+  - `python -m ruff check cacao_accounting/`
+  - `python -m mypy cacao_accounting/`
+  - `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+- Resultado: **342 pruebas en verde** en el clone local.
+- Ajustes realizados durante la validación:
+  - el formulario de Journal Entry ya no permite tratar la moneda como atributo libre por línea; las líneas heredan la moneda del comprobante;
+  - el modal avanzado fue simplificado para captura contable (sin moneda de línea ni cuenta bancaria) y mantiene anticipo/dimensiones;
+  - el bootstrap de datos demo vuelve a preservar web/correo/teléfonos/fax para las vistas smoke de CI;
+  - `smart-select.js` conserva las opciones pre-cargadas al auto-seleccionar una opción default y sus pruebas JS ya funcionan desde rutas reales del repositorio.
+
+## Actualización 2026-05-10 — Framework de reportes financieros (Smart Select)
+
+- Los 4 reportes financieros principales ahora comparten filtros con Smart Select en `reportes/financial_report.html`.
+- Se agregaron filtros dependientes por contexto:
+  - compañía → libro, período, cuentas, dimensiones
+  - tipo de tercero → tercero
+  - compañía + libro → tipo/ID de comprobante
+- `search_select` quedó extendido para reportes con nuevos doctypes:
+  - `accounting_period`, `account_code`, `party_type`, `voucher_type`, `document_no`
+- Se elevó la presentación financiera:
+  - encabezados amigables de columnas
+  - formato monetario en importes
+  - panel superior de contexto
+  - barra sticky de totales al pie
+- Validación ejecutada en verde: flake8, ruff, mypy, pytest completo.
+
+## Actualización 2026-05-10 — Backlog avanzado de reportes financieros
+
+- Vistas guardadas implementadas por usuario para los 4 reportes GL (save/apply/reset).
+- Selector de columnas funcional integrado en el panel de filtros y aplicado en render.
+- Agrupación dinámica (`group_by`) añadida en Detalle de Movimiento.
+- Jerarquías expandibles en tabla financiera habilitadas con árbol por `account_code`.
+- Drill-down implementado:
+  - cuenta → `account-movement`
+  - comprobante (cuando es journal/comprobante contable) → detalle de comprobante.
+- Exportación Excel avanzada implementada con:
+  - metadata (título, fecha, usuario),
+  - encabezados congelados,
+  - formato financiero de celdas exportadas,
+  - autoancho,
+  - hoja adicional `Filtros`.
+- Seguridad reforzada en rutas financieras GL con `@verifica_acceso("accounting")` y normalización de compañía válida.
+
+
+## Actualización incremental — 2026-05-10 (fixes de FIXME en curso)
+
+- Reportes financieros: mejoras de UX de filtros en `/reports/account-movement` (botones arriba/abajo, etiqueta de comprobante, toggle avanzado persistente, ajuste de columnas visibles y limpieza visual de totales).
+- Bancos: cancelación de `PaymentEntry` ahora revierte referencias y recalcula saldos pendientes de facturas referenciadas para mantener consistencia subledger/GL.
+- Series: `generate_identifier` respeta reset anual/mensual de secuencias antes de incrementar.
+
+
+## Actualización incremental — 2026-05-10 (FIXME pendientes)
+
+- Los reportes financieros principales ya no muestran datos al abrirse sin acción explícita de filtros; requieren `Aplicar filtros`.
+- Se añadió filtro primario `Mostrar anulaciones` para incluir comprobantes cancelados en consultas financieras GL.
+- Search Select en reportes corrige etiquetas para evitar valores renderizados como objetos en filtros de tipo tercero/tipo comprobante/comprobante.
+- Ruta de entidad predeterminada corregida para evitar error por columna inexistente `predeterminada`.
+
+
+## Actualización incremental — 2026-05-10 (cierre adicional FIXME)
+
+- `account-movement` muestra subtotal por agrupador cuando se usa `group_by`.
+- Formularios/flows protegidos por CSRF reforzados en impuestos admin y preferencias de Journal Entry.
+
+
+## Actualización incremental — 2026-05-10 (cierre final FIXME)
+
+- Reportes financieros completan ciclo de vistas guardadas con captura de nombre mediante modal.
+- Columnas visibles usan modal dedicado y permiten incluir columnas extendidas de reversión/referencia.
+- Registro de tipos en `search_select` encapsulado como estructura de solo lectura.
+
+
+## Actualización incremental — 2026-05-10 (cierre documental FIXME)
+
+- Se cerraron formalmente en `PENDIENTE.md` los pendientes que estaban vinculados al bloque de issues de `FIXME.md`.
+- `FIXME.md` quedó con estado de cierre explícito para reflejar que el listado fue atendido.
+
+
+## Actualización incremental — 2026-05-11 (posting manual)
+
+- Se eliminó el bloqueo manual para cuentas `income/expense` y otros tipos en Journal Entry; el bloqueo manual queda restringido a cuentas de inventario.
+
+## Actualización incremental — 2026-05-12 (Cierre del módulo)
+
+- **Comprobantes Recurrentes:** Implementado el framework completo para plantillas contables que no impactan el ledger al aprobarse, permitiendo su aplicación diferida. Incluye validación de balance y estados operativos (`draft`, `approved`, `cancelled`, `completed`).
+- **Asistente de Cierre Mensual:** Activado el primer paso operativo del asistente, permitiendo filtrar y aplicar plantillas recurrentes aprobadas para un periodo contable específico.
+- **Integración Contable:** Los comprobantes generados desde recurrentes quedan vinculados a su plantilla de origen y heredan el comportamiento de un comprobante manual.
+- **Posting de Facturas:** Se aseguró que al aprobar una factura de compra o venta, se inicialice correctamente el saldo pendiente (`outstanding_amount`) y el gran total, permitiendo un seguimiento inmediato de AR/AP.

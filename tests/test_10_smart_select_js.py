@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 
-SMART_SELECT_FILE = Path("/workspaces/cacao-accounting/cacao_accounting/static/js/smart-select.js")
+SMART_SELECT_FILE = Path(__file__).resolve().parents[1] / "cacao_accounting" / "static" / "js" / "smart-select.js"
 
 
 def _run_node_script(script_body: str) -> None:

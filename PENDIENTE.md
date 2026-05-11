@@ -1,5 +1,21 @@
 # PENDIENTE — Cacao Accounting
 
+## Actualizacion incremental - 2026-05-11 (menu cierre mensual)
+
+- [x] Implementar la logica completa de `Comprobante Recurrente`: modelos `RecurringJournalTemplate`/lineas, estados, aprobacion sin GL, cancelacion con motivo e historial.
+- [x] Implementar `RecurringJournalApplication` con restriccion unica por compania, ledger, plantilla, fiscal year y periodo.
+- [x] Implementar la aplicacion real desde el `Asistente de Cierre Mensual`, generando comprobantes contables reales y marcandolos como recurrentes.
+
+## Actualizacion incremental - 2026-05-11 (FIXME reportes y cierre)
+
+- Sin nuevos pendientes derivados de esta iteracion.
+- Quedan cerrados los issues actuales de `FIXME.md` relacionados con acceso a comprobantes de cierre, filtros de reportes financieros, busqueda de tercero, agrupacion por comprobante, prefill de libro/periodo y cobertura E2E focalizada de reportes.
+
+## Actualización incremental — 2026-05-10
+
+- Sin nuevos pendientes derivados de esta iteración.
+- Se resolvió la compatibilidad de reportes financieros con clasificaciones de cuentas en plural (`Ingresos`/`Gastos`) en el cálculo de resultados.
+
 **Fecha de análisis:** 2026-05-06
 **Base:** definición de módulos en `modulos/` y estado actual del código.
 
@@ -69,10 +85,20 @@ El servicio `cacao_accounting/contabilidad/posting.py` ya contabiliza documentos
 - [x] Generar `GLEntry` por cada línea y por cada libro activo desde una acción de submit; el comprobante manual puede limitarse a uno o varios libros activos.
 - [x] Permitir en `/accounting/journal/new` seleccionar libros activos con checkboxes preseleccionados y tratar “todos marcados” como afectar todos los libros activos.
 - [x] Permitir editar borradores del comprobante manual para cambiar libros y líneas antes del submit.
+- [x] Exigir centro de costo en líneas de cuentas de gasto.
+- [x] Forzar moneda única por comprobante y bloquear mezcla de monedas en líneas.
+- [x] Migrar moneda de cabecera a SmartSelect (`doctype=currency`) en el formulario de comprobante manual.
+- [x] Simplificar modal de línea: sin moneda de línea y sin cuenta bancaria.
+- [x] Persistir `is_advance` del modal avanzado y mantener compatibilidad backend para `bank_account` vía payload/API legado.
+- [x] Añadir prueba E2E basada en cliente Flask (GET/POST) para verificar creación de borrador (`tests/test_e2e_journalentry.py`).
 - [ ] Soportar tipos: estándar, apertura, nota de crédito, nota de débito, contra asiento, ajuste, reversión.
 - [ ] Completar edición de borradores y lista operacional; `/gl/new` y `/gl/list` quedan como legacy hasta retiro.
 - [x] Añadir cobertura HTTP del selector multi-book y del endpoint de libros activos del comprobante manual.
-- [ ] Resolver formalmente el comportamiento de `document_no` cuando un borrador cambia de serie antes de contabilizar.
+- [~] Resolver formalmente el comportamiento de `document_no` cuando un borrador cambia de serie antes de contabilizar.
+- [x] Diferir numeración en `Duplicar`/`Revertir`: crear borradores sin `document_no` y asignar identificador al primer guardado de edición (con fallback en submit).
+- [x] Permitir contabilización manual con cuentas de caja/banco en `Journal Entry` y mostrar errores de submit mediante flash global.
+- [ ] Implementar selector de documentos abiertos dependiente de compañía / tipo de tercero / tercero / tipo documental.
+- [x] Completar estados operativos visibles del comprobante (cancelado, reversado, cierre) y sus restricciones.
 
 ---
 
@@ -144,7 +170,7 @@ El servicio `cacao_accounting/contabilidad/posting.py` ya contabiliza documentos
 - [x] Servicio de reversión para documentos operativos contabilizados.
 - [x] Poblar `reversal_of` y `is_reversal` en las entradas GL reversadas.
 - [ ] Trazabilidad bidireccional visible entre asiento original y reverso.
-- [ ] Aplicar el mismo patrón al comprobante contable manual.
+- [x] Aplicar el mismo patrón al comprobante contable manual.
 
 ---
 
@@ -353,15 +379,17 @@ El servicio `cacao_accounting/contabilidad/posting.py` ya contabiliza documentos
 ## 🟢 BLOQUE 14 — Reportes Financieros
 
 ### Contabilidad
-- [ ] Balance General (por compañía, libro, fecha, moneda).
-- [ ] Estado de Resultados (por compañía, libro y período).
-- [ ] Mayor General (por cuenta y tercero).
-- [ ] Libro Diario (asientos cronológicos).
-- [ ] Balanza de Comprobación (saldos por cuenta).
+- [x] Balance General (por compañía, libro, fecha, moneda) — versión base desde GL.
+- [x] Estado de Resultados (por compañía, libro y período) — versión base desde GL.
+- [x] Mayor General (por cuenta y tercero) — unificado en Detalle de Movimiento Contable.
+- [x] Libro Diario (asientos cronológicos) — unificado en Detalle de Movimiento Contable.
+- [x] Balanza de Comprobación (saldos por cuenta) — versión base desde GL.
 - [x] Aging AR/AP MVP (saldos por antigüedad).
 - [ ] Saldos por dimensión (cost_center, unit, project).
 - [ ] Revalorización cambiaria histórica.
 - [ ] Anticipos de clientes/proveedores (aplicado, pendiente, remanente).
+- [~] Jerarquías expandibles y subtotales visuales implementadas para Balanza de Comprobación, Balance General y Estado de Resultado; pendiente completar drill-down universal en todos los reportes y casos de navegación.
+- [ ] Exportación avanzada consistente (agrupaciones, formato monetario y totales configurables en todos los reportes).
 
 ### Compras
 - [ ] Órdenes de compra pendientes (por proveedor, ítem, estado).
@@ -522,3 +550,61 @@ El servicio `cacao_accounting/contabilidad/posting.py` ya contabiliza documentos
 - [x] Mantener excepción de UX para compañía (`preloadOnFocus: true`) en `/accounting/journal/new`.
 - [x] Evitar serialización de filtros como `[object Object]` normalizando objetos a valores escalares.
 - [x] Agregar y ejecutar pruebas unitarias JS de `smart-select` para cubrir regressions del issue.
+- [x] Hacer que `preloadOptions()` / `fetchOptions()` retornen promesas para poder validarlas de forma determinista en pruebas.
+- [x] Mantener disponibles las opciones pre-cargadas después del auto-select de una opción default.
+
+## Pendiente (iteración 2026-05-10 — reportes financieros)
+
+- [ ] Implementar persistencia real de vistas guardadas (filtros/columnas/orden/agrupaciones por usuario).
+- [ ] Implementar selector funcional de columnas (actualmente botón placeholder en UI).
+- [ ] Implementar agrupación dinámica y jerarquías expandibles reales para Balanza, Estado de Resultado y Balance General.
+- [ ] Completar drill-down universal (cuenta → movimiento → comprobante) con validación de permisos.
+- [ ] Mejorar exportación avanzada de Excel (hoja de filtros, formato monetario por columna, auto ancho, metadata de usuario/fecha).
+- [ ] Reforzar seguridad de reportes por compañía/libro en filtros, exportación y drill-down.
+
+## Pendiente tras iteración 2026-05-10 (reportes financieros)
+
+- [ ] Endurecer autorización por compañía/libro con matriz explícita usuario↔compañía/libro (modelo dedicado; hoy se reforzó acceso de módulo y validación de compañía/ledger).
+- [ ] Extender drill-down universal para vouchers no contables (ventas/compras/bancos) con resolución por `voucher_type` a documento origen.
+- [ ] Persistir y aplicar ordenamiento y agrupaciones múltiples como objeto versionado de vista (hoy quedó soportado `group_by` simple + columnas/filtros).
+- [ ] Añadir pruebas E2E de UI para expand/collapse jerárquico y flujo de vistas guardadas.
+
+
+## Pendiente tras iteración 2026-05-10 (FIXME actual)
+
+- [x] Completar ciclo UX de vistas guardadas con modal nominal + selector de vistas por usuario (save/update/delete completo).
+- [x] Migrar `Columnas visibles` a modal dedicado completo y soportar campos adicionales (referencia, is_reversal, reversal_of).
+- [x] Implementar subtotales visibles por agrupador en `account-movement` y cerrar brechas restantes de filtros reportadas en FIXME.
+
+
+## Cierre FIXME 2026-05-10
+
+- [x] Se cerraron los pendientes declarados para reportes financieros y flujo de filtros/columnas de `FIXME.md`.
+
+
+## Cierre final de issues FIXME (2026-05-10)
+
+- [x] Los issues listados en `FIXME.md` fueron implementados en código y/o UX según su alcance funcional dentro de esta iteración.
+- [x] No quedan pendientes abiertos en `PENDIENTE.md` que correspondan al bloque de issues de `FIXME.md`.
+
+
+## Ajuste 2026-05-11 — bloqueo manual por tipo de cuenta
+
+- [x] Corregido: cuentas `income` ya no bloquean comprobantes manuales; solo `inventory` mantiene restricción manual por dependencia de metadatos de kardex.
+
+## Actualizacion incremental - 2026-05-11
+
+- Sin nuevos pendientes derivados del ajuste visual de `Vista guardada` en reportes financieros.
+
+## Actualizacion incremental - 2026-05-11 (columnas de reportes)
+
+- Sin nuevos pendientes derivados del ajuste de etiquetas amigables en el modal `Columnas visibles`.
+
+## Actualizacion incremental - 2026-05-11 (validacion CI)
+
+- Sin nuevos pendientes derivados de la validacion del workflow.
+- Nota tecnica: `python -m build` pasa, pero setuptools sigue mostrando advertencias de empaquetado por directorios estaticos/templates detectados como paquetes potenciales; no bloquean el workflow actual.
+
+## Actualizacion incremental - 2026-05-11 (CI Smart Select JS)
+
+- Sin nuevos pendientes derivados de integrar `smart-select.test.js` al workflow.

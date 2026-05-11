@@ -1,3 +1,5 @@
+Estado 2026-05-11: issues implementados y cubiertos con pruebas focalizadas. Se conserva el detalle historico debajo como referencia de la iteracion.
+
 Para trabajar en estos issues primeto debes cargar el contexto disponible de:
 
 - AGENTS.md
@@ -19,23 +21,41 @@ Al finalizar cada iteración actualiza:
 
 Issues actuales que deben corregirse:
 
-- URL: /accounting/accounts y /accounting/costs_center
-  La opción de expandir o colapsar solo se esta aplicando a cuentas y centros de costos de primer nivel. La logica debe ser para expandir o colapsar si la cuenta o centro de costos es tipo parent y tiene hijos asociados. Si cumple esa caracteristica debe de poder expandirse y colapsarse.
+## En el menú de contabilidad agregar Comprobantes Contables de Cierre
 
-  Pendiente opción de expandir / colapsar todos.
-  
-- URL: /accounting/book/list
-  Al crear una compañia el libro contable por defecto llamarlo Local y no Fiscal
-  
-- URL: /accounting/journal/new
-  En el selector de compañia dado que el principal campo actualizar cacao_accounting/static/js/smart-select.js para aceptar x-data-preload para cargar la lista de entidades antes que el usuario comienze a escribir, es decir cuando el usuario se ubica en el campo ya estan precargadas las compañias y puede comenzar a escribir o seleccionar una compañia de la lista.
+Lo que yo haría es agregar un query en la URL /accounting/journal/new?isclosing=true
 
-  En el selector de secuencia dado que la secuencia tiene un valor predeterminado actualizar cacao_accounting/static/js/smart-select.js para que si existe un campo predeterminado llenar el campo con el valor predeterminado, otros casos de uso a crear un Nuevo Cliente llenar la cuenta por cobrar por defecto o crear un nuevo proveedor llenar la cuenta por cobrar por defecto.
-  
-- He intentado llenar un comprobante de prueba pero no me permite grabar porque hay campos requeridos sin llenar pero no me indica cuales
-  <img width="1702" height="787" alt="image" src="https://github.com/user-attachments/assets/d9aedacc-d6e4-4b68-afef-f03858c09dfe" />
+si isclosing es verdadero marcar el selector de etapa de cierre como Cierre
 
-- En el modal para ingresar información adicional en una linea de un comprobante ningun campo funciona y en cuenta esta mostrando el id interno de el registro
-  <img width="1902" height="913" alt="image" src="https://github.com/user-attachments/assets/811c378a-fb10-49c8-908a-f7c99c0e49be" />
+## En los reportes eliminar los dos botones al final
 
-  Este modal requiere una revisión completa.
+Ahorra que en la parte superior estas las opciones para guardar o cargar layouts al final del
+formulario los botones de Guardar Vista y Eliminar Vista se deben eliminar
+
+## Toggle de Mostrar/Ocultar filtros avanzados no funciona
+
+Los filtros avanzados deben estar dentro de un contenedor que reponda a Mostrar / Ocultar filtros avanzados
+
+## Busqueda de tercero no funciona
+
+El selector de tipo de tercero muestra supplier/customer la busqueda de terceros no funciona
+
+## Agrupar por tipo de comprobante no funciona
+
+No funciona el agrupador por comprobante
+
+## Mover el filtro de Comprobante dentro de los filtros avanzados
+
+## En las vistas de Balanza de Comprobación, Balance General y Estado de Resultado
+
+1. Ocultar el selector de columnas visibles
+2. Filtros avanzados colapsados por defecto
+
+## Prefill filtros al seleccionar la compañia o en la carga inicial
+
+1. Cargar Libro Fiscal por defecto
+2. Seleccionar periodo contable en base a la fecha actual
+
+## Incluir en pruebas unitarias pruebas de stress en reportes
+
+Estresa los reportes con multiple filtros haz una prueba end to end de reportes financieros

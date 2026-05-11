@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Comprobante Recurrente') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-arrow-repeat me-2" style="color:#78BF30"></i>{{ _('Comprobante Recurrente') }}</h4>
+</div>
+
+<section class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Plantillas contables recurrentes') }}</h5>
+  </div>
+  <div class="p-3">
+    <p class="text-muted mb-3">
+      {{ _('Define una afectacion contable balanceada que no impacta el ledger al aprobarse y que luego se aplica desde el Asistente de Cierre Mensual.') }}
+    </p>
+    <div class="table-responsive">
+      <table class="ca-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ _('Estado') }}</th>
+            <th scope="col">{{ _('Comportamiento') }}</th>
+            <th scope="col">{{ _('Impacta ledger') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge text-bg-secondary">{{ _('Borrador') }}</span></td>
+            <td>{{ _('Editable; no puede aplicarse.') }}</td>
+            <td>{{ _('No') }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge text-bg-primary">{{ _('Aprobado') }}</span></td>
+            <td>{{ _('Plantilla activa para aplicar por periodo.') }}</td>
+            <td>{{ _('No') }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge text-bg-danger">{{ _('Cancelado') }}</span></td>
+            <td>{{ _('Inactivo; conserva historial y requiere motivo.') }}</td>
+            <td>{{ _('No') }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge text-bg-success">{{ _('Completado') }}</span></td>
+            <td>{{ _('Finalizado al aplicar el ultimo periodo definido.') }}</td>
+            <td>{{ _('No') }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Criterios funcionales') }}</h5>
+  </div>
+  <div class="p-3">
+    <ul class="mb-0">
+      <li>{{ _('La plantilla debe tener compania, ledger, moneda, fecha de inicio, fecha de fin y periodicidad mensual.') }}</li>
+      <li>{{ _('Las lineas deben estar balanceadas antes de aprobarse.') }}</li>
+      <li>{{ _('La aplicacion por periodo debe generar un comprobante contable real vinculado a la plantilla.') }}</li>
+      <li>{{ _('La tabla de aplicaciones debe impedir duplicados por compania, ledger, plantilla, fiscal year y periodo.') }}</li>
+    </ul>
+  </div>
+</section>
+
+{% endblock %}

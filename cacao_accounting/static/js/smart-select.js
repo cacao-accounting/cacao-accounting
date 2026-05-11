@@ -177,7 +177,7 @@
           if (loadSettings.openMenu) {
             this.open = true;
           }
-          fetch(this.endpoint + '?' + params.toString(), { credentials: 'same-origin' })
+          return fetch(this.endpoint + '?' + params.toString(), { credentials: 'same-origin' })
             .then(function (response) {
               if (!response.ok) throw new Error(response.statusText);
               return response.json();
@@ -188,8 +188,19 @@
               if (!self.selectedValue && self.autoSelectDefault) {
                 var defaultOption = self.options.find(function (opt) { return opt.is_default; });
                 if (defaultOption) {
-                  // Auto-select the default option and stop; further processing not needed.
-                  self.selectOption(defaultOption);
+                  self.selectedValue = normalizeValue(defaultOption.value !== undefined ? defaultOption.value : defaultOption.id) || '';
+                  self.selectedLabel = defaultOption.display_name || defaultOption.label || '';
+                  self.search = self.selectedLabel;
+                  self.invalid = false;
+                  self.error = '';
+                  if (typeof self.onSelect === 'function') {
+                    try {
+                      self.onSelect(defaultOption);
+                    } catch (ignore) {
+                      // No-op: do not break select flow
+                    }
+                  }
+                  self.notifyValueChange();
                   return;
                 }
               }
@@ -232,7 +243,7 @@
 
           this.loading = true;
           this.open = true;
-          fetch(this.endpoint + '?' + params.toString(), { credentials: 'same-origin' })
+          return fetch(this.endpoint + '?' + params.toString(), { credentials: 'same-origin' })
             .then(function (response) {
               if (!response.ok) throw new Error(response.statusText);
               return response.json();

@@ -200,7 +200,7 @@ describe('smart-select', function () {
     assert.strictEqual(fetchCalls, 1);
     assert.strictEqual(component.selectedValue, 'SER-001');
     assert.strictEqual(component.selectedLabel, 'Serie 001');
-    assert.strictEqual(component.options.length, 0);
+    assert.strictEqual(component.options.length, 1);
   });
 
   it('selectOption updates hidden input and dispatches input/change events', function () {

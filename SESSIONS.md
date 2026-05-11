@@ -1,5 +1,402 @@
 # SESSIONS
 
+## 2026-05-11 (smart-select JS en workflow CI)
+
+### Peticion del usuario
+Asegurar que `cacao_accounting/static/test/smart-select.test.js` se ejecute como parte de `.github/workflows/python-package.yml`.
+
+### Resumen tecnico de cambios
+- `.github/workflows/python-package.yml`: se agrego setup de Node.js 22 con cache de npm, instalacion con `npm ci` en `cacao_accounting/static` y ejecucion de `npm test`.
+- `cacao_accounting/static/package.json`: el script `test` usa comillas dobles para que Mocha resuelva `test/**/*.test.js` tambien en Windows.
+- `cacao_accounting/static/test/smart-select.test.js`: la expectativa de auto-seleccion default conserva las opciones pre-cargadas, alineada con el comportamiento vigente del componente.
+
+### Verificacion ejecutada
+- `npm.cmd --prefix cacao_accounting\\static ci`
+- `npm.cmd --prefix cacao_accounting\\static test`
+
+## 2026-05-11 (validacion workflow CI con venv)
+
+### Peticion del usuario
+Asegurar que todos los checks definidos en `.github/workflows/python-package.yml` pasen correctamente usando el `venv` del proyecto.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/__init__.py`: la columna tecnica `level` se excluye tambien del modal `Columnas visibles` en Balanza de Comprobacion, no solo de la tabla renderizada.
+- `tests/test_08_reconciliation_reports.py`: la prueba de Balanza simula correctamente el submit de filtros con `apply_filters=1`, respetando la regla de no cargar datos al abrir reportes.
+- `tests/test_11_contabilidad_coverage.py`: la cobertura de bloqueo manual se alinea con la politica vigente: en Journal Entry manual solo se bloquean cuentas de inventario.
+
+### Verificacion ejecutada
+- `venv\\Scripts\\python.exe -m pip install --upgrade pip setuptools flake8 bandit`
+- `venv\\Scripts\\python.exe -m pip install -r development.txt`
+- `venv\\Scripts\\python.exe -m build`
+- `venv\\Scripts\\python.exe -m twine check dist/*`
+- `venv\\Scripts\\python.exe -m flake8 cacao_accounting/`
+- `venv\\Scripts\\python.exe -m ruff check cacao_accounting/`
+- `venv\\Scripts\\python.exe -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest -v -s --exitfirst --slow=True`
+
+## 2026-05-11 (etiquetas amigables en selector de columnas)
+
+### Peticion del usuario
+Corregir el modal `Columnas visibles` de reportes financieros porque algunas columnas aparecian con nombres tecnicos como `cost_center`, `party_type` o `is_reversal`.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/__init__.py`: se completaron etiquetas amigables para columnas tecnicas de reportes y se genera un mapa de encabezados para todas las columnas disponibles del modal, no solo para las visibles en la tabla.
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`: el modal ahora usa `all_column_headers` y evita duplicar columnas extra.
+- `tests/test_08_reconciliation_reports.py`: se agrego cobertura para validar etiquetas amigables de columnas extendidas.
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_08_reconciliation_reports.py -k "financial_report_view_persistence_and_column_selection" -q`
+
+## 2026-05-11 (ajuste visual de vistas guardadas en reportes)
+
+### Peticion del usuario
+Mover los botones de `Cargar`, `Guardar` y `Eliminar` debajo del campo `Vista guardada` en el panel lateral de filtros de reportes.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`: el campo `saved_view` queda en una fila propia y las acciones de vista guardada se agrupan debajo con `flex-wrap` para conservar el layout compacto del panel.
+
+### Verificacion ejecutada
+- Cambio visual puntual en plantilla HTML; no se ejecutaron pruebas automatizadas.
+
+## 2026-05-10 (mejora visual jerárquica en reportes financieros)
+
+### Peticion del usuario
+Priorizar la corrección de presentación visual para Balanza de Comprobación, Balance General y Estado de Resultado, manteniendo el backend común y tomando como referencia el árbol desplegable estilo ERPNext.
+
+### Plan implementado
+1. Mantener el motor de cálculo actual y ajustar solo el renderer/presentación.
+2. Construir jerarquía visual por cuenta contable con nodos expandibles/colapsables y subtotales por agrupador.
+3. Aplicar la jerarquía a Balanza, Balance y Estado de Resultado.
+4. Eliminar columna técnica `Level` de la vista tabular de Balanza.
+5. Validar con pruebas focalizadas y checks del workflow.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/__init__.py`:
+  - nuevo helper `_build_hierarchical_financial_rows` para derivar nodos padre por prefijos de cuenta y acumular subtotales.
+  - se integra el renderer jerárquico para `trial-balance`, `balance-sheet` e `income-statement`.
+  - se oculta columna `level` en `trial-balance` en la salida visual.
+  - metadatos de fila enriquecidos (`is_group`) para estilizar agrupadores.
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`:
+  - indentación visual por nivel y resaltado de filas agrupadoras.
+  - se conserva comportamiento expandir/colapsar y se ajusta presentación de estado cuadrado (sin emoji).
+- `tests/test_08_reconciliation_reports.py`:
+  - nueva prueba `test_trial_balance_uses_tree_presentation_without_level_column`.
+
+### Verificacion ejecutada
+- `python -m build`
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s tests/test_08_reconciliation_reports.py -k \"financial_reports_framework_uses_gl_and_supports_export or financial_report_view_persistence_and_column_selection or trial_balance_uses_tree_presentation_without_level_column\"`
+
+## 2026-05-10 (normalización de clasificaciones plurales en reportes financieros)
+
+### Peticion del usuario
+Corregir error en reportes financieros para que cuentas creadas con clasificaciones en plural (por ejemplo `Ingresos` y `Gastos`) no queden excluidas del Estado de Resultado y del cálculo de utilidad del Balance General.
+
+### Plan implementado
+1. Normalizar alias de clasificación de cuentas en `reportes/services.py`.
+2. Reutilizar la normalización en Estado de Resultado y Balance General.
+3. Ajustar prueba del framework financiero para cubrir clasificaciones plurales.
+4. Ejecutar validación completa (flake8, ruff, mypy y pytest).
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/services.py`:
+  - nuevo helper `_normalize_account_classification` con soporte de alias plural ES/EN.
+  - uso del helper en `get_income_statement_report` y `get_balance_sheet_report`.
+- `tests/test_08_reconciliation_reports.py`:
+  - `test_financial_reports_framework_uses_gl_and_supports_export` ahora usa `Ingresos` y `Gastos` para validar compatibilidad.
+
+### Verificacion ejecutada
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+
+## 2026-05-09 (framework base de reportes financieros)
+
+### Peticion del usuario
+Implementar un framework robusto de reportes contables basado en GL, con soporte multi-ledger, filtros multidimensionales, UX tipo ERP (panel lateral + resultados), paginación server-side y exportación para reportes financieros clave.
+
+### Plan implementado
+1. Extender `reportes/services.py` con reportes financieros derivados únicamente de `GLEntry`.
+2. Exponer nuevas rutas financieras en `reportes/__init__.py` con filtros comunes y exportación CSV/XLSX.
+3. Crear plantilla de UI ERP para reportes con filtros en barra lateral colapsable y tabla con sticky headers.
+4. Enlazar el módulo de contabilidad a los nuevos reportes.
+5. Agregar pruebas focalizadas de servicios y exportación.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/reportes/services.py`:
+  - nuevo `FinancialReportFilters`.
+  - nuevos servicios: `get_account_movement_detail`, `get_trial_balance_report`, `get_income_statement_report`, `get_balance_sheet_report`.
+  - filtros por compañía/libro/período/ID visible/cuenta/rango/dimensiones/tercero/tipo de comprobante/estado.
+  - paginación para detalle de movimientos y totales contables.
+- `cacao_accounting/reportes/__init__.py`:
+  - nuevas rutas:
+    - `/reports/account-movement`
+    - `/reports/trial-balance`
+    - `/reports/income-statement`
+    - `/reports/balance-sheet`
+  - exportación CSV/XLSX en detalle de movimiento con `export=csv|xlsx`.
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`:
+  - layout ERP de dos paneles con sidebar de filtros colapsable y scroll independiente.
+  - panel de resultados con tabla de scroll horizontal/vertical y encabezados sticky.
+- `cacao_accounting/contabilidad/templates/contabilidad.html`:
+  - enlaces del bloque de reportes conectados a los nuevos reportes financieros.
+- `tests/test_08_reconciliation_reports.py`:
+  - nueva prueba `test_financial_reports_framework_uses_gl_and_supports_export`.
+
+### Verificacion ejecutada
+- `python -m black cacao_accounting/reportes/__init__.py cacao_accounting/reportes/services.py tests/test_08_reconciliation_reports.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s tests/test_08_reconciliation_reports.py -k "financial_reports_framework_uses_gl_and_supports_export or reports_return_subledger_aging_kardex_and_reconciliations"`
+- `python -m flake8 cacao_accounting/reportes/__init__.py cacao_accounting/reportes/services.py`
+- `python -m ruff check cacao_accounting/reportes/__init__.py cacao_accounting/reportes/services.py`
+- `python -m mypy cacao_accounting/reportes/__init__.py cacao_accounting/reportes/services.py`
+
+## 2026-05-09 (Contabilizar con caja y feedback visible)
+
+### Peticion del usuario
+Validar los datos reales en `cacaoaccounting.db`, corregir que `Libro Contable` y `Moneda` se muestren correctamente, y resolver por qué `Contabilizar` no funcionaba mientras `Rechazar` sí.
+
+### Plan implementado
+1. Inspeccionar el comprobante real en SQLite para distinguir dato persistido vs. contrato visual.
+2. Confirmar la causa del fallo de Contabilizar mediante una prueba directa de submit.
+3. Relajar la validación manual solo para cuentas de caja y banco en `journal_entry`.
+4. Mostrar mensajes flash globales para que los errores de posting sean visibles.
+5. Mejorar el fallback de detalle para que libros y moneda implícitos se presenten de forma legible.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/default_accounts.py`:
+  - `journal_entry` deja de bloquear cuentas `bank` y `cash`.
+- `cacao_accounting/templates/base.html`:
+  - agrega render global de mensajes flash con estilos Bootstrap.
+- `cacao_accounting/contabilidad/__init__.py`:
+  - `ver_comprobante` ahora muestra libros activos de la compañía cuando el comprobante no tiene selección explícita,
+  - la moneda muestra la moneda de la compañía como fallback legible si no hay moneda transaccional.
+- `tests/test_09_journal_entry_form.py`:
+  - nueva regresión: un comprobante manual con cuenta de caja se contabiliza correctamente.
+
+### Validacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 38 passed.
+
+## 2026-05-09 (numeracion diferida en duplicar/revertir)
+
+### Peticion del usuario
+Mantener correcta la referencia al duplicar, pero evitar que `Duplicar` y `Revertir` consuman secuencia o generen `document_no` al crear el borrador. El identificador debe generarse cuando el usuario guarda la edicion con la fecha/serie objetivo.
+
+### Plan implementado
+1. Permitir crear borradores sin asignacion de identificador documental para los flujos de duplicacion/reversion.
+2. Generar identificador solo al primer guardado de edicion si el borrador aun no tiene `document_no`.
+3. Mantener fallback en submit para asignar identificador si llega un borrador sin numeracion.
+4. Ajustar pruebas unitarias/E2E para validar la nueva semantica.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - `create_journal_draft(..., assign_identifier: bool = True)` ahora permite diferir numeracion.
+  - `duplicate_journal_as_draft` y `duplicate_journal_as_reversal_draft` crean borrador sin consumir secuencia y dejan `document_no`/`serie` en `None`.
+  - `update_journal_draft` asigna identificador en el primer guardado de edicion si el borrador no estaba numerado.
+  - `submit_journal` asigna identificador de respaldo si aun no existe antes de contabilizar.
+- `tests/test_09_journal_entry_form.py` y `tests/test_e2e_journalentry.py`:
+  - validan que duplicados/reversiones nacen sin `document_no`,
+  - validan generacion de identificador al guardar edicion (caso junio: contiene `-06-`).
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 37 passed.
+
+## 2026-05-09 (ajuste de flujo: Duplicar/Revertir abren edición)
+
+### Peticion del usuario
+Hacer que `Duplicar` lleve al formulario de edición para permitir cambiar serie y fecha de contabilización, y agregar variante `Revertir` que copie el payload en modo edición invirtiendo la afectación contable (debe <-> haber).
+
+### Plan implementado
+1. Ajustar redirección de `Duplicar` para abrir el formulario de edición del nuevo borrador.
+2. Desacoplar serie del documento origen durante duplicación para facilitar nueva selección de serie.
+3. Implementar acción `Revertir` que cree un nuevo borrador con débitos/créditos invertidos y redirección a edición.
+4. Extender pruebas de rutas y E2E para validar ambos flujos.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - `duplicate_journal_as_draft` ahora limpia `naming_series_id`/label para permitir seleccionar nueva serie sin arrastre del origen,
+  - nuevo servicio `duplicate_journal_as_reversal_draft` con inversión línea a línea de `debit` y `credit`.
+- `cacao_accounting/contabilidad/__init__.py`:
+  - `POST /journal/<id>/duplicate` redirige a `/journal/edit/<nuevo_id>` en lugar de vista detalle,
+  - nueva ruta `POST /journal/<id>/revert` que crea borrador de reversión y abre edición.
+- `cacao_accounting/contabilidad/templates/contabilidad/journal.html`:
+  - nueva acción `Revertir` junto a `Duplicar` para estados `draft`, `rejected`, `submitted`.
+- `tests/test_09_journal_entry_form.py` y `tests/test_e2e_journalentry.py`:
+  - cobertura para redirección a edición en duplicación,
+  - cobertura de reversión con inversión de signos en líneas.
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 37 passed.
+
+## 2026-05-09 (ajuste UX legible: labels humanas, detalle simplificado y duplicación)
+
+### Peticion del usuario
+Corregir la UX de Journal Entry para evitar códigos crudos: resaltar claramente la fila activa, eliminar `Ver panel`, renombrar `Ver modal` a `Ver detalle`, mostrar libros y moneda con información legible, mostrar cuenta/centro de costos en formato `codigo - descripcion` también en edición, eliminar encabezados `Campo / Valor`, y agregar botón `Duplicar` para crear nuevo borrador desde comprobantes en `draft`, `rejected` o `submitted`.
+
+### Plan implementado
+1. Ajustar vista de detalle (`journal.html`) para interacción clara de línea activa y acciones comprensibles.
+2. Enriquecer backend de vista/serialización para mostrar etiquetas humanas en lugar de códigos sueltos.
+3. Agregar flujo de duplicación de comprobante en servicio y ruta HTTP, con salida siempre en borrador.
+4. Extender pruebas funcionales y E2E para validar UX legible y duplicación por estado permitido.
+5. Registrar decisión de diseño UX como regla permanente del módulo.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/templates/contabilidad/journal.html`:
+  - resaltado visual fuerte de fila activa,
+  - eliminación de botón redundante `Ver panel`,
+  - acción renombrada a `Ver detalle`,
+  - layout de cabecera sin filas `Campo / Valor`,
+  - render de cuenta y centro de costos con etiquetas legibles,
+  - botón `Duplicar` para estados `draft`, `rejected`, `submitted`.
+- `cacao_accounting/contabilidad/__init__.py`:
+  - vista de comprobante con labels legibles para libros, moneda, cuentas y centros de costos,
+  - nueva ruta `POST /accounting/journal/<id>/duplicate`.
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - serialización de líneas con `account_label` y `cost_center_label`,
+  - servicio `duplicate_journal_as_draft` con validación de estados permitidos.
+- `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`:
+  - edición conserva `initialLabel` legible para centro de costos en Smart Select.
+- `tests/test_09_journal_entry_form.py` y `tests/test_e2e_journalentry.py`:
+  - cobertura nueva para etiquetas legibles,
+  - cobertura de duplicación desde `draft`, `rejected` y `submitted`.
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 35 passed.
+
+### Decisión de diseño (regla explícita)
+En Journal Entry, la interfaz debe priorizar información comprensible para usuarios contables: se muestra `codigo - descripcion` para entidades de catálogo (cuentas, centros, libros, moneda) y se evita presentar códigos aislados como valor principal. Los códigos puros quedan reservados al payload técnico interno.
+
+## 2026-05-09 (journal entry: rechazo draft, anulación con reversa y corrección visual Cacao)
+
+### Peticion del usuario
+Implementar rechazo en estado borrador sin tocar el ledger financiero y asegurar que únicamente aprobar/anular comprobantes impacte el ledger. Luego de la primera propuesta visual, corregir el diseño porque no respetaba el estilo Cacao propuesto y reportaba problemas de funcionamiento.
+
+### Plan implementado
+1. Agregar estado `rejected` para borradores en servicio/ruta sin generar `GLEntry`.
+2. Agregar anulación de comprobantes `submitted` con reversa contable append-only (impactando ledger solo en ese flujo).
+3. Corregir edición de borradores para asegurar rehidratación completa de líneas y navegación consistente de Cancelar.
+4. Rehacer `journal.html` usando patrón visual nativo del proyecto (`ca-card`, `ca-table`, toolbar estándar) y mantener doble modo de detalle de líneas (panel + modal) con JS robusto.
+5. Ampliar pruebas E2E para flujo completo y matriz de combinaciones contables.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - nuevos estados `rejected` y `cancelled`,
+  - `reject_journal_draft` (sin impacto en ledger),
+  - `cancel_submitted_journal` (reversa GL usando `cancel_document`).
+- `cacao_accounting/contabilidad/__init__.py`:
+  - nueva ruta `POST /accounting/journal/<id>/cancel`,
+  - ruta `POST /accounting/journal/<id>/reject` conectada a servicio,
+  - `cancel_url` contextual para nuevo/editar,
+  - vista de comprobante ahora recibe nickname de usuario (`User.user`).
+- `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`:
+  - rehidratación robusta de líneas con `uid` estable para evitar pérdida visual en edición,
+  - botón Cancelar contextual en modo edición.
+- `cacao_accounting/contabilidad/templates/contabilidad/journal.html`:
+  - rediseño completo respetando estilo visual existente del sistema,
+  - una sola aparición de secuencia/documento en título,
+  - panel de detalle de línea + modal de detalle,
+  - acciones de flujo (`Editar`, `Rechazar`, `Contabilizar`, `Anular`) con CSRF.
+- `tests/test_09_journal_entry_form.py`:
+  - regresión de edición (rehidratación + cancelar a comprobante origen),
+  - prueba de rechazo draft sin `GLEntry`.
+- `tests/test_e2e_journalentry.py`:
+  - flujo completo crear/ver/editar/modificar/verificar/contabilizar/verificar,
+  - rechazo draft,
+  - anulación submitted con reversas,
+  - matriz de combinaciones (centro/unidad/proyecto/terceros/referencias/anticipo/cruces).
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 30 passed.
+
+### Notas para siguiente iteracion
+1. Ejecutar suite completa oficial (`--slow=True`) para confirmar no regresiones transversales.
+2. Si producto lo requiere, agregar transiciones adicionales de estados (por ejemplo reopen) con reglas explícitas de auditoría.
+
+## 2026-05-09 (implementación de Journal Entry: submit, moneda SmartSelect y prueba E2E)
+
+### Peticion del usuario
+Corregir el guardado por POST de `/accounting/journal/new`, migrar el campo de moneda del comprobante a SmartSelect, eliminar en el modal de línea los campos de moneda y cuenta bancaria, reorganizar el modal según pares definidos y crear una prueba end-to-end basada solo en GET/POST llamada `test_e2e_journalentry.py`.
+
+### Plan implementado
+1. Ajustar frontend del formulario `journal_nuevo.html` para robustecer el submit y adaptar la captura de moneda.
+2. Extender Search Select con doctype de monedas para soportar SmartSelect en cabecera del comprobante.
+3. Endurecer parseo backend del payload para mantener validación server-side confiable.
+4. Agregar prueba E2E con cliente Flask (GET + POST) validando creación de borrador en base de datos.
+5. Actualizar pruebas existentes de Journal Entry para cubrir los cambios de contrato UI/API.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`:
+  - `prepareSubmit` ahora resuelve compañía de forma robusta antes de validar/enviar payload,
+  - `Moneda del comprobante` migrada a SmartSelect (`doctype: "currency"`),
+  - modal de línea actualizado: se elimina `Moneda` de línea, se elimina `Cuenta bancaria`,
+  - modal reordenado conforme a la matriz solicitada,
+  - etiqueta de `Unidad` actualizada a `Unidad de negocio`.
+- `cacao_accounting/search_select.py`:
+  - nuevo doctype `currency` en `SEARCH_SELECT_REGISTRY` para búsqueda por código/nombre.
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - `parse_journal_form` valida explícitamente que `journal_payload` sea JSON objeto (`dict`) antes de procesar.
+- `tests/test_09_journal_entry_form.py`:
+  - valida presencia de `doctype: "currency"`,
+  - valida ausencia de texto `Buscar cuenta bancaria` en formulario,
+  - valida búsqueda `/api/search-select?doctype=currency`.
+- `tests/test_e2e_journalentry.py` (nuevo):
+  - prueba E2E con cliente Flask: GET de formulario y POST de `journal_payload` balanceado,
+  - asegura creación de `ComprobanteContable` en estado `draft` y ausencia de `GLEntry` al guardar borrador.
+
+### Verificacion ejecutada
+- `c:/code/cacao-accounting/venv/Scripts/python.exe -m pytest tests/test_09_journal_entry_form.py tests/test_e2e_journalentry.py -q` -> 19 passed.
+
+### Notas para siguiente iteracion
+1. Si se desea retirar definitivamente cuenta bancaria del dominio de Journal Entry (no solo de UI), ajustar DTO/servicio y pruebas de posting asociadas.
+2. Ejecutar suite completa `--slow=True` para validar no regresión transversal antes de merge final.
+
+## 2026-05-09 (validación de comprobantes contables)
+
+### Peticion del usuario
+Validar la implementación del módulo de Comprobante Contable contra los criterios CA-001..CA-033, asegurar que los checks de `.github/workflows/python-package.yml` pasen y actualizar `SESSIONS.md`, `ESTADO_ACTUAL.md` y `PENDIENTE.md` con el resultado.
+
+### Plan implementado
+1. Auditar la implementación actual del Journal Entry manual en backend, posting, smart selects, modelo y pruebas.
+2. Corregir gaps contables/funcionales de bajo riesgo detectados durante la validación.
+3. Ejecutar build, lint y pruebas equivalentes al workflow CI para dejar el branch listo para merge.
+4. Registrar el resultado de la validación y el estado residual en la documentación de seguimiento.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/contabilidad/journal_service.py`:
+  - ahora exige centro de costo para cuentas de gasto,
+  - impide mezcla de monedas dentro de un mismo comprobante,
+  - normaliza la moneda de líneas para que hereden la moneda del comprobante,
+  - persiste `is_advance` y cuenta bancaria por línea.
+- `cacao_accounting/database/__init__.py` y `cacao_accounting/contabilidad/posting.py`:
+  - `ComprobanteContableDetalle` y `GLEntry` ahora conservan `is_advance` y `bank_account_id`.
+- `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`:
+  - la moneda avanzada de línea deja de capturarse libremente y refleja la moneda del comprobante.
+- `tests/test_09_journal_entry_form.py`:
+  - nuevas pruebas para persistencia de anticipo/cuenta bancaria, validación de centro de costo en gastos y bloqueo de mezcla de monedas.
+- `cacao_accounting/datos/dev/__init__.py` y `cacao_accounting/setup/repository.py`:
+  - el bootstrap de compañías de ejemplo vuelve a propagar web/correo/teléfonos/fax para no romper las vistas smoke de CI.
+- `cacao_accounting/static/js/smart-select.js` y `tests/test_10_smart_select_js.py`:
+  - `preloadOptions()` / `fetchOptions()` retornan promesas,
+  - el auto-select de opciones default mantiene la lista pre-cargada,
+  - la prueba JS resuelve `smart-select.js` desde la ruta real del repositorio.
+
+### Verificacion ejecutada
+- `python -m build`
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -q tests/test_09_journal_entry_form.py` -> 17 passed.
+- `python -m pytest -q tests/test_10_smart_select_js.py` -> 2 passed.
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True` -> 342 passed.
+
+### Notas para siguiente iteracion
+1. Implementar selector real de documentos abiertos dependiente de compañía/tipo de tercero/tercero/tipo documental.
+2. Completar estados operativos del comprobante (cancelado, reversado, cierre visible) y sus restricciones de UI.
+3. Resolver el recálculo formal de `document_no` cuando cambia la serie de un borrador antes del submit.
+
 ## 2026-05-04 (diagnóstico del proyecto)
 
 ### Peticion del usuario
@@ -1374,3 +1771,228 @@ Corregir `cacao_accounting/static/js/smart-select.js` para que los campos depend
 - `npm --prefix cacao_accounting/static ci` → instalación de dependencias JS para pruebas.
 - `npx --prefix cacao_accounting/static mocha cacao_accounting/static/test/smart-select.test.js` → **5 passing**.
 
+## 2026-05-10 (reportes financieros: smart-select en filtros)
+
+### Petición del usuario
+Asegurar que los 4 reportes financieros (`/reports/account-movement`, `/reports/trial-balance`, `/reports/income-statement`, `/reports/balance-sheet`) utilicen Smart Select en los campos de búsqueda y filtrado del panel lateral.
+
+### Plan implementado
+1. Extender el registry de `search_select` para soportar filtros requeridos por reportes financieros.
+2. Migrar los filtros del template `financial_report.html` a componentes `smartSelect` con dependencias por compañía/libro.
+3. Mejorar presentación financiera (encabezados amigables, formato monetario, resumen superior y barra sticky de totales) sin tocar lógica GL.
+4. Añadir pruebas puntuales para validar nuevos doctypes Smart Select y presencia de Smart Select en la vista de reportes.
+5. Ejecutar validación completa de lint, tipos y pruebas.
+
+### Resumen técnico de cambios
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`
+  - Filtros principales y avanzados migrados a `smartSelect`.
+  - Dependencias de filtros: compañía → libro/periodo/cuentas/dimensiones; tipo tercero → tercero; compañía+libro → tipo/ID comprobante.
+  - Panel superior de contexto (compañía, libro, periodo, estado, registros).
+  - Tabla con encabezados amigables y barra sticky de totales.
+- `cacao_accounting/search_select.py`
+  - Nuevos doctypes: `accounting_period`, `account_code`, `party_type`, `voucher_type`, `document_no`.
+  - Soporte de deduplicación por valor para catálogos derivados de GL.
+- `cacao_accounting/reportes/__init__.py`
+  - Etiquetas amigables de columnas.
+  - Formato financiero de importes (`1,000.00`, negativos en paréntesis).
+  - Ocultado de columnas vacías en la renderización.
+  - Envío de contexto de reporte y columnas renderizadas al template.
+- Tests:
+  - `tests/test_09_journal_entry_form.py`: validación de `doctype=accounting_period`.
+  - `tests/test_08_reconciliation_reports.py`: validación de presencia de Smart Select en HTML de reportes.
+
+### Verificación ejecutada
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+- Targeted:
+  - `tests/test_08_reconciliation_reports.py::test_financial_reports_framework_uses_gl_and_supports_export`
+  - `tests/test_09_journal_entry_form.py::test_search_select_supports_journal_doctypes_and_filters`
+  - `tests/test_10_smart_select_js.py`
+
+## 2026-05-10 (completar backlog de reportes financieros solicitado en PR)
+
+### Petición del usuario
+Completar capacidades pendientes del framework de reportes: vistas guardadas, selector de columnas funcional, agrupación/jerarquías, drill-down universal, exportación Excel avanzada y refuerzo de seguridad por compañía/libro.
+
+### Plan implementado
+1. Implementar persistencia de vistas por usuario reutilizando `UserFormPreference`.
+2. Activar selector de columnas en formulario de filtros y aplicar columnas visibles en render.
+3. Añadir agrupación dinámica (`group_by`) en detalle de movimiento y jerarquía expandible en tabla de reportes financieros.
+4. Agregar drill-down a cuenta (hacia account movement) y a comprobante (cuando aplica).
+5. Mejorar exportación XLSX con metadata + hoja “Filtros” + ancho automático + headers congelados.
+6. Reforzar control de acceso con `@verifica_acceso("accounting")` en rutas financieras y normalización de compañía.
+
+### Resumen técnico de cambios
+- `cacao_accounting/reportes/__init__.py`
+  - Vistas guardadas: `saved_view`, `view_action` (save/apply/reset), carga/listado de vistas por usuario.
+  - Selector funcional de columnas (`visible_columns`) aplicado al render.
+  - Agrupación dinámica en account movement (`group_by`).
+  - Drill-down URLs por cuenta/comprobante en filas renderizadas.
+  - Exportación XLSX avanzada con título, fecha, usuario, formato financiero, auto-width, freeze panes y hoja `Filtros`.
+  - Seguridad: rutas financieras GL con `@verifica_acceso("accounting")` y validación de compañía existente.
+- `cacao_accounting/reportes/services.py`
+  - `income_statement` ahora devuelve desglose por cuenta y nivel para permitir jerarquías expandibles reales.
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`
+  - UI de vistas guardadas.
+  - Selector funcional de columnas.
+  - Selector de agrupación.
+  - Enlaces de drill-down y comportamiento expand/collapse en jerarquías.
+- `tests/test_08_reconciliation_reports.py`
+  - Validación de exportación XLSX avanzada (hoja Filtros + freeze panes).
+  - Validación de persistencia de vistas en reportes financieros.
+
+### Verificación ejecutada
+- `python -m build`
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+
+
+## 2026-05-10 (iteración FIXME: reportes + bancos + secuencias + seguridad)
+
+### Peticion del usuario
+Corregir issues listados en `FIXME.md` priorizando reportes financieros y regresiones funcionales detectadas.
+
+### Plan implementado
+1. Ajustar UX/flujo del reporte financiero (`account-movement`) para filtros y columnas.
+2. Corregir consistencia contable en pagos con referencias y cancelaciones.
+3. Respetar política de reinicio de secuencias al generar identificadores.
+4. Aplicar refactor puntual solicitado y ampliar tipos especiales de cuentas.
+5. Actualizar bitácora/estado/backlog de la iteración.
+
+### Resumen tecnico de cambios
+- `reportes/financial_report.html`: renombre de filtro a `Comprobante`, botones de aplicar/limpiar en parte superior e inferior, ocultar badge `Cuadrado`, persistencia visual de toggle avanzado con query param `advanced`, y selector de columnas en bloque colapsable tipo modal ligero.
+- `bancos/__init__.py`: validación estricta de monto vs asignación de referencias; en cancelación de pago se eliminan referencias y se refresca `outstanding` de documentos afectados.
+- `database/helpers.py`: `generate_identifier` ahora aplica `should_reset_sequence` + `reset_sequence` antes de incrementar secuencia.
+- `auth/helpers.py`: `validar_clave_segura` refactorizado con `match/case`.
+- `contabilidad/default_accounts.py`: `SPECIAL_ACCOUNT_TYPES` ampliado con tipos base para creación de cuentas.
+
+
+## 2026-05-10 (iteración FIXME pendientes: filtros iniciales y consistencia de selectores)
+
+### Peticion del usuario
+Resolver issues pendientes del `FIXME.md`.
+
+### Resumen tecnico de cambios
+- `reportes/__init__.py`: reportes financieros no cargan datos hasta aplicar filtros (`apply_filters=1`), y se agregó filtro de primer nivel `show_cancellations` para incluir anulaciones.
+- `reportes/financial_report.html`: envío explícito de `apply_filters`, checkbox `Mostrar anulaciones`, y ampliación de columnas visibles para `reference_type`, `is_reversal`, `reversal_of`.
+- `search_select.py`: etiquetas de `party_type`, `voucher_type` y `document_no` ahora se serializan como texto de negocio, evitando representación tipo objeto.
+- `contabilidad/__init__.py`: corrección de `entity/set_default` para usar campos reales del modelo (`default`) en lugar de `predeterminada`; corrección de `enabled` en activar entidad.
+
+
+## 2026-05-10 (cierre adicional FIXME: subtotales, CSRF y anulaciones)
+
+### Resumen tecnico de cambios
+- Se añadió subtotal por agrupador en `account-movement` para filas agrupadas (`group_subtotal`).
+- Se agregó token CSRF al formulario de impuestos admin (`admin/taxes.html`).
+- Se añadieron headers `X-CSRFToken` para operaciones `PUT/DELETE` de preferencias en `journal_nuevo.html`.
+- Se reforzó reporte financiero con filtro primario de anulaciones y columnas extra (`reference_type`, `is_reversal`, `reversal_of`).
+
+
+## 2026-05-10 (cierre final FIXME pendientes)
+
+### Resumen tecnico de cambios
+- Vistas guardadas en reportes: flujo completar guardar/aplicar/eliminar con nombre via modal y listado de vistas disponibles.
+- Columnas visibles migradas a modal dedicado con soporte de campos extra (`reference_type`, `is_reversal`, `reversal_of`).
+- Filtros tipo tercero/tipo comprobante ajustados a `minChars=0` para mostrar resultados al comenzar a escribir.
+- `SEARCH_SELECT_REGISTRY` endurecido con `MappingProxyType` (solo lectura).
+
+## 2026-05-11 (fix bloqueo manual de cuentas income/expense en Journal Entry)
+
+### Peticion del usuario
+Corregir error en posting manual: cuentas de tipo `income` no deben bloquearse en comprobantes manuales; solo inventario debe bloquearse por requerir metadatos de kardex.
+
+### Resumen tecnico de cambios
+- `contabilidad/default_accounts.py`: `MANUAL_BLOCKED_ACCOUNT_TYPES` reducido a `inventory`.
+- `validate_gl_account_usage`: para vouchers manuales (`comprobante_contable`/`journal_entry`) se bloquea únicamente inventario y se permite el resto de tipos contables.
+
+## 2026-05-11 (FIXME reportes financieros y comprobantes de cierre)
+
+### Peticion del usuario
+Proceder a solucionar los issues detallados en `FIXME.md`.
+
+### Plan implementado
+1. Agregar acceso a comprobantes contables de cierre desde el menu de contabilidad.
+2. Preseleccionar etapa `Cierre` en `/accounting/journal/new?isclosing=true`.
+3. Ajustar filtros de reportes financieros: mover `Comprobante` a filtros avanzados, corregir toggle avanzado, quitar botones finales duplicados y ocultar `Columnas visibles` en reportes resumidos.
+4. Prefill de filtros financieros con libro predeterminado/primario y periodo contable vigente.
+5. Corregir busqueda de tipo de tercero/tercero y agrupacion por tipo de comprobante.
+6. Agregar pruebas focalizadas de regresion y stress de filtros financieros.
+
+### Resumen tecnico de cambios
+- `contabilidad/templates/contabilidad.html`: nuevo enlace `Comprobantes Contables de Cierre`.
+- `contabilidad/__init__.py`: `nuevo_comprobante` reconoce `isclosing=true` y entrega estado inicial al formulario.
+- `reportes/__init__.py`: defaults de libro/periodo, agrupacion robusta por campos no visibles y control de disponibilidad del modal de columnas.
+- `reportes/templates/reportes/financial_report.html`: filtros avanzados encapsulados, `Comprobante` movido al bloque avanzado, acciones finales duplicadas eliminadas y modal de columnas condicionado.
+- `search_select.py`: `party_type` como opcion estatica con etiquetas `Cliente`/`Proveedor`.
+- Tests: cobertura para cierre, UX de reportes, prefill, agrupacion por comprobante y busqueda de terceros.
+
+### Verificacion ejecutada
+- `venv\\Scripts\\python.exe -m black cacao_accounting\\contabilidad\\__init__.py cacao_accounting\\reportes\\__init__.py cacao_accounting\\search_select.py tests\\test_08_reconciliation_reports.py tests\\test_09_journal_entry_form.py`
+- `venv\\Scripts\\python.exe -m flake8 cacao_accounting\\contabilidad\\__init__.py cacao_accounting\\reportes\\__init__.py cacao_accounting\\search_select.py tests\\test_08_reconciliation_reports.py tests\\test_09_journal_entry_form.py`
+- `venv\\Scripts\\python.exe -m ruff check cacao_accounting\\contabilidad\\__init__.py cacao_accounting\\reportes\\__init__.py cacao_accounting\\search_select.py tests\\test_08_reconciliation_reports.py tests\\test_09_journal_entry_form.py`
+- `venv\\Scripts\\python.exe -m mypy cacao_accounting\\contabilidad\\__init__.py cacao_accounting\\reportes\\__init__.py cacao_accounting\\search_select.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest tests\\test_09_journal_entry_form.py -q`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest tests\\test_08_reconciliation_reports.py -k "financial_report_filters_prefill or financial_report_can_group_by_voucher_type or search_select_party_type_labels or financial_report_view_persistence_and_column_selection or trial_balance_uses_tree" -q`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest tests\\test_09_journal_entry_form.py tests\\test_08_reconciliation_reports.py -k "journal_new_closing_query_prefills_closing_stage or financial_report_filters_prefill or financial_report_can_group_by_voucher_type or search_select_party_type_labels or financial_report_view_persistence_and_column_selection or trial_balance_uses_tree" -q`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest -v -s --exitfirst --slow=True` -> 570 passed.
+
+## 2026-05-11 (menu de comprobantes recurrentes y cierre mensual)
+
+### Peticion del usuario
+Agregar al menu de transacciones de contabilidad las entradas `Comprobante Recurrente` y `Asistente de Cierre Mensual` con base en `requerimiento.md`.
+
+### Resumen tecnico de cambios
+- `contabilidad/templates/contabilidad.html`: se agregaron las entradas en el bloque de registros/transacciones del modulo contable.
+- `contabilidad/__init__.py`: nuevas rutas iniciales `/accounting/journal/recurring` y `/accounting/period-close/monthly`.
+- `contabilidad/templates/contabilidad/recurring_journal_lista.html`: pantalla inicial para plantillas de comprobantes recurrentes, con estados y reglas contables clave.
+- `contabilidad/templates/contabilidad/monthly_close_assistant.html`: pantalla inicial del asistente de cierre mensual, enfocada en el paso 1 de aplicar comprobantes recurrentes.
+- `tests/test_11_contabilidad_coverage.py`: cobertura de menu y rutas nuevas.
+
+### Nota de alcance
+Esta iteracion agrega navegacion y pantallas base alineadas al requerimiento tecnico. La persistencia de plantillas, tabla de aplicaciones y generacion real de comprobantes quedan registradas como pendientes.
+
+### Verificacion ejecutada
+- `venv\\Scripts\\python.exe -m black cacao_accounting\\contabilidad\\__init__.py tests\\test_11_contabilidad_coverage.py`
+- `venv\\Scripts\\python.exe -m flake8 cacao_accounting/`
+- `venv\\Scripts\\python.exe -m ruff check cacao_accounting/`
+- `venv\\Scripts\\python.exe -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv\\Scripts\\python.exe -m pytest tests\\test_11_contabilidad_coverage.py -k "route_conta or route_comprobantes_recurrentes or route_asistente_cierre_mensual" -q`
+
+## 2026-05-12 (Cierre del módulo de contabilidad: Comprobantes Recurrentes y Asistente de Cierre)
+
+### Peticion del usuario
+Identificar pendientes para cerrar el módulo de contabilidad y aplicar las correcciones necesarias. Documentar cambios en bitácora.
+
+### Plan implementado
+1. Implementar funcionalidad de Comprobantes Recurrentes (plantillas, aprobación, aplicación).
+2. Completar el Asistente de Cierre Mensual para permitir la aplicación de recurrentes.
+3. Asegurar la inicialización de `outstanding_amount` en el posting de facturas.
+4. Agregar cobertura de pruebas para las nuevas funcionalidades.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/database/__init__.py`:
+    - Nuevos modelos: `RecurringJournalTemplate`, `RecurringJournalItem`, `RecurringJournalApplication`.
+    - Campos agregados a `ComprobanteContable`: `is_recurrent`, `recurrent_template_id`, `recurrent_application_id`.
+- `cacao_accounting/contabilidad/recurring_journal_service.py`: Nuevo servicio con lógica de negocio para plantillas recurrentes (crear, validar balance, aprobar, cancelar, aplicar).
+- `cacao_accounting/contabilidad/forms.py`: Agregado `FormularioRecurringJournalTemplate`.
+- `cacao_accounting/contabilidad/__init__.py`:
+    - Rutas CRUD para `RecurringJournalTemplate`.
+    - Lógica operativa para `Asistente de Cierre Mensual` (selección de periodo y aplicación de plantillas).
+- `cacao_accounting/contabilidad/posting.py`:
+    - `post_sales_invoice` y `post_purchase_invoice` ahora inicializan `grand_total` y refrescan el cache de `outstanding_amount` al momento de la contabilización.
+- `cacao_accounting/contabilidad/templates/contabilidad/`:
+    - `recurring_journal_lista.html`: Lista operativa con estados y badges.
+    - `recurring_journal_nuevo.html`: Formulario dinámico con Alpine.js para captura de líneas contables y balanceo en tiempo real.
+    - `recurring_journal_ver.html`: Vista de detalle con historial de aplicaciones.
+    - `monthly_close_assistant.html`: Interfaz del asistente para aplicar recurrentes por periodo.
+- `tests/test_11_contabilidad_coverage.py`: Extendida la cobertura para incluir las nuevas rutas y lógica de recurrentes.
+
+### Verificacion ejecutada
+- `python -m pytest tests/test_11_contabilidad_coverage.py`
+- `python -m flake8 cacao_accounting/`
+- `python -m ruff check cacao_accounting/`
+- `python -m black cacao_accounting/`

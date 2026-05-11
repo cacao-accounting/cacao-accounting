@@ -298,3 +298,22 @@ class FormularioAjusteContadorExterno(FlaskForm):
 
     new_last_used = IntegerField("Nuevo Ultimo Numero Usado", validators=[InputRequired(), NumberRange(min=0)])
     reason = TextAreaField("Motivo del Ajuste", validators=[DataRequired()])
+
+
+class FormularioRecurringJournalTemplate(FlaskForm):
+    """Formulario para plantillas de comprobantes recurrentes."""
+
+    code = StringField("Código", validators=[DataRequired()])
+    company = SelectField("Entidad", validators=[DataRequired()])
+    ledger_id = SelectField("Libro", validators=[DataRequired()])
+    name = StringField("Nombre de la Plantilla", validators=[DataRequired()])
+    description = TextAreaField("Descripción", validators=[Optional()])
+    start_date = DateField("Fecha Inicio", validators=[DataRequired()])
+    end_date = DateField("Fecha Fin", validators=[DataRequired()])
+    frequency = SelectField(
+        "Frecuencia",
+        choices=[("monthly", "Mensual"), ("weekly", "Semanal"), ("daily", "Diario")],
+        default="monthly",
+        validators=[DataRequired()],
+    )
+    currency = SelectField("Moneda", validators=[DataRequired()])

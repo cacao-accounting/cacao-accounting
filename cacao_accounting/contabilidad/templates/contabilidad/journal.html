@@ -1,116 +1,393 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
+
+<style>
+    .journal-line-row.is-active {
+        background-color: #fff3cd;
+        border-left: 4px solid #d39e00;
+    }
+
+    .journal-line-row {
+        cursor: pointer;
+    }
+
+    .ca-kv-list {
+        display: grid;
+        gap: .6rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ca-kv-item label {
+        color: #64748b;
+        display: block;
+        font-size: .75rem;
+        font-weight: 700;
+        margin-bottom: .15rem;
+        text-transform: uppercase;
+    }
+
+    .ca-kv-item p {
+        margin: 0;
+    }
+
+    @media (max-width: 768px) {
+        .ca-kv-list {
+            grid-template-columns: 1fr;
+        }
+    }
+
+</style>
 
 <nav aria-label="{{ _('breadcrumb') }}">
-  <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item">
-      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> {{ _('Inicio') }}
-      </a>
-    </li>
-    <li class="breadcrumb-item">
-      <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
-    </li>
-    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
-  </ol>
+    <ol class="breadcrumb lh-sm">
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+                <i class="bi bi-house"></i> {{ _('Inicio') }}
+            </a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            {{ registro.document_no or registro.serie or _('Comprobante') }}</li>
+    </ol>
 </nav>
 
-<div class="ca-card" style="max-width:960px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title">
-      <i class="bi bi-receipt"></i> {{ registro.document_no or registro.id }}
-      <span class="badge bg-secondary ms-2">{{ _(registro.status or 'draft') }}</span>
-    </h5>
-    <div class="d-flex gap-2 flex-wrap">
-      {% if registro.status == "draft" %}
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_comprobante', identifier=registro.id) }}">
-        <i class="bi bi-pencil-square me-1"></i>{{ _('Editar borrador') }}
-      </a>
-      <form method="post" action="{{ url_for('contabilidad.contabilizar_comprobante', identifier=registro.id) }}">
-        <button class="btn btn-sm btn-success" type="submit">
-          <i class="bi bi-check2-circle me-1"></i>{{ _('Contabilizar') }}
-        </button>
-      </form>
-      {% endif %}
-      <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
-        <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
-      </a>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.listar_comprobantes') }}">
-        <i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}
-      </a>
+{% set status_value = (registro.status or 'draft') %}
+{% set status_badge = 'bg-secondary' %}
+{% if status_value == 'submitted' %}
+{% set status_badge = 'bg-success' %}
+{% elif status_value == 'rejected' %}
+{% set status_badge = 'bg-danger' %}
+{% elif status_value == 'cancelled' %}
+{% set status_badge = 'bg-dark' %}
+{% endif %}
+
+<div class="ca-card" style="max-width:1100px;">
+    <div class="ca-card-header">
+        <h5 class="ca-card-title">
+            <i class="bi bi-receipt"></i> {{ registro.document_no or registro.serie or _('Comprobante contable') }}
+            <span class="badge {{ status_badge }} ms-2">{{ _(status_value) }}</span>
+        </h5>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if registro.status == "draft" %}
+            <a class="btn btn-sm btn-outline-primary"
+                href="{{ url_for('contabilidad.editar_comprobante', identifier=registro.id) }}">
+                <i class="bi bi-pencil-square me-1"></i>{{ _('Editar borrador') }}
+            </a>
+            <form method="post" action="{{ url_for('contabilidad.rechazar_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit">
+                    <i class="bi bi-x-circle me-1"></i>{{ _('Rechazar') }}
+                </button>
+            </form>
+            <form method="post" action="{{ url_for('contabilidad.contabilizar_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-success" type="submit">
+                    <i class="bi bi-check2-circle me-1"></i>{{ _('Contabilizar') }}
+                </button>
+            </form>
+            {% endif %}
+            {% if registro.status in ["draft", "rejected", "submitted"] %}
+            <form method="post" action="{{ url_for('contabilidad.duplicar_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-dark" type="submit">
+                    <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
+                </button>
+            </form>
+            <form method="post" action="{{ url_for('contabilidad.revertir_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-warning" type="submit">
+                    <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
+                </button>
+            </form>
+            {% endif %}
+            {% if registro.status == "submitted" %}
+            <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Anular comprobante') }}
+                </button>
+            </form>
+            {% endif %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.listar_comprobantes') }}">
+                <i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}
+            </a>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
+                <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
+            </a>
+        </div>
     </div>
-  </div>
-  <div class="row g-3 mt-1">
-    <div class="col-md-6">
-      <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">{{ _('Datos Generales') }}</p>
-      <table class="ca-table">
-        <caption class="visually-hidden">{{ _('Datos generales del comprobante contable') }}</caption>
-        <thead>
-          <tr><th scope="col">{{ _('Campo') }}</th><th scope="col">{{ _('Valor') }}</th></tr>
-        </thead>
-        <tbody>
-          <tr><td style="color:#64748b;">{{ _('Documento') }}</td><td>{{ registro.document_no or registro.id }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Compañía') }}</td><td>{{ registro.entity }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Libros') }}</td><td>{{ ', '.join(selected_books) if selected_books else (registro.book or '') }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Fecha') }}</td><td>{{ registro.date }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Estado') }}</td><td>{{ _(registro.status or 'draft') }}</td></tr>
-        </tbody>
-      </table>
+
+    <div class="row g-3 p-3">
+        <div class="col-md-6">
+            <div class="ca-kv-list">
+                <div class="ca-kv-item"><label>{{ _('Compañía') }}</label>
+                    <p>{{ registro.entity or '' }}</p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Fecha de contabilización') }}</label>
+                    <p>{{ registro.date or '' }}</p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Libros contables') }}</label>
+                    <p>{{ ', '.join(selected_books) if selected_books else '-' }}</p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Usuario') }}</label>
+                    <p>{{ creator_nickname or '' }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="ca-kv-list">
+                <div class="ca-kv-item"><label>{{ _('Estado') }}</label>
+                    <p><span class="badge {{ status_badge }}">{{ _(status_value) }}</span></p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Referencia') }}</label>
+                    <p>{{ registro.reference or '' }}</p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Concepto') }}</label>
+                    <p>{{ registro.memo or '' }}</p>
+                </div>
+                <div class="ca-kv-item"><label>{{ _('Moneda') }}</label>
+                    <p>{{ currency_label or '-' }}</p>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="col-md-6">
-      <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">{{ _('Referencia') }}</p>
-      <table class="ca-table">
-        <caption class="visually-hidden">{{ _('Referencia del comprobante contable') }}</caption>
-        <thead>
-          <tr><th scope="col">{{ _('Campo') }}</th><th scope="col">{{ _('Valor') }}</th></tr>
-        </thead>
-        <tbody>
-          <tr><td style="color:#64748b;">{{ _('Referencia') }}</td><td>{{ registro.reference or '' }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Concepto') }}</td><td>{{ registro.memo or '' }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Usuario') }}</td><td>{{ registro.user_id or '' }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('Serie') }}</td><td>{{ registro.serie or '' }}</td></tr>
-          <tr><td style="color:#64748b;">{{ _('ID') }}</td><td>{{ registro.id }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
-<div class="ca-card mt-3">
-  <div class="ca-card-header">
-    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Líneas') }}</h6>
-  </div>
-  <div class="table-responsive">
-    <table class="ca-table">
-      <caption class="visually-hidden">{{ _('Líneas del comprobante contable') }}</caption>
-      <thead>
-        <tr>
-          <th>{{ _('No.') }}</th>
-          <th>{{ _('Cuenta') }}</th>
-          <th>{{ _('Centro de costos') }}</th>
-          <th>{{ _('Tercero') }}</th>
-          <th class="text-end">{{ _('Debe') }}</th>
-          <th class="text-end">{{ _('Haber') }}</th>
-          <th>{{ _('Observaciones') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for linea in lineas %}
-        <tr>
-          <td>{{ linea.order }}</td>
-          <td>{{ linea.account }}</td>
-          <td>{{ linea.cost_center or '' }}</td>
-          <td>{{ linea.third_code or '' }}</td>
-          <td class="text-end">{{ "%.2f"|format(linea.value if linea.value and linea.value > 0 else 0) }}</td>
-          <td class="text-end">{{ "%.2f"|format(-linea.value if linea.value and linea.value < 0 else 0) }}</td>
-          <td>{{ linea.memo or '' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="ca-card mt-3" style="max-width:1100px;">
+    <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Líneas del comprobante') }}</h6>
+        <small class="text-muted">{{ _('Seleccione una línea para ver detalle contable') }}</small>
+    </div>
+    <div class="table-responsive">
+        <table class="ca-table" id="journal-lines-table">
+            <caption class="visually-hidden">{{ _('Líneas del comprobante contable') }}</caption>
+            <thead>
+                <tr>
+                    <th>{{ _('No.') }}</th>
+                    <th>{{ _('Cuenta') }}</th>
+                    <th>{{ _('Centro de costos') }}</th>
+                    <th>{{ _('Tercero') }}</th>
+                    <th class="text-end">{{ _('Debe') }}</th>
+                    <th class="text-end">{{ _('Haber') }}</th>
+                    <th>{{ _('Acciones') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linea in lineas %}
+                <tr class="journal-line-row{% if loop.first %} is-active{% endif %}"
+                    data-order="{{ linea.order or '' }}" data-account="{{ linea.account_label or linea.account or '' }}"
+                    data-cost-center="{{ linea.cost_center_label or linea.cost_center or '' }}"
+                    data-party-type="{{ linea.third_type or '' }}" data-party="{{ linea.third_code or '' }}"
+                    data-debit="{{ '%.2f'|format(linea.value if linea.value and linea.value > 0 else 0) }}"
+                    data-credit="{{ '%.2f'|format(-linea.value if linea.value and linea.value < 0 else 0) }}"
+                    data-unit="{{ linea.unit or '' }}" data-project="{{ linea.project or '' }}"
+                    data-reference-type="{{ linea.internal_reference or '' }}"
+                    data-reference-name="{{ linea.internal_reference_id or linea.reference or '' }}"
+                    data-reference1="{{ linea.reference1 or '' }}" data-reference2="{{ linea.reference2 or '' }}"
+                    data-advance="{{ 1 if linea.is_advance else 0 }}"
+                    data-memo="{{ linea.memo or linea.line_memo or '' }}">
+                    <td>{{ linea.order }}</td>
+                    <td>{{ linea.account_label or linea.account }}</td>
+                    <td>{{ linea.cost_center_label or linea.cost_center or '-' }}</td>
+                    <td>{{ linea.third_code or '-' }}</td>
+                    <td class="text-end">{{ '%.2f'|format(linea.value if linea.value and linea.value > 0 else 0) }}</td>
+                    <td class="text-end">{{ '%.2f'|format(-linea.value if linea.value and linea.value < 0 else 0) }}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-line-modal"
+                                data-bs-toggle="modal" data-bs-target="#lineDetailModal">{{ _('Ver detalle') }}</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<div class="ca-card mt-3" style="max-width:1100px;" id="line-detail-panel">
+    <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0">{{ _('Detalle de línea seleccionada') }}</h6>
+        <span class="badge bg-light text-dark" id="line-order-badge">#-</span>
+    </div>
+    <div class="row g-3 p-3">
+        <div class="col-md-4"><strong>{{ _('Cuenta') }}</strong>
+            <p class="mb-0" id="line-account">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Centro de costos') }}</strong>
+            <p class="mb-0" id="line-cost-center">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Unidad de negocio') }}</strong>
+            <p class="mb-0" id="line-unit">-</p>
+        </div>
+
+        <div class="col-md-4"><strong>{{ _('Proyecto') }}</strong>
+            <p class="mb-0" id="line-project">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Tipo tercero') }}</strong>
+            <p class="mb-0" id="line-party-type">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Tercero') }}</strong>
+            <p class="mb-0" id="line-party">-</p>
+        </div>
+
+        <div class="col-md-4"><strong>{{ _('Referencia tipo') }}</strong>
+            <p class="mb-0" id="line-reference-type">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Referencia nombre') }}</strong>
+            <p class="mb-0" id="line-reference-name">-</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Referencia 1 / 2') }}</strong>
+            <p class="mb-0"><span id="line-reference1">-</span> / <span id="line-reference2">-</span></p>
+        </div>
+
+        <div class="col-md-4"><strong>{{ _('Debe') }}</strong>
+            <p class="mb-0" id="line-debit">0.00</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Haber') }}</strong>
+            <p class="mb-0" id="line-credit">0.00</p>
+        </div>
+        <div class="col-md-4"><strong>{{ _('Es anticipo') }}</strong>
+            <p class="mb-0" id="line-advance">{{ _('No') }}</p>
+        </div>
+
+        <div class="col-12"><strong>{{ _('Observaciones') }}</strong>
+            <p class="mb-0" id="line-memo">-</p>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="lineDetailModal" tabindex="-1" aria-labelledby="lineDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lineDetailModalLabel">{{ _('Detalle contable de línea') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">{{ _('No. línea') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-order">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Cuenta') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-account">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Centro de costos') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-cost-center">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Unidad de negocio') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-unit">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Proyecto') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-project">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Tipo tercero') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-party-type">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Tercero') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-party">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Referencia') }}</dt>
+                    <dd class="col-sm-8"><span id="modal-line-reference-type">-</span> / <span
+                            id="modal-line-reference-name">-</span></dd>
+
+                    <dt class="col-sm-4">{{ _('Referencia 1') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-reference1">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Referencia 2') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-reference2">-</dd>
+
+                    <dt class="col-sm-4">{{ _('Debe') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-debit">0.00</dd>
+
+                    <dt class="col-sm-4">{{ _('Haber') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-credit">0.00</dd>
+
+                    <dt class="col-sm-4">{{ _('Es anticipo') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-advance">{{ _('No') }}</dd>
+
+                    <dt class="col-sm-4">{{ _('Observaciones') }}</dt>
+                    <dd class="col-sm-8" id="modal-line-memo">-</dd>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">{{ _('Cerrar') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var rows = Array.prototype.slice.call(document.querySelectorAll('.journal-line-row'));
+        if (!rows.length) return;
+
+        function readValue(value) {
+            return value && value.trim() ? value : '-';
+        }
+
+        function applyDetails(row) {
+            var data = row.dataset;
+            document.getElementById('line-order-badge').textContent = '#' + (data.order || '-');
+            document.getElementById('line-account').textContent = readValue(data.account);
+            document.getElementById('line-cost-center').textContent = readValue(data.costCenter);
+            document.getElementById('line-unit').textContent = readValue(data.unit);
+            document.getElementById('line-project').textContent = readValue(data.project);
+            document.getElementById('line-party-type').textContent = readValue(data.partyType);
+            document.getElementById('line-party').textContent = readValue(data.party);
+            document.getElementById('line-reference-type').textContent = readValue(data.referenceType);
+            document.getElementById('line-reference-name').textContent = readValue(data.referenceName);
+            document.getElementById('line-reference1').textContent = readValue(data.reference1);
+            document.getElementById('line-reference2').textContent = readValue(data.reference2);
+            document.getElementById('line-debit').textContent = data.debit || '0.00';
+            document.getElementById('line-credit').textContent = data.credit || '0.00';
+            document.getElementById('line-advance').textContent = data.advance === '1' ? '{{ _('Sí') }}' : '{{ _('No') }}';
+            document.getElementById('line-memo').textContent = readValue(data.memo);
+
+            document.getElementById('modal-line-order').textContent = data.order || '-';
+            document.getElementById('modal-line-account').textContent = readValue(data.account);
+            document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
+            document.getElementById('modal-line-unit').textContent = readValue(data.unit);
+            document.getElementById('modal-line-project').textContent = readValue(data.project);
+            document.getElementById('modal-line-party-type').textContent = readValue(data.partyType);
+            document.getElementById('modal-line-party').textContent = readValue(data.party);
+            document.getElementById('modal-line-reference-type').textContent = readValue(data.referenceType);
+            document.getElementById('modal-line-reference-name').textContent = readValue(data.referenceName);
+            document.getElementById('modal-line-reference1').textContent = readValue(data.reference1);
+            document.getElementById('modal-line-reference2').textContent = readValue(data.reference2);
+            document.getElementById('modal-line-debit').textContent = data.debit || '0.00';
+            document.getElementById('modal-line-credit').textContent = data.credit || '0.00';
+            document.getElementById('modal-line-advance').textContent = data.advance === '1' ? '{{ _('Sí') }}' : '{{ _('No') }}';
+            document.getElementById('modal-line-memo').textContent = readValue(data.memo);
+        }
+
+        function setActiveRow(row) {
+            rows.forEach(function (item) { item.classList.remove('is-active'); });
+            row.classList.add('is-active');
+            applyDetails(row);
+        }
+
+        rows.forEach(function (row) {
+            row.addEventListener('click', function () {
+                setActiveRow(row);
+            });
+
+            var modalButton = row.querySelector('.btn-line-modal');
+            if (modalButton) {
+                modalButton.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    setActiveRow(row);
+                });
+            }
+        });
+
+        setActiveRow(rows[0]);
+    })();
+</script>
 
 {% endblock %}

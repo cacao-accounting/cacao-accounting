@@ -318,6 +318,8 @@ def _create_gl_entry(
     credit_in_account_currency: Decimal | None = None,
     party_type: str | None = None,
     party_id: str | None = None,
+    bank_account_id: str | None = None,
+    is_advance: bool = False,
     cost_center_code: str | None = None,
     unit_code: str | None = None,
     project_code: str | None = None,
@@ -349,6 +351,8 @@ def _create_gl_entry(
         exchange_rate=context.exchange_rate,
         party_type=party_type,
         party_id=party_id,
+        bank_account_id=bank_account_id,
+        is_advance=is_advance,
         voucher_type=context.voucher_type,
         voucher_id=context.voucher_id,
         document_no=context.document_no,
@@ -645,7 +649,16 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
 
         _append_sales_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
 
-    return _add_entries(entries)
+    result = _add_entries(entries)
+
+    from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
+
+    if not document.grand_total:
+        # Se asume que el debito a cuentas por cobrar (amount_total calculado arriba) es el total
+        document.grand_total = abs(_invoice_items_total(items, document) + _signed_tax_delta(document, tax_result))
+    refresh_outstanding_amount_cache(document)
+
+    return result
 
 
 def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = None) -> list[GLEntry]:
@@ -728,6 +741,12 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
             )
 
     result = _add_entries(entries)
+
+    from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
+
+    if not document.grand_total:
+        document.grand_total = abs(amount_total)
+    refresh_outstanding_amount_cache(document)
 
     from cacao_accounting.compras.purchase_reconciliation_service import EventType, emit_economic_event
 
@@ -1630,6 +1649,8 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
                     credit_in_account_currency=credit_in_account_currency,
                     party_type=getattr(line, "third_type", None),
                     party_id=getattr(line, "third_code", None),
+                    bank_account_id=getattr(line, "bank_account_id", None),
+                    is_advance=bool(getattr(line, "is_advance", False)),
                     cost_center_code=getattr(line, "cost_center", None),
                     unit_code=getattr(line, "unit", None),
                     project_code=getattr(line, "project", None),

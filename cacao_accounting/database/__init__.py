@@ -1582,12 +1582,94 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     transaction_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     is_closing = database.Column(database.Boolean(), default=False, nullable=False)
+    is_recurrent = database.Column(database.Boolean(), default=False, nullable=False)
+    recurrent_template_id = database.Column(
+        database.String(26), database.ForeignKey("recurring_journal_template.id"), nullable=True
+    )
+    recurrent_application_id = database.Column(
+        database.String(26), database.ForeignKey("recurring_journal_application.id"), nullable=True
+    )
+
+
+class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Plantilla para comprobantes recurrentes."""
+
+    __tablename__ = "recurring_journal_template"
+    code = database.Column(database.String(50), unique=True, index=True, nullable=False)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    ledger_id = database.Column(database.String(26), database.ForeignKey("book.id"), nullable=True, index=True)
+    name = database.Column(database.String(100), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
+    start_date = database.Column(database.Date(), nullable=False)
+    end_date = database.Column(database.Date(), nullable=False)
+    # monthly, etc.
+    frequency = database.Column(database.String(20), default="monthly", nullable=False)
+    status = database.Column(database.String(20), default="draft", nullable=False, index=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    # 0=draft, 1=approved, 2=cancelled, 3=completed
+    docstatus = database.Column(database.Integer(), default=0, nullable=False)
+    approved_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    approved_at = database.Column(database.DateTime, nullable=True)
+    cancelled_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    cancelled_at = database.Column(database.DateTime, nullable=True)
+    cancel_reason = database.Column(database.Text(), nullable=True)
+    last_applied_date = database.Column(database.Date(), nullable=True)
+    is_completed = database.Column(database.Boolean(), default=False, nullable=False)
+
+
+class RecurringJournalItem(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Linea de plantilla para comprobantes recurrentes."""
+
+    __tablename__ = "recurring_journal_item"
+    template_id = database.Column(
+        database.String(26), database.ForeignKey("recurring_journal_template.id"), nullable=False, index=True
+    )
+    account_code = database.Column(database.String(50), nullable=False)
+    debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    credit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    description = database.Column(database.String(200), nullable=True)
+    cost_center = database.Column(database.String(10), nullable=True)
+    unit = database.Column(database.String(10), nullable=True)
+    project = database.Column(database.String(10), nullable=True)
+    party_type = database.Column(database.String(20), nullable=True)
+    party_id = database.Column(database.String(26), nullable=True)
+    reference_type = database.Column(database.String(50), nullable=True)
+    reference_name = database.Column(database.String(100), nullable=True)
+    reference1 = database.Column(database.String(100), nullable=True)
+    reference2 = database.Column(database.String(100), nullable=True)
+    is_advance = database.Column(database.Boolean(), default=False, nullable=False)
+
+
+class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Registro de aplicacion de comprobante recurrente por periodo."""
+
+    __tablename__ = "recurring_journal_application"
+    __table_args__ = (
+        UniqueConstraint(
+            "company", "ledger_id", "template_id", "fiscal_year", "accounting_period", name="uq_recurring_application"
+        ),
+    )
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    ledger_id = database.Column(database.String(26), database.ForeignKey("book.id"), nullable=True, index=True)
+    template_id = database.Column(
+        database.String(26), database.ForeignKey("recurring_journal_template.id"), nullable=False, index=True
+    )
+    fiscal_year = database.Column(database.String(50), nullable=False)
+    accounting_period = database.Column(database.String(50), nullable=False)
+    application_date = database.Column(database.Date(), nullable=False)
+    # applied, failed, reversed, skipped
+    status = database.Column(database.String(20), default="applied", nullable=False, index=True)
+    journal_id = database.Column(database.String(26), database.ForeignKey("comprobante_contable.id"), nullable=True)
+    applied_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    error_message = database.Column(database.Text(), nullable=True)
 
 
 class ComprobanteContableDetalle(database.Model, GLBase):  # type: ignore[name-defined]
     """Comprobante contable manual detalle."""
 
     __tablename__ = "comprobante_contable_detalle"
+    is_advance = database.Column(database.Boolean(), default=False, nullable=False)
+    bank_account_id = database.Column(database.String(26), database.ForeignKey("bank_account.id"), nullable=True, index=True)
 
 
 class GLEntry(database.Model):  # type: ignore[name-defined]
@@ -1644,6 +1726,8 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     # Tercero (AR/AP) — requerido si la cuenta es receivable o payable
     party_type = database.Column(database.String(20), nullable=True, index=True)
     party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
+    bank_account_id = database.Column(database.String(26), database.ForeignKey("bank_account.id"), nullable=True, index=True)
+    is_advance = database.Column(database.Boolean(), default=False, nullable=False)
     # Trazabilidad de voucher — permite rastrear el origen de cada entrada
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)

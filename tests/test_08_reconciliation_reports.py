@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
 import pytest
+from openpyxl import load_workbook
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -310,6 +312,523 @@ def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     assert reconciliations.totals["bank_reconciled_amount"] == Decimal("0")
 
 
+def test_financial_reports_framework_uses_gl_and_supports_export(app_ctx):
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        Accounts,
+        Book,
+        FiscalYear,
+        GLEntry,
+        Modules,
+        User,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        FinancialReportFilters,
+        get_account_movement_detail,
+        get_balance_sheet_report,
+        get_income_statement_report,
+        get_trial_balance_report,
+    )
+
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="2026",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+        is_closed=False,
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period_apr = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-04",
+        enabled=True,
+        is_closed=False,
+        start=date(2026, 4, 1),
+        end=date(2026, 4, 30),
+    )
+    period_may = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        enabled=True,
+        is_closed=False,
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+    )
+    book = Book(code="FISC", name="Fiscal", entity="cacao", currency="NIO", is_primary=True, default=True)
+    accounts = [
+        Accounts(entity="cacao", code="1.01.01", name="Caja", active=True, enabled=True, classification="Activo"),
+        Accounts(entity="cacao", code="3.01.01", name="Capital", active=True, enabled=True, classification="Patrimonio"),
+        Accounts(entity="cacao", code="4.01.01", name="Ventas", active=True, enabled=True, classification="Ingresos"),
+        Accounts(entity="cacao", code="5.01.01", name="Gastos", active=True, enabled=True, classification="Gastos"),
+    ]
+    database.session.add_all([period_apr, period_may, book, *accounts])
+    database.session.flush()
+    cash, equity, income, expense = accounts
+
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 4, 30),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=cash.id,
+                account_code=cash.code,
+                debit=Decimal("50.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="OPEN-1",
+                document_no="cacao-JOU-2026-04-00001",
+                accounting_period_id=period_apr.id,
+            ),
+            GLEntry(
+                posting_date=date(2026, 4, 30),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=equity.id,
+                account_code=equity.code,
+                debit=Decimal("0"),
+                credit=Decimal("50.00"),
+                voucher_type="journal_entry",
+                voucher_id="OPEN-1",
+                document_no="cacao-JOU-2026-04-00001",
+                accounting_period_id=period_apr.id,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 5),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=cash.id,
+                account_code=cash.code,
+                debit=Decimal("100.00"),
+                credit=Decimal("0"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-1",
+                document_no="cacao-JOU-2026-05-00001",
+                accounting_period_id=period_may.id,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 5),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=income.id,
+                account_code=income.code,
+                debit=Decimal("0"),
+                credit=Decimal("100.00"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-1",
+                document_no="cacao-JOU-2026-05-00001",
+                accounting_period_id=period_may.id,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 12),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=expense.id,
+                account_code=expense.code,
+                debit=Decimal("30.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2",
+                document_no="cacao-JOU-2026-05-00002",
+                accounting_period_id=period_may.id,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 12),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=cash.id,
+                account_code=cash.code,
+                debit=Decimal("0"),
+                credit=Decimal("30.00"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2",
+                document_no="cacao-JOU-2026-05-00002",
+                accounting_period_id=period_may.id,
+            ),
+        ]
+    )
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(user="report-user", name="Report User", password=b"x", classification="admin", active=True)
+    database.session.add_all([accounting_module, report_user])
+    database.session.commit()
+
+    filters = FinancialReportFilters(
+        company="cacao",
+        ledger="FISC",
+        accounting_period="2026-05",
+        include_running_balance=True,
+        page=1,
+        page_size=10,
+        voucher_number="2026-05",
+    )
+    movement = get_account_movement_detail(filters)
+    movement_page_two = get_account_movement_detail(
+        FinancialReportFilters(
+            company="cacao",
+            ledger="FISC",
+            accounting_period="2026-05",
+            account_code="1.01.01",
+            include_running_balance=True,
+            page=2,
+            page_size=1,
+            voucher_number="2026-05",
+        )
+    )
+    trial_balance = get_trial_balance_report(
+        FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05")
+    )
+    income_statement = get_income_statement_report(
+        FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05")
+    )
+    balance_sheet = get_balance_sheet_report(
+        FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05")
+    )
+
+    assert movement.total_rows == 4
+    assert movement.totals["difference"] == Decimal("0")
+    cash_running_balances = [
+        row.values.get("running_balance")
+        for row in movement.rows
+        if row.values.get("account_code") == "1.01.01" and "running_balance" in row.values
+    ]
+    assert cash_running_balances == [Decimal("100.0000"), Decimal("70.0000")]
+    assert movement_page_two.rows[0].values.get("running_balance") == Decimal("70.0000")
+    assert trial_balance.totals["debit"] == Decimal("130.00")
+    assert trial_balance.totals["credit"] == Decimal("130.00")
+    assert income_statement.totals["net_profit"] == Decimal("70.00")
+    assert balance_sheet.totals["difference"] == Decimal("0.00")
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+    response = client.get("/reports/account-movement?company=cacao&ledger=FISC&accounting_period=2026-05&export=csv")
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    html_response = client.get("/reports/account-movement?company=cacao&ledger=FISC&accounting_period=2026-05")
+    html = html_response.get_data(as_text=True)
+    assert html_response.status_code == 200
+    assert 'doctype: "company"' in html
+    assert 'doctype: "book"' in html
+    assert 'doctype: "accounting_period"' in html
+    assert 'doctype: "document_no"' in html
+    response_xlsx = client.get("/reports/account-movement?company=cacao&ledger=FISC&accounting_period=2026-05&export=xlsx")
+    assert response_xlsx.status_code == 200
+    assert response_xlsx.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    workbook = load_workbook(BytesIO(response_xlsx.data))
+    assert "Filtros" in workbook.sheetnames
+    assert workbook.active.freeze_panes == "A5"
+    filters_sheet = workbook["Filtros"]
+    filter_rows = [row for row in filters_sheet.iter_rows(min_row=2, max_col=2, values_only=True) if row[0]]
+    assert any("Company" in str(row[0]) for row in filter_rows)
+    assert any(str(row[1]) == "cacao" for row in filter_rows)
+
+
+def test_financial_report_view_persistence_and_column_selection(app_ctx):
+    from cacao_accounting.database import Modules, User, UserFormPreference, database
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(user="report-view-user", name="Report View User", password=b"x", classification="admin", active=True)
+    database.session.add_all([accounting_module, report_user])
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+
+    response_save = client.get(
+        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=save&visible_columns=posting_date&visible_columns=account_code"
+    )
+    assert response_save.status_code == 200
+    preference = database.session.execute(
+        database.select(UserFormPreference).filter_by(
+            user_id=report_user.id,
+            form_key="reports.financial.account-movement",
+            view_key="vista-mensual",
+        )
+    ).scalar_one()
+    assert "posting_date" in preference.config_json
+
+    response_apply = client.get(
+        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=apply"
+    )
+    assert response_apply.status_code == 200
+    html = response_apply.get_data(as_text=True)
+    assert "vista-mensual" in html
+    assert "Reference Type" in html
+    assert "Is Reversal" in html
+    assert ">reference_type<" not in html
+    assert ">is_reversal<" not in html
+
+
+def test_financial_report_filters_prefill_and_hide_columns_for_summary_reports(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, Book, FiscalYear, Modules, User, database
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(
+        user="report-filter-user", name="Report Filter User", password=b"x", classification="admin", active=True
+    )
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-2026",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add_all([accounting_module, report_user, fiscal_year])
+    database.session.flush()
+    database.session.add_all(
+        [
+            Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", is_primary=True, default=True),
+            AccountingPeriod(
+                entity="cacao",
+                fiscal_year_id=fiscal_year.id,
+                name="2026-05",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+
+    summary_response = client.get("/reports/trial-balance")
+    summary_html = summary_response.get_data(as_text=True)
+    detail_response = client.get("/reports/account-movement")
+    detail_html = detail_response.get_data(as_text=True)
+
+    assert summary_response.status_code == 200
+    assert 'initialValue: "FISC"' in summary_html
+    assert 'initialValue: "2026-05"' in summary_html
+    assert "Columnas visibles" not in summary_html
+    assert 'data-bs-target="#saveViewModal">Guardar vista' not in summary_html
+    assert 'name="view_action" value="reset">Eliminar vista' not in summary_html
+    assert 'x-show="advanced" x-cloak' in summary_html
+    assert detail_response.status_code == 200
+    assert "Columnas visibles" in detail_html
+
+
+def test_financial_report_can_group_by_voucher_type_when_column_is_hidden(app_ctx):
+    from cacao_accounting.database import Accounts, AccountingPeriod, Book, FiscalYear, GLEntry, Modules, User, database
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(user="report-group-user", name="Report Group User", password=b"x", classification="admin", active=True)
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-2026-G",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", is_primary=True, default=True)
+    account = Accounts(entity="cacao", code="1.01.99", name="Caja Grupo", active=True, enabled=True)
+    offset = Accounts(entity="cacao", code="3.01.99", name="Capital Grupo", active=True, enabled=True)
+    database.session.add_all([accounting_module, report_user, fiscal_year, book, account, offset])
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 8),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=account.id,
+                account_code=account.code,
+                debit=Decimal("10.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="JE-G",
+                document_no="JE-G",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 8),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=offset.id,
+                account_code=offset.code,
+                debit=Decimal("0"),
+                credit=Decimal("10.00"),
+                voucher_type="journal_entry",
+                voucher_id="JE-G",
+                document_no="JE-G",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+
+    response = client.get(
+        "/reports/account-movement?apply_filters=1&company=cacao&ledger=FISC&accounting_period=2026-05"
+        "&group_by=voucher_type&visible_columns=posting_date&visible_columns=account_code&visible_columns=debit"
+        "&visible_columns=credit"
+    )
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Voucher Type: journal_entry" in html
+    assert "Subtotal" in html
+
+
+def test_search_select_party_type_labels_and_party_filter(app_ctx):
+    from cacao_accounting.database import CompanyParty, Modules, Party, User, database
+
+    user = User(user="party-filter-user", name="Party Filter User", password=b"x", classification="admin", active=True)
+    database.session.add_all(
+        [
+            Modules(module="accounting", default=True, enabled=True),
+            user,
+            Party(id="SUPP-F", party_type="supplier", name="Proveedor F", tax_id="SUPP-F", is_active=True),
+            Party(id="CUST-F", party_type="customer", name="Cliente F", tax_id="CUST-F", is_active=True),
+            CompanyParty(company="cacao", party_id="SUPP-F", is_active=True),
+            CompanyParty(company="cacao", party_id="CUST-F", is_active=True),
+        ]
+    )
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user.id
+        session["_fresh"] = True
+
+    party_type_payload = client.get("/api/search-select?doctype=party_type&q=prove").json
+    supplier_payload = client.get("/api/search-select?doctype=party&q=Proveedor&company=cacao&party_type=supplier").json
+
+    assert party_type_payload["results"][0]["value"] == "supplier"
+    assert party_type_payload["results"][0]["display_name"] == "Proveedor"
+    assert [item["value"] for item in supplier_payload["results"]] == ["SUPP-F"]
+
+
+def test_trial_balance_uses_tree_presentation_without_level_column(app_ctx):
+    from cacao_accounting.database import (
+        Accounts,
+        AccountingPeriod,
+        Book,
+        FiscalYear,
+        GLEntry,
+        Modules,
+        User,
+        database,
+    )
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(user="trial-tree-user", name="Trial Tree User", password=b"x", classification="admin", active=True)
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-2026",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", is_primary=True, default=True)
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add_all([accounting_module, report_user, fiscal_year, book])
+    database.session.flush()
+    period.fiscal_year_id = fiscal_year.id
+    database.session.add(period)
+    account_parent = Accounts(
+        entity="cacao",
+        code="1.01",
+        name="Activo Corriente",
+        active=True,
+        enabled=True,
+        account_type="asset",
+        classification="activo",
+    )
+    account_leaf = Accounts(
+        entity="cacao",
+        code="1.01.001",
+        name="Caja",
+        active=True,
+        enabled=True,
+        account_type="cash",
+        classification="activo",
+    )
+    database.session.add_all([account_parent, account_leaf])
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=account_leaf.id,
+                account_code=account_leaf.code,
+                debit=Decimal("120.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="TREE-1",
+                document_no="TREE-1",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=account_leaf.id,
+                account_code=account_leaf.code,
+                debit=Decimal("0"),
+                credit=Decimal("120.00"),
+                voucher_type="journal_entry",
+                voucher_id="TREE-1",
+                document_no="TREE-1",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+
+    response = client.get("/reports/trial-balance?apply_filters=1&company=cacao&ledger=FISC&accounting_period=2026-05")
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Activo Corriente" in html
+    assert "Caja" in html
+    assert "Level" not in html
+    assert "ca-tree-toggle" in html
+
+
 def test_tax_template_posts_sales_tax_and_price_suggestion(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
@@ -564,7 +1083,6 @@ def test_example_seed_creates_company_base_records(app_ctx):
     from cacao_accounting.database import (
         AccountingPeriod,
         Book,
-        CompanyDefaultAccount,
         CostCenter,
         Entity,
         FiscalYear,
@@ -591,7 +1109,9 @@ def test_example_seed_creates_company_base_records(app_ctx):
         for company in ("cacao", "dulce", "cafe"):
             assert database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
             assert database.session.execute(database.select(Book).filter_by(entity=company, code="FISC")).scalar_one_or_none()
-            assert database.session.execute(database.select(CostCenter).filter_by(entity=company, code="MAIN")).scalar_one_or_none()
+            assert database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, code="MAIN")
+            ).scalar_one_or_none()
             assert database.session.execute(database.select(FiscalYear).filter_by(entity=company)).scalar_one_or_none()
             assert database.session.execute(database.select(AccountingPeriod).filter_by(entity=company)).scalars().first()
             assert database.session.execute(
@@ -763,8 +1283,8 @@ def test_default_accounts_view_uses_smart_select_without_rendering_full_account_
     assert f'<option value="{receivable.id}"' not in html
 
 
-def test_manual_journal_rejects_restricted_account_types_but_allows_untyped_accounts(app_ctx):
-    from cacao_accounting.contabilidad.posting import PostingError, post_document_to_gl
+def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import Accounts, ComprobanteContable, ComprobanteContableDetalle, GLEntry, database
 
     bank = Accounts(entity="cacao", code="BANK-M", name="Banco", active=True, enabled=True, account_type="bank")
@@ -772,34 +1292,33 @@ def test_manual_journal_rejects_restricted_account_types_but_allows_untyped_acco
     database.session.add_all([bank, free])
     database.session.flush()
 
-    blocked_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual bloqueado")
-    database.session.add(blocked_journal)
+    bank_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual banco")
+    database.session.add(bank_journal)
     database.session.flush()
     database.session.add_all(
         [
             ComprobanteContableDetalle(
                 entity="cacao",
                 account=bank.code,
-                date=blocked_journal.date,
-                transaction=blocked_journal.__tablename__,
-                transaction_id=blocked_journal.id,
+                date=bank_journal.date,
+                transaction=bank_journal.__tablename__,
+                transaction_id=bank_journal.id,
                 value=Decimal("10.00"),
             ),
             ComprobanteContableDetalle(
                 entity="cacao",
                 account=free.code,
-                date=blocked_journal.date,
-                transaction=blocked_journal.__tablename__,
-                transaction_id=blocked_journal.id,
+                date=bank_journal.date,
+                transaction=bank_journal.__tablename__,
+                transaction_id=bank_journal.id,
                 value=Decimal("-10.00"),
             ),
         ]
     )
     database.session.commit()
 
-    with pytest.raises(PostingError):
-        post_document_to_gl(blocked_journal)
-    database.session.rollback()
+    bank_entries = post_document_to_gl(bank_journal)
+    assert len(bank_entries) == 2
 
     free_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual libre")
     database.session.add(free_journal)

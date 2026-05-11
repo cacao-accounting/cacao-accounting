@@ -83,6 +83,11 @@ def demo_entidad():
             "moneda": e.currency,
             "pais": e.country,
             "tipo_entidad": e.entity_type,
+            "correo_electronico": e.e_mail,
+            "web": e.web,
+            "telefono1": e.phone1,
+            "telefono2": e.phone2,
+            "fax": e.fax,
             "inicio_anio_fiscal": fiscal_year_start,
             "fin_anio_fiscal": fiscal_year_end,
         }

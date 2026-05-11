@@ -46,7 +46,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_bank_transaction, submit_document
-from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.service import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
@@ -647,6 +647,20 @@ def _save_payment_references(payment: PaymentEntry) -> Decimal:
     return total_allocated
 
 
+def _refresh_payment_reference_document(reference_type: str, reference_id: str) -> None:
+    """Actualiza el cache de saldo pendiente para documentos referenciados."""
+    model_map = {
+        "purchase_invoice": PurchaseInvoice,
+        "sales_invoice": SalesInvoice,
+    }
+    model = model_map.get(reference_type)
+    if not model:
+        return
+    document = database.session.get(model, reference_id)
+    if document:
+        refresh_outstanding_amount_cache(document)
+
+
 @bancos.route("/payment/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
@@ -739,6 +753,8 @@ def bancos_pago_nuevo():
                 external_context=ext_context,
             )
             allocated = _save_payment_references(payment)
+            if allocated and amount != allocated:
+                raise ValueError(_("El monto del pago debe coincidir con el monto asignado a referencias."))
             if amount == 0 and allocated:
                 if payment_type == "pay":
                     payment.paid_amount = allocated
@@ -811,6 +827,16 @@ def bancos_pago_cancel(payment_id: str):
         abort(400)
     try:
         cancel_document(registro)
+        references = (
+            database.session.execute(database.select(PaymentReference).filter_by(payment_id=registro.id)).scalars().all()
+        )
+        affected_docs = {
+            (ref.reference_type, ref.reference_id) for ref in references if ref.reference_type and ref.reference_id
+        }
+        for ref in references:
+            database.session.delete(ref)
+        for reference_type, reference_id in affected_docs:
+            _refresh_payment_reference_document(reference_type, reference_id)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()

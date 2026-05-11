@@ -6,17 +6,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Callable, Sequence
 
 from sqlalchemy import Select, case, cast, func, or_, select, true
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
     BankAccount,
     Book,
     CompanyParty,
     CostCenter,
+    Currency,
     Entity,
     Item,
     NamingSeries,
@@ -24,8 +27,16 @@ from cacao_accounting.database import (
     Project,
     Unit,
     Warehouse,
+    GLEntry,
     database,
 )
+
+_DEDUP_QUERY_LIMIT_MULTIPLIER = 5
+_DEDUP_QUERY_LIMIT_MIN = 25
+_STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "report_status": (("submitted", "Contabilizado"), ("cancelled", "Cancelado")),
+    "party_type": (("customer", "Cliente"), ("supplier", "Proveedor")),
+}
 
 
 class SearchSelectError(ValueError):
@@ -49,6 +60,7 @@ class SearchSelectSpec:
     allowed_filters: dict[str, str]
     default_filters: dict[str, str | bool]
     limit: int = 20
+    deduplicate_by_value: bool = False
 
 
 def _account_label(account: Accounts) -> str:
@@ -59,8 +71,16 @@ def _company_label(company: Entity) -> str:
     return f"{company.code} - {company.company_name}"
 
 
+def _currency_label(currency: Currency) -> str:
+    return f"{currency.code} - {currency.name}"
+
+
 def _book_label(book: Book) -> str:
     return f"{book.code} - {book.name}"
+
+
+def _accounting_period_label(period: AccountingPeriod) -> str:
+    return period.name
 
 
 def _cost_center_label(cost_center: CostCenter) -> str:
@@ -97,7 +117,25 @@ def _naming_series_label(naming_series: NamingSeries) -> str:
     return f"{naming_series.name} ({naming_series.entity_type})"
 
 
-SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
+def _string_label(value: Any) -> str:
+    return str(value)
+
+
+def _party_type_label(party: Party) -> str:
+    labels = {"customer": "Cliente", "supplier": "Proveedor"}
+    party_type = str(getattr(party, "party_type", "") or "")
+    return labels.get(party_type, party_type)
+
+
+def _voucher_type_label(entry: GLEntry) -> str:
+    return str(getattr(entry, "voucher_type", "") or "")
+
+
+def _document_no_label(entry: GLEntry) -> str:
+    return str(getattr(entry, "document_no", "") or getattr(entry, "voucher_id", "") or "")
+
+
+_SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
     "company": SearchSelectSpec(
         doctype="company",
         model=Entity,
@@ -106,6 +144,15 @@ SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         label_builder=_company_label,
         allowed_filters={"is_active": "enabled"},
         default_filters={"enabled": True},
+    ),
+    "currency": SearchSelectSpec(
+        doctype="currency",
+        model=Currency,
+        search_fields=("code", "name"),
+        value_field="code",
+        label_builder=_currency_label,
+        allowed_filters={"is_active": "active"},
+        default_filters={},
     ),
     "account": SearchSelectSpec(
         doctype="account",
@@ -116,6 +163,15 @@ SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         allowed_filters={"company": "entity", "account_type": "account_type", "is_active": "active"},
         default_filters={"group": False, "active": True, "enabled": True},
     ),
+    "account_code": SearchSelectSpec(
+        doctype="account_code",
+        model=Accounts,
+        search_fields=("code", "name"),
+        value_field="code",
+        label_builder=_account_label,
+        allowed_filters={"company": "entity", "account_type": "account_type", "is_active": "active"},
+        default_filters={"active": True, "enabled": True},
+    ),
     "book": SearchSelectSpec(
         doctype="book",
         model=Book,
@@ -124,6 +180,15 @@ SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         label_builder=_book_label,
         allowed_filters={"company": "entity", "is_primary": "is_primary"},
         default_filters={},
+    ),
+    "accounting_period": SearchSelectSpec(
+        doctype="accounting_period",
+        model=AccountingPeriod,
+        search_fields=("name",),
+        value_field="name",
+        label_builder=_accounting_period_label,
+        allowed_filters={"company": "entity", "is_closed": "is_closed", "is_active": "enabled"},
+        default_filters={"enabled": True},
     ),
     "cost_center": SearchSelectSpec(
         doctype="cost_center",
@@ -215,11 +280,47 @@ SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         allowed_filters={"company": "company", "entity_type": "entity_type", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
+    "party_type": SearchSelectSpec(
+        doctype="party_type",
+        model=Party,
+        search_fields=("party_type",),
+        value_field="party_type",
+        label_builder=_party_type_label,
+        allowed_filters={"is_active": "is_active"},
+        default_filters={"is_active": True},
+        deduplicate_by_value=True,
+    ),
+    "voucher_type": SearchSelectSpec(
+        doctype="voucher_type",
+        model=GLEntry,
+        search_fields=("voucher_type",),
+        value_field="voucher_type",
+        label_builder=_voucher_type_label,
+        allowed_filters={"company": "company", "ledger": "ledger_id"},
+        default_filters={},
+        deduplicate_by_value=True,
+    ),
+    "document_no": SearchSelectSpec(
+        doctype="document_no",
+        model=GLEntry,
+        search_fields=("document_no", "voucher_id"),
+        value_field="document_no",
+        label_builder=_document_no_label,
+        allowed_filters={"company": "company", "ledger": "ledger_id"},
+        default_filters={},
+        deduplicate_by_value=True,
+    ),
 }
+SEARCH_SELECT_REGISTRY = MappingProxyType(_SEARCH_SELECT_REGISTRY)
 
 
 def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit: int | None = None) -> dict[str, Any]:
     """Busca opciones para un doctype registrado y devuelve un payload uniforme."""
+    if doctype in _STATIC_SEARCH_SELECT_OPTIONS:
+        if filters:
+            raise SearchSelectError("Filtros no permitidos para este tipo de seleccion.")
+        return _search_static_options(doctype=doctype, query=query, limit=limit)
+
     spec = SEARCH_SELECT_REGISTRY.get(doctype)
     if spec is None:
         raise SearchSelectError("Tipo de seleccion no registrado.", 404)
@@ -239,16 +340,59 @@ def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit
     statement = _apply_default_filters(statement, spec)
     statement = _apply_request_filters(statement, spec, filters)
     statement = _apply_search(statement, spec, normalized_query)
-    statement = statement.limit(max_results + 1)
+    query_limit = max_results + 1
+    if spec.deduplicate_by_value:
+        query_limit = max(query_limit * _DEDUP_QUERY_LIMIT_MULTIPLIER, _DEDUP_QUERY_LIMIT_MIN)
+    statement = statement.limit(query_limit)
 
     rows = database.session.execute(statement).scalars().all()
-    visible_rows = rows[:max_results]
+    serialized_results = _serialize_results(spec, rows)
+    visible_rows = serialized_results[:max_results]
     return {
         "doctype": doctype,
         "query": normalized_query,
-        "results": [_serialize_result(spec, row) for row in visible_rows],
-        "has_more": len(rows) > max_results,
+        "results": visible_rows,
+        "has_more": len(serialized_results) > max_results,
     }
+
+
+def _search_static_options(doctype: str, query: str, limit: int | None) -> dict[str, Any]:
+    normalized_query = query.strip().lower()
+    max_results = _normalize_limit(limit, default_limit=20)
+    options = _STATIC_SEARCH_SELECT_OPTIONS.get(doctype, ())
+    filtered = [
+        {
+            "id": value,
+            "value": value,
+            "label": label,
+            "display_name": label,
+        }
+        for value, label in options
+        if not normalized_query or normalized_query in value.lower() or normalized_query in label.lower()
+    ]
+    visible_rows = filtered[:max_results]
+    return {
+        "doctype": doctype,
+        "query": query.strip(),
+        "results": visible_rows,
+        "has_more": len(filtered) > max_results,
+    }
+
+
+def _serialize_results(spec: SearchSelectSpec, rows: Sequence[Any]) -> list[dict[str, Any]]:
+    if not spec.deduplicate_by_value:
+        return [_serialize_result(spec, row) for row in rows]
+
+    values: list[dict[str, Any]] = []
+    seen_values: set[str] = set()
+    for row in rows:
+        payload = _serialize_result(spec, row)
+        value = str(payload.get("value", ""))
+        if not value or value in seen_values:
+            continue
+        seen_values.add(value)
+        values.append(payload)
+    return values
 
 
 def _normalize_limit(limit: int | None, default_limit: int) -> int:

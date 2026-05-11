@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<style>
+    .journal-line-row.is-active { background-color: #fff3cd; border-left: 4px solid #d39e00; }
+    .journal-line-row { cursor: pointer; }
+    .ca-kv-list { display: grid; gap: .6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ca-kv-item label { color: #64748b; display: block; font-size: .75rem; font-weight: 700; margin-bottom: .15rem; text-transform: uppercase; }
+    .ca-kv-item p { margin: 0; }
+    @media (max-width: 768px) { .ca-kv-list { grid-template-columns: 1fr; } }
+</style>
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.comprobantes_recurrentes') }}" class="link-dark">{{ _('Comprobante Recurrente') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ plantilla.code }}</li>
+  </ol>
+</nav>
+
+{% set status_value = plantilla.status %}
+{% set status_badge = 'bg-secondary' %}
+{% if status_value == 'approved' %}{% set status_badge = 'bg-primary' %}
+{% elif status_value == 'cancelled' %}{% set status_badge = 'bg-danger' %}
+{% elif status_value == 'completed' %}{% set status_badge = 'bg-success' %}
+{% endif %}
+
+<div class="ca-card" style="max-width:1100px;">
+    <div class="ca-card-header">
+        <h5 class="ca-card-title">
+            <i class="bi bi-arrow-repeat"></i> {{ plantilla.code }}
+            <span class="badge {{ status_badge }} ms-2">{{ _(status_value) }}</span>
+        </h5>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if plantilla.status == "draft" %}
+            <form method="post" action="{{ url_for('contabilidad.aprobar_plantilla_recurrente', identifier=plantilla.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check-lg me-1"></i>{{ _('Aprobar') }}</button>
+            </form>
+            {% endif %}
+            {% if plantilla.status in ["draft", "approved"] %}
+            <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#cancelModal">
+                <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
+            </button>
+            {% endif %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.comprobantes_recurrentes') }}">{{ _('Listado') }}</a>
+        </div>
+    </div>
+
+    <div class="row g-3 p-3">
+        <div class="col-md-6">
+            <div class="ca-kv-list">
+                <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ plantilla.name }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ plantilla.company }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Inicio') }}</label><p>{{ plantilla.start_date }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Frecuencia') }}</label><p>{{ _(plantilla.frequency) }}</p></div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="ca-kv-list">
+                <div class="ca-kv-item"><label>{{ _('Libro') }}</label><p>{{ plantilla.ledger_id or _('Todos') }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Fin') }}</label><p>{{ plantilla.end_date }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ plantilla.currency or _('Local') }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Última aplicación') }}</label><p>{{ plantilla.last_applied_date or '-' }}</p></div>
+            </div>
+        </div>
+        <div class="col-12"><div class="ca-kv-item"><label>{{ _('Descripción') }}</label><p>{{ plantilla.description or '-' }}</p></div></div>
+    </div>
+</div>
+
+<div class="ca-card mt-3" style="max-width:1100px;">
+    <div class="ca-card-header"><h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Líneas de la plantilla') }}</h6></div>
+    <div class="table-responsive">
+        <table class="ca-table">
+            <thead>
+                <tr>
+                    <th>{{ _('Cuenta') }}</th>
+                    <th class="text-end">{{ _('Débito') }}</th>
+                    <th class="text-end">{{ _('Crédito') }}</th>
+                    <th>{{ _('Descripción') }}</th>
+                    <th>{{ _('Detalle') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linea in lineas %}
+                <tr class="journal-line-row {% if loop.first %}is-active{% endif %}"
+                    data-account="{{ linea.account_code }}" data-debit="{{ '%.2f'|format(linea.debit) }}" data-credit="{{ '%.2f'|format(linea.credit) }}"
+                    data-memo="{{ linea.description or '-' }}" data-cc="{{ linea.cost_center or '-' }}" data-unit="{{ linea.unit or '-' }}"
+                    data-project="{{ linea.project or '-' }}" data-party="{{ linea.party_id or '-' }}">
+                    <td>{{ linea.account_code }}</td>
+                    <td class="text-end">{{ "{:,.2f}".format(linea.debit) }}</td>
+                    <td class="text-end">{{ "{:,.2f}".format(linea.credit) }}</td>
+                    <td>{{ linea.description or '-' }}</td>
+                    <td><button class="btn btn-sm btn-link p-0" type="button" @click="setActive($el.closest('tr'))">{{ _('Ver') }}</button></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="ca-card mt-3" style="max-width:1100px;" id="line-detail-panel">
+    <div class="ca-card-header"><h6 class="ca-card-title mb-0">{{ _('Detalle de línea seleccionada') }}</h6></div>
+    <div class="row g-3 p-3">
+        <div class="col-md-4"><strong>{{ _('Centro de costos') }}</strong><p id="line-cc">-</p></div>
+        <div class="col-md-4"><strong>{{ _('Unidad de negocio') }}</strong><p id="line-unit">-</p></div>
+        <div class="col-md-4"><strong>{{ _('Proyecto') }}</strong><p id="line-project">-</p></div>
+        <div class="col-md-4"><strong>{{ _('Tercero') }}</strong><p id="line-party">-</p></div>
+    </div>
+</div>
+
+<div class="ca-card mt-3" style="max-width:1100px;">
+    <div class="ca-card-header"><h6 class="ca-card-title mb-0">{{ _('Historial de Aplicaciones') }}</h6></div>
+    <div class="table-responsive">
+        <table class="ca-table">
+            <thead><tr><th>{{ _('Periodo') }}</th><th>{{ _('Fecha') }}</th><th>{{ _('Comprobante') }}</th><th>{{ _('Estado') }}</th></tr></thead>
+            <tbody>
+                {% for app in aplicaciones %}
+                <tr><td>{{ app.accounting_period }}</td><td>{{ app.application_date }}</td>
+                    <td>{% if app.journal_id %}<a href="{{ url_for('contabilidad.ver_comprobante', identifier=app.journal_id) }}">{{ app.journal_id }}</a>{% else %}-{% endif %}</td>
+                    <td><span class="badge text-bg-success">{{ _(app.status) }}</span></td></tr>
+                {% else %}<tr><td colspan="4" class="text-center text-muted p-3">{{ _('Sin aplicaciones registradas.') }}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+      <form action="{{ url_for('contabilidad.cancelar_plantilla_recurrente', identifier=plantilla.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header"><h5 class="modal-title">{{ _('Cancelar Plantilla') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><label class="form-label">{{ _('Motivo') }}</label><textarea name="reason" class="form-control" required></textarea></div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cerrar') }}</button><button type="submit" class="btn btn-danger">{{ _('Confirmar') }}</button></div>
+      </form>
+  </div></div>
+</div>
+
+<script>
+    function applyLineDetails(row) {
+        const d = row.dataset;
+        document.getElementById('line-cc').textContent = d.cc;
+        document.getElementById('line-unit').textContent = d.unit;
+        document.getElementById('line-project').textContent = d.project;
+        document.getElementById('line-party').textContent = d.party;
+    }
+    document.querySelectorAll('.journal-line-row').forEach(row => {
+        row.addEventListener('click', () => {
+            document.querySelectorAll('.journal-line-row').forEach(r => r.classList.remove('is-active'));
+            row.classList.add('is-active');
+            applyLineDetails(row);
+        });
+    });
+    if (document.querySelector('.journal-line-row')) applyLineDetails(document.querySelector('.journal-line-row'));
+</script>
+
+{% endblock %}

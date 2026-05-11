@@ -96,6 +96,18 @@
         <a href="{{ url_for('contabilidad.listar_comprobantes') }}">Comprobantes Contables</a>
         <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
       </li>
+      <li>
+        <a href="{{ url_for('contabilidad.nuevo_comprobante', isclosing='true') }}">Comprobantes Contables de Cierre</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.comprobantes_recurrentes') }}">Comprobante Recurrente</a>
+        <span class="ca-status-dot ca-status-warning" title="Flujo en preparaciÃ³n"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.asistente_cierre_mensual') }}">Asistente de Cierre Mensual</a>
+        <span class="ca-status-dot ca-status-warning" title="Flujo en preparaciÃ³n"></span>
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Comprobantes Contables</span>
@@ -113,23 +125,19 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('contabilidad.listar_comprobantes') }}">Diario</a>
+        <a href="{{ url_for('reportes.account_movement') }}">Detalle de Movimiento Contable</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('reportes.subledger') }}">Mayor</a>
+        <a href="{{ url_for('reportes.trial_balance') }}">Balanza de Comprobación</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('reportes.reconciliations') }}">Balanza de Comprobación</a>
+        <a href="{{ url_for('reportes.balance_sheet') }}">Balance General</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('reportes.subledger') }}">Balance General</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
-      </li>
-      <li>
-        <a href="{{ url_for('reportes.subledger') }}">Ganancias y Pérdidas</a>
+        <a href="{{ url_for('reportes.income_statement') }}">Estado de Resultado</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       {% else %}

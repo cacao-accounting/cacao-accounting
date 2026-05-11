@@ -15,6 +15,22 @@ from flask.helpers import url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_
 
+try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
+    from flask_babel import gettext as _babel_gettext
+except ImportError:  # pragma: no cover
+
+    def _(value: str) -> str:
+        return value
+
+else:
+
+    def _(value: str) -> str:
+        try:
+            return _babel_gettext(value)
+        except (KeyError, RuntimeError):
+            return value
+
+
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
@@ -294,7 +310,7 @@ def activar_entidad(id_entidad):
     from cacao_accounting.database import Entity
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
-    ENTIDAD[0].habilitada = True
+    ENTIDAD[0].enabled = True
     database.session.commit()
 
     return LISTA_ENTIDADES
@@ -309,14 +325,14 @@ def predeterminar_entidad(id_entidad):
     from cacao_accounting.database import Entity
 
     # Establece cualquier entidad establecida como predeterminada a falso
-    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entity).filter_by(predeterminada=True)).all()
+    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entity).filter_by(default=True)).all()
 
     if ENTIDAD_PREDETERMINADA:
         for e in ENTIDAD_PREDETERMINADA:
-            e[0].predeterminada = False
+            e[0].default = False
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
-    ENTIDAD[0].predeterminada = True
+    ENTIDAD[0].default = True
     database.session.commit()
 
     return LISTA_ENTIDADES
@@ -1186,6 +1202,271 @@ def listar_comprobantes():
     )
 
 
+@contabilidad.route("/journal/recurring")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def comprobantes_recurrentes():
+    """Lista de plantillas de comprobantes recurrentes."""
+    from cacao_accounting.database import RecurringJournalTemplate
+
+    consulta = database.paginate(
+        database.select(RecurringJournalTemplate).order_by(RecurringJournalTemplate.code),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+    return render_template(
+        "contabilidad/recurring_journal_lista.html",
+        consulta=consulta,
+        titulo="Comprobantes Recurrentes - " + APPNAME,
+    )
+
+
+@contabilidad.route("/journal/recurring/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_comprobante_recurrente():
+    """Nueva plantilla de comprobante recurrente."""
+    from cacao_accounting.contabilidad.forms import FormularioRecurringJournalTemplate
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        create_recurring_template,
+    )
+    import json
+
+    formulario = FormularioRecurringJournalTemplate()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.currency.choices = [("", "— Moneda local —")] + obtener_lista_monedas()
+    formulario.ledger_id.choices = [("", "— Seleccione libro —")]
+
+    if formulario.validate_on_submit():
+        try:
+            items_json = request.form.get("items_json")
+            if not items_json:
+                raise RecurringJournalError("Debe incluir al menos dos líneas contables.")
+
+            items = json.loads(items_json)
+            create_recurring_template(
+                data={
+                    "code": formulario.code.data,
+                    "name": formulario.name.data,
+                    "company": formulario.company.data,
+                    "ledger_id": formulario.ledger_id.data or None,
+                    "description": formulario.description.data,
+                    "start_date": formulario.start_date.data,
+                    "end_date": formulario.end_date.data,
+                    "frequency": formulario.frequency.data,
+                    "currency": formulario.currency.data or None,
+                },
+                items=items,
+                user_id=str(current_user.id),
+            )
+            flash("Plantilla de comprobante recurrente creada.", "success")
+            return redirect(url_for("contabilidad.comprobantes_recurrentes"))
+        except (RecurringJournalError, json.JSONDecodeError) as exc:
+            flash(str(exc), "danger")
+
+    return render_template(
+        "contabilidad/recurring_journal_nuevo.html",
+        form=formulario,
+        titulo="Nueva Plantilla Recurrente - " + APPNAME,
+    )
+
+
+@contabilidad.route("/journal/recurring/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_plantilla_recurrente(identifier: str):
+    """Ver detalle de plantilla recurrente."""
+    from cacao_accounting.database import RecurringJournalTemplate, RecurringJournalItem, RecurringJournalApplication
+
+    plantilla = database.session.get(RecurringJournalTemplate, identifier)
+    if not plantilla:
+        flash("Plantilla no encontrada.", "warning")
+        return redirect(url_for("contabilidad.comprobantes_recurrentes"))
+
+    lineas = database.session.query(RecurringJournalItem).filter_by(template_id=plantilla.id).all()
+    aplicaciones = (
+        database.session.query(RecurringJournalApplication)
+        .filter_by(template_id=plantilla.id)
+        .order_by(RecurringJournalApplication.application_date.desc())
+        .all()
+    )
+
+    return render_template(
+        "contabilidad/recurring_journal_ver.html",
+        plantilla=plantilla,
+        lineas=lineas,
+        aplicaciones=aplicaciones,
+        titulo="Detalle de Plantilla Recurrente - " + APPNAME,
+    )
+
+
+@contabilidad.route("/journal/recurring/<identifier>/approve", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def aprobar_plantilla_recurrente(identifier: str):
+    """Aprueba una plantilla recurrente."""
+    from cacao_accounting.contabilidad.recurring_journal_service import RecurringJournalError, approve_recurring_template
+
+    try:
+        approve_recurring_template(identifier, user_id=str(current_user.id))
+        flash("Plantilla recurrente aprobada.", "success")
+    except RecurringJournalError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+
+
+@contabilidad.route("/journal/recurring/<identifier>/cancel", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def cancelar_plantilla_recurrente(identifier: str):
+    """Cancela una plantilla recurrente."""
+    from cacao_accounting.contabilidad.recurring_journal_service import RecurringJournalError, cancel_recurring_template
+
+    motivo = request.form.get("reason")
+    if not motivo:
+        flash("Debe indicar un motivo de cancelación.", "danger")
+        return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+
+    try:
+        cancel_recurring_template(identifier, reason=motivo, user_id=str(current_user.id))
+        flash("Plantilla recurrente cancelada.", "warning")
+    except RecurringJournalError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+
+
+@contabilidad.route("/period-close/monthly")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def asistente_cierre_mensual():
+    """Asistente de cierre mensual."""
+    from cacao_accounting.database import Entity, Book, AccountingPeriod
+    from cacao_accounting.contabilidad.recurring_journal_service import get_applicable_templates
+
+    company_code = request.args.get("company")
+    ledger_id = request.args.get("ledger")
+    period_id = request.args.get("period")
+
+    entidades = database.session.execute(database.select(Entity)).scalars().all()
+    books = []
+    if company_code:
+        books = database.session.execute(database.select(Book).filter_by(entity=company_code, status="activo")).scalars().all()
+
+    periods = []
+    if company_code:
+        periods = (
+            database.session.execute(database.select(AccountingPeriod).filter_by(entity=company_code, is_closed=False))
+            .scalars()
+            .all()
+        )
+
+    templates = []
+    selected_period = None
+    if company_code and ledger_id and period_id:
+        selected_period = database.session.get(AccountingPeriod, period_id)
+        if selected_period:
+            templates = get_applicable_templates(company_code, ledger_id, selected_period.end)
+
+    from cacao_accounting.database import RecurringJournalApplication
+
+    applied_ids = []
+    if selected_period:
+        applied_apps = (
+            database.session.query(RecurringJournalApplication)
+            .filter_by(
+                company=company_code,
+                ledger_id=ledger_id,
+                fiscal_year=str(selected_period.fiscal_year_id),
+                accounting_period=selected_period.name,
+                status="applied",
+            )
+            .all()
+        )
+        applied_ids = [app.template_id for app in applied_apps]
+
+    return render_template(
+        "contabilidad/monthly_close_assistant.html",
+        titulo="Asistente de Cierre Mensual - " + APPNAME,
+        entidades=entidades,
+        books=books,
+        periods=periods,
+        company_code=company_code,
+        ledger_id=ledger_id,
+        period_id=period_id,
+        templates=templates,
+        applied_ids=applied_ids,
+        selected_period=selected_period,
+    )
+
+
+@contabilidad.route("/period-close/monthly/apply-recurring", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def aplicar_recurrentes_cierre():
+    """Aplica plantillas recurrentes desde el asistente de cierre."""
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        apply_recurring_template,
+    )
+    from cacao_accounting.database import AccountingPeriod
+
+    template_ids = request.form.getlist("template_ids")
+    period_id = request.form.get("period_id")
+    ledger_id = request.form.get("ledger_id")
+
+    if not template_ids or not period_id:
+        flash("Debe seleccionar al menos una plantilla y un periodo.", "warning")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    period = database.session.get(AccountingPeriod, period_id)
+    if not period:
+        flash("Periodo no encontrado.", "danger")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    success_count = 0
+    errors = []
+
+    for tid in template_ids:
+        try:
+            apply_recurring_template(
+                template_id=tid,
+                fiscal_year=str(period.fiscal_year_id),
+                period_name=period.name,
+                application_date=period.end,
+                user_id=str(current_user.id),
+            )
+            success_count += 1
+        except RecurringJournalError as exc:
+            errors.append(str(exc))
+
+    if success_count > 0:
+        flash(f"Se aplicaron {success_count} plantillas correctamente.", "success")
+    if errors:
+        for err in errors:
+            flash(err, "danger")
+
+    return redirect(
+        url_for(
+            "contabilidad.asistente_cierre_mensual",
+            company=period.entity,
+            ledger=ledger_id,
+            period=period_id,
+        )
+    )
+
+
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -1210,14 +1491,16 @@ def nuevo_comprobante():
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
     column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
+    initial_journal = {"is_closing": True} if request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"} else None
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,
         column_preferences=column_preferences,
         form_key=JOURNAL_FORM_KEY,
         view_key=DEFAULT_VIEW_KEY,
-        initial_journal=None,
+        initial_journal=initial_journal,
         submit_url=url_for("contabilidad.nuevo_comprobante"),
+        cancel_url=url_for("contabilidad.conta"),
         currencies=obtener_lista_monedas(),
     )
 
@@ -1239,6 +1522,40 @@ def contabilizar_comprobante(identifier: str):
     return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
 
 
+@contabilidad.route("/journal/<identifier>/reject", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def rechazar_comprobante(identifier: str):
+    """Rechaza un comprobante contable manual en borrador sin afectar ledger."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, reject_journal_draft
+
+    try:
+        reject_journal_draft(identifier, user_id=str(current_user.id))
+    except JournalValidationError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Comprobante contable rechazado.", "warning")
+    return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+
+
+@contabilidad.route("/journal/<identifier>/cancel", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def anular_comprobante(identifier: str):
+    """Anula un comprobante contabilizado aplicando reversa en el ledger."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, cancel_submitted_journal
+
+    try:
+        cancel_submitted_journal(identifier, user_id=str(current_user.id))
+    except JournalValidationError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Comprobante contable anulado con reversa contable.", "warning")
+    return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+
+
 @contabilidad.route("/journal/<identifier>")
 @login_required
 @modulo_activo("accounting")
@@ -1247,18 +1564,162 @@ def ver_comprobante(identifier: str):
     """Ver comprobante contable."""
     from cacao_accounting.contabilidad.journal_repository import get_journal, list_journal_lines
     from cacao_accounting.contabilidad.journal_service import serialize_journal_for_form
+    from cacao_accounting.database import Accounts, Book, CostCenter, Currency, Entity, User
 
     journal = get_journal(identifier)
     if journal is None:
         flash("El comprobante contable indicado no existe.", "warning")
         return redirect(url_for("contabilidad.conta"))
+    creator = database.session.get(User, journal.user_id) if journal.user_id else None
+    creator_nickname = creator.user if creator is not None else (journal.user_id or "")
+    lineas_raw = list_journal_lines(identifier)
+
+    selected_book_codes = serialize_journal_for_form(journal).get("books") or []
+    selected_book_rows = (
+        database.session.execute(
+            database.select(Book).filter(Book.entity == journal.entity).where(Book.code.in_(selected_book_codes))
+        )
+        .scalars()
+        .all()
+        if selected_book_codes
+        else []
+    )
+    selected_books = [
+        f"{book.code} - {book.name}" + (f" ({book.currency})" if getattr(book, "currency", None) else "")
+        for book in selected_book_rows
+    ]
+    if not selected_books:
+        fallback_book_rows = (
+            database.session.execute(
+                database.select(Book)
+                .filter(Book.entity == journal.entity)
+                .where(Book.status.is_(None) | (Book.status == "activo"))
+            )
+            .scalars()
+            .all()
+        )
+        selected_books = [
+            f"{book.code} - {book.name}" + (f" ({book.currency})" if getattr(book, "currency", None) else "")
+            for book in fallback_book_rows
+        ]
+    if not selected_books and journal.book:
+        selected_books = [str(journal.book)]
+
+    entity = database.session.get(Entity, journal.entity) if journal.entity else None
+    company_currency_code = getattr(entity, "currency", None)
+    currency_label = ""
+    if journal.transaction_currency:
+        currency_row = database.session.get(Currency, journal.transaction_currency)
+        if currency_row is not None:
+            currency_label = f"{currency_row.code} - {currency_row.name}"
+        else:
+            currency_label = str(journal.transaction_currency)
+    elif company_currency_code:
+        company_currency_row = database.session.get(Currency, company_currency_code)
+        if company_currency_row is not None:
+            currency_label = f"{company_currency_row.code} - {company_currency_row.name}"
+        else:
+            currency_label = f"{company_currency_code} - {_('Moneda local')}"
+    else:
+        currency_label = _("Moneda local")
+
+    account_codes = {line.account for line in lineas_raw if line.account}
+    cost_center_codes = {line.cost_center for line in lineas_raw if line.cost_center}
+    account_rows = (
+        database.session.execute(
+            database.select(Accounts).filter(Accounts.entity == journal.entity).where(Accounts.code.in_(account_codes))
+        )
+        .scalars()
+        .all()
+        if account_codes
+        else []
+    )
+    cost_center_rows = (
+        database.session.execute(
+            database.select(CostCenter)
+            .filter(CostCenter.entity == journal.entity)
+            .where(CostCenter.code.in_(cost_center_codes))
+        )
+        .scalars()
+        .all()
+        if cost_center_codes
+        else []
+    )
+    account_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in account_rows}
+    cost_center_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in cost_center_rows}
+
+    lineas = []
+    for line in lineas_raw:
+        account_code = line.account or ""
+        cost_center_code = line.cost_center or ""
+        lineas.append(
+            {
+                "order": line.order,
+                "account": account_code,
+                "account_label": account_labels.get(account_code, account_code),
+                "cost_center": cost_center_code,
+                "cost_center_label": cost_center_labels.get(cost_center_code, cost_center_code),
+                "third_type": line.third_type,
+                "third_code": line.third_code,
+                "value": line.value,
+                "unit": line.unit,
+                "project": line.project,
+                "internal_reference": line.internal_reference,
+                "internal_reference_id": line.internal_reference_id,
+                "reference": line.reference,
+                "reference1": line.reference1,
+                "reference2": line.reference2,
+                "is_advance": line.is_advance,
+                "memo": line.memo,
+                "line_memo": line.line_memo,
+            }
+        )
+
     return render_template(
         "contabilidad/journal.html",
         registro=journal,
-        lineas=list_journal_lines(identifier),
-        selected_books=(serialize_journal_for_form(journal).get("books") or []),
+        lineas=lineas,
+        selected_books=selected_books,
+        currency_label=currency_label,
+        creator_nickname=creator_nickname,
         titulo="Comprobante Contable - " + APPNAME,
     )
+
+
+@contabilidad.route("/journal/<identifier>/duplicate", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def duplicar_comprobante(identifier: str):
+    """Duplica un comprobante y crea un nuevo borrador editable."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_draft
+
+    try:
+        duplicated = duplicate_journal_as_draft(identifier, user_id=str(current_user.id))
+    except JournalValidationError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+
+    flash("Comprobante duplicado como nuevo borrador.", "success")
+    return redirect(url_for("contabilidad.editar_comprobante", identifier=duplicated.id))
+
+
+@contabilidad.route("/journal/<identifier>/revert", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def revertir_comprobante(identifier: str):
+    """Crea borrador de reversión invirtiendo débitos y créditos del comprobante origen."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_reversal_draft
+
+    try:
+        reversed_draft = duplicate_journal_as_reversal_draft(identifier, user_id=str(current_user.id))
+    except JournalValidationError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+
+    flash("Reversión creada como nuevo borrador editable.", "success")
+    return redirect(url_for("contabilidad.editar_comprobante", identifier=reversed_draft.id))
 
 
 @contabilidad.route("/journal/edit/<identifier>", methods=["GET", "POST"])
@@ -1303,6 +1764,7 @@ def editar_comprobante(identifier: str):
         view_key=DEFAULT_VIEW_KEY,
         initial_journal=serialize_journal_for_form(journal),
         submit_url=url_for("contabilidad.editar_comprobante", identifier=identifier),
+        cancel_url=url_for("contabilidad.ver_comprobante", identifier=identifier),
         currencies=obtener_lista_monedas(),
     )
 

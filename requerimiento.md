@@ -1,253 +1,465 @@
-Sí: con lo que describes, el problema está claramente en el contrato de comportamiento del frontend, no en la API.
+Requerimiento Técnico: Comprobantes Recurrentes y Asistente de Cierre Mensual
+
+1. Objetivo
+
+Implementar una funcionalidad de Comprobantes Recurrentes que permita definir una afectación contable completa una sola vez y aplicarla automáticamente por periodo contable, sin duplicaciones, como parte del proceso de Cierre Mensual.
+
+El comprobante recurrente no debe afectar directamente el ledger al aprobarse. Su aprobación crea una plantilla contable activa que podrá ser aplicada posteriormente desde el Asistente de Cierre Mensual.
+
+1. Concepto General
+
+Un Comprobante Recurrente representa una plantilla contable aprobada para generar comprobantes contables reales en periodos futuros.
+
+Ejemplos:
+
+Amortización mensual de seguros pagados por anticipado.
+Depreciación mensual.
+Devengo mensual de gastos.
+Reclasificaciones periódicas.
+Provisiones recurrentes.
+Distribuciones contables mensuales.
+3. Estados del Comprobante Recurrente
+
+El comprobante recurrente debe manejar los siguientes estados:
+
+3.1 Borrador
+
+Estado inicial.
 
-El archivo actual permite preload, loadOnFilterChange y lógica activa en onFocus, por eso un campo puede mostrar resultados solo al recibir foco. Ese comportamiento existe explícitamente en onFocus() y preloadOptions() dentro de smart-select.js. 
-Tu requerimiento funcional confirma que solo compañía debe precargar, y que los demás campos solo deben consultar backend cuando el usuario escriba. 
+Características:
+
+Editable.
+No puede aplicarse.
+No afecta ledger.
+Puede eliminarse si no tiene historial de aplicación.
+3.2 Aprobado
 
-Diagnóstico del issue
+Estado activo.
+
+Características:
+
+No debe ser editable en sus líneas contables críticas.
+Puede ser aplicado por periodo desde el Asistente de Cierre Mensual.
+No afecta ledger al momento de aprobación.
+Representa una plantilla válida para generación de comprobantes.
+3.3 Cancelado
+
+Estado inactivo por decisión del usuario.
+
+Características:
+
+No puede aplicarse a nuevos periodos.
+Conserva historial de aplicaciones anteriores.
+No elimina comprobantes ya generados.
+Debe requerir motivo de cancelación.
+3.4 Completado
 
-El comportamiento incorrecto viene de esta regla actual:
+Estado final automático o manual controlado.
 
-onFocus: function () {
-  if ((this.preload || this.loadOnFilterChange) && !this.open && !this.loading) {
-    ...
-    this.preloadOptions();
-  }
-}
+Características:
 
-Eso permite que un campo como naming_series abra opciones solo por foco, especialmente si tiene:
+Se alcanza cuando ya fue aplicado el comprobante correspondiente al último periodo definido.
+No puede aplicarse nuevamente.
+Conserva historial completo.
+No debe permitir nuevas aplicaciones.
+4. Campos Principales del Comprobante Recurrente
+4.1 Header
+
+Campos mínimos:
+
+ID.
+Código o número interno.
+Compañía.
+Libro contable / ledger.
+Nombre del comprobante recurrente.
+Descripción.
+Fecha de inicio.
+Fecha de fin.
+Periodicidad: por ahora mensual.
+Estado.
+Moneda.
+Tipo de comprobante.
+Diario contable, si aplica.
+Referencia.
+Creado por.
+Fecha de creación.
+Aprobado por.
+Fecha de aprobación.
+Cancelado por.
+Fecha de cancelación.
+Motivo de cancelación.
+Fecha de último periodo aplicado.
+Próximo periodo sugerido.
+Indicación de si está completamente aplicado.
+4.2 Líneas contables
+
+Cada comprobante recurrente debe contener una afectación contable completa:
+
+Cuenta contable.
+Débito.
+Crédito.
+Descripción de línea.
+Centro de costo.
+Unidad de negocio.
+Proyecto.
+Dimensiones analíticas adicionales.
+Tercero / proveedor / cliente, si aplica.
+Moneda.
+Tipo de cambio, si aplica.
+Referencia documental, si aplica.
+
+Regla crítica:
+
+La plantilla debe estar balanceada antes de poder aprobarse.
+
+1. Reglas Contables
+5.1 Aprobación no afecta ledger
 
-loadOnFilterChange: true
+Al aprobar un comprobante recurrente:
+
+No se crea movimiento en gl_entry.
+No se crea comprobante contable real.
+Solo se cambia el estado de la plantilla a aprobado.
+5.2 Aplicación sí genera comprobante contable
+
+Cuando el comprobante recurrente se aplica a un periodo:
+
+Se genera un comprobante contable real.
+Ese comprobante se comporta igual que un comprobante manual.
+Se generan entradas reales en el ledger.
+El comprobante generado queda vinculado al comprobante recurrente origen.
+5.3 Comprobante generado
 
-o
+El comprobante generado debe tener:
+
+is_recurrent = true.
+recurrent_template_id.
+recurrent_application_id.
+Periodo contable aplicado.
+Badge visual: “Recurrente”.
+Mismo comportamiento contable que un comprobante manual.
+Mismas validaciones de balance.
+Mismo proceso de auditoría.
+Misma capacidad de consulta, impresión y drill-down.
+6. Tabla Intermedia de Aplicación por Periodo
+
+Debe existir una tabla intermedia para controlar qué comprobantes recurrentes ya fueron aplicados por periodo.
+
+Nombre sugerido:
+
+recurring_journal_application
+
+6.1 Propósito
+
+Garantizar que un comprobante recurrente solo pueda aplicarse una vez por periodo contable.
+
+6.2 Campos mínimos
+ID.
+Compañía.
+Ledger / libro contable.
+ID del comprobante recurrente.
+Año fiscal.
+Periodo contable.
+Mes.
+Fecha de aplicación.
+Estado de aplicación.
+ID del comprobante contable generado.
+Usuario que aplicó.
+Fecha y hora de ejecución.
+Resultado.
+Mensaje de error, si aplica.
+Hash o firma de control opcional.
+Creado en.
+Actualizado en.
+6.3 Estados de aplicación
+
+Estados sugeridos:
 
-preload: true
+pending
+applied
+failed
+reversed
+skipped
+6.4 Restricción única obligatoria
 
-Para tu caso ERP, eso es incorrecto.
+Debe existir una restricción única sobre:
 
+company_id + ledger_id + recurring_journal_id + fiscal_year + accounting_period
 
----
+Esto garantiza que no se pueda aplicar dos veces el mismo comprobante recurrente en el mismo periodo.
 
-Requerimiento técnico propuesto
+1. Asistente de Cierre Mensual
+7.1 Objetivo
 
-Título
+Implementar un Asistente de Cierre Mensual como flujo guiado para ejecutar actividades necesarias al cierre del mes.
 
-Corrección del comportamiento de Smart Select para evitar precarga no deseada en campos dependientes
+Por ahora, el primer y único paso será:
 
-Contexto
+Aplicar comprobantes recurrentes del mes actual.
 
-En formularios contables y operativos, la compañía funciona como dimensión principal del documento. El campo compañía puede precargar registros activos porque normalmente el volumen es bajo y porque define el contexto operativo del formulario.
+1. Paso 1: Aplicar Comprobantes Recurrentes
+8.1 Pantalla del asistente
 
-Los demás campos dependientes —secuencia, tercero, cuenta, producto, centro de costo, proyecto, unidad, etc.— no deben precargar resultados al recibir foco ni al cambiar filtros. Deben esperar interacción explícita del usuario mediante escritura.
+El sistema debe mostrar:
 
-Problema
+Compañía.
+Año fiscal.
+Periodo actual.
+Fecha de cierre sugerida.
+Lista de comprobantes recurrentes aplicables.
+Estado de cada comprobante recurrente para el periodo.
+Acción para aplicar individualmente.
+Acción para aplicar todos los pendientes.
+8.2 Clasificación visual
 
-En /accounting/journal/new, el campo de secuencia muestra resultados al recibir foco. Este comportamiento no es esperado.
+Cada comprobante recurrente debe mostrarse con estado visual:
 
-Además, al escribir en el campo de secuencia, la API recibe parámetros incorrectos como:
+Pendiente de aplicar.
+Ya aplicado.
+No aplicable.
+Fallido.
+Completado.
+Cancelado.
+8.3 Aplicación masiva
 
-company=[object Object]
+El usuario debe poder ejecutar:
 
-Esto indica que el frontend está enviando un objeto completo como filtro en lugar del valor real esperado, probablemente company_id o código de compañía.
+Aplicar todos los comprobantes recurrentes pendientes del periodo actual.
 
-Comportamiento esperado
+El sistema debe:
 
-Campo compañía
+Validar cada plantilla.
+Evitar duplicados.
+Generar comprobantes reales.
+Registrar la aplicación en la tabla intermedia.
+Mostrar resultado individual por comprobante.
+Permitir revisar errores sin afectar los comprobantes exitosos.
+9. Reglas de Elegibilidad
 
-Debe:
+Un comprobante recurrente es aplicable si:
 
-1. Precargar compañías activas.
+Está en estado aprobado.
+Pertenece a la compañía seleccionada.
+Pertenece al ledger seleccionado.
+La fecha del periodo está entre fecha inicio y fecha fin.
+No ha sido aplicado previamente en ese periodo.
+Sus cuentas contables están activas.
+El periodo contable está abierto.
+El comprobante está balanceado.
+La moneda y dimensiones son válidas.
 
+No es aplicable si:
 
-2. Mostrar opciones al recibir foco.
+Está en borrador.
+Está cancelado.
+Está completado.
+El periodo ya fue aplicado.
+El periodo está cerrado.
+La fecha del periodo está fuera del rango.
+Tiene cuentas inactivas.
+Tiene líneas inválidas o desbalanceadas.
+10. Generación del Comprobante Contable
+
+Al aplicar una plantilla recurrente, el sistema debe crear un comprobante contable real.
+
+10.1 Fecha del comprobante
+
+Debe definirse una regla clara.
 
+Opciones recomendadas:
+
+Fecha del último día del periodo.
+Fecha configurada por el usuario en el asistente.
+Fecha contable del periodo seleccionado.
 
-3. Filtrar localmente o vía backend al escribir.
+Recomendación:
 
+Por defecto usar el último día del periodo contable, permitiendo ajuste si el periodo sigue abierto.
 
-4. Al seleccionarse, establecer el filtro de compañía para el resto del formulario.
+10.2 Numeración
 
+El comprobante generado debe usar la serie normal de comprobantes contables.
 
-5. Disparar actualización contextual de campos dependientes.
+Debe conservar una referencia visible al comprobante recurrente origen.
 
+Ejemplo:
+
+Origen recurrente: DEP-MENSUAL-001
+Periodo aplicado: 2026-05
+11. Reversión y Anulación
+
+Debe definirse el comportamiento si un comprobante generado necesita anularse.
 
+Reglas recomendadas:
+
+Si se anula el comprobante generado, la aplicación debe marcarse como reversed.
+No debe eliminarse el historial.
+El sistema puede permitir reaplicar el periodo solo si la aplicación anterior está reversed.
+La reaplicación debe generar un nuevo comprobante.
+Debe quedar trazabilidad completa.
+12. Trazabilidad
+
+Debe existir trazabilidad bidireccional.
+
+Desde el comprobante recurrente:
+
+Ver aplicaciones por periodo.
+Ver comprobantes generados.
+Ver estado de cada aplicación.
+Ver usuario y fecha de ejecución.
+
+Desde el comprobante generado:
+
+Ver comprobante recurrente origen.
+Ver periodo aplicado.
+Ver aplicación asociada.
+Mostrar badge “Recurrente”.
+13. Auditoría
+
+Eventos auditables mínimos:
+
+Creación del comprobante recurrente.
+Modificación en borrador.
+Aprobación.
+Cancelación.
+Aplicación por periodo.
+Fallo de aplicación.
+Reversión de comprobante generado.
+Marcado automático como completado.
 
-Campo secuencia / naming series
+Cada evento debe registrar:
 
-Debe:
+Usuario.
+Fecha y hora.
+Acción.
+Estado anterior.
+Estado nuevo.
+Comentario o motivo.
+Referencia al documento afectado.
+14. UI / UX
+14.1 Lista de comprobantes recurrentes
 
-1. No mostrar lista al recibir foco.
+Debe mostrar:
 
+Código.
+Nombre.
+Compañía.
+Ledger.
+Fecha inicio.
+Fecha fin.
+Estado.
+Último periodo aplicado.
+Próximo periodo sugerido.
+Badge de estado.
+14.2 Vista detalle
 
-2. No consultar backend al recibir foco.
+Debe incluir:
 
+Header.
+Líneas contables.
+Historial de aplicaciones.
+Comprobantes generados.
+Botones según estado.
+14.3 Badges sugeridos
 
-3. No precargar todas las secuencias de la compañía.
+Para comprobantes recurrentes:
 
+Borrador: gris.
+Aprobado: azul.
+Cancelado: rojo.
+Completado: verde.
 
-4. Al cambiar compañía, cargar únicamente la secuencia predeterminada aplicable.
+Para comprobantes generados:
 
+Badge adicional: “Recurrente”.
+15. Validaciones Críticas
 
-5. Permitir que el usuario borre la secuencia predeterminada.
+Antes de aprobar:
 
+Debe tener al menos dos líneas.
+Debe estar balanceado.
+Debe tener fecha inicio.
+Debe tener fecha fin.
+Fecha fin debe ser mayor o igual a fecha inicio.
+Debe tener compañía.
+Debe tener ledger.
+Todas las cuentas deben estar activas.
+Las dimensiones requeridas deben estar completas.
 
-6. Al comenzar a escribir, consultar backend usando:
+Antes de aplicar:
 
-doctype=naming_series
+Periodo abierto.
+No duplicado por periodo.
+Plantilla aprobada.
+Rango de fechas válido.
+Balance válido.
+Cuentas activas.
+Permisos suficientes.
+16. Seguridad y Permisos
 
-q=<texto digitado>
+Permisos sugeridos:
 
-company=<valor real de compañía>
+Ver comprobantes recurrentes.
+Crear comprobantes recurrentes.
+Editar borradores.
+Aprobar comprobantes recurrentes.
+Cancelar comprobantes recurrentes.
+Ejecutar asistente de cierre mensual.
+Aplicar comprobantes recurrentes.
+Revertir aplicación recurrente.
+Ver historial de aplicación.
+17. Criterios de Aceptación
+CA-001 — Aprobación sin afectar ledger
 
-entity_type=journal_entry
+Dado un comprobante recurrente válido, cuando se aprueba, entonces no debe crear entradas en ledger ni comprobante contable real.
 
-limit=20
+CA-002 — Aplicación desde cierre mensual
 
+Dado un comprobante recurrente aprobado, cuando se ejecuta el paso de cierre mensual, entonces debe generarse un comprobante contable real para el periodo actual.
 
+CA-003 — Prevención de duplicados
 
+Dado un comprobante recurrente ya aplicado en un periodo, cuando se intenta aplicar nuevamente, entonces el sistema debe bloquear la operación.
 
-Campos dependientes en general
+CA-004 — Tabla intermedia obligatoria
 
-Deben:
+Cada aplicación debe registrarse en la tabla intermedia con compañía, ledger, comprobante recurrente, periodo y comprobante generado.
 
-1. Limpiarse cuando cambia un filtro del que dependen.
+CA-005 — Comprobante generado equivalente a manual
 
+El comprobante generado debe comportarse igual que un comprobante manual, salvo por la bandera is_recurrent = true y sus referencias de origen.
 
-2. No consultar backend automáticamente por foco.
+CA-006 — Badge visual
 
+Todo comprobante generado desde una plantilla recurrente debe mostrar un badge visual “Recurrente”.
 
-3. No consultar backend automáticamente por cambio de filtro, salvo que el campo tenga una acción explícita de carga de default.
+CA-007 — Estado completado
 
+Cuando se aplique el último periodo definido por fecha fin, el comprobante recurrente debe cambiar automáticamente a completado.
 
-4. Consultar backend únicamente cuando el usuario escriba el mínimo de caracteres requerido.
+CA-008 — Cancelación controlada
 
+Un comprobante recurrente cancelado no debe poder aplicarse a nuevos periodos.
 
-5. Enviar filtros normalizados, nunca objetos JavaScript crudos.
+CA-009 — Periodo cerrado
 
+No debe permitirse aplicar comprobantes recurrentes en periodos cerrados.
 
+CA-010 — Reversión trazable
 
+Si se anula un comprobante generado por recurrencia, la aplicación debe conservar historial y marcarse como revertida.
 
----
+1. Recomendación de Implementación
 
-Cambio requerido en la librería
+La arquitectura recomendada es separar tres conceptos:
 
-1. Separar dos conceptos
+RecurringJournalTemplate
+    Define la plantilla recurrente.
 
-Actualmente loadOnFilterChange mezcla dos comportamientos:
+RecurringJournalApplication
+    Controla la aplicación por periodo.
 
-reaccionar al cambio de filtro;
+JournalEntry
+    Representa el comprobante contable real generado.
 
-cargar opciones.
-
-
-Debe separarse en:
-
-clearOnFilterChange: true
-loadDefaultOnFilterChange: false
-preloadOptionsOnFocus: false
-
-2. Nuevo contrato recomendado
-
-{
-  preload: false,
-  openOnFocus: false,
-  searchOnFocus: false,
-  clearOnFilterChange: true,
-  loadDefaultOnFilterChange: false,
-  searchOnlyOnInput: true
-}
-
-3. Regla global
-
-Para todos los Smart Select excepto compañía:
-
-El evento focus no debe ejecutar fetch.
-
-4. Regla específica para compañía
-
-Solo compañía puede usar:
-
-preload: true,
-openOnFocus: true
-
-5. Regla específica para secuencia
-
-Secuencia debe usar:
-
-preload: false,
-openOnFocus: false,
-loadOnFilterChange: false,
-clearOnFilterChange: true,
-autoLoadDefaultOnCompanyChange: true
-
-
----
-
-Corrección importante de filtros
-
-El log muestra:
-
-company=[object Object]
-
-Eso debe corregirse. El frontend debe enviar un valor escalar.
-
-Incorrecto:
-
-filters: {
-  company: someCompanyObject
-}
-
-Correcto:
-
-filters: {
-  company: function () {
-    return document.querySelector('[name="company"]').value;
-  }
-}
-
-o:
-
-filters: {
-  company: { selector: '[name="company"]' }
-}
-
-
----
-
-Pruebas unitarias que faltan
-
-Las pruebas actuales no capturan el error porque probablemente validan búsqueda, pero no validan ausencia de efectos secundarios.
-
-Agregar pruebas para:
-
-Caso 1: campo no preload no consulta en focus
-
-Dado un smart select con preload=false y loadOnFilterChange=false
-Cuando el usuario hace focus
-Entonces no se debe llamar fetch
-Y no se debe abrir la lista de opciones
-
-Caso 2: campo dependiente se limpia al cambiar compañía
-
-Dado un campo secuencia con valor seleccionado
-Cuando cambia compañía
-Entonces selectedValue, selectedLabel, search y options deben quedar vacíos
-Y no debe ejecutarse fetch
-
-Caso 3: búsqueda solo por input
-
-Dado un campo secuencia dependiente de compañía
-Cuando el usuario escribe al menos minChars caracteres
-Entonces se ejecuta fetch con company como valor escalar
-
-Caso 4: nunca enviar objetos como filtros
-
-Dado un filtro company configurado
-Cuando se construyen parámetros
-Entonces company no debe ser "[object Object]"
-
-
----
-
-Requerimiento resumido para implementación
-
-El formulario de comprobante contable debe implementar un comportamiento de Smart Select orientado a formularios ERP. El campo compañía será el único campo con precarga y apertura automática al recibir foco. Los demás campos deberán permanecer inactivos al recibir foco y solo deberán consultar el backend cuando el usuario escriba el mínimo de caracteres requerido. Los cambios en compañía u otros filtros deberán limpiar campos dependientes, aplicar nuevos filtros contextuales y, únicamente cuando exista una regla explícita de default, asignar un valor predeterminado sin abrir listas ni precargar resultados.
+Esto mantiene limpia la contabilidad, evita duplicados y permite que el Asistente de Cierre Mensual crezca en el futuro sin convertir cada proceso de cierre en un módulo aislado.

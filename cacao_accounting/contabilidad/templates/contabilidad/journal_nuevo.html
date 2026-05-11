@@ -2,22 +2,83 @@
 {% block contenido %}
 
 <style>
-  .ca-journal-form { display: flex; flex-direction: column; gap: 1rem; }
-  .ca-journal-toolbar { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
-  .ca-journal-grid { overflow-x: auto; }
-  .ca-journal-table { min-width: 1120px; table-layout: fixed; }
-  .ca-journal-table th,
-  .ca-journal-table td { vertical-align: middle; }
-  .ca-journal-table input { min-width: 0; }
-  .ca-journal-actions { display: flex; gap: .25rem; justify-content: center; white-space: nowrap; }
-  .ca-journal-balance { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
-  .ca-book-selector { border: 1px solid var(--bs-border-color); border-radius: .375rem; max-height: 180px; overflow-y: auto; padding: .5rem .75rem; }
-  .ca-book-selector-empty { color: var(--bs-secondary-color); font-size: .875rem; margin: 0; }
-  .ca-journal-modal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 768px) {
-    .ca-journal-modal-grid { grid-template-columns: 1fr; }
-    .ca-journal-toolbar { align-items: stretch; flex-direction: column; }
+  .ca-journal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
+
+  .ca-journal-toolbar {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+  }
+
+  .ca-journal-grid {
+    overflow-x: auto;
+  }
+
+  .ca-journal-table {
+    min-width: 1120px;
+    table-layout: fixed;
+  }
+
+  .ca-journal-table th,
+  .ca-journal-table td {
+    vertical-align: middle;
+  }
+
+  .ca-journal-table input {
+    min-width: 0;
+  }
+
+  .ca-journal-actions {
+    display: flex;
+    gap: .25rem;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .ca-journal-balance {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    justify-content: flex-end;
+  }
+
+  .ca-book-selector {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .375rem;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: .5rem .75rem;
+  }
+
+  .ca-book-selector-empty {
+    color: var(--bs-secondary-color);
+    font-size: .875rem;
+    margin: 0;
+  }
+
+  .ca-journal-modal-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 768px) {
+    .ca-journal-modal-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .ca-journal-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+
 </style>
 
 <nav aria-label="{{ _('breadcrumb') }}">
@@ -50,6 +111,8 @@
         reference: (config.initialJournal && config.initialJournal.reference) || '',
         memo: (config.initialJournal && config.initialJournal.memo) || '',
         transaction_currency: (config.initialJournal && config.initialJournal.transaction_currency) || '',
+        transaction_currency_label: (config.initialJournal && config.initialJournal.transaction_currency_label) ||
+          (config.initialJournal && config.initialJournal.transaction_currency) || '',
         is_closing: (config.initialJournal && config.initialJournal.is_closing) || false,
       },
       bookOptions: [],
@@ -60,7 +123,17 @@
       modalLine: null,
       payload: '',
 
+      normalizeLine: function (line) {
+        var base = this.newLine();
+        var normalized = Object.assign({}, base, line || {});
+        normalized.uid = normalized.uid || base.uid;
+        normalized.account = normalized.account || normalized.account_label || '';
+        normalized.account_label = normalized.account_label || normalized.account || '';
+        return normalized;
+      },
+
       init: function () {
+        this.lines = (this.lines || []).map(this.normalizeLine.bind(this));
         if (!this.lines.length) this.addMultipleRows(2);
         var self = this;
         var companyInput = document.getElementById('company');
@@ -94,6 +167,14 @@
         return value;
       },
 
+      companyCodeFromLabel: function (value) {
+        var normalized = this.normalizeCompanyValue(value);
+        if (!normalized) return '';
+        var separatorIndex = normalized.indexOf(' - ');
+        if (separatorIndex <= 0) return normalized.trim();
+        return normalized.slice(0, separatorIndex).trim();
+      },
+
       syncCompanyFilterValue: function (value) {
         var companyInput = document.getElementById('company');
         var companyFilterInput = document.getElementById('company_filter_value');
@@ -111,6 +192,21 @@
         }
 
         return normalized || '';
+      },
+
+      resolveCompanyValue: function () {
+        var companyInput = document.getElementById('company');
+        var companyTextInput = document.querySelector('.ca-smart-select input.ca-smart-select-input');
+        var companyFilterInput = document.getElementById('company_filter_value');
+        var currentCompany = this.normalizeCompanyValue(this.header.company);
+        var hiddenCompany = companyInput ? this.normalizeCompanyValue(companyInput.value) : '';
+        var filterCompany = companyFilterInput ? this.normalizeCompanyValue(companyFilterInput.value) : '';
+        var labelCompany = this.companyCodeFromLabel(this.header.company_label);
+        var typedCompany = companyTextInput ? this.companyCodeFromLabel(companyTextInput.value) : '';
+        var resolved = hiddenCompany || currentCompany || filterCompany || labelCompany || typedCompany;
+        resolved = this.syncCompanyFilterValue(resolved);
+        this.header.company = resolved;
+        return resolved;
       },
 
       get visibleColumns() {
@@ -153,6 +249,7 @@
           account: '',
           account_label: '',
           cost_center: '',
+          cost_center_label: '',
           party_type: '',
           party: '',
           debit: '',
@@ -218,9 +315,11 @@
 
       savePreferences: function () {
         var self = this;
+        var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           credentials: 'same-origin',
           body: JSON.stringify(this.preferences)
         })
@@ -233,8 +332,11 @@
 
       resetPreferences: function () {
         var self = this;
+        var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
           method: 'DELETE',
+          headers: { 'X-CSRFToken': csrfToken },
           credentials: 'same-origin'
         })
           .then(function (response) { return response.json(); })
@@ -287,7 +389,7 @@
       },
 
       prepareSubmit: function (event) {
-        var company = document.getElementById('company').value;
+        var company = this.resolveCompanyValue();
         var missing = [];
         if (!company) missing.push(this.messages.fieldCompany);
         if (!this.header.posting_date) missing.push(this.messages.fieldDate);
@@ -312,8 +414,12 @@
           is_closing: this.header.is_closing,
           lines: this.lines.map(function (line, index) {
             var account = line.account || line.account_label;
-            return Object.assign({}, line, { order: index + 1, account: account });
-          }).filter(function (line) {
+            return Object.assign({}, line, {
+              order: index + 1,
+              account: account,
+              currency: this.header.transaction_currency || null
+            });
+          }, this).filter(function (line) {
             return line.account || Number(line.debit || 0) || Number(line.credit || 0);
           })
         });
@@ -341,13 +447,9 @@
   },
 } %}
 
-<form
-  class="ca-journal-form"
-  method="post"
-  x-data='journalEntryForm({{ journal_initial_state | tojson | safe }})'
-  @submit="prepareSubmit"
-  action="{{ submit_url }}"
->
+<form class="ca-journal-form" method="post" x-data='journalEntryForm({{ journal_initial_state | tojson | safe }})'
+  @submit="prepareSubmit" action="{{ submit_url }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="journal_payload" :value="payload">
 
   <div class="ca-journal-toolbar">
@@ -356,10 +458,12 @@
       <p class="text-muted mb-0">{{ _('Borrador') }}</p>
     </div>
     <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#columnsModal">
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal"
+        data-bs-target="#columnsModal">
         <i class="bi bi-sliders"></i> {{ _('Columnas') }}
       </button>
-      <a href="{{ url_for('contabilidad.conta') }}" class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
+      <a href="{{ cancel_url or url_for('contabilidad.conta') }}"
+        class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
       <button class="btn btn-sm btn-primary" type="submit">
         <i class="bi bi-save"></i> {{ _('Guardar borrador') }}
       </button>
@@ -370,9 +474,7 @@
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
-        <div
-          class="ca-smart-select"
-          x-data='smartSelect({
+        <div class="ca-smart-select" x-data='smartSelect({
             doctype: "company",
             name: "company",
             minChars: 1,
@@ -392,13 +494,14 @@
               invalid: {{ _('Seleccione una opción válida')|tojson }},
               error: {{ _('No se pudo buscar')|tojson }}
             }
-          })'
-        >
+          })'>
           <input type="hidden" id="company" name="company" x-model="selectedValue" @change="$dispatch('input')">
           <input type="hidden" id="company_filter_value" value="{{ (journal.company if journal else '')|e }}">
           <div class="ca-smart-select-input-wrap">
-            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
-            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
           </div>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -407,16 +510,15 @@
                 <span x-text="option.display_name"></span>
               </button>
             </template>
-            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
             <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
           </div>
         </div>
       </div>
       <div class="col-md-6">
         <label class="form-label" for="naming_series_id">{{ _('Secuencia') }}</label>
-        <div
-          class="ca-smart-select"
-          x-data='smartSelect({
+        <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
             minChars: 1,
@@ -437,12 +539,13 @@
               invalid: {{ _('Seleccione una opción válida')|tojson }},
               error: {{ _('No se pudo buscar')|tojson }}
             }
-          })'
-        >
+          })'>
           <input type="hidden" id="naming_series_id" name="naming_series_id" x-model="selectedValue">
           <div class="ca-smart-select-input-wrap">
-            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
-            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
           </div>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -451,23 +554,57 @@
                 <span x-text="option.display_name"></span>
               </button>
             </template>
-            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
             <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
           </div>
         </div>
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="posting_date">{{ _('Fecha de contabilización') }} <span class="text-danger">*</span></label>
-        <input class="form-control" id="posting_date" name="posting_date" type="date" x-model="header.posting_date" required>
+        <label class="form-label" for="posting_date">{{ _('Fecha de contabilización') }} <span
+            class="text-danger">*</span></label>
+        <input class="form-control" id="posting_date" name="posting_date" type="date" x-model="header.posting_date"
+          required>
       </div>
       <div class="col-md-4">
         <label class="form-label" for="transaction_currency">{{ _('Moneda del comprobante') }}</label>
-        <select class="form-select form-select-sm" id="transaction_currency" name="transaction_currency" x-model="header.transaction_currency">
-          <option value="">{{ _('Moneda local') }}</option>
-          {% for code, label in currencies %}
-          <option value="{{ code }}">{{ label }}</option>
-          {% endfor %}
-        </select>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "currency",
+            name: "transaction_currency",
+            minChars: 1,
+            preload: false,
+            initialValue: header.transaction_currency,
+            initialLabel: header.transaction_currency_label,
+            messages: {
+              placeholder: {{ _('Moneda local')|tojson }},
+              loading: {{ _('Buscando...')|tojson }},
+              noResults: {{ _('Sin resultados')|tojson }},
+              minChars: {{ _('Escriba para buscar')|tojson }},
+              clear: {{ _('Moneda local')|tojson }},
+              invalid: {{ _('Seleccione una opción válida')|tojson }},
+              error: {{ _('No se pudo buscar')|tojson }}
+            }
+          })'
+          x-effect="header.transaction_currency = selectedValue; header.transaction_currency_label = selectedLabel">
+          <input type="hidden" id="transaction_currency" name="transaction_currency" x-model="selectedValue">
+          <div class="ca-smart-select-input-wrap">
+            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
+          </div>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+          </div>
+        </div>
       </div>
       <div class="col-md-4">
         <label class="form-label" for="is_closing">{{ _('Etapa de Cierre') }}</label>
@@ -480,17 +617,13 @@
         <label class="form-label">{{ _('Libros contables') }}</label>
         <div class="ca-book-selector">
           <template x-if="!bookOptions.length">
-            <p class="ca-book-selector-empty mb-0">{{ _('Seleccione una compañía para cargar los libros activos.') }}</p>
+            <p class="ca-book-selector-empty mb-0">{{ _('Seleccione una compañía para cargar los libros activos.') }}
+            </p>
           </template>
           <template x-for="book in bookOptions" :key="book.value">
             <div class="form-check">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                :id="'book-' + book.value"
-                :checked="selectedBooks.includes(book.value)"
-                @change="toggleBook(book.value)"
-              >
+              <input class="form-check-input" type="checkbox" :id="'book-' + book.value"
+                :checked="selectedBooks.includes(book.value)" @change="toggleBook(book.value)">
               <label class="form-check-label" :for="'book-' + book.value">
                 <span x-text="book.display_name"></span>
                 <small class="text-muted" x-show="book.currency">(<span x-text="book.currency"></span>)</small>
@@ -498,7 +631,9 @@
             </div>
           </template>
         </div>
-        <div class="form-text">{{ _('Todos los libros activos se seleccionan automáticamente. Desmarque los que no deban afectarse; si quedan todos marcados se aplicará a todos.') }}</div>
+        <div class="form-text">
+          {{ _('Todos los libros activos se seleccionan automáticamente. Desmarque los que no deban afectarse; si quedan todos marcados se aplicará a todos.') }}
+        </div>
       </div>
       <div class="col-md-4">
         <label class="form-label" for="reference">{{ _('Referencia') }}</label>
@@ -511,7 +646,8 @@
     <div class="ca-journal-toolbar mb-3">
       <h5 class="mb-0">{{ _('Asientos contables') }}</h5>
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button"
+          @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
         <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
       </div>
     </div>
@@ -553,17 +689,22 @@
                     })' x-effect="line.account = selectedValue; line.account_label = selectedLabel">
                       <input type="hidden" x-model="selectedValue">
                       <div class="ca-smart-select-input-wrap">
-                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="column.label">
-                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput"
+                          @blur="closeSoon" :placeholder="column.label">
+                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue"
+                          @click="clearSelection" :title="messages.clear">×</button>
                       </div>
                       <div class="ca-smart-select-menu" x-show="open" x-cloak>
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
-                          <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                          <button class="ca-smart-select-option" type="button"
+                            @mousedown.prevent="selectOption(option)">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
-                        <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                        <div class="ca-smart-select-state"
+                          x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults">
+                        </div>
                         <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                       </div>
                     </div>
@@ -576,7 +717,7 @@
                       filters: { company: { selector: "#company_filter_value" } },
                       filterSources: ["#company"],
                       initialValue: line.cost_center,
-                      initialLabel: line.cost_center,
+                      initialLabel: line.cost_center_label || line.cost_center,
                       messages: {
                         placeholder: {{ _('Buscar centro de costos')|tojson }},
                         loading: {{ _('Buscando...')|tojson }},
@@ -586,20 +727,25 @@
                         invalid: {{ _('Seleccione una opción válida')|tojson }},
                         error: {{ _('No se pudo buscar')|tojson }},
                       }
-                    })' x-effect="line.cost_center = selectedValue">
+                    })' x-effect="line.cost_center = selectedValue; line.cost_center_label = selectedLabel">
                       <input type="hidden" x-model="selectedValue">
                       <div class="ca-smart-select-input-wrap">
-                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="column.label">
-                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput"
+                          @blur="closeSoon" :placeholder="column.label">
+                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue"
+                          @click="clearSelection" :title="messages.clear">×</button>
                       </div>
                       <div class="ca-smart-select-menu" x-show="open" x-cloak>
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
-                          <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                          <button class="ca-smart-select-option" type="button"
+                            @mousedown.prevent="selectOption(option)">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
-                        <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                        <div class="ca-smart-select-state"
+                          x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults">
+                        </div>
                         <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                       </div>
                     </div>
@@ -638,36 +784,48 @@
                     })' x-effect="line.party = selectedValue">
                       <input type="hidden" x-model="selectedValue">
                       <div class="ca-smart-select-input-wrap">
-                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="column.label">
-                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                        <input class="form-control form-control-sm" type="text" x-model="search" @input="onInput"
+                          @blur="closeSoon" :placeholder="column.label">
+                        <button class="ca-smart-select-clear" type="button" x-show="selectedValue"
+                          @click="clearSelection" :title="messages.clear">×</button>
                       </div>
                       <div class="ca-smart-select-menu" x-show="open" x-cloak>
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
-                          <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                          <button class="ca-smart-select-option" type="button"
+                            @mousedown.prevent="selectOption(option)">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
-                        <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                        <div class="ca-smart-select-state"
+                          x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults">
+                        </div>
                         <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                       </div>
                     </div>
                   </template>
                   <template x-if="column.field === 'debit'">
-                    <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" x-model="line.debit">
+                    <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0"
+                      x-model="line.debit">
                   </template>
                   <template x-if="column.field === 'credit'">
-                    <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" x-model="line.credit">
+                    <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0"
+                      x-model="line.credit">
                   </template>
                 </td>
               </template>
               <td>
                 <div class="ca-journal-actions">
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)" title="{{ _('Editar') }}"><i class="bi bi-pencil"></i></button>
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index)" title="{{ _('Insertar arriba') }}"><i class="bi bi-arrow-up"></i></button>
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index + 1)" title="{{ _('Insertar abajo') }}"><i class="bi bi-arrow-down"></i></button>
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="duplicateRow(index)" title="{{ _('Duplicar') }}"><i class="bi bi-copy"></i></button>
-                  <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)" title="{{ _('Eliminar') }}"><i class="bi bi-trash"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"
+                    title="{{ _('Editar') }}"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index)"
+                    title="{{ _('Insertar arriba') }}"><i class="bi bi-arrow-up"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index + 1)"
+                    title="{{ _('Insertar abajo') }}"><i class="bi bi-arrow-down"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="duplicateRow(index)"
+                    title="{{ _('Duplicar') }}"><i class="bi bi-copy"></i></button>
+                  <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)"
+                    title="{{ _('Eliminar') }}"><i class="bi bi-trash"></i></button>
                 </div>
               </td>
             </tr>
@@ -722,8 +880,10 @@
                 })' x-effect="modalLine.account = selectedValue; modalLine.account_label = selectedLabel">
                   <input type="hidden" x-model="selectedValue">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon"
+                      :placeholder="messages.placeholder">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      :title="messages.clear">×</button>
                   </div>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -732,7 +892,8 @@
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                      x-text="messages.noResults"></div>
                     <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                   </div>
                 </div>
@@ -746,7 +907,7 @@
                   filters: { company: { selector: "#company_filter_value" } },
                   filterSources: ["#company"],
                   initialValue: modalLine.cost_center,
-                  initialLabel: modalLine.cost_center,
+                  initialLabel: modalLine.cost_center_label || modalLine.cost_center,
                   messages: {
                     placeholder: {{ _('Buscar centro de costos')|tojson }},
                     loading: {{ _('Buscando...')|tojson }},
@@ -756,11 +917,13 @@
                     invalid: {{ _('Seleccione una opción válida')|tojson }},
                     error: {{ _('No se pudo buscar')|tojson }}
                   }
-                })' x-effect="modalLine.cost_center = selectedValue">
+                })' x-effect="modalLine.cost_center = selectedValue; modalLine.cost_center_label = selectedLabel">
                   <input type="hidden" x-model="selectedValue">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon"
+                      :placeholder="messages.placeholder">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      :title="messages.clear">×</button>
                   </div>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -769,13 +932,14 @@
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                      x-text="messages.noResults"></div>
                     <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                   </div>
                 </div>
               </div>
               <div>
-                <label class="form-label">{{ _('Unidad') }}</label>
+                <label class="form-label">{{ _('Unidad de negocio') }}</label>
                 <div class="ca-smart-select" x-data='smartSelect({
                   doctype: "unit",
                   name: "modal_unit",
@@ -796,8 +960,10 @@
                 })' x-effect="modalLine.unit = selectedValue">
                   <input type="hidden" x-model="selectedValue">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon"
+                      :placeholder="messages.placeholder">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      :title="messages.clear">×</button>
                   </div>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -806,7 +972,8 @@
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                      x-text="messages.noResults"></div>
                     <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                   </div>
                 </div>
@@ -833,8 +1000,10 @@
                 })' x-effect="modalLine.project = selectedValue">
                   <input type="hidden" x-model="selectedValue">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon"
+                      :placeholder="messages.placeholder">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      :title="messages.clear">×</button>
                   </div>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -843,7 +1012,8 @@
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                      x-text="messages.noResults"></div>
                     <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                   </div>
                 </div>
@@ -884,8 +1054,10 @@
                 })' x-effect="modalLine.party = selectedValue">
                   <input type="hidden" x-model="selectedValue">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
+                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon"
+                      :placeholder="messages.placeholder">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      :title="messages.clear">×</button>
                   </div>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
@@ -894,7 +1066,8 @@
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                      x-text="messages.noResults"></div>
                     <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                   </div>
                 </div>
@@ -906,10 +1079,6 @@
               <div>
                 <label class="form-label">{{ _('Haber') }}</label>
                 <input class="form-control" type="number" step="0.0001" min="0" x-model="modalLine.credit">
-              </div>
-              <div>
-                <label class="form-label">{{ _('Moneda') }}</label>
-                <input class="form-control" x-model="modalLine.currency">
               </div>
               <div>
                 <label class="form-label">{{ _('Tipo de referencia') }}</label>
@@ -927,50 +1096,13 @@
                 <label class="form-label">{{ _('Referencia 2') }}</label>
                 <input class="form-control" x-model="modalLine.reference2">
               </div>
-              <div class="form-check align-self-end">
-                <input class="form-check-input" id="isAdvance" type="checkbox" x-model="modalLine.is_advance">
-                <label class="form-check-label" for="isAdvance">{{ _('Es anticipo') }}</label>
-              </div>
               <div>
-                <label class="form-label">{{ _('Cuenta bancaria') }}</label>
-                <div class="ca-smart-select" x-data='smartSelect({
-                  doctype: "bank_account",
-                  name: "modal_bank_account",
-                  minChars: 1,
-                  filters: { company: { selector: "#company" } },
-                  filterSources: ["#company"],
-                  initialValue: modalLine.bank_account,
-                  initialLabel: modalLine.bank_account,
-                  messages: {
-                    placeholder: {{ _('Buscar cuenta bancaria')|tojson }},
-                    loading: {{ _('Buscando...')|tojson }},
-                    noResults: {{ _('Sin resultados')|tojson }},
-                    minChars: {{ _('Escriba para buscar')|tojson }},
-                    clear: {{ _('Limpiar')|tojson }},
-                    invalid: {{ _('Seleccione una opción válida')|tojson }},
-                    error: {{ _('No se pudo buscar')|tojson }}
-                  }
-                })' x-effect="modalLine.bank_account = selectedValue">
-                  <input type="hidden" x-model="selectedValue">
-                  <div class="ca-smart-select-input-wrap">
-                    <input class="form-control" type="text" x-model="search" @input="onInput" @blur="closeSoon" :placeholder="messages.placeholder">
-                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection" :title="messages.clear">×</button>
-                  </div>
-                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                    <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                    <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
-                        <span x-text="option.display_name"></span>
-                      </button>
-                    </template>
-                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
-                    <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
-                  </div>
-                </div>
-              </div>
-              <div class="grid-column-full">
                 <label class="form-label">{{ _('Observaciones') }}</label>
                 <textarea class="form-control" rows="3" x-model="modalLine.remarks"></textarea>
+              </div>
+              <div class="form-check align-self-start pt-4">
+                <input class="form-check-input" id="isAdvance" type="checkbox" x-model="modalLine.is_advance">
+                <label class="form-check-label" for="isAdvance">{{ _('Es anticipo') }}</label>
               </div>
             </div>
           </template>
@@ -995,14 +1127,18 @@
             <div class="d-flex align-items-center gap-2 mb-2">
               <input class="form-check-input" type="checkbox" x-model="column.visible">
               <span class="flex-grow-1" x-text="column.label"></span>
-              <input class="form-control form-control-sm text-end" style="width: 80px;" type="number" min="1" max="4" x-model.number="column.width">
-              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, -1)"><i class="bi bi-arrow-up"></i></button>
-              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, 1)"><i class="bi bi-arrow-down"></i></button>
+              <input class="form-control form-control-sm text-end" style="width: 80px;" type="number" min="1" max="4"
+                x-model.number="column.width">
+              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, -1)"><i
+                  class="bi bi-arrow-up"></i></button>
+              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, 1)"><i
+                  class="bi bi-arrow-down"></i></button>
             </div>
           </template>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" @click="resetPreferences()">{{ _('Restablecer') }}</button>
+          <button class="btn btn-outline-secondary" type="button"
+            @click="resetPreferences()">{{ _('Restablecer') }}</button>
           <button class="btn btn-primary" type="button" @click="savePreferences()">{{ _('Actualizar') }}</button>
         </div>
       </div>

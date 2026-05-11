@@ -4,6 +4,7 @@
   <h4>{{ _("Impuestos y Cargos") }}</h4>
 </div>
 <form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="row g-2">
     <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
     <div class="col-md-2"><input class="form-control" name="rate" placeholder="{{ _('Tasa/Monto') }}" value="0"></div>

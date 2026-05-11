@@ -5,16 +5,20 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
+    AccountingPeriod,
+    Accounts,
     Batch,
+    Book,
     GLEntry,
     PaymentReference,
     PurchaseInvoice,
@@ -76,6 +80,32 @@ class OperationalReportFilters:
 
 
 @dataclass(frozen=True)
+class FinancialReportFilters:
+    """Filtros comunes para reportes financieros del libro mayor."""
+
+    company: str
+    ledger: str | None = None
+    accounting_period: str | None = None
+    voucher_number: str | None = None
+    account_code: str | None = None
+    account_from: str | None = None
+    account_to: str | None = None
+    cost_center_code: str | None = None
+    unit_code: str | None = None
+    project_code: str | None = None
+    party_type: str | None = None
+    party_id: str | None = None
+    voucher_type: str | None = None
+    status: str | None = None
+    include_running_balance: bool = False
+    page: int = 1
+    page_size: int = 100
+    sort_by: str = "posting_date"
+    sort_dir: str = "asc"
+    export_all: bool = False
+
+
+@dataclass(frozen=True)
 class ReportRow:
     """Fila generica de reporte."""
 
@@ -88,6 +118,11 @@ class PaginatedReport:
 
     rows: list[ReportRow]
     totals: dict[str, Decimal]
+    columns: list[str] | None = None
+    total_rows: int = 0
+    page: int = 1
+    page_size: int = 0
+    ledger_currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +139,25 @@ def _decimal_value(value: Any) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+def _normalize_account_classification(account: Accounts | None) -> str:
+    """Normaliza aliases de clasificaciones de cuentas para reportes financieros."""
+    raw_classification = (account.classification or "").strip().lower() if account else ""
+    aliases = {
+        "activos": "activo",
+        "pasivos": "pasivo",
+        "ingresos": "ingreso",
+        "costos": "costo",
+        "gastos": "gasto",
+        "assets": "asset",
+        "liabilities": "liability",
+        "equities": "equity",
+        "incomes": "income",
+        "costs": "cost",
+        "expenses": "expense",
+    }
+    return aliases.get(raw_classification, raw_classification)
 
 
 def _payment_allocations(reference_type: str, reference_id: str, as_of_date: date | None) -> Decimal:
@@ -311,6 +365,433 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
             "bank_reconciled_amount": bank_total,
             "purchase_pending_amount": sum((row.pending_amount for row in purchase_pending), Decimal("0")),
         },
+    )
+
+
+def _resolve_ledger(company: str, ledger: str | None) -> Book | None:
+    query = select(Book).where(Book.entity == company)
+    if ledger:
+        query = query.where(or_(Book.id == ledger, Book.code == ledger))
+    else:
+        query = query.order_by(Book.is_primary.desc(), Book.default.desc(), Book.created.asc())
+    return database.session.execute(query).scalars().first()
+
+
+def _period_bounds(company: str, period_name: str | None) -> tuple[date | None, date | None, AccountingPeriod | None]:
+    if not period_name:
+        return None, None, None
+    period = (
+        database.session.execute(
+            select(AccountingPeriod).where(AccountingPeriod.entity == company, AccountingPeriod.name == period_name)
+        )
+        .scalars()
+        .first()
+    )
+    if period is None:
+        return None, None, None
+    return period.start, period.end, period
+
+
+def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start: date | None, period_end: date | None) -> Any:
+    query = query.where(GLEntry.company == filters.company)
+    if filters.voucher_number:
+        like_value = f"%{filters.voucher_number.strip()}%"
+        query = query.where(GLEntry.document_no.ilike(like_value))
+    if filters.account_code:
+        query = query.where(GLEntry.account_code == filters.account_code)
+    if filters.account_from:
+        query = query.where(GLEntry.account_code >= filters.account_from)
+    if filters.account_to:
+        query = query.where(GLEntry.account_code <= filters.account_to)
+    if filters.cost_center_code:
+        query = query.where(GLEntry.cost_center_code == filters.cost_center_code)
+    if filters.unit_code:
+        query = query.where(GLEntry.unit_code == filters.unit_code)
+    if filters.project_code:
+        query = query.where(GLEntry.project_code == filters.project_code)
+    if filters.party_type:
+        query = query.where(GLEntry.party_type == filters.party_type)
+    if filters.party_id:
+        query = query.where(GLEntry.party_id == filters.party_id)
+    if filters.voucher_type:
+        query = query.where(GLEntry.voucher_type == filters.voucher_type)
+    if filters.status == "cancelled":
+        query = query.where(GLEntry.is_cancelled.is_(True))
+    elif filters.status in {"submitted", "posted"}:
+        query = query.where(GLEntry.is_cancelled.is_(False))
+    if period_start:
+        query = query.where(GLEntry.posting_date >= period_start)
+    if period_end:
+        query = query.where(GLEntry.posting_date <= period_end)
+    return query
+
+
+def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
+    sort_columns = {
+        "posting_date": GLEntry.posting_date,
+        "document_no": GLEntry.document_no,
+        "account_code": GLEntry.account_code,
+        "debit": GLEntry.debit,
+        "credit": GLEntry.credit,
+        "created": GLEntry.created,
+    }
+    column = sort_columns.get(sort_by, GLEntry.posting_date)
+    direction = column.desc() if sort_dir.lower() == "desc" else column.asc()
+    return query.order_by(direction, GLEntry.id.asc())
+
+
+def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
+    """Detalle de movimiento contable (diario + mayor) desde GL."""
+    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
+
+    query = (
+        select(GLEntry, Accounts, AccountingPeriod)
+        .join(
+            Accounts,
+            (Accounts.id == GLEntry.account_id),
+            isouter=True,
+        )
+        .join(
+            AccountingPeriod,
+            (AccountingPeriod.id == GLEntry.accounting_period_id),
+            isouter=True,
+        )
+    )
+    query = _apply_gl_filters(query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    query = _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
+
+    count_query = query.order_by(None).with_only_columns(func.count())
+    total_rows = database.session.execute(count_query).scalar_one()
+    page = max(filters.page, 1)
+    page_size = max(filters.page_size, 1)
+    row_offset = (page - 1) * page_size
+    display_from_index = 0
+    if not filters.export_all:
+        if filters.include_running_balance and row_offset > 0:
+            query = query.limit(row_offset + page_size)
+            display_from_index = row_offset
+        else:
+            query = query.offset(row_offset).limit(page_size)
+
+    running_per_account: dict[str, Decimal] = defaultdict(Decimal)
+    rows: list[ReportRow] = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    for index, (entry, account, period) in enumerate(database.session.execute(query).all()):
+        account_code = entry.account_code or (account.code if account else None) or ""
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+        running_per_account[account_code] += debit - credit
+        if index < display_from_index:
+            continue
+        total_debit += debit
+        total_credit += credit
+        row_values: dict[str, Any] = {
+            "posting_date": entry.posting_date,
+            "accounting_period": period.name if period else None,
+            "document_no": entry.document_no or entry.voucher_id,
+            "voucher_type": entry.voucher_type,
+            "account_code": account_code,
+            "account_name": account.name if account else None,
+            "debit": debit,
+            "credit": credit,
+            "currency": selected_ledger.currency or entry.company_currency or entry.account_currency,
+            "ledger": selected_ledger.code,
+            "company": entry.company,
+            "cost_center": entry.cost_center_code,
+            "unit": entry.unit_code,
+            "project": entry.project_code,
+            "party_type": entry.party_type,
+            "party_id": entry.party_id,
+            "line_comment": entry.remarks,
+            "created_by": entry.created_by,
+            "created_at": entry.created,
+            "voucher_status": "cancelled" if entry.is_cancelled else "submitted",
+        }
+        if filters.include_running_balance:
+            row_values["running_balance"] = running_per_account[account_code]
+        rows.append(ReportRow(values=row_values))
+
+    columns = list(rows[0].values.keys()) if rows else []
+    return PaginatedReport(
+        rows=rows,
+        totals={"debit": total_debit, "credit": total_credit, "difference": total_debit - total_credit},
+        columns=columns,
+        total_rows=total_rows,
+        page=page,
+        page_size=page_size,
+        ledger_currency=selected_ledger.currency,
+    )
+
+
+def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport:
+    """Balanza de comprobación por cuenta contable."""
+    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+
+    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    base_query = _apply_gl_filters(base_query, filters, None, None).where(GLEntry.ledger_id == selected_ledger.id)
+    entries = database.session.execute(_sorted_gl_query(base_query, "account_code", "asc")).all()
+
+    account_totals: dict[str, dict[str, Any]] = {}
+    for entry, account in entries:
+        if period_start and entry.posting_date < period_start:
+            bucket = "opening"
+        elif period_end and entry.posting_date > period_end:
+            continue
+        else:
+            bucket = "movement"
+        account_code = entry.account_code or (account.code if account else "")
+        row = account_totals.setdefault(
+            account_code,
+            {
+                "account_code": account_code,
+                "account_name": account.name if account else None,
+                "opening": Decimal("0"),
+                "debit": Decimal("0"),
+                "credit": Decimal("0"),
+                "level": account_code.count(".") + 1 if account_code else 1,
+            },
+        )
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+        if bucket == "opening":
+            row["opening"] += debit - credit
+        else:
+            row["debit"] += debit
+            row["credit"] += credit
+
+    rows = []
+    total_opening = Decimal("0")
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    total_ending = Decimal("0")
+    for account_code in sorted(account_totals):
+        values = account_totals[account_code]
+        ending = values["opening"] + values["debit"] - values["credit"]
+        total_opening += values["opening"]
+        total_debit += values["debit"]
+        total_credit += values["credit"]
+        total_ending += ending
+        rows.append(
+            ReportRow(
+                values={
+                    "account_code": values["account_code"],
+                    "account_name": values["account_name"],
+                    "opening_balance": values["opening"],
+                    "debit": values["debit"],
+                    "credit": values["credit"],
+                    "ending_balance": ending,
+                    "level": values["level"],
+                }
+            )
+        )
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "opening_balance": total_opening,
+            "debit": total_debit,
+            "credit": total_credit,
+            "ending_balance": total_ending,
+            "difference": total_debit - total_credit,
+        },
+        columns=list(rows[0].values.keys()) if rows else [],
+        total_rows=len(rows),
+        page=1,
+        page_size=len(rows),
+        ledger_currency=selected_ledger.currency,
+    )
+
+
+def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
+    """Estado de resultado acumulado por clasificación contable."""
+    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    summary = {
+        "income": Decimal("0"),
+        "cost": Decimal("0"),
+        "expense": Decimal("0"),
+    }
+    account_summary: dict[str, dict[str, Any]] = {}
+    for entry, account in database.session.execute(base_query).all():
+        if account is None:
+            continue
+        classification = _normalize_account_classification(account)
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+        account_code = account.code or (entry.account_code or "")
+        account_name = account.name
+        account_bucket = account_summary.setdefault(
+            account_code,
+            {
+                "account_code": account_code,
+                "account_name": account_name,
+                "section": None,
+                "amount": Decimal("0"),
+                "level": account_code.count(".") + 1 if account_code else 1,
+            },
+        )
+        if classification in {"ingreso", "income"}:
+            amount = credit - debit
+            summary["income"] += amount
+            account_bucket["section"] = "income"
+            account_bucket["amount"] += amount
+        elif classification in {"costo", "cost"}:
+            amount = debit - credit
+            summary["cost"] += amount
+            account_bucket["section"] = "cost"
+            account_bucket["amount"] += amount
+        elif classification in {"gasto", "expense"}:
+            amount = debit - credit
+            summary["expense"] += amount
+            account_bucket["section"] = "expense"
+            account_bucket["amount"] += amount
+    gross_profit = summary["income"] - summary["cost"]
+    operating_profit = gross_profit - summary["expense"]
+    rows: list[ReportRow] = []
+    for section in ("income", "cost", "expense"):
+        section_amount = summary[section]
+        rows.append(
+            ReportRow({"section": section, "account_code": None, "account_name": None, "amount": section_amount, "level": 0})
+        )
+        section_rows = [
+            row
+            for row in account_summary.values()
+            if row.get("section") == section and _decimal_value(row.get("amount")) != Decimal("0")
+        ]
+        for values in sorted(section_rows, key=lambda item: str(item["account_code"])):
+            rows.append(
+                ReportRow(
+                    {
+                        "section": section,
+                        "account_code": values["account_code"],
+                        "account_name": values["account_name"],
+                        "amount": values["amount"],
+                        "level": values["level"],
+                    }
+                )
+            )
+    rows.extend(
+        [
+            ReportRow(
+                {"section": "gross_profit", "account_code": None, "account_name": None, "amount": gross_profit, "level": 0}
+            ),
+            ReportRow(
+                {"section": "net_profit", "account_code": None, "account_name": None, "amount": operating_profit, "level": 0}
+            ),
+        ]
+    )
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "income": summary["income"],
+            "cost": summary["cost"],
+            "expense": summary["expense"],
+            "gross_profit": gross_profit,
+            "net_profit": operating_profit,
+        },
+        columns=["section", "account_code", "account_name", "amount", "level"],
+        total_rows=len(rows),
+        page=1,
+        page_size=len(rows),
+        ledger_currency=selected_ledger.currency,
+    )
+
+
+def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
+    """Balance general por clasificación Activo/Pasivo/Patrimonio."""
+    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+
+    by_account: dict[str, dict[str, Any]] = {}
+    totals = {
+        "assets": Decimal("0"),
+        "liabilities": Decimal("0"),
+        "equity": Decimal("0"),
+        "income": Decimal("0"),
+        "cost": Decimal("0"),
+        "expense": Decimal("0"),
+    }
+    for entry, account in database.session.execute(base_query).all():
+        if account is None:
+            continue
+        classification = _normalize_account_classification(account)
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+        if classification in {"activo", "asset"}:
+            amount = debit - credit
+            section = "assets"
+        elif classification in {"pasivo", "liability"}:
+            amount = credit - debit
+            section = "liabilities"
+        elif classification in {"patrimonio", "equity"}:
+            amount = credit - debit
+            section = "equity"
+        elif classification in {"ingreso", "income"}:
+            totals["income"] += credit - debit
+            continue
+        elif classification in {"costo", "cost"}:
+            totals["cost"] += debit - credit
+            continue
+        elif classification in {"gasto", "expense"}:
+            totals["expense"] += debit - credit
+            continue
+        else:
+            continue
+        account_code = account.code or (entry.account_code or "")
+        record = by_account.setdefault(
+            account_code,
+            {
+                "section": section,
+                "account_code": account_code,
+                "account_name": account.name,
+                "amount": Decimal("0"),
+            },
+        )
+        record["amount"] += amount
+        totals[section] += amount
+
+    period_profit = totals["income"] - totals["cost"] - totals["expense"]
+    totals["equity"] += period_profit
+    rows = [ReportRow(values=value) for _, value in sorted(by_account.items())]
+    rows.append(
+        ReportRow(
+            values={
+                "section": "equity",
+                "account_code": None,
+                "account_name": "period_profit_summary",
+                "amount": period_profit,
+            }
+        )
+    )
+    difference = totals["assets"] - (totals["liabilities"] + totals["equity"])
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "assets": totals["assets"],
+            "liabilities": totals["liabilities"],
+            "equity": totals["equity"],
+            "period_profit": period_profit,
+            "difference": difference,
+        },
+        columns=["section", "account_code", "account_name", "amount"],
+        total_rows=len(rows),
+        page=1,
+        page_size=len(rows),
+        ledger_currency=selected_ledger.currency,
     )
 
 
