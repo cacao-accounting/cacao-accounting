@@ -11,40 +11,83 @@
   </ol>
 </nav>
 
-<div class="ca-card">
-  <div class="ca-card-header d-flex justify-content-between align-items-center">
-    <h5 class="ca-card-title"><i class="bi bi-calendar-range"></i> Listado de Períodos Contables.</h5>
-    <a href="{{ url_for('contabilidad.accounting_period_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Nuevo Período</a>
+<div class="ca-page-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-calendar-range me-2" style="color:#78BF30"></i>{{ _('Períodos Contables') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('contabilidad.accounting_period_new') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo Período') }}
+    </a>
   </div>
-  <table class="ca-table">
-    <caption style="display: none;">Listado de periodos contables.</caption>
-    <thead>
-      <tr>
-        <th scope="col">Nombre</th>
-        <th scope="col">Entidad</th>
-        <th scope="col">Inicio</th>
-        <th scope="col">Fin</th>
-        <th scope="col">Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in consulta.items -%}
-      <tr>
-        <td>{{ macros.render_status(status=item.status, lista_status=statusweb) }} {{ item.name }}</td>
-        <td>{{ item.entity }}</td>
-        <td>{{ item.start }}</td>
-        <td>{{ item.end }}</td>
-        <td>
-          <a href="{{ url_for('contabilidad.accounting_period_edit', period_id=item.id) }}" class="btn btn-sm btn-outline-primary">Editar</a>
-          <a href="{{ url_for('contabilidad.accounting_period_delete', period_id=item.id) }}" class="btn btn-sm btn-outline-danger">Eliminar</a>
-        </td>
-      </tr>
-      {%- else %}
-      <tr><td colspan="5" class="text-center text-muted">No hay períodos contables registrados.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}</div>
+</div>
+
+<div class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Filtros') }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="{{ _('Buscar por nombre o entidad...') }}" value="{{ request.args.get('search', '') }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Filtrar') }}</button>
+        <a href="{{ url_for('contabilidad.periodo_contable') }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Listado de Períodos Contables') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none;">{{ _('Listado de periodos contables') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ _('Nombre') }}</th>
+          <th scope="col">{{ _('Entidad') }}</th>
+          <th scope="col">{{ _('Inicio') }}</th>
+          <th scope="col">{{ _('Fin') }}</th>
+          <th scope="col" class="text-center">{{ _('Estado') }}</th>
+          <th scope="col">{{ _('Acciones') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in consulta.items -%}
+        <tr>
+          <td><span class="fw-bold">{{ item.name }}</span></td>
+          <td>{{ item.entity }}</td>
+          <td>{{ item.start }}</td>
+          <td>{{ item.end }}</td>
+          <td class="text-center">
+            {% if item.is_closed %}
+            <span class="badge bg-dark">{{ _('Cerrado') }}</span>
+            {% else %}
+            <span class="badge bg-success">{{ _('Abierto') }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('contabilidad.accounting_period_edit', period_id=item.id) }}" class="btn btn-sm btn-outline-primary" title="{{ _('Editar') }}">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{{ url_for('contabilidad.accounting_period_delete', period_id=item.id) }}" class="btn btn-sm btn-outline-danger" title="{{ _('Eliminar') }}">
+                    <i class="bi bi-trash"></i>
+                </a>
+            </div>
+          </td>
+        </tr>
+        {%- else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No se encontraron períodos contables.') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="ca-card-footer">
+    {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.periodo_contable") }}
+  </div>
 </div>
 
 {% endblock %}

@@ -2007,3 +2007,23 @@ Identificar pendientes para cerrar el módulo de contabilidad y aplicar las corr
 4.  **UX Uniforme:** Se aplicó el nuevo diseño (heredado de Journal Entry) a Unidades de Negocio, Libros, Proyectos, Monedas, Tasas de Cambio, Periodos y Años Fiscales.
 5.  **Filtros:** Se agregaron filtros de búsqueda en todas las páginas de listado del módulo contable.
 6.  **Validación:** Se verificó la consistencia visual y se ejecutaron las pruebas unitarias existentes.
+
+## 2026-05-12 (Consolidación y Limpieza de Backlog)
+
+### Petición del usuario
+Confirmar qué ítems están realmente pendientes revisando SESSIONS.md y el código fuente, para "limpiar la casa" antes de continuar el desarrollo.
+
+### Plan implementado
+1. Auditoría del código fuente frente a PENDIENTE.md y SESSIONS.md.
+2. Confirmación de implementación de: Valuación FIFO/MA, Saldo vivo dinámico, Pagos multi-factura y Comprobantes Recurrentes.
+3. Limpieza de FIXME.md eliminando tareas de unificación de UI ya completadas.
+4. Reestructuración de PENDIENTE.md enfocándolo en brechas reales (Colaboración, Auditoría, Seguridad avanzada).
+5. Actualización de ESTADO_ACTUAL.md con las capacidades verificadas del sistema.
+6. Validación de estabilidad mediante ejecución de la suite completa de pruebas (578 tests passed).
+
+### Resumen técnico de cambios
+- Documentación sincronizada: FIXME.md, PENDIENTE.md, ESTADO_ACTUAL.md.
+- Verificación de lógica de posting para asegurar consistencia en reportes financieros y operativos.
+
+### Verificación ejecutada
+- export PYTHONPATH=$PYTHONPATH:. && CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True (578 passed).

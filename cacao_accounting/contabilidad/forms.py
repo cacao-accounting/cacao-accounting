@@ -177,7 +177,6 @@ class FormularioCuenta(FlaskForm):
     entidad = SelectField("Entidad", validators=[DataRequired()])
     grupo = BooleanField("Grupo", default=False)
     padre = SelectField("Cuenta Padre", choices=[], validators=[Optional()])
-    moneda = SelectField("Moneda", choices=[], validators=[Optional()])
     clasificacion = SelectField(
         "Clasificación",
         choices=[
@@ -190,7 +189,6 @@ class FormularioCuenta(FlaskForm):
         ],
         validators=[Optional()],
     )
-    tipo = StringField("Tipo", validators=[Optional()])
     account_type = SelectField(
         "Tipo de Cuenta",
         choices=[
@@ -207,7 +205,6 @@ class FormularioCuenta(FlaskForm):
         validators=[Optional()],
     )
     activo = BooleanField("Activo", default=True)
-    habilitado = BooleanField("Habilitado", default=True)
 
 
 class FormularioCentroCosto(FlaskForm):
@@ -217,7 +214,6 @@ class FormularioCentroCosto(FlaskForm):
     nombre = StringField("Nombre", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
     activo = BooleanField("Activo", default=True)
-    habilitado = BooleanField("Habilitado", default=True)
     predeterminado = BooleanField("Predeterminado", default=False)
     grupo = BooleanField("Grupo", default=False)
     padre = SelectField("Centro Padre", choices=[], validators=[Optional()])

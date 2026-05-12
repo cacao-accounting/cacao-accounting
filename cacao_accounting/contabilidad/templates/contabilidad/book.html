@@ -11,31 +11,67 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:680px;">
+<style>
+    .ca-kv-list {
+        display: grid;
+        gap: .6rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ca-kv-item label {
+        color: #64748b;
+        display: block;
+        font-size: .75rem;
+        font-weight: 700;
+        margin-bottom: .15rem;
+        text-transform: uppercase;
+    }
+
+    .ca-kv-item p {
+        margin: 0;
+    }
+
+    @media (max-width: 768px) {
+        .ca-kv-list {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="ca-card" style="max-width:800px;">
   <div class="ca-card-header d-flex justify-content-between align-items-center">
-    <h5 class="ca-card-title"><i class="bi bi-journals"></i> {{ registro.name }}</h5>
+    <h5 class="ca-card-title mb-0">
+        <i class="bi bi-journals me-2"></i> {{ registro.code }} - {{ registro.name }}
+        {% if registro.status == 'activo' or not registro.status %}
+        <span class="badge bg-success ms-2">{{ _('Activo') }}</span>
+        {% else %}
+        <span class="badge bg-secondary ms-2">{{ registro.status }}</span>
+        {% endif %}
+        {% if registro.is_primary %}
+        <span class="badge bg-primary ms-2">{{ _('Primario') }}</span>
+        {% endif %}
+    </h5>
     <div class="d-flex gap-2">
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_libro', id_libro=registro.code) }}">Editar</a>
+      <a href="{{ url_for('contabilidad.libros') }}" class="btn btn-outline-secondary btn-sm">{{ _('Volver al Listado') }}</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_libro', id_libro=registro.code) }}">
+        <i class="bi bi-pencil me-1"></i>{{ _('Editar') }}
+      </a>
       {% if acceso.configurar %}
-      <a class="btn btn-sm btn-danger" href="{{ url_for('contabilidad.eliminar_libro', id_unidad=registro.code) }}">
-        <i class="bi bi-trash me-1"></i>Eliminar
+      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_libro', id_unidad=registro.code) }}">
+        <i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}
       </a>
       {% endif %}
     </div>
   </div>
-  <div class="card-body">
-    <dl class="row mb-0">
-      <dt class="col-sm-4">Código</dt>
-      <dd class="col-sm-8">{{ registro.code }}</dd>
-      <dt class="col-sm-4">Entidad</dt>
-      <dd class="col-sm-8">{{ registro.entity }}</dd>
-      <dt class="col-sm-4">Moneda</dt>
-      <dd class="col-sm-8">{{ registro.currency or '-' }}</dd>
-      <dt class="col-sm-4">Estatus</dt>
-      <dd class="col-sm-8">{{ registro.status or 'activo' }}</dd>
-      <dt class="col-sm-4">Primario</dt>
-      <dd class="col-sm-8">{{ 'Sí' if registro.is_primary else 'No' }}</dd>
-    </dl>
+  <div class="p-4">
+    <div class="ca-kv-list">
+        <div class="ca-kv-item"><label>{{ _('Código') }}</label><p><strong>{{ registro.code }}</strong></p></div>
+        <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Entidad') }}</label><p>{{ registro.entity }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or 'activo' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Libro Primario') }}</label><p>{{ _('Sí') if registro.is_primary else _('No') }}</p></div>
+    </div>
   </div>
 </div>
 

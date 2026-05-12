@@ -15,8 +15,86 @@
   </ol>
 </nav>
 
-<div class="ca-page-header">
+<div class="ca-page-header d-flex justify-content-between align-items-center">
   <h4><i class="bi bi-arrow-repeat me-2" style="color:#78BF30"></i>{{ _('Comprobante Recurrente') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('contabilidad.nuevo_comprobante_recurrente') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva Plantilla') }}
+    </a>
+  </div>
+</div>
+
+<div class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Plantillas de Comprobantes Recurrentes') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th>{{ _('Código') }}</th>
+          <th>{{ _('Nombre') }}</th>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Frecuencia') }}</th>
+          <th>{{ _('Próxima Aplicación') }}</th>
+          <th>{{ _('Acciones') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in consulta.items %}
+        <tr>
+          <td>{{ item.code }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.company }}</td>
+          <td>
+            {% if item.status == 'draft' %}
+            <span class="badge text-bg-secondary">{{ _('Borrador') }}</span>
+            {% elif item.status == 'approved' %}
+            <span class="badge text-bg-primary">{{ _('Aprobado') }}</span>
+            {% elif item.status == 'cancelled' %}
+            <span class="badge text-bg-danger">{{ _('Cancelado') }}</span>
+            {% elif item.status == 'completed' %}
+            <span class="badge text-bg-success">{{ _('Completado') }}</span>
+            {% else %}
+            <span class="badge text-bg-info">{{ item.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ _(item.frequency) }}</td>
+          <td>{{ item.next_application_date or '-' }}</td>
+          <td>
+            <a href="{{ url_for('contabilidad.ver_plantilla_recurrente', identifier=item.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            {{ _('No se encontraron plantillas de comprobantes recurrentes.') }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if consulta.pages > 1 %}
+  <div class="ca-card-footer">
+    <nav aria-label="Navegación de páginas">
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% for page in consulta.iter_pages() %}
+        {% if page %}
+        <li class="page-item {{ 'active' if page == consulta.page else '' }}">
+          <a class="page-item" href="{{ url_for('contabilidad.comprobantes_recurrentes', page=page) }}">{{ page }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
 </div>
 
 <section class="ca-card mb-3">
