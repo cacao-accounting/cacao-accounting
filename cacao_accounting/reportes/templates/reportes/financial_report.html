@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{# smart_select_field: label, name, doctype, value, field_id, min_chars, filters(dict), filter_sources(list), required_filters(list) #}
+{% macro smart_select_field(label, name, doctype, value='', field_id='', min_chars=1, filters=None, filter_sources=None, required_filters=None) -%}
+<label class="form-label mb-0">
+  {{ _(label) }}
+  <div class="ca-smart-select" x-data='smartSelect({
+      doctype: {{ doctype|tojson }},
+      name: {{ name|tojson }},
+      minChars: {{ min_chars }},
+      preload: true,
+      preloadOnFocus: true,
+      loadOnFilterChange: true,
+      initialValue: {{ value|tojson }},
+      initialLabel: {{ value|tojson }},
+      filters: {{ (filters or {})|tojson }},
+      filterSources: {{ (filter_sources or [])|tojson }},
+      requiredFilters: {{ (required_filters or [])|tojson }},
+      messages: {
+        placeholder: {{ _("Buscar...")|tojson }},
+        loading: {{ _("Buscando...")|tojson }},
+        noResults: {{ _("Sin resultados")|tojson }},
+        minChars: {{ _("Escriba para buscar")|tojson }},
+        clear: {{ _("Limpiar")|tojson }},
+        invalid: {{ _("Seleccione una opción válida")|tojson }},
+        error: {{ _("No se pudo buscar")|tojson }}
+      }
+    })'>
+    <input type="hidden" id="{{ field_id or name }}" name="{{ name }}" x-model="selectedValue">
+    <div class="ca-smart-select-input-wrap">
+      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus"
+        @blur="closeSoon" :placeholder="messages.placeholder">
+      <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+        :title="messages.clear">×</button>
+    </div>
+    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+      <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+      <template x-for="option in options" :key="option.value">
+        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+          <span x-text="option.display_name"></span>
+        </button>
+      </template>
+      <div class="ca-smart-select-state" x-show="!loading && !options.length" x-text="messages.noResults"></div>
+      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+    </div>
+  </div>
+</label>
+{%- endmacro %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ report_title }}</li>
+  </ol>
+</nav>
+
+<div x-data="{ collapsed: false, advanced: {{ (request.args.get('advanced') == '1')|tojson }} }" class="ca-report-layout">
+  <aside class="ca-report-filters ca-card" :class="{ 'ca-report-filters-collapsed': collapsed }">
+    <div class="ca-card-header d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title mb-0">{{ _("Filtros") }}</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapsed = !collapsed">
+        <span x-show="!collapsed">{{ _("Colapsar") }}</span>
+        <span x-show="collapsed">{{ _("Expandir") }}</span>
+      </button>
+    </div>
+    <div class="p-3" x-show="!collapsed">
+      <form method="get" class="d-grid gap-2" id="financial-filter-form">
+        <input type="hidden" name="apply_filters" value="1">
+        <input type="hidden" name="advanced" :value="advanced ? '1' : '0'">
+                <div class="d-flex flex-wrap gap-2 mb-2">
+          <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
+          <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
+        </div>
+        <label class="form-label mb-0">
+          {{ _("Vista guardada") }}
+          <div class="d-grid gap-2">
+            <input name="saved_view" class="form-control" list="saved-views-list" value="{{ saved_view }}">
+            <datalist id="saved-views-list">
+              {% for view_name in saved_views %}
+              <option value="{{ view_name }}"></option>
+              {% endfor %}
+            </datalist>
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary" type="submit" name="view_action" value="apply">{{ _("Cargar") }}</button>
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">{{ _("Guardar") }}</button>
+              <button class="btn btn-outline-danger" type="submit" name="view_action" value="reset">{{ _("Eliminar") }}</button>
+            </div>
+          </div>
+        </label>
+        {{ smart_select_field("Compañía", "company", "company", report_filters.company, "report-company") }}
+        {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        <button class="btn btn-link text-start p-0 mt-1" type="button" @click="advanced = !advanced">
+          <span x-show="!advanced">{{ _("Mostrar filtros avanzados") }}</span>
+          <span x-show="advanced">{{ _("Ocultar filtros avanzados") }}</span>
+        </button>
+        <div class="d-grid gap-2" x-show="advanced" x-cloak>
+          {{ smart_select_field("Comprobante", "voucher_number", "document_no", report_filters.voucher_number or '', "report-voucher-number", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
+          {{ smart_select_field("Rango cuenta desde", "account_from", "account_code", report_filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Rango cuenta hasta", "account_to", "account_code", report_filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Centro de costos", "cost_center_code", "cost_center", report_filters.cost_center_code or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Unidad de negocio", "unit_code", "unit", report_filters.unit_code or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Proyecto", "project_code", "project", report_filters.project_code or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Tipo de tercero", "party_type", "party_type", report_filters.party_type or '', "report-party-type", 0) }}
+          {{ smart_select_field("Tercero", "party_id", "party", report_filters.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}, "party_type": {"selector": "#report-party-type"}}, ["#report-company", "#report-party-type"], ["company"]) }}
+          {{ smart_select_field("Tipo de comprobante", "voucher_type", "voucher_type", report_filters.voucher_type or '', "report-voucher-type", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
+          {{ smart_select_field("Estado", "status", "report_status", report_filters.status or 'submitted', "report-status") }}
+          <label class="form-label mb-0">
+            {{ _("Agrupar por") }}
+            <select class="form-select" name="group_by">
+              <option value="">{{ _("Sin agrupación") }}</option>
+              <option value="account_code" {% if group_by == 'account_code' %}selected{% endif %}>{{ _("Cuenta") }}</option>
+              <option value="voucher_type" {% if group_by == 'voucher_type' %}selected{% endif %}>{{ _("Tipo de comprobante") }}</option>
+              <option value="document_no" {% if group_by == 'document_no' %}selected{% endif %}>{{ _("Comprobante") }}</option>
+              <option value="cost_center" {% if group_by == 'cost_center' %}selected{% endif %}>{{ _("Centro de costo") }}</option>
+              <option value="party_id" {% if group_by == 'party_id' %}selected{% endif %}>{{ _("Tercero") }}</option>
+              <option value="posting_date" {% if group_by == 'posting_date' %}selected{% endif %}>{{ _("Fecha") }}</option>
+              <option value="accounting_period" {% if group_by == 'accounting_period' %}selected{% endif %}>{{ _("Periodo") }}</option>
+            </select>
+          </label>
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if request.args.get('show_cancellations') in ('1','true','on','yes') %}checked{% endif %}>
+            <span class="form-check-label">{{ _("Mostrar anulaciones") }}</span>
+          </label>
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if request.args.get('include_closing') in ('1','true','on','yes') %}checked{% endif %}>
+            <span class="form-check-label">{{ _("Incluir Registro de Cierre") }}</span>
+          </label>
+          {% if allow_column_selection %}
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#columnsModal">{{ _("Columnas visibles") }}</button>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
+          <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <section class="ca-report-results ca-card">
+    <div class="ca-card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+      <h5 class="ca-card-title mb-0">{{ report_title }}</h5>
+      <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-success" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=xlsx">{{ _("Exportar Excel") }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=csv">{{ _("Exportar CSV") }}</a>
+      </div>
+    </div>
+    <div class="ca-report-context">
+      <div><strong>{{ _("Compañía") }}:</strong> {{ context_summary.company }}</div>
+      <div><strong>{{ _("Libro") }}:</strong> {{ context_summary.ledger }}</div>
+      <div><strong>{{ _("Periodo") }}:</strong> {{ context_summary.period }}</div>
+      <div><strong>{{ _("Estado") }}:</strong> {{ context_summary.status }}</div>
+      <div><strong>{{ _("Registros") }}:</strong> {{ context_summary.records }}</div>
+    </div>
+    <div class="ca-report-table-wrapper">
+      <table class="ca-table ca-report-table">
+        <caption style="display:none;">{{ report_title }}</caption>
+        <thead>
+          <tr>
+            {% for column in columns %}
+            <th scope="col" class="{% if column in right_align_columns %}text-end{% endif %}">{{ display_headers.get(column, column) }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in display_rows %}
+          {% if row.get('__row_type') == 'group' %}
+          <tr class="table-light">
+            <td colspan="{{ columns|length if columns else 1 }}" class="fw-semibold">{{ row.get('__group_title') }}</td>
+          </tr>
+          {% elif row.get('__row_type') == 'group_subtotal' %}
+          <tr class="table-secondary">
+            {% for column in columns %}
+            {% if loop.first %}
+            <td class="fw-semibold">{{ row.get('__group_title') }}</td>
+            {% elif column == 'debit' %}
+            <td class="text-end fw-semibold">{{ row.get('debit', "—") }}</td>
+            {% elif column == 'credit' %}
+            <td class="text-end fw-semibold">{{ row.get('credit', "—") }}</td>
+            {% else %}
+            <td>—</td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% else %}
+            {% set meta = row.get('__meta') %}
+          <tr class="{% if meta and meta.is_group %}ca-group-row{% endif %}">
+            {% for column in columns %}
+            <td class="{% if column in right_align_columns %}text-end{% endif %}" {% if meta and meta.code %}data-code="{{ meta.code }}" data-parent="{{ meta.parent }}" data-level="{{ meta.level }}"{% endif %}>
+              {% if column == 'account_code' and row.get(column) not in (None, '—', '') %}
+              <span class="ca-tree-label" data-indent="{{ (meta.level if meta else 1) - 1 }}">
+                {% if meta and meta.drilldown_url %}
+                <a href="{{ meta.drilldown_url }}">{{ row.get(column, "—") }}</a>
+                {% else %}
+                {{ row.get(column, "—") }}
+                {% endif %}
+              </span>
+              {% elif column == 'document_no' and meta and meta.voucher_url and row.get(column) not in (None, '—', '') %}
+              <a href="{{ meta.voucher_url }}">{{ row.get(column, "—") }}</a>
+              {% else %}
+              {{ row.get(column, "—") }}
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% else %}
+          <tr><td colspan="{{ columns|length if columns else 1 }}">{{ _("No hay registros para los filtros seleccionados.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="ca-report-totals-sticky">
+      {% for key, value in totals.items() %}
+      <div class="ca-total-item">
+        <span class="ca-total-label">{{ _(key.replace("_", " ").title()) }}</span>
+        <strong class="ca-total-value">{{ value }}</strong>
+      </div>
+      {% endfor %}
+          </div>
+  </section>
+</div>
+
+<div class="modal fade" id="saveViewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">{{ _("Guardar vista") }}</h5></div>
+      <div class="modal-body">
+        <label class="form-label">{{ _("Nombre de vista") }}</label>
+        <input class="form-control" id="save-view-name" value="{{ saved_view }}">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Cancelar") }}</button>
+        <button type="button" class="btn btn-primary" id="save-view-confirm">{{ _("Guardar") }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if allow_column_selection %}
+<div class="modal fade" id="columnsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">{{ _("Columnas visibles") }}</h5></div>
+      <div class="modal-body">
+        <div class="row row-cols-2">
+          {% for available in all_columns %}
+          <label class="form-check col">
+            <input class="form-check-input" type="checkbox" name="visible_columns" form="financial-filter-form" value="{{ available }}" {% if available in selected_columns %}checked{% endif %}>
+            <span class="form-check-label">{{ all_column_headers.get(available, available) }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Cerrar") }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<style>
+  .ca-report-layout{display:flex;gap:1rem;min-height:70vh}
+  .ca-report-filters{width:340px;position:sticky;top:88px;align-self:flex-start;max-height:calc(100vh - 110px);overflow-y:auto;flex-shrink:0}
+  .ca-report-filters-collapsed{width:auto}
+  .ca-report-results{flex:1;min-width:0;display:flex;flex-direction:column}
+  .ca-report-context{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;padding:.75rem 1rem;background:var(--ca-bg-soft,#f8f9fa);border-bottom:1px solid var(--ca-border,#dee2e6)}
+  .ca-report-table-wrapper{overflow:auto;max-height:calc(100vh - 330px)}
+  .ca-report-table thead th{position:sticky;top:0;z-index:2;white-space:nowrap}
+  .ca-report-table td,.ca-report-table th{white-space:nowrap}
+  .ca-report-table tbody tr:nth-child(even){background-color:rgba(0,0,0,.02)}
+  .ca-report-totals-sticky{position:sticky;bottom:0;display:flex;gap:.5rem;flex-wrap:wrap;padding:.75rem 1rem;border-top:1px solid var(--ca-border,#dee2e6);background:var(--ca-bg,#fff)}
+  .ca-total-item{display:flex;flex-direction:column;min-width:180px}
+  .ca-total-label{font-size:.75rem;color:var(--bs-secondary-color,#6c757d)}
+  .ca-total-value{text-align:right}
+  .ca-total-ok{justify-content:center;font-weight:600;color:#198754}
+  .ca-tree-toggle{cursor:pointer;font-weight:600}
+  .ca-group-row{background:rgba(13,110,253,.04)!important;font-weight:600}
+  .ca-tree-label{display:inline-flex;align-items:center;gap:.35rem}
+  @media (max-width: 1100px){.ca-report-layout{flex-direction:column}.ca-report-filters{position:static;width:100%;max-height:none}}
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const filterForm = document.getElementById('financial-filter-form');
+    const saveViewConfirm = document.getElementById('save-view-confirm');
+    const saveViewName = document.getElementById('save-view-name');
+    if (saveViewConfirm && saveViewName && filterForm) {
+      saveViewConfirm.addEventListener('click', function () {
+        const savedViewInput = filterForm.querySelector('input[name=\"saved_view\"]');
+        if (savedViewInput) savedViewInput.value = saveViewName.value || '';
+        const hiddenAction = document.createElement('input');
+        hiddenAction.type = 'hidden';
+        hiddenAction.name = 'view_action';
+        hiddenAction.value = 'save';
+        filterForm.appendChild(hiddenAction);
+        filterForm.submit();
+      });
+    }
+    const rows = Array.from(document.querySelectorAll('.ca-report-table tbody tr'));
+    rows.forEach(function (row) {
+      const cell = row.querySelector('td[data-code]');
+      if (!cell) return;
+      const code = cell.dataset.code || '';
+      const parent = cell.dataset.parent || '';
+      if (parent) row.dataset.parentCode = parent;
+    });
+
+    function toggleChildren(code, hide) {
+      rows.forEach(function (row) {
+        if ((row.dataset.parentCode || '') !== code) return;
+        row.style.display = hide ? 'none' : '';
+        const childCell = row.querySelector('td[data-code]');
+        if (!childCell) return;
+        const childCode = childCell.dataset.code || '';
+        if (hide) toggleChildren(childCode, true);
+      });
+    }
+
+    rows.forEach(function (row) {
+      const cell = row.querySelector('td[data-code]');
+      if (!cell) return;
+      const code = cell.dataset.code || '';
+      if (!code) return;
+      const hasChildren = rows.some(function (candidate) {
+        return (candidate.dataset.parentCode || '') === code;
+      });
+      if (!hasChildren) return;
+      const text = cell.textContent || '';
+      cell.textContent = '';
+      const toggle = document.createElement('span');
+      toggle.className = 'ca-tree-toggle';
+      toggle.textContent = '▾';
+      cell.appendChild(toggle);
+      cell.appendChild(document.createTextNode(' ' + text));
+      let collapsed = false;
+      toggle.addEventListener('click', function (event) {
+        event.preventDefault();
+        collapsed = !collapsed;
+        toggle.textContent = collapsed ? '▸' : '▾';
+        toggleChildren(code, collapsed);
+      });
+    });
+  });
+</script>
+
+{% endblock %}

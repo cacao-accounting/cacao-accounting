@@ -1,0 +1,76 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.fiscal_year_closing_list') }}" class="link-dark">Cierres de Año Fiscal</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nuevo Cierre</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-calendar-plus"></i> Ejecutar Cierre de Año Fiscal</h5>
+  </div>
+
+  <div class="ca-card-body">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      El cierre contable de año fiscal genera un comprobante contable automático que salda las cuentas de Ingresos, Costos y Gastos contra la cuenta de Utilidades Acumuladas configurada para la compañía.
+    </div>
+
+    <form method="POST" action="{{ url_for('contabilidad.fiscal_year_closing_new') }}" class="row g-3">
+      <div class="col-md-6">
+        <label for="company" class="form-label">Compañía</label>
+        <select name="company" id="company" class="form-select" required>
+          <option value="">— Seleccione Compañía —</option>
+          {% for e in entidades %}
+          <option value="{{ e.code }}">{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-6">
+        <label for="fiscal_year_id" class="form-label">Año Fiscal a Cerrar</label>
+        <select name="fiscal_year_id" id="fiscal_year_id" class="form-select" required>
+          <option value="">— Seleccione Año Fiscal —</option>
+          {% for fy in fiscal_years %}
+          <option value="{{ fy.id }}" data-company="{{ fy.entity }}">{{ fy.name }} ({{ fy.entity }})</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Solo se muestran años fiscales cerrados administrativamente que aún no tienen cierre contable.</div>
+      </div>
+
+      <div class="col-12 mt-4 border-top pt-3">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-circle me-1"></i>Ejecutar Cierre Contable
+        </button>
+        <a href="{{ url_for('contabilidad.fiscal_year_closing_list') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('company').addEventListener('change', function() {
+  const companyCode = this.value;
+  const fySelect = document.getElementById('fiscal_year_id');
+  const options = fySelect.querySelectorAll('option');
+
+  options.forEach(opt => {
+    if (opt.value === "") return;
+    if (opt.dataset.company === companyCode) {
+      opt.style.display = "";
+    } else {
+      opt.style.display = "none";
+    }
+  });
+
+  fySelect.value = "";
+});
+</script>
+
+{% endblock %}

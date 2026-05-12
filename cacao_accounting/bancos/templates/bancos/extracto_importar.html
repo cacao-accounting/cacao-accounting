@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Importar Extracto Bancario") }}</h4></div>
+<form method="post" enctype="multipart/form-data" class="mb-4">
+  <div class="row g-2">
+    <div class="col-md-3"><select class="form-select" name="bank_account_id">{% for account in accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><input class="form-control" type="file" name="statement_file" accept=".csv" required></div>
+    <div class="col-md-1"><input class="form-control" name="date_column" value="date"></div>
+    <div class="col-md-1"><input class="form-control" name="reference_column" value="reference"></div>
+    <div class="col-md-1"><input class="form-control" name="description_column" value="description"></div>
+    <div class="col-md-1"><input class="form-control" name="deposit_column" value="deposit"></div>
+    <div class="col-md-1"><input class="form-control" name="withdrawal_column" value="withdrawal"></div>
+    <div class="col-md-1"><button class="btn btn-outline-primary" name="action" value="preview">{{ _("Vista") }}</button></div>
+    <div class="col-md-1"><button class="btn btn-primary" name="action" value="import">{{ _("Importar") }}</button></div>
+  </div>
+</form>
+{% if result %}
+<table class="table table-sm">
+  <thead><tr><th>{{ _("Fecha") }}</th><th>{{ _("Referencia") }}</th><th>{{ _("Descripción") }}</th><th>{{ _("Depósito") }}</th><th>{{ _("Retiro") }}</th><th>{{ _("Duplicado") }}</th></tr></thead>
+  <tbody>{% for row in result.rows %}<tr><td>{{ row.posting_date }}</td><td>{{ row.reference_number or "" }}</td><td>{{ row.description or "" }}</td><td>{{ row.deposit or "" }}</td><td>{{ row.withdrawal or "" }}</td><td>{{ row.duplicate }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+{% endblock %}

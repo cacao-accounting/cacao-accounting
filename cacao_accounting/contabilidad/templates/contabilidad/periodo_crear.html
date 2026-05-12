@@ -1,0 +1,75 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.periodo_contable') }}" class="link-dark">Períodos Contables</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if edit %}Editar{% else %}Nuevo{% endif %} Período Contable</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:700px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-calendar-check"></i> {% if edit %}Editar{% else %}Nuevo{% endif %} Período Contable</h5>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" form="form-periodo" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
+      <a href="{{ url_for('contabilidad.periodo_contable') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    </div>
+  </div>
+  {% if no_fiscal_years %}
+  <div class="alert alert-warning mb-3" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    No existen años fiscales registrados. <a href="{{ url_for('contabilidad.fiscal_year_new') }}" class="alert-link">Crear año fiscal</a> antes de registrar períodos contables.
+  </div>
+  {% endif %}
+  <form method="post" id="form-periodo">
+    {{ form.csrf_token }}
+    <div class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label" for="id-periodo">Código</label>
+        {{ form.id(class="form-control form-control-sm", id="id-periodo") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="entidad">Entidad</label>
+        {{ form.entidad(class="form-select form-select-sm", id="entidad") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="fiscal_year">Año Fiscal</label>
+        {{ form.fiscal_year(class="form-select form-select-sm", id="fiscal_year") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="status">Estado</label>
+        {{ form.status(class="form-control form-control-sm", id="status") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="nombre">Nombre</label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="inicio">Fecha Inicio</label>
+        {{ form.inicio(class="form-control form-control-sm", id="inicio") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="fin">Fecha Fin</label>
+        {{ form.fin(class="form-control form-control-sm", id="fin") }}
+      </div>
+      <div class="col-md-3 mt-2">
+        <div class="form-check">
+          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          <label class="form-check-label" for="habilitado">Habilitado</label>
+        </div>
+      </div>
+      <div class="col-md-3 mt-2">
+        <div class="form-check">
+          {{ form.cerrado(class="form-check-input", id="cerrado") }}
+          <label class="form-check-label" for="cerrado">Cerrado</label>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

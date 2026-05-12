@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/recepcion.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_recepcion_lista') }}" class="link-dark">Recepciones</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:960px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-box-seam"></i> {{ registro.document_no or registro.id }}
+      {{ macros.document_status_for("purchase_receipt", registro, detail=True) }}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      {{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('compras.compras_recepcion_submit', receipt_id=registro.id),
+            url_for('compras.compras_recepcion_cancel', receipt_id=registro.id)) }}
+      {% if registro.docstatus == 1 %}
+        {{ macros.crear_dropdown([
+              ("Factura de Compra", url_for('compras.compras_factura_compra_nuevo', from_receipt=registro.id)),
+              ("Devolución", url_for('compras.compras_factura_compra_nuevo', document_type='purchase_return', from_receipt=registro.id)),
+              ("Entrada de Almacén", url_for('inventario.inventario_entrada_nuevo', purpose='material_receipt', source_type='purchase_receipt', source_id=registro.id))
+           ]) }}
+      {% endif %}
+    </div>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Datos generales de la recepción</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Número de Documento</td><td>{{ registro.document_no or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Compañía</td><td>{{ registro.company or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Fecha</td><td>{{ registro.posting_date or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Estado</td><td>{{ macros.document_status_for("purchase_receipt", registro, detail=True) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Datos del proveedor</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Proveedor</td><td>{{ registro.supplier_name or registro.supplier_id or "" }}</td></tr>
+          {% if registro.purchase_order_id %}
+          <tr><td style="color:#64748b;">Orden de Compra</td>
+              <td><a href="{{ url_for('compras.compras_orden_compra', order_id=registro.purchase_order_id) }}">{{ registro.purchase_order_id }}</a></td></tr>
+          {% endif %}
+          <tr><td style="color:#64748b;">Observaciones</td><td>{{ registro.remarks or "" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{ macros.lineas_tabla_lectura(items) }}
+{{ macros.document_flow_trace("purchase_receipt", registro) }}
+
+{% endblock %}

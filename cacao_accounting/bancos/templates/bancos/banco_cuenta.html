@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco_cuenta.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}" class="link-dark">Cuentas Bancarias</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.account_name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> {{ registro.account_name }}</h5>
+  </div>
+  <dl class="row p-3">
+    <dt class="col-sm-3">Nombre de Cuenta</dt>
+    <dd class="col-sm-9">{{ registro.account_name }}</dd>
+    <dt class="col-sm-3">Número de Cuenta</dt>
+    <dd class="col-sm-9">{{ registro.account_no or "" }}</dd>
+    <dt class="col-sm-3">IBAN</dt>
+    <dd class="col-sm-9">{{ registro.iban or "" }}</dd>
+    <dt class="col-sm-3">Compañía</dt>
+    <dd class="col-sm-9">{{ registro.company or "" }}</dd>
+  </dl>
+</div>
+
+{% endblock %}

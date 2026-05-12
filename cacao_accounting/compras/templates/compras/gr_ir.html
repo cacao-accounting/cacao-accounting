@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("GR/IR Pendiente") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">{{ _("GR/IR Pendiente") }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <input name="company" class="form-control" value="{{ company }}" placeholder="{{ _('Compañía') }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100" type="submit">{{ _("Filtrar") }}</button>
+      </div>
+    </form>
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("GR/IR pendiente") }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ _("Recepción") }}</th>
+          <th scope="col">{{ _("Item") }}</th>
+          <th scope="col">{{ _("Bodega") }}</th>
+          <th scope="col">{{ _("UOM") }}</th>
+          <th scope="col">{{ _("Cantidad pendiente") }}</th>
+          <th scope="col">{{ _("Monto pendiente") }}</th>
+          <th scope="col">{{ _("Estado") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.purchase_receipt_id }}</td>
+          <td>{{ row.item_code }}</td>
+          <td>{{ row.warehouse or "" }}</td>
+          <td>{{ row.uom or "" }}</td>
+          <td>{{ row.pending_qty }}</td>
+          <td>{{ row.pending_amount }}</td>
+          <td>{{ row.status }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">{{ _("No hay saldos GR/IR pendientes.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Asistente de Cierre Mensual') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-calendar-check me-2" style="color:#78BF30"></i>{{ _('Asistente de Cierre Mensual') }}</h4>
+</div>
+
+<section class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Paso 1: aplicar comprobantes recurrentes') }}</h5>
+  </div>
+  <div class="p-3">
+    <p class="text-muted mb-3">
+      {{ _('El primer paso del cierre mensual sera aplicar las plantillas recurrentes aprobadas para el periodo actual, evitando duplicados y registrando el resultado por plantilla.') }}
+    </p>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="border rounded-2 p-3 h-100">
+          <h6>{{ _('Contexto') }}</h6>
+          <ul class="mb-0">
+            <li>{{ _('Compania') }}</li>
+            <li>{{ _('Ano fiscal') }}</li>
+            <li>{{ _('Periodo actual') }}</li>
+            <li>{{ _('Fecha de cierre sugerida') }}</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded-2 p-3 h-100">
+          <h6>{{ _('Estados visibles') }}</h6>
+          <ul class="mb-0">
+            <li>{{ _('Pendiente de aplicar') }}</li>
+            <li>{{ _('Ya aplicado') }}</li>
+            <li>{{ _('No aplicable') }}</li>
+            <li>{{ _('Fallido') }}</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded-2 p-3 h-100">
+          <h6>{{ _('Acciones esperadas') }}</h6>
+          <ul class="mb-0">
+            <li>{{ _('Aplicar individualmente') }}</li>
+            <li>{{ _('Aplicar todos los pendientes') }}</li>
+            <li>{{ _('Revisar errores sin revertir exitosos') }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Reglas de elegibilidad') }}</h5>
+  </div>
+  <div class="p-3">
+    <ul class="mb-0">
+      <li>{{ _('Solo se aplican plantillas aprobadas, dentro del rango de fechas y con periodo abierto.') }}</li>
+      <li>{{ _('Cada plantilla se aplica una sola vez por periodo contable.') }}</li>
+      <li>{{ _('Las cuentas deben estar activas y el asiento debe permanecer balanceado.') }}</li>
+      <li>{{ _('El comprobante generado debe quedar marcado como recurrente y vinculado a su aplicacion.') }}</li>
+    </ul>
+  </div>
+</section>
+
+{% endblock %}

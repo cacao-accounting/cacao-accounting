@@ -2,13 +2,11 @@ import pytest
 import os
 import sys
 
-
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_func import init_test_db
 
 from cacao_accounting import create_app
-
 
 app = create_app(
     {
@@ -173,3 +171,213 @@ def test_delete_entity(request):
                 assert current_user.is_authenticated
 
                 client.get("/accounts/entity/delete/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+
+
+def test_purchase_credit_note_list_route(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/purchase-invoice/credit-note/list")
+                assert response.status_code == 200
+                assert "Listado de Notas de Crédito de Compra" in response.get_data(as_text=True)
+
+
+def test_purchase_return_list_route(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/purchase-invoice/return/list")
+                assert response.status_code == 200
+                assert "Listado de Devoluciones de Compra" in response.get_data(as_text=True)
+
+
+def test_purchase_debit_note_list_route(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/purchase-invoice/debit-note/list")
+                assert response.status_code == 200
+                assert "Listado de Notas de Débito de Compra" in response.get_data(as_text=True)
+
+
+def test_sales_credit_note_list_route(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/sales/sales-invoice/return/list")
+                assert response.status_code == 200
+                assert "Listado de Notas de Crédito de Venta" in response.get_data(as_text=True)
+
+                response = client.get("/sales/sales-invoice/debit-note/list")
+                assert response.status_code == 200
+                assert "Listado de Notas de Débito de Venta" in response.get_data(as_text=True)
+
+
+def test_sales_request_routes(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/sales/sales-request/list")
+                assert response.status_code == 200
+                assert "Listado de Pedidos de Venta" in response.get_data(as_text=True)
+
+                response = client.get("/sales/sales-request/new")
+                assert response.status_code == 200
+                assert "Nuevo Pedido de Venta" in response.get_data(as_text=True)
+
+
+def test_purchase_quotation_routes(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/request-for-quotation/list")
+                assert response.status_code == 200
+                assert "Listado de Solicitudes de Cotización" in response.get_data(as_text=True)
+
+                response = client.get("/buying/request-for-quotation/new")
+                assert response.status_code == 200
+                assert "Nueva Solicitud de Cotización" in response.get_data(as_text=True)
+
+                response = client.get("/buying/request-for-quotation/comparison")
+                assert response.status_code == 200
+                assert "Comparativo de Ofertas" in response.get_data(as_text=True)
+                assert "Nueva Solicitud de Cotización" in response.get_data(as_text=True)
+
+
+def test_purchase_request_and_supplier_quotation_routes(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/purchase-request/list")
+                assert response.status_code == 200
+                assert "Listado de Solicitudes de Compra" in response.get_data(as_text=True)
+
+                response = client.get("/buying/purchase-request/new")
+                assert response.status_code == 200
+                assert "Nueva Solicitud de Compra" in response.get_data(as_text=True)
+
+                response = client.get("/buying/supplier-quotation/list")
+                assert response.status_code == 200
+                assert "Listado de Cotizaciones de Proveedor" in response.get_data(as_text=True)
+
+                response = client.get("/buying/supplier-quotation/new")
+                assert response.status_code == 200
+                assert "Nueva Cotización de Proveedor" in response.get_data(as_text=True)
+
+                response = client.get("/buying/request-for-quotation/comparison")
+                assert response.status_code == 200
+                assert "Comparativo de Ofertas" in response.get_data(as_text=True)
+
+
+def test_inventory_stock_entry_routes(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/inventory/stock-entry/material-receipt/list")
+                assert response.status_code == 200
+                assert "Listado de Recepciones de Material" in response.get_data(as_text=True)
+
+                response = client.get("/inventory/stock-entry/material-issue/list")
+                assert response.status_code == 200
+                assert "Listado de Salidas de Material" in response.get_data(as_text=True)
+
+                response = client.get("/inventory/stock-entry/material-transfer/list")
+                assert response.status_code == 200
+                assert "Listado de Transferencias de Material" in response.get_data(as_text=True)
+
+                response = client.get("/inventory/stock-entry/new?purpose=material_issue")
+                assert response.status_code == 200
+                assert "Nueva Entrada de Almacén" in response.get_data(as_text=True)
+                assert "Salidas de Material" not in response.get_data(as_text=True)
+
+                response = client.get("/inventory/stock-entry/material-receipt/new")
+                assert response.status_code == 200
+                assert "Nueva Recepción de Material" in response.get_data(as_text=True)
+
+                response = client.get("/buying/purchase-receipt/REC-DEMO-0000001")
+                assert response.status_code == 200
+                assert "Entrada de Almacén" in response.get_data(as_text=True)
+
+
+def test_sales_quotation_routes(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/sales/quotation/list")
+                assert response.status_code == 200
+                assert "Listado de Cotizaciones de Venta" in response.get_data(as_text=True)
+
+                response = client.get("/sales/request-for-quotation/list")
+                assert response.status_code == 200
+                assert "Listado de Cotizaciones de Venta" in response.get_data(as_text=True)
+
+                response = client.get("/sales/quotation/new")
+                assert response.status_code == 200
+                assert "Nueva Cotización" in response.get_data(as_text=True)
+
+                response = client.get("/sales/request-for-quotation/new")
+                assert response.status_code == 200
+                assert "Nueva Cotización" in response.get_data(as_text=True)

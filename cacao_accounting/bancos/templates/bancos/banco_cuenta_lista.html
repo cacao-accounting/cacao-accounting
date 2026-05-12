@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco_cuenta_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Listado de Cuentas Bancarias</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> Listado de Cuentas Bancarias.</h5>
+    <a href="{{ url_for('bancos.bancos_cuenta_bancaria_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de cuentas bancarias.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nombre</th>
+        <th scope="col">Número de Cuenta</th>
+        <th scope="col">Moneda</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.account_name }}</td>
+        <td>{{ item.account_no or "" }}</td>
+        <td>{{ item.currency or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="bancos.bancos_cuenta_bancaria_lista") }}</div>
+</div>
+
+{% endblock %}

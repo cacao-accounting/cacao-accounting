@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Comparativo de Ofertas</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas</h5>
+    <a href="{{ url_for('compras.compras_solicitud_cotizacion_nueva') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nueva Solicitud de Cotización
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de solicitudes de cotización para comparar ofertas.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Solicitud de Cotización</th>
+        <th scope="col">Proveedor</th>
+        <th scope="col">Fecha</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.document_no or item.id }}</td>
+        <td>{{ item.supplier_name or "-" }}</td>
+        <td>{{ item.posting_date or "" }}</td>
+        <td>
+          <a href="{{ url_for('compras.compras_comparativo_ofertas', rfq_id=item.id) }}" class="btn btn-sm btn-outline-secondary">Ver Ofertas</a>
+        </td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="compras.compras_comparativo_ofertas_lista") }}</div>
+</div>
+
+{% endblock %}

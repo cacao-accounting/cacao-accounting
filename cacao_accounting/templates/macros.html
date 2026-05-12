@@ -59,6 +59,7 @@
 
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
+<script src="{{ url_for('static', filename='js/smart-select.js') }}?v=20260506-2" defer></script>
 <script src="//unpkg.com/alpinejs" defer></script>
 
 {%- endmacro %}
@@ -80,6 +81,9 @@
     <button class="ca-nav-btn" id="ca-theme-btn" onclick="caToggleTheme()" title="Cambiar tema" type="button">
       <i class="bi bi-moon-stars-fill" id="ca-theme-icon"></i>
     </button>
+    <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="Mi perfil">
+      <i class="bi bi-person-circle"></i>
+    </a>
     <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="Cerrar sesión">
       <i class="bi bi-box-arrow-right"></i>
     </a>
@@ -192,8 +196,10 @@
 {% endmacro %}
 
 {% macro render_status(status=None, lista_status=None) %}
-<span class="badge" title="">
-  <i class="bi bi-circle-fill" style="color:{{ lista_status[status].color }}"></i>
+{%- set normalized_status = status if status is not none else 'activo' -%}
+{%- set status_info = lista_status[normalized_status] if lista_status and normalized_status in lista_status else None -%}
+<span class="badge" title="{{ status_info.label if status_info else 'Activo' }}">
+  <i class="bi bi-circle-fill" style="color:{{ status_info.color if status_info else '#6c757d' }}"></i>
 </span>
 {% endmacro %}
 
@@ -230,4 +236,436 @@
 
 </div>
 
+{% endmacro %}
+
+{# ─── Docstatus Badge ──────────────────────────────────────────── #}
+{% macro docstatus_badge(docstatus) %}
+  {% if docstatus == 0 %}
+    <span class="badge bg-secondary"><i class="bi bi-pencil-fill me-1"></i>Borrador</span>
+  {% elif docstatus == 1 %}
+    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Aprobado</span>
+  {% elif docstatus == 2 %}
+    <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i>Cancelado</span>
+  {% endif %}
+{% endmacro %}
+
+{# ─── Calculated Document Status Badge ────────────────────────── #}
+{% macro document_status_badge(status_info, detail=False) %}
+  <span class="badge {{ status_info.badge_class }}" title="{{ status_info.full_label }}">
+    <i class="bi {{ status_info.icon }} me-1"></i>{{ status_info.label }}
+  </span>
+  {% if detail %}
+    <span class="ms-2 text-muted small">{{ status_info.full_label }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro document_status_for(document_type, document, detail=False) %}
+  {{ document_status_badge(document_status_info(document_type, document), detail=detail) }}
+{% endmacro %}
+
+{% macro document_flow_trace(document_type, document) %}
+{%- set api_url = url_for('api.api_document_flow_summary') ~ '?document_type=' ~ document_type ~ '&document_id=' ~ document.id -%}
+<div class="ca-card mt-3"
+     x-data="{
+       open: false,
+       loaded: false,
+       loading: false,
+       upstream: [],
+       downstream: [],
+       createActions: [],
+       toggle() {
+         this.open = !this.open;
+         if (this.open && !this.loaded) this.load();
+       },
+       load() {
+         this.loading = true;
+         fetch('{{ api_url }}', {credentials: 'same-origin'})
+           .then(r => r.json())
+           .then(data => {
+             this.upstream = data.upstream || [];
+             this.downstream = data.downstream || [];
+             this.createActions = data.create_actions || [];
+             this.loaded = true;
+             this.loading = false;
+           })
+           .catch(() => { this.loading = false; });
+       }
+     }">
+  <div class="ca-card-header" style="cursor:pointer;" @click="toggle()">
+    <h6 class="ca-card-title mb-0">
+      <i class="bi bi-diagram-3 me-1"></i>Flujo documental
+      <span class="ms-2">{{ document_status_for(document_type, document) }}</span>
+    </h6>
+    <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+  </div>
+
+  <div x-show="open" x-cloak>
+    <div x-show="loading" class="p-3 text-muted small text-center">
+      <span class="spinner-border spinner-border-sm me-1"></span>Cargando relaciones…
+    </div>
+
+    <div x-show="!loading && loaded">
+      {# ── Documentos origen (upstream) ─────────────────────── #}
+      <template x-if="upstream.length > 0">
+        <div class="px-3 pt-2">
+          <p class="small fw-semibold text-muted mb-1"><i class="bi bi-arrow-up-circle me-1"></i>Documentos origen</p>
+          <template x-for="group in upstream" :key="group.doctype">
+            <div class="mb-2">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="small fw-semibold" x-text="group.label"></span>
+                <span class="badge text-bg-primary" x-text="group.active_count" x-show="group.active_count > 0"></span>
+                <span class="badge text-bg-secondary" x-show="group.historical_count > 0"
+                      :title="'Históricos: ' + group.historical_count" x-text="group.historical_count + ' hist.'"></span>
+                <template x-if="group.list_url">
+                  <a :href="group.list_url" class="btn btn-link btn-sm p-0 ms-auto small">
+                    <i class="bi bi-list-ul me-1"></i>Ver lista
+                  </a>
+                </template>
+              </div>
+              <template x-for="rel in group.documents" :key="rel.relation_id">
+                <div class="d-flex align-items-center gap-2 ms-2 mb-1 small">
+                  <span class="badge" :class="rel.badge_class"
+                        x-text="rel.document.status ? rel.document.status.label : '—'"></span>
+                  <span x-text="rel.document.document_no"
+                        :class="{'text-decoration-line-through text-muted': rel.status !== 'active'}"></span>
+                  <span class="badge text-bg-light border" x-text="rel.relation_type"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      {# ── Documentos destino (downstream) ──────────────────── #}
+      <template x-if="downstream.length > 0">
+        <div class="px-3 pt-2 pb-3">
+          <p class="small fw-semibold text-muted mb-1"><i class="bi bi-arrow-down-circle me-1"></i>Documentos generados</p>
+          <template x-for="group in downstream" :key="group.doctype">
+            <div class="mb-2">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="small fw-semibold" x-text="group.label"></span>
+                <span class="badge text-bg-primary" x-text="group.active_count" x-show="group.active_count > 0"></span>
+                <span class="badge text-bg-secondary" x-show="group.historical_count > 0"
+                      :title="'Históricos: ' + group.historical_count" x-text="group.historical_count + ' hist.'"></span>
+                <template x-if="group.list_url">
+                  <a :href="group.list_url" class="btn btn-link btn-sm p-0 ms-auto small">
+                    <i class="bi bi-list-ul me-1"></i>Ver lista
+                  </a>
+                </template>
+              </div>
+              <template x-for="rel in group.documents" :key="rel.relation_id">
+                <div class="d-flex align-items-center gap-2 ms-2 mb-1 small">
+                  <span class="badge" :class="rel.badge_class"
+                        x-text="rel.document.status ? rel.document.status.label : '—'"></span>
+                  <span x-text="rel.document.document_no"
+                        :class="{'text-decoration-line-through text-muted': rel.status !== 'active'}"></span>
+                  <span class="badge text-bg-light border" x-text="rel.relation_type"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      {# ── Sin relaciones ───────────────────────────────────── #}
+      <template x-if="upstream.length === 0 && downstream.length === 0">
+        <div class="p-3 text-muted small text-center">
+          <i class="bi bi-info-circle me-1"></i>No hay documentos relacionados aún.
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{# ─── Workflow Buttons (Submit / Cancel) ──────────────────────── #}
+{% macro workflow_buttons(docstatus, submit_url, cancel_url) %}
+  {% if docstatus == 0 %}
+    <form method="post" action="{{ submit_url }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-check-circle me-1"></i>Aprobar
+      </button>
+    </form>
+  {% elif docstatus == 1 %}
+    <form method="post" action="{{ cancel_url }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-danger"
+              onclick="return confirm('¿Cancelar este documento?')">
+        <i class="bi bi-x-circle me-1"></i>Cancelar
+      </button>
+    </form>
+  {% endif %}
+{% endmacro %}
+
+{# ─── "Crear" dropdown shortcuts (shown when docstatus == 1) ──── #}
+{% macro crear_dropdown(opciones) %}
+  {# opciones: list of (label, url) #}
+  <div class="dropdown">
+    <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+      <i class="bi bi-plus-circle me-1"></i>Crear
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      {% for label, url in opciones %}
+        <li><a class="dropdown-item" href="{{ url }}">{{ label }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endmacro %}
+
+{# ─── Line Items Table (Alpine.js) for create forms ──────────── #}
+{# Params:                                                         #}
+{#   items_disponibles: list of {code, name, uom}                 #}
+{#   uoms_disponibles:  list of {code, name}                      #}
+{#   source_api_url:    string or None — enables auto-fill modal   #}
+{#   source_label:      human-readable source doc label            #}
+{% macro lineas_items(items_disponibles, uoms_disponibles, source_api_url=None, source_label="documento origen") %}
+<div class="ca-card mt-3"
+     x-data="{
+       items: [],
+       availableItems: {{ items_disponibles | tojson }},
+       availableUoms:  {{ uoms_disponibles  | tojson }},
+       sourceItems: [],
+       loadingSource: false,
+       addRow() {
+         this.items.push({
+           item_code:'', item_name:'', qty:1, uom:'', rate:0, amount:0,
+           source_type:'', source_id:'', source_item_id:''
+         });
+       },
+       removeRow(i) {
+         this.items.splice(i, 1);
+       },
+       calcAmount(i) {
+         this.items[i].amount = parseFloat(this.items[i].qty || 0) * parseFloat(this.items[i].rate || 0);
+       },
+       onItemSelect(i) {
+         const found = this.availableItems.find(x => x.code === this.items[i].item_code);
+         if (found) {
+           this.items[i].item_name = found.name;
+           if (!this.items[i].uom) this.items[i].uom = found.uom || '';
+         }
+         this.calcAmount(i);
+       },
+       fetchSource(apiUrl) {
+         this.loadingSource = true;
+         fetch(apiUrl, {credentials: 'same-origin'})
+           .then(r => r.json())
+           .then(data => {
+             this.sourceItems = (data.items || []).map(item => Object.assign({selected: true}, item));
+             this.loadingSource = false;
+           })
+           .catch(() => { this.loadingSource = false; });
+       },
+       applySource() {
+         const sel = this.sourceItems.filter(i => i.selected);
+         sel.forEach(i => {
+           const exists = this.items.some(row =>
+             row.source_type === i.source_type &&
+             row.source_id === i.source_id &&
+             row.source_item_id === i.source_item_id
+           );
+           if (!exists) {
+             this.items.push({
+               item_code: i.item_code,
+               item_name: i.item_name,
+               qty: i.qty,
+               uom: i.uom,
+               rate: i.rate,
+               amount: parseFloat(i.qty || 0) * parseFloat(i.rate || 0),
+               source_type: i.source_type || '',
+               source_id: i.source_id || '',
+               source_item_id: i.source_item_id || ''
+             });
+           }
+         });
+       }
+     }">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>Productos / Servicios</h6>
+    <div class="d-flex gap-2">
+      {% if source_api_url %}
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="modal" data-bs-target="#modalAutofill"
+              @click="fetchSource('{{ source_api_url }}')">
+        <i class="bi bi-arrow-repeat me-1"></i>Actualizar Elementos
+      </button>
+      {% endif %}
+      <button type="button" class="btn btn-sm btn-outline-primary" @click="addRow()">
+        <i class="bi bi-plus me-1"></i>Agregar Línea
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive p-2">
+    <table class="ca-table">
+      <caption class="visually-hidden">Líneas del documento</caption>
+      <thead>
+        <tr>
+          <th scope="col" style="width:22%">Artículo</th>
+          <th scope="col" style="width:22%">Descripción</th>
+          <th scope="col" style="width:10%">Cantidad</th>
+          <th scope="col" style="width:10%">UOM</th>
+          <th scope="col" style="width:12%">Precio Unit.</th>
+          <th scope="col" style="width:12%">Monto</th>
+          <th scope="col" style="width:6%"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(item, idx) in items" :key="idx">
+          <tr>
+            <td>
+              <select :name="'item_code_' + idx" x-model="item.item_code"
+                      @change="onItemSelect(idx)" class="form-select form-select-sm">
+                <option value=""></option>
+                <template x-for="ai in availableItems" :key="ai.code">
+                  <option :value="ai.code" :selected="ai.code === item.item_code"
+                          x-text="ai.code + ' — ' + ai.name"></option>
+                </template>
+              </select>
+              <input type="hidden" :name="'item_name_' + idx" :value="item.item_name">
+              <input type="hidden" :name="'source_type_' + idx" :value="item.source_type">
+              <input type="hidden" :name="'source_id_' + idx" :value="item.source_id">
+              <input type="hidden" :name="'source_item_id_' + idx" :value="item.source_item_id">
+            </td>
+            <td><input type="text" :name="'item_name_display_' + idx" x-model="item.item_name"
+                       class="form-control form-control-sm" placeholder="Descripción"></td>
+            <td><input type="number" :name="'qty_' + idx" x-model.number="item.qty" min="0.0001"
+                       step="0.0001" @input="calcAmount(idx)" class="form-control form-control-sm"></td>
+            <td>
+              <select :name="'uom_' + idx" x-model="item.uom" class="form-select form-select-sm">
+                <option value=""></option>
+                <template x-for="u in availableUoms" :key="u.code">
+                  <option :value="u.code" :selected="u.code === item.uom" x-text="u.code"></option>
+                </template>
+              </select>
+            </td>
+            <td><input type="number" :name="'rate_' + idx" x-model.number="item.rate" min="0"
+                       step="0.0001" @input="calcAmount(idx)" class="form-control form-control-sm"></td>
+            <td>
+              <span x-text="item.amount.toFixed(2)" style="font-size:.85rem;"></span>
+              <input type="hidden" :name="'amount_' + idx" :value="item.amount">
+            </td>
+            <td>
+              <button type="button" class="btn btn-sm btn-outline-danger" @click="removeRow(idx)"
+                      title="Eliminar línea"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="items.length === 0">
+          <td colspan="7" class="text-center text-muted py-3" style="font-size:.85rem;">
+            Sin líneas. Use "Agregar Línea"{% if source_api_url %} o "Actualizar Elementos"{% endif %}.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {% if source_api_url %}
+  {# ── Auto-fill modal ── #}
+  <div class="modal fade" id="modalAutofill" tabindex="-1" aria-labelledby="modalAutofillLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalAutofillLabel">
+            <i class="bi bi-table me-2"></i>Actualizar Elementos desde {{ source_label }}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div x-show="loadingSource" class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            Cargando elementos…
+          </div>
+          <div x-show="!loadingSource">
+            <table class="ca-table">
+              <caption class="visually-hidden">Elementos del documento origen</caption>
+              <thead>
+                <tr>
+                  <th scope="col" style="width:5%"><input type="checkbox"
+                    @change="sourceItems.forEach(i => i.selected = $event.target.checked)"></th>
+                  <th scope="col">Código</th>
+                  <th scope="col">Descripción</th>
+                  <th scope="col">Ordenado</th>
+                  <th scope="col">Consumido</th>
+                  <th scope="col">Pendiente</th>
+                  <th scope="col">Traer</th>
+                  <th scope="col">UOM</th>
+                  <th scope="col">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(si, idx) in sourceItems" :key="idx">
+                  <tr>
+                    <td><input type="checkbox" x-model="si.selected"></td>
+                    <td x-text="si.item_code"></td>
+                    <td x-text="si.item_name"></td>
+                    <td x-text="Number(si.source_qty || si.qty || 0).toFixed(4)"></td>
+                    <td x-text="Number(si.consumed_qty || 0).toFixed(4)"></td>
+                    <td x-text="Number(si.pending_qty || si.qty || 0).toFixed(4)"></td>
+                    <td>
+                      <input type="number" x-model.number="si.qty" min="0.0001"
+                             :max="si.pending_qty || si.qty" step="0.0001"
+                             class="form-control form-control-sm" style="width:90px">
+                    </td>
+                    <td x-text="si.uom"></td>
+                    <td x-text="Number(si.rate || 0).toFixed(2)"></td>
+                  </tr>
+                </template>
+                <tr x-show="sourceItems.length === 0">
+                  <td colspan="9" class="text-center text-muted py-3">Sin elementos disponibles.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="applySource()">
+            <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# ─── Line Items read-only table (for detail pages) ───────────── #}
+{% macro lineas_tabla_lectura(items) %}
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>Productos / Servicios</h6>
+  </div>
+  <div class="table-responsive p-2">
+    <table class="ca-table">
+      <caption class="visually-hidden">Líneas del documento</caption>
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Descripción</th>
+          <th scope="col">Cantidad</th>
+          <th scope="col">UOM</th>
+          <th scope="col">Precio Unit.</th>
+          <th scope="col">Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in items %}
+        <tr>
+          <td>{{ fila[0].item_code }}</td>
+          <td>{{ fila[0].item_name or "" }}</td>
+          <td>{{ fila[0].qty }}</td>
+          <td>{{ fila[0].uom or "" }}</td>
+          <td>{{ fila[0].rate or "" }}</td>
+          <td>{{ fila[0].amount or "" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-3">Sin líneas registradas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endmacro %}

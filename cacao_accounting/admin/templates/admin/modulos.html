@@ -1,13 +1,86 @@
 {% extends "base.html" %}
 {% block contenido %}
 
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Administración de Módulos</li>
+  </ol>
+</nav>
+
 <div class="ca-page-header">
-  <h4><i class="bi bi-puzzle me-2" style="color:#78BF30"></i>Listado de Módulos</h4>
+  <h4><i class="bi bi-puzzle me-2" style="color:#78BF30"></i>Administración de Módulos</h4>
 </div>
 
-<div class="ca-card">
-  <p style="color:#64748b;font-size:.875rem;">
-    Administra los módulos activos del sistema desde esta sección.
+<div class="ca-card mb-4">
+  <p class="mb-0" style="color:#64748b;font-size:.875rem;">
+    Gestiona los módulos instalados y los plugins detectados. El estado definido aquí se utiliza para controlar el acceso a cada módulo.
   </p>
 </div>
+
+<div class="ca-card p-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 small">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Predeterminado</th>
+          <th>Estado</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for modulo in modulos %}
+        <tr>
+          <td>
+            <strong>{{ modulo.module }}</strong>
+            {% if modulo.package %}
+            <div class="text-muted small">{{ modulo.package }}</div>
+            {% endif %}
+          </td>
+          <td>{{ modulo.type }}</td>
+          <td>{{ 'Sí' if modulo.default else 'No' }}</td>
+          <td>
+            <span class="badge bg-{{ 'success' if modulo.enabled else 'secondary' }}">
+              {{ 'Activo' if modulo.enabled else 'Inactivo' }}
+            </span>
+          </td>
+          <td>
+            <form method="post" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="module_id" value="{{ modulo.id }}">
+              <button
+                type="submit"
+                name="action"
+                value="toggle"
+                class="btn btn-sm btn-{{ 'outline-danger' if modulo.enabled else 'outline-success' }}"
+                {% if modulo.module == 'admin' %}disabled{% endif %}
+              >
+                {{ 'Deshabilitar' if modulo.enabled else 'Habilitar' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}

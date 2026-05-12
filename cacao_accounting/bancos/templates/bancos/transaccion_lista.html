@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/transaccion_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ page_heading or "Listado de Transacciones Bancarias" }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-arrow-left-right"></i> {{ page_heading or "Listado de Transacciones Bancarias" }}.</h5>
+    {% if new_url %}
+    <a href="{{ new_url }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    </a>
+    {% endif %}
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de transacciones bancarias.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Fecha</th>
+        <th scope="col">Descripción</th>
+        <th scope="col">Depósito</th>
+        <th scope="col">Retiro</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.posting_date }}</td>
+        <td>{{ item.description or "" }}</td>
+        <td>{{ item.deposit or "" }}</td>
+        <td>{{ item.withdrawal or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="bancos.bancos_transaccion_lista") }}</div>
+</div>
+
+{% endblock %}

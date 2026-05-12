@@ -35,7 +35,7 @@ contabilidad = {
 bancos = {
     "modulo": "cash",
     "estandar": True,
-    "habilitado": False,
+    "habilitado": True,
 }
 
 compras = {
@@ -73,20 +73,32 @@ MODULOS_STANDAR = [
 
 # <---------------------------------------------------------------------------------------------> #
 # Interface para agregar módulos adicionales al sistema.
-MODULOS_ADICIONALES = None
+modulos_adicionales_detectados: list[str] = []
 modulos = iter_modules()
 for modulo in modulos:
     MODULO_COMO_TEXTO = str(modulo.name)
     try:
         if MODULO_COMO_TEXTO.startswith("cacao_accounting_modulo") or MODULO_COMO_TEXTO.startswith("cacao_accounting_module"):
-            MODULOS_ADICIONALES = []
-            MODULOS_ADICIONALES.append(MODULO_COMO_TEXTO)
+            modulos_adicionales_detectados.append(MODULO_COMO_TEXTO)
     except AttributeError:
         pass
+
+MODULOS_ADICIONALES: list[str] | None = modulos_adicionales_detectados or None
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Funciones auxiliares para la administración de módulos.
+
+
+def _parse_plugin_module_name(package_name: str) -> str:
+    """Extrae el nombre lógico del modulo a partir del paquete detectado."""
+    if package_name.startswith("cacao_accounting_modulo_"):
+        return package_name.removeprefix("cacao_accounting_modulo_")
+    if package_name.startswith("cacao_accounting_module_"):
+        return package_name.removeprefix("cacao_accounting_module_")
+    return package_name
+
+
 def registrar_modulo(entrada: dict) -> None:
     """Recibe un diccionario y lo inserta en la base de datos."""
     registro = Modules(
@@ -126,6 +138,50 @@ def listado_modulos() -> dict:
         "modulos": list(_modulos),
     }
     return lista_modulos
+
+
+def obtener_modulos_disponibles() -> list[dict[str, Any]]:
+    """Devuelve los módulos estándar y plugins detectados en el entorno."""
+    disponibles: list[dict[str, Any]] = []
+    for modulo in MODULOS_STANDAR:
+        disponibles.append(
+            {
+                "module": modulo["modulo"],
+                "default": modulo["estandar"],
+                "type": "estandar",
+                "package": None,
+            }
+        )
+
+    if MODULOS_ADICIONALES:
+        for paquete in MODULOS_ADICIONALES:
+            disponibles.append(
+                {
+                    "module": _parse_plugin_module_name(paquete),
+                    "default": False,
+                    "type": "plugin",
+                    "package": paquete,
+                }
+            )
+
+    return disponibles
+
+
+def sincronizar_modulos() -> dict:
+    """Asegura que los módulos detectados estén registrados en la base de datos."""
+    modulos_existentes = {registro.module for registro in Modules.query.all()}
+
+    for modulo in MODULOS_STANDAR:
+        if modulo["modulo"] not in modulos_existentes:
+            registrar_modulo(modulo)
+
+    if MODULOS_ADICIONALES:
+        for paquete in MODULOS_ADICIONALES:
+            moduloname = _parse_plugin_module_name(paquete)
+            if moduloname not in modulos_existentes:
+                registrar_modulo({"modulo": moduloname, "estandar": False, "habilitado": False})
+
+    return listado_modulos()
 
 
 def validar_modulo_activo(modulo_a_validar: str) -> bool:

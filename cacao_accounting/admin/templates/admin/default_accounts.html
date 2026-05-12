@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Cuentas por defecto") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-journal-check me-2" style="color:#78BF30"></i>{{ _("Configuración de cuentas") }}</h4>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _('Cerrar') }}"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<form method="get" class="row g-2 align-items-end mb-3">
+  <div class="col-md-4">
+    <label class="form-label fw-semibold" for="company">{{ _("Compañía") }}</label>
+    <select class="form-select" id="company" name="company">
+      {% for company in companies %}
+      <option value="{{ company.code }}" {% if company.code == selected_company %}selected{% endif %}>
+        {{ company.code }} - {{ company.name or company.company_name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-primary" type="submit">
+      <i class="bi bi-arrow-clockwise me-1"></i>{{ _("Actualizar") }}
+    </button>
+  </div>
+</form>
+
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="company" value="{{ selected_company }}">
+
+  <div class="row g-4">
+    {% for row in rows %}
+    <div class="col-lg-6">
+      <label class="form-label" for="{{ row.field }}">{{ _(row.label) }}</label>
+      <div
+        class="ca-smart-select"
+        :class="{ 'is-invalid': invalid }"
+        x-data='smartSelect({
+          doctype: "account",
+          name: {{ row.field | tojson }},
+          minChars: 2,
+          initialValue: {{ (row.account.id if row.account else "") | tojson }},
+          initialLabel: {{ ((row.account.code ~ " - " ~ row.account.name) if row.account else "") | tojson }},
+          filters: {
+            company: {{ selected_company | tojson }},
+            account_type: {{ row.allowed_account_types | list | tojson }},
+            is_active: true
+          },
+          messages: {
+            placeholder: {{ _("Buscar por código o nombre...") | tojson }},
+            loading: {{ _("Buscando opciones...") | tojson }},
+            noResults: {{ _("No hay resultados compatibles.") | tojson }},
+            minChars: {{ _("Escriba al menos 2 caracteres para buscar.") | tojson }},
+            clear: {{ _("Limpiar selección") | tojson }},
+            invalid: {{ _("Seleccione una opción válida de la lista.") | tojson }},
+            error: {{ _("No se pudieron cargar las opciones.") | tojson }}
+          }
+        })'
+      >
+        <input type="hidden" :name="name" x-model="selectedValue">
+        <div class="ca-smart-select-input-wrap">
+          <input
+            class="form-control ca-smart-select-input"
+            id="{{ row.field }}"
+            type="text"
+            x-model="search"
+            @input.debounce.300ms="onInput"
+            @focus="fetchOptions"
+            @blur="closeSoon"
+            :placeholder="messages.placeholder"
+            autocomplete="off"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+          >
+          <button
+            class="ca-smart-select-clear"
+            type="button"
+            x-show="selectedValue || search"
+            @click="clearSelection"
+            :title="messages.clear"
+            :aria-label="messages.clear"
+            x-cloak
+          >
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <div class="ca-smart-select-state" x-show="loading">
+            <span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span>
+          </div>
+          <template x-for="option in options" :key="option.id">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <span x-text="option.display_name"></span>
+            </button>
+          </template>
+          <div
+            class="ca-smart-select-state"
+            x-show="!loading && !error && search.trim().length < minChars"
+            x-text="messages.minChars"
+          ></div>
+          <div
+            class="ca-smart-select-state"
+            x-show="!loading && !error && search.trim().length >= minChars && options.length === 0"
+            x-text="messages.noResults"
+          ></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+        <template x-if="invalid">
+          <div class="text-danger small mt-1" x-text="messages.invalid"></div>
+        </template>
+      </div>
+      <div class="form-text">{{ _("Tipos permitidos") }}: {{ row.allowed_account_types | join(", ") }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="d-flex gap-2 mt-4 pt-3 border-top">
+    <button class="btn btn-primary" type="submit" name="action" value="save">
+      <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
+    </button>
+    {% if config %}
+    <button class="btn btn-outline-danger" type="submit" name="action" value="delete">
+      <i class="bi bi-trash me-1"></i>{{ _("Eliminar configuración") }}
+    </button>
+    {% endif %}
+  </div>
+</form>
+
+<div class="ca-card mt-4">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-list-ul me-1"></i>{{ _("Compañías configuradas") }}</h6>
+  </div>
+  <div class="p-2">
+    {% if configs %}
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Listado de cuentas predeterminadas") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Compañía") }}</th>
+          <th>{{ _("Cuentas configuradas") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cfg in configs %}
+        <tr>
+          <td><a href="{{ url_for('admin.cuentas_predeterminadas', company=cfg.company) }}">{{ cfg.company }}</a></td>
+          <td>{{ definitions | length }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-3 text-muted text-center">{{ _("No hay configuraciones de cuentas predeterminadas.") }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

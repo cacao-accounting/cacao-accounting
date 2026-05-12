@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva Nota de Crédito") if note_kind == "credit" else _("Nueva Nota de Débito") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:780px;">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title">{{ _("Nueva Nota de Crédito Bancario") if note_kind == "credit" else _("Nueva Nota de Débito Bancario") }}</h5>
+  </div>
+  <form method="post" class="p-3">
+    <div class="mb-3">
+      <label class="form-label">{{ _("Compañía") }}</label>
+      <input name="company" class="form-control" value="{{ company or '' }}">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">{{ _("Cuenta Bancaria") }}</label>
+      <select name="bank_account_id" class="form-select" required>
+        <option value="">{{ _("Seleccione...") }}</option>
+        {% for cuenta in cuentas %}
+        <option value="{{ cuenta.id }}">{{ cuenta.account_name }} {{ cuenta.account_no or '' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">{{ _("Fecha") }}</label>
+      <input type="date" name="posting_date" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">{{ _("Monto") }}</label>
+      <input name="amount" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">{{ _("Referencia") }}</label>
+      <input name="reference_number" class="form-control">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">{{ _("Descripción") }}</label>
+      <textarea name="description" class="form-control" rows="3"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ _("Guardar") }}</button>
+  </form>
+</div>
+
+{% endblock %}

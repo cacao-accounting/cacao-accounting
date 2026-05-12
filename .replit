@@ -30,3 +30,6 @@ externalPort = 80
 [rules.formatter]
 
 [rules.formatter.fileExtensions]
+
+[agent]
+expertMode = true

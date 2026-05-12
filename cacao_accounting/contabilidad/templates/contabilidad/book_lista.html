@@ -17,19 +17,22 @@
 
 {% if entidades_creadas %}
 <div class="ca-card">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-journals"></i> Listado de Libros de Contabilidad</h5>
-    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.nueva_unidad') }}" role="button">
+    <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_libro') }}">
       <i class="bi bi-plus-lg me-1"></i>Nuevo Libro
     </a>
   </div>
   <table class="ca-table">
-    <caption style="display: none;">Listado de unidades de negocio.</caption>
+    <caption style="display: none;">Listado de libros de contabilidad.</caption>
     <thead>
       <tr>
         <th scope="col">Código</th>
         <th scope="col">Nombre</th>
         <th scope="col">Entidad</th>
+        <th scope="col">Moneda</th>
+        <th scope="col">Estatus</th>
+        <th scope="col">Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -37,15 +40,23 @@
       <tr>
         <td>
           {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-          <a href="{{ url_for('contabilidad.unidad', id_unidad=item.code) }}">{{ item.code }}</a>
+          <a href="{{ url_for('contabilidad.libro', id_unidad=item.code) }}">{{ item.code }}</a>
         </td>
-        <td><a href="{{ url_for('contabilidad.unidad', id_unidad=item.code) }}">{{ item.name }}</a></td>
+        <td><a href="{{ url_for('contabilidad.libro', id_unidad=item.code) }}">{{ item.name }}</a></td>
         <td><a href="{{ url_for('contabilidad.entidad', entidad_id=item.entity) }}">{{ item.entity }}</a></td>
+        <td>{{ item.currency or '-' }}</td>
+        <td>{{ item.status or 'activo' }}</td>
+        <td>
+          <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_libro', id_libro=item.code) }}">Editar</a>
+            <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_libro', id_unidad=item.code) }}">Eliminar</a>
+          </div>
+        </td>
       </tr>
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.unidades") }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.libros") }}</div>
 </div>
 {% else %}
 {{ macros.crear_nueva_entidad() }}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.lista_roles') }}" class="link-dark">Roles</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Permisos de {{ rol.name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-grid-1x2-fill me-2" style="color:#78BF30"></i>Permisos de {{ rol.name }}</h4>
+</div>
+
+<div class="ca-card p-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 small">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Módulo</th>
+            {% for _, label in acciones %}
+              <th>{{ label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for modulo in modulos %}
+          <tr>
+            <td><strong>{{ modulo.module }}</strong></td>
+            {% set permisos = permisos_existentes.get(modulo.id) %}
+            {% for accion, _ in acciones %}
+            <td>
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="perm_{{ modulo.id }}_{{ accion }}"
+                  name="perm_{{ modulo.id }}_{{ accion }}"
+                  {% if permisos and permisos[accion] %}checked{% endif %}
+                >
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">Guardar permisos</button>
+      <a href="{{ url_for('admin.lista_roles') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

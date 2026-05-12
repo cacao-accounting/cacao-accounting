@@ -227,7 +227,7 @@ def db_version():  # pragma: no cover
 # <---------------------------------------------------------------------------------------------> #
 
 
-def resolve_naming_series_prefix(template: str, posting_date: date) -> str:
+def resolve_naming_series_prefix(template: str, posting_date: date, company: Optional[str] = None) -> str:
     """Resuelve los tokens dinamicos de un template de serie.
 
     Los tokens se resuelven usando posting_date (fecha contable),
@@ -241,9 +241,18 @@ def resolve_naming_series_prefix(template: str, posting_date: date) -> str:
         Prefijo resuelto listo para concatenar con el numero de secuencia.
     """
     MONTH_ABBR = {
-        1: "ENE", 2: "FEB", 3: "MAR", 4: "ABR",
-        5: "MAY", 6: "JUN", 7: "JUL", 8: "AGO",
-        9: "SEP", 10: "OCT", 11: "NOV", 12: "DIC",
+        1: "ENE",
+        2: "FEB",
+        3: "MAR",
+        4: "ABR",
+        5: "MAY",
+        6: "JUN",
+        7: "JUL",
+        8: "AGO",
+        9: "SEP",
+        10: "OCT",
+        11: "NOV",
+        12: "DIC",
     }
 
     result = template
@@ -252,6 +261,7 @@ def resolve_naming_series_prefix(template: str, posting_date: date) -> str:
     result = result.replace("*MMM*", MONTH_ABBR[posting_date.month])
     result = result.replace("*MM*", f"{posting_date.month:02d}")
     result = result.replace("*DD*", f"{posting_date.day:02d}")
+    result = result.replace("*COMP*", company or "")
 
     return result
 
@@ -273,9 +283,7 @@ def get_next_sequence_value(sequence_id: str) -> int:
     """
     from cacao_accounting.database import Sequence
 
-    seq = database.session.execute(
-        database.select(Sequence).filter_by(id=sequence_id)
-    ).scalar_one_or_none()
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
     if seq is None:
         raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")
@@ -335,23 +343,21 @@ def generate_identifier(
     prefix = ""
 
     if naming_series_id:
-        series = database.session.execute(
-            database.select(NamingSeries).filter_by(id=naming_series_id)
-        ).scalar_one_or_none()
+        series = database.session.execute(database.select(NamingSeries).filter_by(id=naming_series_id)).scalar_one_or_none()
 
         if series is None:
             raise ValueError(f"NamingSeries con id '{naming_series_id}' no encontrada.")
 
-        prefix = resolve_naming_series_prefix(series.prefix_template, posting_date)
+        prefix = resolve_naming_series_prefix(series.prefix_template, posting_date, company)
 
     if sequence_id:
-        seq = database.session.execute(
-            database.select(Sequence).filter_by(id=sequence_id)
-        ).scalar_one_or_none()
+        seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
         if seq is None:
             raise ValueError(f"Sequence con id '{sequence_id}' no encontrada.")
 
+        if should_reset_sequence(sequence_id, posting_date):
+            reset_sequence(sequence_id)
         next_val = get_next_sequence_value(sequence_id)
         suffix = format_sequence_value(next_val, seq.padding)
         full_identifier = f"{prefix}{suffix}"
@@ -388,15 +394,14 @@ def get_active_naming_series(entity_type: str, company: Optional[str] = None) ->
 
     if company:
         from sqlalchemy import or_
+
         query = database.select(NamingSeries).filter(
             NamingSeries.entity_type == entity_type,
             NamingSeries.is_active.is_(True),
             or_(NamingSeries.company == company, NamingSeries.company.is_(None)),
         )
     else:
-        query = database.select(NamingSeries).filter_by(
-            entity_type=entity_type, is_active=True
-        )
+        query = database.select(NamingSeries).filter_by(entity_type=entity_type, is_active=True)
 
     results = database.session.execute(query).scalars().all()
     return list(results)
@@ -419,9 +424,7 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
     """
     from cacao_accounting.database import GeneratedIdentifierLog, Sequence
 
-    seq = database.session.execute(
-        database.select(Sequence).filter_by(id=sequence_id)
-    ).scalar_one_or_none()
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
     if seq is None or seq.reset_policy == "never":
         return False
@@ -430,7 +433,7 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
         database.select(GeneratedIdentifierLog)
         .filter_by(sequence_id=sequence_id)
         .order_by(GeneratedIdentifierLog.generated_at.desc())
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     if last_log is None or last_log.posting_date is None:
         return False
@@ -439,10 +442,7 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
         return posting_date.year != last_log.posting_date.year
 
     if seq.reset_policy == "monthly":
-        return (
-            posting_date.year != last_log.posting_date.year
-            or posting_date.month != last_log.posting_date.month
-        )
+        return posting_date.year != last_log.posting_date.year or posting_date.month != last_log.posting_date.month
 
     return False
 
@@ -460,9 +460,7 @@ def reset_sequence(sequence_id: str) -> None:
     """
     from cacao_accounting.database import Sequence
 
-    seq = database.session.execute(
-        database.select(Sequence).filter_by(id=sequence_id)
-    ).scalar_one_or_none()
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
     if seq is None:
         raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")

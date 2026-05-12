@@ -1,8 +1,5 @@
 import sys
 import os
-import pytest
-
-from time import sleep
 
 from flask import session
 
@@ -53,9 +50,9 @@ def test_fill_all_forms(request):
                     if form.file:
                         data = {key: str(value) for key, value in form.data.items()}
                         data[form.file.get("name")] = form.file.get("bytes")
-                        consulta = client.post(form.ruta, data=data, follow_redirects=True, content_type="multipart/form-data")
+                        client.post(form.ruta, data=data, follow_redirects=True, content_type="multipart/form-data")
                     else:
-                        consulta = client.post(form.ruta, data=form.data, follow_redirects=True)
+                        client.post(form.ruta, data=form.data, follow_redirects=True)
 
                     if form.flash:
                         assert session["_flashes"][0][0] == form.flash[1]

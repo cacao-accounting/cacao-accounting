@@ -1,0 +1,69 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.ccostos') }}" class="link-dark">Centros de Costos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if edit %}Editar{% else %}Nuevo{% endif %} Centro de Costos</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:700px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> {% if edit %}Editar{% else %}Nuevo{% endif %} Centro de Costos</h5>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" form="form-centro-costo" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
+      <a href="{{ url_for('contabilidad.ccostos') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    </div>
+  </div>
+  <form method="post" id="form-centro-costo">
+    {{ form.csrf_token }}
+    <div class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label" for="id-centro">Código</label>
+        {{ form.id(class="form-control form-control-sm", id="id-centro") }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="nombre">Nombre</label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="entidad">Entidad</label>
+        {{ form.entidad(class="form-select form-select-sm", id="entidad") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="padre">Centro Padre</label>
+        {{ form.padre(class="form-select form-select-sm", id="padre") }}
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-2">
+          {{ form.activo(class="form-check-input", id="activo") }}
+          <label class="form-check-label" for="activo">Activo</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-2">
+          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          <label class="form-check-label" for="habilitado">Habilitado</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-2">
+          {{ form.predeterminado(class="form-check-input", id="predeterminado") }}
+          <label class="form-check-label" for="predeterminado">Predeterminado</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-2">
+          {{ form.grupo(class="form-check-input", id="grupo") }}
+          <label class="form-check-label" for="grupo">Grupo</label>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

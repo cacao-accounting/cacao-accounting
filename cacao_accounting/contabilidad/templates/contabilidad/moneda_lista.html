@@ -13,11 +13,9 @@
 
 {% if entidades_creadas %}
 <div class="ca-card">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-currency-exchange"></i> Listado de Monedas.</h5>
-    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.nueva_unidad') }}" role="button">
-      <i class="bi bi-plus-lg me-1"></i>Nueva Moneda
-    </a>
+    <a href="{{ url_for('contabilidad.nueva_moneda') }}" class="btn btn-sm btn-primary">Nueva Moneda</a>
   </div>
   <table class="ca-table">
     <caption style="display: none;">Listado de monedas.</caption>

@@ -11,12 +11,9 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask_wtf import FlaskForm
-from wtforms import PasswordField, StringField, SubmitField
-
-# ---------------------------------------------------------------------------------------
-# Recursos locales
-# ---------------------------------------------------------------------------------------
-from wtforms.validators import DataRequired
+from wtforms import BooleanField, PasswordField, SelectMultipleField, StringField, SubmitField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
+from wtforms.widgets import CheckboxInput, ListWidget
 
 
 class LoginForm(FlaskForm):
@@ -25,3 +22,95 @@ class LoginForm(FlaskForm):
     usuario = StringField(validators=[DataRequired()])
     acceso = PasswordField(validators=[DataRequired()])
     inicio_sesion = SubmitField()
+
+
+class ProfileForm(FlaskForm):
+    """Formulario para actualizar información personal."""
+
+    name = StringField("Nombre", validators=[Optional()])
+    name2 = StringField("Segundo Nombre", validators=[Optional()])
+    last_name = StringField("Apellido", validators=[Optional()])
+    last_name2 = StringField("Segundo Apellido", validators=[Optional()])
+    e_mail = StringField("Correo electrónico", validators=[Optional(), Email()])
+    phone = StringField("Teléfono", validators=[Optional()])
+    guardar_perfil = SubmitField("Guardar cambios")
+
+
+class PasswordChangeForm(FlaskForm):
+    """Formulario para cambiar la contraseña del usuario."""
+
+    current_password = PasswordField("Contraseña actual", validators=[DataRequired()])
+    new_password = PasswordField("Nueva contraseña", validators=[DataRequired()])
+    confirm_password = PasswordField(
+        "Confirmar contraseña",
+        validators=[DataRequired(), EqualTo("new_password", message="Las contraseñas deben coincidir")],
+    )
+    cambiar_clave = SubmitField("Cambiar contraseña")
+
+
+class UserCreateForm(FlaskForm):
+    """Formulario para crear usuarios."""
+
+    usuario = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=15)])
+    name = StringField("Nombre", validators=[Optional()])
+    name2 = StringField("Segundo Nombre", validators=[Optional()])
+    last_name = StringField("Apellido", validators=[Optional()])
+    last_name2 = StringField("Segundo Apellido", validators=[Optional()])
+    e_mail = StringField("Correo electrónico", validators=[Optional(), Email()])
+    phone = StringField("Teléfono", validators=[Optional()])
+    classification = StringField("Clasificación", validators=[Optional()])
+    active = BooleanField("Habilitado", default=True)
+    password = PasswordField("Contraseña", validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField(
+        "Confirmar contraseña",
+        validators=[DataRequired(), EqualTo("password", message="Las contraseñas deben coincidir")],
+    )
+    crear_usuario = SubmitField("Crear usuario")
+
+
+class UserEditForm(FlaskForm):
+    """Formulario para editar usuarios."""
+
+    usuario = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=15)])
+    name = StringField("Nombre", validators=[Optional()])
+    name2 = StringField("Segundo Nombre", validators=[Optional()])
+    last_name = StringField("Apellido", validators=[Optional()])
+    last_name2 = StringField("Segundo Apellido", validators=[Optional()])
+    e_mail = StringField("Correo electrónico", validators=[Optional(), Email()])
+    phone = StringField("Teléfono", validators=[Optional()])
+    classification = StringField("Clasificación", validators=[Optional()])
+    active = BooleanField("Habilitado")
+    guardar_usuario = SubmitField("Guardar usuario")
+
+
+class UserPasswordForm(FlaskForm):
+    """Formulario para cambiar contraseña de usuario desde administración."""
+
+    password = PasswordField("Nueva contraseña", validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField(
+        "Confirmar contraseña",
+        validators=[DataRequired(), EqualTo("password", message="Las contraseñas deben coincidir")],
+    )
+    cambiar_clave = SubmitField("Cambiar contraseña")
+
+
+class MultiCheckboxField(SelectMultipleField):
+    """Campo para representar una lista de opciones con checkboxes."""
+
+    widget = ListWidget(prefix_label=False)
+    option_widget = CheckboxInput()
+
+
+class UserRoleForm(FlaskForm):
+    """Formulario para asignar roles a un usuario."""
+
+    roles = MultiCheckboxField("Roles", validators=[Optional()], choices=[])
+    guardar_roles = SubmitField("Guardar roles")
+
+
+class RoleForm(FlaskForm):
+    """Formulario para crear o editar un rol."""
+
+    name = StringField("Nombre del rol", validators=[DataRequired(), Length(min=3, max=50)])
+    note = StringField("Detalle", validators=[Optional(), Length(max=100)])
+    guardar_rol = SubmitField("Guardar rol")

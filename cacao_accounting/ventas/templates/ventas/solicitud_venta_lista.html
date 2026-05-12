@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Listado de Pedidos de Venta</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-cart-plus"></i> Listado de Pedidos de Venta.</h5>
+    <a href="{{ url_for('ventas.ventas_pedido_venta_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de pedidos de venta.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Cliente</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Fecha</th>
+        <th scope="col">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.customer_name or "" }}</td>
+        <td>{{ macros.document_status_for("sales_request", item) }}</td>
+        <td>{{ item.posting_date or "" }}</td>
+        <td>{{ item.grand_total or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="ventas.ventas_pedido_venta_lista") }}</div>
+</div>
+
+{% endblock %}

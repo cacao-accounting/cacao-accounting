@@ -26,9 +26,9 @@ from cacao_accounting.config import configuracion
 @pytest.fixture(scope="module")
 def app():
     """Instancia de aplicacion Flask con base de datos en memoria."""
-    _app = create_app(configuracion)
-    _app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    _app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    _app = create_app(
+        {**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SQLALCHEMY_TRACK_MODIFICATIONS": False}
+    )
     return _app
 
 
@@ -50,9 +50,9 @@ class TestSchemaTableCreation(unittest.TestCase):
 
     def setUp(self):
         """Configura la aplicacion y crea el esquema en memoria."""
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app(
+            {**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SQLALCHEMY_TRACK_MODIFICATIONS": False}
+        )
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -263,15 +263,15 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_item_price_table_exists(self):
         self.assertIn("item_price", self.tables)
 
-    # Reconciliation & GR/IR
+    # Reconciliation & Conciliacion de Compras
     def test_reconciliation_table_exists(self):
         self.assertIn("reconciliation", self.tables)
 
     def test_reconciliation_item_table_exists(self):
         self.assertIn("reconciliation_item", self.tables)
 
-    def test_gr_ir_reconciliation_table_exists(self):
-        self.assertIn("gr_ir_reconciliation", self.tables)
+    def test_purchase_reconciliation_table_exists(self):
+        self.assertIn("purchase_reconciliation", self.tables)
 
     # Multi-Ledger
     def test_ledger_mapping_rule_table_exists(self):
@@ -354,8 +354,7 @@ class TestGLEntrySchema(unittest.TestCase):
     """Verifica que gl_entry tiene todos los campos requeridos."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -446,8 +445,7 @@ class TestBookMultiLedger(unittest.TestCase):
     """Verifica que Book soporta multiples libros contables paralelos."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -489,8 +487,7 @@ class TestAccountingPeriodSchema(unittest.TestCase):
     """Verifica que accounting_period tiene los campos extendidos."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -517,8 +514,7 @@ class TestAccountsSchema(unittest.TestCase):
     """Verifica que accounts tiene el campo account_type para AR/AP."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -536,6 +532,54 @@ class TestAccountsSchema(unittest.TestCase):
         self.assertIn("account_type", self.columns)
 
 
+class TestCompanyDefaultAccountExtendedSchema(unittest.TestCase):
+    """Verifica campos completos de cuentas predeterminadas."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        inspector = inspect(database.engine)
+        self.columns = {c["name"] for c in inspector.get_columns("company_default_account")}
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def test_company_default_account_has_required_account_fields(self):
+        expected = {
+            "default_cash",
+            "default_bank",
+            "default_receivable",
+            "default_payable",
+            "default_income",
+            "default_expense",
+            "default_inventory",
+            "default_cogs",
+            "inventory_adjustment_account_id",
+            "bridge_account_id",
+            "customer_advance_account_id",
+            "supplier_advance_account_id",
+            "bank_difference_account_id",
+            "default_sales_tax_account_id",
+            "default_purchase_tax_account_id",
+            "default_rounding_account_id",
+            "exchange_gain_account_id",
+            "exchange_loss_account_id",
+            "unrealized_exchange_gain_account_id",
+            "unrealized_exchange_loss_account_id",
+            "deferred_income_account_id",
+            "deferred_expense_account_id",
+            "payment_discount_account_id",
+            "period_profit_loss_account_id",
+            "retained_earnings_account_id",
+        }
+        assert expected.issubset(self.columns)
+
+
 # -------------------------------------------------------------------------------------
 # Tests: Unit como dimension analitica
 # -------------------------------------------------------------------------------------
@@ -543,8 +587,7 @@ class TestUnitAsAnalyticDimension(unittest.TestCase):
     """Verifica que Unit esta correctamente vinculada a GLEntry como dimension."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database, Unit, Unidad
@@ -586,8 +629,7 @@ class TestDocBaseFields(unittest.TestCase):
     """Verifica que los documentos transaccionales tienen los campos DocBase."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -676,9 +718,7 @@ class TestResolveNamingSeriesPrefix(unittest.TestCase):
     def test_resolves_multiple_tokens_at_once(self):
         from cacao_accounting.database.helpers import resolve_naming_series_prefix
 
-        result = resolve_naming_series_prefix(
-            "CHOCO-SI-*YYYY*-*MMM*-", date(2025, 6, 15)
-        )
+        result = resolve_naming_series_prefix("CHOCO-SI-*YYYY*-*MMM*-", date(2025, 6, 15))
         self.assertEqual(result, "CHOCO-SI-2025-JUN-")
 
     def test_resolves_all_month_abbreviations(self):
@@ -686,9 +726,18 @@ class TestResolveNamingSeriesPrefix(unittest.TestCase):
         from cacao_accounting.database.helpers import resolve_naming_series_prefix
 
         expected = {
-            1: "ENE", 2: "FEB", 3: "MAR", 4: "ABR",
-            5: "MAY", 6: "JUN", 7: "JUL", 8: "AGO",
-            9: "SEP", 10: "OCT", 11: "NOV", 12: "DIC",
+            1: "ENE",
+            2: "FEB",
+            3: "MAR",
+            4: "ABR",
+            5: "MAY",
+            6: "JUN",
+            7: "JUL",
+            8: "AGO",
+            9: "SEP",
+            10: "OCT",
+            11: "NOV",
+            12: "DIC",
         }
         for month, abbr in expected.items():
             result = resolve_naming_series_prefix("*MMM*", date(2025, month, 1))
@@ -752,8 +801,7 @@ class TestGetNextSequenceValue(unittest.TestCase):
     """Pruebas del contador de secuencias."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -812,8 +860,7 @@ class TestGenerateIdentifier(unittest.TestCase):
     """Pruebas de integracion del generador de identificadores."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -880,9 +927,7 @@ class TestGenerateIdentifier(unittest.TestCase):
         )
 
         log_entry = self.database.session.execute(
-            self.database.select(GeneratedIdentifierLog).filter_by(
-                full_identifier=identifier
-            )
+            self.database.select(GeneratedIdentifierLog).filter_by(full_identifier=identifier)
         ).scalar_one_or_none()
 
         self.assertIsNotNone(log_entry)
@@ -967,8 +1012,7 @@ class TestSequenceReset(unittest.TestCase):
     """Pruebas de la politica de reinicio de secuencias."""
 
     def setUp(self):
-        self.app = create_app(configuracion)
-        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1096,53 +1140,404 @@ def test_all_domain_models_importable():
     """Todos los modelos del dominio se pueden importar correctamente."""
     from cacao_accounting.database import (  # noqa: F401
         # Core
-        CacaoConfig, Currency, ExchangeRate,
+        CacaoConfig,
+        Currency,
+        ExchangeRate,
         # Auth
-        User, Roles, RolesAccess, RolesUser, Modules, Modulos,
+        User,
+        Roles,
+        RolesAccess,
+        RolesUser,
+        Modules,
+        Modulos,
         # Company
-        Entity, Unit, Unidad, Book,
+        Entity,
+        Unit,
+        Unidad,
+        Book,
         # Accounting
-        FiscalYear, AccountingPeriod, Accounts, CostCenter, Project,
+        FiscalYear,
+        AccountingPeriod,
+        Accounts,
+        CostCenter,
+        Project,
         # GL
-        GLEntry, GLBase, ComprobanteContable, ComprobanteContableDetalle,
+        GLEntry,
+        GLBase,
+        ComprobanteContable,
+        ComprobanteContableDetalle,
         # Series
-        Serie, NamingSeries, Sequence, SeriesSequenceMap, GeneratedIdentifierLog,
+        NamingSeries,
+        Sequence,
+        SeriesSequenceMap,
+        GeneratedIdentifierLog,
         # Party
-        Party, Contact, Address, PartyContact, PartyAddress, CompanyParty,
+        Party,
+        Contact,
+        Address,
+        PartyContact,
+        PartyAddress,
+        CompanyParty,
         # Inventory
-        UOM, Item, ItemUOMConversion, Warehouse, Batch, SerialNumber,
-        StockEntry, StockEntryItem, StockLedgerEntry, StockBin, StockValuationLayer,
+        UOM,
+        Item,
+        ItemUOMConversion,
+        Warehouse,
+        Batch,
+        SerialNumber,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        StockBin,
+        StockValuationLayer,
         # Purchasing
-        PurchaseOrder, PurchaseOrderItem, PurchaseReceipt, PurchaseReceiptItem,
-        PurchaseInvoice, PurchaseInvoiceItem,
+        PurchaseOrder,
+        PurchaseOrderItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
         # Sales
-        SalesOrder, SalesOrderItem, DeliveryNote, DeliveryNoteItem,
-        SalesInvoice, SalesInvoiceItem,
+        SalesOrder,
+        SalesOrderItem,
+        DeliveryNote,
+        DeliveryNoteItem,
+        SalesInvoice,
+        SalesInvoiceItem,
         # Banking
-        Bank, BankAccount, PaymentEntry, PaymentReference, BankTransaction,
+        Bank,
+        BankAccount,
+        PaymentEntry,
+        PaymentReference,
+        BankTransaction,
         # Account mapping
-        ItemAccount, PartyAccount, CompanyDefaultAccount,
+        ItemAccount,
+        PartyAccount,
+        CompanyDefaultAccount,
         # Tax & Pricing
-        Tax, TaxTemplate, TaxTemplateItem, PriceList, ItemPrice,
+        Tax,
+        TaxTemplate,
+        TaxTemplateItem,
+        PriceList,
+        ItemPrice,
         # Reconciliation
-        Reconciliation, ReconciliationItem,
-        # GR/IR
-        GRIRReconciliation,
+        Reconciliation,
+        ReconciliationItem,
+        # Conciliacion de Compras
+        PurchaseReconciliation,
         # Multi-ledger
         LedgerMappingRule,
         # Revaluation & Period Close
-        ExchangeRevaluation, ExchangeRevaluationItem,
-        PeriodCloseRun, PeriodCloseCheck,
+        ExchangeRevaluation,
+        ExchangeRevaluationItem,
+        PeriodCloseRun,
+        PeriodCloseCheck,
         # Dimensions
-        DimensionType, DimensionValue, GLEntryDimension,
+        DimensionType,
+        DimensionValue,
+        GLEntryDimension,
         # Collaboration
-        Comment, CommentMention, Assignment,
-        Workflow, WorkflowState, WorkflowTransition,
-        WorkflowInstance, WorkflowActionLog,
+        Comment,
+        CommentMention,
+        Assignment,
+        Workflow,
+        WorkflowState,
+        WorkflowTransition,
+        WorkflowInstance,
+        WorkflowActionLog,
         # Files
-        File, FileAttachment,
+        File,
+        FileAttachment,
         # Audit & Snapshots
-        AuditLog, AccountBalanceSnapshot, StockBalanceSnapshot,
+        AuditLog,
+        AccountBalanceSnapshot,
+        StockBalanceSnapshot,
     )
+
     # If we reach here without ImportError, all imports succeeded
     assert True
+
+
+# -------------------------------------------------------------------------------------
+# Tests: Data model improvements — correctness and integrity
+# -------------------------------------------------------------------------------------
+class TestStatusWebLeyendas(unittest.TestCase):
+    """Verifica que los valores de StatusWeb tienen las leyendas correctas."""
+
+    def test_canceled_leyenda_is_cancelado(self):
+        from cacao_accounting.database import STATUS
+
+        self.assertEqual(STATUS["canceled"].leyenda, "Cancelado")
+
+    def test_applied_leyenda_is_aplicado(self):
+        from cacao_accounting.database import STATUS
+
+        self.assertEqual(STATUS["applied"].leyenda, "Aplicado")
+
+    def test_current_leyenda_is_actual(self):
+        from cacao_accounting.database import STATUS
+
+        self.assertEqual(STATUS["current"].leyenda, "Actual")
+
+    def test_default_leyenda_is_predeterminado(self):
+        from cacao_accounting.database import STATUS
+
+        self.assertEqual(STATUS["default"].leyenda, "Predeterminado")
+
+    def test_no_duplicate_leyendas_for_core_statuses(self):
+        """canceled y applied deben tener leyendas distintas entre sí y distintas de current/default."""
+        from cacao_accounting.database import STATUS
+
+        canceled = STATUS["canceled"].leyenda
+        applied = STATUS["applied"].leyenda
+        current = STATUS["current"].leyenda
+        default = STATUS["default"].leyenda
+        self.assertNotEqual(canceled, current)
+        self.assertNotEqual(applied, default)
+        self.assertNotEqual(canceled, applied)
+
+
+class TestDocBaseDocumentNo(unittest.TestCase):
+    """Verifica que DocBase tiene los campos document_no y naming_series_id."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        self.inspector = inspect(database.engine)
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def _check_document_no_fields(self, table_name: str) -> None:
+        cols = {c["name"] for c in self.inspector.get_columns(table_name)}
+        self.assertIn("document_no", cols, f"{table_name} missing document_no")
+        self.assertIn("naming_series_id", cols, f"{table_name} missing naming_series_id")
+
+    def test_purchase_order_has_document_no(self):
+        self._check_document_no_fields("purchase_order")
+
+    def test_purchase_invoice_has_document_no(self):
+        self._check_document_no_fields("purchase_invoice")
+
+    def test_purchase_receipt_has_document_no(self):
+        self._check_document_no_fields("purchase_receipt")
+
+    def test_sales_order_has_document_no(self):
+        self._check_document_no_fields("sales_order")
+
+    def test_sales_invoice_has_document_no(self):
+        self._check_document_no_fields("sales_invoice")
+
+    def test_delivery_note_has_document_no(self):
+        self._check_document_no_fields("delivery_note")
+
+    def test_payment_entry_has_document_no(self):
+        self._check_document_no_fields("payment_entry")
+
+    def test_stock_entry_has_document_no(self):
+        self._check_document_no_fields("stock_entry")
+
+
+class TestAccountsClassificationField(unittest.TestCase):
+    """Verifica que Accounts usa 'classification' (sin typo)."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        inspector = inspect(database.engine)
+        self.columns = {c["name"] for c in inspector.get_columns("accounts")}
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def test_accounts_has_classification_not_clasification(self):
+        self.assertIn("classification", self.columns)
+        self.assertNotIn("clasification", self.columns)
+
+
+class TestPartyClassificationField(unittest.TestCase):
+    """Verifica que Party usa 'classification' (sin typo)."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        inspector = inspect(database.engine)
+        self.columns = {c["name"] for c in inspector.get_columns("party")}
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def test_party_has_classification_not_clasification(self):
+        self.assertIn("classification", self.columns)
+        self.assertNotIn("clasification", self.columns)
+
+
+class TestPaymentTermsTable(unittest.TestCase):
+    """Verifica que la tabla payment_terms existe y tiene los campos requeridos."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        inspector = inspect(database.engine)
+        self.tables = set(inspector.get_table_names())
+        self.columns = {c["name"] for c in inspector.get_columns("payment_terms")}
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def test_payment_terms_table_exists(self):
+        self.assertIn("payment_terms", self.tables)
+
+    def test_payment_terms_has_name(self):
+        self.assertIn("name", self.columns)
+
+    def test_payment_terms_has_due_days(self):
+        self.assertIn("due_days", self.columns)
+
+    def test_payment_terms_has_discount_days(self):
+        self.assertIn("discount_days", self.columns)
+
+    def test_payment_terms_has_discount_percent(self):
+        self.assertIn("discount_percent", self.columns)
+
+    def test_payment_terms_has_is_active(self):
+        self.assertIn("is_active", self.columns)
+
+
+class TestCompanyPartyPaymentTermsFk(unittest.TestCase):
+    """Verifica que company_party usa FK a payment_terms (no texto plano)."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+        from sqlalchemy import inspect
+
+        database.create_all()
+        inspector = inspect(database.engine)
+        self.columns = {c["name"] for c in inspector.get_columns("company_party")}
+
+    def tearDown(self):
+        self.ctx.pop()
+
+    def test_company_party_has_payment_terms_id(self):
+        self.assertIn("payment_terms_id", self.columns)
+
+    def test_company_party_no_longer_has_payment_terms_text(self):
+        self.assertNotIn("payment_terms", self.columns)
+
+
+class TestBatchUniqueConstraint(unittest.TestCase):
+    """Verifica que batch tiene constraint unico por (item_code, batch_no)."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+
+        database.create_all()
+        self.database = database
+
+    def tearDown(self):
+        self.database.session.rollback()
+        self.ctx.pop()
+
+    def test_batch_rejects_duplicate_item_batch_combination(self):
+        """No se puede tener dos lotes con el mismo item_code y batch_no."""
+        from cacao_accounting.database import UOM, Batch, Item
+        from sqlalchemy.exc import IntegrityError
+
+        uom = UOM(code="UND-B", name="Unidad Batch Test", is_active=True)
+        self.database.session.add(uom)
+        item = Item(
+            code="ITEM-BATCH-TEST",
+            name="Item para test de lotes",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom="UND-B",
+        )
+        self.database.session.add(item)
+        self.database.session.flush()
+
+        b1 = Batch(item_code="ITEM-BATCH-TEST", batch_no="LOTE-001", is_active=True)
+        b2 = Batch(item_code="ITEM-BATCH-TEST", batch_no="LOTE-001", is_active=True)
+        self.database.session.add(b1)
+        self.database.session.flush()
+        self.database.session.add(b2)
+        with self.assertRaises(IntegrityError):
+            self.database.session.flush()
+
+
+class TestExchangeRateUniqueConstraint(unittest.TestCase):
+    """Verifica que exchange_rate tiene constraint unico por (origin, destination, date)."""
+
+    def setUp(self):
+        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        from cacao_accounting.database import database
+
+        database.create_all()
+        self.database = database
+
+    def tearDown(self):
+        self.database.session.rollback()
+        self.ctx.pop()
+
+    def test_exchange_rate_rejects_duplicate_pair_on_same_date(self):
+        """No se puede tener dos tasas para el mismo par de monedas en el mismo dia."""
+        from datetime import date as Date
+
+        from cacao_accounting.database import Currency, ExchangeRate
+        from sqlalchemy.exc import IntegrityError
+
+        c1 = Currency(code="USD-T", name="US Dollar Test", active=True)
+        c2 = Currency(code="NIO-T", name="Córdoba Test", active=True)
+        self.database.session.add_all([c1, c2])
+        self.database.session.flush()
+
+        today = Date(2025, 6, 15)
+        r1 = ExchangeRate(origin="USD-T", destination="NIO-T", rate="36.5", date=today)
+        r2 = ExchangeRate(origin="USD-T", destination="NIO-T", rate="36.7", date=today)
+        self.database.session.add(r1)
+        self.database.session.flush()
+        self.database.session.add(r2)
+        with self.assertRaises(IntegrityError):
+            self.database.session.flush()
+
+
+def test_payment_terms_importable():
+    """PaymentTerms se puede importar desde cacao_accounting.database."""
+    from cacao_accounting.database import PaymentTerms  # noqa: F401
+
+    assert PaymentTerms is not None
+
+
+def test_all_domain_models_importable_v2():
+    """PaymentTerms incluido en importaciones del dominio."""
+    from cacao_accounting.database import PaymentTerms  # noqa: F401
+
+    assert hasattr(PaymentTerms, "__tablename__")
+    assert PaymentTerms.__tablename__ == "payment_terms"
