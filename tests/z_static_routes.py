@@ -39,7 +39,7 @@ static_rutes = [
     Route(
         url="/accounting/entity/list",
         text=[
-            "Listado de Entidades.".encode("utf-8"),
+            "Listado de Entidades".encode("utf-8"),
             "Nueva Entidad".encode("utf-8"),
             "Código".encode("utf-8"),
             "Razón Social".encode("utf-8"),
@@ -71,7 +71,8 @@ static_rutes = [
         url="/accounting/entity/edit/cacao",
         text=[
             "/accounting/entity/cacao".encode("utf-8"),
-            "Editar Choco Sonrisas Sociedad Anonima".encode("utf-8"),
+            "Editar Entidad".encode("utf-8"),
+            "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Información Básica".encode("utf-8"),
             "Nombre Comercial".encode("utf-8"),
             "Choco Sonrisas".encode("utf-8"),
@@ -191,7 +192,7 @@ static_rutes = [
             "La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html".encode(
                 "utf-8"
             ),
-            "Listado de Unidades de Negocio.".encode("utf-8"),
+            "Listado de Unidades de Negocio".encode("utf-8"),
             "Código".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Entidad".encode("utf-8"),
@@ -201,13 +202,12 @@ static_rutes = [
             "movil".encode(),
             "Casa Matriz".encode(),
             "Masaya".encode(),
-            "/accounting/entity/cacao".encode(),
         ],
     ),
     Route(
         url="/accounting/project/list",
         text=[
-            "Listado de Proyectos.".encode("utf-8"),
+            "Listado de Proyectos".encode("utf-8"),
             "Código".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Fecha Inicio".encode("utf-8"),
@@ -221,7 +221,7 @@ static_rutes = [
     Route(
         url="/accounting/currency/list",
         text=[
-            "Listado de Monedas.".encode("utf-8"),
+            "Listado de Monedas".encode("utf-8"),
             "Nueva Moneda".encode("utf-8"),
             "Nombre".encode("utf-8"),
             "Moneda".encode("utf-8"),
@@ -231,25 +231,25 @@ static_rutes = [
     Route(
         url="/accounting/exchange",
         text=[
-            "Listado de Tasas de Cambio.".encode("utf-8"),
+            "Listado de Tasas de Cambio".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounting/accounting_period",
         text=[
-            "Listado de Períodos Contables.".encode("utf-8"),
+            "Listado de Períodos Contables".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounting/account/cacao/1",
         text=[
-            "Cuenta Contable".encode("utf-8"),
+            "1 - Activos".encode("utf-8"),
         ],
     ),
     Route(
         url="/accounting/costs_center/A00000",
         text=[
-            "Centro de Costos.".encode("utf-8"),
+            "A00000 - Centro Costos Predeterminado".encode("utf-8"),
         ],
     ),
     Route(
@@ -258,6 +258,7 @@ static_rutes = [
             "La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html".encode(
                 "utf-8"
             ),
+            "Listado de Libros de Contabilidad".encode("utf-8"),
         ],
     ),
     Route(
@@ -301,13 +302,7 @@ static_rutes = [
     Route(
         url="/accounting/unit/new",
         text=[
-            "Crear Nueva Unidad de Negocio.".encode("utf-8"),
-        ],
-    ),
-    Route(
-        url="/accounting/unit/new",
-        text=[
-            "Crear Nueva Unidad de Negocio.".encode("utf-8"),
+            "Nueva Unidad de Negocio".encode("utf-8"),
         ],
     ),
     Route(

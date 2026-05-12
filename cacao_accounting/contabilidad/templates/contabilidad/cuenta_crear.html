@@ -11,65 +11,112 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:700px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-journal-text"></i> Nueva Cuenta Contable</h5>
+<div class="ca-card" style="max-width:800px;">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-journal-text me-2"></i> {{ _('Nueva Cuenta Contable') }}</h5>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-cuenta" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('contabilidad.cuentas') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('contabilidad.cuentas') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-cuenta" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Cuenta') }}
+      </button>
     </div>
   </div>
-  <form method="post" id="form-cuenta">
-    {{ form.csrf_token }}
-    <div class="row g-2">
-      <div class="col-md-4">
-        <label class="form-label" for="code">Código</label>
-        {{ form.code(class="form-control form-control-sm", id="code") }}
-      </div>
-      <div class="col-md-8">
-        <label class="form-label" for="name">Nombre</label>
-        {{ form.name(class="form-control form-control-sm", id="name") }}
-      </div>
+  <div class="p-4">
+    <form method="post" id="form-cuenta" class="row g-3">
+      {{ form.csrf_token }}
+
       <div class="col-md-6">
-        <label class="form-label" for="entidad">Entidad</label>
-        {{ form.entidad(class="form-select form-select-sm", id="entidad") }}
+        <label class="form-label" for="entidad">{{ _('Entidad') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "company",
+            name: "entidad",
+            minChars: 1,
+            preload: true,
+            initialValue: "{{ form.entidad.data or "" }}",
+            messages: {
+              placeholder: {{ _("Buscar entidad")|tojson }},
+              loading: {{ _("Cargando...")|tojson }},
+              noResults: {{ _("Sin resultados")|tojson }},
+              minChars: {{ _("Escriba para buscar")|tojson }},
+              clear: {{ _("Limpiar")|tojson }}
+            }
+          })'>
+          <input type="hidden" name="entidad" id="entidad_hidden" x-model="selectedValue" @change="$dispatch('change')">
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
+
       <div class="col-md-6">
-        <label class="form-label" for="moneda">Moneda</label>
-        {{ form.moneda(class="form-select form-select-sm", id="moneda") }}
+        <label class="form-label" for="code">{{ _('Código') }} <span class="text-danger">*</span></label>
+        {{ form.code(class="form-control form-control-sm", id="code", required=True) }}
       </div>
+
+      <div class="col-12">
+        <label class="form-label" for="name">{{ _('Nombre de la Cuenta') }} <span class="text-danger">*</span></label>
+        {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+      </div>
+
       <div class="col-md-6">
-        <label class="form-label" for="clasificacion">Clasificación</label>
+        <label class="form-label" for="clasificacion">{{ _('Clasificación') }}</label>
         {{ form.clasificacion(class="form-select form-select-sm", id="clasificacion") }}
       </div>
+
       <div class="col-md-6">
-        <label class="form-label" for="tipo">Tipo</label>
-        {{ form.tipo(class="form-select form-select-sm", id="tipo") }}
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="account_type">Tipo de Cuenta</label>
+        <label class="form-label" for="account_type">{{ _('Tipo de Cuenta') }}</label>
         {{ form.account_type(class="form-select form-select-sm", id="account_type") }}
       </div>
-      <div class="col-md-6">
-        <label class="form-label" for="padre">Cuenta Padre</label>
-        {{ form.padre(class="form-select form-select-sm", id="padre") }}
+
+      <div class="col-md-12">
+        <label class="form-label" for="padre">{{ _('Cuenta Padre') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "account",
+            name: "padre",
+            minChars: 1,
+            filters: {
+                company: { selector: "#entidad_hidden" },
+                is_group: 1,
+                classification: { selector: "#clasificacion" }
+            },
+            filterSources: ["#entidad_hidden", "#clasificacion"],
+            messages: {
+              placeholder: {{ _("Buscar cuenta de grupo")|tojson }},
+              loading: {{ _("Cargando...")|tojson }},
+              noResults: {{ _("Sin resultados")|tojson }},
+              minChars: {{ _("Escriba para buscar")|tojson }},
+              clear: {{ _("Limpiar")|tojson }}
+            }
+          })'>
+          <input type="hidden" name="padre" x-model="selectedValue">
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
-      <div class="col-12">
+
+      <div class="col-12 mt-4">
         <div class="form-check form-check-inline">
           {{ form.grupo(class="form-check-input", id="grupo") }}
-          <label class="form-check-label" for="grupo">Es Grupo</label>
+          <label class="form-check-label" for="grupo">{{ _('Es cuenta de grupo') }}</label>
         </div>
         <div class="form-check form-check-inline">
           {{ form.activo(class="form-check-input", id="activo") }}
-          <label class="form-check-label" for="activo">Activo</label>
-        </div>
-        <div class="form-check form-check-inline">
-          {{ form.habilitado(class="form-check-input", id="habilitado") }}
-          <label class="form-check-label" for="habilitado">Habilitado</label>
+          <label class="form-check-label" for="activo">{{ _('Activo') }}</label>
         </div>
       </div>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
 
 {% endblock %}

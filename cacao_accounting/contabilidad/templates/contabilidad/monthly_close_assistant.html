@@ -15,9 +15,118 @@
   </ol>
 </nav>
 
-<div class="ca-page-header">
+<div class="ca-page-header d-flex justify-content-between align-items-center">
   <h4><i class="bi bi-calendar-check me-2" style="color:#78BF30"></i>{{ _('Asistente de Cierre Mensual') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('contabilidad.nuevo_comprobante', isclosing='true') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo Cierre') }}
+    </a>
+  </div>
 </div>
+
+<section class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Selección de Periodo') }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <label for="company" class="form-label">{{ _('Entidad') }}</label>
+        <select name="company" id="company" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">{{ _('Seleccione entidad') }}</option>
+          {% for ent in entidades %}
+          <option value="{{ ent.code }}" {{ 'selected' if ent.code == company_code else '' }}>{{ ent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label for="ledger" class="form-label">{{ _('Libro') }}</label>
+        <select name="ledger" id="ledger" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">{{ _('Seleccione libro') }}</option>
+          {% for book in books %}
+          <option value="{{ book.code }}" {{ 'selected' if book.code == ledger_id else '' }}>{{ book.code }} - {{ book.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label for="period" class="form-label">{{ _('Periodo') }}</label>
+        <select name="period" id="period" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">{{ _('Seleccione periodo') }}</option>
+          {% for p in periods %}
+          <option value="{{ p.id }}" {{ 'selected' if p.id == period_id else '' }}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</section>
+
+{% if selected_period %}
+<section class="ca-card mb-3">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0">{{ _('Plantillas Recurrentes Aplicables') }}</h5>
+    {% if templates %}
+    <form action="{{ url_for('contabilidad.aplicar_recurrentes_cierre') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="period_id" value="{{ period_id }}">
+      <input type="hidden" name="ledger_id" value="{{ ledger_id }}">
+      {% for t in templates %}
+      {% if t.id not in applied_ids %}
+      <input type="hidden" name="template_ids" value="{{ t.id }}">
+      {% endif %}
+      {% endfor %}
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-play-fill"></i> {{ _('Aplicar Todas') }}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th>{{ _('Plantilla') }}</th>
+          <th>{{ _('Descripción') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Acción') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td>{{ t.description or '-' }}</td>
+          <td>
+            {% if t.id in applied_ids %}
+            <span class="badge text-bg-success">{{ _('Aplicada') }}</span>
+            {% else %}
+            <span class="badge text-bg-warning">{{ _('Pendiente') }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.id not in applied_ids %}
+            <form action="{{ url_for('contabilidad.aplicar_recurrentes_cierre') }}" method="post" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="period_id" value="{{ period_id }}">
+              <input type="hidden" name="ledger_id" value="{{ ledger_id }}">
+              <input type="hidden" name="template_ids" value="{{ t.id }}">
+              <button type="submit" class="btn btn-sm btn-outline-primary">{{ _('Aplicar') }}</button>
+            </form>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-3">{{ _('No hay plantillas pendientes para este periodo.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <section class="ca-card mb-3">
   <div class="ca-card-header">

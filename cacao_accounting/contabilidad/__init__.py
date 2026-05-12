@@ -69,8 +69,13 @@ def monedas():
     """Listado de monedas registradas en el sistema."""
     from cacao_accounting.database import Currency
 
+    query = database.select(Currency)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Currency.code.ilike(f"%{search}%"), Currency.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Currency),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -140,8 +145,19 @@ def entidades():
     """Listado de entidades."""
     from cacao_accounting.database import Entity
 
+    query = database.select(Entity)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(
+            or_(
+                Entity.code.ilike(f"%{search}%"),
+                Entity.name.ilike(f"%{search}%"),
+                Entity.company_name.ilike(f"%{search}%"),
+            )
+        )
+
     CONSULTA = database.paginate(
-        database.select(Entity),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -348,8 +364,13 @@ def unidades():
     """Listado de unidades de negocios."""
     from cacao_accounting.database import Unit, database
 
+    query = database.select(Unit)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Unit.code.ilike(f"%{search}%"), Unit.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Unit),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -431,8 +452,13 @@ def libros():
     """Listado de libros de contabilidad."""
     from cacao_accounting.database import Book, database
 
+    query = database.select(Book)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Book.code.ilike(f"%{search}%"), Book.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Book),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -630,7 +656,6 @@ def nueva_cuenta():
 
     formulario = FormularioCuenta()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.moneda.choices = [("", "Sin moneda específica")] + obtener_lista_monedas()
     formulario.padre.choices = [("", "Sin padre")]
     TITULO = "Nueva Cuenta Contable - " + APPNAME
 
@@ -641,12 +666,12 @@ def nueva_cuenta():
             name=formulario.name.data,
             group=bool(formulario.grupo.data),
             parent=formulario.padre.data or None,
-            currency=formulario.moneda.data or None,
+            currency=None,
             classification=formulario.clasificacion.data or None,
-            type_=formulario.tipo.data or None,
+            type_=None,
             account_type=formulario.account_type.data or None,
             active=bool(formulario.activo.data),
-            enabled=bool(formulario.habilitado.data),
+            enabled=bool(formulario.activo.data),
         )
         database.session.add(DATA)
         database.session.commit()
@@ -656,6 +681,56 @@ def nueva_cuenta():
         "contabilidad/cuenta_crear.html",
         titulo=TITULO,
         form=formulario,
+    )
+
+
+@contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_cuenta(entity, id_cta):
+    """Formulario para editar una cuenta contable existente."""
+    from cacao_accounting.contabilidad.forms import FormularioCuenta
+    from cacao_accounting.database import Accounts
+
+    registro = database.session.execute(
+        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
+    ).scalar_one_or_none()
+
+    if registro is None:
+        flash("La cuenta contable indicada no existe.", "warning")
+        return redirect(url_for("contabilidad.cuentas"))
+
+    formulario = FormularioCuenta(obj=registro)
+    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.data = registro.entity
+    formulario.padre.choices = [("", "Sin padre")]
+    if registro.parent:
+        padre_row = database.session.execute(
+            database.select(Accounts).filter(Accounts.code == registro.parent, Accounts.entity == entity)
+        ).scalar_one_or_none()
+        if padre_row:
+            formulario.padre.choices.append((padre_row.code, f"{padre_row.code} - {padre_row.name}"))
+        formulario.padre.data = registro.parent
+
+    TITULO = "Editar Cuenta Contable - " + APPNAME
+
+    if formulario.validate_on_submit():
+        registro.name = formulario.name.data
+        registro.group = bool(formulario.grupo.data)
+        registro.parent = formulario.padre.data or None
+        registro.classification = formulario.clasificacion.data or None
+        registro.account_type = formulario.account_type.data or None
+        registro.active = bool(formulario.activo.data)
+        registro.enabled = bool(formulario.activo.data)
+        database.session.commit()
+        return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
+
+    return render_template(
+        "contabilidad/cuenta_crear.html",
+        titulo=TITULO,
+        form=formulario,
+        edit=True,
     )
 
 
@@ -697,7 +772,7 @@ def nuevo_centro_costo():
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
             active=bool(formulario.activo.data),
-            enabled=bool(formulario.habilitado.data),
+            enabled=bool(formulario.activo.data),
             default=bool(formulario.predeterminado.data),
             group=bool(formulario.grupo.data),
             parent=request.form.get("padre") or None,
@@ -737,7 +812,7 @@ def editar_centro_costo(id_cc):
         registro.name = request.form.get("nombre", registro.name)
         registro.entity = request.form.get("entidad", registro.entity)
         registro.active = bool(formulario.activo.data)
-        registro.enabled = bool(formulario.habilitado.data)
+        registro.enabled = bool(formulario.activo.data)
         registro.default = bool(formulario.predeterminado.data)
         registro.group = bool(formulario.grupo.data)
         registro.parent = request.form.get("padre") or None
@@ -796,8 +871,13 @@ def proyectos():
     """Listado de proyectos."""
     from cacao_accounting.database import Project
 
+    query = database.select(Project)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Project.code.ilike(f"%{search}%"), Project.name.ilike(f"%{search}%")))
+
     consulta = database.paginate(
-        database.select(Project),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -908,8 +988,13 @@ def fiscal_year_list():
     """Listado de años fiscales."""
     from cacao_accounting.database import FiscalYear
 
+    query = database.select(FiscalYear)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(FiscalYear.name.ilike(f"%{search}%"), FiscalYear.entity.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(FiscalYear),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -1116,8 +1201,13 @@ def tasa_cambio():
     """Listado de tasas de cambio."""
     from cacao_accounting.database import ExchangeRate
 
+    query = database.select(ExchangeRate)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(ExchangeRate.origin.ilike(f"%{search}%"), ExchangeRate.destination.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(ExchangeRate),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -1172,8 +1262,13 @@ def periodo_contable():
     """Lista de periodos contables."""
     from cacao_accounting.database import AccountingPeriod
 
+    query = database.select(AccountingPeriod)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(AccountingPeriod.name.ilike(f"%{search}%"), AccountingPeriod.entity.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(AccountingPeriod),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -1365,7 +1460,11 @@ def asistente_cierre_mensual():
     entidades = database.session.execute(database.select(Entity)).scalars().all()
     books = []
     if company_code:
-        books = database.session.execute(database.select(Book).filter_by(entity=company_code, status="activo")).scalars().all()
+        books = (
+            database.session.execute(database.select(Book).filter_by(entity=company_code, status="activo"))
+            .scalars()
+            .all()
+        )
 
     periods = []
     if company_code:
@@ -1495,7 +1594,8 @@ def nuevo_comprobante():
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
     column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
-    initial_journal = {"is_closing": True} if request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"} else None
+    is_closing = request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"}
+    initial_journal = {"is_closing": True} if is_closing else None
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,

@@ -11,59 +11,100 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:700px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> {% if edit %}Editar{% else %}Nuevo{% endif %} Centro de Costos</h5>
+<div class="ca-card" style="max-width:800px;">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-diagram-2 me-2"></i> {% if edit %}{{ _('Editar Centro de Costos') }}{% else %}{{ _('Nuevo Centro de Costos') }}{% endif %}</h5>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-centro-costo" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('contabilidad.ccostos') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('contabilidad.ccostos') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-centro-costo" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Centro') }}
+      </button>
     </div>
   </div>
-  <form method="post" id="form-centro-costo">
-    {{ form.csrf_token }}
-    <div class="row g-2">
+  <div class="p-4">
+    <form method="post" id="form-centro-costo" class="row g-3">
+      {{ form.csrf_token }}
       <div class="col-md-4">
-        <label class="form-label" for="id-centro">Código</label>
-        {{ form.id(class="form-control form-control-sm", id="id-centro") }}
+        <label class="form-label" for="id-centro">{{ _('Código') }} <span class="text-danger">*</span></label>
+        {{ form.id(class="form-control form-control-sm", id="id-centro", required=True) }}
       </div>
       <div class="col-md-8">
-        <label class="form-label" for="nombre">Nombre</label>
-        {{ form.nombre(class="form-control form-control-sm", id="nombre") }}
+        <label class="form-label" for="nombre">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre", required=True) }}
       </div>
-      <div class="col-md-6">
-        <label class="form-label" for="entidad">Entidad</label>
-        {{ form.entidad(class="form-select form-select-sm", id="entidad") }}
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="padre">Centro Padre</label>
-        {{ form.padre(class="form-select form-select-sm", id="padre") }}
-      </div>
-      <div class="col-md-3">
-        <div class="form-check mt-2">
-          {{ form.activo(class="form-check-input", id="activo") }}
-          <label class="form-check-label" for="activo">Activo</label>
+      <div class="col-md-12">
+        <label class="form-label" for="entidad">{{ _('Entidad') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "company",
+            name: "entidad",
+            minChars: 1,
+            preload: true,
+            initialValue: "{{ form.entidad.data or "" }}",
+            messages: {
+              placeholder: {{ _("Buscar entidad")|tojson }},
+              loading: {{ _("Cargando...")|tojson }},
+              noResults: {{ _("Sin resultados")|tojson }},
+              minChars: {{ _("Escriba para buscar")|tojson }},
+              clear: {{ _("Limpiar")|tojson }}
+            }
+          })'>
+          <input type="hidden" name="entidad" id="entidad_hidden" x-model="selectedValue" @change="$dispatch('change')">
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+          </div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="form-check mt-2">
-          {{ form.habilitado(class="form-check-input", id="habilitado") }}
-          <label class="form-check-label" for="habilitado">Habilitado</label>
+      <div class="col-md-12">
+        <label class="form-label" for="padre">{{ _('Centro Padre') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "cost_center",
+            name: "padre",
+            minChars: 1,
+            filters: {
+                company: { selector: "#entidad_hidden" },
+                is_group: 1
+            },
+            filterSources: ["#entidad_hidden"],
+            messages: {
+              placeholder: {{ _("Buscar centro de grupo")|tojson }},
+              loading: {{ _("Cargando...")|tojson }},
+              noResults: {{ _("Sin resultados")|tojson }},
+              minChars: {{ _("Escriba para buscar")|tojson }},
+              clear: {{ _("Limpiar")|tojson }}
+            }
+          })'>
+          <input type="hidden" name="padre" x-model="selectedValue">
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+          </div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="form-check mt-2">
-          {{ form.predeterminado(class="form-check-input", id="predeterminado") }}
-          <label class="form-check-label" for="predeterminado">Predeterminado</label>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="form-check mt-2">
+      <div class="col-12 mt-4">
+        <div class="form-check form-check-inline">
           {{ form.grupo(class="form-check-input", id="grupo") }}
-          <label class="form-check-label" for="grupo">Grupo</label>
+          <label class="form-check-label" for="grupo">{{ _('Es centro de grupo') }}</label>
+        </div>
+        <div class="form-check form-check-inline">
+          {{ form.activo(class="form-check-input", id="activo") }}
+          <label class="form-check-label" for="activo">{{ _('Activo') }}</label>
+        </div>
+        <div class="form-check form-check-inline">
+          {{ form.predeterminado(class="form-check-input", id="predeterminado") }}
+          <label class="form-check-label" for="predeterminado">{{ _('Predeterminado') }}</label>
         </div>
       </div>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
 
 {% endblock %}

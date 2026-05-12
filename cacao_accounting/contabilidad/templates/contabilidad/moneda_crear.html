@@ -11,43 +11,43 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:600px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-currency-exchange"></i> Nueva Moneda</h5>
+<div class="ca-card" style="max-width:800px;">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-currency-exchange me-2"></i> {{ _('Nueva Moneda') }}</h5>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-moneda" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('contabilidad.monedas') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('contabilidad.monedas') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-moneda" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Moneda') }}
+      </button>
     </div>
   </div>
-  <form method="post" id="form-moneda">
-    {{ form.csrf_token }}
-    <div class="row g-2">
+  <div class="p-4">
+    <form method="post" id="form-moneda" class="row g-3">
+      {{ form.csrf_token }}
       <div class="col-md-4">
-        <label class="form-label" for="code">Código</label>
-        {{ form.code(class="form-control form-control-sm", id="code", maxlength=10) }}
+        <label class="form-label" for="code">{{ _('Código') }} <span class="text-danger">*</span></label>
+        {{ form.code(class="form-control form-control-sm", id="code", maxlength=10, required=True) }}
       </div>
       <div class="col-md-8">
-        <label class="form-label" for="name">Nombre</label>
-        {{ form.name(class="form-control form-control-sm", id="name") }}
+        <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+        {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="decimals">Decimales</label>
-        {{ form.decimals(class="form-control form-control-sm", id="decimals") }}
+        <label class="form-label" for="decimals">{{ _('Decimales') }}</label>
+        {{ form.decimals(class="form-control form-control-sm", id="decimals", type="number", min=0, max=8) }}
       </div>
-      <div class="col-md-3 mt-2">
-        <div class="form-check">
+      <div class="col-12 mt-3">
+        <div class="form-check form-check-inline">
           {{ form.active(class="form-check-input", id="active") }}
-          <label class="form-check-label" for="active">Activo</label>
+          <label class="form-check-label" for="active">{{ _('Activo') }}</label>
         </div>
-      </div>
-      <div class="col-md-3 mt-2">
-        <div class="form-check">
+        <div class="form-check form-check-inline">
           {{ form.default(class="form-check-input", id="default") }}
-          <label class="form-check-label" for="default">Predeterminada</label>
+          <label class="form-check-label" for="default">{{ _('Predeterminada') }}</label>
         </div>
       </div>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
 
 {% endblock %}

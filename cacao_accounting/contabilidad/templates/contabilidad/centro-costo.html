@@ -12,23 +12,66 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:680px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> Centro de Costos.</h5>
-    {{ macros.render_status(status=registro.status, lista_status=statusweb) }}
+<style>
+    .ca-kv-list {
+        display: grid;
+        gap: .6rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ca-kv-item label {
+        color: #64748b;
+        display: block;
+        font-size: .75rem;
+        font-weight: 700;
+        margin-bottom: .15rem;
+        text-transform: uppercase;
+    }
+
+    .ca-kv-item p {
+        margin: 0;
+    }
+
+    @media (max-width: 768px) {
+        .ca-kv-list {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="ca-card" style="max-width:800px;">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0">
+        <i class="bi bi-diagram-2 me-2"></i> {{ registro.code }} - {{ registro.name }}
+        {% if registro.active %}
+        <span class="badge bg-success ms-2">{{ _('Activo') }}</span>
+        {% else %}
+        <span class="badge bg-danger ms-2">{{ _('Inactivo') }}</span>
+        {% endif %}
+        {% if registro.default %}
+        <span class="badge bg-primary ms-2">{{ _('Predeterminado') }}</span>
+        {% endif %}
+    </h5>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('contabilidad.ccostos') }}" class="btn btn-outline-secondary btn-sm">{{ _('Volver al Catálogo') }}</a>
+      <a href="{{ url_for('contabilidad.editar_centro_costo', id_cc=registro.code) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
+      {% if acceso.configurar %}
+      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_centro_costo', id_cc=registro.code) }}">
+        <i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}
+      </a>
+      {% endif %}
+    </div>
   </div>
-  <table class="ca-table">
-    <caption class="visually-hidden">Detalle del centro de costos</caption>
-    <thead>
-      <tr><th scope="col">Campo</th><th scope="col">Valor</th></tr>
-    </thead>
-    <tbody>
-      <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.code }}</strong></td></tr>
-      <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.name }}</td></tr>
-      <tr><td style="color:#64748b;">Estado</td><td>{{ registro.status }}</td></tr>
-      <tr><td style="color:#64748b;">Tipo</td><td>{% if registro.group %}Grupo{% else %}Detalle{% endif %}</td></tr>
-    </tbody>
-  </table>
+  <div class="p-4">
+    <div class="ca-kv-list">
+        <div class="ca-kv-item"><label>{{ _('Código') }}</label><p><strong>{{ registro.code }}</strong></p></div>
+        <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Entidad') }}</label><p>{{ registro.entity }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Tipo') }}</label><p>{% if registro.group %}{{ _('Centro de Grupo') }}{% else %}{{ _('Centro de Detalle') }}{% endif %}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Centro Padre') }}</label><p>{{ registro.parent or '-' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Habilitado') }}</label><p>{% if registro.enabled %}{{ _('Sí') }}{% else %}{{ _('No') }}{% endif %}</p></div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}

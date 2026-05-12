@@ -10,107 +10,115 @@
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:860px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-building-add"></i> Crear Nueva Entidad</h5>
+<div class="ca-card" style="max-width:1000px;">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-building-add me-2"></i> {{ _('Crear Nueva Entidad') }}</h5>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-entidad" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('contabilidad.entidades') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('contabilidad.entidades') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-entidad" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Entidad') }}
+      </button>
     </div>
   </div>
 
-  <form method="post" id="form-entidad">
-    {{ form.csrf_token }}
+  <div class="p-4">
+    <form method="post" id="form-entidad">
+      {{ form.csrf_token }}
 
-    <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Información Básica</p>
-    <div class="row g-2 mb-3">
-      <div class="col-md-6">
-        <label class="form-label" for="nombre-comercial">Nombre Comercial</label>
-        {{ form.nombre_comercial(class="form-control form-control-sm", id="nombre-comercial") }}
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="razon-social">Razón Social</label>
-        {{ form.razon_social(class="form-control form-control-sm", id="razon-social") }}
-      </div>
-      <div class="col-md-4">
-        <label class="form-label" for="id-fiscal">ID Fiscal</label>
-        {{ form.id_fiscal(class="form-control form-control-sm", id="id-fiscal") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="id-entidad">Código Entidad</label>
-        {{ form.id(class="form-control form-control-sm", id="id-entidad") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="pais">País</label>
-        {{ form.pais(class="form-select form-select-sm", id="pais") }}
-      </div>
-      <div class="col-md-2">
-        <label class="form-label" for="idioma">Idioma</label>
-        {{ form.idioma(class="form-select form-select-sm", id="idioma") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="moneda">Moneda Principal</label>
-        {{ form.moneda(class="form-select form-select-sm", id="moneda") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="inicio-anio-fiscal">Inicio Año Fiscal</label>
-        {{ form.inicio_anio_fiscal(class="form-control form-control-sm", id="inicio-anio-fiscal") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="fin-anio-fiscal">Fin Año Fiscal</label>
-        {{ form.fin_anio_fiscal(class="form-control form-control-sm", id="fin-anio-fiscal") }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="tipo">Tipo de Entidad</label>
-        {{ form.tipo_entidad(class="form-select form-select-sm", id="tipo") }}
-      </div>
-      <div class="col-md-3 mt-2">
-        <div class="form-check">
-          {{ form.habilitado(class="form-check-input", id="habilitado") }}
-          <label class="form-check-label" for="habilitado">Habilitado</label>
-        </div>
-      </div>
-      <div class="col-12">
-        <label class="form-label">Catálogo contable</label>
-        <div class="d-flex gap-3 align-items-center mb-2">
-          {% for option in form.catalogo %}
-          <div class="form-check">
-            {{ option(class="form-check-input", id=option.id) }}
-            <label class="form-check-label" for="{{ option.id }}">{{ option.label.text }}</label>
-          </div>
-          {% endfor %}
+      <h6 class="mb-3 text-primary border-bottom pb-2">{{ _('Información Básica') }}</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label" for="nombre-comercial">{{ _('Nombre Comercial') }}</label>
+          {{ form.nombre_comercial(class="form-control form-control-sm", id="nombre-comercial") }}
         </div>
         <div class="col-md-6">
-          <label class="form-label" for="catalogo_origen">Catálogo existente</label>
+          <label class="form-label" for="razon-social">{{ _('Razón Social') }} <span class="text-danger">*</span></label>
+          {{ form.razon_social(class="form-control form-control-sm", id="razon-social", required=True) }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="id-fiscal">{{ _('ID Fiscal') }} <span class="text-danger">*</span></label>
+          {{ form.id_fiscal(class="form-control form-control-sm", id="id-fiscal", required=True) }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="id-entidad">{{ _('Código Entidad') }} <span class="text-danger">*</span></label>
+          {{ form.id(class="form-control form-control-sm", id="id-entidad", required=True) }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="pais">{{ _('País') }} <span class="text-danger">*</span></label>
+          {{ form.pais(class="form-select form-select-sm", id="pais", required=True) }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="idioma">{{ _('Idioma') }} <span class="text-danger">*</span></label>
+          {{ form.idioma(class="form-select form-select-sm", id="idioma", required=True) }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="moneda">{{ _('Moneda Principal') }} <span class="text-danger">*</span></label>
+          {{ form.moneda(class="form-select form-select-sm", id="moneda", required=True) }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="inicio-anio-fiscal">{{ _('Inicio Año Fiscal') }}</label>
+          {{ form.inicio_anio_fiscal(class="form-control form-control-sm", id="inicio-anio-fiscal", type="date") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="fin-anio-fiscal">{{ _('Fin Año Fiscal') }}</label>
+          {{ form.fin_anio_fiscal(class="form-control form-control-sm", id="fin-anio-fiscal", type="date") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="tipo">{{ _('Tipo de Entidad') }} <span class="text-danger">*</span></label>
+          {{ form.tipo_entidad(class="form-select form-select-sm", id="tipo", required=True) }}
+        </div>
+        <div class="col-12">
+            <div class="form-check">
+              {{ form.habilitado(class="form-check-input", id="habilitado") }}
+              <label class="form-check-label" for="habilitado">{{ _('Habilitado') }}</label>
+            </div>
+        </div>
+      </div>
+
+      <h6 class="mb-3 text-primary border-bottom pb-2">{{ _('Configuración Contable') }}</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-12">
+          <label class="form-label">{{ _('Catálogo contable') }}</label>
+          <div class="d-flex gap-4 align-items-center mb-2">
+            {% for option in form.catalogo %}
+            <div class="form-check">
+              {{ option(class="form-check-input", id=option.id) }}
+              <label class="form-check-label" for="{{ option.id }}">{{ option.label.text }}</label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="catalogo_origen">{{ _('Catálogo existente') }}</label>
           {{ form.catalogo_origen(class="form-select form-select-sm", id="catalogo_origen") }}
         </div>
       </div>
-    </div>
 
-    <p class="mb-1" style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;">Información de Contacto</p>
-    <div class="row g-2">
-      <div class="col-md-6">
-        <label class="form-label" for="correo-e">Correo Electrónico</label>
-        {{ form.correo_electronico(class="form-control form-control-sm", id="correo-e") }}
+      <h6 class="mb-3 text-primary border-bottom pb-2">{{ _('Información de Contacto') }}</h6>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="correo-e">{{ _('Correo Electrónico') }}</label>
+          {{ form.correo_electronico(class="form-control form-control-sm", id="correo-e", type="email") }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="web-site">{{ _('Página Web') }}</label>
+          {{ form.web(class="form-control form-control-sm", id="web-site") }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="tel1">{{ _('Teléfono 1') }}</label>
+          {{ form.telefono1(class="form-control form-control-sm", id="tel1") }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="tel2">{{ _('Teléfono 2') }}</label>
+          {{ form.telefono2(class="form-control form-control-sm", id="tel2") }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="fax">{{ _('Número Fax') }}</label>
+          {{ form.fax(class="form-control form-control-sm", id="fax") }}
+        </div>
       </div>
-      <div class="col-md-6">
-        <label class="form-label" for="web-site">Página Web</label>
-        {{ form.web(class="form-control form-control-sm", id="web-site") }}
-      </div>
-      <div class="col-md-4">
-        <label class="form-label" for="tel1">Teléfono 1</label>
-        {{ form.telefono1(class="form-control form-control-sm", id="tel1") }}
-      </div>
-      <div class="col-md-4">
-        <label class="form-label" for="tel2">Teléfono 2</label>
-        {{ form.telefono2(class="form-control form-control-sm", id="tel2") }}
-      </div>
-      <div class="col-md-4">
-        <label class="form-label" for="fax">Número Fax</label>
-        {{ form.fax(class="form-control form-control-sm", id="fax") }}
-      </div>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
 
 {% endblock %}
