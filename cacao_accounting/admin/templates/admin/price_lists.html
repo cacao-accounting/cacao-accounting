@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Listas de Precios") }}</h4></div>
+<form method="post" class="mb-4">
+  <div class="row g-2">
+    <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
+    <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}"></div>
+    <div class="col-md-2"><input class="form-control" name="currency" placeholder="{{ _('Moneda') }}"></div>
+    <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_buying" id="buying"><label class="form-check-label" for="buying">{{ _("Compra") }}</label></div>
+    <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_selling" id="selling" checked><label class="form-check-label" for="selling">{{ _("Venta") }}</label></div>
+    <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_active" id="pl_active" checked><label class="form-check-label" for="pl_active">{{ _("Activo") }}</label></div>
+    <div class="col-md-2"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
+  </div>
+</form>
+<table class="table table-sm"><thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Moneda") }}</th><th>{{ _("Compra") }}</th><th>{{ _("Venta") }}</th></tr></thead><tbody>{% for price_list in price_lists %}<tr><td>{{ price_list.name }}</td><td>{{ price_list.currency or "" }}</td><td>{{ price_list.is_buying }}</td><td>{{ price_list.is_selling }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

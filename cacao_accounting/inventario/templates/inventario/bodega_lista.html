@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/bodega_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Listado de Bodegas</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-building"></i> Listado de Bodegas.</h5>
+    <a href="{{ url_for('inventario.inventario_bodega_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de bodegas.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Código</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Compañía</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.code }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.company }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="inventario.inventario_bodega_lista") }}</div>
+</div>
+
+{% endblock %}

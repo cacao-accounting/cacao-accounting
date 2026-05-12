@@ -1,0 +1,30 @@
+{
+  "catalog": "base_es.csv",
+  "default_accounts": {
+    "default_cash": "11.01.001.001",
+    "default_bank": "11.01.002.001",
+    "default_receivable": "11.02.001.001",
+    "default_payable": "21.01.001.001",
+    "default_income": "41.01",
+    "default_expense": "52.02.037",
+    "default_inventory": "11.03.001",
+    "default_cogs": "51.01",
+    "inventory_adjustment_account_id": "51.03",
+    "bridge_account_id": "21.01.001.002",
+    "customer_advance_account_id": "21.02.001",
+    "supplier_advance_account_id": "11.04.004.001",
+    "bank_difference_account_id": "52.04.006",
+    "default_sales_tax_account_id": "21.05.001",
+    "default_purchase_tax_account_id": "21.05.002",
+    "default_rounding_account_id": "52.03.009",
+    "exchange_gain_account_id": "42.01",
+    "exchange_loss_account_id": "52.03.003",
+    "unrealized_exchange_gain_account_id": "42.03",
+    "unrealized_exchange_loss_account_id": "52.03.011",
+    "deferred_income_account_id": "21.02.005",
+    "deferred_expense_account_id": "11.04.002.006",
+    "payment_discount_account_id": "52.04.007",
+    "period_profit_loss_account_id": "33.01",
+    "retained_earnings_account_id": "33.02"
+  }
+}

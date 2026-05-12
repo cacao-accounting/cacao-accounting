@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Líneas de Plantilla") }}: {{ template.name }}</h4></div>
+<form method="post" class="mb-4">
+  <div class="row g-2">
+    <div class="col-md-3"><select class="form-select" name="tax_id">{% for tax in taxes %}<option value="{{ tax.id }}">{{ tax.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-1"><input class="form-control" name="sequence" value="10"></div>
+    <div class="col-md-2"><select class="form-select" name="calculation_base"><option value="net_document">{{ _("Documento neto") }}</option><option value="previous_total">{{ _("Total previo") }}</option></select></div>
+    <div class="col-md-2"><select class="form-select" name="behavior"><option value="additive">{{ _("Aditivo") }}</option><option value="deductive">{{ _("Deductivo") }}</option></select></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="is_inclusive" id="inclusive"><label class="form-check-label" for="inclusive">{{ _("Incluido") }}</label></div>
+    <div class="col-md-2"><button class="btn btn-primary" type="submit">{{ _("Agregar") }}</button></div>
+  </div>
+</form>
+<table class="table table-sm"><thead><tr><th>{{ _("Secuencia") }}</th><th>{{ _("Impuesto") }}</th><th>{{ _("Base") }}</th><th>{{ _("Comportamiento") }}</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.sequence }}</td><td>{{ item.tax_id }}</td><td>{{ item.calculation_base }}</td><td>{{ item.behavior }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

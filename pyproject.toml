@@ -2,7 +2,7 @@
 name = "cacao-accounting"
 description = "Accounting solution for the management of Accounts Payable, Accounts Receivable, Inventory, Treasury and General Accounting."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 authors = [
   {name = "William Moreno Reyes", email = "williamjmorenor@gmail.com"},
   {name = "BMO Soluciones", email = "development@bmogroup.solutions"},

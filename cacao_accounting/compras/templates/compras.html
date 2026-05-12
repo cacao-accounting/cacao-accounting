@@ -1,5 +1,10 @@
+{% set acceso = permisos(modulo=id_modulo("purchases"), usuario=usuario.id) %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -17,29 +22,127 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Proveedores</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Categorías de Compra</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Condiciones de Pago</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}">Proveedores</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Proveedores</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Órdenes de Compra</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="#">Facturas de Proveedor</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Notas de Crédito</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('compras.compras_solicitud_compra_lista') }}">Solicitud de Compra</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_solicitud_cotizacion_lista') }}">Solicitud de Cotización</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_cotizacion_proveedor_lista') }}">Cotización de Proveedor</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}">Comparativo de Ofertas</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_orden_compra_lista') }}">Órdenes de Compra</a>
+        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Mercancía</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Facturas de Proveedor</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Órdenes de Compra</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Recepciones de Mercancía</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Facturas de Proveedor</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Compras por Proveedor</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Cuentas por Pagar</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}">Compras por Proveedor</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Cuentas por Pagar</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_orden_compra_lista') }}">Órdenes Pendientes</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+
+  {# ── Columna 4: Conciliación ──────────────────────── #}
+  <div class="ca-module-card">
+    <h5><i class="bi bi-arrow-left-right"></i> Conciliación de Compras</h5>
+    <ul class="ca-module-links">
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('compras.compras_reconciliation_panel') }}">Panel de Conciliaciones</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_purchase_reconciliation') }}">Conciliaciones Pendientes</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Conciliación de Compras</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

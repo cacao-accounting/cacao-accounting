@@ -1,0 +1,61 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Comprobantes contables') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Listado de Comprobantes Contables.') }}</h5>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none;">{{ _('Listado de comprobantes contables.') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Documento') }}</th>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Fecha') }}</th>
+          <th>{{ _('Referencia') }}</th>
+          <th>{{ _('Estado') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for registro in consulta %}
+        <tr>
+          <td>
+            <a href="{{ url_for('contabilidad.ver_comprobante', identifier=registro.id) }}">
+              {{ registro.document_no or registro.id }}
+            </a>
+          </td>
+          <td>{{ registro.entity }}</td>
+          <td>{{ registro.date }}</td>
+          <td>{{ registro.reference or '' }}</td>
+          <td>{{ _(registro.status or 'draft') }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">{{ _('No hay comprobantes contables registrados.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

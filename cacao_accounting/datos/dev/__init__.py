@@ -14,19 +14,33 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from datetime import date
+
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.database import database
 from cacao_accounting.datos.dev.data import (
     BASE_USUARIOS,
-    CENTROS_DE_COSTOS,
-    CUENTAS,
-    ENTIDADES,
-    PERIODOS,
-    PROYECTOS,
-    SERIES,
-    TASAS_DE_CAMBIO,
-    UNIDADES,
     USUARIO_ROLES,
+    _make_articulos,
+    _make_bancos,
+    _make_bodegas,
+    _make_centros_de_costos,
+    _make_cuentas,
+    _make_documentos,
+    _make_entidades,
+    _make_items_entrega,
+    _make_items_factura_compra,
+    _make_items_factura_venta,
+    _make_items_orden_compra,
+    _make_items_orden_venta,
+    _make_items_recepcion,
+    _make_periodos,
+    _make_proyectos,
+    _make_series,
+    _make_tasas_de_cambio,
+    _make_terceros,
+    _make_unidades,
+    _make_unidades_medida,
 )
 from cacao_accounting.logs import log
 
@@ -54,21 +68,48 @@ def demo_usuarios():
 
 def demo_entidad():
     """Entidad de demostración."""
-    for e in ENTIDADES:
-        database.session.add(e)
+    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.setup.service import create_company
+
+    fiscal_year_start = date(date.today().year, 1, 1)
+    fiscal_year_end = date(date.today().year, 12, 31)
+
+    for e in _make_entidades():
+        company_data = {
+            "id": e.code,
+            "razon_social": e.company_name,
+            "nombre_comercial": e.name,
+            "id_fiscal": e.tax_id,
+            "moneda": e.currency,
+            "pais": e.country,
+            "tipo_entidad": e.entity_type,
+            "correo_electronico": e.e_mail,
+            "web": e.web,
+            "telefono1": e.phone1,
+            "telefono2": e.phone2,
+            "fax": e.fax,
+            "inicio_anio_fiscal": fiscal_year_start,
+            "fin_anio_fiscal": fiscal_year_end,
+        }
+        create_company(
+            company_data,
+            status=e.status or "active",
+            default=bool(e.default),
+        )
+        seed_matching_config_for_company(e.code)
     database.session.commit()
 
 
 def series_predeterminadas():
     """Crear series predeterminadas."""
-    for s in SERIES:
+    for s in _make_series():
         database.session.add(s)
     database.session.commit()
 
 
 def demo_unidades():
     """Unidades de Negocio de Demostración."""
-    for u in UNIDADES:
+    for u in _make_unidades():
         database.session.add(u)
     database.session.commit()
 
@@ -76,35 +117,71 @@ def demo_unidades():
 def cargar_catalogo_de_cuentas():
     """Catalogo de cuentas de demostración."""
     from cacao_accounting.contabilidad.ctas import base, cargar_catalogos
+    from cacao_accounting.contabilidad.default_accounts import apply_catalog_default_mapping
 
     log.debug("Cargando catalogos de cuentas.")
-    cargar_catalogos(base, "cacao")
-    cargar_catalogos(base, "dulce")
-    cargar_catalogos(base, "cafe")
+    for company in ("cacao", "dulce", "cafe"):
+        cargar_catalogos(base, company)
+        apply_catalog_default_mapping(company, base.file)
 
-    for c in CUENTAS:
+    for c in _make_cuentas():
         database.session.add(c)
     database.session.commit()
 
 
 def cargar_centros_de_costos():
     """Centros de Costos de demostración."""
-    for cc in CENTROS_DE_COSTOS:
+    for cc in _make_centros_de_costos():
         database.session.add(cc)
     database.session.commit()
 
 
 def cargar_proyectos():
     """Proyectos de demostración."""
-    for p in PROYECTOS:
+    for p in _make_proyectos():
         database.session.add(p)
     database.session.commit()
 
 
 def tasas_de_cambio():
     """Tasa de Cambio de demostración."""
-    for t in TASAS_DE_CAMBIO:
+    for t in _make_tasas_de_cambio():
         database.session.add(t)
+    database.session.commit()
+
+
+def cargar_bancos():
+    """Bancos de demostración."""
+    for b in _make_bancos():
+        database.session.add(b)
+    database.session.commit()
+
+
+def cargar_terceros():
+    """Terceros de demostración."""
+    for t in _make_terceros():
+        database.session.add(t)
+    database.session.commit()
+
+
+def cargar_unidades_medida():
+    """Unidades de medida de demostración."""
+    for u in _make_unidades_medida():
+        database.session.add(u)
+    database.session.commit()
+
+
+def cargar_articulos():
+    """Articulos de demostración."""
+    for a in _make_articulos():
+        database.session.add(a)
+    database.session.commit()
+
+
+def cargar_bodegas():
+    """Bodegas de demostración."""
+    for b in _make_bodegas():
+        database.session.add(b)
     database.session.commit()
 
 
@@ -120,13 +197,18 @@ def master_data():
     cargar_proyectos()
     tasas_de_cambio()
     cargar_catalogo_de_cuentas()
+    cargar_bancos()
+    cargar_terceros()
+    cargar_unidades_medida()
+    cargar_articulos()
+    cargar_bodegas()
 
     log.debug("Master data de prueba creada correctamente.")
 
 
 def periodo_contable():
     """Crea periodos contables para desarrollo."""
-    for p in PERIODOS:
+    for p in _make_periodos():
         database.session.add(p)
     database.session.commit()
 
@@ -134,7 +216,28 @@ def periodo_contable():
 def transacciones():
     """Crea transacciones de desarrollo en la base de datos."""
     periodo_contable()
+    _cargar_documentos_demo()
     log.debug("Transacciones de Pruebas Creadas correctamente.")
+
+
+def _cargar_documentos_demo():
+    """Crea documentos transaccionales de demostración."""
+    for d in _make_documentos():
+        database.session.add(d)
+    database.session.commit()
+    for i in _make_items_orden_compra():
+        database.session.add(i)
+    for i in _make_items_orden_venta():
+        database.session.add(i)
+    for i in _make_items_recepcion():
+        database.session.add(i)
+    for i in _make_items_factura_compra():
+        database.session.add(i)
+    for i in _make_items_entrega():
+        database.session.add(i)
+    for i in _make_items_factura_venta():
+        database.session.add(i)
+    database.session.commit()
 
 
 def dev_data():

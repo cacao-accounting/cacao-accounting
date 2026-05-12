@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "Software contable para micro, pequeñas y medianas empresas.",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "mocha \"test/**/*.test.js\" --timeout 5000"
+  },
   "repository": "git+https://github.com/cacao-accounting/cacao-accounting.git",
   "author": "William Moreno Reyes",
   "license": "Apache-2.0",
@@ -17,6 +19,7 @@
   },
   "devDependencies": {
     "chai": "^5.1.2",
+    "jsdom": "^29.1.1",
     "mocha": "^11.7.5"
   }
 }

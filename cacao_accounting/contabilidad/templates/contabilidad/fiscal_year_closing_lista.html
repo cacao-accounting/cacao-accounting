@@ -1,0 +1,87 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Cierres de Año Fiscal</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-calendar-check"></i> Cierres de Año Fiscal</h5>
+    {% if usuario.classification == "admin" %}
+    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.fiscal_year_closing_new') }}" role="button">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo Cierre
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="ca-card-body">
+    <form class="row g-3 mb-4" method="GET" action="{{ url_for('contabilidad.fiscal_year_closing_list') }}">
+      <div class="col-md-4">
+        <label for="company" class="form-label">Compañía</label>
+        <select name="company" id="company" class="form-select form-select-sm">
+          <option value="">— Todas —</option>
+          {% for e in entidades %}
+          <option value="{{ e.code }}" {% if company_filter == e.code %}selected{% endif %}>{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Comprobante</th>
+            <th>Compañía</th>
+            <th>Año Fiscal</th>
+            <th>Estado</th>
+            <th>Referencia</th>
+            <th class="text-end">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for journal in consulta.items %}
+          <tr>
+            <td>{{ journal.date }}</td>
+            <td><a href="{{ url_for('contabilidad.ver_comprobante', identifier=journal.id) }}">{{ journal.document_no or journal.id }}</a></td>
+            <td>{{ journal.entity }}</td>
+            <td>{{ journal.fiscal_year_id }}</td>
+            <td>
+              {% if journal.status == 'draft' %}
+                <span class="badge bg-secondary">Borrador</span>
+              {% elif journal.status == 'submitted' %}
+                <span class="badge bg-success">Aprobado</span>
+              {% elif journal.status == 'cancelled' %}
+                <span class="badge bg-danger">Anulado</span>
+              {% else %}
+                <span class="badge bg-light text-dark">{{ journal.status }}</span>
+              {% endif %}
+            </td>
+            <td>{{ journal.reference }}</td>
+            <td class="text-end">{{ "%.2f"|format(journal.debit or 0) }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center">No se encontraron comprobantes de cierre.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {{ macros.rendizar_paginacion(consulta, 'contabilidad.fiscal_year_closing_list') }}
+  </div>
+</div>
+
+{% endblock %}

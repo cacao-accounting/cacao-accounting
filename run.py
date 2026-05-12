@@ -23,7 +23,6 @@ from cacao_accounting.config import PORT, THREADS, configuracion
 from cacao_accounting.database.helpers import verifica_coneccion_db, usuarios_creados
 from cacao_accounting.database.helpers import inicia_base_de_datos
 
-
 app = create_app(configuracion)
 user = environ.get("CACAO_USER") or "cacao"
 passwd = environ.get("CACAO_PSWD") or "cacao"

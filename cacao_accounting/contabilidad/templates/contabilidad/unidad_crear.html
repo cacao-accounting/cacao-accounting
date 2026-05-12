@@ -33,6 +33,12 @@
         <label class="form-label" for="entidad">Entidad</label>
         {{ form.entidad(class="form-select form-select-sm", id="entidad") }}
       </div>
+      <div class="col-md-3 mt-2">
+        <div class="form-check">
+          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          <label class="form-check-label" for="habilitado">Habilitado</label>
+        </div>
+      </div>
     </div>
   </form>
 </div>

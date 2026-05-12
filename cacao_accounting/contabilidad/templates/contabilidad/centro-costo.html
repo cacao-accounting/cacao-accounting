@@ -8,7 +8,7 @@
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.ccostos') }}" class="link-dark">Centros de Costos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ registro.codigo }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.code }}</li>
   </ol>
 </nav>
 
@@ -23,10 +23,10 @@
       <tr><th scope="col">Campo</th><th scope="col">Valor</th></tr>
     </thead>
     <tbody>
-      <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.codigo }}</strong></td></tr>
-      <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.nombre }}</td></tr>
+      <tr><td style="color:#64748b;">Código</td><td><strong>{{ registro.code }}</strong></td></tr>
+      <tr><td style="color:#64748b;">Nombre</td><td>{{ registro.name }}</td></tr>
       <tr><td style="color:#64748b;">Estado</td><td>{{ registro.status }}</td></tr>
-      <tr><td style="color:#64748b;">Tipo</td><td>{% if registro.grupo %}Grupo{% else %}Detalle{% endif %}</td></tr>
+      <tr><td style="color:#64748b;">Tipo</td><td>{% if registro.group %}Grupo{% else %}Detalle{% endif %}</td></tr>
     </tbody>
   </table>
 </div>

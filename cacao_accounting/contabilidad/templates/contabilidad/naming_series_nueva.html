@@ -1,0 +1,76 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.naming_series_list') }}" class="link-dark">Series de Numeracion</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nueva Serie</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:700px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-hash"></i> Nueva Serie de Numeracion</h5>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" form="form-naming-series" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
+      <a href="{{ url_for('contabilidad.naming_series_list') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    </div>
+  </div>
+  <form method="post" id="form-naming-series">
+    {{ form.csrf_token }}
+    <div class="row g-2">
+      <div class="col-md-12">
+        <label class="form-label" for="nombre">Nombre de la Serie <span class="text-danger">*</span></label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre", placeholder="Ej: CHOCO-SI-2026") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="entity-type">Tipo de Documento <span class="text-danger">*</span></label>
+        {{ form.entity_type(class="form-select form-select-sm", id="entity-type") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="company">Compania</label>
+        {{ form.company(class="form-select form-select-sm", id="company") }}
+        <small class="text-muted">Dejar en blanco para serie global (sin compania).</small>
+      </div>
+      <div class="col-md-12">
+        <label class="form-label" for="prefix-template">Plantilla de Prefijo <span class="text-danger">*</span></label>
+        {{ form.prefix_template(class="form-control form-control-sm", id="prefix-template", placeholder="Ej: *COMP*-SI-*YYYY*-*MM*-") }}
+        <small class="text-muted">
+          Tokens: <code>*COMP*</code> (compania), <code>*YYYY*</code> (año), <code>*YY*</code> (año corto),
+          <code>*MMM*</code> (mes texto), <code>*MM*</code> (mes numero), <code>*DD*</code> (dia).
+        </small>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="current-value">Ultimo Interno</label>
+        {{ form.current_value(class="form-control form-control-sm", id="current-value") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="increment">Incremento</label>
+        {{ form.increment(class="form-control form-control-sm", id="increment") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="padding">Padding</label>
+        {{ form.padding(class="form-control form-control-sm", id="padding") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="reset-policy">Reinicio</label>
+        {{ form.reset_policy(class="form-select form-select-sm", id="reset-policy") }}
+      </div>
+      <div class="col-md-6 d-flex align-items-center gap-3 mt-2">
+        <div class="form-check">
+          {{ form.is_active(class="form-check-input", id="is-active") }}
+          <label class="form-check-label" for="is-active">Activa</label>
+        </div>
+        <div class="form-check">
+          {{ form.is_default(class="form-check-input", id="is-default") }}
+          <label class="form-check-label" for="is-default">Predeterminada</label>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

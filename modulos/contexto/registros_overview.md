@@ -1,0 +1,186 @@
+# CONTABILIDAD (Accounting)
+- Accounting
+- Journal Entry
+- Standard Entry
+- Bank Entry
+- Cash Entry
+- Credit Note
+- Debit Note
+- Opening Entry
+- Contra Entry
+- Excise Entry
+- Write Off Entry
+- Payment Entry
+- Receive
+- Pay
+- Internal Transfer
+- Sales Invoice
+- Standard
+- POS Invoice
+- Return (Credit Note)
+- Deferred Revenue
+- Purchase Invoice
+- Standard
+- Return (Debit Note)
+- Deferred Expense
+
+# GL Entry
+- System Generated
+- Account
+- Asset
+- Liability
+- Equity
+- Income
+- Expense
+- Fiscal Year
+- Period Closing Voucher
+- Payment Request
+- Inbound
+- Outbound
+- Bank Account
+- Bank Transaction
+- Deposit
+- Withdrawal
+- Bank Reconciliation Tool
+- Dunning
+- Exchange Rate Revaluation
+
+# BANCOS (Banking)
+- Banking
+- Bank
+- Bank Account
+- Bank Statement
+- Import
+- Manual Entry
+- Bank Transaction
+- Unreconciled
+- Reconciled
+- Payment Entry
+- Receive
+- Pay
+- Transfer
+- Cheque Print Template
+- Bank Reconciliation
+- Manual
+- Semi-Automatic
+
+# COMPRAS (Buying)
+- Buying
+- Supplier
+- Supplier Group
+- Purchase Order
+- Standard
+- Subcontracting
+- Drop Ship
+- Purchase Receipt
+- Standard
+- Return
+- Subcontracting Receipt
+- Purchase Invoice
+- Standard
+- Return
+- Request for Quotation (RFQ)
+- Supplier Quotation
+- Purchase Taxes and Charges Template
+- Item Supplier
+- Landed Cost Voucher
+- Subcontracting Order
+- Material Request
+- Purchase
+- Material Transfer
+- Material Issue
+- Manufacture
+
+# VENTAS (Selling)
+- Selling
+- Customer
+- Customer Group
+- Quotation
+- Sales Order
+- Standard
+- Drop Ship
+- Internal
+- Delivery Note
+- Standard
+- Return
+- Sales Invoice
+- Standard
+- POS
+- Return
+- POS Invoice
+- Draft
+- Paid
+- Sales Taxes and Charges Template
+- Pricing Rule
+- Customer Credit Limit
+- Subscription
+- Active
+- Cancelled
+- Sales Partner
+
+# ALMACÉN (Stock / Inventory)
+- Stock
+- Item
+- Stock Item
+- Service Item
+- Fixed Asset
+- Item Group
+- Warehouse
+- Group Warehouse
+- Leaf Warehouse
+- Stock Entry
+- Material Receipt
+- Material Issue
+- Material Transfer
+- Material Transfer for Manufacture
+- Manufacture
+- Repack
+- Subcontract
+- Stock Ledger Entry
+- System Generated
+- Bin
+- Batch
+- Serial Number
+- Delivery Note
+- Outgoing
+- Return
+- Purchase Receipt
+- Incoming
+- Return
+- Stock Reconciliation
+- Quantity Adjustment
+- Valuation Adjustment
+- Item Price
+- Packing Slip
+- Quality Inspection
+- Incoming
+- Outgoing
+- Inventory Dimension
+- Putaway Rule
+- Pick List
+- Delivery
+- Material Transfer
+- Stock Reservation Entry
+
+# CONFIGURACIÓN GENERAL (Setup / Core)
+- Setup
+- Company
+- Global Defaults
+- System Settings
+- Naming Series
+- Role
+- User
+- Currency
+- Language
+- Country
+- Holiday List
+- Address
+- Contact
+- Activity Log
+- File
+- Comment
+- Tag
+- Assignment Rule
+- Auto Repeat
+- Server Script
+- Client Script

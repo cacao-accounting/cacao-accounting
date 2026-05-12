@@ -5,6 +5,7 @@
 build
 twine
 wheel
+packaging>=26.0
 
 # Control de calidad python
 black

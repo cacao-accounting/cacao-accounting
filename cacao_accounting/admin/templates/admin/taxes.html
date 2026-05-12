@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header">
+  <h4>{{ _("Impuestos y Cargos") }}</h4>
+</div>
+<form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
+    <div class="col-md-2"><input class="form-control" name="rate" placeholder="{{ _('Tasa/Monto') }}" value="0"></div>
+    <div class="col-md-2">
+      <select class="form-select" name="tax_type">
+        <option value="percentage">{{ _("Porcentaje") }}</option>
+        <option value="fixed">{{ _("Monto fijo") }}</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <select class="form-select" name="applies_to">
+        <option value="both">{{ _("Compra y venta") }}</option>
+        <option value="purchase">{{ _("Compra") }}</option>
+        <option value="sales">{{ _("Venta") }}</option>
+      </select>
+    </div>
+    <div class="col-md-3"><input class="form-control" name="account_id" placeholder="{{ _('Cuenta contable') }}"></div>
+    <div class="col-md-3 form-check ms-2"><input class="form-check-input" type="checkbox" name="is_charge" id="is_charge"><label class="form-check-label" for="is_charge">{{ _("Es cargo") }}</label></div>
+    <div class="col-md-3 form-check"><input class="form-check-input" type="checkbox" name="is_capitalizable" id="is_capitalizable"><label class="form-check-label" for="is_capitalizable">{{ _("Capitalizable") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="is_active" id="is_active" checked><label class="form-check-label" for="is_active">{{ _("Activo") }}</label></div>
+    <div class="col-md-2"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
+  </div>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Aplica") }}</th><th>{{ _("Cuenta") }}</th><th>{{ _("Activo") }}</th></tr></thead>
+  <tbody>
+    {% for tax in taxes %}
+    <tr><td>{{ tax.name }}</td><td>{{ tax.tax_type }} {{ tax.rate }}</td><td>{{ tax.applies_to }}</td><td>{{ tax.account_id or "" }}</td><td>{{ tax.is_active }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

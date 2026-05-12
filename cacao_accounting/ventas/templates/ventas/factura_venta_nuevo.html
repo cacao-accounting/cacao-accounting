@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_factura_venta_lista') }}" class="link-dark">Facturas de Venta</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nueva Factura de Venta</li>
+  </ol>
+</nav>
+
+<form method="post" id="form-main">
+  {{ form.csrf_token }}
+  {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
+  {% if from_note_id %}<input type="hidden" name="from_note" value="{{ from_note_id }}">{% endif %}
+  {% if from_invoice_id %}<input type="hidden" name="from_invoice" value="{{ from_invoice_id }}">{% endif %}
+  {% if from_return_id %}
+    <input type="hidden" name="from_return" value="{{ from_return_id }}">
+  {% endif %}
+  <input type="hidden" name="document_type" value="{{ document_type or 'sales_invoice' }}">
+  {% if document_type == 'sales_invoice' %}
+    <input type="hidden" name="is_return" value="0">
+  {% elif document_type == 'sales_credit_note' %}
+    <input type="hidden" name="is_return" value="1">
+  {% endif %}
+  <div class="ca-card" style="max-width:860px;">
+    <div class="ca-card-header">
+      <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i>
+        {% if document_type == 'sales_credit_note' %}
+          Nueva Nota de Crédito de Venta
+          {% if factura_origen %}<small class="text-muted ms-2">desde {{ factura_origen.document_no or factura_origen.id }}</small>{% endif %}
+        {% elif document_type == 'sales_debit_note' %}
+          Nueva Nota de Débito de Venta
+          {% if factura_origen %}<small class="text-muted ms-2">desde {{ factura_origen.document_no or factura_origen.id }}</small>{% endif %}
+        {% else %}
+          Nueva Factura de Venta
+          {% if orden_origen %}<small class="text-muted ms-2">desde {{ orden_origen.document_no or orden_origen.id }}</small>{% endif %}
+          {% if entrega_origen %}<small class="text-muted ms-2">desde {{ entrega_origen.document_no or entrega_origen.id }}</small>{% endif %}
+          {% if from_invoice_id and not document_type in ['sales_credit_note','sales_debit_note'] %}
+            <small class="text-muted ms-2">desde {{ factura_origen.document_no or factura_origen.id }}</small>
+          {% endif %}
+        {% endif %}
+      </h5>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
+        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      </div>
+    </div>
+    <div class="row g-3 p-3">
+      <div class="col-md-6">
+        <div class="mb-3">
+          {{ form.customer_id.label(class="form-label") }}
+          {{ form.customer_id(class="form-select") }}
+        </div>
+        <div class="mb-3">
+          {{ form.company.label(class="form-label") }}
+          {{ form.company(class="form-select") }}
+        </div>
+        <div class="mb-3">
+          {{ form.naming_series.label(class="form-label") }}
+          {{ form.naming_series(class="form-select") }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="mb-3">
+          {{ form.posting_date.label(class="form-label") }}
+          {{ form.posting_date(class="form-control", type="date") }}
+        </div>
+        <div class="mb-3">
+          {{ form.remarks.label(class="form-label") }}
+          {{ form.remarks(class="form-control", rows=3) }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if from_return_id %}
+    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
+         source_api_url="/api/sales/sales-invoice/" ~ from_return_id ~ "/items?target_type=sales_invoice",
+         source_label="Factura de Venta") }}
+  {% elif from_note_id %}
+    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
+         source_api_url="/api/sales/delivery-note/" ~ from_note_id ~ "/items?target_type=sales_invoice",
+         source_label="Nota de Entrega") }}
+  {% elif from_order_id %}
+    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
+         source_api_url="/api/sales/sales-order/" ~ from_order_id ~ "/items?target_type=sales_invoice",
+         source_label="Orden de Venta") }}
+  {% else %}
+    {{ macros.lineas_items(items_disponibles, uoms_disponibles) }}
+  {% endif %}
+</form>
+
+{% endblock %}

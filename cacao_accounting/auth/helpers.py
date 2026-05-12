@@ -3,6 +3,7 @@
 
 """Utilidades de autenticación."""
 
+import re
 from typing import Optional
 
 from argon2 import PasswordHasher
@@ -40,6 +41,25 @@ def autenticar_usuario(usuario: str, clave: str) -> Optional[User]:
 def validar_acceso(usuario: str, clave: str) -> bool:
     """Verifica si las credenciales provistas pertenecen a un usuario activo."""
     return autenticar_usuario(usuario, clave) is not None
+
+
+def validar_clave_segura(clave: str) -> bool:
+    """Verifica que la contraseña cumpla con reglas básicas de seguridad."""
+    checks = {
+        "min_len": len(clave) >= 8,
+        "upper": bool(re.search(r"[A-Z]", clave)),
+        "lower": bool(re.search(r"[a-z]", clave)),
+        "digit": bool(re.search(r"\d", clave)),
+        "special": bool(re.search(r"[^A-Za-z0-9]", clave)),
+    }
+    for rule, passed in checks.items():
+        match rule:
+            case "min_len" | "upper" | "lower" | "digit" | "special":
+                if not passed:
+                    return False
+            case _:
+                return False
+    return True
 
 
 def puede_iniciar_en_escritorio(identidad: User) -> bool:

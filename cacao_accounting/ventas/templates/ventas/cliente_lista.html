@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/cliente_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Listado de Clientes</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-people"></i> Listado de Clientes.</h5>
+    <a href="{{ url_for('ventas.ventas_cliente_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de clientes.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nombre</th>
+        <th scope="col">Nombre Comercial</th>
+        <th scope="col">RUC / ID Fiscal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.comercial_name or "" }}</td>
+        <td>{{ item.tax_id or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="ventas.ventas_cliente_lista") }}</div>
+</div>
+
+{% endblock %}

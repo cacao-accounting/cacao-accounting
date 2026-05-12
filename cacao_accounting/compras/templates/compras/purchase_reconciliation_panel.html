@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Panel de Conciliación") }}</li>
+  </ol>
+</nav>
+
+{# Filtro de compañía #}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3">
+    <input name="company" class="form-control" value="{{ company }}" placeholder="{{ _('Compañía') }}">
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-outline-primary w-100" type="submit">
+      <i class="bi bi-funnel me-1"></i>{{ _("Filtrar") }}
+    </button>
+  </div>
+  <div class="col-md-auto ms-auto">
+    <a href="{{ url_for('compras.compras_purchase_reconciliation', company=company) }}" class="btn btn-outline-secondary">
+      <i class="bi bi-list-ul me-1"></i>{{ _("Vista de líneas") }}
+    </a>
+  </div>
+</form>
+
+{% if not groups %}
+<div class="ca-card">
+  <div class="p-4 text-center text-muted">
+    <i class="bi bi-check2-all fs-3 d-block mb-2 text-success"></i>
+    {{ _("No hay conciliaciones activas para esta compañía.") }}
+  </div>
+</div>
+{% endif %}
+
+{# Macro: badge coloreado según el estado de conciliación #}
+{% macro status_badge(status) %}
+  {% if status == "reconciled" %}
+    <span class="badge rounded-pill" style="background-color:#198754">
+      <i class="bi bi-check-circle me-1"></i>{{ _("Conciliado") }}
+    </span>
+  {% elif status == "partial" %}
+    <span class="badge rounded-pill" style="background-color:#0d6efd">
+      <i class="bi bi-arrow-left-right me-1"></i>{{ _("Parcial") }}
+    </span>
+  {% elif status in ("pending_receipt", "pending_invoice") %}
+    <span class="badge rounded-pill bg-secondary">
+      <i class="bi bi-hourglass-split me-1"></i>{{ _("Pendiente") }}
+    </span>
+  {% elif status == "disputed" %}
+    <span class="badge rounded-pill bg-danger">
+      <i class="bi bi-exclamation-triangle me-1"></i>{{ _("En Disputa") }}
+    </span>
+  {% else %}
+    <span class="badge rounded-pill bg-light text-dark border">{{ status }}</span>
+  {% endif %}
+{% endmacro %}
+
+{# Grupos colapsables por OC #}
+{% for group in groups %}
+<div class="ca-card mb-3">
+  {# Encabezado del grupo — clic para colapsar #}
+  <div class="ca-card-header d-flex align-items-center gap-2"
+       role="button"
+       data-bs-toggle="collapse"
+       data-bs-target="#group-{{ loop.index }}"
+       aria-expanded="true"
+       style="cursor:pointer;">
+    <i class="bi bi-chevron-down small text-muted me-1 collapse-icon-{{ loop.index }}"></i>
+    <strong class="me-2">
+      {% if group.purchase_order_id %}
+        <i class="bi bi-file-earmark-text me-1"></i>{{ group.purchase_order_id }}
+      {% else %}
+        <i class="bi bi-dash-circle me-1 text-muted"></i>{{ _("Sin Orden de Compra") }}
+      {% endif %}
+    </strong>
+
+    {# Contadores #}
+    <span class="badge bg-light text-dark border me-1" title="{{ _('Recepciones') }}">
+      <i class="bi bi-box-seam me-1"></i>{{ _("Recepciones:") }} <strong>{{ group.receipt_count }}</strong>
+    </span>
+    <span class="badge bg-light text-dark border me-1" title="{{ _('Facturas') }}">
+      <i class="bi bi-receipt me-1"></i>{{ _("Facturas:") }} <strong>{{ group.invoice_count }}</strong>
+    </span>
+
+    {# Estado global del grupo #}
+    <span class="ms-auto">{{ status_badge(group.worst_status) }}</span>
+  </div>
+
+  {# Cuerpo colapsable #}
+  <div class="collapse show" id="group-{{ loop.index }}">
+    <div class="p-2">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _("Conciliaciones del grupo") }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ _("Recepción") }}</th>
+            <th scope="col">{{ _("Factura") }}</th>
+            <th scope="col">{{ _("Tipo matching") }}</th>
+            <th scope="col">{{ _("Monto conciliado") }}</th>
+            <th scope="col">{{ _("Fecha") }}</th>
+            <th scope="col">{{ _("Estado") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in group.reconciliations %}
+          <tr>
+            <td>
+              {% if rec.purchase_receipt_id %}
+                <a href="{{ url_for('compras.compras_recepcion', id=rec.purchase_receipt_id) }}" class="link-dark">
+                  <i class="bi bi-box-seam me-1 text-muted"></i>{{ rec.purchase_receipt_id }}
+                </a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if rec.purchase_invoice_id %}
+                <a href="{{ url_for('compras.compras_factura', id=rec.purchase_invoice_id) }}" class="link-dark">
+                  <i class="bi bi-receipt me-1 text-muted"></i>{{ rec.purchase_invoice_id }}
+                </a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if rec.matching_type == "3-way" %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle">3-way</span>
+              {% else %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">2-way</span>
+              {% endif %}
+            </td>
+            <td class="text-end">{{ rec.matched_amount or "—" }}</td>
+            <td>{{ rec.matched_date or "—" }}</td>
+            <td>{{ status_badge(rec.status) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+// Rota el ícono chevron al colapsar/expandir
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) {
+    var target = document.querySelector(toggle.getAttribute('data-bs-target'));
+    if (!target) return;
+    target.addEventListener('hide.bs.collapse', function () {
+      toggle.querySelector('i[class*="collapse-icon"]').classList.replace('bi-chevron-down', 'bi-chevron-right');
+    });
+    target.addEventListener('show.bs.collapse', function () {
+      toggle.querySelector('i[class*="collapse-icon"]').classList.replace('bi-chevron-right', 'bi-chevron-down');
+    });
+  });
+});
+</script>
+
+{% endblock %}

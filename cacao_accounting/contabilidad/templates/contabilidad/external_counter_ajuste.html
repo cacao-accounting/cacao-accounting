@@ -1,0 +1,55 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Ajustar Contador</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:600px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-pencil-square"></i> Ajustar Ultimo Numero Usado</h5>
+    <div class="d-flex gap-2">
+      <button class="btn btn-warning btn-sm" form="form-ajuste" type="submit"><i class="bi bi-floppy me-1"></i>Guardar Ajuste</button>
+      <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    </div>
+  </div>
+
+  <div class="mb-3 p-2 bg-light rounded">
+    <strong>Contador:</strong> {{ counter.name }}<br>
+    <strong>Compania:</strong> {{ counter.company }}<br>
+    <strong>Ultimo numero usado:</strong> {{ counter.last_used }}<br>
+    <strong>Siguiente sugerido:</strong> <code>{{ counter.next_suggested_formatted }}</code>
+  </div>
+
+  <div class="alert alert-warning d-flex align-items-start gap-2">
+    <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+    <div>
+      <strong>Atencion:</strong> Este ajuste queda registrado en la bitacora de auditoria con el motivo
+      indicado, el valor anterior y el nuevo valor. El motivo es obligatorio.
+    </div>
+  </div>
+
+  <form method="post" id="form-ajuste">
+    {{ form.csrf_token }}
+    <div class="row g-2">
+      <div class="col-md-12">
+        <label class="form-label" for="new-last-used">Nuevo Ultimo Numero Usado <span class="text-danger">*</span></label>
+        {{ form.new_last_used(class="form-control form-control-sm", id="new-last-used", value=counter.last_used) }}
+      </div>
+      <div class="col-md-12">
+        <label class="form-label" for="reason">Motivo del Ajuste <span class="text-danger">*</span></label>
+        {{ form.reason(class="form-control form-control-sm", id="reason", rows=3,
+           placeholder="Ej: Cheque no. 10540 fue anulado. Se ajusta al 10539.") }}
+        <small class="text-muted">El motivo es obligatorio y quedara registrado en la bitacora de auditoria.</small>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

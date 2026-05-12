@@ -1,5 +1,10 @@
+{% set acceso = permisos(modulo=id_modulo("sales"), usuario=usuario.id) %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -17,29 +22,95 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Clientes</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Lista de Precios</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Condiciones de Venta</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Clientes</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Clientes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Órdenes de Venta</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="#">Facturas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Notas de Crédito</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('ventas.ventas_pedido_venta_lista') }}">Pedidos de Venta</a>
+        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_orden_venta_lista') }}">Órdenes de Venta</a>
+        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_cotizacion_lista') }}">Cotizaciones</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_entrega_lista') }}">Notas de Entrega</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}">Facturas de Venta</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Órdenes de Venta</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Notas de Entrega</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Facturas de Venta</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Ventas por Cliente</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Cuentas por Cobrar</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Ventas por Cliente</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}">Cuentas por Cobrar</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_orden_venta_lista') }}">Pedidos Pendientes</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

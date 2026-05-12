@@ -20,9 +20,38 @@
   <div class="ca-module-card">
     <h5><i class="bi bi-sliders"></i> Configuración General</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('admin.lista_modulos') }}">Módulos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Usuarios</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Roles y Permisos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+      <li><a href="{{ url_for('admin.lista_modulos') }}">Módulos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('admin.lista_usuarios') }}">Usuarios</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('admin.lista_roles') }}">Roles y Permisos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('admin.cuentas_predeterminadas') }}">{{ _("Cuentas por defecto") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-hash"></i> Series e Identificadores</h5>
+    <ul class="ca-module-links">
+      <li><a href="{{ url_for('contabilidad.naming_series_list') }}">Series de Numeracion</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      <li><a href="{{ url_for('contabilidad.external_counter_list') }}">Contadores Externos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-receipt"></i> {{ _("Impuestos y Precios") }}</h5>
+    <ul class="ca-module-links">
+      <li><a href="{{ url_for('admin.lista_impuestos') }}">{{ _("Impuestos y Cargos") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>
+      <li><a href="{{ url_for('admin.lista_plantillas_impuesto') }}">{{ _("Plantillas de Impuestos") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>
+      <li><a href="{{ url_for('admin.lista_precios') }}">{{ _("Listas de Precios") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>
+      <li><a href="{{ url_for('admin.precios_item') }}">{{ _("Precios por Item") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
+    <h5><i class="bi bi-arrow-left-right"></i> {{ _("Configuración de Conciliación de Compras") }}</h5>
+    <ul class="ca-module-links">
+      <li>
+        <a href="{{ url_for('admin.config_conciliacion_compras') }}">{{ _("Configuración de Conciliación") }}</a>
+        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+      </li>
     </ul>
   </div>
 
@@ -34,12 +63,6 @@
     </ul>
   </div>
 
-  <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
-    <ul class="ca-module-links">
-      <li><a href="#"><em class="text-muted">Próximamente</em></a><span class="ca-status-dot ca-status-disabled" title="Sin acceso"></span></li>
-    </ul>
-  </div>
 
 </div>
 {% endblock %}

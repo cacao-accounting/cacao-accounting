@@ -6,19 +6,36 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.unidades') }}" class="link-dark">Unidades de Negocio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.libros') }}" class="link-dark">Libros de Contabilidad</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
 </nav>
 
 <div class="ca-card" style="max-width:680px;">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
     <h5 class="ca-card-title"><i class="bi bi-journals"></i> {{ registro.name }}</h5>
-    {% if acceso.configurar %}
-    <a class="btn btn-sm btn-danger" href="{{ url_for('contabilidad.eliminar_unidad', id_unidad=registro.id) }}">
-      <i class="bi bi-trash me-1"></i>Eliminar
-    </a>
-    {% endif %}
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_libro', id_libro=registro.code) }}">Editar</a>
+      {% if acceso.configurar %}
+      <a class="btn btn-sm btn-danger" href="{{ url_for('contabilidad.eliminar_libro', id_unidad=registro.code) }}">
+        <i class="bi bi-trash me-1"></i>Eliminar
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Código</dt>
+      <dd class="col-sm-8">{{ registro.code }}</dd>
+      <dt class="col-sm-4">Entidad</dt>
+      <dd class="col-sm-8">{{ registro.entity }}</dd>
+      <dt class="col-sm-4">Moneda</dt>
+      <dd class="col-sm-8">{{ registro.currency or '-' }}</dd>
+      <dt class="col-sm-4">Estatus</dt>
+      <dd class="col-sm-8">{{ registro.status or 'activo' }}</dd>
+      <dt class="col-sm-4">Primario</dt>
+      <dd class="col-sm-8">{{ 'Sí' if registro.is_primary else 'No' }}</dd>
+    </dl>
   </div>
 </div>
 

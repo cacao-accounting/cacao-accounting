@@ -10,7 +10,9 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from cacao_accounting.database import Modules, Roles, RolesAccess, RolesUser
+from sqlalchemy import select
+
+from cacao_accounting.database import Modules, Roles, RolesAccess, RolesUser, User, database
 from cacao_accounting.database.helpers import (
     obtener_id_modulo_por_nombre,
     obtener_id_rol_por_monbre,
@@ -57,275 +59,119 @@ class Permisos:
     especificado, si uno de los roles del usuario otorga permiso se aprueba como valido.
     """
 
+    PERMISSION_FIELDS = {
+        "access": "access",
+        "actualizar": "update",
+        "anular": "set_null",
+        "autorizar": "approve",
+        "bi": "bi",
+        "cerrar": "close",
+        "configurar": "setup",
+        "consultar": "view",
+        "corregir": "update",
+        "crear": "create",
+        "editar": "edit",
+        "eliminar": "delete",
+        "importar": "import_",
+        "reportes": "report",
+        "solicitar": "request",
+        "validar": "validate",
+    }
+
+    access: bool
+    actualizar: bool
+    anular: bool
+    autorizar: bool
+    bi: bool
+    cerrar: bool
+    configurar: bool
+    consultar: bool
+    corregir: bool
+    crear: bool
+    editar: bool
+    eliminar: bool
+    importar: bool
+    reportes: bool
+    solicitar: bool
+    validar: bool
+
     def __init__(self, modulo: str | None = None, usuario: str | None = None) -> None:
         """Inicia la clase permisos."""
-        self.__init_valido: bool | str | None = self.valida_modulo(modulo) and usuario
+        self.modulo = modulo
+        self.usuario = usuario
+        self.__init_valido: bool = bool(self.valida_modulo(modulo) and usuario)
+
+        self.usuario_model: User | None = None
+        if usuario:
+            self.usuario_model = database.session.get(User, usuario)
+
         if self.__init_valido:
-            self.modulo: str | None = modulo
-            self.usuario: str | None = usuario
-            self.administrador: bool | None = self.valida_usuario_tiene_rol_administrativo()
-            self.roles: list | None = self.obtener_roles_de_usuario()
-            self.permisos_usuario: list | None = self.obtiene_lista_de_permisos()
-            if self.administrador:
-                self.autorizado: bool | None = True
-                self.actualizar: bool | None = True
-                self.anular: bool | None = True
-                self.autorizar: bool | None = True
-                self.bi: bool | None = True
-                self.cerrar: bool | None = True
-                self.configurar: bool | None = True
-                self.consultar: bool | None = True
-                self.corregir: bool | None = True
-                self.crear: bool | None = True
-                self.editar: bool | None = True
-                self.eliminar: bool | None = True
-                self.importar: bool | None = True
-                self.reportes: bool | None = True
-                self.solicitar: bool | None = True
-                self.validar: bool | None = True
-            else:
-                self.autorizado = self.__usuario_autorizado()
-                self.actualizar = self.__actualizar()
-                self.anular = self.__anular()
-                self.autorizar = self.__autorizar()
-                self.bi = self.__bi()
-                self.cerrar = self.__cerrar()
-                self.configurar = self.__configurar()
-                self.consultar = self.__consultar()
-                self.corregir = self.__corregir()
-                self.crear = self.__crear()
-                self.editar = self.__editar()
-                self.eliminar = self.__eliminar()
-                self.importar = self.__importar()
-                self.reportes = self.__reportes()
-                self.solicitar = self.__solicitar()
-                self.validar = self.__validar()
+            self.administrador: bool = self.valida_usuario_tiene_rol_administrativo()
+            self.roles: list[str] = self.obtener_roles_de_usuario()
+            self.permisos_usuario: list[RolesAccess] = self.obtiene_lista_de_permisos()
         else:
-            self.modulo = None
-            self.usuario = None
             self.administrador = False
-            self.roles = None
-            self.permisos_usuario = None
+            self.roles = []
+            self.permisos_usuario = []
+
+        if self.administrador:
+            self.autorizado = True
+            for permiso_nombre in self.PERMISSION_FIELDS:
+                setattr(self, permiso_nombre, True)
+        elif self.__init_valido:
+            for permiso_nombre in self.PERMISSION_FIELDS:
+                setattr(self, permiso_nombre, self._tiene_permiso(self.PERMISSION_FIELDS[permiso_nombre]))
+            self.autorizado = self.access
+        else:
             self.autorizado = False
-            self.actualizar = False
-            self.anular = False
-            self.autorizar = False
-            self.bi = False
-            self.cerrar = False
-            self.configurar = False
-            self.consultar = False
-            self.corregir = False
-            self.crear = False
-            self.editar = False
-            self.eliminar = False
-            self.importar = False
-            self.reportes = False
-            self.solicitar = False
-            self.validar = False
+            for permiso_nombre in self.PERMISSION_FIELDS:
+                setattr(self, permiso_nombre, False)
 
     def valida_modulo(self, modulo: str | None) -> bool:
-        """Verifica si un modulo se encuentra activo."""
-        if modulo:
-            LISTA_MODULOS_ACTIVOS = []
-            CONSULTA = Modules.query.filter_by(enabled=True)
-            if CONSULTA:
-                for r in CONSULTA:
-                    LISTA_MODULOS_ACTIVOS.append(r.id)
-                return modulo in LISTA_MODULOS_ACTIVOS
-            else:
-                return False
-        else:
+        """Verifica si un modulo se encuentra activo por su id."""
+        if not modulo:
             return False
 
-    def obtener_roles_de_usuario(self) -> list:
-        """Devuelve una lista con los roles del usuario."""
-        ROLES_USUARIO = RolesUser.query.filter_by(user_id=self.usuario)
-        ROLES = [ROL.role_id for ROL in ROLES_USUARIO]
-        return ROLES
+        modulos_activos = database.session.execute(select(Modules.id).filter_by(enabled=True)).scalars().all()
 
-    def obtener_id_rol_administrador(self) -> str:
+        return modulo in modulos_activos
+
+    def obtener_roles_de_usuario(self) -> list[str]:
+        """Devuelve una lista con los roles del usuario."""
+        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario)]
+
+    def obtener_id_rol_administrador(self) -> str | None:
         """Devuelve el UUID asignado al rol administrador."""
-        ID_ROL_ADMIN = Roles.query.filter_by(name="admin").first()
-        return ID_ROL_ADMIN.id
+        administrador = Roles.query.filter_by(name="admin").first()
+        return administrador.id if administrador else None
 
     def valida_usuario_tiene_rol_administrativo(self) -> bool:
-        """Retorno verdadero o falso según si el usuario es miembro del grupo admin."""
-        CONSULTA = RolesUser.query.filter(
-            RolesUser.role_id == self.obtener_id_rol_administrador(),
-            RolesUser.user_id == self.usuario,
-        ).first()
-        return CONSULTA is not None
+        """Retorna verdadero si el usuario tiene rol administrador o clasificación admin."""
+        if self.usuario_model and getattr(self.usuario_model, "classification", None) == "admin":
+            return True
 
-    def obtiene_lista_de_permisos(self) -> list | None:
-        """Devuelve una lista con los permisos del usuario."""
-        if self.roles:
-            PERMISOS = []
-            for rol in self.roles:
-                CONSULTA_PERMISOS = RolesAccess.query.filter(RolesAccess.rol_id == rol, RolesAccess.module_id == self.modulo)
-                PERMISOS.append(CONSULTA_PERMISOS)
-            return PERMISOS
-        else:
-            return None
+        admin_role_id = self.obtener_id_rol_administrador()
+        if not admin_role_id or not self.usuario:
+            return False
+        return RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario).first() is not None
 
-    def __usuario_autorizado(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.access is True:
-                        ACCESO = True
-                        break
-        return ACCESO
+    def obtiene_lista_de_permisos(self) -> list[RolesAccess]:
+        """Devuelve todos los permisos del usuario para el modulo actual."""
+        if not self.roles or not self.modulo:
+            return []
+        return RolesAccess.query.filter(
+            RolesAccess.rol_id.in_(self.roles),
+            RolesAccess.module_id == self.modulo,
+        ).all()
 
-    def __actualizar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.update is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __anular(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.set_null is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __autorizar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.approve is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __bi(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.bi is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __cerrar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.close is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __crear(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.create is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __configurar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.setup is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __consultar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.view is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __corregir(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.update is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __editar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.edit is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __eliminar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.delete is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __importar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.import_ is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __reportes(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.report is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __solicitar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.request is True:
-                        ACCESO = True
-                        break
-        return ACCESO
-
-    def __validar(self) -> bool:
-        ACCESO = False
-        if self.__init_valido and self.permisos_usuario:
-            for permisos in self.permisos_usuario:
-                for permiso in permisos:
-                    if permiso.validate is True:
-                        ACCESO = True
-                        break
-        return ACCESO
+    def _tiene_permiso(self, permission_field: str) -> bool:
+        """Verifica si alguno de los roles del usuario tiene el permiso solicitado."""
+        if not self.__init_valido or not self.permisos_usuario:
+            return False
+        for permiso in self.permisos_usuario:
+            if getattr(permiso, permission_field, False) is True:
+                return True
+        return False
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/factura_venta.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_factura_venta_lista') }}" class="link-dark">Facturas de Venta</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:960px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-receipt"></i> {{ registro.document_no or registro.id }}
+      {{ macros.document_status_for("sales_invoice", registro, detail=True) }}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      {{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('ventas.ventas_factura_venta_submit', invoice_id=registro.id),
+            url_for('ventas.ventas_factura_venta_cancel', invoice_id=registro.id)) }}
+      {% if registro.docstatus == 1 %}
+        {{ macros.crear_dropdown([
+              ("Pago", url_for('bancos.bancos_pago_nuevo', from_sales_invoice=registro.id)),
+              ("Nota de Crédito", url_for('ventas.ventas_factura_venta_nuevo', from_return=registro.id))
+           ]) }}
+      {% endif %}
+    </div>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Datos generales de la factura</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Número de Documento</td><td>{{ registro.document_no or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Compañía</td><td>{{ registro.company or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Fecha</td><td>{{ registro.posting_date or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Estado</td><td>{{ macros.document_status_for("sales_invoice", registro, detail=True) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Datos del cliente y montos</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Cliente</td><td>{{ registro.customer_name or registro.customer_id or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Total</td><td>{{ registro.grand_total or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Saldo Pendiente</td><td>{{ registro.outstanding_amount or "" }}</td></tr>
+          {% if registro.sales_order_id %}
+          <tr><td style="color:#64748b;">Orden de Venta</td>
+              <td><a href="{{ url_for('ventas.ventas_orden_venta', order_id=registro.sales_order_id) }}">{{ registro.sales_order_id }}</a></td></tr>
+          {% endif %}
+          {% if registro.delivery_note_id %}
+          <tr><td style="color:#64748b;">Nota de Entrega</td>
+              <td><a href="{{ url_for('ventas.ventas_entrega', note_id=registro.delivery_note_id) }}">{{ registro.delivery_note_id }}</a></td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{ macros.lineas_tabla_lectura(items) }}
+{{ macros.document_flow_trace("sales_invoice", registro) }}
+
+{% endblock %}

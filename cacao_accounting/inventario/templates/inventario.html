@@ -1,5 +1,10 @@
+{% set acceso = permisos(modulo=id_modulo("inventory"), usuario=usuario.id) %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -17,32 +22,103 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Productos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Categorías</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Bodegas / Almacenes</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Unidades de Medida</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('inventario.inventario_articulo_lista') }}">Artículos / Productos</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_bodega_lista') }}">Bodegas / Almacenes</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_uom_lista') }}">Unidades de Medida</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Artículos / Productos</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Bodegas / Almacenes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Unidades de Medida</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Entradas de Inventario</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Salidas de Inventario</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Ajustes de Inventario</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="#">Traslados</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('inventario.inventario_material_receipt_lista') }}">Recepciones de Material</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">Salidas de Material</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">Ajustes de Inventario</a>
+        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_material_transfer_lista') }}">Traslados</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Entradas de Almacén</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Ajustes de Inventario</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Existencias</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Valorización de Inventario</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Kardex</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('inventario.inventario_bodega_lista') }}">Existencias</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_articulo_lista') }}">Valorización de Inventario</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">Kardex</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_banco_lista') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-bank"></i> {{ registro.name }}</h5>
+  </div>
+  <dl class="row p-3">
+    <dt class="col-sm-3">Nombre</dt>
+    <dd class="col-sm-9">{{ registro.name }}</dd>
+    <dt class="col-sm-3">Código SWIFT</dt>
+    <dd class="col-sm-9">{{ registro.swift_code or "" }}</dd>
+  </dl>
+</div>
+
+{% endblock %}

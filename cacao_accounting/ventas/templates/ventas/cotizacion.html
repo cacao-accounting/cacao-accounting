@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/cotizacion.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_cotizacion_lista') }}" class="link-dark">Cotizaciones</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:860px;">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title">
+      <i class="bi bi-file-earmark-text"></i> Cotización
+      {{ macros.document_status_for("sales_quotation", registro, detail=True) }}
+    </h5>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-6">
+      <div><strong>Cliente</strong></div>
+      <div>{{ registro.customer_name or "-" }}</div>
+      <div class="mt-3"><strong>Fecha</strong></div>
+      <div>{{ registro.posting_date or "-" }}</div>
+    </div>
+    <div class="col-md-6">
+      <div><strong>Total</strong></div>
+      <div>{{ registro.grand_total or "0" }}</div>
+      <div class="mt-3"><strong>Notas</strong></div>
+      <div>{{ registro.remarks or "-" }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3 ca-card">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">Líneas</h6>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Líneas de la cotización de venta.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Item</th>
+        <th scope="col">Cantidad</th>
+        <th scope="col">UOM</th>
+        <th scope="col">Precio</th>
+        <th scope="col">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items -%}
+      <tr>
+        <td>{{ item.item_name or item.item_code }}</td>
+        <td>{{ item.qty }}</td>
+        <td>{{ item.uom or "" }}</td>
+        <td>{{ item.rate or "" }}</td>
+        <td>{{ item.amount or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{{ macros.document_flow_trace("sales_quotation", registro) }}
+
+{% endblock %}

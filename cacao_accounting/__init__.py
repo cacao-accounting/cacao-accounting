@@ -44,12 +44,14 @@ from cacao_accounting.database.helpers import (
     entidades_creadas,
     obtener_id_modulo_por_nombre,
 )
+from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import (
     registrar_modulos_adicionales,
     validar_modulo_activo,
 )
+from cacao_accounting.reportes import reportes
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.version import PRERELEASE
@@ -67,6 +69,10 @@ def command() -> None:  # pragma: no cover
 def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
+        from flask_wtf.csrf import CSRFProtect
+
+        csrf = CSRFProtect()
+        csrf.init_app(app)
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
@@ -116,6 +122,7 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(contabilidad, url_prefix="/accounting")
             app.register_blueprint(compras, url_prefix="/buying")
             app.register_blueprint(inventario, url_prefix="/inventory")
+            app.register_blueprint(reportes)
             app.register_blueprint(ventas, url_prefix="/sales")
             app.register_blueprint(setup_wizard, url_prefix="/setup")
 
@@ -131,6 +138,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(permisos=Permisos)
+            app.jinja_env.globals.update(_=_)
             app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
@@ -147,6 +155,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
+            from cacao_accounting.document_flow.status import calculate_document_status
+
+            app.jinja_env.globals.update(document_status_info=calculate_document_status)
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
             if PRERELEASE:
@@ -169,6 +180,12 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
+
+    if not cacao_app.config.get("SECRET_KEY"):
+        if cacao_app.config.get("TESTING"):
+            cacao_app.config["SECRET_KEY"] = "test-secret-key"
+        else:
+            cacao_app.config["SECRET_KEY"] = "dev-secret-key"
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover

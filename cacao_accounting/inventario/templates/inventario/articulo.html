@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/articulo.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">Artículos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-box"></i> {{ registro.name }}</h5>
+  </div>
+  <dl class="row p-3">
+    <dt class="col-sm-3">Código</dt>
+    <dd class="col-sm-9">{{ registro.code }}</dd>
+    <dt class="col-sm-3">Nombre</dt>
+    <dd class="col-sm-9">{{ registro.name }}</dd>
+    <dt class="col-sm-3">Descripción</dt>
+    <dd class="col-sm-9">{{ registro.description or "" }}</dd>
+    <dt class="col-sm-3">Tipo</dt>
+    <dd class="col-sm-9">{{ registro.item_type or "" }}</dd>
+    <dt class="col-sm-3">Artículo de Inventario</dt>
+    <dd class="col-sm-9">{{ "Sí" if registro.is_stock_item else "No" }}</dd>
+    <dt class="col-sm-3">UOM Base</dt>
+    <dd class="col-sm-9">{{ registro.default_uom or "" }}</dd>
+  </dl>
+</div>
+
+{% endblock %}

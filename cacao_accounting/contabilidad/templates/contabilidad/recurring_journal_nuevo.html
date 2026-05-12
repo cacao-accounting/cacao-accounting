@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<style>
+  .ca-journal-form { display: flex; flex-direction: column; gap: 1rem; }
+  .ca-journal-toolbar { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
+  .ca-journal-grid { overflow-x: auto; }
+  .ca-journal-table { min-width: 1120px; table-layout: fixed; }
+  .ca-journal-table th, .ca-journal-table td { vertical-align: middle; }
+  .ca-journal-table input { min-width: 0; }
+  .ca-journal-actions { display: flex; gap: .25rem; justify-content: center; white-space: nowrap; }
+  .ca-journal-balance { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
+  .ca-journal-modal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 768px) {
+    .ca-journal-modal-grid { grid-template-columns: 1fr; }
+    .ca-journal-toolbar { align-items: stretch; flex-direction: column; }
+  }
+</style>
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.comprobantes_recurrentes') }}" class="link-dark">{{ _('Comprobante Recurrente') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nueva Plantilla') }}</li>
+  </ol>
+</nav>
+
+<script>
+  window.recurringJournalForm = function (config) {
+    return {
+      header: {
+        code: (config.initialJournal && config.initialJournal.code) || '',
+        name: (config.initialJournal && config.initialJournal.name) || '',
+        company: (config.initialJournal && config.initialJournal.company) || '',
+        company_label: (config.initialJournal && config.initialJournal.company_label) || '',
+        ledger_id: (config.initialJournal && config.initialJournal.ledger_id) || '',
+        start_date: (config.initialJournal && config.initialJournal.start_date) || new Date().toISOString().slice(0, 10),
+        end_date: (config.initialJournal && config.initialJournal.end_date) || '',
+        frequency: (config.initialJournal && config.initialJournal.frequency) || 'monthly',
+        currency: (config.initialJournal && config.initialJournal.currency) || '',
+        currency_label: (config.initialJournal && config.initialJournal.currency_label) || '',
+        description: (config.initialJournal && config.initialJournal.description) || '',
+      },
+      lines: (config.initialJournal && config.initialJournal.lines) || [],
+      activeIndex: null,
+      modalLine: null,
+      payload: '',
+      books: [],
+
+      init: function () {
+        if (!this.lines.length) this.addMultipleRows(2);
+        if (this.header.company) this.loadBooks(this.header.company);
+      },
+
+      newLine: function () {
+        return {
+          uid: window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now() + Math.random()),
+          account_code: '',
+          account_label: '',
+          debit: 0,
+          credit: 0,
+          description: '',
+          cost_center: '',
+          unit: '',
+          project: '',
+          party_type: '',
+          party_id: ''
+        };
+      },
+
+      addRow: function () { this.lines.push(this.newLine()); },
+      addMultipleRows: function (n) { for (let i = 0; i < n; i++) this.addRow(); },
+      removeRow: function (index) { if (this.lines.length > 1) this.lines.splice(index, 1); else this.lines[0] = this.newLine(); },
+      duplicateRow: function (index) {
+        let copy = JSON.parse(JSON.stringify(this.lines[index]));
+        copy.uid = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now() + Math.random());
+        this.lines.splice(index + 1, 0, copy);
+      },
+
+      get totalDebit() { return this.lines.reduce((sum, line) => sum + (parseFloat(line.debit) || 0), 0); },
+      get totalCredit() { return this.lines.reduce((sum, line) => sum + (parseFloat(line.credit) || 0), 0); },
+      get isBalanced() { return Math.abs(this.totalDebit - this.totalCredit) < 0.001 && this.totalDebit > 0; },
+
+      async loadBooks(company) {
+        if (!company) { this.books = []; return; }
+        try {
+          const resp = await fetch(`{{ url_for('contabilidad.journal_books') }}?company=${company}`);
+          const data = await resp.json();
+          this.books = data.results;
+        } catch (err) { console.error(err); }
+      },
+
+      openDetails: function (index) {
+        this.activeIndex = index;
+        this.modalLine = JSON.parse(JSON.stringify(this.lines[index]));
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).show();
+      },
+
+      saveModalLine: function () {
+        this.lines[this.activeIndex] = JSON.parse(JSON.stringify(this.modalLine));
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).hide();
+      },
+
+      prepareSubmit: function (e) {
+        if (!this.isBalanced) { e.preventDefault(); alert("{{ _('El comprobante debe estar balanceado.') }}"); return; }
+        this.payload = JSON.stringify(this.lines.filter(l => l.account_code || l.debit || l.credit));
+      },
+
+      formatMoney: function (val) { return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(val); }
+    };
+  };
+</script>
+
+<form class="ca-journal-form" method="post" x-data='recurringJournalForm({ initialJournal: {{ (initial_journal or {}) | tojson | safe }} })' @submit="prepareSubmit" action="{{ submit_url }}">
+  {{ form.csrf_token }}
+  <input type="hidden" name="items_json" :value="payload">
+
+  <div class="ca-journal-toolbar">
+    <div>
+      <h4 class="mb-1">{{ _('Plantilla de comprobante recurrente') }}</h4>
+      <p class="text-muted mb-0">{{ _('Borrador') }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
+      <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-save"></i> {{ _('Guardar plantilla') }}</button>
+    </div>
+  </div>
+
+  <section class="border rounded-2 p-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">{{ form.code.label }} <span class="text-danger">*</span></label>
+        {{ form.code(class="form-control form-control-sm", **{"x-model": "header.code"}) }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">{{ form.name.label }} <span class="text-danger">*</span></label>
+        {{ form.name(class="form-control form-control-sm", **{"x-model": "header.name"}) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.company.label }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "company",
+          name: "company",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          initialValue: header.company,
+          initialLabel: header.company_label,
+          onSelect: function(opt) { header.company = opt.value; loadBooks(opt.value); },
+          messages: { placeholder: "{{ _('Buscar compañía') }}" }
+        })'>
+          <input type="hidden" name="company" x-model="selectedValue">
+          <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.ledger_id.label }}</label>
+        <select name="ledger_id" class="form-select form-select-sm" x-model="header.ledger_id">
+          <option value="">{{ _('— Seleccione libro —') }}</option>
+          <template x-for="book in books" :key="book.value">
+            <option :value="book.value" x-text="book.display_name"></option>
+          </template>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.start_date.label }}</label>
+        {{ form.start_date(class="form-control form-control-sm", type="date", **{"x-model": "header.start_date"}) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.end_date.label }}</label>
+        {{ form.end_date(class="form-control form-control-sm", type="date", **{"x-model": "header.end_date"}) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.frequency.label }}</label>
+        {{ form.frequency(class="form-select form-select-sm", **{"x-model": "header.frequency"}) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.currency.label }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "currency",
+          name: "currency",
+          initialValue: header.currency,
+          initialLabel: header.currency_label,
+          onSelect: function(opt) { header.currency = opt.value; }
+        })'>
+          <input type="hidden" name="currency" x-model="selectedValue">
+          <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border rounded-2 p-3">
+    <div class="ca-journal-toolbar mb-3">
+      <h5 class="mb-0">{{ _('Asientos contables') }}</h5>
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
+    </div>
+    <div class="ca-journal-grid">
+      <table class="table table-sm table-bordered ca-journal-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th style="width: 350px;">{{ _('Cuenta') }}</th>
+            <th style="width: 150px;">{{ _('Debe') }}</th>
+            <th style="width: 150px;">{{ _('Haber') }}</th>
+            <th>{{ _('Descripción') }}</th>
+            <th style="width: 150px;">{{ _('Acciones') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="(line, index) in lines" :key="line.uid">
+            <tr>
+              <td class="text-center" x-text="index + 1"></td>
+              <td>
+                <div class="ca-smart-select" x-data='smartSelect({
+                  doctype: "account",
+                  filters: { company: function() { return header.company; } },
+                  initialValue: line.account_code,
+                  initialLabel: line.account_label,
+                  onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; }
+                })'>
+                  <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon" placeholder="{{ _('Buscar cuenta') }}">
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  </div>
+                </div>
+              </td>
+              <td><input type="number" step="0.01" class="form-control form-control-sm text-end" x-model="line.debit"></td>
+              <td><input type="number" step="0.01" class="form-control form-control-sm text-end" x-model="line.credit"></td>
+              <td><input type="text" class="form-control form-control-sm" x-model="line.description"></td>
+              <td>
+                <div class="ca-journal-actions">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="duplicateRow(index)"><i class="bi bi-copy"></i></button>
+                  <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)"><i class="bi bi-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="border rounded-2 p-3">
+    <div class="ca-journal-balance">
+      <strong>{{ _('Debe') }}: <span x-text="formatMoney(totalDebit)"></span></strong>
+      <strong>{{ _('Haber') }}: <span x-text="formatMoney(totalCredit)"></span></strong>
+      <span class="badge" :class="isBalanced ? 'text-bg-success' : 'text-bg-warning'" x-text="isBalanced ? '{{ _('Balanceado') }}' : '{{ _('Desbalanceado') }}'"></span>
+    </div>
+  </section>
+
+  <section class="border rounded-2 p-3">
+    <label class="form-label">{{ form.description.label }}</label>
+    {{ form.description(class="form-control", rows="2", **{"x-model": "header.description"}) }}
+  </section>
+
+  {# Modal de detalle avanzado #}
+  <div class="modal fade" id="lineDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content" x-if="modalLine">
+        <div class="modal-header"><h5 class="modal-title">{{ _('Detalle de línea') }}</h5><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="ca-journal-modal-grid">
+            <div>
+              <label class="form-label">{{ _('Centro de costos') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "cost_center",
+                filters: { company: function() { return header.company; } },
+                initialValue: modalLine.cost_center,
+                onSelect: function(opt) { modalLine.cost_center = opt.value; }
+              })'>
+                <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">{{ _('Unidad de negocio') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "unit",
+                filters: { company: function() { return header.company; } },
+                initialValue: modalLine.unit,
+                onSelect: function(opt) { modalLine.unit = opt.value; }
+              })'>
+                <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">{{ _('Proyecto') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "project",
+                filters: { company: function() { return header.company; } },
+                initialValue: modalLine.project,
+                onSelect: function(opt) { modalLine.project = opt.value; }
+              })'>
+                <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">{{ _('Tipo de tercero') }}</label>
+              <select class="form-select form-select-sm" x-model="modalLine.party_type">
+                <option value=""></option>
+                <option value="customer">{{ _('Cliente') }}</option>
+                <option value="supplier">{{ _('Proveedor') }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">{{ _('Tercero') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "party",
+                filters: { company: function() { return header.company; }, party_type: function() { return modalLine.party_type; } },
+                initialValue: modalLine.party_id,
+                onSelect: function(opt) { modalLine.party_id = opt.value; }
+              })'>
+                <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cerrar') }}</button><button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Actualizar') }}</button></div>
+      </div>
+    </div>
+  </div>
+
+</form>
+
+{% endblock %}

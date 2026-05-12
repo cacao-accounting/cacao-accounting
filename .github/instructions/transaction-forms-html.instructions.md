@@ -4,6 +4,8 @@ applyTo: "**/templates/**/*.html"
 
 # Cacao Accounting HTML Instructions
 
+Utiliza el formulario de nuevo asiento contable como referencia estructural para el diseño de formularios transaccionales en el módulo de contabilidad. Mantén la separación clara entre header, grilla de líneas y memo, y sigue las convenciones de filas por índice y campos por prefijo de fila. Asegúrate de que las acciones por línea sean visibles en la grilla y que el detalle adicional por línea esté colapsado para campos avanzados. Mantén los metadatos de línea ocultos para trazabilidad sin sobrecargar la grilla principal.
+
 ## Formularios transaccionales
 
 Estas reglas aplican a formularios de documentos transaccionales (asientos, facturas, pagos, recepciones, entregas, movimientos de inventario).

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/solicitud_venta.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_pedido_venta_lista') }}" class="link-dark">Pedidos de Venta</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width:960px;">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-cart-plus"></i> {{ registro.document_no or registro.id }}
+      {{ macros.document_status_for("sales_request", registro, detail=True) }}
+    </h5>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Datos generales del pedido</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Número de Documento</td><td>{{ registro.document_no or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Cliente</td><td>{{ registro.customer_name or registro.customer_id or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Compañía</td><td>{{ registro.company or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Fecha</td><td>{{ registro.posting_date or "" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-md-6">
+      <table class="ca-table">
+        <caption class="visually-hidden">Montos y observaciones</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#64748b;">Total</td><td>{{ registro.grand_total or "" }}</td></tr>
+          <tr><td style="color:#64748b;">Observaciones</td><td>{{ registro.remarks or "" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{ macros.lineas_tabla_lectura(items) }}
+{{ macros.document_flow_trace("sales_request", registro) }}
+
+{% endblock %}

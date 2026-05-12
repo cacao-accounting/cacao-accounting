@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Plantillas de Impuestos") }}</h4></div>
+<form method="post" class="mb-4">
+  <div class="row g-2">
+    <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
+    <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}"></div>
+    <div class="col-md-2"><input class="form-control" name="currency" placeholder="{{ _('Moneda') }}"></div>
+    <div class="col-md-2"><select class="form-select" name="template_type"><option value="buying">{{ _("Compra") }}</option><option value="selling">{{ _("Venta") }}</option></select></div>
+    <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_active" id="tpl_active" checked><label class="form-check-label" for="tpl_active">{{ _("Activo") }}</label></div>
+    <div class="col-md-2"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
+  </div>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Líneas") }}</th></tr></thead>
+  <tbody>{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ template.template_type }}</td><td>{{ template.company or "" }}</td><td><a href="{{ url_for('admin.items_plantilla_impuesto', template_id=template.id) }}">{{ _("Editar") }}</a></td></tr>{% endfor %}</tbody>
+</table>
+{% endblock %}

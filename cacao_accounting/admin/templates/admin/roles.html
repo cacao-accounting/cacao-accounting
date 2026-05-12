@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Roles</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-shield-lock me-2" style="color:#78BF30"></i>Gestión de Roles</h4>
+</div>
+
+<div class="ca-card mb-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <p class="mb-0" style="color:#64748b;font-size:.875rem;">
+      Crea y administra los roles del sistema. Asigna permisos a cada rol por módulo.
+    </p>
+    <a href="{{ url_for('admin.crear_rol') }}" class="btn btn-sm btn-primary">Nuevo Rol</a>
+  </div>
+</div>
+
+<div class="ca-card p-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 small">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Rol</th>
+          <th>Detalle</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rol in roles %}
+        <tr>
+          <td><strong>{{ rol.name }}</strong></td>
+          <td>{{ rol.note or "-" }}</td>
+          <td class="text-end">
+            <a href="{{ url_for('admin.editar_rol', role_id=rol.id) }}" class="btn btn-sm btn-outline-primary me-1">Editar</a>
+            <a href="{{ url_for('admin.rol_permisos', role_id=rol.id) }}" class="btn btn-sm btn-outline-secondary">Permisos</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

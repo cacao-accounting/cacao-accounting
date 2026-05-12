@@ -11,10 +11,10 @@
   </ol>
 </nav>
 
-{% if entidades_creadas %}
 <div class="ca-card">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
     <h5 class="ca-card-title"><i class="bi bi-kanban"></i> Listado de Proyectos</h5>
+    <a href="{{ url_for('contabilidad.nuevo_proyecto') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Nuevo Proyecto</a>
   </div>
   <table class="ca-table">
     <caption style="display: none;">Listado de Proyectos.</caption>
@@ -22,28 +22,33 @@
       <tr>
         <th scope="col">Código</th>
         <th scope="col">Nombre</th>
+        <th scope="col">Entidad</th>
         <th scope="col">Fecha Inicio</th>
         <th scope="col">Fecha Fin</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Acciones</th>
       </tr>
     </thead>
     <tbody>
       {% for item in consulta.items %}
       <tr>
-        <td>
-          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-          <a href="{{ url_for('contabilidad.entidad', entidad_id=item.entidad) }}">{{ item.code }}</a>
-        </td>
-        <td><a href="{{ url_for('contabilidad.entidad', entidad_id=item.entidad) }}">{{ item.name }}</a></td>
+        <td>{{ item.code }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.entity }}</td>
         <td>{{ item.start }}</td>
         <td>{{ item.end }}</td>
+        <td>{{ macros.render_status(status=item.status, lista_status=statusweb) }}</td>
+        <td>
+          <a href="{{ url_for('contabilidad.editar_proyecto', project_id=item.code) }}" class="btn btn-sm btn-outline-primary">Editar</a>
+          <a href="{{ url_for('contabilidad.eliminar_proyecto', project_id=item.code) }}" class="btn btn-sm btn-outline-danger">Eliminar</a>
+        </td>
       </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted">No hay proyectos registrados.</td></tr>
       {% endfor %}
     </tbody>
   </table>
   <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.proyectos") }}</div>
 </div>
-{% else %}
-{{ macros.crear_nueva_entidad() }}
-{% endif %}
 
 {% endblock %}

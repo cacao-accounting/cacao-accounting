@@ -41,12 +41,49 @@
         {{ form.id(class="form-control form-control-sm", id="id-entidad") }}
       </div>
       <div class="col-md-3">
+        <label class="form-label" for="pais">País</label>
+        {{ form.pais(class="form-select form-select-sm", id="pais") }}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="idioma">Idioma</label>
+        {{ form.idioma(class="form-select form-select-sm", id="idioma") }}
+      </div>
+      <div class="col-md-3">
         <label class="form-label" for="moneda">Moneda Principal</label>
         {{ form.moneda(class="form-select form-select-sm", id="moneda") }}
       </div>
-      <div class="col-md-2">
+      <div class="col-md-3">
+        <label class="form-label" for="inicio-anio-fiscal">Inicio Año Fiscal</label>
+        {{ form.inicio_anio_fiscal(class="form-control form-control-sm", id="inicio-anio-fiscal") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="fin-anio-fiscal">Fin Año Fiscal</label>
+        {{ form.fin_anio_fiscal(class="form-control form-control-sm", id="fin-anio-fiscal") }}
+      </div>
+      <div class="col-md-3">
         <label class="form-label" for="tipo">Tipo de Entidad</label>
         {{ form.tipo_entidad(class="form-select form-select-sm", id="tipo") }}
+      </div>
+      <div class="col-md-3 mt-2">
+        <div class="form-check">
+          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          <label class="form-check-label" for="habilitado">Habilitado</label>
+        </div>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Catálogo contable</label>
+        <div class="d-flex gap-3 align-items-center mb-2">
+          {% for option in form.catalogo %}
+          <div class="form-check">
+            {{ option(class="form-check-input", id=option.id) }}
+            <label class="form-check-label" for="{{ option.id }}">{{ option.label.text }}</label>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="catalogo_origen">Catálogo existente</label>
+          {{ form.catalogo_origen(class="form-select form-select-sm", id="catalogo_origen") }}
+        </div>
       </div>
     </div>
 

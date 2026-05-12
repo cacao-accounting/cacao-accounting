@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Precios por Item") }}</h4></div>
+<form method="post" class="mb-4">
+  <div class="row g-2">
+    <div class="col-md-2"><input class="form-control" name="item_code" placeholder="{{ _('Item') }}" required></div>
+    <div class="col-md-3"><select class="form-select" name="price_list_id">{% for price_list in price_lists %}<option value="{{ price_list.id }}">{{ price_list.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-1"><input class="form-control" name="uom" placeholder="{{ _('UOM') }}"></div>
+    <div class="col-md-2"><input class="form-control" name="price" placeholder="{{ _('Precio') }}" required></div>
+    <div class="col-md-1"><input class="form-control" name="min_qty" value="0"></div>
+    <div class="col-md-1"><input class="form-control" type="date" name="valid_from"></div>
+    <div class="col-md-1"><input class="form-control" type="date" name="valid_upto"></div>
+    <div class="col-md-1"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
+  </div>
+</form>
+<table class="table table-sm"><thead><tr><th>{{ _("Item") }}</th><th>{{ _("Lista") }}</th><th>{{ _("UOM") }}</th><th>{{ _("Precio") }}</th></tr></thead><tbody>{% for item_price in item_prices %}<tr><td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

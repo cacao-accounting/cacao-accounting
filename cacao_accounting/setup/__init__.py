@@ -77,6 +77,8 @@ def setup():
                     "id_fiscal": form.id_fiscal.data,
                     "tipo_entidad": form.tipo_entidad.data,
                     "moneda": setup_data.get("moneda"),
+                    "inicio_anio_fiscal": form.inicio_anio_fiscal.data,
+                    "fin_anio_fiscal": form.fin_anio_fiscal.data,
                 }
                 catalogo_tipo = form.catalogo.data
                 catalogo_archivo = form.catalogo_origen.data if catalogo_tipo == "preexistente" else None
