@@ -1,14 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
+import json
 from decimal import Decimal
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     Book,
+    BankAccount,
     ComprobanteContable,
     CostCenter,
+    ExternalCounter,
     ExchangeRate,
     GLEntry,
+    NamingSeries,
     Project,
+    SeriesExternalCounterMap,
     Unit,
     database,
 )
@@ -83,6 +88,58 @@ def test_tasas_de_cambio(app):
             .first()
         )
         assert tasa_eur is not None
+
+
+def test_seed_bank_accounts_share_payment_series_with_separate_checkbooks(app):
+    with app.app_context():
+        bank_accounts = (
+            database.session.execute(
+                database.select(BankAccount)
+                .filter(BankAccount.company == "cacao", BankAccount.currency.in_(("NIO", "USD")))
+                .order_by(BankAccount.currency)
+            )
+            .scalars()
+            .all()
+        )
+        by_currency = {account.currency: account for account in bank_accounts}
+        assert {"NIO", "USD"}.issubset(by_currency)
+
+        nio_account = by_currency["NIO"]
+        usd_account = by_currency["USD"]
+        assert nio_account.default_naming_series_id == usd_account.default_naming_series_id
+        assert nio_account.default_external_counter_id != usd_account.default_external_counter_id
+
+        series = database.session.get(NamingSeries, nio_account.default_naming_series_id)
+        assert series is not None
+        assert series.entity_type == "payment_entry"
+
+        counters = {
+            counter.id: counter
+            for counter in database.session.execute(
+                database.select(ExternalCounter).filter(
+                    ExternalCounter.id.in_(
+                        [
+                            nio_account.default_external_counter_id,
+                            usd_account.default_external_counter_id,
+                        ]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert {counter.counter_type for counter in counters.values()} == {"checkbook"}
+
+        mappings = (
+            database.session.execute(database.select(SeriesExternalCounterMap).filter_by(naming_series_id=series.id))
+            .scalars()
+            .all()
+        )
+        conditions_by_counter = {
+            mapping.external_counter_id: json.loads(mapping.condition_json or "{}") for mapping in mappings
+        }
+        assert conditions_by_counter[nio_account.default_external_counter_id] == {"bank_account_id": nio_account.id}
+        assert conditions_by_counter[usd_account.default_external_counter_id] == {"bank_account_id": usd_account.id}
 
 
 def test_ledger_multimoneda(app):

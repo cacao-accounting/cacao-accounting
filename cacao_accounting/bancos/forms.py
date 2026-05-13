@@ -25,6 +25,8 @@ class FormularioCuentaBancaria(FlaskForm):
     iban = StringField("IBAN")
     currency = SelectField("Moneda", choices=[])
     gl_account_id = SelectField("Cuenta contable bancaria", choices=[], validators=[Optional()])
+    default_naming_series_id = SelectField("Serie interna para pagos", choices=[], validators=[Optional()])
+    default_external_counter_id = SelectField("Chequera", choices=[], validators=[Optional()])
 
 
 class FormularioPago(FlaskForm):

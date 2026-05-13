@@ -14,6 +14,7 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+import json
 from datetime import date
 
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
@@ -186,9 +187,87 @@ def tasas_de_cambio():
 
 
 def cargar_bancos():
-    """Bancos de demostración."""
+    """Bancos, cuentas bancarias y chequeras de demostración."""
+    from cacao_accounting.database import (
+        Bank,
+        BankAccount,
+        ExternalCounter,
+        NamingSeries,
+        SeriesExternalCounterMap,
+    )
+    from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
+
     for b in _make_bancos():
         database.session.add(b)
+    database.session.flush()
+
+    ensure_default_naming_series_for_company("cacao", ["payment_entry"])
+    payment_series = (
+        database.session.execute(
+            database.select(NamingSeries)
+            .filter_by(company="cacao", entity_type="payment_entry", is_active=True)
+            .order_by(NamingSeries.is_default.desc(), NamingSeries.name)
+        )
+        .scalars()
+        .first()
+    )
+    if payment_series is None:
+        raise RuntimeError("No se pudo preparar la serie compartida de pagos para el seed.")
+
+    bank_by_name = {
+        bank.name: bank for bank in database.session.execute(database.select(Bank).order_by(Bank.name)).scalars().all()
+    }
+    bank_accounts_data = [
+        {
+            "bank": bank_by_name["Banco Nacional de Desarrollo"],
+            "account_name": "Cuenta Corriente Cacao NIO",
+            "account_no": "CTA-DEMO-NIO",
+            "currency": "NIO",
+            "counter_name": "Chequera Cacao NIO",
+            "counter_prefix": "NIO-CHK-",
+        },
+        {
+            "bank": bank_by_name["Banco de América Central"],
+            "account_name": "Cuenta Corriente Cacao USD",
+            "account_no": "CTA-DEMO-USD",
+            "currency": "USD",
+            "counter_name": "Chequera Cacao USD",
+            "counter_prefix": "USD-CHK-",
+        },
+    ]
+    for data in bank_accounts_data:
+        counter = ExternalCounter(
+            company="cacao",
+            name=data["counter_name"],
+            counter_type="checkbook",
+            prefix=data["counter_prefix"],
+            last_used=0,
+            padding=5,
+            is_active=True,
+            naming_series_id=payment_series.id,
+        )
+        database.session.add(counter)
+        database.session.flush()
+        bank_account = BankAccount(
+            bank_id=data["bank"].id,
+            company="cacao",
+            account_name=data["account_name"],
+            account_no=data["account_no"],
+            currency=data["currency"],
+            default_naming_series_id=payment_series.id,
+            default_external_counter_id=counter.id,
+            is_active=True,
+        )
+        database.session.add(bank_account)
+        database.session.flush()
+        database.session.add(
+            SeriesExternalCounterMap(
+                naming_series_id=payment_series.id,
+                external_counter_id=counter.id,
+                priority=0,
+                condition_json=json.dumps({"bank_account_id": bank_account.id}, sort_keys=True),
+            )
+        )
     database.session.commit()
 
 

@@ -149,6 +149,66 @@
         </div>
       </div>
     </div>
+    <div class="col-md-6">
+      <label class="form-label" for="default_naming_series_id">{{ _('Serie interna para pagos') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "naming_series",
+        name: "default_naming_series_id",
+        minChars: 1,
+        preload: true,
+        filters: { company: { selector: "#company" }, entity_type: "payment_entry", is_active: true },
+        filterSources: ["#company"],
+        messages: {
+          placeholder: {{ _('Buscar serie de pagos')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" name="default_naming_series_id" x-model="selectedValue">
+        <input class="form-control form-control-sm ca-smart-select-input" id="default_naming_series_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="default_external_counter_id">{{ _('Chequera') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "external_counter",
+        name: "default_external_counter_id",
+        minChars: 1,
+        preload: true,
+        filters: { company: { selector: "#company" }, counter_type: "checkbook", is_active: true },
+        filterSources: ["#company"],
+        messages: {
+          placeholder: {{ _('Buscar chequera')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" name="default_external_counter_id" x-model="selectedValue">
+        <input class="form-control form-control-sm ca-smart-select-input" id="default_external_counter_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
   </form>
 </div>
 

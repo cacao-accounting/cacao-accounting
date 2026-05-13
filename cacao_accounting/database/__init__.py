@@ -1396,6 +1396,10 @@ class BankAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     iban = database.Column(database.String(50), nullable=True)
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     gl_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    default_naming_series_id = database.Column(database.String(26), database.ForeignKey("naming_series.id"), nullable=True)
+    default_external_counter_id = database.Column(
+        database.String(26), database.ForeignKey("external_counter.id"), nullable=True
+    )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 

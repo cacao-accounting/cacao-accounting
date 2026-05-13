@@ -1,5 +1,32 @@
 # SESSIONS
 
+## 2026-05-13 (cuentas bancarias con serie compartida y chequeras separadas)
+
+### Peticion del usuario
+Implementar preferencias de numeracion para cuentas bancarias: varias cuentas pueden compartir la misma serie interna de pagos, pero cada cuenta debe tener su propia chequera como contador externo. El seed inicial debe crear una cuenta bancaria en Cordobas y otra en Dolares para pruebas.
+
+### Resumen tecnico de cambios
+- `BankAccount` ahora guarda `default_naming_series_id` y `default_external_counter_id`.
+- `/cash_management/bank-account/new` permite seleccionar la serie interna de pagos y la chequera, con validacion de tipo documental, compania y tipo `checkbook`.
+- `search_select.py` registra el doctype `external_counter`, mostrando el siguiente numero sugerido para usarlo con `smart-select`.
+- La creacion de pagos usa defaults de la cuenta bancaria cuando el formulario no envia serie o contador explicitamente; la seleccion manual conserva precedencia.
+- El flujo documental generico de pagos tambien respeta estos defaults y evita persistir fechas como string antes de normalizarlas.
+- El seed de desarrollo crea dos cuentas bancarias demo para `cacao` (`NIO` y `USD`) que comparten la misma serie `payment_entry`, con chequeras distintas y mappings por `bank_account_id`.
+- Se agregaron regresiones para esquema, formulario, defaults de pago y seed.
+
+### Verificacion ejecutada
+- `venv/bin/python -m black cacao_accounting/database/__init__.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/search_select.py cacao_accounting/datos/dev/__init__.py cacao_accounting/document_flow/service.py tests/test_bank_account_numbering.py tests/test_seed_accounting.py tests/test_04database_schema.py`
+- `venv/bin/python -m py_compile cacao_accounting/database/__init__.py cacao_accounting/bancos/__init__.py cacao_accounting/search_select.py cacao_accounting/datos/dev/__init__.py tests/test_bank_account_numbering.py tests/test_seed_accounting.py`
+- `venv/bin/python -m ruff check cacao_accounting/database/__init__.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/search_select.py cacao_accounting/datos/dev/__init__.py cacao_accounting/document_flow/service.py tests/test_bank_account_numbering.py tests/test_seed_accounting.py tests/test_04database_schema.py`
+- `venv/bin/python -m flake8 cacao_accounting/database/__init__.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/search_select.py cacao_accounting/datos/dev/__init__.py cacao_accounting/document_flow/service.py tests/test_bank_account_numbering.py tests/test_seed_accounting.py tests/test_04database_schema.py`
+- `venv/bin/python -m mypy cacao_accounting/database/__init__.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/search_select.py cacao_accounting/datos/dev/__init__.py cacao_accounting/document_flow/service.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest -q --exitfirst tests/test_bank_account_numbering.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest -q --exitfirst tests/test_seed_accounting.py::test_seed_bank_accounts_share_payment_series_with_separate_checkbooks tests/test_04database_schema.py::TestSchemaTableCreation::test_bank_account_has_numbering_default_fields`
+- `venv/bin/python -m ruff check cacao_accounting/`
+- `venv/bin/python -m flake8 cacao_accounting/`
+- `venv/bin/python -m mypy cacao_accounting/`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest -v -s --exitfirst --slow=True` -> 602 passed, 3 skipped.
+
 ## 2026-05-13 (seed con comprobante multi-libro y conversión)
 
 ### Peticion del usuario

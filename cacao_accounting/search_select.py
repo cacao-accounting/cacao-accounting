@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     CostCenter,
     Currency,
     Entity,
+    ExternalCounter,
     Item,
     NamingSeries,
     Party,
@@ -127,6 +128,10 @@ def _bank_label(bank: Bank) -> str:
 
 def _naming_series_label(naming_series: NamingSeries) -> str:
     return f"{naming_series.name} ({naming_series.entity_type})"
+
+
+def _external_counter_label(counter: ExternalCounter) -> str:
+    return f"{counter.name} (siguiente: {counter.next_suggested_formatted})"
 
 
 def _string_label(value: Any) -> str:
@@ -326,6 +331,20 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         value_field="id",
         label_builder=_naming_series_label,
         allowed_filters={"company": "company", "entity_type": "entity_type", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "external_counter": SearchSelectSpec(
+        doctype="external_counter",
+        model=ExternalCounter,
+        search_fields=("name", "counter_type", "prefix", "description"),
+        value_field="id",
+        label_builder=_external_counter_label,
+        allowed_filters={
+            "company": "company",
+            "counter_type": "counter_type",
+            "is_active": "is_active",
+            "naming_series_id": "naming_series_id",
+        },
         default_filters={"is_active": True},
     ),
     "party_type": SearchSelectSpec(
