@@ -12,7 +12,10 @@ Estas reglas aplican a formularios de documentos transaccionales (asientos, fact
 
 ## Referencia base actual
 
-Tomar como referencia estructural el formulario de asientos en [cacao_accounting/contabilidad/gl/templates/gl_new.html](cacao_accounting/contabilidad/gl/templates/gl_new.html).
+Tomar como referencia estructural el formulario de asientos en:
+
+- cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html
+- cacao_accounting/contabilidad/templates/contabilidad/journal.html
 
 Patrones concretos a conservar/evolucionar desde esa referencia:
 
