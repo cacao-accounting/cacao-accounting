@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.tasa_cambio') }}" class="link-dark">{{ _('Tasas de Cambio') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.origin }} / {{ registro.destination }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-arrow-left-right"></i>{{ registro.origin }} → {{ registro.destination }}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.tasa_cambio') }}"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nueva_tasa_cambio') }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Moneda base') }}</label><p>{{ registro.origin }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Moneda destino') }}</label><p>{{ registro.destination }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Tasa') }}</label><p>{{ registro.rate }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Fecha') }}</label><p>{{ registro.date }}</p></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

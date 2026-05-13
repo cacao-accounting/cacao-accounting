@@ -4,8 +4,9 @@
 """Servicio para gestión de comprobantes recurrentes."""
 
 from datetime import date
+import json
 from typing import Any, Dict, List, Sequence
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from cacao_accounting.database import (
     database,
     RecurringJournalTemplate,
@@ -28,6 +29,8 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
         code=data["code"],
         company=data["company"],
         ledger_id=data.get("ledger_id"),
+        naming_series_id=data.get("naming_series_id"),
+        book_codes=_serialize_book_codes(data.get("books")),
         name=data["name"],
         description=data.get("description"),
         start_date=data["start_date"],
@@ -53,11 +56,6 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
             project=item.get("project"),
             party_type=item.get("party_type"),
             party_id=item.get("party_id"),
-            reference_type=item.get("reference_type"),
-            reference_name=item.get("reference_name"),
-            reference1=item.get("reference1"),
-            reference2=item.get("reference2"),
-            is_advance=bool(item.get("is_advance")),
             status="active",
             created_by=user_id,
         )
@@ -116,7 +114,10 @@ def get_applicable_templates(company: str, ledger_id: str, period_date: date) ->
     # Filtros: compañía, ledger, rango de fechas, estado aprobado, no completado
     stmt = select(RecurringJournalTemplate).where(
         RecurringJournalTemplate.company == company,
-        RecurringJournalTemplate.ledger_id == ledger_id,
+        or_(
+            RecurringJournalTemplate.ledger_id == ledger_id,
+            RecurringJournalTemplate.book_codes.contains(f'"{ledger_id}"'),
+        ),
         RecurringJournalTemplate.start_date <= period_date,
         RecurringJournalTemplate.end_date >= period_date,
         RecurringJournalTemplate.status == "approved",
@@ -157,6 +158,8 @@ def apply_recurring_template(
     journal = ComprobanteContable(
         entity=template.company,
         book=template.ledger_id,
+        book_codes=template.book_codes,
+        naming_series_id=template.naming_series_id,
         date=application_date,
         memo=f"Generado automáticamente desde plantilla recurrente: {template.name}",
         status="draft",
@@ -166,6 +169,10 @@ def apply_recurring_template(
     )
     database.session.add(journal)
     database.session.flush()
+
+    from cacao_accounting.contabilidad.journal_service import _assign_identifier_if_needed
+
+    _assign_identifier_if_needed(journal, template.naming_series_id)
 
     # Generar líneas
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
@@ -180,11 +187,6 @@ def apply_recurring_template(
             project=item.project,
             third_type=item.party_type,
             third_code=item.party_id,
-            internal_reference=item.reference_type,
-            internal_reference_id=item.reference_name,
-            reference1=item.reference1,
-            reference2=item.reference2,
-            is_advance=item.is_advance,
             transaction_id=journal.id,
         )
         database.session.add(line)
@@ -213,3 +215,15 @@ def apply_recurring_template(
 
     database.session.commit()
     return application
+
+
+def _serialize_book_codes(books: Any) -> str | None:
+    """Serializa la selección de libros para aplicar la plantilla."""
+    if not books:
+        return None
+    if isinstance(books, str):
+        return json.dumps([books])
+    if isinstance(books, list):
+        normalized = [str(book) for book in books if str(book)]
+        return json.dumps(normalized) if normalized else None
+    return None

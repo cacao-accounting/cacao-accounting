@@ -4,6 +4,21 @@ Este documento registra lo que queda pendiente tras la consolidación de mayo de
 
 ---
 
+## Correcciones Técnicas Resueltas
+- [x] Migrar los maestros principales Item, Cliente, Proveedor, Banco y Cuenta Bancaria al estilo visual del comprobante contable.
+- [x] Usar `smart-select` en los maestros principales donde hay relaciones: UOM, compañía, banco, moneda y cuenta contable.
+- [x] Permitir y validar asociación de Cuenta Bancaria con cuenta contable de tipo `bank`.
+- [x] Alinear gradualmente formularios y vistas de registros maestros contables con el estilo del comprobante, manteniendo plantillas separadas y sin macros nuevas.
+- [x] Agregar URLs de visualización para monedas, tasas de cambio, proyectos, años fiscales y períodos contables.
+- [x] Ampliar tipos de cuenta en `/accounting/account/new` para cubrir el catálogo base y la configuración de cuentas por defecto.
+- [x] Resolver advertencia `SAWarning` por ciclo FK entre `comprobante_contable` y `recurring_journal_application` durante `drop_all()` en SQLite.
+- [x] Corregir toggle Mostrar/Ocultar filtros avanzados en los cinco reportes financieros y reubicar los checkboxes principales bajo `Cuenta contable`.
+- [x] Alinear formulario de plantillas recurrentes con comprobante normal: serie por defecto, libros por checkbox y modal de dimensiones sin referencias específicas.
+- [x] Rediseñar asistente de cierre mensual como registro step-by-step con lista de cierres, creación por periodo y paso inicial de comprobantes recurrentes.
+- [x] Usar Smart Select en nuevo cierre mensual para compañía y periodos contables abiertos filtrados por compañía.
+
+---
+
 ## Posting Contable y Core
 - [ ] Resolver política formal de renumeración de `document_no` cuando un borrador cambia de serie/fecha tras haber sido numerado.
 - [ ] Implementar soporte completo para `GLEntryDimension` (dimensiones personalizadas) en el motor de posting.
@@ -24,7 +39,9 @@ Este documento registra lo que queda pendiente tras la consolidación de mayo de
 
 ## Proveedor y Cliente
 - [ ] Implementar modelo `PartyGroup` y su CRUD.
-- [ ] Migrar formularios de Proveedor y Cliente al "Voucher Pattern" y añadir gestión de múltiples direcciones/contactos.
+- [ ] Completar edición y visualización por compañía para Cliente y Proveedor en el nuevo patrón de comprobante.
+- [ ] Añadir gestión de múltiples direcciones/contactos.
+- [ ] Evaluar si la clasificación libre debe convertirse en un maestro formal de tipo de tercero.
 
 ---
 

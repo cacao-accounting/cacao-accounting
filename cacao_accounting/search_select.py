@@ -15,6 +15,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
+    Bank,
     BankAccount,
     Book,
     CompanyParty,
@@ -25,7 +26,9 @@ from cacao_accounting.database import (
     NamingSeries,
     Party,
     Project,
+    TaxTemplate,
     Unit,
+    UOM,
     Warehouse,
     GLEntry,
     database,
@@ -75,6 +78,10 @@ def _currency_label(currency: Currency) -> str:
     return f"{currency.code} - {currency.name}"
 
 
+def _uom_label(uom: UOM) -> str:
+    return f"{uom.code} - {uom.name}"
+
+
 def _book_label(book: Book) -> str:
     return f"{book.code} - {book.name}"
 
@@ -111,6 +118,11 @@ def _warehouse_label(warehouse: Warehouse) -> str:
 def _bank_account_label(bank_account: BankAccount) -> str:
     account_no = f" {bank_account.account_no}" if bank_account.account_no else ""
     return f"{bank_account.account_name}{account_no}"
+
+
+def _bank_label(bank: Bank) -> str:
+    swift_suffix = f" ({bank.swift_code})" if bank.swift_code else ""
+    return f"{bank.name}{swift_suffix}"
 
 
 def _naming_series_label(naming_series: NamingSeries) -> str:
@@ -154,6 +166,15 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         allowed_filters={"is_active": "active"},
         default_filters={},
     ),
+    "uom": SearchSelectSpec(
+        doctype="uom",
+        model=UOM,
+        search_fields=("code", "name"),
+        value_field="code",
+        label_builder=_uom_label,
+        allowed_filters={"is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
     "account": SearchSelectSpec(
         doctype="account",
         model=Accounts,
@@ -186,6 +207,15 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         model=AccountingPeriod,
         search_fields=("name",),
         value_field="name",
+        label_builder=_accounting_period_label,
+        allowed_filters={"company": "entity", "is_closed": "is_closed", "is_active": "enabled"},
+        default_filters={"enabled": True},
+    ),
+    "accounting_period_id": SearchSelectSpec(
+        doctype="accounting_period_id",
+        model=AccountingPeriod,
+        search_fields=("name",),
+        value_field="id",
         label_builder=_accounting_period_label,
         allowed_filters={"company": "entity", "is_closed": "is_closed", "is_active": "enabled"},
         default_filters={"enabled": True},
@@ -269,6 +299,24 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         value_field="id",
         label_builder=_bank_account_label,
         allowed_filters={"company": "company", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "bank": SearchSelectSpec(
+        doctype="bank",
+        model=Bank,
+        search_fields=("name", "swift_code"),
+        value_field="id",
+        label_builder=_bank_label,
+        allowed_filters={"is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "tax_template": SearchSelectSpec(
+        doctype="tax_template",
+        model=TaxTemplate,
+        search_fields=("name",),
+        value_field="id",
+        label_builder=_string_label,
+        allowed_filters={"company": "company", "template_type": "template_type", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "naming_series": SearchSelectSpec(

@@ -54,7 +54,7 @@
   </ol>
 </nav>
 
-<div x-data="{ collapsed: false, advanced: {{ (request.args.get('advanced') == '1')|tojson }} }" class="ca-report-layout">
+<div x-data="{ collapsed: false }" class="ca-report-layout">
   <aside class="ca-report-filters ca-card" :class="{ 'ca-report-filters-collapsed': collapsed }">
     <div class="ca-card-header d-flex justify-content-between align-items-center">
       <h5 class="ca-card-title mb-0">{{ _("Filtros") }}</h5>
@@ -66,7 +66,7 @@
     <div class="p-3" x-show="!collapsed">
       <form method="get" class="d-grid gap-2" id="financial-filter-form">
         <input type="hidden" name="apply_filters" value="1">
-        <input type="hidden" name="advanced" :value="advanced ? '1' : '0'">
+        <input type="hidden" id="financial-advanced-state" name="advanced" value="{{ '1' if request.args.get('advanced') == '1' else '0' }}">
                 <div class="d-flex flex-wrap gap-2 mb-2">
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
           <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
@@ -91,11 +91,25 @@
         {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        <button class="btn btn-link text-start p-0 mt-1" type="button" @click="advanced = !advanced">
-          <span x-show="!advanced">{{ _("Mostrar filtros avanzados") }}</span>
-          <span x-show="advanced">{{ _("Ocultar filtros avanzados") }}</span>
+        <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if request.args.get('show_cancellations') in ('1','true','on','yes') %}checked{% endif %}>
+          <span class="form-check-label">{{ _("Mostrar anulaciones") }}</span>
+        </label>
+        <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if request.args.get('include_closing') in ('1','true','on','yes') %}checked{% endif %}>
+          <span class="form-check-label">{{ _("Incluir Registro de Cierre") }}</span>
+        </label>
+        <button
+          class="btn btn-link text-start p-0 mt-1"
+          type="button"
+          id="financial-advanced-toggle"
+          aria-controls="financial-advanced-filters"
+          aria-expanded="{{ 'true' if request.args.get('advanced') == '1' else 'false' }}"
+        >
+          <span data-advanced-label="show" {% if request.args.get('advanced') == '1' %}hidden{% endif %}>{{ _("Mostrar filtros avanzados") }}</span>
+          <span data-advanced-label="hide" {% if request.args.get('advanced') != '1' %}hidden{% endif %}>{{ _("Ocultar filtros avanzados") }}</span>
         </button>
-        <div class="d-grid gap-2" x-show="advanced" x-cloak>
+        <div class="ca-report-advanced-filters d-grid gap-2{% if request.args.get('advanced') != '1' %} is-hidden{% endif %}" id="financial-advanced-filters">
           {{ smart_select_field("Comprobante", "voucher_number", "document_no", report_filters.voucher_number or '', "report-voucher-number", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
           {{ smart_select_field("Rango cuenta desde", "account_from", "account_code", report_filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
           {{ smart_select_field("Rango cuenta hasta", "account_to", "account_code", report_filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
@@ -118,14 +132,6 @@
               <option value="posting_date" {% if group_by == 'posting_date' %}selected{% endif %}>{{ _("Fecha") }}</option>
               <option value="accounting_period" {% if group_by == 'accounting_period' %}selected{% endif %}>{{ _("Periodo") }}</option>
             </select>
-          </label>
-          <label class="form-check">
-            <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if request.args.get('show_cancellations') in ('1','true','on','yes') %}checked{% endif %}>
-            <span class="form-check-label">{{ _("Mostrar anulaciones") }}</span>
-          </label>
-          <label class="form-check">
-            <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if request.args.get('include_closing') in ('1','true','on','yes') %}checked{% endif %}>
-            <span class="form-check-label">{{ _("Incluir Registro de Cierre") }}</span>
           </label>
           {% if allow_column_selection %}
           <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#columnsModal">{{ _("Columnas visibles") }}</button>
@@ -272,6 +278,7 @@
   .ca-report-table thead th{position:sticky;top:0;z-index:2;white-space:nowrap}
   .ca-report-table td,.ca-report-table th{white-space:nowrap}
   .ca-report-table tbody tr:nth-child(even){background-color:rgba(0,0,0,.02)}
+  .ca-report-advanced-filters.is-hidden{display:none!important}
   .ca-report-totals-sticky{position:sticky;bottom:0;display:flex;gap:.5rem;flex-wrap:wrap;padding:.75rem 1rem;border-top:1px solid var(--ca-border,#dee2e6);background:var(--ca-bg,#fff)}
   .ca-total-item{display:flex;flex-direction:column;min-width:180px}
   .ca-total-label{font-size:.75rem;color:var(--bs-secondary-color,#6c757d)}
@@ -300,6 +307,28 @@
         filterForm.submit();
       });
     }
+    const advancedToggle = document.getElementById('financial-advanced-toggle');
+    const advancedPanel = document.getElementById('financial-advanced-filters');
+    const advancedState = document.getElementById('financial-advanced-state');
+    const advancedShowLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label=\"show\"]') : null;
+    const advancedHideLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label=\"hide\"]') : null;
+
+    function setAdvancedFiltersVisibility(isVisible) {
+      if (!advancedPanel || !advancedToggle || !advancedState || !advancedShowLabel || !advancedHideLabel) return;
+      advancedPanel.classList.toggle('is-hidden', !isVisible);
+      advancedState.value = isVisible ? '1' : '0';
+      advancedToggle.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+      advancedShowLabel.hidden = isVisible;
+      advancedHideLabel.hidden = !isVisible;
+    }
+
+    if (advancedToggle && advancedPanel && advancedState) {
+      setAdvancedFiltersVisibility(advancedState.value === '1');
+      advancedToggle.addEventListener('click', function () {
+        setAdvancedFiltersVisibility(advancedPanel.classList.contains('is-hidden'));
+      });
+    }
+
     const rows = Array.from(document.querySelectorAll('.ca-report-table tbody tr'));
     rows.forEach(function (row) {
       const cell = row.querySelector('td[data-code]');

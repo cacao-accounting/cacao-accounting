@@ -34,6 +34,8 @@
         name: (config.initialJournal && config.initialJournal.name) || '',
         company: (config.initialJournal && config.initialJournal.company) || '',
         company_label: (config.initialJournal && config.initialJournal.company_label) || '',
+        naming_series_id: (config.initialJournal && config.initialJournal.naming_series_id) || '',
+        naming_series_label: (config.initialJournal && config.initialJournal.naming_series_label) || '',
         ledger_id: (config.initialJournal && config.initialJournal.ledger_id) || '',
         start_date: (config.initialJournal && config.initialJournal.start_date) || new Date().toISOString().slice(0, 10),
         end_date: (config.initialJournal && config.initialJournal.end_date) || '',
@@ -47,6 +49,8 @@
       modalLine: null,
       payload: '',
       books: [],
+      selectedBooks: (config.initialJournal && config.initialJournal.books) || [],
+      initialBooksSelectionApplied: false,
 
       init: function () {
         if (!this.lines.length) this.addMultipleRows(2);
@@ -69,6 +73,14 @@
         };
       },
 
+      get primarySelectedBook() {
+        return this.selectedBooks.length ? this.selectedBooks[0] : '';
+      },
+
+      get allBooksSelected() {
+        return this.books.length > 0 && this.selectedBooks.length === this.books.length;
+      },
+
       addRow: function () { this.lines.push(this.newLine()); },
       addMultipleRows: function (n) { for (let i = 0; i < n; i++) this.addRow(); },
       removeRow: function (index) { if (this.lines.length > 1) this.lines.splice(index, 1); else this.lines[0] = this.newLine(); },
@@ -88,7 +100,26 @@
           const resp = await fetch(`{{ url_for('contabilidad.journal_books') }}?company=${company}`);
           const data = await resp.json();
           this.books = data.results;
+          if (!this.initialBooksSelectionApplied) {
+            if (this.selectedBooks.length) {
+              this.selectedBooks = this.selectedBooks.filter((bookCode) => this.books.some((book) => book.value === bookCode));
+            } else {
+              this.selectedBooks = this.books.map((book) => book.value);
+            }
+            this.initialBooksSelectionApplied = true;
+            return;
+          }
+          this.selectedBooks = this.books.map((book) => book.value);
         } catch (err) { console.error(err); }
+      },
+
+      toggleBook: function (bookCode) {
+        const index = this.selectedBooks.indexOf(bookCode);
+        if (index >= 0) {
+          this.selectedBooks.splice(index, 1);
+          return;
+        }
+        this.selectedBooks.push(bookCode);
       },
 
       openDetails: function (index) {
@@ -104,6 +135,7 @@
 
       prepareSubmit: function (e) {
         if (!this.isBalanced) { e.preventDefault(); alert("{{ _('El comprobante debe estar balanceado.') }}"); return; }
+        if (!this.selectedBooks.length) { e.preventDefault(); alert("{{ _('Seleccione al menos un libro contable.') }}"); return; }
         this.payload = JSON.stringify(this.lines.filter(l => l.account_code || l.debit || l.credit));
       },
 
@@ -115,6 +147,7 @@
 <form class="ca-journal-form" method="post" x-data='recurringJournalForm({ initialJournal: {{ (initial_journal or {}) | tojson | safe }} })' @submit="prepareSubmit" action="{{ submit_url }}">
   {{ form.csrf_token }}
   <input type="hidden" name="items_json" :value="payload">
+  <input type="hidden" name="ledger_id" :value="primarySelectedBook">
 
   <div class="ca-journal-toolbar">
     <div>
@@ -150,7 +183,7 @@
           onSelect: function(opt) { header.company = opt.value; loadBooks(opt.value); },
           messages: { placeholder: "{{ _('Buscar compañía') }}" }
         })'>
-          <input type="hidden" name="company" x-model="selectedValue">
+          <input type="hidden" id="company" name="company" x-model="selectedValue">
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
@@ -160,13 +193,69 @@
         </div>
       </div>
       <div class="col-md-6">
-        <label class="form-label">{{ form.ledger_id.label }}</label>
-        <select name="ledger_id" class="form-select form-select-sm" x-model="header.ledger_id">
-          <option value="">{{ _('— Seleccione libro —') }}</option>
-          <template x-for="book in books" :key="book.value">
-            <option :value="book.value" x-text="book.display_name"></option>
+        <label class="form-label" for="naming_series_id">{{ _('Secuencia') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "naming_series",
+          name: "naming_series_id",
+          minChars: 1,
+          preload: false,
+          loadOnFilterChange: true,
+          requiredFilters: ["company"],
+          autoSelectDefault: true,
+          filters: { company: { selector: "#company" }, entity_type: "journal_entry" },
+          filterSources: ["#company"],
+          initialValue: header.naming_series_id,
+          initialLabel: header.naming_series_label,
+          messages: {
+            placeholder: {{ _('Buscar secuencia')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin resultados')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+          <input type="hidden" id="naming_series_id" name="naming_series_id" x-model="selectedValue">
+          <div class="ca-smart-select-input-wrap">
+            <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search"
+              @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
+          </div>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)">
+                <span x-text="opt.display_name"></span>
+              </button>
+            </template>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-12">
+        <label class="form-label">{{ _('Libros contables') }}</label>
+        <div class="ca-book-selector">
+          <template x-if="!books.length">
+            <p class="ca-book-selector-empty mb-0">{{ _('Seleccione una compañía para cargar los libros activos.') }}</p>
           </template>
-        </select>
+          <template x-for="book in books" :key="book.value">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="books" :id="'recurring-book-' + book.value"
+                :value="book.value" :checked="selectedBooks.includes(book.value)" @change="toggleBook(book.value)">
+              <label class="form-check-label" :for="'recurring-book-' + book.value">
+                <span x-text="book.display_name"></span>
+                <small class="text-muted" x-show="book.currency">(<span x-text="book.currency"></span>)</small>
+              </label>
+            </div>
+          </template>
+        </div>
+        <div class="form-text">
+          {{ _('Todos los libros activos se seleccionan automáticamente. Desmarque los que no deban afectarse; si quedan todos marcados se aplicará a todos.') }}
+        </div>
       </div>
       <div class="col-md-3">
         <label class="form-label">{{ form.start_date.label }}</label>

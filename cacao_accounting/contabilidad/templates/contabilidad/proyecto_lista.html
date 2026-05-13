@@ -58,7 +58,7 @@
       <tbody>
         {% for item in consulta.items %}
         <tr>
-          <td><span class="fw-bold">{{ item.code }}</span></td>
+          <td><a class="fw-bold" href="{{ url_for('contabilidad.proyecto', project_id=item.code) }}">{{ item.code }}</a></td>
           <td>{{ item.name }}</td>
           <td>{{ item.entity }}</td>
           <td>{{ item.start or '-' }}</td>

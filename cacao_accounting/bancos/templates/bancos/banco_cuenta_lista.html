@@ -33,7 +33,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
-        <td>{{ item.account_name }}</td>
+        <td><a class="fw-bold" href="{{ url_for('bancos.bancos_cuenta_bancaria', account_id=item.id) }}">{{ item.account_name }}</a></td>
         <td>{{ item.account_no or "" }}</td>
         <td>{{ item.currency or "" }}</td>
       </tr>

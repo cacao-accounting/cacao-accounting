@@ -244,6 +244,8 @@ def test_journal_new_closing_query_prefills_closing_stage(app_ctx):
 
     assert response.status_code == 200
     assert '"is_closing": true' in html
+    assert "is_closing: (config.initialJournal && config.initialJournal.is_closing) ? 'true' : 'false'" in html
+    assert '<option value="true">Cierre</option>' in html
 
 
 def test_journal_post_creates_draft_without_gl_entries(app_ctx):

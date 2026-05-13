@@ -33,7 +33,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
-        <td>{{ item.name }}</td>
+        <td><a class="fw-bold" href="{{ url_for('compras.compras_proveedor', supplier_id=item.id) }}">{{ item.name }}</a></td>
         <td>{{ item.comercial_name or "" }}</td>
         <td>{{ item.tax_id or "" }}</td>
       </tr>

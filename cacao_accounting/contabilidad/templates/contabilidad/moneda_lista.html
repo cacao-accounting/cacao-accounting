@@ -56,7 +56,7 @@
       <tbody>
         {% for moneda in consulta.items -%}
         <tr>
-          <td><span class="fw-bold">{{ moneda.code }}</span></td>
+          <td><a class="fw-bold" href="{{ url_for('contabilidad.moneda', code=moneda.code) }}">{{ moneda.code }}</a></td>
           <td>{{ moneda.name }}</td>
           <td class="text-center">
             {% if moneda.default %}

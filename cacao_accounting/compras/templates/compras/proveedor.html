@@ -1,34 +1,38 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/proveedor.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">Proveedores</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _('Compras') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">{{ _('Proveedores') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-person-vcard"></i> {{ registro.name }}</h5>
+    <h5 class="ca-card-title">
+      <i class="bi bi-person-vcard"></i>{{ registro.name }}
+      {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activo') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactivo') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a href="{{ url_for('compras.compras_proveedor_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
   </div>
-  <dl class="row p-3">
-    <dt class="col-sm-3">Nombre</dt>
-    <dd class="col-sm-9">{{ registro.name }}</dd>
-    <dt class="col-sm-3">Nombre Comercial</dt>
-    <dd class="col-sm-9">{{ registro.comercial_name or "" }}</dd>
-    <dt class="col-sm-3">ID Fiscal</dt>
-    <dd class="col-sm-9">{{ registro.tax_id or "" }}</dd>
-    <dt class="col-sm-3">Clasificación</dt>
-    <dd class="col-sm-9">{{ registro.classification or "" }}</dd>
-  </dl>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Nombre comercial') }}</label><p>{{ registro.comercial_name or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('ID fiscal') }}</label><p>{{ registro.tax_id or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Clasificación') }}</label><p>{{ registro.classification or '-' }}</p></div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}
