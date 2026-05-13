@@ -25,6 +25,7 @@ from cacao_accounting.datos.dev.data import (
     _make_bancos,
     _make_bodegas,
     _make_centros_de_costos,
+    _make_comprobantes_contables,
     _make_cuentas,
     _make_documentos,
     _make_entidades,
@@ -36,6 +37,7 @@ from cacao_accounting.datos.dev.data import (
     _make_items_recepcion,
     _make_periodos,
     _make_proyectos,
+    _make_recurring_templates,
     _make_series,
     _make_tasas_de_cambio,
     _make_terceros,
@@ -56,6 +58,9 @@ def demo_usuarios():
     from cacao_accounting.database import User
 
     for u in BASE_USUARIOS:
+        exists = database.session.execute(database.select(User).filter_by(user=u.get("user"))).scalars().first()
+        if exists:
+            continue
         usuario = User(
             user=u.get("user"),
             e_mail=u.get("e_mail"),
@@ -143,6 +148,36 @@ def cargar_proyectos():
     database.session.commit()
 
 
+def demo_libros():
+    """Libros contables adicionales para la empresa cacao."""
+    from cacao_accounting.database import Book
+
+    libros = [
+        Book(code="FIN", name="Financiero", entity="cacao", currency="USD", is_primary=False, default=False, status="activo"),
+        Book(code="MGMT", name="Gerencia", entity="cacao", currency="EUR", is_primary=False, default=False, status="activo"),
+    ]
+    for lib in libros:
+        database.session.add(lib)
+    database.session.commit()
+
+
+def cargar_comprobantes():
+    """Crea y contabiliza comprobantes de demostración."""
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+
+    for c in _make_comprobantes_contables():
+        journal = create_journal_draft(c, user_id="admin")
+        submit_journal(journal.id)
+
+
+def cargar_plantillas_recurrentes():
+    """Crea plantillas recurrentes de demostración."""
+    from cacao_accounting.contabilidad.recurring_journal_service import create_recurring_template
+
+    for t in _make_recurring_templates():
+        create_recurring_template(t["data"], t["items"], user_id="admin")
+
+
 def tasas_de_cambio():
     """Tasa de Cambio de demostración."""
     for t in _make_tasas_de_cambio():
@@ -192,6 +227,7 @@ def master_data():
     demo_usuarios()
     asignar_usuario_a_roles()
     demo_entidad()
+    demo_libros()
     demo_unidades()
     cargar_centros_de_costos()
     cargar_proyectos()
@@ -217,6 +253,8 @@ def transacciones():
     """Crea transacciones de desarrollo en la base de datos."""
     periodo_contable()
     _cargar_documentos_demo()
+    cargar_comprobantes()
+    cargar_plantillas_recurrentes()
     log.debug("Transacciones de Pruebas Creadas correctamente.")
 
 

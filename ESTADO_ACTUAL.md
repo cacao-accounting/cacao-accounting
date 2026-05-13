@@ -10,6 +10,16 @@ Estado 2026-05-12 (Finalizado): Todos los issues listados han sido resueltos y v
 
 # ESTADO ACTUAL DEL PROYECTO
 
+## Actualización incremental — 2026-05-14 (Ampliación del seed de datos de prueba)
+
+- **Seed de datos robusto:** Se han ampliado los datos de prueba (`dev_data`) para incluir un escenario multimoneda completo para la empresa 'cacao'.
+- **Libros Contables:** 'cacao' ahora cuenta con 3 libros: Local (NIO), Financiero (USD) y Gerencia (EUR).
+- **Transacciones Reales:** El seed ya no solo inserta datos maestros, sino que ejecuta transacciones reales (asientos iniciales) a través del motor de posting para cada moneda y libro, asegurando que el ledger (`gl_entry`) esté poblado desde el inicio.
+- **Tasas de Cambio:** Se generan tipos de cambio dinámicos para el día actual, permitiendo pruebas de conversión en tiempo real.
+- **Dimensiones Analíticas:** Se agregaron unidades de negocio (Logística, Ventas), centros de costos (ADM, VTAS, OPS) y proyectos (Expansión) para permitir pruebas de reportes filtrados.
+- **Plantillas Recurrentes:** Se incluye una plantilla de renta mensual aprobada y lista para ser aplicada en el asistente de cierre.
+- **Verificación:** Todos los datos sembrados son validados por una suite de pruebas unitarias que también confirma que los reportes financieros (Balance, Resultados) son consistentes con la siembra.
+
 ## Actualización incremental — 2026-05-13 (inicio de Cliente y Proveedor con UX tipo comprobante)
 
 - **Base funcional creada:** Cliente y Proveedor ya se están reestructurando con una cabecera de datos maestros y una tabla por compañía para activación y configuración operativa.

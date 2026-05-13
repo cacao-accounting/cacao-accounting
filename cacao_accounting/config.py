@@ -102,7 +102,7 @@ def probar_modo_escritorio() -> bool:
     # Probamos si se ha establecido la variable de entorno CACAO_ACCOUNTING-DESKTOP
     # En el codigo fuente de la distribución de escritorio se establece esta opción
     # previo a importar la aplicación principal.
-    elif environ.get("CACAO_ACCOUNTING_DESKTOP", default=False):
+    elif str(environ.get("CACAO_ACCOUNTING_DESKTOP", "False")).lower() == "true":
         return True
 
     else:

@@ -2197,3 +2197,26 @@ Mejorar `/accounting/period-close/monthly` para que la creación de un nuevo cie
 ### Verificación ejecutada
 - `venv/bin/python -m pytest tests/test_11_contabilidad_coverage.py::test_route_asistente_cierre_mensual tests/test_11_contabilidad_coverage.py::test_monthly_close_period_smart_select_filters_open_periods_by_company tests/test_11_contabilidad_coverage.py::test_monthly_close_creates_run_and_shows_step_detail -v -s --exitfirst` (3 passed).
 - `venv/bin/python -m ruff check cacao_accounting/search_select.py tests/test_11_contabilidad_coverage.py`
+
+## 2026-05-14 (Ampliación del seed de datos contables y multimoneda)
+
+### Petición del usuario
+Ampliar el seed inicial de datos de pruebas para el módulo de contabilidad incluyendo: comprobantes contables, templates recurrentes, tipos de cambio dinámicos, 3 libros contables (NIO, USD, EUR) para la empresa cacao, y nuevas unidades, centros de costos y proyectos. Validar exhaustivamente con pruebas unitarias que el backend registra correctamente en el ledger multimoneda y que los reportes financieros reflejan estos datos.
+
+### Resumen técnico de cambios
+- `cacao_accounting/datos/base/__init__.py`: se incluyó el Euro (EUR) en la carga rápida de monedas.
+- `cacao_accounting/datos/dev/data.py`:
+  - `_make_tasas_de_cambio`: genera tasas dinámicas para el día de ejecución (NIO/USD, NIO/EUR, USD/EUR).
+  - `_make_comprobantes_contables`: definiciones para asientos iniciales en NIO, USD y EUR usando cuentas de hoja de balance.
+  - `_make_recurring_templates`: plantilla de renta mensual pre-configurada.
+  - Ampliación de unidades de negocio (Logística, Ventas Norte), centros de costos (ADM, VTAS, OPS) y proyectos (Expansión Regional).
+- `cacao_accounting/datos/dev/__init__.py`:
+  - `demo_libros`: crea libros 'FIN' (USD) y 'MGMT' (EUR) además del 'FISC' (NIO) predeterminado.
+  - `cargar_comprobantes`: crea y contabiliza los JEs de prueba usando `journal_service`.
+  - `cargar_plantillas_recurrentes`: inicializa plantillas usando `recurring_journal_service`.
+  - `demo_usuarios`: ahora verifica existencia para evitar duplicados del usuario 'admin'.
+- `tests/test_seed_accounting.py`: nueva suite de pruebas que valida la existencia de libros, tipos de cambio, dimensiones analíticas, y la integridad de los registros en `gl_entry` por cada libro y moneda. También verifica que los reportes (Balance, Resultados, Balanza) cuadren con los datos sembrados.
+
+### Verificación ejecutada
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s tests/test_seed_accounting.py` (5 passed).
+- Verificación de que el posting engine resuelve correctamente tipos de cambio históricos/del día durante el seed.

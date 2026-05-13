@@ -19,9 +19,11 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Listado de Comprobantes Contables.') }}</h5>
+    {% if acceso.crear %}
     <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
       <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   <div class="table-responsive">
     <table class="ca-table">

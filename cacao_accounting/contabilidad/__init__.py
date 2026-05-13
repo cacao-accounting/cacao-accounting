@@ -11,7 +11,7 @@ from collections.abc import Sequence
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, flash, jsonify, redirect, render_template, request
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_
@@ -1779,7 +1779,13 @@ def nuevo_comprobante():
 @verifica_acceso("accounting")
 def contabilizar_comprobante(identifier: str):
     """Contabiliza un comprobante contable manual."""
+    from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if not permisos.autorizar:
+        abort(403)
 
     try:
         submit_journal(identifier)
@@ -1796,7 +1802,13 @@ def contabilizar_comprobante(identifier: str):
 @verifica_acceso("accounting")
 def rechazar_comprobante(identifier: str):
     """Rechaza un comprobante contable manual en borrador sin afectar ledger."""
+    from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, reject_journal_draft
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if not permisos.validar:
+        abort(403)
 
     try:
         reject_journal_draft(identifier, user_id=str(current_user.id))
@@ -1813,7 +1825,13 @@ def rechazar_comprobante(identifier: str):
 @verifica_acceso("accounting")
 def anular_comprobante(identifier: str):
     """Anula un comprobante contabilizado aplicando reversa en el ledger."""
+    from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, cancel_submitted_journal
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if not permisos.anular:
+        abort(403)
 
     try:
         cancel_submitted_journal(identifier, user_id=str(current_user.id))

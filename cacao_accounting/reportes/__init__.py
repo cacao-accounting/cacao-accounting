@@ -381,7 +381,7 @@ def _default_ledger_for_company(company_code: str) -> str | None:
         database.select(Book.code)
         .where(Book.entity == company_code)
         .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
-    ).scalar_one_or_none()
+    ).scalars().first()
 
 
 def _default_period_for_company(company_code: str, target_date: date | None = None) -> str | None:
