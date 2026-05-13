@@ -57,7 +57,7 @@
       <tbody>
         {% for item in consulta.items -%}
         <tr>
-          <td><span class="fw-bold">{{ item.origin }}</span></td>
+          <td><a class="fw-bold" href="{{ url_for('contabilidad.tipo_cambio', rate_id=item.id) }}">{{ item.origin }}</a></td>
           <td style="color:#94a3b8;" class="text-center">→</td>
           <td><span class="fw-bold">{{ item.destination }}</span></td>
           <td class="text-end">{{ "%.4f"|format(item.rate | float) }}</td>

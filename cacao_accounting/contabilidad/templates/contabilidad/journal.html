@@ -64,7 +64,7 @@
 {% set status_badge = 'bg-dark' %}
 {% endif %}
 
-<div class="ca-card" style="max-width:1100px;">
+<div class="ca-card">
     <div class="ca-card-header">
         <h5 class="ca-card-title">
             <i class="bi bi-receipt"></i> {{ registro.document_no or registro.serie or _('Comprobante contable') }}
@@ -156,7 +156,7 @@
     </div>
 </div>
 
-<div class="ca-card mt-3" style="max-width:1100px;">
+<div class="ca-card mt-3">
     <div class="ca-card-header">
         <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Líneas del comprobante') }}</h6>
         <small class="text-muted">{{ _('Seleccione una línea para ver detalle contable') }}</small>
@@ -209,7 +209,7 @@
     </div>
 </div>
 
-<div class="ca-card mt-3" style="max-width:1100px;" id="line-detail-panel">
+<div class="ca-card mt-3" id="line-detail-panel">
     <div class="ca-card-header">
         <h6 class="ca-card-title mb-0">{{ _('Detalle de línea seleccionada') }}</h6>
         <span class="badge bg-light text-dark" id="line-order-badge">#-</span>

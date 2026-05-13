@@ -1748,6 +1748,30 @@ def test_route_comprobantes_recurrentes(app_ctx):
     assert "Plantillas contables recurrentes" in html
 
 
+def test_route_nuevo_comprobante_recurrente_uses_journal_patterns(app_ctx):
+    from cacao_accounting.database import User
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.get("/accounting/journal/recurring/new")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'name: "naming_series_id"' in html
+    assert 'autoSelectDefault: true' in html
+    assert 'name="books"' in html
+    assert "selectedBooks.includes(book.value)" in html
+    assert "lineDetailModal" in html
+    assert "Unidad de negocio" in html
+    assert "Proyecto" in html
+    assert "Tipo de tercero" in html
+    assert "Tercero" in html
+    assert "Tipo de referencia" not in html
+    assert "Nombre de referencia" not in html
+    assert "Es anticipo" not in html
+
+
 def test_route_asistente_cierre_mensual(app_ctx):
     from cacao_accounting.database import User
 
@@ -1759,6 +1783,156 @@ def test_route_asistente_cierre_mensual(app_ctx):
     assert response.status_code == 200
     assert "Asistente de Cierre Mensual" in html
     assert "aplicar comprobantes recurrentes" in html
+    assert "Cierres mensuales" in html
+    assert "Crear cierre" in html
+    assert 'doctype: "company"' in html
+    assert 'doctype: "accounting_period_id"' in html
+    assert 'requiredFilters: ["company"]' in html
+    assert 'filters: { company: { selector: "#close-company" }, is_closed: false }' in html
+
+
+def test_monthly_close_creates_run_and_shows_step_detail(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseRun, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post("/accounting/period-close/monthly/new", data={"period_id": period.id}, follow_redirects=True)
+    html = response.get_data(as_text=True)
+    close_run = database.session.execute(database.select(PeriodCloseRun).filter_by(period_id=period.id)).scalar_one()
+
+    assert response.status_code == 200
+    assert close_run.run_status == "open"
+    assert "Paso 1: aplicar comprobantes recurrentes" in html
+    assert "Ejecutar paso" in html
+
+
+def test_monthly_close_period_smart_select_filters_open_periods_by_company(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    database.session.add(Entity(code="cafe", name="Cafe", company_name="Cafe SA", tax_id="J0002", currency="NIO"))
+    fiscal_year_cacao = FiscalYear(
+        entity="cacao",
+        name="FY-CACAO-SELECT",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    fiscal_year_cafe = FiscalYear(
+        entity="cafe",
+        name="FY-CAFE-SELECT",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add_all([fiscal_year_cacao, fiscal_year_cafe])
+    database.session.flush()
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                fiscal_year_id=fiscal_year_cacao.id,
+                name="CACAO-OPEN",
+                start=date(2026, 1, 1),
+                end=date(2026, 1, 31),
+                enabled=True,
+                is_closed=False,
+            ),
+            AccountingPeriod(
+                entity="cacao",
+                fiscal_year_id=fiscal_year_cacao.id,
+                name="CACAO-CLOSED",
+                start=date(2026, 2, 1),
+                end=date(2026, 2, 28),
+                enabled=True,
+                is_closed=True,
+            ),
+            AccountingPeriod(
+                entity="cafe",
+                fiscal_year_id=fiscal_year_cafe.id,
+                name="CAFE-OPEN",
+                start=date(2026, 1, 1),
+                end=date(2026, 1, 31),
+                enabled=True,
+                is_closed=False,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.get(
+        "/api/search-select?doctype=accounting_period_id&company=cacao&is_closed=false&q=&limit=10"
+    )
+    payload = response.get_json()
+    labels = [item["display_name"] for item in payload["results"]]
+
+    assert response.status_code == 200
+    assert "CACAO-OPEN" in labels
+    assert "CACAO-CLOSED" not in labels
+    assert "CAFE-OPEN" not in labels
+
+
+def test_monthly_close_apply_recurring_step_records_check(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseCheck, PeriodCloseRun, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE-STEP",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-06",
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 30),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.flush()
+    close_run = PeriodCloseRun(company="cacao", period_id=period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        f"/accounting/period-close/monthly/{close_run.id}/apply-recurring",
+        data={},
+        follow_redirects=True,
+    )
+    check = database.session.execute(database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)).scalar_one()
+
+    assert response.status_code == 200
+    assert check.check_type == "apply_recurring_journals"
+    assert check.check_status == "skipped"
+    assert "Historial de pasos" in response.get_data(as_text=True)
 
 
 def test_route_ver_comprobante_not_found(app_ctx):

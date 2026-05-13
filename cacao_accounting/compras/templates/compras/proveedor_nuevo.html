@@ -1,45 +1,201 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/proveedor_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">Proveedores</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nuevo Proveedor</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _('Compras') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">{{ _('Proveedores') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nuevo proveedor') }}</li>
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:860px;">
+<div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i> Nuevo Proveedor</h5>
-    <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    <h5 class="ca-card-title"><i class="bi bi-person-plus"></i>{{ _('Nuevo proveedor') }}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
     </div>
   </div>
-  <form method="post" id="form-main">
+  <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
-    <div class="mb-3">
-      {{ form.name.label(class="form-label") }}
-      {{ form.name(class="form-control") }}
+    <div class="col-12">
+      <div class="ca-card shadow-sm">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Nombre y tipo') }}</h6>
+        </div>
+        <div class="row g-3 p-3">
+          <div class="col-md-6">
+            <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+            {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="comercial_name">{{ _('Nombre comercial') }}</label>
+            {{ form.comercial_name(class="form-control form-control-sm", id="comercial_name") }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="tax_id">{{ _('ID fiscal') }}</label>
+            {{ form.tax_id(class="form-control form-control-sm", id="tax_id") }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label" for="classification">{{ _('Clasificación') }}</label>
+            {{ form.classification(class="form-control form-control-sm", id="classification") }}
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="mb-3">
-      {{ form.comercial_name.label(class="form-label") }}
-      {{ form.comercial_name(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ form.tax_id.label(class="form-label") }}
-      {{ form.tax_id(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ form.classification.label(class="form-label") }}
-      {{ form.classification(class="form-control") }}
+
+    <div class="col-12">
+      <div class="ca-card shadow-sm">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Configuración por compañía') }}</h6>
+        </div>
+        <div class="p-3">
+          <table class="ca-table">
+            <caption style="display:none;">{{ _('Configuración de activación del proveedor por compañía') }}</caption>
+            <thead>
+              <tr>
+                <th>{{ _('Compañía') }}</th>
+                <th>{{ _('Activo') }}</th>
+                <th>{{ _('Cuenta por pagar') }}</th>
+                <th>{{ _('Plantilla de impuestos') }}</th>
+                <th>{{ _('Sin OC') }}</th>
+                <th>{{ _('Sin recibo') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "company",
+                    name: "company",
+                    minChars: 1,
+                    preload: true,
+                    initialValue: {{ (selected_company or "") | tojson }},
+                    initialLabel: {{ (company_settings.company_label if company_settings else "") | tojson }},
+                    messages: {
+                      placeholder: {{ _('Buscar compañía para activar el proveedor')|tojson }},
+                      loading: {{ _('Cargando...')|tojson }},
+                      noResults: {{ _('Sin resultados')|tojson }},
+                      minChars: {{ _('Escriba para buscar')|tojson }},
+                      clear: {{ _('Limpiar')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" id="company_value" name="company" x-model="selectedValue">
+                    <input class="form-control form-control-sm ca-smart-select-input" id="company" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <template x-for="option in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                      </template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="align-middle">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="company_is_active" id="company_is_active" {% if not company_settings or company_settings.is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="company_is_active">{{ _('Sí') }}</label>
+                  </div>
+                </td>
+                <td>
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "account",
+                    name: "payable_account_id",
+                    minChars: 2,
+                    initialValue: {{ (company_settings.payable_account_id if company_settings else "") | tojson }},
+                    initialLabel: {{ (company_settings.payable_account_label if company_settings else "") | tojson }},
+                    filters: {
+                      company: { selector: "#company_value" },
+                      account_type: ["payable"],
+                      is_active: true
+                    },
+                    filterSources: ["#company_value"],
+                    requiredFilters: ["company"],
+                    messages: {
+                      placeholder: {{ _('Buscar cuenta por pagar')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba al menos 2 caracteres para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="payable_account_id" x-model="selectedValue">
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" id="payable_account_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "tax_template",
+                    name: "tax_template_id",
+                    minChars: 1,
+                    initialValue: {{ (company_settings.tax_template_id if company_settings else "") | tojson }},
+                    initialLabel: {{ (company_settings.tax_template_label if company_settings else "") | tojson }},
+                    filters: {
+                      company: { selector: "#company_value" },
+                      template_type: ["buying"],
+                      is_active: true
+                    },
+                    filterSources: ["#company_value"],
+                    requiredFilters: ["company"],
+                    messages: {
+                      placeholder: {{ _('Buscar plantilla de impuestos')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="tax_template_id" x-model="selectedValue">
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" id="tax_template_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="align-middle text-center">
+                  <div class="form-check d-inline-flex">
+                    <input class="form-check-input" type="checkbox" name="allow_purchase_invoice_without_order" id="allow_purchase_invoice_without_order" {% if company_settings and company_settings.allow_purchase_invoice_without_order %}checked{% endif %}>
+                  </div>
+                </td>
+                <td class="align-middle text-center">
+                  <div class="form-check d-inline-flex">
+                    <input class="form-check-input" type="checkbox" name="allow_purchase_invoice_without_receipt" id="allow_purchase_invoice_without_receipt" {% if company_settings and company_settings.allow_purchase_invoice_without_receipt %}checked{% endif %}>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </form>
 </div>

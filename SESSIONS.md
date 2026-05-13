@@ -1,5 +1,70 @@
 # SESSIONS
 
+## 2026-05-13 (inicio de Cliente y Proveedor con UX tipo comprobante)
+
+### Peticion del usuario
+Empezar la implementacion de los formularios de Cliente y Proveedor con la UX de referencia del comprobante contable, incorporando una tabla por compañia para activacion, cuenta por cobrar o pagar prellenada desde la configuracion de la empresa, regla fiscal por compañia y banderas operativas para compra.
+
+### Resumen tecnico de cambios
+- `database/__init__.py`: `CompanyParty` ahora guarda plantilla fiscal por compañia y banderas de compra sin orden / sin recibo.
+- `party_settings.py`: nuevo servicio compartido para prellenar y guardar configuracion de tercero por compañia, incluyendo cuentas AR/AP y plantilla fiscal.
+- `ventas` y `compras`: las rutas de alta ahora crean el maestro global y la configuracion por compañia en una sola transaccion.
+- `ventas/templates/ventas/cliente_nuevo.html` y `compras/templates/compras/proveedor_nuevo.html`: reorganizadas con seccion de datos principales y tabla de configuracion por compañia, usando `smart-select` para cuentas y plantillas.
+
+### Verificacion ejecutada
+- `python -m py_compile cacao_accounting/database/__init__.py cacao_accounting/party_settings.py cacao_accounting/ventas/__init__.py cacao_accounting/ventas/forms.py cacao_accounting/compras/__init__.py cacao_accounting/compras/forms.py`
+- `get_errors` sobre los mismos archivos: sin errores
+
+## 2026-05-13 (maestros principales con UX tipo comprobante)
+
+### Peticion del usuario
+Migrar con buena letra los formularios maestros principales `Item`, `Cliente`, `Proveedor`, `Banco` y `Cuenta Bancaria` al estilo visual del comprobante contable, usando `smart-select`, y permitir que la cuenta bancaria se asocie a una cuenta contable de tipo banco.
+
+### Resumen tecnico de cambios
+- `Item`: formulario y vista separados, a ancho completo, con selección de UOM base mediante `smart-select`.
+- `Cliente` y `Proveedor`: formularios y vistas separados con el estilo de comprobante; el alta permite seleccionar compañía con `smart-select` para crear la activación `CompanyParty` sin cambiar la naturaleza global del tercero.
+- `Banco`: formulario y vista separados alineados al nuevo patrón visual.
+- `Cuenta Bancaria`: formulario con `smart-select` para banco, compañía, moneda y cuenta contable; la cuenta contable se filtra por compañía y `account_type=bank`, y se valida en servidor antes de guardar `gl_account_id`.
+- `search_select.py`: se agregaron doctypes `uom` y `bank` para reutilizar el framework de selección asistida.
+- Los listados de los cinco maestros enlazan al registro de lectura correspondiente.
+
+### Verificacion ejecutada
+- `venv/bin/python -m black cacao_accounting/search_select.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/ventas/__init__.py cacao_accounting/compras/__init__.py`
+- `venv/bin/python -m ruff check cacao_accounting/search_select.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/ventas/__init__.py cacao_accounting/compras/__init__.py`
+- `venv/bin/python -m flake8 cacao_accounting/search_select.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/ventas/__init__.py cacao_accounting/compras/__init__.py`
+- `venv/bin/python -m mypy cacao_accounting/search_select.py cacao_accounting/bancos/__init__.py cacao_accounting/bancos/forms.py cacao_accounting/ventas/__init__.py cacao_accounting/compras/__init__.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest tests/test_routes_map.py tests/test_01vistas.py tests/test_02forms.py tests/test_10_smart_select_js.py -q --exitfirst`
+
+## 2026-05-12 (UX contable gradual para registros maestros)
+
+### Peticion del usuario
+Actualizar con calma y sin sobreingenieria la UX de formularios y vistas del modulo de Contabilidad para alinearla con el estilo de comprobante contable, manteniendo plantillas separadas por tipo de registro y completando los tipos de cuenta requeridos por la configuracion de cuentas por defecto.
+
+### Resumen tecnico de cambios
+- Se quitaron limites de ancho fijos en formularios y vistas principales de registros contables para usar mejor el espacio disponible, incluido `/accounting/journal/<id>`.
+- Se agregaron vistas separadas de lectura para moneda, tasa de cambio, proyecto, año fiscal y periodo contable, y los listados enlazan a esas vistas.
+- Se mantuvo cada plantilla como archivo independiente; no se introdujeron macros nuevas para estos formularios.
+- `FormularioCuenta` ahora expone todos los tipos de cuenta requeridos por `CompanyDefaultAccount` y el catalogo base `base_es.json`/`base_es.csv`.
+
+### Verificacion ejecutada
+- `venv/bin/python -m black cacao_accounting/contabilidad/__init__.py cacao_accounting/contabilidad/forms.py`
+- `venv/bin/python -m ruff check cacao_accounting/contabilidad/__init__.py cacao_accounting/contabilidad/forms.py`
+- `venv/bin/python -m flake8 cacao_accounting/contabilidad/__init__.py cacao_accounting/contabilidad/forms.py`
+- `venv/bin/python -m mypy cacao_accounting/contabilidad/__init__.py cacao_accounting/contabilidad/forms.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest tests/test_routes_map.py tests/test_01vistas.py tests/test_02forms.py -q --exitfirst`
+
+## 2026-05-12 (ciclo FK en comprobantes recurrentes)
+
+### Peticion del usuario
+Corregir el `SAWarning` de SQLAlchemy al ordenar tablas para `DROP` por una dependencia circular entre `comprobante_contable` y `recurring_journal_application`.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/database/__init__.py`: se marco con `use_alter=True` la relacion circular entre `ComprobanteContable.recurrent_application_id` y `RecurringJournalApplication.journal_id`, conservando la trazabilidad bidireccional entre el comprobante generado y su aplicacion recurrente.
+
+### Verificacion ejecutada
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python - <<'PY' ... database.create_all(); database.drop_all() ... PY` con `SAWarning` elevado a error.
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest tests/test_12_recurring_journals.py -q`
+
 ## 2026-05-11 (smart-select JS en workflow CI)
 
 ### Peticion del usuario
@@ -2027,3 +2092,108 @@ Confirmar qué ítems están realmente pendientes revisando SESSIONS.md y el có
 
 ### Verificación ejecutada
 - export PYTHONPATH=$PYTHONPATH:. && CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True (578 passed).
+
+## 2026-05-12 (fix reportes financieros: toggle de filtros avanzados)
+
+### Petición del usuario
+Corregir el toggle Mostrar/Ocultar filtros avanzados en los cinco reportes financieros y mover los checkboxes `Mostrar anulaciones` e `Incluir Registro de Cierre` debajo del filtro de cuenta contable.
+
+### Plan implementado
+1. Identificar el motor compartido de reportes financieros (`reportes/__init__.py`) y la plantilla común (`financial_report.html`).
+2. Sustituir el estado avanzado dependiente de Alpine por JavaScript local robusto para el panel compartido.
+3. Mantener la persistencia del estado mediante el input `advanced`.
+4. Reubicar los checkboxes principales debajo de `Cuenta contable`.
+5. Ampliar la prueba de reportes para validar los cinco endpoints financieros.
+
+### Resumen técnico de cambios
+- `cacao_accounting/reportes/templates/reportes/financial_report.html`: toggle avanzado con IDs estables, `aria-expanded`, clase `is-hidden` inicial desde servidor, CSS propio para ocultar el contenedor completo y sincronización del input `advanced`.
+- `tests/test_08_reconciliation_reports.py`: cobertura para `account-movement`, `account-summary`, `trial-balance`, `balance-sheet` e `income-statement`, validando existencia del toggle, orden de checkboxes y que todo el bloque avanzado quede dentro del contenedor controlado.
+
+### Verificación ejecutada
+- `venv/bin/python -m pytest tests/test_08_reconciliation_reports.py -v -s --exitfirst` (38 passed).
+- `venv/bin/python -m ruff check tests/test_08_reconciliation_reports.py`
+- `venv/bin/python -m pytest tests/test_08_reconciliation_reports.py::test_financial_report_filters_prefill_and_hide_columns_for_summary_reports -v -s --exitfirst`
+
+## 2026-05-12 (fix comprobante contable: parámetro isclosing)
+
+### Petición del usuario
+Corregir `/accounting/journal/new?isclosing=true` para que la Etapa de Cierre quede marcada como `Cierre` por defecto.
+
+### Plan implementado
+1. Revisar la ruta `nuevo_comprobante` y confirmar que sí envía `initial_journal={"is_closing": True}`.
+2. Corregir el binding del selector en `journal_nuevo.html`, usando valores string estables en el `<select>` y convirtiendo a boolean al construir el payload.
+3. Ampliar el test existente para validar el estado inicial visual del selector.
+
+### Resumen técnico de cambios
+- `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`: `header.is_closing` inicia como `'true'`/`'false'`, el select usa `value="true|false"` y el payload envía boolean.
+- `tests/test_09_journal_entry_form.py`: el caso `isclosing=true` valida el JSON inicial y las opciones del selector.
+
+### Verificación ejecutada
+- `venv/bin/python -m pytest tests/test_09_journal_entry_form.py::test_journal_new_closing_query_prefills_closing_stage -v -s --exitfirst`
+- `venv/bin/python -m pytest tests/test_09_journal_entry_form.py -v -s --exitfirst` (24 passed).
+- `venv/bin/python -m ruff check tests/test_09_journal_entry_form.py`
+
+## 2026-05-12 (ajuste UX de plantillas recurrentes)
+
+### Petición del usuario
+Corregir `/accounting/journal/recurring/new`: permitir seleccionar la serie por defecto para el comprobante generado, cambiar selección de libro a checkboxes como en `/accounting/journal/new`, agregar modal de dimensiones contables por línea y retirar referencias a registros específicos de la plantilla.
+
+### Plan implementado
+1. Extender la plantilla recurrente para conservar `naming_series_id` y selección de libros.
+2. Hacer que el comprobante generado desde la plantilla herede serie y libros seleccionados.
+3. Cambiar `Seleccione libro` por selector de checkboxes con selección automática de todos los libros activos.
+4. Mantener el modal de línea con dimensiones contables: centro de costos, unidad, proyecto, tipo de tercero y tercero.
+5. Eliminar de la captura/aplicación recurrente los campos de referencia a registros específicos y anticipo.
+
+### Resumen técnico de cambios
+- `database/__init__.py`: `RecurringJournalTemplate` ahora soporta `naming_series_id` y `book_codes`.
+- `recurring_journal_service.py`: guarda libros/serie en la plantilla, los transfiere al comprobante generado y asigna identificador usando la serie seleccionada cuando exista.
+- `recurring_journal_nuevo.html`: añade Smart Select de secuencia con `autoSelectDefault`, checkboxes de libros, y mantiene el modal de dimensiones contables sin referencias documentales específicas.
+- Tests de recurrentes y cobertura de ruta actualizados para validar selección de libros, UI de serie, modal y ausencia de referencias específicas.
+
+### Verificación ejecutada
+- `venv/bin/python -m pytest tests/test_12_recurring_journals.py -v -s --exitfirst` (4 passed).
+- `venv/bin/python -m pytest tests/test_11_contabilidad_coverage.py::test_route_nuevo_comprobante_recurrente_uses_journal_patterns -v -s --exitfirst`
+- `venv/bin/python -m ruff check cacao_accounting/contabilidad/recurring_journal_service.py tests/test_12_recurring_journals.py tests/test_11_contabilidad_coverage.py`
+- `venv/bin/python -m pytest tests/test_11_contabilidad_coverage.py::test_route_nuevo_comprobante_recurrente_uses_journal_patterns tests/test_12_recurring_journals.py tests/test_04database_schema.py::TestSchemaTableCreation::test_minimum_90_tables -v -s --exitfirst` (6 passed).
+- `venv/bin/python -m ruff check cacao_accounting/database/__init__.py cacao_accounting/contabilidad/__init__.py cacao_accounting/contabilidad/forms.py cacao_accounting/contabilidad/recurring_journal_service.py tests/test_11_contabilidad_coverage.py tests/test_12_recurring_journals.py`
+
+## 2026-05-12 (rediseño del asistente de cierre mensual)
+
+### Petición del usuario
+Corregir `/accounting/period-close/monthly`: el asistente debe ser un registro de cierre mensual con lista de cierres pasados, creación de nuevo cierre por periodo contable y ejecución paso a paso. Por ahora el único paso es aplicar comprobantes recurrentes definidos.
+
+### Plan implementado
+1. Convertir `/period-close/monthly` en pantalla de listado y creación de cierres mensuales (`PeriodCloseRun`).
+2. Agregar vista de detalle `/period-close/monthly/<id>` para continuar un cierre existente.
+3. Asociar el paso `apply_recurring_journals` al cierre y registrar resultado en `PeriodCloseCheck`.
+4. Mantener como único paso operativo la aplicación de plantillas recurrentes aprobadas aplicables al periodo.
+
+### Resumen técnico de cambios
+- `contabilidad/__init__.py`: nuevas rutas para crear cierre, ver cierre y ejecutar el paso de recurrentes asociado al cierre.
+- `monthly_close_assistant.html`: ahora renderiza lista/nuevo cierre o detalle step-by-step según contexto.
+- `tests/test_11_contabilidad_coverage.py`: cobertura de listado, creación de cierre y registro del paso ejecutado.
+
+### Verificación ejecutada
+- `venv/bin/python -m pytest tests/test_11_contabilidad_coverage.py::test_route_asistente_cierre_mensual tests/test_11_contabilidad_coverage.py::test_monthly_close_creates_run_and_shows_step_detail tests/test_11_contabilidad_coverage.py::test_monthly_close_apply_recurring_step_records_check -v -s --exitfirst` (3 passed).
+- `venv/bin/python -m ruff check tests/test_11_contabilidad_coverage.py cacao_accounting/contabilidad/__init__.py`
+
+## 2026-05-12 (smart-select en nuevo cierre mensual)
+
+### Petición del usuario
+Mejorar `/accounting/period-close/monthly` para que la creación de un nuevo cierre use Smart Select para seleccionar compañía y periodo contable, filtrando periodos abiertos asociados a la compañía seleccionada.
+
+### Plan implementado
+1. Agregar selector Smart Select de compañía en el formulario de nuevo cierre.
+2. Agregar selector Smart Select de periodo contable dependiente de compañía.
+3. Filtrar los periodos por `company` e `is_closed=false`.
+4. Crear un doctype de búsqueda `accounting_period_id` para devolver el ID real del periodo sin romper reportes que usan el nombre.
+
+### Resumen técnico de cambios
+- `search_select.py`: nuevo doctype `accounting_period_id` con `value_field="id"` y filtros `company`, `is_closed`, `is_active`.
+- `monthly_close_assistant.html`: formulario de nuevo cierre usa Smart Select para compañía y periodo abierto.
+- `tests/test_11_contabilidad_coverage.py`: cobertura de UI y del filtro de periodos abiertos por compañía.
+
+### Verificación ejecutada
+- `venv/bin/python -m pytest tests/test_11_contabilidad_coverage.py::test_route_asistente_cierre_mensual tests/test_11_contabilidad_coverage.py::test_monthly_close_period_smart_select_filters_open_periods_by_company tests/test_11_contabilidad_coverage.py::test_monthly_close_creates_run_and_shows_step_detail -v -s --exitfirst` (3 passed).
+- `venv/bin/python -m ruff check cacao_accounting/search_select.py tests/test_11_contabilidad_coverage.py`

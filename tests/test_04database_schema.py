@@ -69,6 +69,15 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_fiscal_year_table_exists(self):
         self.assertIn("fiscal_year", self.tables)
 
+    def test_fiscal_year_closing_keys_use_alter(self):
+        from cacao_accounting.database import ComprobanteContable, FiscalYear
+
+        closing_voucher_fk = next(iter(FiscalYear.__table__.c.closing_voucher_id.foreign_keys))
+        fiscal_year_fk = next(iter(ComprobanteContable.__table__.c.fiscal_year_id.foreign_keys))
+
+        self.assertTrue(closing_voucher_fk.use_alter)
+        self.assertTrue(fiscal_year_fk.use_alter)
+
     def test_accounting_period_table_exists(self):
         self.assertIn("accounting_period", self.tables)
 

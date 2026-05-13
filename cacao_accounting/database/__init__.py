@@ -419,7 +419,11 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
     year_end_date = database.Column(database.Date(), nullable=False)
     is_closed = database.Column(database.Boolean(), default=False, nullable=False)
     financial_closed = database.Column(database.Boolean(), default=False, nullable=False)
-    closing_voucher_id = database.Column(database.String(26), database.ForeignKey("comprobante_contable.id"), nullable=True)
+    closing_voucher_id = database.Column(
+        database.String(26),
+        database.ForeignKey("comprobante_contable.id", use_alter=True),
+        nullable=True,
+    )
 
 
 class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -762,6 +766,9 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     credit_limit = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     payment_terms_id = database.Column(database.String(26), database.ForeignKey(PAYMENT_TERMS_ID), nullable=True, index=True)
+    tax_template_id = database.Column(database.String(26), database.ForeignKey("tax_template.id"), nullable=True, index=True)
+    allow_purchase_invoice_without_order = database.Column(database.Boolean(), default=False, nullable=False)
+    allow_purchase_invoice_without_receipt = database.Column(database.Boolean(), default=False, nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -1585,13 +1592,17 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     is_closing = database.Column(database.Boolean(), default=False, nullable=False)
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)
-    fiscal_year_id = database.Column(database.String(26), database.ForeignKey("fiscal_year.id"), nullable=True)
+    fiscal_year_id = database.Column(
+        database.String(26),
+        database.ForeignKey("fiscal_year.id", use_alter=True),
+        nullable=True,
+    )
     is_recurrent = database.Column(database.Boolean(), default=False, nullable=False)
     recurrent_template_id = database.Column(
         database.String(26), database.ForeignKey("recurring_journal_template.id"), nullable=True
     )
     recurrent_application_id = database.Column(
-        database.String(26), database.ForeignKey("recurring_journal_application.id"), nullable=True
+        database.String(26), database.ForeignKey("recurring_journal_application.id", use_alter=True), nullable=True
     )
 
 
@@ -1602,6 +1613,8 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
     code = database.Column(database.String(50), unique=True, index=True, nullable=False)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
     ledger_id = database.Column(database.String(26), database.ForeignKey("book.id"), nullable=True, index=True)
+    naming_series_id = database.Column(database.String(26), database.ForeignKey("naming_series.id"), nullable=True)
+    book_codes = database.Column(database.Text(), nullable=True)
     name = database.Column(database.String(100), nullable=False)
     description = database.Column(database.Text(), nullable=True)
     start_date = database.Column(database.Date(), nullable=False)
@@ -1663,7 +1676,9 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     application_date = database.Column(database.Date(), nullable=False)
     # applied, failed, reversed, skipped
     status = database.Column(database.String(20), default="applied", nullable=False, index=True)
-    journal_id = database.Column(database.String(26), database.ForeignKey("comprobante_contable.id"), nullable=True)
+    journal_id = database.Column(
+        database.String(26), database.ForeignKey("comprobante_contable.id", use_alter=True), nullable=True
+    )
     applied_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
     error_message = database.Column(database.Text(), nullable=True)
 

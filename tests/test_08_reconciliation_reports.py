@@ -605,19 +605,63 @@ def test_financial_report_filters_prefill_and_hide_columns_for_summary_reports(a
         session["_user_id"] = report_user.id
         session["_fresh"] = True
 
-    summary_response = client.get("/reports/trial-balance")
-    summary_html = summary_response.get_data(as_text=True)
-    detail_response = client.get("/reports/account-movement")
-    detail_html = detail_response.get_data(as_text=True)
+    report_paths = [
+        "/reports/account-movement",
+        "/reports/account-summary",
+        "/reports/trial-balance",
+        "/reports/balance-sheet",
+        "/reports/income-statement",
+    ]
 
-    assert summary_response.status_code == 200
+    rendered_reports = {}
+    for report_path in report_paths:
+        response = client.get(report_path)
+        html = response.get_data(as_text=True)
+        rendered_reports[report_path] = html
+
+        assert response.status_code == 200
+        assert 'id="financial-advanced-state" name="advanced"' in html
+        assert 'id="financial-advanced-toggle"' in html
+        assert 'aria-controls="financial-advanced-filters"' in html
+        assert 'id="financial-advanced-filters"' in html
+        assert (
+            'class="ca-report-advanced-filters d-grid gap-2 is-hidden" id="financial-advanced-filters"'
+            in html
+        )
+
+        account_index = html.index('name="account_code"')
+        cancellations_index = html.index('name="show_cancellations"')
+        closing_index = html.index('name="include_closing"')
+        advanced_index = html.index('id="financial-advanced-filters"')
+        assert account_index < cancellations_index < closing_index < advanced_index
+
+        advanced_block = html[advanced_index : html.index('class="d-flex flex-wrap gap-2 mt-2"', advanced_index)]
+        assert 'name="voucher_number"' in advanced_block
+        assert 'name="account_from"' in advanced_block
+        assert 'name="account_to"' in advanced_block
+        assert 'name="cost_center_code"' in advanced_block
+        assert 'name="unit_code"' in advanced_block
+        assert 'name="project_code"' in advanced_block
+        assert 'name="party_type"' in advanced_block
+        assert 'name="party_id"' in advanced_block
+        assert 'name="voucher_type"' in advanced_block
+        assert 'name="status"' in advanced_block
+        assert 'name="group_by"' in advanced_block
+
+    advanced_response = client.get("/reports/trial-balance?advanced=1")
+    advanced_html = advanced_response.get_data(as_text=True)
+    assert advanced_response.status_code == 200
+    assert 'aria-expanded="true"' in advanced_html
+    assert 'class="ca-report-advanced-filters d-grid gap-2" id="financial-advanced-filters"' in advanced_html
+
+    summary_html = rendered_reports["/reports/trial-balance"]
+    detail_html = rendered_reports["/reports/account-movement"]
+
     assert 'initialValue: "FISC"' in summary_html
     assert 'initialValue: "2026-05"' in summary_html
     assert "Columnas visibles" not in summary_html
     assert 'data-bs-target="#saveViewModal">Guardar vista' not in summary_html
     assert 'name="view_action" value="reset">Eliminar vista' not in summary_html
-    assert 'x-show="advanced" x-cloak' in summary_html
-    assert detail_response.status_code == 200
     assert "Columnas visibles" in detail_html
 
 

@@ -10,6 +10,46 @@ Estado 2026-05-12 (Finalizado): Todos los issues listados han sido resueltos y v
 
 # ESTADO ACTUAL DEL PROYECTO
 
+## Actualización incremental — 2026-05-13 (inicio de Cliente y Proveedor con UX tipo comprobante)
+
+- **Base funcional creada:** Cliente y Proveedor ya se están reestructurando con una cabecera de datos maestros y una tabla por compañía para activación y configuración operativa.
+- **Configuración por compañía:** `CompanyParty` ahora soporta plantilla fiscal y banderas para permitir factura de compra sin OC / sin recibo; la lógica de guardado vive en `party_settings.py`.
+- **Prefill de cuentas:** La cuenta por cobrar o por pagar se prellena desde `CompanyDefaultAccount` y se guarda en `PartyAccount` con validación de compañía y tipo de cuenta.
+- **UX alineada:** Las plantillas de alta ya usan `smart-select` para compañía, cuentas y plantilla fiscal, siguiendo el patrón visual del comprobante contable.
+- **Estado actual:** Es una primera entrega funcional; falta completar edición, listado detallado por compañía y el maestro formal de tipo de tercero si se decide separar la clasificación libre.
+
+## Actualización incremental — 2026-05-13 (Maestros principales con UX tipo comprobante)
+
+- **Maestros migrados:** Item, Cliente, Proveedor, Banco y Cuenta Bancaria usan formularios y vistas separadas alineadas al estilo del comprobante contable.
+- **Smart Select aplicado:** Item selecciona UOM base con `smart-select`; Cliente y Proveedor seleccionan compañía para activación; Cuenta Bancaria selecciona banco, compañía, moneda y cuenta contable.
+- **Cuenta bancaria contable:** La cuenta bancaria puede asociarse a una cuenta contable `account_type=bank`; el filtro es visual y también se valida en servidor antes de guardar `gl_account_id`.
+- **Navegación de lectura:** Los listados de estos maestros enlazan al registro individual.
+- **Sin sobreingeniería:** No se introdujeron macros nuevas ni un renderer compartido; cada plantilla se mantiene explícita por tipo de registro.
+
+## Actualización incremental — 2026-05-12 (UX gradual de registros contables)
+
+- **Alcance conservador:** Se mantuvieron plantillas HTML separadas por tipo de registro y no se agregaron macros nuevas para la UX de estos formularios.
+- **Aprovechamiento de pantalla:** Los formularios y vistas de registros contables dejaron de tener `max-width` fijo; `/accounting/journal/<id>` también ocupa el ancho disponible.
+- **Vistas de lectura agregadas:** Monedas, tasas de cambio, proyectos, años fiscales y períodos contables ahora tienen URL propia de visualización y sus listados enlazan a ella.
+- **Tipos de cuenta completos:** `/accounting/account/new` expone todos los tipos de cuenta requeridos por el catálogo base y la configuración de cuentas por defecto.
+- **Verificación focalizada:** Pasan rutas, vistas y formularios con `tests/test_routes_map.py`, `tests/test_01vistas.py` y `tests/test_02forms.py`.
+
+## Actualización incremental — 2026-05-12 (Reportes financieros: filtros avanzados)
+
+- **Motor identificado:** Los cinco reportes financieros usan el renderer común de `cacao_accounting/reportes/__init__.py` y la plantilla `financial_report.html`.
+- **UX de filtros corregida:** El toggle Mostrar/Ocultar filtros avanzados ahora usa JavaScript local con estado inicial renderizado desde servidor y conserva `advanced=1|0` al aplicar filtros.
+- **Filtros principales reordenados:** `Mostrar anulaciones` e `Incluir Registro de Cierre` quedan visibles debajo de `Cuenta contable` en todos los reportes financieros.
+- **Comprobantes de cierre manuales:** `/accounting/journal/new?isclosing=true` precarga la Etapa de Cierre como `Cierre` en el selector del formulario.
+- **Plantillas recurrentes alineadas al comprobante normal:** `/accounting/journal/recurring/new` permite serie por defecto, selección de libros con checkboxes y edición avanzada de dimensiones por línea sin asociar la plantilla a registros específicos.
+- **Cierre mensual paso a paso:** `/accounting/period-close/monthly` ahora lista cierres mensuales, permite crear un cierre por periodo contable y continuar cada cierre desde una vista de pasos; el primer paso ejecuta comprobantes recurrentes y registra resultado en `PeriodCloseCheck`.
+- **Smart Select en cierre mensual:** El formulario de nuevo cierre selecciona compañía con Smart Select y filtra periodos contables abiertos por compañía antes de crear el cierre.
+
+## Actualización incremental — 2026-05-12 (Corrección de ciclo FK en recurrentes)
+
+- **Esquema recurrente:** Corregida la advertencia de SQLAlchemy durante `drop_all()` en SQLite causada por la dependencia circular entre `comprobante_contable` y `recurring_journal_application`.
+- **Trazabilidad conservada:** Se mantiene el vínculo bidireccional entre el comprobante contable generado y el registro de aplicación recurrente, marcando el ciclo explícitamente con `use_alter=True`.
+- **Verificación:** `create_all()`/`drop_all()` pasa con `SAWarning` tratado como error y las pruebas de recurrentes continúan pasando.
+
 ## Actualización incremental — 2026-05-12 (Cierre del módulo de contabilidad)
 
 - **Comprobantes Recurrentes:** Implementado el framework completo para plantillas contables que no impactan el ledger al aprobarse, permitiendo su aplicación diferida. Incluye validación de balance y estados operativos (`draft`, `approved`, `cancelled`, `completed`).

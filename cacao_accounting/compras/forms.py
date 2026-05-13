@@ -15,6 +15,12 @@ class FormularioProveedor(FlaskForm):
     comercial_name = StringField("Nombre Comercial")
     tax_id = StringField("ID Fiscal")
     classification = StringField("Clasificación")
+    company = StringField("Compañía")
+    payable_account_id = StringField("Cuenta por pagar")
+    tax_template_id = StringField("Plantilla de impuestos")
+    company_is_active = BooleanField("Activo en la compañía", default=True)
+    allow_purchase_invoice_without_order = BooleanField("Permitir factura sin orden de compra", default=False)
+    allow_purchase_invoice_without_receipt = BooleanField("Permitir factura sin recibo de compra", default=False)
 
 
 class FormularioOrdenCompra(FlaskForm):

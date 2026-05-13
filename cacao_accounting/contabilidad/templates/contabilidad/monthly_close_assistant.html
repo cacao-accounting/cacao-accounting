@@ -18,68 +18,177 @@
 <div class="ca-page-header d-flex justify-content-between align-items-center">
   <h4><i class="bi bi-calendar-check me-2" style="color:#78BF30"></i>{{ _('Asistente de Cierre Mensual') }}</h4>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('contabilidad.nuevo_comprobante', isclosing='true') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo Cierre') }}
+    {% if close_run is defined %}
+    <a href="{{ url_for('contabilidad.asistente_cierre_mensual') }}" class="btn btn-sm btn-outline-secondary">
+      {{ _('Ver cierres') }}
     </a>
+    {% endif %}
   </div>
 </div>
 
+{% if close_run is not defined %}
 <section class="ca-card mb-3">
   <div class="ca-card-header">
-    <h5 class="ca-card-title mb-0">{{ _('Selección de Periodo') }}</h5>
+    <h5 class="ca-card-title mb-0">{{ _('Nuevo cierre mensual') }}</h5>
   </div>
   <div class="p-3">
-    <form method="get" class="row g-3">
-      <div class="col-md-4">
-        <label for="company" class="form-label">{{ _('Entidad') }}</label>
-        <select name="company" id="company" class="form-select form-select-sm" onchange="this.form.submit()">
-          <option value="">{{ _('Seleccione entidad') }}</option>
-          {% for ent in entidades %}
-          <option value="{{ ent.code }}" {{ 'selected' if ent.code == company_code else '' }}>{{ ent.name }}</option>
-          {% endfor %}
-        </select>
+    <p class="text-muted">
+      {{ _('Cree un cierre mensual para ejecutar paso a paso las tareas del periodo. Por ahora el primer paso es aplicar comprobantes recurrentes aprobados.') }}
+    </p>
+    <form method="post" action="{{ url_for('contabilidad.nuevo_cierre_mensual') }}" class="row g-3 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-6">
+        <label class="form-label" for="close-company">{{ _('Compañía') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "company",
+          name: "company",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          messages: {
+            placeholder: {{ _('Buscar compañía')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin resultados')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+          <input type="hidden" id="close-company" name="company" x-model="selectedValue">
+          <div class="ca-smart-select-input-wrap">
+            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
+          </div>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="period_id">{{ _('Periodo contable a cerrar') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "accounting_period_id",
+          name: "period_id",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          loadOnFilterChange: true,
+          requiredFilters: ["company"],
+          filters: { company: { selector: "#close-company" }, is_closed: false },
+          filterSources: ["#close-company"],
+          messages: {
+            placeholder: {{ _('Buscar periodo abierto')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin periodos abiertos')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+          <input type="hidden" id="period_id" name="period_id" x-model="selectedValue" required>
+          <div class="ca-smart-select-input-wrap">
+            <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+            <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+              :title="messages.clear">×</button>
+          </div>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+            <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+              x-text="messages.noResults"></div>
+            <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+          </div>
+        </div>
       </div>
       <div class="col-md-4">
-        <label for="ledger" class="form-label">{{ _('Libro') }}</label>
-        <select name="ledger" id="ledger" class="form-select form-select-sm" onchange="this.form.submit()">
-          <option value="">{{ _('Seleccione libro') }}</option>
-          {% for book in books %}
-          <option value="{{ book.code }}" {{ 'selected' if book.code == ledger_id else '' }}>{{ book.code }} - {{ book.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label for="period" class="form-label">{{ _('Periodo') }}</label>
-        <select name="period" id="period" class="form-select form-select-sm" onchange="this.form.submit()">
-          <option value="">{{ _('Seleccione periodo') }}</option>
-          {% for p in periods %}
-          <option value="{{ p.id }}" {{ 'selected' if p.id == period_id else '' }}>{{ p.name }}</option>
-          {% endfor %}
-        </select>
+        <button class="btn btn-primary" type="submit">{{ _('Crear cierre') }}</button>
       </div>
     </form>
   </div>
 </section>
 
-{% if selected_period %}
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Cierres mensuales') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Periodo') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Creado') }}</th>
+          <th>{{ _('Acciones') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        {% set run_period = period_by_id.get(run.period_id) %}
+        <tr>
+          <td>{{ run.company }}</td>
+          <td>{{ run_period.name if run_period else run.period_id }}</td>
+          <td><span class="badge text-bg-secondary">{{ run.run_status }}</span></td>
+          <td>{{ run.created }}</td>
+          <td>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.ver_cierre_mensual', identifier=run.id) }}">
+              {{ _('Continuar') }}
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-3">{{ _('No hay cierres mensuales registrados.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Cierre mensual') }}</h5>
+  </div>
+  <div class="ca-report-context">
+    <div><strong>{{ _('Compañía') }}:</strong> {{ close_run.company }}</div>
+    <div><strong>{{ _('Periodo') }}:</strong> {{ selected_period.name if selected_period else close_run.period_id }}</div>
+    <div><strong>{{ _('Estado') }}:</strong> {{ close_run.run_status }}</div>
+    <div><strong>{{ _('Paso actual') }}:</strong> {{ _('Aplicar comprobantes recurrentes') }}</div>
+  </div>
+</section>
+
 <section class="ca-card mb-3">
   <div class="ca-card-header d-flex justify-content-between align-items-center">
-    <h5 class="ca-card-title mb-0">{{ _('Plantillas Recurrentes Aplicables') }}</h5>
-    {% if templates %}
-    <form action="{{ url_for('contabilidad.aplicar_recurrentes_cierre') }}" method="post">
+    <h5 class="ca-card-title mb-0">{{ _('Paso 1: aplicar comprobantes recurrentes') }}</h5>
+    <form action="{{ url_for('contabilidad.aplicar_recurrentes_cierre', identifier=close_run.id) }}" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="period_id" value="{{ period_id }}">
-      <input type="hidden" name="ledger_id" value="{{ ledger_id }}">
-      {% for t in templates %}
-      {% if t.id not in applied_ids %}
-      <input type="hidden" name="template_ids" value="{{ t.id }}">
+      {% for template in templates %}
+      {% if template.id not in applied_ids %}
+      <input type="hidden" name="template_ids" value="{{ template.id }}">
       {% endif %}
       {% endfor %}
       <button type="submit" class="btn btn-sm btn-success">
-        <i class="bi bi-play-fill"></i> {{ _('Aplicar Todas') }}
+        <i class="bi bi-play-fill"></i> {{ _('Ejecutar paso') }}
       </button>
     </form>
-    {% endif %}
   </div>
   <div class="table-responsive">
     <table class="ca-table">
@@ -88,38 +197,54 @@
           <th>{{ _('Plantilla') }}</th>
           <th>{{ _('Descripción') }}</th>
           <th>{{ _('Estado') }}</th>
-          <th>{{ _('Acción') }}</th>
         </tr>
       </thead>
       <tbody>
-        {% for t in templates %}
+        {% for template in templates %}
         <tr>
-          <td>{{ t.name }}</td>
-          <td>{{ t.description or '-' }}</td>
+          <td>{{ template.name }}</td>
+          <td>{{ template.description or '-' }}</td>
           <td>
-            {% if t.id in applied_ids %}
+            {% if template.id in applied_ids %}
             <span class="badge text-bg-success">{{ _('Aplicada') }}</span>
             {% else %}
             <span class="badge text-bg-warning">{{ _('Pendiente') }}</span>
             {% endif %}
           </td>
-          <td>
-            {% if t.id not in applied_ids %}
-            <form action="{{ url_for('contabilidad.aplicar_recurrentes_cierre') }}" method="post" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="period_id" value="{{ period_id }}">
-              <input type="hidden" name="ledger_id" value="{{ ledger_id }}">
-              <input type="hidden" name="template_ids" value="{{ t.id }}">
-              <button type="submit" class="btn btn-sm btn-outline-primary">{{ _('Aplicar') }}</button>
-            </form>
-            {% else %}
-            -
-            {% endif %}
-          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="4" class="text-center text-muted py-3">{{ _('No hay plantillas pendientes para este periodo.') }}</td>
+          <td colspan="3" class="text-center text-muted py-3">{{ _('No hay plantillas recurrentes aplicables.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Historial de pasos') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th>{{ _('Paso') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Mensaje') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for check in checks %}
+        <tr>
+          <td>{{ check.check_type }}</td>
+          <td><span class="badge text-bg-secondary">{{ check.check_status }}</span></td>
+          <td>{{ check.message or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="text-center text-muted py-3">{{ _('Aún no se han ejecutado pasos.') }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -127,64 +252,5 @@
   </div>
 </section>
 {% endif %}
-
-<section class="ca-card mb-3">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title mb-0">{{ _('Paso 1: aplicar comprobantes recurrentes') }}</h5>
-  </div>
-  <div class="p-3">
-    <p class="text-muted mb-3">
-      {{ _('El primer paso del cierre mensual sera aplicar las plantillas recurrentes aprobadas para el periodo actual, evitando duplicados y registrando el resultado por plantilla.') }}
-    </p>
-    <div class="row g-3">
-      <div class="col-md-4">
-        <div class="border rounded-2 p-3 h-100">
-          <h6>{{ _('Contexto') }}</h6>
-          <ul class="mb-0">
-            <li>{{ _('Compania') }}</li>
-            <li>{{ _('Ano fiscal') }}</li>
-            <li>{{ _('Periodo actual') }}</li>
-            <li>{{ _('Fecha de cierre sugerida') }}</li>
-          </ul>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="border rounded-2 p-3 h-100">
-          <h6>{{ _('Estados visibles') }}</h6>
-          <ul class="mb-0">
-            <li>{{ _('Pendiente de aplicar') }}</li>
-            <li>{{ _('Ya aplicado') }}</li>
-            <li>{{ _('No aplicable') }}</li>
-            <li>{{ _('Fallido') }}</li>
-          </ul>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="border rounded-2 p-3 h-100">
-          <h6>{{ _('Acciones esperadas') }}</h6>
-          <ul class="mb-0">
-            <li>{{ _('Aplicar individualmente') }}</li>
-            <li>{{ _('Aplicar todos los pendientes') }}</li>
-            <li>{{ _('Revisar errores sin revertir exitosos') }}</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title mb-0">{{ _('Reglas de elegibilidad') }}</h5>
-  </div>
-  <div class="p-3">
-    <ul class="mb-0">
-      <li>{{ _('Solo se aplican plantillas aprobadas, dentro del rango de fechas y con periodo abierto.') }}</li>
-      <li>{{ _('Cada plantilla se aplica una sola vez por periodo contable.') }}</li>
-      <li>{{ _('Las cuentas deben estar activas y el asiento debe permanecer balanceado.') }}</li>
-      <li>{{ _('El comprobante generado debe quedar marcado como recurrente y vinculado a su aplicacion.') }}</li>
-    </ul>
-  </div>
-</section>
 
 {% endblock %}

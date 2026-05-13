@@ -56,7 +56,7 @@
       <tbody>
         {% for item in consulta.items %}
         <tr>
-          <td><span class="fw-bold">{{ item.name }}</span></td>
+          <td><a class="fw-bold" href="{{ url_for('contabilidad.fiscal_year_detail', fy_id=item.id) }}">{{ item.name }}</a></td>
           <td>{{ item.entity }}</td>
           <td>{{ item.year_start_date }}</td>
           <td>{{ item.year_end_date }}</td>

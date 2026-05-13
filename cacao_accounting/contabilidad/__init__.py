@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -118,6 +119,22 @@ def nueva_moneda():
         titulo=TITULO,
         form=formulario,
     )
+
+
+@contabilidad.route("/currency/<code>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def moneda(code):
+    """Vista de una moneda."""
+    from cacao_accounting.database import Currency
+
+    registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La moneda indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.monedas"))
+
+    return render_template("contabilidad/moneda.html", registro=registro)
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -926,6 +943,22 @@ def nuevo_proyecto():
     )
 
 
+@contabilidad.route("/project/<project_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def proyecto(project_id):
+    """Vista de un proyecto."""
+    from cacao_accounting.database import Project
+
+    registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El proyecto indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.proyectos"))
+
+    return render_template("contabilidad/proyecto.html", registro=registro, statusweb=STATUS)
+
+
 @contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -1079,6 +1112,22 @@ def fiscal_year_edit(fy_id):
     )
 
 
+@contabilidad.route("/fiscal_year/<fy_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def fiscal_year_detail(fy_id):
+    """Vista de un año fiscal."""
+    from cacao_accounting.database import FiscalYear
+
+    registro = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El año fiscal indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.fiscal_year_list"))
+
+    return render_template("contabilidad/fiscal_year.html", registro=registro)
+
+
 @contabilidad.route("/fiscal_year/<fy_id>/delete")
 @login_required
 @modulo_activo("accounting")
@@ -1191,6 +1240,22 @@ def accounting_period_delete(period_id):
     return redirect(url_for("contabilidad.periodo_contable"))
 
 
+@contabilidad.route("/accounting_period/<period_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def accounting_period_detail(period_id):
+    """Vista de un período contable."""
+    from cacao_accounting.database import AccountingPeriod
+
+    registro = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El período contable indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.periodo_contable"))
+
+    return render_template("contabilidad/periodo.html", registro=registro)
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Tipos de Cambio
 @contabilidad.route("/exchange")
@@ -1252,6 +1317,22 @@ def nueva_tasa_cambio():
         titulo=TITULO,
         form=formulario,
     )
+
+
+@contabilidad.route("/exchange/<rate_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def tipo_cambio(rate_id):
+    """Vista de una tasa de cambio."""
+    from cacao_accounting.database import ExchangeRate
+
+    registro = database.session.execute(database.select(ExchangeRate).filter_by(id=rate_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La tasa de cambio indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.tasa_cambio"))
+
+    return render_template("contabilidad/tc.html", registro=registro)
 
 
 @contabilidad.route("/accounting_period")
@@ -1348,12 +1429,16 @@ def nuevo_comprobante_recurrente():
                 raise RecurringJournalError("Debe incluir al menos dos líneas contables.")
 
             items = json.loads(items_json)
+            selected_books = request.form.getlist("books")
+            ledger_id = selected_books[0] if selected_books else formulario.ledger_id.data
             create_recurring_template(
                 data={
                     "code": formulario.code.data,
                     "name": formulario.name.data,
                     "company": formulario.company.data,
-                    "ledger_id": formulario.ledger_id.data or None,
+                    "ledger_id": ledger_id or None,
+                    "books": selected_books,
+                    "naming_series_id": request.form.get("naming_series_id") or None,
                     "description": formulario.description.data,
                     "start_date": formulario.start_date.data,
                     "end_date": formulario.end_date.data,
@@ -1449,97 +1534,168 @@ def cancelar_plantilla_recurrente(identifier: str):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def asistente_cierre_mensual():
-    """Asistente de cierre mensual."""
-    from cacao_accounting.database import Entity, Book, AccountingPeriod
-    from cacao_accounting.contabilidad.recurring_journal_service import get_applicable_templates
+    """Lista de ejecuciones de cierre mensual."""
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
-    company_code = request.args.get("company")
-    ledger_id = request.args.get("ledger")
-    period_id = request.args.get("period")
+    runs = (
+        database.session.execute(
+            database.select(PeriodCloseRun).order_by(PeriodCloseRun.created.desc(), PeriodCloseRun.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+    periods = (
+        database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.is_closed.is_(False)))
+        .scalars()
+        .all()
+    )
+    period_by_id = {period.id: period for period in periods}
 
-    entidades = database.session.execute(database.select(Entity)).scalars().all()
-    books = []
-    if company_code:
-        books = (
-            database.session.execute(database.select(Book).filter_by(entity=company_code, status="activo"))
+    return render_template(
+        "contabilidad/monthly_close_assistant.html",
+        titulo="Asistente de Cierre Mensual - " + APPNAME,
+        runs=runs,
+        periods=periods,
+        period_by_id=period_by_id,
+    )
+
+
+@contabilidad.route("/period-close/monthly/new", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_cierre_mensual():
+    """Crea un registro de cierre mensual para un periodo."""
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+
+    period_id = request.form.get("period_id")
+    period = database.session.get(AccountingPeriod, period_id)
+    if not period:
+        flash("Periodo no encontrado.", "danger")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    existing = database.session.execute(
+        database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
+    ).scalar_one_or_none()
+    if existing:
+        flash("Ya existe un cierre mensual para ese periodo.", "warning")
+        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=existing.id))
+
+    close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.commit()
+    flash("Cierre mensual creado.", "success")
+    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+
+
+@contabilidad.route("/period-close/monthly/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_cierre_mensual(identifier: str):
+    """Vista paso a paso de una ejecución de cierre mensual."""
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        PeriodCloseCheck,
+        PeriodCloseRun,
+        RecurringJournalApplication,
+        RecurringJournalTemplate,
+    )
+
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash("Cierre mensual no encontrado.", "warning")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    period = database.session.get(AccountingPeriod, close_run.period_id)
+    templates: Sequence[RecurringJournalTemplate] = []
+    applied_ids: list[str] = []
+    if period:
+        templates = (
+            database.session.execute(
+                database.select(RecurringJournalTemplate)
+                .filter_by(company=close_run.company, status="approved")
+                .where(RecurringJournalTemplate.start_date <= period.end)
+                .where(RecurringJournalTemplate.end_date >= period.end)
+                .where(RecurringJournalTemplate.is_completed.is_(False))
+                .order_by(RecurringJournalTemplate.code)
+            )
             .scalars()
             .all()
         )
-
-    periods = []
-    if company_code:
-        periods = (
-            database.session.execute(database.select(AccountingPeriod).filter_by(entity=company_code, is_closed=False))
-            .scalars()
-            .all()
-        )
-
-    templates = []
-    selected_period = None
-    if company_code and ledger_id and period_id:
-        selected_period = database.session.get(AccountingPeriod, period_id)
-        if selected_period:
-            templates = get_applicable_templates(company_code, ledger_id, selected_period.end)
-
-    from cacao_accounting.database import RecurringJournalApplication
-
-    applied_ids = []
-    if selected_period:
         applied_apps = (
             database.session.query(RecurringJournalApplication)
             .filter_by(
-                company=company_code,
-                ledger_id=ledger_id,
-                fiscal_year=str(selected_period.fiscal_year_id),
-                accounting_period=selected_period.name,
+                company=close_run.company,
+                fiscal_year=str(period.fiscal_year_id),
+                accounting_period=period.name,
                 status="applied",
             )
             .all()
         )
         applied_ids = [app.template_id for app in applied_apps]
 
+    checks = (
+        database.session.execute(
+            database.select(PeriodCloseCheck)
+            .filter_by(close_run_id=close_run.id)
+            .order_by(PeriodCloseCheck.created.desc(), PeriodCloseCheck.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
     return render_template(
         "contabilidad/monthly_close_assistant.html",
         titulo="Asistente de Cierre Mensual - " + APPNAME,
-        entidades=entidades,
-        books=books,
-        periods=periods,
-        company_code=company_code,
-        ledger_id=ledger_id,
-        period_id=period_id,
+        close_run=close_run,
+        selected_period=period,
         templates=templates,
         applied_ids=applied_ids,
-        selected_period=selected_period,
+        checks=checks,
     )
 
 
-@contabilidad.route("/period-close/monthly/apply-recurring", methods=["POST"])
+@contabilidad.route("/period-close/monthly/<identifier>/apply-recurring", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def aplicar_recurrentes_cierre():
-    """Aplica plantillas recurrentes desde el asistente de cierre."""
+def aplicar_recurrentes_cierre(identifier: str):
+    """Aplica plantillas recurrentes desde un registro de cierre mensual."""
     from cacao_accounting.contabilidad.recurring_journal_service import (
         RecurringJournalError,
         apply_recurring_template,
     )
-    from cacao_accounting.database import AccountingPeriod
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, PeriodCloseRun, RecurringJournalTemplate
 
-    template_ids = request.form.getlist("template_ids")
-    period_id = request.form.get("period_id")
-    ledger_id = request.form.get("ledger_id")
-
-    if not template_ids or not period_id:
-        flash("Debe seleccionar al menos una plantilla y un periodo.", "warning")
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash("Cierre mensual no encontrado.", "danger")
         return redirect(url_for("contabilidad.asistente_cierre_mensual"))
 
-    period = database.session.get(AccountingPeriod, period_id)
+    period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
         flash("Periodo no encontrado.", "danger")
-        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+
+    template_ids = request.form.getlist("template_ids")
+    if not template_ids:
+        templates = (
+            database.session.execute(
+                database.select(RecurringJournalTemplate)
+                .filter_by(company=close_run.company, status="approved")
+                .where(RecurringJournalTemplate.start_date <= period.end)
+                .where(RecurringJournalTemplate.end_date >= period.end)
+                .where(RecurringJournalTemplate.is_completed.is_(False))
+            )
+            .scalars()
+            .all()
+        )
+        template_ids = [template.id for template in templates]
 
     success_count = 0
     errors = []
+    close_run.run_status = "in_progress"
 
     for tid in template_ids:
         try:
@@ -1554,20 +1710,28 @@ def aplicar_recurrentes_cierre():
         except RecurringJournalError as exc:
             errors.append(str(exc))
 
+    check_status = "passed" if success_count and not errors else "failed" if errors else "skipped"
+    message = f"Plantillas aplicadas: {success_count}."
+    if errors:
+        message = f"{message} Errores: {' | '.join(errors)}"
+    database.session.add(
+        PeriodCloseCheck(
+            close_run_id=close_run.id,
+            check_type="apply_recurring_journals",
+            check_status=check_status,
+            message=message,
+        )
+    )
+    close_run.run_status = "in_progress" if success_count else "open"
+    database.session.commit()
+
     if success_count > 0:
         flash(f"Se aplicaron {success_count} plantillas correctamente.", "success")
     if errors:
         for err in errors:
             flash(err, "danger")
 
-    return redirect(
-        url_for(
-            "contabilidad.asistente_cierre_mensual",
-            company=period.entity,
-            ledger=ledger_id,
-            period=period_id,
-        )
-    )
+    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
 
 
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
@@ -2339,6 +2503,7 @@ def fiscal_year_closing_list():
     )
 
     from cacao_accounting.database import Entity
+
     entidades = database.session.execute(database.select(Entity)).scalars().all()
 
     return render_template(
@@ -2380,9 +2545,9 @@ def fiscal_year_closing_new():
             flash(str(exc), "danger")
 
     # Obtener años fiscales cerrados administrativamente pero no financieramente
-    fiscal_years = database.session.execute(
-        database.select(FiscalYear).filter_by(is_closed=True, financial_closed=False)
-    ).scalars().all()
+    fiscal_years = (
+        database.session.execute(database.select(FiscalYear).filter_by(is_closed=True, financial_closed=False)).scalars().all()
+    )
 
     return render_template(
         "contabilidad/fiscal_year_closing_nuevo.html",
