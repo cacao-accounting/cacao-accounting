@@ -33,11 +33,8 @@ def registra_monedas(carga_rapida):
     if carga_rapida:
         MONEDAS = (
             Currency(code="NIO", name="Cordobas", decimals=2),
-            Currency(
-                code="USD",
-                name="Dolares",
-                decimals=2,
-            ),
+            Currency(code="USD", name="Dolares", decimals=2),
+            Currency(code="EUR", name="Euros", decimals=2),
         )
         for m in MONEDAS:
             database.session.add(m)

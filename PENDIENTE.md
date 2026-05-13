@@ -17,6 +17,11 @@ Este documento registra lo que queda pendiente tras la consolidación de mayo de
 - [x] Rediseñar asistente de cierre mensual como registro step-by-step con lista de cierres, creación por periodo y paso inicial de comprobantes recurrentes.
 - [x] Usar Smart Select en nuevo cierre mensual para compañía y periodos contables abiertos filtrados por compañía.
 
+- [x] Ampliar el seed inicial de datos de prueba para cubrir escenarios multimoneda (NIO, USD, EUR).
+- [x] Incluir transacciones reales (JEs) y plantillas recurrentes en el proceso de siembra de datos.
+- [x] Dinamizar fechas de registros y tasas de cambio según el mes de ejecución.
+- [x] Agregar unidades de negocio, centros de costos y proyectos adicionales al seed.
+
 ---
 
 ## Posting Contable y Core

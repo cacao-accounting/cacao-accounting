@@ -45,33 +45,33 @@ from cacao_accounting.database import (
 
 
 BASE_USUARIOS = [
-    {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": False, "classification": "system"},
-    {"user": "audit", "e_mail": "au@dm.com", "password": _pg("audit"), "active": False, "classification": "system"},
-    {"user": "analist", "e_mail": "an@dm.com", "password": _pg("analist"), "active": False, "classification": "system"},
-    {"user": "conta", "e_mail": "con@dm.com", "password": _pg("conta"), "active": False, "classification": "system"},
-    {"user": "contaj", "e_mail": "conj@dm.com", "password": _pg("contaj"), "active": False, "classification": "system"},
-    {"user": "compras", "e_mail": "compras@dm.com", "password": _pg("compras"), "active": False, "classification": "system"},
+    {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "system"},
+    {"user": "audit", "e_mail": "au@dm.com", "password": _pg("audit"), "active": True, "classification": "system"},
+    {"user": "analist", "e_mail": "an@dm.com", "password": _pg("analist"), "active": True, "classification": "system"},
+    {"user": "conta", "e_mail": "con@dm.com", "password": _pg("conta"), "active": True, "classification": "system"},
+    {"user": "contaj", "e_mail": "conj@dm.com", "password": _pg("contaj"), "active": True, "classification": "system"},
+    {"user": "compras", "e_mail": "compras@dm.com", "password": _pg("compras"), "active": True, "classification": "system"},
     {
         "user": "comprasj",
         "e_mail": "comprasj@dm.com",
         "password": _pg("comprasj"),
-        "active": False,
+        "active": True,
         "classification": "system",
     },
-    {"user": "ventas", "e_mail": "ventas@dm.com", "password": _pg("ventas"), "active": False, "classification": "system"},
-    {"user": "ventasj", "e_mail": "ventasj@dm.com", "password": _pg("ventasj"), "active": False, "classification": "system"},
-    {"user": "inventario", "e_mail": "in@dm.com", "password": _pg("inventario"), "active": False, "classification": "system"},
+    {"user": "ventas", "e_mail": "ventas@dm.com", "password": _pg("ventas"), "active": True, "classification": "system"},
+    {"user": "ventasj", "e_mail": "ventasj@dm.com", "password": _pg("ventasj"), "active": True, "classification": "system"},
+    {"user": "inventario", "e_mail": "in@dm.com", "password": _pg("inventario"), "active": True, "classification": "system"},
     {
         "user": "inventarioj",
         "e_mail": "inj@dm.com",
         "password": _pg("inventarioj"),
-        "active": False,
+        "active": True,
         "classification": "system",
     },
-    {"user": "tesoreria", "e_mail": "t@dm.com", "password": _pg("tesoreria"), "active": False, "classification": "system"},
-    {"user": "tesoreriaj", "e_mail": "tj@dm.com", "password": _pg("tesoreriaj"), "active": False, "classification": "system"},
-    {"user": "pasante", "e_mail": "p@dm.com", "password": _pg("pasante"), "active": False, "classification": "system"},
-    {"user": "usuario", "e_mail": "u@dm.com", "password": _pg("usuario"), "active": False, "classification": "system"},
+    {"user": "tesoreria", "e_mail": "t@dm.com", "password": _pg("tesoreria"), "active": True, "classification": "system"},
+    {"user": "tesoreriaj", "e_mail": "tj@dm.com", "password": _pg("tesoreriaj"), "active": True, "classification": "system"},
+    {"user": "pasante", "e_mail": "p@dm.com", "password": _pg("pasante"), "active": True, "classification": "system"},
+    {"user": "usuario", "e_mail": "u@dm.com", "password": _pg("usuario"), "active": True, "classification": "system"},
 ]
 
 USUARIO_ROLES = [
@@ -107,6 +107,8 @@ def _make_unidades() -> tuple:
         Unit(name="Casa Matriz", entity="cacao", code="matriz", status="active"),
         Unit(name="Movil", entity="cacao", code="movil", status="active"),
         Unit(name="Masaya", entity="cacao", code="masaya", status="inactive"),
+        Unit(name="Logistica", entity="cacao", code="logistica", status="active"),
+        Unit(name="Ventas Norte", entity="cacao", code="ventas_n", status="active"),
     )
 
 
@@ -320,6 +322,30 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
+            entity="cacao",
+            code="ADM",
+            name="Administración",
+            group=False,
+            status="active",
+        ),
+        CostCenter(
+            active=True,
+            entity="cacao",
+            code="VTAS",
+            name="Ventas",
+            group=False,
+            status="active",
+        ),
+        CostCenter(
+            active=True,
+            entity="cacao",
+            code="OPS",
+            name="Operaciones",
+            group=False,
+            status="active",
+        ),
+        CostCenter(
+            active=True,
             default=True,
             enabled=True,
             entity="cafe",
@@ -374,16 +400,92 @@ def _make_proyectos() -> tuple:
             budget=10000,
             status="open",
         ),
+        Project(
+            enabled=True,
+            entity="cacao",
+            code="EXPANSION",
+            name="Expansión Regional",
+            start=date(year=date.today().year, month=1, day=1),
+            end=date(year=date.today().year, month=12, day=31),
+            budget=500000,
+            status="open",
+        ),
     )
 
 
 def _make_tasas_de_cambio() -> tuple:
     """Crea instancias frescas de Tasas de Cambio."""
+    today = date.today()
     return (
-        ExchangeRate(origin="NIO", destination="USD", rate=34.5984, date=date(year=int(datetime.now().year), month=6, day=30)),
-        ExchangeRate(origin="NIO", destination="USD", rate=34.5984, date=date(year=int(datetime.now().year), month=6, day=29)),
-        ExchangeRate(origin="NIO", destination="USD", rate=34.5964, date=date(year=int(datetime.now().year), month=6, day=28)),
+        ExchangeRate(origin="NIO", destination="USD", rate=36.6243, date=today),
+        ExchangeRate(origin="NIO", destination="EUR", rate=40.1234, date=today),
+        ExchangeRate(origin="USD", destination="EUR", rate=1.0954, date=today),
     )
+
+
+def _make_comprobantes_contables() -> list:
+    """Crea definiciones de comprobantes contables dinámicos."""
+    today = date.today()
+    return [
+        {
+            "company": "cacao",
+            "posting_date": today.isoformat(),
+            "books": ["FISC"],
+            "reference": "INIT-NIO",
+            "memo": "Asiento inicial en Córdobas",
+            "lines": [
+                {"account": "11.01.001.001", "debit": 1000, "credit": 0, "cost_center": "A00000"},
+                {"account": "31.01", "debit": 0, "credit": 1000},
+            ],
+        },
+        {
+            "company": "cacao",
+            "posting_date": today.isoformat(),
+            "books": ["FIN"],
+            "transaction_currency": "USD",
+            "reference": "INIT-USD",
+            "memo": "Asiento inicial en Dólares",
+            "lines": [
+                {"account": "11.01.001.001", "debit": 100, "credit": 0, "currency": "USD"},
+                {"account": "31.01", "debit": 0, "credit": 100, "currency": "USD"},
+            ],
+        },
+        {
+            "company": "cacao",
+            "posting_date": today.isoformat(),
+            "books": ["MGMT"],
+            "transaction_currency": "EUR",
+            "reference": "INIT-EUR",
+            "memo": "Asiento inicial en Euros",
+            "lines": [
+                {"account": "11.01.001.001", "debit": 50, "credit": 0, "currency": "EUR"},
+                {"account": "31.01", "debit": 0, "credit": 50, "currency": "EUR"},
+            ],
+        },
+    ]
+
+
+def _make_recurring_templates() -> list:
+    """Crea definiciones de plantillas recurrentes."""
+    today = date.today()
+    return [
+        {
+            "data": {
+                "code": "RENT-MONTHLY",
+                "company": "cacao",
+                "name": "Pago de Renta Mensual",
+                "description": "Plantilla para pago recurrente de renta",
+                "start_date": today,
+                "end_date": date(today.year, 12, 31),
+                "frequency": "monthly",
+                "books": ["FISC"],
+            },
+            "items": [
+                {"account_code": "52.01.001", "debit": 500, "credit": 0, "cost_center": "ADM"},
+                {"account_code": "11.01.001.001", "debit": 0, "credit": 500},
+            ],
+        }
+    ]
 
 
 def _make_periodos() -> tuple:

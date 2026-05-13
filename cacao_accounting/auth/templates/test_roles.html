@@ -18,10 +18,10 @@
       </tr>
     </thead>
     <tbody>
-      <tr><td style="color:#64748b;">Nombre</td><td>{{ current_user.p_nombre }} {{ current_user.s_nombre }}</td></tr>
-      <tr><td style="color:#64748b;">Apellido</td><td>{{ current_user.p_apellido }} {{ current_user.s_apellido }}</td></tr>
-      <tr><td style="color:#64748b;">Correo</td><td>{{ current_user.correo_e }}</td></tr>
-      <tr><td style="color:#64748b;">Usuario</td><td>{{ current_user.usuario }}</td></tr>
+      <tr><td style="color:#64748b;">Nombre</td><td>{{ current_user.name }} {{ current_user.name2 }}</td></tr>
+      <tr><td style="color:#64748b;">Apellido</td><td>{{ current_user.last_name }} {{ current_user.last_name2 }}</td></tr>
+      <tr><td style="color:#64748b;">Correo</td><td>{{ current_user.e_mail }}</td></tr>
+      <tr><td style="color:#64748b;">Usuario</td><td>{{ current_user.user }}</td></tr>
       <tr><td style="color:#64748b;">UUID</td><td style="font-family:monospace;font-size:.8rem;">{{ current_user.id }}</td></tr>
     </tbody>
   </table>
@@ -43,7 +43,7 @@
     <tbody>
       {% for role in roles %}
       <tr>
-        <td>{{ role.Usuario.usuario }}</td>
+        <td>{{ role.User.user }}</td>
         <td>{{ role.Roles.name }}</td>
         <td style="font-family:monospace;font-size:.8rem;">{{ role.Roles.id }}</td>
       </tr>
