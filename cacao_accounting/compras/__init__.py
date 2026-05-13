@@ -50,6 +50,11 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.party_settings import (
+    build_party_company_settings,
+    draft_party_company_settings,
+    upsert_party_company_settings,
+)
 from cacao_accounting.version import APPNAME
 
 # < --------------------------------------------------------------------------------------------- >
@@ -486,21 +491,54 @@ def compras_reconciliation_panel():
 def compras_proveedor_nuevo():
     """Formulario para crear un nuevo proveedor."""
     from cacao_accounting.compras.forms import FormularioProveedor
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioProveedor()
     titulo = "Nuevo Proveedor - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    company_choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
+    company_settings = build_party_company_settings("supplier", selected_company) if selected_company else None
+    if request.method == "POST":
         proveedor = Party(
             party_type="supplier",
-            name=request.form.get("name"),
+            name=request.form.get("name") or "",
             comercial_name=request.form.get("comercial_name"),
             tax_id=request.form.get("tax_id"),
             classification=request.form.get("classification"),
         )
-        database.session.add(proveedor)
-        database.session.commit()
-        return redirect("/buying/supplier/list")
-    return render_template("compras/proveedor_nuevo.html", form=formulario, titulo=titulo)
+        try:
+            database.session.add(proveedor)
+            database.session.flush()
+            company = request.form.get("company") or None
+            if company:
+                upsert_party_company_settings(
+                    proveedor.id,
+                    "supplier",
+                    company,
+                    is_active=request.form.get("company_is_active") is not None,
+                    receivable_account_id=None,
+                    payable_account_id=request.form.get("payable_account_id") or None,
+                    tax_template_id=request.form.get("tax_template_id") or None,
+                    allow_purchase_invoice_without_order=request.form.get("allow_purchase_invoice_without_order") is not None,
+                    allow_purchase_invoice_without_receipt=(
+                        request.form.get("allow_purchase_invoice_without_receipt") is not None
+                    ),
+                )
+            database.session.commit()
+            return redirect("/buying/supplier/list")
+        except ValueError as exc:
+            database.session.rollback()
+            if selected_company:
+                company_settings = draft_party_company_settings("supplier", selected_company, request.form)
+            flash(str(exc), "danger")
+    return render_template(
+        "compras/proveedor_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+    )
 
 
 @compras.route("/supplier/<supplier_id>")

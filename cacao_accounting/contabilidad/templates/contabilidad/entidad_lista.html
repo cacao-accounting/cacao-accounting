@@ -19,50 +19,72 @@
 
 {% if entidades_creadas %}
 
-<div class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-building"></i> Listado de Entidades.</h5>
-    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.nueva_entidad') }}" role="button">
-      <i class="bi bi-plus-lg me-1"></i>Nueva Entidad
+<div class="ca-page-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-building me-2" style="color:#78BF30"></i>{{ _('Entidades') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('contabilidad.nueva_entidad') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva Entidad') }}
     </a>
   </div>
-  <table class="ca-table">
-    <caption style="display: none;">Listado de entidades.</caption>
-    <thead>
-      <tr>
-        <th scope="col">Código</th>
-        <th scope="col">Razón Social</th>
-        <th scope="col">Nombre Comercial</th>
-        <th scope="col">ID Fiscal</th>
-        <th scope="col">Estado</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in consulta.items %}
-      <tr>
-        <td>
-          {{ macros.render_status(status=item.status, lista_status=statusweb) }}
-          <a href="{{ url_for('contabilidad.entidad', entidad_id=item.code) }}">{{ item.code }}</a>
-        </td>
-        <td>
-          <a href="{{ url_for('contabilidad.entidad', entidad_id=item.code) }}">{{ item.company_name }}</a>
-        </td>
-        <td>
-          <a href="{{ url_for('contabilidad.entidad', entidad_id=item.code) }}">{{ item.name }}</a>
-        </td>
-        <td>{{ item.tax_id }}</td>
-        <td>
-          {% if item.enabled %}
-          <span class="badge text-bg-secondary">Inhabilitar</span>
-          {% else %}
-          <span class="badge text-bg-success">Habilitar</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="mt-2">
+</div>
+
+<div class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Filtros') }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="{{ _('Buscar por nombre o código...') }}" value="{{ request.args.get('search', '') }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Filtrar') }}</button>
+        <a href="{{ url_for('contabilidad.entidades') }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Listado de Entidades') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none;">{{ _('Listado de entidades') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ _('Código') }}</th>
+          <th scope="col">{{ _('Razón Social') }}</th>
+          <th scope="col">{{ _('Nombre Comercial') }}</th>
+          <th scope="col">{{ _('ID Fiscal') }}</th>
+          <th scope="col">{{ _('Estado') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in consulta.items %}
+        <tr>
+          <td>
+            <a href="{{ url_for('contabilidad.entidad', entidad_id=item.code) }}" class="fw-bold">{{ item.code }}</a>
+          </td>
+          <td>{{ item.company_name }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.tax_id }}</td>
+          <td>
+            {% if item.status == 'activo' %}
+            <span class="badge bg-success">{{ _('Activo') }}</span>
+            {% elif item.status == 'predeterminado' %}
+            <span class="badge bg-primary">{{ _('Predeterminado') }}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ item.status }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="ca-card-footer">
     {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.entidades") }}
   </div>
 </div>

@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-import pytest
-from decimal import Decimal
+import json
 from datetime import date
+from decimal import Decimal
+
+import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import database, ComprobanteContable
@@ -51,6 +53,7 @@ def test_recurring_journal_flow(app_ctx):
             "name": "Amortizacion Seguros",
             "company": "abc",
             "ledger_id": "L01",
+            "books": ["L01", "L02"],
             "start_date": date(2026, 1, 1),
             "end_date": date(2026, 12, 31),
             "frequency": "monthly",
@@ -61,6 +64,7 @@ def test_recurring_journal_flow(app_ctx):
         ]
         template = create_recurring_template(data, items, user_id="admin")
         assert template.status == "draft"
+        assert json.loads(template.book_codes) == ["L01", "L02"]
 
         # 2. Aprobar
         approve_recurring_template(template.id, user_id="admin")
@@ -80,6 +84,7 @@ def test_recurring_journal_flow(app_ctx):
         journal = database.session.get(ComprobanteContable, app_log.journal_id)
         assert journal.is_recurrent is True
         assert journal.recurrent_template_id == template.id
+        assert json.loads(journal.book_codes) == ["L01", "L02"]
 
         # 4. Evitar duplicados
         with pytest.raises(RecurringJournalError, match="ya fue aplicada"):
@@ -122,9 +127,6 @@ def test_recurring_journal_extended_fields(app_ctx):
                 "project": "P1",
                 "party_type": "supplier",
                 "party_id": "S1",
-                "reference_type": "invoice",
-                "reference_name": "INV-001",
-                "is_advance": True,
             },
             {"account_code": "1000", "debit": 0, "credit": 500},
         ]
@@ -150,9 +152,9 @@ def test_recurring_journal_extended_fields(app_ctx):
         assert target_line.project == "P1"
         assert target_line.third_type == "supplier"
         assert target_line.third_code == "S1"
-        assert target_line.internal_reference == "invoice"
-        assert target_line.internal_reference_id == "INV-001"
-        assert target_line.is_advance is True
+        assert target_line.internal_reference is None
+        assert target_line.internal_reference_id is None
+        assert target_line.is_advance is False
 
 
 def test_posting_initializes_outstanding_amount(app_ctx):

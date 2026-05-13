@@ -34,7 +34,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
-        <td>{{ item.code }}</td>
+        <td><a class="fw-bold" href="{{ url_for('inventario.inventario_articulo', item_id=item.code) }}">{{ item.code }}</a></td>
         <td>{{ item.name }}</td>
         <td>{{ item.item_type }}</td>
         <td>{{ item.default_uom }}</td>

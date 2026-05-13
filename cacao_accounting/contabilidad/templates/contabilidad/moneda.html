@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.monedas') }}" class="link-dark">{{ _('Monedas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.code }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-currency-exchange"></i>{{ registro.code }} - {{ registro.name }}
+      {% if registro.active %}<span class="badge bg-success ms-2">{{ _('Activo') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactivo') }}</span>{% endif %}
+      {% if registro.default %}<span class="badge bg-warning text-dark ms-2">{{ _('Predeterminada') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.monedas') }}"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nueva_moneda') }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Código') }}</label><p>{{ registro.code }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Decimales') }}</label><p>{{ registro.decimals }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ _('Activo') if registro.active else _('Inactivo') }}</p></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

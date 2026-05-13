@@ -1,38 +1,43 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/articulo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">Artículos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _('Inventario') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">{{ _('Items') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-box"></i> {{ registro.name }}</h5>
+    <h5 class="ca-card-title">
+      <i class="bi bi-box-seam"></i>{{ registro.code }} - {{ registro.name }}
+      {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activo') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactivo') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a href="{{ url_for('inventario.inventario_articulo_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
   </div>
-  <dl class="row p-3">
-    <dt class="col-sm-3">Código</dt>
-    <dd class="col-sm-9">{{ registro.code }}</dd>
-    <dt class="col-sm-3">Nombre</dt>
-    <dd class="col-sm-9">{{ registro.name }}</dd>
-    <dt class="col-sm-3">Descripción</dt>
-    <dd class="col-sm-9">{{ registro.description or "" }}</dd>
-    <dt class="col-sm-3">Tipo</dt>
-    <dd class="col-sm-9">{{ registro.item_type or "" }}</dd>
-    <dt class="col-sm-3">Artículo de Inventario</dt>
-    <dd class="col-sm-9">{{ "Sí" if registro.is_stock_item else "No" }}</dd>
-    <dt class="col-sm-3">UOM Base</dt>
-    <dd class="col-sm-9">{{ registro.default_uom or "" }}</dd>
-  </dl>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Código') }}</label><p>{{ registro.code }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Tipo') }}</label><p>{{ registro.item_type or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('UOM base') }}</label><p>{{ registro.default_uom or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Item de inventario') }}</label><p>{{ _('Sí') if registro.is_stock_item else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Método de valuación') }}</label><p>{{ registro.valuation_method or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Control por lote') }}</label><p>{{ _('Sí') if registro.has_batch else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Control por serie') }}</label><p>{{ _('Sí') if registro.has_serial_no else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Descripción') }}</label><p>{{ registro.description or '-' }}</p></div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}

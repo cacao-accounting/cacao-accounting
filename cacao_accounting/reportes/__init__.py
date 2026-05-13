@@ -30,6 +30,7 @@ from cacao_accounting.reportes.services import (
     SubledgerFilters,
     PaginatedReport,
     get_account_movement_detail,
+    get_account_summary_report,
     get_aging_report,
     get_ar_ap_subledger,
     get_batch_report,
@@ -74,6 +75,8 @@ _COLUMN_LABELS = {
     "voucher_type": "Type",
     "account_code": "Account",
     "account_name": "Account Name",
+    "account_type": "Account Type",
+    "classification": "Section",
     "debit": "Debit",
     "credit": "Credit",
     "running_balance": "Final Balance",
@@ -90,6 +93,9 @@ _COLUMN_LABELS = {
     "created_by": "User",
     "created": "Creation Date",
     "created_at": "Creation Date",
+    "movement_count": "Movements",
+    "first_movement": "First Movement",
+    "last_movement": "Last Movement",
     "line_comment": "Reference",
     "reference_type": "Reference Type",
     "is_reversal": "Is Reversal",
@@ -118,7 +124,17 @@ _MONEY_COLUMNS = {
     "net_profit",
 }
 _RIGHT_ALIGN_COLUMNS = _MONEY_COLUMNS | {"level"}
-_ALWAYS_VISIBLE_COLUMNS = {"debit", "credit", "difference", "account_code", "account_name", "section", "amount"}
+_ALWAYS_VISIBLE_COLUMNS = {
+    "debit",
+    "credit",
+    "difference",
+    "account_code",
+    "account_name",
+    "section",
+    "amount",
+    "opening_balance",
+    "ending_balance",
+}
 _EMPTY_CELL_VALUE = "—"
 _FINANCIAL_FILTER_FIELDS = (
     "company",
@@ -389,7 +405,9 @@ def _default_period_for_company(company_code: str, target_date: date | None = No
     ).scalar_one_or_none()
 
 
-def _build_drill_down_url(values: dict[str, object], company: str, ledger: str | None) -> str | None:
+def _build_drill_down_url(
+    values: dict[str, object], company: str, ledger: str | None, period: str | None = None
+) -> str | None:
     account_code = values.get("account_code")
     if account_code in (None, "", _EMPTY_CELL_VALUE):
         return None
@@ -399,6 +417,8 @@ def _build_drill_down_url(values: dict[str, object], company: str, ledger: str |
     }
     if ledger:
         query["ledger"] = ledger
+    if period:
+        query["accounting_period"] = period
     return url_for("reportes.account_movement", **query)
 
 
@@ -677,7 +697,7 @@ def _render_financial_report(
     all_columns = list(dict.fromkeys([*(report.columns or []), *extra_columns]))
     if report_code == "trial-balance":
         all_columns = [column for column in all_columns if column != "level"]
-    allow_column_selection = report_code == "account-movement"
+    allow_column_selection = report_code in {"account-movement", "account-summary"}
     display_headers = {column: _column_label(column, report.ledger_currency) for column in display_columns}
     all_column_headers = {column: _column_label(column, report.ledger_currency) for column in all_columns}
     source_rows = [dict(row.values) for row in report.rows]
@@ -700,7 +720,9 @@ def _render_financial_report(
                 "parent": parent_code,
                 "has_children": bool(child_counts.get(account_code)),
                 "level": _resolve_row_level(row, account_code),
-                "drilldown_url": _build_drill_down_url(row, report_filters.company, report_filters.ledger),
+                "drilldown_url": _build_drill_down_url(
+                    row, report_filters.company, report_filters.ledger, report_filters.accounting_period
+                ),
                 "voucher_url": _build_voucher_url(row),
                 "is_group": bool(row.get("is_group")),
             }
@@ -785,6 +807,24 @@ def _render_financial_report(
         all_columns=all_columns,
         allow_column_selection=allow_column_selection,
         group_by=group_by,
+    )
+
+
+@reportes.route("/reports/account-summary")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def account_summary():
+    """Resumen de movimientos por cuenta (Sábana analítica)."""
+    filters, selected_view, saved_views = _resolve_view_context("account-summary", _financial_filters())
+    report = get_account_summary_report(filters) if _should_run_financial_report() else _empty_financial_report()
+    return _render_financial_report(
+        "account-summary",
+        _("Resumen de Movimiento por Cuenta"),
+        report,
+        filters,
+        selected_view,
+        saved_views,
     )
 
 

@@ -326,6 +326,7 @@ def _create_gl_entry(
     entry_remarks: str | None = None,
     is_reversal: bool = False,
     reversal_of: str | None = None,
+    is_fiscal_year_closing: bool = False,
 ) -> GLEntry:
     _validate_single_sided_amount(debit, credit)
     return GLEntry(
@@ -353,6 +354,7 @@ def _create_gl_entry(
         party_id=party_id,
         bank_account_id=bank_account_id,
         is_advance=is_advance,
+        is_fiscal_year_closing=is_fiscal_year_closing,
         voucher_type=context.voucher_type,
         voucher_id=context.voucher_id,
         document_no=context.document_no,
@@ -1606,6 +1608,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
         raise PostingError("El comprobante contable no contiene lineas.")
 
     entries: list[GLEntry] = []
+    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in lines:
             original_value = _decimal_value(getattr(line, "value", None))
@@ -1655,6 +1658,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
                     unit_code=getattr(line, "unit", None),
                     project_code=getattr(line, "project", None),
                     entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+                    is_fiscal_year_closing=is_fy_closing,
                 )
             )
 
@@ -1763,7 +1767,8 @@ def cancel_document(document: Any) -> list[GLEntry]:
 
     company = _company_for(document)
     try:
-        validate_accounting_period(company, _posting_date_for(document))
+        allow_closing = bool(getattr(document, "is_closing", False))
+        validate_accounting_period(company, _posting_date_for(document), allow_closing=allow_closing)
     except IdentifierConfigurationError as exc:
         raise PostingError(str(exc)) from exc
     voucher_type = _get_voucher_type(document)
@@ -1816,6 +1821,7 @@ def cancel_document(document: Any) -> list[GLEntry]:
                 entry_remarks="Reversion " + (entry.remarks or ""),
                 is_reversal=True,
                 reversal_of=entry.id,
+                is_fiscal_year_closing=entry.is_fiscal_year_closing,
             )
         )
         entry.is_cancelled = True

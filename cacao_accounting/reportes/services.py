@@ -98,6 +98,7 @@ class FinancialReportFilters:
     voucher_type: str | None = None
     status: str | None = None
     include_running_balance: bool = False
+    include_closing: bool = False
     page: int = 1
     page_size: int = 100
     sort_by: str = "posting_date"
@@ -394,6 +395,8 @@ def _period_bounds(company: str, period_name: str | None) -> tuple[date | None, 
 
 def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start: date | None, period_end: date | None) -> Any:
     query = query.where(GLEntry.company == filters.company)
+    if not filters.include_closing:
+        query = query.where(GLEntry.is_fiscal_year_closing.is_(False))
     if filters.voucher_number:
         like_value = f"%{filters.voucher_number.strip()}%"
         query = query.where(GLEntry.document_no.ilike(like_value))
@@ -523,6 +526,118 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
         total_rows=total_rows,
         page=page,
         page_size=page_size,
+        ledger_currency=selected_ledger.currency,
+    )
+
+
+def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedReport:
+    """Resumen de movimientos por cuenta contable (Sábana analítica)."""
+    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+
+    # Siempre unimos con Accounts para obtener metadatos de la cuenta
+    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    base_query = _apply_gl_filters(base_query, filters, None, None).where(GLEntry.ledger_id == selected_ledger.id)
+
+    # El requerimiento sugiere que puede haber agrupaciones dinámicas (Cuenta, Centro de Costo, Proyecto, etc.)
+    # Por ahora implementamos la agrupación base por cuenta, pero permitimos extraer metadatos.
+    entries = database.session.execute(base_query).all()
+
+    account_totals: dict[str, dict[str, Any]] = {}
+    for entry, account in entries:
+        if period_start and entry.posting_date < period_start:
+            bucket = "opening"
+        elif period_end and entry.posting_date > period_end:
+            continue
+        else:
+            bucket = "movement"
+
+        account_code = entry.account_code or (account.code if account else "")
+        # Podemos extender la llave de agrupación si en el futuro se requiere soportar
+        # agrupaciones múltiples (ej. Cuenta + Centro de Costos) en una sola fila.
+        group_key = account_code
+
+        row = account_totals.setdefault(
+            group_key,
+            {
+                "account_code": account_code,
+                "account_name": account.name if account else None,
+                "account_type": account.account_type if account else None,
+                "classification": _normalize_account_classification(account),
+                "currency": account.currency if account else None,
+                "opening_balance": Decimal("0"),
+                "debit": Decimal("0"),
+                "credit": Decimal("0"),
+                "movement_count": 0,
+                "first_movement": None,
+                "last_movement": None,
+                "level": account_code.count(".") + 1 if account_code else 1,
+            },
+        )
+
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+
+        if bucket == "opening":
+            row["opening_balance"] += debit - credit
+        else:
+            row["debit"] += debit
+            row["credit"] += credit
+            row["movement_count"] += 1
+            if row["first_movement"] is None or entry.posting_date < row["first_movement"]:
+                row["first_movement"] = entry.posting_date
+            if row["last_movement"] is None or entry.posting_date > row["last_movement"]:
+                row["last_movement"] = entry.posting_date
+
+    rows = []
+    total_opening = Decimal("0")
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    total_ending = Decimal("0")
+
+    for group_key in sorted(account_totals):
+        values = account_totals[group_key]
+        ending = values["opening_balance"] + values["debit"] - values["credit"]
+        total_opening += values["opening_balance"]
+        total_debit += values["debit"]
+        total_credit += values["credit"]
+        total_ending += ending
+
+        rows.append(
+            ReportRow(
+                values={
+                    "account_code": values["account_code"],
+                    "account_name": values["account_name"],
+                    "account_type": values["account_type"],
+                    "classification": values["classification"],
+                    "currency": values["currency"],
+                    "opening_balance": values["opening_balance"],
+                    "debit": values["debit"],
+                    "credit": values["credit"],
+                    "ending_balance": ending,
+                    "movement_count": values["movement_count"],
+                    "first_movement": values["first_movement"],
+                    "last_movement": values["last_movement"],
+                    "level": values["level"],
+                }
+            )
+        )
+
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "opening_balance": total_opening,
+            "debit": total_debit,
+            "credit": total_credit,
+            "ending_balance": total_ending,
+            "difference": total_debit - total_credit,
+        },
+        columns=list(rows[0].values.keys()) if rows else [],
+        total_rows=len(rows),
+        page=1,
+        page_size=len(rows),
         ledger_currency=selected_ledger.currency,
     )
 

@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -69,8 +70,13 @@ def monedas():
     """Listado de monedas registradas en el sistema."""
     from cacao_accounting.database import Currency
 
+    query = database.select(Currency)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Currency.code.ilike(f"%{search}%"), Currency.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Currency),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -115,6 +121,22 @@ def nueva_moneda():
     )
 
 
+@contabilidad.route("/currency/<code>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def moneda(code):
+    """Vista de una moneda."""
+    from cacao_accounting.database import Currency
+
+    registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La moneda indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.monedas"))
+
+    return render_template("contabilidad/moneda.html", registro=registro)
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Contabilidad
 @contabilidad.route("/")
@@ -140,8 +162,19 @@ def entidades():
     """Listado de entidades."""
     from cacao_accounting.database import Entity
 
+    query = database.select(Entity)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(
+            or_(
+                Entity.code.ilike(f"%{search}%"),
+                Entity.name.ilike(f"%{search}%"),
+                Entity.company_name.ilike(f"%{search}%"),
+            )
+        )
+
     CONSULTA = database.paginate(
-        database.select(Entity),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -348,8 +381,13 @@ def unidades():
     """Listado de unidades de negocios."""
     from cacao_accounting.database import Unit, database
 
+    query = database.select(Unit)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Unit.code.ilike(f"%{search}%"), Unit.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Unit),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -431,8 +469,13 @@ def libros():
     """Listado de libros de contabilidad."""
     from cacao_accounting.database import Book, database
 
+    query = database.select(Book)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Book.code.ilike(f"%{search}%"), Book.name.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(Book),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -630,7 +673,6 @@ def nueva_cuenta():
 
     formulario = FormularioCuenta()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.moneda.choices = [("", "Sin moneda específica")] + obtener_lista_monedas()
     formulario.padre.choices = [("", "Sin padre")]
     TITULO = "Nueva Cuenta Contable - " + APPNAME
 
@@ -641,12 +683,12 @@ def nueva_cuenta():
             name=formulario.name.data,
             group=bool(formulario.grupo.data),
             parent=formulario.padre.data or None,
-            currency=formulario.moneda.data or None,
+            currency=None,
             classification=formulario.clasificacion.data or None,
-            type_=formulario.tipo.data or None,
+            type_=None,
             account_type=formulario.account_type.data or None,
             active=bool(formulario.activo.data),
-            enabled=bool(formulario.habilitado.data),
+            enabled=bool(formulario.activo.data),
         )
         database.session.add(DATA)
         database.session.commit()
@@ -656,6 +698,56 @@ def nueva_cuenta():
         "contabilidad/cuenta_crear.html",
         titulo=TITULO,
         form=formulario,
+    )
+
+
+@contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_cuenta(entity, id_cta):
+    """Formulario para editar una cuenta contable existente."""
+    from cacao_accounting.contabilidad.forms import FormularioCuenta
+    from cacao_accounting.database import Accounts
+
+    registro = database.session.execute(
+        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
+    ).scalar_one_or_none()
+
+    if registro is None:
+        flash("La cuenta contable indicada no existe.", "warning")
+        return redirect(url_for("contabilidad.cuentas"))
+
+    formulario = FormularioCuenta(obj=registro)
+    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.data = registro.entity
+    formulario.padre.choices = [("", "Sin padre")]
+    if registro.parent:
+        padre_row = database.session.execute(
+            database.select(Accounts).filter(Accounts.code == registro.parent, Accounts.entity == entity)
+        ).scalar_one_or_none()
+        if padre_row:
+            formulario.padre.choices.append((padre_row.code, f"{padre_row.code} - {padre_row.name}"))
+        formulario.padre.data = registro.parent
+
+    TITULO = "Editar Cuenta Contable - " + APPNAME
+
+    if formulario.validate_on_submit():
+        registro.name = formulario.name.data
+        registro.group = bool(formulario.grupo.data)
+        registro.parent = formulario.padre.data or None
+        registro.classification = formulario.clasificacion.data or None
+        registro.account_type = formulario.account_type.data or None
+        registro.active = bool(formulario.activo.data)
+        registro.enabled = bool(formulario.activo.data)
+        database.session.commit()
+        return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
+
+    return render_template(
+        "contabilidad/cuenta_crear.html",
+        titulo=TITULO,
+        form=formulario,
+        edit=True,
     )
 
 
@@ -697,7 +789,7 @@ def nuevo_centro_costo():
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
             active=bool(formulario.activo.data),
-            enabled=bool(formulario.habilitado.data),
+            enabled=bool(formulario.activo.data),
             default=bool(formulario.predeterminado.data),
             group=bool(formulario.grupo.data),
             parent=request.form.get("padre") or None,
@@ -737,7 +829,7 @@ def editar_centro_costo(id_cc):
         registro.name = request.form.get("nombre", registro.name)
         registro.entity = request.form.get("entidad", registro.entity)
         registro.active = bool(formulario.activo.data)
-        registro.enabled = bool(formulario.habilitado.data)
+        registro.enabled = bool(formulario.activo.data)
         registro.default = bool(formulario.predeterminado.data)
         registro.group = bool(formulario.grupo.data)
         registro.parent = request.form.get("padre") or None
@@ -796,8 +888,13 @@ def proyectos():
     """Listado de proyectos."""
     from cacao_accounting.database import Project
 
+    query = database.select(Project)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(Project.code.ilike(f"%{search}%"), Project.name.ilike(f"%{search}%")))
+
     consulta = database.paginate(
-        database.select(Project),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -844,6 +941,22 @@ def nuevo_proyecto():
         titulo=TITULO,
         form=formulario,
     )
+
+
+@contabilidad.route("/project/<project_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def proyecto(project_id):
+    """Vista de un proyecto."""
+    from cacao_accounting.database import Project
+
+    registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El proyecto indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.proyectos"))
+
+    return render_template("contabilidad/proyecto.html", registro=registro, statusweb=STATUS)
 
 
 @contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
@@ -908,8 +1021,13 @@ def fiscal_year_list():
     """Listado de años fiscales."""
     from cacao_accounting.database import FiscalYear
 
+    query = database.select(FiscalYear)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(FiscalYear.name.ilike(f"%{search}%"), FiscalYear.entity.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(FiscalYear),
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -974,6 +1092,10 @@ def fiscal_year_edit(fy_id):
     TITULO = "Editar Año Fiscal - " + APPNAME
 
     if formulario.validate_on_submit():
+        if fiscal_year.financial_closed and not bool(formulario.cerrado.data):
+            flash("No se puede abrir un año con cierre contable realizado.", "danger")
+            return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
+
         fiscal_year.entity = request.form.get("entidad", fiscal_year.entity)
         fiscal_year.name = request.form.get("id", fiscal_year.name)
         fiscal_year.year_start_date = formulario.inicio.data
@@ -988,6 +1110,22 @@ def fiscal_year_edit(fy_id):
         form=formulario,
         edit=True,
     )
+
+
+@contabilidad.route("/fiscal_year/<fy_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def fiscal_year_detail(fy_id):
+    """Vista de un año fiscal."""
+    from cacao_accounting.database import FiscalYear
+
+    registro = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El año fiscal indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.fiscal_year_list"))
+
+    return render_template("contabilidad/fiscal_year.html", registro=registro)
 
 
 @contabilidad.route("/fiscal_year/<fy_id>/delete")
@@ -1102,6 +1240,22 @@ def accounting_period_delete(period_id):
     return redirect(url_for("contabilidad.periodo_contable"))
 
 
+@contabilidad.route("/accounting_period/<period_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def accounting_period_detail(period_id):
+    """Vista de un período contable."""
+    from cacao_accounting.database import AccountingPeriod
+
+    registro = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("El período contable indicado no existe."), "warning")
+        return redirect(url_for("contabilidad.periodo_contable"))
+
+    return render_template("contabilidad/periodo.html", registro=registro)
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Tipos de Cambio
 @contabilidad.route("/exchange")
@@ -1112,8 +1266,13 @@ def tasa_cambio():
     """Listado de tasas de cambio."""
     from cacao_accounting.database import ExchangeRate
 
+    query = database.select(ExchangeRate)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(ExchangeRate.origin.ilike(f"%{search}%"), ExchangeRate.destination.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(ExchangeRate),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -1160,6 +1319,22 @@ def nueva_tasa_cambio():
     )
 
 
+@contabilidad.route("/exchange/<rate_id>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def tipo_cambio(rate_id):
+    """Vista de una tasa de cambio."""
+    from cacao_accounting.database import ExchangeRate
+
+    registro = database.session.execute(database.select(ExchangeRate).filter_by(id=rate_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La tasa de cambio indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.tasa_cambio"))
+
+    return render_template("contabilidad/tc.html", registro=registro)
+
+
 @contabilidad.route("/accounting_period")
 @login_required
 @modulo_activo("accounting")
@@ -1168,8 +1343,13 @@ def periodo_contable():
     """Lista de periodos contables."""
     from cacao_accounting.database import AccountingPeriod
 
+    query = database.select(AccountingPeriod)
+    search = request.args.get("search")
+    if search:
+        query = query.filter(or_(AccountingPeriod.name.ilike(f"%{search}%"), AccountingPeriod.entity.ilike(f"%{search}%")))
+
     CONSULTA = database.paginate(
-        database.select(AccountingPeriod),  # noqa: E712
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -1249,12 +1429,16 @@ def nuevo_comprobante_recurrente():
                 raise RecurringJournalError("Debe incluir al menos dos líneas contables.")
 
             items = json.loads(items_json)
+            selected_books = request.form.getlist("books")
+            ledger_id = selected_books[0] if selected_books else formulario.ledger_id.data
             create_recurring_template(
                 data={
                     "code": formulario.code.data,
                     "name": formulario.name.data,
                     "company": formulario.company.data,
-                    "ledger_id": formulario.ledger_id.data or None,
+                    "ledger_id": ledger_id or None,
+                    "books": selected_books,
+                    "naming_series_id": request.form.get("naming_series_id") or None,
                     "description": formulario.description.data,
                     "start_date": formulario.start_date.data,
                     "end_date": formulario.end_date.data,
@@ -1350,93 +1534,168 @@ def cancelar_plantilla_recurrente(identifier: str):
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def asistente_cierre_mensual():
-    """Asistente de cierre mensual."""
-    from cacao_accounting.database import Entity, Book, AccountingPeriod
-    from cacao_accounting.contabilidad.recurring_journal_service import get_applicable_templates
+    """Lista de ejecuciones de cierre mensual."""
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
-    company_code = request.args.get("company")
-    ledger_id = request.args.get("ledger")
-    period_id = request.args.get("period")
+    runs = (
+        database.session.execute(
+            database.select(PeriodCloseRun).order_by(PeriodCloseRun.created.desc(), PeriodCloseRun.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+    periods = (
+        database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.is_closed.is_(False)))
+        .scalars()
+        .all()
+    )
+    period_by_id = {period.id: period for period in periods}
 
-    entidades = database.session.execute(database.select(Entity)).scalars().all()
-    books = []
-    if company_code:
-        books = database.session.execute(database.select(Book).filter_by(entity=company_code, status="activo")).scalars().all()
+    return render_template(
+        "contabilidad/monthly_close_assistant.html",
+        titulo="Asistente de Cierre Mensual - " + APPNAME,
+        runs=runs,
+        periods=periods,
+        period_by_id=period_by_id,
+    )
 
-    periods = []
-    if company_code:
-        periods = (
-            database.session.execute(database.select(AccountingPeriod).filter_by(entity=company_code, is_closed=False))
+
+@contabilidad.route("/period-close/monthly/new", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nuevo_cierre_mensual():
+    """Crea un registro de cierre mensual para un periodo."""
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+
+    period_id = request.form.get("period_id")
+    period = database.session.get(AccountingPeriod, period_id)
+    if not period:
+        flash("Periodo no encontrado.", "danger")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    existing = database.session.execute(
+        database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
+    ).scalar_one_or_none()
+    if existing:
+        flash("Ya existe un cierre mensual para ese periodo.", "warning")
+        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=existing.id))
+
+    close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.commit()
+    flash("Cierre mensual creado.", "success")
+    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+
+
+@contabilidad.route("/period-close/monthly/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_cierre_mensual(identifier: str):
+    """Vista paso a paso de una ejecución de cierre mensual."""
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        PeriodCloseCheck,
+        PeriodCloseRun,
+        RecurringJournalApplication,
+        RecurringJournalTemplate,
+    )
+
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash("Cierre mensual no encontrado.", "warning")
+        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+
+    period = database.session.get(AccountingPeriod, close_run.period_id)
+    templates: Sequence[RecurringJournalTemplate] = []
+    applied_ids: list[str] = []
+    if period:
+        templates = (
+            database.session.execute(
+                database.select(RecurringJournalTemplate)
+                .filter_by(company=close_run.company, status="approved")
+                .where(RecurringJournalTemplate.start_date <= period.end)
+                .where(RecurringJournalTemplate.end_date >= period.end)
+                .where(RecurringJournalTemplate.is_completed.is_(False))
+                .order_by(RecurringJournalTemplate.code)
+            )
             .scalars()
             .all()
         )
-
-    templates = []
-    selected_period = None
-    if company_code and ledger_id and period_id:
-        selected_period = database.session.get(AccountingPeriod, period_id)
-        if selected_period:
-            templates = get_applicable_templates(company_code, ledger_id, selected_period.end)
-
-    from cacao_accounting.database import RecurringJournalApplication
-
-    applied_ids = []
-    if selected_period:
         applied_apps = (
             database.session.query(RecurringJournalApplication)
             .filter_by(
-                company=company_code,
-                ledger_id=ledger_id,
-                fiscal_year=str(selected_period.fiscal_year_id),
-                accounting_period=selected_period.name,
+                company=close_run.company,
+                fiscal_year=str(period.fiscal_year_id),
+                accounting_period=period.name,
                 status="applied",
             )
             .all()
         )
         applied_ids = [app.template_id for app in applied_apps]
 
+    checks = (
+        database.session.execute(
+            database.select(PeriodCloseCheck)
+            .filter_by(close_run_id=close_run.id)
+            .order_by(PeriodCloseCheck.created.desc(), PeriodCloseCheck.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
     return render_template(
         "contabilidad/monthly_close_assistant.html",
         titulo="Asistente de Cierre Mensual - " + APPNAME,
-        entidades=entidades,
-        books=books,
-        periods=periods,
-        company_code=company_code,
-        ledger_id=ledger_id,
-        period_id=period_id,
+        close_run=close_run,
+        selected_period=period,
         templates=templates,
         applied_ids=applied_ids,
-        selected_period=selected_period,
+        checks=checks,
     )
 
 
-@contabilidad.route("/period-close/monthly/apply-recurring", methods=["POST"])
+@contabilidad.route("/period-close/monthly/<identifier>/apply-recurring", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def aplicar_recurrentes_cierre():
-    """Aplica plantillas recurrentes desde el asistente de cierre."""
+def aplicar_recurrentes_cierre(identifier: str):
+    """Aplica plantillas recurrentes desde un registro de cierre mensual."""
     from cacao_accounting.contabilidad.recurring_journal_service import (
         RecurringJournalError,
         apply_recurring_template,
     )
-    from cacao_accounting.database import AccountingPeriod
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, PeriodCloseRun, RecurringJournalTemplate
 
-    template_ids = request.form.getlist("template_ids")
-    period_id = request.form.get("period_id")
-    ledger_id = request.form.get("ledger_id")
-
-    if not template_ids or not period_id:
-        flash("Debe seleccionar al menos una plantilla y un periodo.", "warning")
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash("Cierre mensual no encontrado.", "danger")
         return redirect(url_for("contabilidad.asistente_cierre_mensual"))
 
-    period = database.session.get(AccountingPeriod, period_id)
+    period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
         flash("Periodo no encontrado.", "danger")
-        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+
+    template_ids = request.form.getlist("template_ids")
+    if not template_ids:
+        templates = (
+            database.session.execute(
+                database.select(RecurringJournalTemplate)
+                .filter_by(company=close_run.company, status="approved")
+                .where(RecurringJournalTemplate.start_date <= period.end)
+                .where(RecurringJournalTemplate.end_date >= period.end)
+                .where(RecurringJournalTemplate.is_completed.is_(False))
+            )
+            .scalars()
+            .all()
+        )
+        template_ids = [template.id for template in templates]
 
     success_count = 0
     errors = []
+    close_run.run_status = "in_progress"
 
     for tid in template_ids:
         try:
@@ -1451,20 +1710,28 @@ def aplicar_recurrentes_cierre():
         except RecurringJournalError as exc:
             errors.append(str(exc))
 
+    check_status = "passed" if success_count and not errors else "failed" if errors else "skipped"
+    message = f"Plantillas aplicadas: {success_count}."
+    if errors:
+        message = f"{message} Errores: {' | '.join(errors)}"
+    database.session.add(
+        PeriodCloseCheck(
+            close_run_id=close_run.id,
+            check_type="apply_recurring_journals",
+            check_status=check_status,
+            message=message,
+        )
+    )
+    close_run.run_status = "in_progress" if success_count else "open"
+    database.session.commit()
+
     if success_count > 0:
         flash(f"Se aplicaron {success_count} plantillas correctamente.", "success")
     if errors:
         for err in errors:
             flash(err, "danger")
 
-    return redirect(
-        url_for(
-            "contabilidad.asistente_cierre_mensual",
-            company=period.entity,
-            ledger=ledger_id,
-            period=period_id,
-        )
-    )
+    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
 
 
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
@@ -1491,7 +1758,8 @@ def nuevo_comprobante():
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
     column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
-    initial_journal = {"is_closing": True} if request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"} else None
+    is_closing = request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"}
+    initial_journal = {"is_closing": True} if is_closing else None
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,
@@ -2212,3 +2480,102 @@ def external_counter_audit_log(counter_id: str):
         registros=registros,
         titulo="Auditoria de Contador Externo - " + APPNAME,
     )
+
+
+@contabilidad.route("/fiscal_year_closing/list")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def fiscal_year_closing_list():
+    """Listado de cierres de año fiscal."""
+    from cacao_accounting.database import FiscalYear
+
+    company_filter = request.args.get("company", type=str)
+    query = database.select(FiscalYear)
+    if company_filter:
+        query = query.filter_by(entity=company_filter)
+
+    consulta = database.paginate(
+        query.order_by(FiscalYear.year_end_date.desc()),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+    from cacao_accounting.database import Entity
+
+    entidades = database.session.execute(database.select(Entity)).scalars().all()
+
+    return render_template(
+        "contabilidad/fiscal_year_closing_lista.html",
+        titulo="Cierres de Año Fiscal - " + APPNAME,
+        consulta=consulta,
+        entidades=entidades,
+        company_filter=company_filter,
+        statusweb=STATUS,
+    )
+
+
+@contabilidad.route("/fiscal_year_closing/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def fiscal_year_closing_new():
+    """Formulario para ejecutar un nuevo cierre de año fiscal."""
+    if current_user.classification != "admin":
+        flash("Solo el administrador del sistema puede ejecutar el cierre de año fiscal.", "danger")
+        return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+
+    from cacao_accounting.database import Entity, FiscalYear
+    from cacao_accounting.contabilidad.fiscal_year_closing import (
+        FiscalYearClosingError,
+        create_fiscal_year_closing_voucher,
+    )
+
+    entidades = database.session.execute(database.select(Entity)).scalars().all()
+
+    if request.method == "POST":
+        company = request.form.get("company")
+        fiscal_year_id = request.form.get("fiscal_year_id")
+        try:
+            create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
+            flash("Cierre de año fiscal ejecutado correctamente.", "success")
+            return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+        except FiscalYearClosingError as exc:
+            flash(str(exc), "danger")
+
+    # Obtener años fiscales cerrados administrativamente pero no financieramente
+    fiscal_years = (
+        database.session.execute(database.select(FiscalYear).filter_by(is_closed=True, financial_closed=False)).scalars().all()
+    )
+
+    return render_template(
+        "contabilidad/fiscal_year_closing_nuevo.html",
+        titulo="Nuevo Cierre de Año Fiscal - " + APPNAME,
+        entidades=entidades,
+        fiscal_years=fiscal_years,
+    )
+
+
+@contabilidad.route("/fiscal_year_closing/reverse/<fy_id>", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def fiscal_year_closing_reverse(fy_id):
+    """Revierte un cierre de año fiscal."""
+    if current_user.classification != "admin":
+        flash("Solo el administrador del sistema puede revertir el cierre de año fiscal.", "danger")
+        return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+
+    from cacao_accounting.contabilidad.fiscal_year_closing import (
+        FiscalYearClosingError,
+        reverse_fiscal_year_closing,
+    )
+
+    try:
+        reverse_fiscal_year_closing(fy_id, user_id=str(current_user.id))
+        flash("Cierre de año fiscal revertido correctamente.", "success")
+    except FiscalYearClosingError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(url_for("contabilidad.fiscal_year_closing_list"))

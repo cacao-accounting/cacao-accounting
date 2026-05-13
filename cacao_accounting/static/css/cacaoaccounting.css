@@ -379,6 +379,31 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 }
 .ca-card-title i { color: var(--ca-text-secondary); }
 
+.ca-kv-list {
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ca-kv-item label {
+  color: #64748b;
+  display: block;
+  font-size: .75rem;
+  font-weight: 700;
+  margin-bottom: .15rem;
+  text-transform: uppercase;
+}
+
+.ca-kv-item p {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .ca-kv-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════
    9. MODULE INDEX CARDS
    ═══════════════════════════════════════════════════════ */

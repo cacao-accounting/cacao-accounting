@@ -433,7 +433,7 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
         database.select(GeneratedIdentifierLog)
         .filter_by(sequence_id=sequence_id)
         .order_by(GeneratedIdentifierLog.generated_at.desc())
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     if last_log is None or last_log.posting_date is None:
         return False

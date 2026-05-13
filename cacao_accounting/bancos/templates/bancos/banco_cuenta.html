@@ -1,34 +1,40 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco_cuenta.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}" class="link-dark">Cuentas Bancarias</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}" class="link-dark">{{ _('Cuentas Bancarias') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.account_name }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> {{ registro.account_name }}</h5>
+    <h5 class="ca-card-title">
+      <i class="bi bi-credit-card"></i>{{ registro.account_name }}
+      {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activo') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactivo') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a href="{{ url_for('bancos.bancos_cuenta_bancaria_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
   </div>
-  <dl class="row p-3">
-    <dt class="col-sm-3">Nombre de Cuenta</dt>
-    <dd class="col-sm-9">{{ registro.account_name }}</dd>
-    <dt class="col-sm-3">Número de Cuenta</dt>
-    <dd class="col-sm-9">{{ registro.account_no or "" }}</dd>
-    <dt class="col-sm-3">IBAN</dt>
-    <dd class="col-sm-9">{{ registro.iban or "" }}</dd>
-    <dt class="col-sm-3">Compañía</dt>
-    <dd class="col-sm-9">{{ registro.company or "" }}</dd>
-  </dl>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Nombre de cuenta') }}</label><p>{{ registro.account_name }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Número de cuenta') }}</label><p>{{ registro.account_no or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('IBAN') }}</label><p>{{ registro.iban or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ registro.company or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Cuenta contable') }}</label><p>{{ registro.gl_account_id or '-' }}</p></div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}

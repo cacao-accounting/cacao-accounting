@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.periodo_contable') }}" class="link-dark">{{ _('Períodos Contables') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-calendar-range"></i>{{ registro.name }}
+      {% if registro.is_closed %}<span class="badge bg-dark ms-2">{{ _('Cerrado') }}</span>{% else %}<span class="badge bg-success ms-2">{{ _('Abierto') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.accounting_period_edit', period_id=registro.id) }}"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.periodo_contable') }}"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.accounting_period_new') }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+    </div>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Entidad') }}</label><p>{{ registro.entity }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Año fiscal') }}</label><p>{{ registro.fiscal_year_id or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Inicio') }}</label><p>{{ registro.start }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Fin') }}</label><p>{{ registro.end }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Habilitado') }}</label><p>{{ _('Sí') if registro.enabled else _('No') }}</p></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

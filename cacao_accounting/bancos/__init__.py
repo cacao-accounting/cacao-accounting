@@ -33,6 +33,7 @@ from cacao_accounting.bancos.statement_service import (
     import_bank_statement,
 )
 from cacao_accounting.database import (
+    Accounts,
     Bank,
     BankAccount,
     BankMatchingRule,
@@ -538,13 +539,21 @@ def bancos_cuenta_bancaria_nuevo():
     formulario.currency.choices = [("", "")] + obtener_lista_monedas()
     titulo = "Nueva Cuenta Bancaria - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
+        gl_account_id = request.form.get("gl_account_id") or None
+        company = request.form.get("company")
+        if gl_account_id:
+            gl_account = database.session.get(Accounts, gl_account_id)
+            if not gl_account or gl_account.entity != company or gl_account.account_type != "bank":
+                flash(_("Seleccione una cuenta contable de tipo banco para la compañía indicada."), "danger")
+                return render_template("bancos/banco_cuenta_nuevo.html", form=formulario, titulo=titulo)
         cuenta = BankAccount(
             bank_id=request.form.get("bank_id"),
-            company=request.form.get("company"),
+            company=company,
             account_name=request.form.get("account_name"),
             account_no=request.form.get("account_no"),
             iban=request.form.get("iban"),
             currency=request.form.get("currency") or None,
+            gl_account_id=gl_account_id,
         )
         database.session.add(cuenta)
         database.session.commit()

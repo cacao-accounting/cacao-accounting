@@ -33,7 +33,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
-        <td>{{ item.name }}</td>
+        <td><a class="fw-bold" href="{{ url_for('bancos.bancos_banco', bank_id=item.id) }}">{{ item.name }}</a></td>
         <td>{{ item.swift_code or "" }}</td>
         <td>{{ "Sí" if item.is_active else "No" }}</td>
       </tr>

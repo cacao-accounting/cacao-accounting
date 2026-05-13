@@ -21,6 +21,37 @@ from wtforms.validators import DataRequired, InputRequired, Length, NumberRange,
 from cacao_accounting.database import Entity
 from cacao_accounting.setup.forms import CATALOG_CHOICES, COUNTRY_CHOICES, LANGUAGE_CHOICES
 
+ACCOUNT_TYPE_CHOICES = [
+    ("", "— Seleccione —"),
+    ("asset", "Activo"),
+    ("liability", "Pasivo"),
+    ("equity", "Patrimonio"),
+    ("income", "Ingreso"),
+    ("expense", "Gasto"),
+    ("cash", "Efectivo"),
+    ("bank", "Banco"),
+    ("receivable", "Cuentas por Cobrar"),
+    ("payable", "Cuentas por Pagar"),
+    ("inventory", "Inventario"),
+    ("cost_of_goods_sold", "Costo de ventas"),
+    ("inventory_adjustment", "Ajuste de inventario"),
+    ("bridge", "Cuenta puente"),
+    ("customer_advance", "Anticipo de clientes"),
+    ("supplier_advance", "Anticipo a proveedores"),
+    ("bank_difference", "Diferencia bancaria"),
+    ("tax", "Impuesto"),
+    ("rounding", "Redondeo"),
+    ("exchange_gain", "Ganancia cambiaria"),
+    ("exchange_loss", "Pérdida cambiaria"),
+    ("unrealized_exchange_gain", "Ganancia cambiaria no realizada"),
+    ("unrealized_exchange_loss", "Pérdida cambiaria no realizada"),
+    ("deferred_income", "Ingreso diferido"),
+    ("deferred_expense", "Gasto diferido"),
+    ("payment_discount", "Descuento de pago"),
+    ("period_profit_loss", "Resultado del período"),
+    ("retained_earnings", "Utilidades retenidas"),
+]
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Entidades
 
@@ -177,7 +208,6 @@ class FormularioCuenta(FlaskForm):
     entidad = SelectField("Entidad", validators=[DataRequired()])
     grupo = BooleanField("Grupo", default=False)
     padre = SelectField("Cuenta Padre", choices=[], validators=[Optional()])
-    moneda = SelectField("Moneda", choices=[], validators=[Optional()])
     clasificacion = SelectField(
         "Clasificación",
         choices=[
@@ -190,24 +220,12 @@ class FormularioCuenta(FlaskForm):
         ],
         validators=[Optional()],
     )
-    tipo = StringField("Tipo", validators=[Optional()])
     account_type = SelectField(
         "Tipo de Cuenta",
-        choices=[
-            ("", "— Seleccione —"),
-            ("receivable", "Cuentas por Cobrar"),
-            ("payable", "Cuentas por Pagar"),
-            ("bank", "Banco"),
-            ("cash", "Efectivo"),
-            ("expense", "Gasto"),
-            ("income", "Ingreso"),
-            ("asset", "Activo"),
-            ("liability", "Pasivo"),
-        ],
+        choices=ACCOUNT_TYPE_CHOICES,
         validators=[Optional()],
     )
     activo = BooleanField("Activo", default=True)
-    habilitado = BooleanField("Habilitado", default=True)
 
 
 class FormularioCentroCosto(FlaskForm):
@@ -217,7 +235,6 @@ class FormularioCentroCosto(FlaskForm):
     nombre = StringField("Nombre", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
     activo = BooleanField("Activo", default=True)
-    habilitado = BooleanField("Habilitado", default=True)
     predeterminado = BooleanField("Predeterminado", default=False)
     grupo = BooleanField("Grupo", default=False)
     padre = SelectField("Centro Padre", choices=[], validators=[Optional()])
@@ -305,7 +322,7 @@ class FormularioRecurringJournalTemplate(FlaskForm):
 
     code = StringField("Código", validators=[DataRequired()])
     company = SelectField("Entidad", validators=[DataRequired()])
-    ledger_id = SelectField("Libro", validators=[DataRequired()])
+    ledger_id = SelectField("Libro", validators=[DataRequired()], validate_choice=False)
     name = StringField("Nombre de la Plantilla", validators=[DataRequired()])
     description = TextAreaField("Descripción", validators=[Optional()])
     start_date = DateField("Fecha Inicio", validators=[DataRequired()])

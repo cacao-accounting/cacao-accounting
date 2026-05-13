@@ -20,7 +20,14 @@ from cacao_accounting.contabilidad.journal_repository import (
     replace_journal_lines,
 )
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_comprobante_contable
-from cacao_accounting.database import Accounts, ComprobanteContable, ComprobanteContableDetalle, CostCenter, database
+from cacao_accounting.database import (
+    Accounts,
+    ComprobanteContable,
+    ComprobanteContableDetalle,
+    CostCenter,
+    FiscalYear,
+    database,
+)
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
 JOURNAL_ENTITY_TYPE = "journal_entry"
@@ -73,6 +80,8 @@ class JournalDraftInput:
     transaction_currency: str | None
     exchange_rate: Decimal | None
     is_closing: bool
+    is_fiscal_year_closing: bool
+    fiscal_year_id: str | None
     lines: list[JournalLineInput]
 
 
@@ -95,6 +104,8 @@ def create_journal_draft(payload: dict[str, Any], user_id: str, assign_identifie
         transaction_currency=data.transaction_currency,
         exchange_rate=data.exchange_rate,
         is_closing=data.is_closing,
+        is_fiscal_year_closing=data.is_fiscal_year_closing,
+        fiscal_year_id=data.fiscal_year_id,
     )
     lines = [
         _line_model(data.company, data.posting_date, primary_book, data.transaction_currency, line) for line in data.lines
@@ -121,6 +132,15 @@ def submit_journal(journal_id: str) -> list[Any]:
         database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
     journal.status = JOURNAL_STATUS_SUBMITTED
+
+    # Hook para cierre de año fiscal
+    if journal.is_fiscal_year_closing and journal.fiscal_year_id:
+        fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id)
+        if fiscal_year:
+            fiscal_year.financial_closed = True
+            fiscal_year.closing_voucher_id = journal.id
+            database.session.add(fiscal_year)
+
     database.session.add(journal)
     database.session.commit()
     return entries
@@ -157,6 +177,15 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
     journal.status = JOURNAL_STATUS_CANCELLED
     if user_id:
         journal.modified_by = user_id
+
+    # Hook para cierre de año fiscal
+    if journal.is_fiscal_year_closing and journal.fiscal_year_id:
+        fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id)
+        if fiscal_year:
+            fiscal_year.financial_closed = False
+            fiscal_year.closing_voucher_id = None
+            database.session.add(fiscal_year)
+
     database.session.add(journal)
     database.session.commit()
     return entries
@@ -226,6 +255,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal.transaction_currency = data.transaction_currency
     journal.exchange_rate = data.exchange_rate
     journal.is_closing = data.is_closing
+    journal.is_fiscal_year_closing = data.is_fiscal_year_closing
+    journal.fiscal_year_id = data.fiscal_year_id
     journal.user_id = user_id
 
     lines = [
@@ -259,6 +290,8 @@ def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
         "transaction_currency_label": journal.transaction_currency,
         "exchange_rate": str(journal.exchange_rate) if journal.exchange_rate is not None else "",
         "is_closing": bool(getattr(journal, "is_closing", False)),
+        "is_fiscal_year_closing": bool(getattr(journal, "is_fiscal_year_closing", False)),
+        "fiscal_year_id": getattr(journal, "fiscal_year_id", None),
         "lines": [_serialize_journal_line(line, account_labels, cost_center_labels) for line in lines],
     }
 
@@ -285,6 +318,8 @@ def parse_journal_form(form_data: Any) -> dict[str, Any]:
         "transaction_currency": form_data.get("transaction_currency"),
         "exchange_rate": form_data.get("exchange_rate"),
         "is_closing": form_data.get("is_closing") in ("true", "True", "1", "on"),
+        "is_fiscal_year_closing": form_data.get("is_fiscal_year_closing") in ("true", "True", "1", "on"),
+        "fiscal_year_id": form_data.get("fiscal_year_id"),
         "lines": [],
     }
 
@@ -313,6 +348,8 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         transaction_currency=transaction_currency,
         exchange_rate=None,
         is_closing=_optional_bool(payload.get("is_closing")),
+        is_fiscal_year_closing=_optional_bool(payload.get("is_fiscal_year_closing")),
+        fiscal_year_id=_optional_text(payload.get("fiscal_year_id")),
         lines=lines,
     )
 
@@ -409,11 +446,13 @@ def _line_model(
 def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id: str | None) -> None:
     setattr(journal, "company", journal.entity)
     try:
+        allow_closing = bool(getattr(journal, "is_closing", False))
         assign_document_identifier(
             document=journal,
             entity_type=JOURNAL_ENTITY_TYPE,
             posting_date_raw=journal.date,
             naming_series_id=naming_series_id,
+            allow_closing=allow_closing,
         )
     except IdentifierConfigurationError:
         return

@@ -113,7 +113,7 @@
         transaction_currency: (config.initialJournal && config.initialJournal.transaction_currency) || '',
         transaction_currency_label: (config.initialJournal && config.initialJournal.transaction_currency_label) ||
           (config.initialJournal && config.initialJournal.transaction_currency) || '',
-        is_closing: (config.initialJournal && config.initialJournal.is_closing) || false,
+        is_closing: (config.initialJournal && config.initialJournal.is_closing) ? 'true' : 'false',
       },
       bookOptions: [],
       selectedBooks: (config.initialJournal && config.initialJournal.books) || [],
@@ -411,7 +411,7 @@
           reference: this.header.reference,
           memo: this.header.memo,
           transaction_currency: this.header.transaction_currency,
-          is_closing: this.header.is_closing,
+          is_closing: this.header.is_closing === 'true',
           lines: this.lines.map(function (line, index) {
             var account = line.account || line.account_label;
             return Object.assign({}, line, {
@@ -609,8 +609,8 @@
       <div class="col-md-4">
         <label class="form-label" for="is_closing">{{ _('Etapa de Cierre') }}</label>
         <select class="form-select form-select-sm" id="is_closing" name="is_closing" x-model="header.is_closing">
-          <option :value="false">{{ _('Operativo') }}</option>
-          <option :value="true">{{ _('Cierre') }}</option>
+          <option value="false">{{ _('Operativo') }}</option>
+          <option value="true">{{ _('Cierre') }}</option>
         </select>
       </div>
       <div class="col-md-4">
