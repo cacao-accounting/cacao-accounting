@@ -417,8 +417,8 @@ def _make_tasas_de_cambio() -> tuple:
     """Crea instancias frescas de Tasas de Cambio."""
     today = date.today()
     return (
-        ExchangeRate(origin="NIO", destination="USD", rate=36.6243, date=today),
-        ExchangeRate(origin="NIO", destination="EUR", rate=40.1234, date=today),
+        ExchangeRate(origin="USD", destination="NIO", rate=36.6243, date=today),
+        ExchangeRate(origin="EUR", destination="NIO", rate=40.1234, date=today),
         ExchangeRate(origin="USD", destination="EUR", rate=1.0954, date=today),
     )
 
@@ -460,6 +460,18 @@ def _make_comprobantes_contables() -> list:
             "lines": [
                 {"account": "11.01.001.001", "debit": 50, "credit": 0, "currency": "EUR"},
                 {"account": "31.01", "debit": 0, "credit": 50, "currency": "EUR"},
+            ],
+        },
+        {
+            "company": "cacao",
+            "posting_date": today.isoformat(),
+            "books": ["FISC", "FIN", "MGMT"],
+            "transaction_currency": "NIO",
+            "reference": "MULTI-BOOK-NIO",
+            "memo": "Asiento multi-libro con conversión desde Córdobas",
+            "lines": [
+                {"account": "11.01.001.001", "debit": 10, "credit": 0, "currency": "NIO"},
+                {"account": "31.01", "debit": 0, "credit": 10, "currency": "NIO"},
             ],
         },
     ]

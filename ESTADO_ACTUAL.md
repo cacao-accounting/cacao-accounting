@@ -10,6 +10,20 @@ Estado 2026-05-12 (Finalizado): Todos los issues listados han sido resueltos y v
 
 # ESTADO ACTUAL DEL PROYECTO
 
+## Actualización incremental — 2026-05-13 (Seed multi-libro con conversión)
+
+- **Cuarto comprobante demo:** El seed agrega `MULTI-BOOK-NIO`, un comprobante en NIO que afecta simultáneamente los libros `FISC`, `FIN` y `MGMT`.
+- **Conversión verificada:** La suite `tests/test_seed_accounting.py` comprueba que el backend genera 2 entradas GL por libro y convierte desde la moneda del comprobante hacia USD y EUR usando el recíproco cuando la tasa está registrada como USD/EUR hacia NIO.
+- **Ledger multimoneda más realista:** Las pruebas distinguen moneda del libro (`company_currency`) de moneda transaccional (`account_currency`), permitiendo entradas NIO dentro de libros USD/EUR.
+
+## Actualización incremental — 2026-05-13 (Recurrentes y cierre mensual E2E)
+
+- **Comprobantes recurrentes posteables:** Las líneas generadas desde el asistente de cierre mensual quedan vinculadas con `transaction="journal_entry"`, por lo que aparecen en la vista del comprobante y pueden contabilizarse.
+- **Nombres técnicos en inglés:** Las líneas de comprobantes manuales y recurrentes usan `journal_entry` como nombre funcional de transacción, sin generar nuevos valores técnicos en español.
+- **Smart Select cubierto:** La plantilla recurrente normaliza cuentas recibidas como `Accounts.id` o como código contable, alineando el backend con el valor enviado por el selector visual.
+- **Trazabilidad completa:** El comprobante generado conserva el enlace con su plantilla y con `RecurringJournalApplication` en ambos sentidos.
+- **Regresión automatizada:** `tests/test_12_recurring_journals.py` incluye un flujo E2E con cliente Flask desde creación de plantilla hasta aprobación del comprobante generado.
+
 ## Actualización incremental — 2026-05-14 (Ampliación del seed de datos de prueba)
 
 - **Seed de datos robusto:** Se han ampliado los datos de prueba (`dev_data`) para incluir un escenario multimoneda completo para la empresa 'cacao'.

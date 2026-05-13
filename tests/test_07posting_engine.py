@@ -181,7 +181,7 @@ def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
         entity="cacao",
         account=receivable_account.code,
         date=journal.date,
-        transaction=journal.__tablename__,
+        transaction="journal_entry",
         transaction_id=journal.id,
         value=Decimal("100.00"),
         memo="Cliente por cobrar",
@@ -192,7 +192,7 @@ def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
         entity="cacao",
         account=revenue_account.code,
         date=journal.date,
-        transaction=journal.__tablename__,
+        transaction="journal_entry",
         transaction_id=journal.id,
         value=Decimal("-100.00"),
         memo="Venta manual",
@@ -204,7 +204,7 @@ def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
     database.session.commit()
 
     posted_entries = (
-        database.session.execute(database.select(GLEntry).filter_by(voucher_type=journal.__tablename__, voucher_id=journal.id))
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="journal_entry", voucher_id=journal.id))
         .scalars()
         .all()
     )

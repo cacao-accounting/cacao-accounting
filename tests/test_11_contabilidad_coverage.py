@@ -309,7 +309,7 @@ def test_default_accounts_validate_gl_account_usage_blocked_manual(app_ctx):
     database.session.add(acct)
     database.session.commit()
     with pytest.raises(DefaultAccountError, match="no permite afectacion manual"):
-        validate_gl_account_usage(acct.id, "comprobante_contable")
+        validate_gl_account_usage(acct.id, "journal_entry")
 
 
 def test_default_accounts_validate_gl_account_usage_disallowed_voucher(app_ctx):
@@ -332,7 +332,7 @@ def test_default_accounts_validate_gl_account_usage_no_type(app_ctx):
     acct = Accounts(entity="cacao", code="GEN001", name="General", active=True, enabled=True, account_type=None)
     database.session.add(acct)
     database.session.commit()
-    validate_gl_account_usage(acct.id, "comprobante_contable")
+    validate_gl_account_usage(acct.id, "journal_entry")
 
 
 def test_default_accounts_accounts_for_company(app_ctx):
@@ -1759,7 +1759,7 @@ def test_route_nuevo_comprobante_recurrente_uses_journal_patterns(app_ctx):
 
     assert response.status_code == 200
     assert 'name: "naming_series_id"' in html
-    assert 'autoSelectDefault: true' in html
+    assert "autoSelectDefault: true" in html
     assert 'name="books"' in html
     assert "selectedBooks.includes(book.value)" in html
     assert "lineDetailModal" in html
@@ -1881,9 +1881,7 @@ def test_monthly_close_period_smart_select_filters_open_periods_by_company(app_c
 
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get(
-        "/api/search-select?doctype=accounting_period_id&company=cacao&is_closed=false&q=&limit=10"
-    )
+    response = client.get("/api/search-select?doctype=accounting_period_id&company=cacao&is_closed=false&q=&limit=10")
     payload = response.get_json()
     labels = [item["display_name"] for item in payload["results"]]
 

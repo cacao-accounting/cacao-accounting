@@ -422,7 +422,7 @@ def _line_model(
         project=line.project,
         book=book,
         date=posting_date,
-        transaction=ComprobanteContable.__tablename__,
+        transaction=JOURNAL_TRANSACTION_TYPE,
         order=line.order,
         value=amount,
         currency_id=transaction_currency,

@@ -1,5 +1,39 @@
 # SESSIONS
 
+## 2026-05-13 (seed con comprobante multi-libro y conversión)
+
+### Peticion del usuario
+Agregar al seed inicial un cuarto comprobante contable que afecte los tres libros de `cacao` y permita verificar que el backend convierte correctamente desde la moneda del comprobante hacia la moneda de cada libro.
+
+### Resumen tecnico de cambios
+- `cacao_accounting/datos/dev/data.py`: `_make_comprobantes_contables()` ahora incluye `MULTI-BOOK-NIO`, un asiento en NIO aplicado a los libros `FISC`, `FIN` y `MGMT`.
+- `posting.py`: la busqueda de tipo de cambio ahora usa la tasa directa si existe y, si solo existe la tasa inversa, calcula el reciproco para evitar conversiones invertidas.
+- `cacao_accounting/datos/dev/data.py`: las tasas del seed se expresan como USD/EUR hacia NIO cuando el valor representa Cordobas por moneda extranjera.
+- `tests/test_seed_accounting.py`: se agrego una regresion que valida las 6 entradas GL generadas, dos por libro, y comprueba importes convertidos para USD y EUR usando las tasas inversas del seed.
+- La prueba general de ledger multimoneda ahora distingue moneda del libro (`company_currency`) de moneda transaccional (`account_currency`), permitiendo escenarios reales con monedas mixtas por libro.
+
+### Verificacion ejecutada
+- `python -m black cacao_accounting/datos/dev/data.py tests/test_seed_accounting.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest -v -s --exitfirst tests/test_seed_accounting.py tests/test_09_journal_entry_form.py::test_submit_journal_converts_foreign_currency_to_book_currency tests/test_09_journal_entry_form.py::test_submit_journal_rejects_missing_exchange_rate_for_foreign_currency` -> 8 passed.
+
+## 2026-05-13 (regresión E2E de recurrentes en cierre mensual)
+
+### Peticion del usuario
+Corregir el flujo completo de comprobantes recurrentes porque un comprobante generado desde el asistente de cierre mensual aparecia sin lineas contables y no existia una prueba end-to-end que lo detectara.
+
+### Resumen tecnico de cambios
+- `recurring_journal_service.py`: las lineas generadas desde plantillas recurrentes ahora se crean con `transaction="journal_entry"`, orden de linea y `voucher_type="journal_entry"`, por lo que son visibles por las vistas y contabilizables por el motor de posting.
+- `journal_repository.py`, `journal_service.py`, `posting.py` y `statement_service.py`: el valor persistido de transaccion para lineas de comprobante manual queda estandarizado en ingles como `journal_entry`, sin compatibilidad hacia valores tecnicos en español.
+- `posting.py`: los `ComprobanteContable` construidos directamente tambien se identifican en GL como `voucher_type="journal_entry"`, evitando que fixtures o servicios que no pasan por `journal_service` usen el nombre fisico de tabla.
+- La creacion de plantillas recurrentes normaliza cuentas recibidas por `Accounts.id` o por codigo, cubriendo el contrato real del `smart-select`.
+- La aplicacion recurrente falla de forma explicita si una plantilla aprobada no tiene lineas, y conserva el enlace bidireccional `journal.recurrent_application_id`.
+- `tests/test_12_recurring_journals.py`: nueva prueba E2E con cliente Flask que crea, aprueba y aplica una plantilla recurrente desde cierre mensual, verifica lineas visibles y contabiliza el comprobante generado.
+
+### Verificacion ejecutada
+- `python -m black cacao_accounting/contabilidad/recurring_journal_service.py tests/test_12_recurring_journals.py`
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True tests/test_12_recurring_journals.py` -> no ejecuta por falta de `openpyxl` en el Python del sistema.
+- `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS venv/bin/python -m pytest -v -s --exitfirst --slow=True tests/test_12_recurring_journals.py` -> 5 passed.
+
 ## 2026-05-13 (inicio de Cliente y Proveedor con UX tipo comprobante)
 
 ### Peticion del usuario

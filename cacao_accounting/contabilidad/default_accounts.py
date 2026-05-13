@@ -135,14 +135,14 @@ ACCOUNT_TYPE_ALLOWED_VOUCHERS: dict[str, frozenset[str]] = {
     "inventory_adjustment": frozenset({"stock_entry"}),
     "customer_advance": frozenset({"payment_entry"}),
     "supplier_advance": frozenset({"payment_entry"}),
-    "bank_difference": frozenset({"bank_transaction", "comprobante_contable"}),
+    "bank_difference": frozenset({"bank_transaction", "journal_entry"}),
     "rounding": frozenset({"sales_invoice", "purchase_invoice", "payment_entry"}),
-    "exchange_gain": frozenset({"exchange_revaluation", "comprobante_contable"}),
-    "exchange_loss": frozenset({"exchange_revaluation", "comprobante_contable"}),
+    "exchange_gain": frozenset({"exchange_revaluation", "journal_entry"}),
+    "exchange_loss": frozenset({"exchange_revaluation", "journal_entry"}),
     "unrealized_exchange_gain": frozenset({"exchange_revaluation"}),
     "unrealized_exchange_loss": frozenset({"exchange_revaluation"}),
-    "deferred_income": frozenset({"sales_invoice", "comprobante_contable"}),
-    "deferred_expense": frozenset({"purchase_invoice", "comprobante_contable"}),
+    "deferred_income": frozenset({"sales_invoice", "journal_entry"}),
+    "deferred_expense": frozenset({"purchase_invoice", "journal_entry"}),
     "payment_discount": frozenset({"payment_entry"}),
     "period_profit_loss": frozenset({"period_close_run"}),
     "retained_earnings": frozenset({"period_close_run"}),
@@ -248,7 +248,7 @@ def validate_gl_account_usage(account_id: str, voucher_type: str | None) -> None
     account_type = (account.account_type or "").strip()
     if not account_type:
         return
-    is_manual_voucher = voucher_type in {"comprobante_contable", "journal_entry"}
+    is_manual_voucher = voucher_type == "journal_entry"
     if is_manual_voucher and account_type in MANUAL_BLOCKED_ACCOUNT_TYPES:
         raise DefaultAccountError(f"La cuenta {account.code} de tipo {account_type} no permite afectacion manual.")
     if is_manual_voucher:

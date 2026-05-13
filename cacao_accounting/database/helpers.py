@@ -429,11 +429,15 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
     if seq is None or seq.reset_policy == "never":
         return False
 
-    last_log = database.session.execute(
-        database.select(GeneratedIdentifierLog)
-        .filter_by(sequence_id=sequence_id)
-        .order_by(GeneratedIdentifierLog.generated_at.desc())
-    ).scalars().first()
+    last_log = (
+        database.session.execute(
+            database.select(GeneratedIdentifierLog)
+            .filter_by(sequence_id=sequence_id)
+            .order_by(GeneratedIdentifierLog.generated_at.desc())
+        )
+        .scalars()
+        .first()
+    )
 
     if last_log is None or last_log.posting_date is None:
         return False
