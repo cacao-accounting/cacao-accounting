@@ -29,20 +29,43 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Accounts, Currency, Entity, Modules, User, database
 
         database.create_all()
-        database.session.add(
-            Entity(
-                code="abc",
-                name="ABC",
-                company_name="ABC",
-                tax_id="J0001",
-                currency="NIO",
-            )
+        database.session.add_all(
+            [
+                Entity(
+                    code="abc",
+                    name="ABC",
+                    company_name="ABC",
+                    tax_id="J0001",
+                    currency="NIO",
+                ),
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao SA",
+                    tax_id="J0002",
+                    currency="NIO",
+                    enabled=True,
+                ),
+                Modules(module="accounting", default=True, enabled=True),
+                User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Accounts(entity="abc", code="6101", name="Gasto", active=True, enabled=True, group=False),
+                Accounts(entity="abc", code="1105", name="Seguro pagado", active=True, enabled=True, group=False),
+                Accounts(entity="abc", code="6000", name="Gasto extendido", active=True, enabled=True, group=False),
+                Accounts(entity="abc", code="1000", name="Caja", active=True, enabled=True, group=False),
+            ]
         )
         database.session.commit()
         yield app
+
+
+def _login(client, user_id: str) -> None:
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_fresh"] = True
 
 
 def test_recurring_journal_flow(app_ctx):
@@ -155,6 +178,168 @@ def test_recurring_journal_extended_fields(app_ctx):
         assert target_line.internal_reference is None
         assert target_line.internal_reference_id is None
         assert target_line.is_advance is False
+
+
+def test_e2e_recurring_journal_monthly_close_creates_visible_postable_lines(app_ctx):
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        Accounts,
+        Book,
+        ComprobanteContableDetalle,
+        FiscalYear,
+        GLEntry,
+        PeriodCloseCheck,
+        PeriodCloseRun,
+        RecurringJournalApplication,
+        RecurringJournalItem,
+        RecurringJournalTemplate,
+        User,
+        database,
+    )
+
+    user = User.query.filter_by(user="admin").first()
+    debit_account = Accounts(
+        entity="cacao",
+        code="52.01.E2E",
+        name="Gasto recurrente E2E",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    credit_account = Accounts(
+        entity="cacao",
+        code="11.01.E2E",
+        name="Caja recurrente E2E",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-REC-E2E",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add_all([debit_account, credit_account, book, fiscal_year])
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    new_template_response = client.get("/accounting/journal/recurring/new")
+    assert new_template_response.status_code == 200
+
+    template_items = [
+        {
+            "account_code": debit_account.id,
+            "debit": "250.00",
+            "credit": "0",
+            "description": "Gasto recurrente E2E",
+        },
+        {
+            "account_code": credit_account.id,
+            "debit": "0",
+            "credit": "250.00",
+            "description": "Pago recurrente E2E",
+        },
+    ]
+    create_response = client.post(
+        "/accounting/journal/recurring/new",
+        data={
+            "code": "REC-E2E-CLOSE",
+            "name": "Recurrente E2E cierre",
+            "company": "cacao",
+            "ledger_id": "FISC",
+            "books": ["FISC"],
+            "start_date": "2026-05-01",
+            "end_date": "2026-12-31",
+            "frequency": "monthly",
+            "currency": "NIO",
+            "items_json": json.dumps(template_items),
+        },
+        follow_redirects=False,
+    )
+    template = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code="REC-E2E-CLOSE")).scalar_one()
+    persisted_items = (
+        database.session.execute(database.select(RecurringJournalItem).filter_by(template_id=template.id)).scalars().all()
+    )
+
+    assert create_response.status_code == 302
+    assert {item.account_code for item in persisted_items} == {"52.01.E2E", "11.01.E2E"}
+
+    template_view_response = client.get(f"/accounting/journal/recurring/{template.id}")
+    approve_response = client.post(f"/accounting/journal/recurring/{template.id}/approve", follow_redirects=False)
+    database.session.refresh(template)
+
+    assert template_view_response.status_code == 200
+    assert approve_response.status_code == 302
+    assert template.status == "approved"
+
+    close_list_response = client.get("/accounting/period-close/monthly")
+    close_create_response = client.post(
+        "/accounting/period-close/monthly/new",
+        data={"period_id": period.id},
+        follow_redirects=False,
+    )
+    close_run = database.session.execute(database.select(PeriodCloseRun).filter_by(period_id=period.id)).scalar_one()
+    close_view_response = client.get(f"/accounting/period-close/monthly/{close_run.id}")
+    apply_response = client.post(
+        f"/accounting/period-close/monthly/{close_run.id}/apply-recurring",
+        data={"template_ids": [template.id]},
+        follow_redirects=False,
+    )
+
+    check = database.session.execute(database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)).scalar_one()
+    application = database.session.execute(
+        database.select(RecurringJournalApplication).filter_by(template_id=template.id)
+    ).scalar_one()
+    journal = database.session.get(ComprobanteContable, application.journal_id)
+    lines = (
+        database.session.execute(
+            database.select(ComprobanteContableDetalle).filter_by(
+                transaction="journal_entry",
+                transaction_id=journal.id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    assert close_list_response.status_code == 200
+    assert close_create_response.status_code == 302
+    assert close_view_response.status_code == 200
+    assert apply_response.status_code == 302
+    assert check.check_status == "passed"
+    assert application.journal_id
+    assert journal.is_recurrent is True
+    assert journal.recurrent_template_id == template.id
+    assert journal.recurrent_application_id == application.id
+    assert len(lines) == 2
+    assert {line.account for line in lines} == {"52.01.E2E", "11.01.E2E"}
+
+    journal_view_response = client.get(f"/accounting/journal/{journal.id}")
+    assert journal_view_response.status_code == 200
+    assert "Gasto recurrente E2E" in journal_view_response.get_data(as_text=True)
+
+    submit_response = client.post(f"/accounting/journal/{journal.id}/submit", follow_redirects=False)
+    entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    database.session.refresh(journal)
+
+    assert submit_response.status_code == 302
+    assert journal.status == "submitted"
+    assert entries
 
 
 def test_posting_initializes_outstanding_amount(app_ctx):

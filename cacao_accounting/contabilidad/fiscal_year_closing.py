@@ -91,9 +91,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if not balances:
         raise FiscalYearClosingError("No hay movimientos en cuentas de resultados para cerrar en este año fiscal.")
 
-    defaults = (
-        database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
-    )
+    defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
     if not defaults or not defaults.retained_earnings_account_id:
         raise FiscalYearClosingError("No se ha definido la cuenta de utilidades acumuladas en la configuración.")
 
@@ -183,4 +181,5 @@ def reverse_fiscal_year_closing(fiscal_year_id: str, user_id: str) -> None:
 
     # Anular el comprobante. Esto disparará el hook en journal_service para actualizar el año fiscal.
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
+
     cancel_submitted_journal(journal.id, user_id=user_id)

@@ -204,14 +204,14 @@ def create_bank_difference_journal(
     database.session.add_all(
         [
             ComprobanteContableDetalle(
-                transaction="comprobante_contable",
+                transaction="journal_entry",
                 transaction_id=journal.id,
                 account=debit_account_id,
                 value=abs(amount),
                 memo="Diferencia bancaria",
             ),
             ComprobanteContableDetalle(
-                transaction="comprobante_contable",
+                transaction="journal_entry",
                 transaction_id=journal.id,
                 account=credit_account_id,
                 value=-abs(amount),

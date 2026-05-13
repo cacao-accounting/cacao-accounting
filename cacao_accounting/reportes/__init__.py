@@ -377,11 +377,15 @@ def _resolve_company(company_code: str) -> str:
 
 
 def _default_ledger_for_company(company_code: str) -> str | None:
-    return database.session.execute(
-        database.select(Book.code)
-        .where(Book.entity == company_code)
-        .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
-    ).scalars().first()
+    return (
+        database.session.execute(
+            database.select(Book.code)
+            .where(Book.entity == company_code)
+            .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
+        )
+        .scalars()
+        .first()
+    )
 
 
 def _default_period_for_company(company_code: str, target_date: date | None = None) -> str | None:
@@ -425,7 +429,7 @@ def _build_drill_down_url(
 def _build_voucher_url(values: dict[str, object]) -> str | None:
     voucher_type = str(values.get("voucher_type") or "").lower()
     voucher_id = str(values.get("document_no") or values.get("voucher_id") or "").strip()
-    if voucher_type in {"journal_entry", "comprobante_contable"} and voucher_id:
+    if voucher_type == "journal_entry" and voucher_id:
         return url_for("contabilidad.ver_comprobante", identifier=voucher_id)
     return None
 

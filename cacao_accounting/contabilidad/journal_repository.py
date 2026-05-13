@@ -9,13 +9,15 @@ from sqlalchemy import select
 
 from cacao_accounting.database import ComprobanteContable, ComprobanteContableDetalle, database
 
+JOURNAL_TRANSACTION_TYPE = "journal_entry"
+
 
 def add_journal(journal: ComprobanteContable, lines: list[ComprobanteContableDetalle]) -> ComprobanteContable:
     """Persiste un comprobante contable manual y sus lineas."""
     database.session.add(journal)
     database.session.flush()
     for line in lines:
-        line.transaction = ComprobanteContable.__tablename__
+        line.transaction = JOURNAL_TRANSACTION_TYPE
         line.transaction_id = journal.id
     database.session.add_all(lines)
     database.session.commit()
@@ -45,7 +47,7 @@ def list_journal_lines(journal_id: str) -> list[ComprobanteContableDetalle]:
     return list(
         database.session.execute(
             select(ComprobanteContableDetalle)
-            .filter_by(transaction=ComprobanteContable.__tablename__, transaction_id=journal_id)
+            .filter_by(transaction=JOURNAL_TRANSACTION_TYPE, transaction_id=journal_id)
             .order_by(ComprobanteContableDetalle.order, ComprobanteContableDetalle.id)
         )
         .scalars()
@@ -61,7 +63,7 @@ def replace_journal_lines(journal: ComprobanteContable, lines: list[ComprobanteC
     database.session.flush()
 
     for line in lines:
-        line.transaction = ComprobanteContable.__tablename__
+        line.transaction = JOURNAL_TRANSACTION_TYPE
         line.transaction_id = journal.id
 
     database.session.add(journal)

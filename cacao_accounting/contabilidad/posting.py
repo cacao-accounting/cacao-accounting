@@ -46,6 +46,8 @@ from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
+JOURNAL_TRANSACTION_TYPE = "journal_entry"
+
 
 class PostingError(ValueError):
     """Error controlado del motor de contabilizacion."""
@@ -89,6 +91,8 @@ def _validate_single_sided_amount(debit: Decimal, credit: Decimal) -> None:
 
 
 def _get_voucher_type(document: Any) -> str:
+    if isinstance(document, ComprobanteContable):
+        return JOURNAL_TRANSACTION_TYPE
     return str(getattr(document, "voucher_type", None) or getattr(document, "__tablename__", ""))
 
 
@@ -394,9 +398,21 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
         .scalars()
         .first()
     )
-    if rate is None:
-        raise PostingError(f"No existe tipo de cambio registrado para {origin} -> {destination} en la fecha {posting_date}.")
-    return _decimal_value(rate.rate)
+    if rate is not None:
+        return _decimal_value(rate.rate)
+
+    inverse_rate = (
+        database.session.execute(select(ExchangeRate).filter_by(origin=destination, destination=origin, date=posting_date))
+        .scalars()
+        .first()
+    )
+    if inverse_rate is not None:
+        inverse_value = _decimal_value(inverse_rate.rate)
+        if inverse_value == 0:
+            raise PostingError("El tipo de cambio no puede ser cero.")
+        return Decimal("1") / inverse_value
+
+    raise PostingError(f"No existe tipo de cambio registrado para {origin} -> {destination} en la fecha {posting_date}.")
 
 
 def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
@@ -1293,7 +1309,7 @@ def _document_items(document: Any) -> list[Any]:
 def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContableDetalle]:
     return list(
         database.session.execute(
-            select(ComprobanteContableDetalle).filter_by(transaction=document.__tablename__, transaction_id=document.id)
+            select(ComprobanteContableDetalle).filter_by(transaction=JOURNAL_TRANSACTION_TYPE, transaction_id=document.id)
         )
         .scalars()
         .all()
