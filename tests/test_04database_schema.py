@@ -237,6 +237,11 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_bank_account_table_exists(self):
         self.assertIn("bank_account", self.tables)
 
+    def test_bank_account_has_numbering_default_fields(self):
+        cols = {c["name"] for c in self.inspector.get_columns("bank_account")}
+        self.assertIn("default_naming_series_id", cols)
+        self.assertIn("default_external_counter_id", cols)
+
     def test_payment_entry_table_exists(self):
         self.assertIn("payment_entry", self.tables)
 

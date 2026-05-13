@@ -10,6 +10,14 @@ Estado 2026-05-12 (Finalizado): Todos los issues listados han sido resueltos y v
 
 # ESTADO ACTUAL DEL PROYECTO
 
+## Actualización incremental — 2026-05-13 (Tesorería: serie compartida y chequeras por cuenta)
+
+- **Preferencias por cuenta bancaria:** Las cuentas bancarias pueden guardar una serie interna predeterminada para pagos y una chequera predeterminada.
+- **Serie compartida:** Varias cuentas bancarias pueden reutilizar la misma serie `payment_entry`; la separación operativa queda en el contador externo.
+- **Chequera por cuenta:** Cada cuenta bancaria puede asociar su propio `ExternalCounter` tipo `checkbook`, y el sistema crea el mapping contextual por `bank_account_id`.
+- **Pagos con defaults:** Al crear pagos, si el usuario no selecciona serie o contador, se toman los defaults de la cuenta bancaria. La seleccion explicita en el formulario mantiene prioridad.
+- **Seed bancario:** El seed de desarrollo crea cuentas demo NIO y USD para `cacao`, ambas con la misma serie de pagos y chequeras distintas.
+
 ## Actualización incremental — 2026-05-13 (Seed multi-libro con conversión)
 
 - **Cuarto comprobante demo:** El seed agrega `MULTI-BOOK-NIO`, un comprobante en NIO que afecta simultáneamente los libros `FISC`, `FIN` y `MGMT`.

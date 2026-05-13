@@ -13,6 +13,7 @@ from sqlalchemy import or_, select
 
 from cacao_accounting.database import (
     AuditLog,
+    BankAccount,
     DocumentRelation,
     PaymentEntry,
     PaymentReference,
@@ -614,9 +615,11 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
     """Crea un pago generico desde facturas fuente."""
     company = payload.get("company") or payload.get("company_id")
     posting_date = payload.get("posting_date")
+    bank_account = (
+        database.session.get(BankAccount, payload.get("bank_account_id")) if payload.get("bank_account_id") else None
+    )
     payment = PaymentEntry(
         company=company,
-        posting_date=posting_date,
         docstatus=0,
         payment_type=str(payload.get("payment_type") or "receive"),
         party_type=payload.get("party_type"),
@@ -629,9 +632,11 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
         document=payment,
         entity_type="payment_entry",
         posting_date_raw=posting_date,
-        naming_series_id=payload.get("naming_series_id"),
-        external_counter_id=payload.get("external_counter_id"),
+        naming_series_id=payload.get("naming_series_id") or (bank_account.default_naming_series_id if bank_account else None),
+        external_counter_id=payload.get("external_counter_id")
+        or (bank_account.default_external_counter_id if bank_account else None),
         external_number=payload.get("external_number"),
+        external_context={"bank_account_id": payment.bank_account_id},
     )
     total = Decimal("0")
     for selected in payload.get("lines") or []:

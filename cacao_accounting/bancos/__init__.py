@@ -8,6 +8,7 @@
 # --------------------------------------------------------------------------------------
 from datetime import date
 from decimal import Decimal
+import json
 from typing import cast
 
 # ---------------------------------------------------------------------------------------
@@ -38,11 +39,14 @@ from cacao_accounting.database import (
     BankAccount,
     BankMatchingRule,
     BankTransaction,
+    ExternalCounter,
+    NamingSeries,
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
     ReconciliationItem,
     SalesInvoice,
+    SeriesExternalCounterMap,
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
@@ -65,6 +69,72 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
         (str(series.id), f"{series.name} ({series.prefix_template})")
         for series in get_active_naming_series(entity_type=entity_type, company=company)
     ]
+
+
+def _validate_bank_account_numbering_defaults(
+    *,
+    company: str | None,
+    naming_series_id: str | None,
+    external_counter_id: str | None,
+) -> tuple[str | None, str | None]:
+    """Valida la serie de pagos y chequera predeterminadas de una cuenta bancaria."""
+    if naming_series_id:
+        series = database.session.get(NamingSeries, naming_series_id)
+        if not series or not series.is_active:
+            raise IdentifierConfigurationError("La serie interna seleccionada no existe o está inactiva.")
+        if series.entity_type != "payment_entry":
+            raise IdentifierConfigurationError("La serie interna debe ser para pagos.")
+        if series.company not in (None, company):
+            raise IdentifierConfigurationError("La serie interna no pertenece a la compañía indicada.")
+
+    if external_counter_id:
+        counter = database.session.get(ExternalCounter, external_counter_id)
+        if not counter or not counter.is_active:
+            raise IdentifierConfigurationError("La chequera seleccionada no existe o está inactiva.")
+        if counter.counter_type != "checkbook":
+            raise IdentifierConfigurationError("El contador externo seleccionado debe ser una chequera.")
+        if counter.company != company:
+            raise IdentifierConfigurationError("La chequera no pertenece a la compañía indicada.")
+
+    return naming_series_id, external_counter_id
+
+
+def _ensure_bank_account_counter_mapping(bank_account: BankAccount) -> None:
+    """Vincula la serie compartida con la chequera usando la cuenta como contexto."""
+    if not bank_account.default_naming_series_id or not bank_account.default_external_counter_id:
+        return
+
+    condition_json = json.dumps({"bank_account_id": bank_account.id}, sort_keys=True)
+    existing = database.session.execute(
+        database.select(SeriesExternalCounterMap).filter_by(
+            naming_series_id=bank_account.default_naming_series_id,
+            external_counter_id=bank_account.default_external_counter_id,
+            condition_json=condition_json,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return
+
+    database.session.add(
+        SeriesExternalCounterMap(
+            naming_series_id=bank_account.default_naming_series_id,
+            external_counter_id=bank_account.default_external_counter_id,
+            priority=0,
+            condition_json=condition_json,
+        )
+    )
+
+
+def _payment_numbering_defaults(bank_account_id: str | None) -> tuple[str | None, str | None]:
+    """Devuelve serie y chequera predeterminadas de la cuenta bancaria."""
+    if not bank_account_id:
+        return None, None
+
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account:
+        return None, None
+
+    return bank_account.default_naming_series_id, bank_account.default_external_counter_id
 
 
 @bancos.route("/")
@@ -541,11 +611,22 @@ def bancos_cuenta_bancaria_nuevo():
     if formulario.validate_on_submit() or request.method == "POST":
         gl_account_id = request.form.get("gl_account_id") or None
         company = request.form.get("company")
+        default_naming_series_id = request.form.get("default_naming_series_id") or None
+        default_external_counter_id = request.form.get("default_external_counter_id") or None
         if gl_account_id:
             gl_account = database.session.get(Accounts, gl_account_id)
             if not gl_account or gl_account.entity != company or gl_account.account_type != "bank":
                 flash(_("Seleccione una cuenta contable de tipo banco para la compañía indicada."), "danger")
                 return render_template("bancos/banco_cuenta_nuevo.html", form=formulario, titulo=titulo)
+        try:
+            default_naming_series_id, default_external_counter_id = _validate_bank_account_numbering_defaults(
+                company=company,
+                naming_series_id=default_naming_series_id,
+                external_counter_id=default_external_counter_id,
+            )
+        except IdentifierConfigurationError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template("bancos/banco_cuenta_nuevo.html", form=formulario, titulo=titulo)
         cuenta = BankAccount(
             bank_id=request.form.get("bank_id"),
             company=company,
@@ -554,8 +635,12 @@ def bancos_cuenta_bancaria_nuevo():
             iban=request.form.get("iban"),
             currency=request.form.get("currency") or None,
             gl_account_id=gl_account_id,
+            default_naming_series_id=default_naming_series_id,
+            default_external_counter_id=default_external_counter_id,
         )
         database.session.add(cuenta)
+        database.session.flush()
+        _ensure_bank_account_counter_mapping(cuenta)
         database.session.commit()
         return redirect("/cash_management/bank-account/list")
     return render_template("bancos/banco_cuenta_nuevo.html", form=formulario, titulo=titulo)
@@ -729,7 +814,6 @@ def bancos_pago_nuevo():
             payment = PaymentEntry(
                 payment_type=payment_type,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
                 bank_account_id=request.form.get("bank_account_id") or None,
                 party_type=request.form.get("party_type") or None,
                 party_id=request.form.get("party_id") or None,
@@ -747,17 +831,20 @@ def bancos_pago_nuevo():
                 payment.received_amount = amount
             database.session.add(payment)
             database.session.flush()
+            default_series_id, default_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+            naming_series_id = request.form.get("naming_series") or default_series_id
+            external_counter_id = request.form.get("external_counter_id") or default_counter_id
             # Contexto para seleccion contextual del contador externo
             ext_context = {
                 "payment_type": payment_type,
-                "bank_account_id": request.form.get("bank_account_id") or None,
+                "bank_account_id": payment.bank_account_id,
             }
             assign_document_identifier(
                 document=payment,
                 entity_type="payment_entry",
                 posting_date_raw=request.form.get("posting_date"),
-                naming_series_id=request.form.get("naming_series") or None,
-                external_counter_id=request.form.get("external_counter_id") or None,
+                naming_series_id=naming_series_id,
+                external_counter_id=external_counter_id,
                 external_number=request.form.get("external_number") or None,
                 external_context=ext_context,
             )
