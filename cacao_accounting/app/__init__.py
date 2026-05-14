@@ -12,7 +12,7 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, current_app, jsonify, render_template
+from flask import Blueprint, current_app, jsonify, make_response, render_template
 from flask_login import login_required
 
 # ---------------------------------------------------------------------------------------
@@ -91,3 +91,22 @@ def ping():
     resp.status_code = 200
 
     return resp
+
+
+@cacao_app.route("/health")
+def health():
+    """Endpoint de salud basico."""
+    return make_response("ok", 200)
+
+
+@cacao_app.route("/ready")
+def ready():
+    """Endpoint de disponibilidad que verifica la base de datos."""
+    from sqlalchemy.sql import text
+    from cacao_accounting.database import database
+
+    try:
+        database.session.execute(text("SELECT 1"))
+        return make_response("ready", 200)
+    except Exception:
+        return make_response("service unavailable", 503)

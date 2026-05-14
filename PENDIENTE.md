@@ -1,93 +1,37 @@
-# PENDIENTE — Cacao Accounting
+# PENDIENTE — Cacao Accounting (Backlog Priorizado)
 
-Este documento registra lo que queda pendiente tras la consolidación de mayo de 2026. Se han priorizado las funcionalidades de colaboración, auditoría y seguridad avanzada.
+## Core y Posting
+- [ ] Resolver política formal de renumeración de `document_no` tras cambios en borradores.
+- [ ] Implementar soporte completo para `GLEntryDimension` (dimensiones personalizadas) en posting.
 
----
-
-## Correcciones Técnicas Resueltas
-- [x] Migrar los maestros principales Item, Cliente, Proveedor, Banco y Cuenta Bancaria al estilo visual del comprobante contable.
-- [x] Usar `smart-select` en los maestros principales donde hay relaciones: UOM, compañía, banco, moneda y cuenta contable.
-- [x] Permitir y validar asociación de Cuenta Bancaria con cuenta contable de tipo `bank`.
-- [x] Alinear gradualmente formularios y vistas de registros maestros contables con el estilo del comprobante, manteniendo plantillas separadas y sin macros nuevas.
-- [x] Agregar URLs de visualización para monedas, tasas de cambio, proyectos, años fiscales y períodos contables.
-- [x] Ampliar tipos de cuenta en `/accounting/account/new` para cubrir el catálogo base y la configuración de cuentas por defecto.
-- [x] Resolver advertencia `SAWarning` por ciclo FK entre `comprobante_contable` y `recurring_journal_application` durante `drop_all()` en SQLite.
-- [x] Corregir toggle Mostrar/Ocultar filtros avanzados en los cinco reportes financieros y reubicar los checkboxes principales bajo `Cuenta contable`.
-- [x] Alinear formulario de plantillas recurrentes con comprobante normal: serie por defecto, libros por checkbox y modal de dimensiones sin referencias específicas.
-- [x] Rediseñar asistente de cierre mensual como registro step-by-step con lista de cierres, creación por periodo y paso inicial de comprobantes recurrentes.
-- [x] Usar Smart Select en nuevo cierre mensual para compañía y periodos contables abiertos filtrados por compañía.
-- [x] Corregir el contrato de líneas de comprobantes recurrentes generados desde cierre mensual y cubrirlo con prueba E2E usando cliente Flask.
-
-- [x] Ampliar el seed inicial de datos de prueba para cubrir escenarios multimoneda (NIO, USD, EUR).
-- [x] Incluir transacciones reales (JEs) y plantillas recurrentes en el proceso de siembra de datos.
-- [x] Dinamizar fechas de registros y tasas de cambio según el mes de ejecución.
-- [x] Agregar unidades de negocio, centros de costos y proyectos adicionales al seed.
-- [x] Agregar al seed un comprobante multi-libro y validar conversión de moneda del comprobante hacia moneda de libro.
-- [x] Agregar cuentas bancarias demo NIO/USD con una serie de pagos compartida y chequeras separadas por cuenta.
-
----
-
-## Posting Contable y Core
-- [ ] Resolver política formal de renumeración de `document_no` cuando un borrador cambia de serie/fecha tras haber sido numerado.
-- [ ] Implementar soporte completo para `GLEntryDimension` (dimensiones personalizadas) en el motor de posting.
-
----
-
-## Cuentas por Cobrar / Cuentas por Pagar (AR/AP)
-- [ ] Mejorar UX de exportación de Aging y permitir buckets configurables por compañía.
-- [ ] Implementar conciliación masiva de facturas contra pagos desde una interfaz dedicada (actualmente es 1 a N desde el pago).
-
----
-
-## Documentos de Corrección
-- [ ] Reforzar validaciones E2E para flujos de devolución complejos (ej. devolución parcial de mercancía con factura ya pagada).
-- [ ] Trazabilidad bidireccional visualmente mejorada en el árbol de flujo para reversiones.
-
----
-
-## Proveedor y Cliente
+## AR/AP y Terceros
 - [ ] Implementar modelo `PartyGroup` y su CRUD.
-- [ ] Completar edición y visualización por compañía para Cliente y Proveedor en el nuevo patrón de comprobante.
-- [ ] Añadir gestión de múltiples direcciones/contactos.
-- [ ] Evaluar si la clasificación libre debe convertirse en un maestro formal de tipo de tercero.
+- [ ] Completar edición/visualización por compañía para Cliente y Proveedor en nuevo patrón.
+- [ ] Gestión de múltiples direcciones y contactos para terceros.
+- [ ] Conciliación masiva de facturas contra pagos (interfaz dedicada).
+- [ ] Buckets configurables por compañía en reportes de Aging.
 
----
-
-## Inventario
-- [ ] Implementar "Stock Reconciliation" para ajuste de valuación (actualmente solo soporta ajuste de cantidad/conciliación física).
-- [ ] Prorrateo de cargos capitalizables (fletes/seguros) hacia el costo de entrada en `StockValuationLayer`.
-
----
-
-## Multi-Ledger y Dimensiones
-- [ ] Implementar `LedgerMappingRule` para diferencias automáticas entre libros.
-- [ ] UI para gestión de `DimensionType` y `DimensionValue`.
-- [ ] Reporte de saldos por dimensiones analíticas.
-
----
-
-## Tesorería y Revalorización
-- [ ] Implementar proceso de `ExchangeRevaluation` (revalorización cambiaria de cuentas monetarias).
-- [ ] Automatización de ajustes por diferencial cambiario en pagos de facturas multimoneda.
-- [ ] Implementar historial de chequeras por cuenta bancaria cuando se requiera reemplazar una chequera agotada sin perder trazabilidad.
-
----
+## Inventario y Valoración
+- [ ] Implementar "Stock Reconciliation" para ajuste de valuación (actualmente solo cantidad).
+- [ ] Prorrateo de cargos capitalizables (fletes/seguros) en `StockValuationLayer`.
 
 ## Administración y Seguridad
-- [ ] Endurecer autorización por compañía/libro con matriz explícita usuario↔compañía/libro.
-- [ ] Implementar Workflow de aprobación configurable (definición de estados y transiciones).
-- [ ] Activar registro automático de `AuditLog` para cambios en documentos operativos (actualmente solo en flujo documental).
+- [ ] Matriz explícita de autorización Usuario ↔ Compañía/Libro.
+- [ ] Implementar Workflow de aprobación configurable (estados y transiciones).
+- [ ] Activar `AuditLog` automático para cambios en documentos operativos.
 
----
+## Multi-Ledger y Revalorización
+- [ ] Implementar `LedgerMappingRule` para diferencias automáticas entre libros.
+- [ ] Implementar proceso de `ExchangeRevaluation` (revalorización cambiaria de cuentas monetarias).
+- [ ] UI para gestión de `DimensionType` y `DimensionValue`.
 
-## UI y UX (Pendiente Transversal)
-- [ ] Añadir filtros de búsqueda en listados de Compras, Ventas y Bancos (completado solo en Contabilidad).
-- [ ] Migrar todos los formularios operativos restantes al Smart Select Framework.
-- [ ] Implementar el árbol gráfico de trazabilidad (Diagrama de Flujo).
+## UI/UX y Reportes
+- [ ] Filtros de búsqueda en listados de Compras, Ventas y Bancos.
+- [ ] Migrar formularios operativos restantes al Smart Select Framework.
+- [ ] Implementar árbol gráfico de trazabilidad (Diagrama de Flujo).
+- [ ] Drill-down universal en el 100% de los reportes operativos.
+- [ ] Exportación consistente a Excel con formato financiero en todos los reportes.
 
----
-
-## Reportes
-- [ ] Drill-down universal completo en todos los reportes operativos.
-- [ ] Exportación consistente a Excel con formato financiero en el 100% de los reportes.
-- [ ] Añadir pruebas E2E de UI para expand/collapse jerárquico.
+## Nota de Integración (2026-05-14)
+- [x] Integración selectiva desde `ia/main` completada: base documental de `1965ac44a352de5af34d604b81400a2bc8aed74a` y endpoints/prueba de salud desde `bef4029e25000512539a27164f8915cf3b4b2acc`.
+- [ ] Verificar en CI la integración selectiva completa sobre `main`.
