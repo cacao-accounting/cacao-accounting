@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import json
+import re
 from decimal import Decimal
 from datetime import date
 import pytest
@@ -58,6 +59,14 @@ def app_ctx():
 
         database.session.commit()
         yield app
+
+def get_error(data):
+    if isinstance(data, bytes):
+        data = data.decode()
+    match = re.search(r'class="alert alert-danger.*?>(.*?)</div>', data, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
 
 def login(client, username, password):
     return client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
@@ -656,9 +665,8 @@ def test_partial_and_over_deliveries(app_ctx):
     dn2 = database.session.execute(database.select(DeliveryNote).order_by(DeliveryNote.created.desc())).scalars().first()
     response = client.post(f"/sales/delivery-note/{dn2.id}/submit", follow_redirects=True)
     if b"danger" in response.data:
-        from tests.test_uoms_full import get_error
         print(f"PARTIAL DN2 ERROR: {get_error(response.data)}")
-    assert b"danger" not in response.data
+    assert b"alert-danger" not in response.data
     database.session.refresh(dn2)
     assert dn2.docstatus == 1
 
@@ -671,6 +679,6 @@ def test_partial_and_over_deliveries(app_ctx):
     client.post("/sales/delivery-note/new", data=dn3_data, follow_redirects=True)
     dn3 = database.session.execute(database.select(DeliveryNote).order_by(DeliveryNote.created.desc())).scalars().first()
     response = client.post(f"/sales/delivery-note/{dn3.id}/submit", follow_redirects=True)
-    assert b"danger" not in response.data
+    assert b"alert-danger" not in response.data
     database.session.refresh(dn3)
     assert dn3.docstatus == 1 # If it submitted, then over-delivery is technically allowed by engine

@@ -1775,7 +1775,7 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     remarks = database.Column(database.String(500), nullable=True)
     # Reversion contable append-only
     is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
-    reversal_of = database.Column(database.String(10), database.ForeignKey("gl_entry.id"), nullable=True)
+    reversal_of = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
     created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
@@ -1816,7 +1816,7 @@ class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Dimension analitica adicional de una entrada GL (0..N por entrada)."""
 
     __tablename__ = "gl_entry_dimension"
-    gl_entry_id = database.Column(database.String(10), database.ForeignKey("gl_entry.id"), nullable=False, index=True)
+    gl_entry_id = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=False, index=True)
     dimension_type_id = database.Column(
         database.String(26), database.ForeignKey("dimension_type.id"), nullable=False, index=True
     )
