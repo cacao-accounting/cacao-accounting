@@ -11,6 +11,7 @@ WSGI.
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from os import environ
 
 # ---------------------------------------------------------------------------------------
@@ -155,6 +156,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
+            app.jinja_env.globals.update(document_currency_code=document_currency_code)
+            app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.globals.update(format_quantity=format_quantity)
             from cacao_accounting.document_flow.status import calculate_document_status
 
             app.jinja_env.globals.update(document_status_info=calculate_document_status)
@@ -166,6 +170,44 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
 
     else:
         raise RuntimeError(ERROR2)
+
+
+def document_currency_code(document: object | None) -> str:
+    """Return the display currency code for a transactional document."""
+    if document is None:
+        return ""
+    for attr in ("transaction_currency", "currency", "base_currency"):
+        value = getattr(document, attr, None)
+        if value:
+            return str(value)
+    company = getattr(document, "company", None) or getattr(document, "entity", None)
+    if not company:
+        return ""
+    from cacao_accounting.database import Entity
+
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
+    return str(getattr(entity, "currency", "") or "")
+
+
+def _decimal_for_display(value: object | None) -> Decimal:
+    """Normalize template values before numeric formatting."""
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def format_money_with_currency(value: object | None, currency_code: str | None = "") -> str:
+    """Format money with thousands separators and optional currency code."""
+    amount = f"{_decimal_for_display(value):,.2f}"
+    return f"{currency_code} {amount}" if currency_code else amount
+
+
+def format_quantity(value: object | None) -> str:
+    """Format operational quantities with four decimals."""
+    return f"{_decimal_for_display(value):,.4f}"
 
 
 def create_app(ajustes: dict | None = None) -> Flask:

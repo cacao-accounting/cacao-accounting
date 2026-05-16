@@ -1,6 +1,8 @@
 {# Esta no es una página web, contiene funciones para que puedan ser usadas en otras páginas. #}
 {# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
 
+{% import "detail_view_macros.html" as dv_macros %}
+
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 {% macro headertags() -%}
 {# Linea en blanco intencional #}
@@ -60,6 +62,7 @@
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
 <script src="{{ url_for('static', filename='js/smart-select.js') }}?v=20260506-2" defer></script>
+<script src="{{ url_for('static', filename='js/transaction-form.js') }}" defer></script>
 <script src="//unpkg.com/alpinejs" defer></script>
 
 {%- endmacro %}
@@ -379,12 +382,12 @@
 {% endmacro %}
 
 {# ─── Workflow Buttons (Submit / Cancel) ──────────────────────── #}
-{% macro workflow_buttons(docstatus, submit_url, cancel_url) %}
+{% macro workflow_buttons(docstatus, submit_url, cancel_url, submit_label, cancel_label) %}
   {% if docstatus == 0 %}
     <form method="post" action="{{ submit_url }}" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-sm btn-success">
-        <i class="bi bi-check-circle me-1"></i>Aprobar
+        <i class="bi bi-check-circle me-1"></i>{{ submit_label }}
       </button>
     </form>
   {% elif docstatus == 1 %}
@@ -392,7 +395,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-sm btn-outline-danger"
               onclick="return confirm('¿Cancelar este documento?')">
-        <i class="bi bi-x-circle me-1"></i>Cancelar
+        <i class="bi bi-arrow-counterclockwise me-1"></i>{{ cancel_label }}
       </button>
     </form>
   {% endif %}
@@ -411,6 +414,15 @@
       {% endfor %}
     </ul>
   </div>
+{% endmacro %}
+
+{% macro detail_nav_buttons(list_url, new_url) %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ list_url }}">
+    <i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}
+  </a>
+  <a class="btn btn-sm btn-primary" href="{{ new_url }}">
+    <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
+  </a>
 {% endmacro %}
 
 {# ─── Line Items Table (Alpine.js) for create forms ──────────── #}
@@ -633,39 +645,6 @@
 {% endmacro %}
 
 {# ─── Line Items read-only table (for detail pages) ───────────── #}
-{% macro lineas_tabla_lectura(items) %}
-<div class="ca-card mt-3">
-  <div class="ca-card-header">
-    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>Productos / Servicios</h6>
-  </div>
-  <div class="table-responsive p-2">
-    <table class="ca-table">
-      <caption class="visually-hidden">Líneas del documento</caption>
-      <thead>
-        <tr>
-          <th scope="col">Código</th>
-          <th scope="col">Descripción</th>
-          <th scope="col">Cantidad</th>
-          <th scope="col">UOM</th>
-          <th scope="col">Precio Unit.</th>
-          <th scope="col">Monto</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for fila in items %}
-        <tr>
-          <td>{{ fila[0].item_code }}</td>
-          <td>{{ fila[0].item_name or "" }}</td>
-          <td>{{ fila[0].qty }}</td>
-          <td>{{ fila[0].uom or "" }}</td>
-          <td>{{ fila[0].rate or "" }}</td>
-          <td>{{ fila[0].amount or "" }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-3">Sin líneas registradas.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% macro lineas_tabla_lectura(items, currency_code='') %}
+{{ dv_macros.detail_lines_table(items, currency_code=currency_code) }}
 {% endmacro %}

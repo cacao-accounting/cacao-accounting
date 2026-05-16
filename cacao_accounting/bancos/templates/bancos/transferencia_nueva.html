@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+  </ol>
+</nav>
+
+<script>
+  window.bankTransferForm = function (config) {
+    return {
+      header: {
+        payment_type: config.paymentType,
+        company: '',
+        naming_series_id: '',
+        posting_date: new Date().toISOString().slice(0, 10),
+        bank_account_id: '',
+        currency: '',
+        target_bank_account_id: '',
+        target_currency: '',
+        paid_amount: 0,
+        remarks: '',
+        external_number: '',
+      },
+      payload: '',
+
+      init: function () {
+        var self = this;
+        document.addEventListener('bank-account-selected', function (event) {
+            self.header.bank_account_id = event.detail.value;
+            if (event.detail.extra && event.detail.extra.currency) {
+                self.header.currency = event.detail.extra.currency;
+            }
+        });
+        document.addEventListener('target-bank-account-selected', function (event) {
+            self.header.target_bank_account_id = event.detail.value;
+            if (event.detail.extra && event.detail.extra.currency) {
+                self.header.target_currency = event.detail.extra.currency;
+            }
+        });
+      },
+
+      prepareSubmit: function (event) {
+        if (!this.header.company || !this.header.bank_account_id || !this.header.target_bank_account_id || this.header.paid_amount <= 0) {
+          event.preventDefault();
+          alert("{{ _('Por favor complete los campos obligatorios.') }}");
+          return;
+        }
+
+        if (this.header.bank_account_id === this.header.target_bank_account_id) {
+            event.preventDefault();
+            alert("{{ _('La cuenta de origen y destino deben ser distintas.') }}");
+            return;
+        }
+
+        this.payload = JSON.stringify({
+          payment_type: this.header.payment_type,
+          company: this.header.company,
+          naming_series_id: this.header.naming_series_id,
+          posting_date: this.header.posting_date,
+          bank_account_id: this.header.bank_account_id,
+          target_bank_account_id: this.header.target_bank_account_id,
+          paid_amount: this.header.paid_amount,
+          remarks: this.header.remarks,
+          external_number: this.header.external_number
+        });
+      }
+    };
+  };
+</script>
+
+<form method="post" x-data='bankTransferForm({ paymentType: "{{ payment_type }}" })' @submit="prepareSubmit">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="payment_payload" :value="payload">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">{{ titulo }}</h4>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('bancos.bancos_transferencia_lista') }}" class="btn btn-sm btn-outline-secondary">{{ _('Cancelar') }}</a>
+      <button class="btn btn-sm btn-primary" type="submit">
+        <i class="bi bi-save"></i> {{ _('Guardar borrador') }}
+      </button>
+    </div>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "company",
+            name: "company"
+          })'>
+          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
+          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _('Secuencia') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "naming_series",
+            name: "naming_series_id",
+            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
+            filterSources: ["#company_val"],
+            autoSelectDefault: true
+          })'>
+          <input type="hidden" id="company_val" x-model="header.company">
+          <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
+          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Fecha') }}</label>
+        <input class="form-control" type="date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Referencia / Comprobante') }}</label>
+        <input class="form-control" x-model="header.external_number" placeholder="{{ _('Opcional...') }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+      <div class="col-md-6">
+        <div class="ca-card p-3">
+            <h6 class="text-primary border-bottom pb-2 mb-3"><i class="bi bi-arrow-up-circle"></i> {{ _('Cuenta de Origen') }}</h6>
+            <div class="mb-3">
+                <label class="form-label">{{ _('Banco Origen') }} <span class="text-danger">*</span></label>
+                <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "bank_account",
+                    name: "bank_account_id",
+                    filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
+                    filterSources: ["#company_val"],
+                    onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
+                  })'>
+                  <input type="hidden" x-model="selectedValue">
+                  <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar origen...') }}" required>
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <template x-for="opt in options" :key="opt.value">
+                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                    </template>
+                  </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Moneda') }}</label>
+                    <input class="form-control bg-light" x-model="header.currency" readonly>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">{{ _('Monto a Transferir') }}</label>
+                    <input class="form-control text-end fw-bold" type="number" step="0.01" x-model="header.paid_amount" required>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="ca-card p-3">
+            <h6 class="text-success border-bottom pb-2 mb-3"><i class="bi bi-arrow-down-circle"></i> {{ _('Cuenta de Destino') }}</h6>
+            <div class="mb-3">
+                <label class="form-label">{{ _('Banco Destino') }} <span class="text-danger">*</span></label>
+                <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "bank_account",
+                    name: "target_bank_account_id",
+                    filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
+                    filterSources: ["#company_val"],
+                    onSelect: function(opt) { $dispatch("target-bank-account-selected", opt) }
+                  })'>
+                  <input type="hidden" x-model="selectedValue">
+                  <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar destino...') }}" required>
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <template x-for="opt in options" :key="opt.value">
+                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                    </template>
+                  </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">{{ _('Moneda') }}</label>
+                <input class="form-control bg-light" x-model="header.target_currency" readonly>
+            </div>
+            <div class="mt-2 text-muted small">
+                <i class="bi bi-info-circle"></i> {{ _('Si las monedas son distintas, se aplicará el tipo de cambio del sistema al postear.') }}
+            </div>
+        </div>
+      </div>
+  </div>
+
+  <div class="ca-card p-3 mt-3">
+      <label class="form-label">{{ _('Notas / Concepto') }}</label>
+      <textarea class="form-control" rows="2" x-model="header.remarks"></textarea>
+  </div>
+
+</form>
+
+{% endblock %}

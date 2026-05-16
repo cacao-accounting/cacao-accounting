@@ -1,83 +1,61 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada.html"></div>
-{%- endif -%}
-
+{% import "detail_view_macros.html" as dv_macros %}
+{% if TESTING %}<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada.html">
+</div>{% endif %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_entrada_lista') }}" class="link-dark">Entradas de Almacén</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventarios</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-
-<div class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title">
-      <i class="bi bi-archive"></i> {{ registro.document_no or registro.id }}
-      {{ macros.document_status_for("stock_entry", registro, detail=True) }}
-    </h5>
-    <div class="d-flex gap-2">
-      {{ macros.workflow_buttons(
-          registro.docstatus,
-          url_for('inventario.inventario_entrada_submit', entry_id=registro.id),
-          url_for('inventario.inventario_entrada_cancel', entry_id=registro.id)
-      ) }}
-    </div>
-  </div>
-  <dl class="row p-3">
-    <dt class="col-sm-3">Número de Documento</dt>
-    <dd class="col-sm-9">{{ registro.document_no or "" }}</dd>
-    <dt class="col-sm-3">Compañía</dt>
-    <dd class="col-sm-9">{{ registro.company or "" }}</dd>
-    <dt class="col-sm-3">Fecha</dt>
-    <dd class="col-sm-9">{{ registro.posting_date or "" }}</dd>
-    <dt class="col-sm-3">Estado</dt>
-    <dd class="col-sm-9">{{ macros.document_status_for("stock_entry", registro, detail=True) }}</dd>
-  </dl>
-</div>
-
-<div class="ca-card mt-3">
-  <div class="ca-card-header">
-    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>Productos / Servicios</h6>
-  </div>
-  <div class="table-responsive p-2">
-    <table class="ca-table">
-      <caption class="visually-hidden">Líneas de entrada de almacén</caption>
-      <thead>
-        <tr>
-          <th scope="col">Código</th>
-          <th scope="col">Cantidad</th>
-          <th scope="col">UOM</th>
-          <th scope="col">Origen</th>
-          <th scope="col">Destino</th>
-          <th scope="col">Costo</th>
-          <th scope="col">Monto</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for fila in items %}
-        <tr>
-          <td>{{ fila[0].item_code }}</td>
-          <td>{{ fila[0].qty }}</td>
-          <td>{{ fila[0].uom or "" }}</td>
-          <td>{{ fila[0].source_warehouse or "" }}</td>
-          <td>{{ fila[0].target_warehouse or "" }}</td>
-          <td>{{ fila[0].basic_rate or "" }}</td>
-          <td>{{ fila[0].amount or "" }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="7" class="text-center text-muted py-3">Sin líneas registradas.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
+{% set buttons %}
+{% if registro.docstatus == 0 %}
+<a class="btn btn-sm btn-outline-secondary"
+  href="{{ url_for('inventario.inventario_entrada_editar', entry_id=registro.id) }}">
+  <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
+</a>
+{% endif %}
+{% if registro.docstatus in [0, 1] %}
+<form method="post" action="{{ url_for('inventario.inventario_entrada_duplicar', entry_id=registro.id) }}"
+  class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-files me-1"></i>{{ _('Duplicar') }}
+  </button>
+</form>
+{% endif %}
+{{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('inventario.inventario_entrada_submit', entry_id=registro.id),
+            url_for('inventario.inventario_entrada_cancel', entry_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+{{ macros.detail_nav_buttons(
+            url_for('inventario.inventario_entrada_lista'),
+            url_for('inventario.inventario_entrada_nuevo')) }}
+{% endset %}
+{% set currency_code = document_currency_code(registro) %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Movimiento de Inventario'),
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Propósito'), registro.purpose),
+      (_('Compañía'), registro.company),
+      (_('Fecha'), registro.posting_date),
+      (_('Monto Total'), format_money_with_currency(registro.total_amount, currency_code)),
+      (_('Moneda'), currency_code),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-box-seam'
+) }}
+{{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_trace("stock_entry", registro) }}
-
 {% endblock %}

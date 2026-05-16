@@ -6,13 +6,14 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+from datetime import date
 from decimal import Decimal
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -65,12 +66,29 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 PURCHASE_RETURN = "purchase_return"
 
+FACTURA_DE_COMPRA = "Factura de Compra"
+COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML = "compras/factura_compra_devolucion_lista.html"
+COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
+COMPRAS_COMPRAS_ORDEN_COMPRA = "compras.compras_orden_compra"
+COMPRAS_COMPRAS_RECEPCION = "compras.compras_recepcion"
+COMPRAS_COMPRAS_FACTURA_COMPRA = "compras.compras_factura_compra"
+
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
-    PURCHASE_INVOICE: "Factura de Compra",
+    PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
     PURCHASE_RETURN: "Devolución de Compra",
 }
+
+
+def _parse_date(value: str | None) -> date | None:
+    """Parsea una fecha en formato ISO."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -134,6 +152,8 @@ def compras_solicitud_compra_nueva():
 
     formulario = FormularioSolicitudCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    from cacao_accounting.form_preferences import get_column_preferences
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -144,13 +164,22 @@ def compras_solicitud_compra_nueva():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Solicitud de Compra - " + APPNAME
+    transaction_config = {
+        "formKey": "purchases.purchase_request",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_request"),
+        "availableSourceTypes": [],
+    }
     if request.method == "POST":
         try:
+            posting_date = _parse_date(request.form.get("posting_date"))
             solicitud = PurchaseRequest(
                 requested_by=request.form.get("requested_by"),
                 department=request.form.get("department"),
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -159,7 +188,7 @@ def compras_solicitud_compra_nueva():
             assign_document_identifier(
                 document=solicitud,
                 entity_type="purchase_request",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             total_qty, total = _save_purchase_request_items(solicitud.id)
@@ -178,6 +207,7 @@ def compras_solicitud_compra_nueva():
         titulo=titulo,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -192,6 +222,171 @@ def compras_solicitud_compra(request_id: str):
     items = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_id)).all()
     titulo = (registro.document_no or request_id) + " - " + APPNAME
     return render_template("compras/solicitud_compra.html", registro=registro, items=items, titulo=titulo)
+
+
+@compras.route("/purchase-request/<request_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_compra_editar(request_id: str):
+    """Edita una solicitud de compra en borrador."""
+    from cacao_accounting.compras.forms import FormularioSolicitudCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(PurchaseRequest, request_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioSolicitudCompra(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("purchase_request", selected_company)
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        try:
+            registro.requested_by = request.form.get("requested_by")
+            registro.department = request.form.get("department")
+            registro.company = request.form.get("company") or None
+            registro.posting_date = _parse_date(request.form.get("posting_date"))
+            registro.remarks = request.form.get("remarks")
+            for item in database.session.execute(
+                database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
+            ).scalars():
+                database.session.delete(item)
+            total_qty, total = _save_purchase_request_items(registro.id)
+            registro.total = total
+            registro.base_total = total
+            registro.grand_total = total
+            database.session.commit()
+            flash("Solicitud de compra actualizada correctamente.", "success")
+            return redirect(url_for("compras.compras_solicitud_compra", request_id=registro.id))
+        except IdentifierConfigurationError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+
+    lineas = database.session.execute(
+        database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
+    ).scalars()
+    transaction_config = {
+        "formKey": "purchases.purchase_request",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_request"),
+        "availableSourceTypes": [],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    return render_template(
+        "compras/solicitud_compra_nueva.html",
+        form=formulario,
+        titulo="Editar Solicitud de Compra - " + APPNAME,
+        edit=True,
+        registro=registro,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/purchase-request/<request_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_compra_duplicar(request_id: str):
+    """Duplica una solicitud de compra como borrador nuevo."""
+    origen = database.session.get(PurchaseRequest, request_id)
+    if not origen:
+        abort(404)
+    duplicada = PurchaseRequest(
+        requested_by=origen.requested_by,
+        department=origen.department,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="purchase_request",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(
+        database.select(PurchaseRequestItem).filter_by(purchase_request_id=origen.id)
+    ).scalars():
+        linea = PurchaseRequestItem(
+            purchase_request_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicada.total = total
+    duplicada.base_total = total
+    duplicada.grand_total = total
+    database.session.commit()
+    flash("Solicitud de compra duplicada como nuevo borrador.", "success")
+    return redirect(url_for("compras.compras_solicitud_compra", request_id=duplicada.id))
+
+
+@compras.route("/purchase-request/<request_id>/submit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_compra_submit(request_id: str):
+    """Aprueba una solicitud de compra."""
+    registro = database.session.get(PurchaseRequest, request_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+    registro.docstatus = 1
+    database.session.commit()
+    flash("Solicitud de compra aprobada.", "success")
+    return redirect(url_for("compras.compras_solicitud_compra", request_id=request_id))
+
+
+@compras.route("/purchase-request/<request_id>/cancel", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_compra_cancel(request_id: str):
+    """Cancela una solicitud de compra."""
+    registro = database.session.get(PurchaseRequest, request_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 1:
+        abort(400)
+    registro.docstatus = 2
+    database.session.commit()
+    flash("Solicitud de compra cancelada.", "warning")
+    return redirect(url_for("compras.compras_solicitud_compra", request_id=request_id))
 
 
 @compras.route("/supplier-quotation/list")
@@ -216,9 +411,11 @@ def compras_cotizacion_proveedor_nueva():
     """Formulario para crear una cotización de proveedor."""
     from cacao_accounting.compras.forms import FormularioCotizacionProveedor
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
 
     formulario = FormularioCotizacionProveedor()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -235,16 +432,25 @@ def compras_cotizacion_proveedor_nueva():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
+    transaction_config = {
+        "formKey": "purchases.supplier_quotation",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
+        "availableSourceTypes": [{"value": "request_for_quotation", "label": _("Solicitud de Cotización")}],
+    }
     if request.method == "POST":
         try:
             supplier_id = request.form.get("supplier_id") or None
             supplier = database.session.get(Party, supplier_id) if supplier_id else None
+            posting_date = _parse_date(request.form.get("posting_date"))
             cotizacion = SupplierQuotation(
                 supplier_id=supplier_id,
                 supplier_name=supplier.name if supplier else None,
                 purchase_quotation_id=from_rfq_id or None,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -253,7 +459,7 @@ def compras_cotizacion_proveedor_nueva():
             assign_document_identifier(
                 document=cotizacion,
                 entity_type="supplier_quotation",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             total_qty, total = _save_supplier_quotation_items(cotizacion.id)
@@ -274,6 +480,7 @@ def compras_cotizacion_proveedor_nueva():
         from_rfq_id=from_rfq_id,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -290,6 +497,182 @@ def compras_cotizacion_proveedor(quotation_id: str):
     ).all()
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
     return render_template("compras/cotizacion_proveedor.html", registro=registro, items=items, titulo=titulo)
+
+
+@compras.route("/supplier-quotation/<quotation_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_cotizacion_proveedor_editar(quotation_id: str):
+    """Edita una cotizacion de proveedor en borrador."""
+    from cacao_accounting.compras.forms import FormularioCotizacionProveedor
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(SupplierQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioCotizacionProveedor(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        total_qty, total = _save_supplier_quotation_items(registro.id)
+        registro.total = total
+        registro.base_total = total
+        registro.grand_total = total
+        database.session.commit()
+        flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
+        return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=registro.id))
+
+    lineas = database.session.execute(
+        database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
+    ).scalars()
+    transaction_config = {
+        "formKey": "purchases.supplier_quotation",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
+        "availableSourceTypes": [{"value": "request_for_quotation", "label": _("Solicitud de Cotización")}],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+            "party": registro.supplier_id or "",
+            "party_label": registro.supplier_name or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    return render_template(
+        "compras/cotizacion_proveedor_nueva.html",
+        form=formulario,
+        titulo="Editar Cotizacion de Proveedor - " + APPNAME,
+        edit=True,
+        registro=registro,
+        rfq_origen=None,
+        from_rfq_id=None,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/supplier-quotation/<quotation_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_cotizacion_proveedor_duplicar(quotation_id: str):
+    """Duplica una cotizacion de proveedor como borrador nuevo."""
+    origen = database.session.get(SupplierQuotation, quotation_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicada = SupplierQuotation(
+        supplier_id=origen.supplier_id,
+        supplier_name=origen.supplier_name,
+        purchase_quotation_id=None,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="supplier_quotation",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(
+        database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=origen.id)
+    ).scalars():
+        linea = SupplierQuotationItem(
+            supplier_quotation_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicada.total = total
+    duplicada.base_total = total
+    duplicada.grand_total = total
+    database.session.commit()
+    flash(_("Cotizacion de proveedor duplicada como nuevo borrador."), "success")
+    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=duplicada.id))
+
+
+@compras.route("/supplier-quotation/<quotation_id>/submit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_cotizacion_proveedor_submit(quotation_id: str):
+    """Aprueba una cotizacion de proveedor."""
+    registro = database.session.get(SupplierQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+    registro.docstatus = 1
+    database.session.commit()
+    flash(_("Cotizacion de proveedor aprobada."), "success")
+    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=quotation_id))
+
+
+@compras.route("/supplier-quotation/<quotation_id>/cancel", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_cotizacion_proveedor_cancel(quotation_id: str):
+    """Cancela una cotizacion de proveedor."""
+    registro = database.session.get(SupplierQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 1:
+        abort(400)
+    registro.docstatus = 2
+    revert_relations_for_target("supplier_quotation", quotation_id)
+    database.session.commit()
+    flash(_("Cotizacion de proveedor cancelada."), "warning")
+    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=quotation_id))
 
 
 @compras.route("/request-for-quotation/comparison")
@@ -363,7 +746,7 @@ def compras_factura_compra_nota_debito_lista():
     )
     titulo = "Listado de Notas de Débito de Compra - " + APPNAME
     return render_template(
-        "compras/factura_compra_devolucion_lista.html",
+        COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         page_heading="Listado de Notas de Débito de Compra",
@@ -386,7 +769,7 @@ def compras_factura_compra_nota_credito_lista():
     )
     titulo = "Listado de Notas de Crédito de Compra - " + APPNAME
     return render_template(
-        "compras/factura_compra_devolucion_lista.html",
+        COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         page_heading="Listado de Notas de Crédito de Compra",
@@ -409,7 +792,7 @@ def compras_factura_compra_devolucion_lista():
     )
     titulo = "Listado de Devoluciones de Compra - " + APPNAME
     return render_template(
-        "compras/factura_compra_devolucion_lista.html",
+        COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         page_heading="Listado de Devoluciones de Compra",
@@ -424,7 +807,7 @@ def compras_factura_compra_devolucion_lista():
 @login_required
 def compras_factura_compra_nota_debito_nueva():
     """Alias explicito para crear nota de débito de compra."""
-    return redirect(url_for("compras.compras_factura_compra_nuevo", document_type=PURCHASE_DEBIT_NOTE))
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, document_type=PURCHASE_DEBIT_NOTE))
 
 
 @compras.route("/purchase-invoice/credit-note/new", methods=["GET", "POST"])
@@ -432,7 +815,7 @@ def compras_factura_compra_nota_debito_nueva():
 @login_required
 def compras_factura_compra_nota_credito_nueva():
     """Alias explicito para crear nota de crédito de compra."""
-    return redirect(url_for("compras.compras_factura_compra_nuevo", document_type=PURCHASE_CREDIT_NOTE))
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, document_type=PURCHASE_CREDIT_NOTE))
 
 
 @compras.route("/purchase-invoice/return/new", methods=["GET", "POST"])
@@ -440,7 +823,7 @@ def compras_factura_compra_nota_credito_nueva():
 @login_required
 def compras_factura_compra_devolucion_nueva():
     """Alias explicito para crear devolución de compra."""
-    return redirect(url_for("compras.compras_factura_compra_nuevo", document_type=PURCHASE_RETURN))
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, document_type=PURCHASE_RETURN))
 
 
 @compras.route("/supplier/list")
@@ -496,6 +879,7 @@ def compras_proveedor_nuevo():
     formulario = FormularioProveedor()
     titulo = "Nuevo Proveedor - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
+
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings = build_party_company_settings("supplier", selected_company) if selected_company else None
     if request.method == "POST":
@@ -610,16 +994,19 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
+            uom = request.form.get(f"uom_{i}") or None
             linea = PurchaseOrderItem(
                 purchase_order_id=order_id,
                 item_code=item_code,
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
-                uom=request.form.get(f"uom_{i}") or None,
+                uom=uom,
                 rate=rate,
                 amount=amount,
             )
             database.session.add(linea)
+            database.session.flush()
+            _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
         i += 1
@@ -637,16 +1024,19 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
+            uom = request.form.get(f"uom_{i}") or None
             linea = PurchaseQuotationItem(
                 purchase_quotation_id=quotation_id,
                 item_code=item_code,
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
-                uom=request.form.get(f"uom_{i}") or None,
+                uom=uom,
                 rate=rate,
                 amount=amount,
             )
             database.session.add(linea)
+            database.session.flush()
+            _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
         i += 1
@@ -691,16 +1081,19 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
+            uom = request.form.get(f"uom_{i}") or None
             linea = SupplierQuotationItem(
                 supplier_quotation_id=quotation_id,
                 item_code=item_code,
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
-                uom=request.form.get(f"uom_{i}") or None,
+                uom=uom,
                 rate=rate,
                 amount=amount,
             )
             database.session.add(linea)
+            database.session.flush()
+            _create_line_relation(i, "supplier_quotation", quotation_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
         i += 1
@@ -778,6 +1171,8 @@ def compras_orden_compra_nuevo():
 
     formulario = FormularioOrdenCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    from cacao_accounting.form_preferences import get_column_preferences
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -791,16 +1186,19 @@ def compras_orden_compra_nuevo():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    from_request_id = request.args.get("from_request") or request.form.get("from_request")
+    solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     titulo = "Nueva Orden de Compra - " + APPNAME
     if request.method == "POST":
         try:
             supplier_id = request.form.get("supplier_id") or None
             supplier = database.session.get(Party, supplier_id) if supplier_id else None
+            posting_date = _parse_date(request.form.get("posting_date"))
             orden = PurchaseOrder(
                 supplier_id=supplier_id,
                 supplier_name=supplier.name if supplier else None,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -809,7 +1207,7 @@ def compras_orden_compra_nuevo():
             assign_document_identifier(
                 document=orden,
                 entity_type="purchase_order",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             total_qty, total = _save_purchase_order_items(orden.id)
@@ -820,16 +1218,36 @@ def compras_orden_compra_nuevo():
             orden.base_total = total
             database.session.commit()
             flash("Orden de compra creada correctamente.", "success")
-            return redirect(url_for("compras.compras_orden_compra", order_id=orden.id))
+            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
+    transaction_config = {
+        "formKey": "purchases.purchase_order",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_order"),
+        "availableSourceTypes": [
+            {"value": "purchase_request", "label": _("Solicitud de Compra")},
+            {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
+        ],
+        "initialSourceType": "purchase_request" if from_request_id else "",
+    }
+    if solicitud_origen:
+        transaction_config["initialHeader"] = {
+            "company": solicitud_origen.company or "",
+            "posting_date": str(date.today()),
+        }
     return render_template(
         "compras/orden_compra_nuevo.html",
         form=formulario,
         titulo=titulo,
+        from_request_id=from_request_id,
+        solicitud_origen=solicitud_origen,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -844,6 +1262,153 @@ def compras_orden_compra(order_id):
     items = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     return render_template("compras/orden_compra.html", registro=registro, items=items, titulo=titulo)
+
+
+@compras.route("/purchase-order/<order_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_orden_compra_editar(order_id: str):
+    """Edita una orden de compra en borrador."""
+    from cacao_accounting.compras.forms import FormularioOrdenCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(PurchaseOrder, order_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioOrdenCompra(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        total_qty, total = _save_purchase_order_items(registro.id)
+        registro.total_qty = total_qty
+        registro.total = total
+        registro.net_total = total
+        registro.grand_total = total
+        registro.base_total = total
+        database.session.commit()
+        flash(_("Orden de compra actualizada correctamente."), "success")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+
+    lineas = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)).scalars()
+    transaction_config = {
+        "formKey": "purchases.purchase_order",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_order"),
+        "availableSourceTypes": [
+            {"value": "purchase_request", "label": _("Solicitud de Compra")},
+            {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
+        ],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+            "party": registro.supplier_id or "",
+            "party_label": registro.supplier_name or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    return render_template(
+        "compras/orden_compra_nuevo.html",
+        form=formulario,
+        titulo="Editar Orden de Compra - " + APPNAME,
+        edit=True,
+        registro=registro,
+        from_request_id=None,
+        solicitud_origen=None,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/purchase-order/<order_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_orden_compra_duplicar(order_id: str):
+    """Duplica una orden de compra como borrador nuevo."""
+    origen = database.session.get(PurchaseOrder, order_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicada = PurchaseOrder(
+        supplier_id=origen.supplier_id,
+        supplier_name=origen.supplier_name,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="purchase_order",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    total_qty = Decimal("0")
+    for item in database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=origen.id)).scalars():
+        linea = PurchaseOrderItem(
+            purchase_order_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total_qty += item.qty or Decimal("0")
+        total += item.amount or Decimal("0")
+    duplicada.total_qty = total_qty
+    duplicada.total = total
+    duplicada.net_total = total
+    duplicada.grand_total = total
+    duplicada.base_total = total
+    database.session.commit()
+    flash(_("Orden de compra duplicada como nuevo borrador."), "success")
+    return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=duplicada.id))
 
 
 @compras.route("/request-for-quotation/list")
@@ -868,9 +1433,11 @@ def compras_solicitud_cotizacion_nueva():
     """Formulario para crear una solicitud de cotización."""
     from cacao_accounting.compras.forms import FormularioSolicitudCotizacion
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
 
     formulario = FormularioSolicitudCotizacion()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -884,16 +1451,33 @@ def compras_solicitud_cotizacion_nueva():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    from_request_id = request.args.get("from_request") or request.form.get("from_request")
+    solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     titulo = "Nueva Solicitud de Cotización - " + APPNAME
+    transaction_config = {
+        "formKey": "purchases.purchase_quotation",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_quotation"),
+        "availableSourceTypes": [{"value": "purchase_request", "label": _("Solicitud de Compra")}],
+        "initialSourceType": "purchase_request" if from_request_id else "",
+    }
+    if solicitud_origen:
+        transaction_config["initialHeader"] = {
+            "company": solicitud_origen.company or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         try:
             supplier_id = request.form.get("supplier_id") or None
             supplier = database.session.get(Party, supplier_id) if supplier_id else None
+            posting_date = _parse_date(request.form.get("posting_date"))
             cotizacion = PurchaseQuotation(
                 supplier_id=supplier_id,
                 supplier_name=supplier.name if supplier else None,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -902,7 +1486,7 @@ def compras_solicitud_cotizacion_nueva():
             assign_document_identifier(
                 document=cotizacion,
                 entity_type="purchase_quotation",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             total_qty, total = _save_purchase_quotation_items(cotizacion.id)
@@ -919,8 +1503,11 @@ def compras_solicitud_cotizacion_nueva():
         "compras/solicitud_cotizacion_nuevo.html",
         form=formulario,
         titulo=titulo,
+        from_request_id=from_request_id,
+        solicitud_origen=solicitud_origen,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -946,6 +1533,181 @@ def compras_solicitud_cotizacion(quotation_id: str):
     )
 
 
+@compras.route("/request-for-quotation/<quotation_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_cotizacion_editar(quotation_id: str):
+    """Edita una solicitud de cotizacion en borrador."""
+    from cacao_accounting.compras.forms import FormularioSolicitudCotizacion
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(PurchaseQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioSolicitudCotizacion(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        total_qty, total = _save_purchase_quotation_items(registro.id)
+        registro.total = total
+        registro.base_total = total
+        registro.grand_total = total
+        database.session.commit()
+        flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
+        return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=registro.id))
+
+    lineas = database.session.execute(
+        database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
+    ).scalars()
+    transaction_config = {
+        "formKey": "purchases.purchase_quotation",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_quotation"),
+        "availableSourceTypes": [{"value": "purchase_request", "label": _("Solicitud de Compra")}],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+            "party": registro.supplier_id or "",
+            "party_label": registro.supplier_name or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    return render_template(
+        "compras/solicitud_cotizacion_nuevo.html",
+        form=formulario,
+        titulo="Editar Solicitud de Cotizacion - " + APPNAME,
+        edit=True,
+        registro=registro,
+        from_request_id=None,
+        solicitud_origen=None,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/request-for-quotation/<quotation_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_cotizacion_duplicar(quotation_id: str):
+    """Duplica una solicitud de cotizacion como borrador nuevo."""
+    origen = database.session.get(PurchaseQuotation, quotation_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicada = PurchaseQuotation(
+        supplier_id=origen.supplier_id,
+        supplier_name=origen.supplier_name,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="purchase_quotation",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(
+        database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=origen.id)
+    ).scalars():
+        linea = PurchaseQuotationItem(
+            purchase_quotation_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicada.total = total
+    duplicada.base_total = total
+    duplicada.grand_total = total
+    database.session.commit()
+    flash(_("Solicitud de cotizacion duplicada como nuevo borrador."), "success")
+    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=duplicada.id))
+
+
+@compras.route("/request-for-quotation/<quotation_id>/submit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_cotizacion_submit(quotation_id: str):
+    """Aprueba una solicitud de cotizacion."""
+    registro = database.session.get(PurchaseQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+    registro.docstatus = 1
+    database.session.commit()
+    flash(_("Solicitud de cotizacion aprobada."), "success")
+    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=quotation_id))
+
+
+@compras.route("/request-for-quotation/<quotation_id>/cancel", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_solicitud_cotizacion_cancel(quotation_id: str):
+    """Cancela una solicitud de cotizacion."""
+    registro = database.session.get(PurchaseQuotation, quotation_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 1:
+        abort(400)
+    registro.docstatus = 2
+    revert_relations_for_target("purchase_quotation", quotation_id)
+    database.session.commit()
+    flash(_("Solicitud de cotizacion cancelada."), "warning")
+    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=quotation_id))
+
+
 @compras.route("/purchase-order/<order_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -959,7 +1721,7 @@ def compras_orden_compra_submit(order_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash("Orden de compra aprobada.", "success")
-    return redirect(url_for("compras.compras_orden_compra", order_id=order_id))
+    return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
 @compras.route("/purchase-order/<order_id>/cancel", methods=["POST"])
@@ -976,7 +1738,7 @@ def compras_orden_compra_cancel(order_id: str):
     revert_relations_for_target("purchase_order", order_id)
     database.session.commit()
     flash("Orden de compra cancelada.", "warning")
-    return redirect(url_for("compras.compras_orden_compra", order_id=order_id))
+    return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
 @compras.route("/purchase-receipt/new", methods=["GET", "POST"])
@@ -990,6 +1752,8 @@ def compras_recepcion_nuevo():
 
     formulario = FormularioRecepcionCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    from cacao_accounting.form_preferences import get_column_preferences
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -1009,12 +1773,22 @@ def compras_recepcion_nuevo():
         {"code": w[0].code, "name": w[0].name} for w in database.session.execute(database.select(Warehouse)).all()
     ]
     titulo = "Nueva Recepción de Compra - " + APPNAME
+    transaction_config = {
+        "formKey": "purchases.purchase_receipt",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_receipt"),
+        "availableSourceTypes": [{"value": "purchase_order", "label": _("Orden de Compra")}],
+    }
     if request.method == "POST":
         try:
+            posting_date = _parse_date(request.form.get("posting_date"))
             recepcion = PurchaseReceipt(
                 supplier_id=request.form.get("supplier_id") or None,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 purchase_order_id=request.form.get("from_order") or None,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
@@ -1024,28 +1798,18 @@ def compras_recepcion_nuevo():
             assign_document_identifier(
                 document=recepcion,
                 entity_type="purchase_receipt",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_purchase_receipt_items(recepcion.id)
+            recepcion.total = total
+            recepcion.grand_total = total
+            database.session.commit()
+            flash("Recepción de compra creada correctamente.", "success")
+            return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=recepcion.id))
         except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
-            return render_template(
-                "compras/recepcion_nuevo.html",
-                form=formulario,
-                titulo=titulo,
-                orden_origen=orden_origen,
-                from_order_id=from_order_id,
-                items_disponibles=items_disponibles,
-                uoms_disponibles=uoms_disponibles,
-                bodegas_disponibles=bodegas_disponibles,
-            )
-        recepcion.total = total
-        recepcion.grand_total = total
-        database.session.commit()
-        flash("Recepción de compra creada correctamente.", "success")
-        return redirect(url_for("compras.compras_recepcion", receipt_id=recepcion.id))
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
@@ -1055,6 +1819,7 @@ def compras_recepcion_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         bodegas_disponibles=bodegas_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -1075,6 +1840,151 @@ def compras_recepcion(receipt_id):
     return render_template("compras/recepcion.html", registro=registro, items=items, titulo=titulo)
 
 
+@compras.route("/purchase-receipt/<receipt_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_recepcion_editar(receipt_id: str):
+    """Edita una recepcion de compra en borrador."""
+    from cacao_accounting.compras.forms import FormularioRecepcionCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.database import Warehouse
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(PurchaseReceipt, receipt_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioRecepcionCompra(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    bodegas_disponibles = [
+        {"code": w[0].code, "name": w[0].name} for w in database.session.execute(database.select(Warehouse)).all()
+    ]
+
+    if request.method == "POST":
+        registro.supplier_id = request.form.get("supplier_id") or None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _total_qty, total = _save_purchase_receipt_items(registro.id)
+        registro.total = total
+        registro.grand_total = total
+        database.session.commit()
+        flash(_("Recepcion de compra actualizada correctamente."), "success")
+        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
+
+    lineas = database.session.execute(
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
+    ).scalars()
+    transaction_config = {
+        "formKey": "purchases.purchase_receipt",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_receipt"),
+        "availableSourceTypes": [{"value": "purchase_order", "label": _("Orden de Compra")}],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+            "party": registro.supplier_id or "",
+            "party_label": registro.supplier_name or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+                "warehouse": item.warehouse or "",
+            }
+            for item in lineas
+        ],
+    }
+    return render_template(
+        "compras/recepcion_nuevo.html",
+        form=formulario,
+        titulo="Editar Recepcion de Compra - " + APPNAME,
+        edit=True,
+        registro=registro,
+        orden_origen=None,
+        from_order_id=None,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        bodegas_disponibles=bodegas_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/purchase-receipt/<receipt_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_recepcion_duplicar(receipt_id: str):
+    """Duplica una recepcion de compra como borrador nuevo."""
+    origen = database.session.get(PurchaseReceipt, receipt_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicada = PurchaseReceipt(
+        supplier_id=origen.supplier_id,
+        supplier_name=origen.supplier_name,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="purchase_receipt",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=origen.id)
+    ).scalars():
+        linea = PurchaseReceiptItem(
+            purchase_receipt_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+            warehouse=item.warehouse,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicada.total = total
+    duplicada.grand_total = total
+    database.session.commit()
+    flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
+    return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
+
+
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1092,7 +2002,7 @@ def compras_recepcion_submit(receipt_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_recepcion", receipt_id=receipt_id))
+    return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
 @compras.route("/purchase-receipt/<receipt_id>/cancel", methods=["POST"])
@@ -1114,7 +2024,7 @@ def compras_recepcion_cancel(receipt_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_recepcion", receipt_id=receipt_id))
+    return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
 @compras.route("/purchase-invoice/new", methods=["GET", "POST"])
@@ -1127,6 +2037,8 @@ def compras_factura_compra_nuevo():
 
     formulario = FormularioFacturaCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    from cacao_accounting.form_preferences import get_column_preferences
+
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
@@ -1152,20 +2064,33 @@ def compras_factura_compra_nuevo():
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
     recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
     factura_origen = database.session.get(PurchaseInvoice, from_invoice_id) if from_invoice_id else None
-    document_title = DOCUMENT_TYPE_LABELS.get(document_type, "Factura de Compra")
+    document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = f"Nueva {document_title} - {APPNAME}"
+    transaction_config = {
+        "formKey": "purchases.purchase_invoice",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
+        "availableSourceTypes": [
+            {"value": "purchase_order", "label": _("Orden de Compra")},
+            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+            {"value": "purchase_invoice", "label": _("Factura de Compra")},
+        ],
+    }
     if request.method == "POST":
         try:
             document_type = request.form.get("document_type") or PURCHASE_INVOICE
+            posting_date = _parse_date(request.form.get("posting_date"))
             factura = PurchaseInvoice(
                 supplier_id=request.form.get("supplier_id") or None,
                 company=request.form.get("company") or None,
-                posting_date=request.form.get("posting_date") or None,
+                posting_date=posting_date,
                 supplier_invoice_no=request.form.get("supplier_invoice_no"),
                 document_type=document_type,
                 purchase_order_id=request.form.get("from_order") or None,
@@ -1184,36 +2109,22 @@ def compras_factura_compra_nuevo():
             assign_document_identifier(
                 document=factura,
                 entity_type="purchase_invoice",
-                posting_date_raw=request.form.get("posting_date"),
+                posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_purchase_invoice_items(factura.id)
+            factura.total = total
+            factura.base_total = total
+            factura.grand_total = total
+            factura.base_grand_total = total
+            factura.outstanding_amount = total
+            factura.base_outstanding_amount = total
+            database.session.commit()
+            flash("Factura de compra creada correctamente.", "success")
+            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
         except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
-            return render_template(
-                "compras/factura_compra_nuevo.html",
-                form=formulario,
-                titulo=titulo,
-                orden_origen=orden_origen,
-                recepcion_origen=recepcion_origen,
-                factura_origen=factura_origen,
-                from_order_id=from_order_id,
-                from_receipt_id=from_receipt_id,
-                from_invoice_id=from_invoice_id,
-                document_type=document_type,
-                items_disponibles=items_disponibles,
-                uoms_disponibles=uoms_disponibles,
-            )
-        factura.total = total
-        factura.base_total = total
-        factura.grand_total = total
-        factura.base_grand_total = total
-        factura.outstanding_amount = total
-        factura.base_outstanding_amount = total
-        database.session.commit()
-        flash("Factura de compra creada correctamente.", "success")
-        return redirect(url_for("compras.compras_factura_compra", invoice_id=factura.id))
     return render_template(
         "compras/factura_compra_nuevo.html",
         form=formulario,
@@ -1227,6 +2138,7 @@ def compras_factura_compra_nuevo():
         document_type=document_type,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
     )
 
 
@@ -1240,7 +2152,7 @@ def compras_factura_compra(invoice_id):
         abort(404)
     items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
-    document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, "Factura de Compra")
+    document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, FACTURA_DE_COMPRA)
     return render_template(
         "compras/factura_compra.html",
         registro=registro,
@@ -1248,6 +2160,166 @@ def compras_factura_compra(invoice_id):
         titulo=titulo,
         document_type_label=document_type_label,
     )
+
+
+@compras.route("/purchase-invoice/<invoice_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_factura_compra_editar(invoice_id: str):
+    """Edita una factura de compra en borrador."""
+    from cacao_accounting.compras.forms import FormularioFacturaCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    registro = database.session.get(PurchaseInvoice, invoice_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioFacturaCompra(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        registro.supplier_id = request.form.get("supplier_id") or None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _total_qty, total = _save_purchase_invoice_items(registro.id)
+        registro.total = total
+        registro.base_total = total
+        registro.grand_total = total
+        registro.base_grand_total = total
+        registro.outstanding_amount = total
+        registro.base_outstanding_amount = total
+        database.session.commit()
+        flash(_("Factura de compra actualizada correctamente."), "success")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
+
+    lineas = database.session.execute(
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+    ).scalars()
+    transaction_config = {
+        "formKey": "purchases.purchase_invoice",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
+        "availableSourceTypes": [
+            {"value": "purchase_order", "label": _("Orden de Compra")},
+            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+            {"value": "purchase_invoice", "label": _("Factura de Compra")},
+        ],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+            "party": registro.supplier_id or "",
+            "party_label": registro.supplier_name or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    document_type = registro.document_type or PURCHASE_INVOICE
+    formulario.is_return.data = document_type == PURCHASE_RETURN
+    return render_template(
+        "compras/factura_compra_nuevo.html",
+        form=formulario,
+        titulo="Editar Factura de Compra - " + APPNAME,
+        edit=True,
+        registro=registro,
+        orden_origen=None,
+        recepcion_origen=None,
+        factura_origen=None,
+        from_order_id=None,
+        from_receipt_id=None,
+        from_invoice_id=None,
+        document_type=document_type,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+@compras.route("/purchase-invoice/<invoice_id>/duplicate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_factura_compra_duplicar(invoice_id: str):
+    """Duplica una factura de compra como borrador nuevo."""
+    origen = database.session.get(PurchaseInvoice, invoice_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicada = PurchaseInvoice(
+        supplier_id=origen.supplier_id,
+        supplier_name=origen.supplier_name,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        supplier_invoice_no=origen.supplier_invoice_no,
+        document_type=origen.document_type,
+        is_return=origen.is_return,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicada)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicada,
+        entity_type="purchase_invoice",
+        posting_date_raw=duplicada.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id)
+    ).scalars():
+        linea = PurchaseInvoiceItem(
+            purchase_invoice_id=duplicada.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            qty=item.qty,
+            uom=item.uom,
+            rate=item.rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicada.total = total
+    duplicada.base_total = total
+    duplicada.grand_total = total
+    duplicada.base_grand_total = total
+    duplicada.outstanding_amount = total
+    duplicada.base_outstanding_amount = total
+    database.session.commit()
+    flash(_("Factura de compra duplicada como nuevo borrador."), "success")
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=duplicada.id))
 
 
 @compras.route("/purchase-invoice/<invoice_id>/submit", methods=["POST"])
@@ -1266,9 +2338,9 @@ def compras_factura_compra_submit(invoice_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("compras.compras_factura_compra", invoice_id=invoice_id))
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     flash(_("Factura de compra aprobada y contabilizada."), "success")
-    return redirect(url_for("compras.compras_factura_compra", invoice_id=invoice_id))
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
 
 
 @compras.route("/purchase-invoice/<invoice_id>/cancel", methods=["POST"])
@@ -1289,6 +2361,6 @@ def compras_factura_compra_cancel(invoice_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("compras.compras_factura_compra", invoice_id=invoice_id))
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     flash(_("Factura de compra cancelada con reverso contable."), "warning")
-    return redirect(url_for("compras.compras_factura_compra", invoice_id=invoice_id))
+    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))

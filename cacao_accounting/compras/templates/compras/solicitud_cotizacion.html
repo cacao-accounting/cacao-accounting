@@ -1,80 +1,66 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/solicitud_cotizacion.html"></div>
-{%- endif -%}
-
+{% import "detail_view_macros.html" as dv_macros %}
+{% if TESTING %}<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/solicitud_cotizacion.html">
+</div>{% endif %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_solicitud_cotizacion_lista') }}" class="link-dark">Solicitudes de Cotización</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-
-<div class="ca-card" style="max-width:860px;">
-  <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title">
-      <i class="bi bi-file-earmark-text"></i> Solicitud de Cotización
-      {{ macros.document_status_for("purchase_quotation", registro, detail=True) }}
-    </h5>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id) }}" class="btn btn-sm btn-primary">
-        <i class="bi bi-file-earmark-plus me-1"></i>Crear Cotización de Proveedor
-      </a>
-      <a href="{{ url_for('compras.compras_comparativo_ofertas', rfq_id=registro.id) }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-bar-chart-line me-1"></i>Comparar Ofertas
-      </a>
-    </div>
-  </div>
-  <div class="row g-3 p-3">
-    <div class="col-md-6">
-      <div><strong>Proveedor</strong></div>
-      <div>{{ registro.supplier_name or "-" }}</div>
-      <div class="mt-3"><strong>Fecha</strong></div>
-      <div>{{ registro.posting_date or "-" }}</div>
-    </div>
-    <div class="col-md-6">
-      <div><strong>Total</strong></div>
-      <div>{{ registro.grand_total or "0" }}</div>
-      <div class="mt-3"><strong>Notas</strong></div>
-      <div>{{ registro.remarks or "-" }}</div>
-    </div>
-  </div>
-</div>
-
-<div class="mt-3 ca-card">
-  <div class="ca-card-header">
-    <h6 class="ca-card-title">Líneas</h6>
-  </div>
-  <table class="ca-table">
-    <caption style="display: none;">Líneas de la cotización.</caption>
-    <thead>
-      <tr>
-        <th scope="col">Item</th>
-        <th scope="col">Cantidad</th>
-        <th scope="col">UOM</th>
-        <th scope="col">Precio</th>
-        <th scope="col">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in items -%}
-      <tr>
-        <td>{{ item.item_name or item.item_code }}</td>
-        <td>{{ item.qty }}</td>
-        <td>{{ item.uom or "" }}</td>
-        <td>{{ item.rate or "" }}</td>
-        <td>{{ item.amount or "" }}</td>
-      </tr>
-      {%- endfor %}
-    </tbody>
-  </table>
-</div>
-
+{% set buttons %}
+{{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('compras.compras_solicitud_cotizacion_submit', quotation_id=registro.id),
+            url_for('compras.compras_solicitud_cotizacion_cancel', quotation_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+{% if registro.docstatus == 1 %}
+{{ macros.crear_dropdown([
+              ("Cotización de Proveedor", url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id)),
+              ("Comparar Ofertas", url_for('compras.compras_comparativo_ofertas', rfq_id=registro.id))
+           ]) }}
+{% endif %}
+{% if registro.docstatus == 0 %}
+<a class="btn btn-sm btn-outline-secondary"
+  href="{{ url_for('compras.compras_solicitud_cotizacion_editar', quotation_id=registro.id) }}">
+  <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
+</a>
+{% endif %}
+{% if registro.docstatus in [0, 1] %}
+<form method="post" action="{{ url_for('compras.compras_solicitud_cotizacion_duplicar', quotation_id=registro.id) }}"
+  class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-files me-1"></i>{{ _('Duplicar') }}
+  </button>
+</form>
+{% endif %}
+{{ macros.detail_nav_buttons(
+            url_for('compras.compras_solicitud_cotizacion_lista'),
+            url_for('compras.compras_solicitud_cotizacion_nueva')) }}
+{% endset %}
+{% set currency_code = document_currency_code(registro) %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Solicitud de Cotización'),
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Compañía'), registro.company),
+      (_('Fecha'), registro.posting_date),
+      (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
+      (_('Moneda'), currency_code),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-file-earmark-ruled'
+) }}
+{{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_trace("purchase_quotation", registro) }}
-
 {% endblock %}

@@ -58,6 +58,13 @@ from cacao_accounting.modulos import listado_modulos, obtener_modulos_disponible
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 
+# Constants for duplicated literals
+LISTA_MODULOS = "admin.lista_modulos"
+CUENTAS_PREDETERMINADAS = "admin.cuentas_predeterminadas"
+USUARIO_NO_ENCONTRADO = "Usuario no encontrado."
+LISTA_USUARIOS = "admin.lista_usuarios"
+LISTA_ROLES = "admin.lista_roles"
+
 
 def _require_system_admin() -> None:
     """Restringe configuracion global al administrador del sistema."""
@@ -113,18 +120,18 @@ def lista_modulos():
 
         if module is None:
             flash("Módulo no encontrado.", "danger")
-            return redirect(url_for("admin.lista_modulos"))
+            return redirect(url_for(LISTA_MODULOS))
 
         if module.module == "admin":
             flash("El módulo administrativo no puede deshabilitarse.", "danger")
-            return redirect(url_for("admin.lista_modulos"))
+            return redirect(url_for(LISTA_MODULOS))
 
         if action == "toggle":
             module.enabled = not module.enabled
             database.session.commit()
             estado = "habilitado" if module.enabled else "deshabilitado"
             flash(f"Módulo {module.module} {estado} correctamente.", "success")
-            return redirect(url_for("admin.lista_modulos"))
+            return redirect(url_for(LISTA_MODULOS))
 
     datos = listado_modulos()
     modulos_disponibles = obtener_modulos_disponibles()
@@ -348,7 +355,7 @@ def cuentas_predeterminadas():
         action = request.form.get("action") or "save"
         if not selected_company:
             flash(_("Debe seleccionar una compania."), "danger")
-            return redirect(url_for("admin.cuentas_predeterminadas"))
+            return redirect(url_for(CUENTAS_PREDETERMINADAS))
 
         if action == "delete":
             config = get_company_default_accounts(selected_company)
@@ -356,7 +363,7 @@ def cuentas_predeterminadas():
                 database.session.delete(config)
                 database.session.commit()
                 flash(_("Configuracion de cuentas predeterminadas eliminada correctamente."), "success")
-            return redirect(url_for("admin.cuentas_predeterminadas", company=selected_company))
+            return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}
         try:
@@ -364,10 +371,10 @@ def cuentas_predeterminadas():
         except DefaultAccountError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
-            return redirect(url_for("admin.cuentas_predeterminadas", company=selected_company))
+            return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
         database.session.commit()
         flash(_("Cuentas predeterminadas guardadas correctamente."), "success")
-        return redirect(url_for("admin.cuentas_predeterminadas", company=selected_company))
+        return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
 
     config = get_company_default_accounts(selected_company) if selected_company else None
     configs = (
@@ -435,15 +442,15 @@ def lista_usuarios():
         usuario = _obtener_usuario(user_id) if user_id else None
 
         if usuario is None:
-            flash("Usuario no encontrado.", "danger")
-            return redirect(url_for("admin.lista_usuarios"))
+            flash(USUARIO_NO_ENCONTRADO, "danger")
+            return redirect(url_for(LISTA_USUARIOS))
 
         if action == "toggle":
             usuario.active = not bool(usuario.active)
             database.session.commit()
             estado = "habilitado" if usuario.active else "deshabilitado"
             flash(f"Usuario {usuario.user} {estado} correctamente.", "success")
-            return redirect(url_for("admin.lista_usuarios"))
+            return redirect(url_for(LISTA_USUARIOS))
 
     usuarios = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
     roles_por_usuario = {
@@ -497,7 +504,7 @@ def crear_usuario():
             database.session.add(nuevo_usuario)
             database.session.commit()
             flash("Usuario creado correctamente.", "success")
-            return redirect(url_for("admin.lista_usuarios"))
+            return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
@@ -515,8 +522,8 @@ def editar_usuario(user_id: str):
     """Edita los datos básicos de un usuario."""
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash("Usuario no encontrado.", "danger")
-        return redirect(url_for("admin.lista_usuarios"))
+        flash(USUARIO_NO_ENCONTRADO, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
 
     form = UserEditForm(obj=usuario)
     if form.validate_on_submit():
@@ -545,7 +552,7 @@ def editar_usuario(user_id: str):
             usuario.active = bool(form.active.data)
             database.session.commit()
             flash("Usuario actualizado correctamente.", "success")
-            return redirect(url_for("admin.lista_usuarios"))
+            return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
@@ -564,8 +571,8 @@ def usuario_roles(user_id: str):
     """Asigna roles a un usuario."""
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash("Usuario no encontrado.", "danger")
-        return redirect(url_for("admin.lista_usuarios"))
+        flash(USUARIO_NO_ENCONTRADO, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
 
     roles = _obtener_roles_disponibles()
     form = UserRoleForm()
@@ -581,7 +588,7 @@ def usuario_roles(user_id: str):
             database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
         database.session.commit()
         flash("Roles actualizados correctamente.", "success")
-        return redirect(url_for("admin.lista_usuarios"))
+        return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_roles.html",
@@ -597,8 +604,8 @@ def usuario_password(user_id: str):
     """Cambia la contraseña de un usuario."""
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash("Usuario no encontrado.", "danger")
-        return redirect(url_for("admin.lista_usuarios"))
+        flash(USUARIO_NO_ENCONTRADO, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
 
     form = UserPasswordForm()
     if form.validate_on_submit():
@@ -610,7 +617,7 @@ def usuario_password(user_id: str):
             usuario.password = proteger_passwd(form.password.data)
             database.session.commit()
             flash("Contraseña actualizada correctamente.", "success")
-            return redirect(url_for("admin.lista_usuarios"))
+            return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_password.html",
@@ -643,7 +650,7 @@ def crear_rol():
             database.session.add(nuevo_rol)
             database.session.commit()
             flash("Rol creado correctamente.", "success")
-            return redirect(url_for("admin.lista_roles"))
+            return redirect(url_for(LISTA_ROLES))
 
     return render_template(
         "admin/rol_form.html",
@@ -661,7 +668,7 @@ def editar_rol(role_id: str):
     rol = _obtener_rol(role_id)
     if rol is None:
         flash("Rol no encontrado.", "danger")
-        return redirect(url_for("admin.lista_roles"))
+        return redirect(url_for(LISTA_ROLES))
 
     form = RoleForm(obj=rol)
     if form.validate_on_submit():
@@ -675,7 +682,7 @@ def editar_rol(role_id: str):
             rol.note = form.note.data or ""
             database.session.commit()
             flash("Rol actualizado correctamente.", "success")
-            return redirect(url_for("admin.lista_roles"))
+            return redirect(url_for(LISTA_ROLES))
 
     return render_template(
         "admin/rol_form.html",
@@ -694,7 +701,7 @@ def rol_permisos(role_id: str):
     rol = _obtener_rol(role_id)
     if rol is None:
         flash("Rol no encontrado.", "danger")
-        return redirect(url_for("admin.lista_roles"))
+        return redirect(url_for(LISTA_ROLES))
 
     modulos = _obtener_modulos_disponibles()
     acciones = [
@@ -729,7 +736,7 @@ def rol_permisos(role_id: str):
                 database.session.add(RolesAccess(**permiso_kwargs))
         database.session.commit()
         flash("Permisos del rol actualizados correctamente.", "success")
-        return redirect(url_for("admin.lista_roles"))
+        return redirect(url_for(LISTA_ROLES))
 
     return render_template(
         "admin/rol_permisos.html",

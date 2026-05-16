@@ -22,6 +22,9 @@ class RecurringJournalError(Exception):
     """Error base para comprobantes recurrentes."""
 
 
+PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
+
+
 def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]], user_id: str) -> RecurringJournalTemplate:
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
@@ -85,7 +88,7 @@ def approve_recurring_template(template_id: str, user_id: str):
     """Aprueba una plantilla recurrente."""
     template = database.session.get(RecurringJournalTemplate, template_id)
     if not template:
-        raise RecurringJournalError("Plantilla no encontrada.")
+        raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
 
     if template.status != "draft":
         raise RecurringJournalError("Solo se pueden aprobar plantillas en borrador.")
@@ -101,7 +104,7 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     """Cancela una plantilla recurrente."""
     template = database.session.get(RecurringJournalTemplate, template_id)
     if not template:
-        raise RecurringJournalError("Plantilla no encontrada.")
+        raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
 
     template.status = "cancelled"
     template.docstatus = 2
@@ -138,7 +141,7 @@ def apply_recurring_template(
     """Aplica una plantilla recurrente a un periodo específico."""
     template = database.session.get(RecurringJournalTemplate, template_id)
     if not template:
-        raise RecurringJournalError("Plantilla no encontrada.")
+        raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
     if template.status != "approved":
         raise RecurringJournalError("Solo se pueden aplicar plantillas aprobadas.")
 

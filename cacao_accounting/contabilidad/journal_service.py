@@ -38,6 +38,8 @@ JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
 
+EL_COMPROBANTE_INDICADO_NO_EXISTE = "El comprobante indicado no existe."
+
 
 class JournalValidationError(ValueError):
     """Error validado en la captura de comprobantes manuales."""
@@ -121,7 +123,7 @@ def submit_journal(journal_id: str) -> list[Any]:
     """Contabiliza un comprobante manual en borrador."""
     journal = get_journal(journal_id)
     if journal is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede contabilizar un comprobante en borrador.")
     if not journal.document_no:
@@ -150,7 +152,7 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     """Marca un comprobante manual en borrador como rechazado sin afectar ledger."""
     journal = get_journal(journal_id)
     if journal is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede rechazar un comprobante en borrador.")
     journal.status = JOURNAL_STATUS_REJECTED
@@ -165,7 +167,7 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
     """Anula un comprobante contabilizado mediante reversa GL append-only."""
     journal = get_journal(journal_id)
     if journal is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
     setattr(journal, "docstatus", 1)
@@ -195,7 +197,7 @@ def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteCont
     """Duplica un comprobante existente creando uno nuevo en borrador."""
     source = get_journal(journal_id)
     if source is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status not in JOURNAL_DUPLICABLE_STATUSES:
         raise JournalValidationError("Solo se puede duplicar un comprobante en borrador, rechazado o contabilizado.")
 
@@ -215,7 +217,7 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str) -> Compro
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
     source = get_journal(journal_id)
     if source is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status not in JOURNAL_DUPLICABLE_STATUSES:
         raise JournalValidationError("Solo se puede revertir un comprobante en borrador, rechazado o contabilizado.")
 
@@ -237,7 +239,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     """Actualiza un comprobante manual en borrador."""
     journal = get_journal(journal_id)
     if journal is None:
-        raise JournalValidationError("El comprobante indicado no existe.")
+        raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede editar un comprobante en borrador.")
 

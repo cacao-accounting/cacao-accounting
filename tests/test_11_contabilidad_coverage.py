@@ -1973,6 +1973,7 @@ def test_route_ver_comprobante_with_currency_label(app_ctx):
     _login(client, user.id)
     response = client.get(f"/accounting/journal/{journal.id}")
     assert response.status_code == 200
+    assert "Comprobante manual" in response.get_data(as_text=True)
 
 
 def test_route_ver_comprobante_unknown_currency(app_ctx):

@@ -28,6 +28,9 @@ ph = PasswordHasher()
 
 INICIO_SESION = redirect("/login")
 
+PROFILE_HTML = "profile.html"
+PROFILE_TITLE = "Mi Perfil - Cacao Accounting"
+
 
 @administrador_sesion.user_loader
 def cargar_sesion(identidad):  # pragma: no cover
@@ -134,10 +137,10 @@ def profile():  # pragma: no cover
                 if existing_user:
                     flash("El correo electrónico ya está en uso por otro usuario.")
                     return render_template(
-                        "profile.html",
+                        PROFILE_HTML,
                         profile_form=profile_form,
                         password_form=password_form,
-                        titulo="Mi Perfil - Cacao Accounting",
+                        titulo=PROFILE_TITLE,
                     )
 
             current_user.name = profile_form.name.data
@@ -158,20 +161,20 @@ def profile():  # pragma: no cover
                         for err in password_form.confirm_password.errors
                     ]
                 return render_template(
-                    "profile.html",
+                    PROFILE_HTML,
                     profile_form=profile_form,
                     password_form=password_form,
-                    titulo="Mi Perfil - Cacao Accounting",
+                    titulo=PROFILE_TITLE,
                 )
 
             autenticado = helpers.autenticar_usuario(current_user.user, password_form.current_password.data)
             if autenticado is None:
                 password_form.current_password.errors.append("Contraseña actual incorrecta.")
                 return render_template(
-                    "profile.html",
+                    PROFILE_HTML,
                     profile_form=profile_form,
                     password_form=password_form,
-                    titulo="Mi Perfil - Cacao Accounting",
+                    titulo=PROFILE_TITLE,
                 )
 
             if not helpers.validar_clave_segura(password_form.new_password.data):
@@ -179,10 +182,10 @@ def profile():  # pragma: no cover
                     "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
                 )
                 return render_template(
-                    "profile.html",
+                    PROFILE_HTML,
                     profile_form=profile_form,
                     password_form=password_form,
-                    titulo="Mi Perfil - Cacao Accounting",
+                    titulo=PROFILE_TITLE,
                 )
 
             current_user.password = helpers.proteger_passwd(password_form.new_password.data)
@@ -191,8 +194,8 @@ def profile():  # pragma: no cover
             return redirect(url_for("login.profile"))
 
     return render_template(
-        "profile.html",
+        PROFILE_HTML,
         profile_form=profile_form,
         password_form=password_form,
-        titulo="Mi Perfil - Cacao Accounting",
+        titulo=PROFILE_TITLE,
     )

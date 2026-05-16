@@ -273,8 +273,12 @@ def cargar_bancos():
 
 def cargar_terceros():
     """Terceros de demostración."""
+    from cacao_accounting.database import CompanyParty
+
     for t in _make_terceros():
         database.session.add(t)
+        database.session.flush()
+        database.session.add(CompanyParty(company="cacao", party_id=t.id, is_active=True))
     database.session.commit()
 
 

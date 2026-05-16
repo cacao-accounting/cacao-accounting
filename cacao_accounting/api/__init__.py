@@ -214,10 +214,17 @@ def api_document_flow_source_documents():
     """Devuelve documentos fuente disponibles para un tipo destino."""
     target_type = request.args.get("target_document_type") or request.args.get("target_type") or ""
     company = request.args.get("company") or request.args.get("company_id")
+    party_type = request.args.get("party_type")
+    party_id = request.args.get("party_id") or request.args.get("party")
     if not target_type:
         abort(400)
     try:
-        sources = list_source_documents(target_type, company)
+        sources = list_source_documents(
+            target_type=target_type,
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+        )
     except (DocumentFlowError, KeyError):
         abort(400)
     return jsonify({"target_type": target_type, "source_documents": sources})

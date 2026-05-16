@@ -1,0 +1,275 @@
+{% macro detail_header(document_title, document_type_label, status_value, buttons_html, items, icon) %}
+{% set status_badge = 'bg-secondary' %}
+{% set status_label = _('draft') %}
+{% if status_value == 'submitted' or status_value == 1 %}
+    {% set status_badge = 'bg-success' %}
+    {% set status_label = _('submitted') %}
+{% elif status_value == 'rejected' %}
+    {% set status_badge = 'bg-danger' %}
+    {% set status_label = _('rejected') %}
+{% elif status_value == 'cancelled' or status_value == 2 %}
+    {% set status_badge = 'bg-danger' %}
+    {% set status_label = _('cancelled') %}
+{% endif %}
+
+<style>
+  .journal-line-row.is-active {
+    background-color: #fff3cd;
+    border-left: 4px solid #d39e00;
+  }
+
+  .journal-line-row {
+    cursor: pointer;
+  }
+
+  .ca-kv-list {
+    display: grid;
+    gap: .6rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ca-kv-item label {
+    color: #64748b;
+    display: block;
+    font-size: .75rem;
+    font-weight: 700;
+    margin-bottom: .15rem;
+    text-transform: uppercase;
+  }
+
+  .ca-kv-item p {
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .ca-kv-list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <div>
+      <h5 class="ca-card-title mb-0">
+        <i class="bi {{ icon }} me-2"></i>{{ document_title }}
+        <span class="badge {{ status_badge }} ms-2">{{ status_label }}</span>
+      </h5>
+      <small class="text-muted">{{ document_type_label }}</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+      {{ buttons_html | safe }}
+    </div>
+  </div>
+  <div class="row g-3 p-3">
+    {% for label, value in items %}
+    <div class="col-md-3 col-sm-6">
+      <div class="ca-kv-item">
+        <label>{{ label }}</label>
+        <p>{{ value or '-' }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro detail_lines_table(items, title='Productos / Servicios', currency_code='') %}
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _(title) }}</h6>
+    <small class="text-muted">{{ _('Seleccione una línea para ver detalle') }}</small>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table" id="transaction-lines-table">
+      <caption class="visually-hidden">{{ _('Líneas del documento') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('No.') }}</th>
+          <th>{{ _('Código') }}</th>
+          <th>{{ _('Descripción') }}</th>
+          <th>{{ _('Unidad de medida') }}</th>
+          <th class="text-end">{{ _('Cantidad') }}</th>
+          <th class="text-end">{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</th>
+          <th class="text-end">{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</th>
+          <th>{{ _('Acciones') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in items %}
+        {% set item = fila[0] %}
+        <tr class="journal-line-row{% if loop.first %} is-active{% endif %}"
+            data-order="{{ loop.index }}"
+            data-item-code="{{ item.item_code|default('', true) }}"
+            data-item-name="{{ item.item_name|default('', true) }}"
+            data-uom="{{ item.uom|default('', true) }}"
+            data-qty="{{ format_quantity(item.qty|default(0, true)) }}"
+            data-rate="{{ format_money_with_currency(item.rate|default('', true) or item.basic_rate|default('', true), currency_code) }}"
+            data-amount="{{ format_money_with_currency(item.amount|default(0, true), currency_code) }}"
+            data-warehouse="{{ item.warehouse|default('', true) or item.source_warehouse|default('', true) or item.target_warehouse|default('', true) }}"
+            data-account="{{ item.account|default('', true) }}"
+            data-cost-center="{{ item.cost_center|default('', true) }}"
+            data-unit="{{ item.unit|default('', true) }}"
+            data-project="{{ item.project|default('', true) }}"
+            data-source-type="{{ item.source_type|default('', true) }}"
+            data-source-id="{{ item.source_id|default('', true) }}"
+            data-source-item-id="{{ item.source_item_id|default('', true) }}"
+            data-remarks="{{ item.remarks|default('', true) }}">
+          <td>{{ loop.index }}</td>
+          <td>{{ item.item_code|default('', true) or '-' }}</td>
+          <td>{{ item.item_name|default('', true) or '-' }}</td>
+          <td>{{ item.uom|default('', true) or '-' }}</td>
+          <td class="text-end">{{ format_quantity(item.qty|default(0, true)) }}</td>
+          <td class="text-end">{{ format_money_with_currency(item.rate|default('', true) or item.basic_rate|default('', true), currency_code) }}</td>
+          <td class="text-end">{{ format_money_with_currency(item.amount|default(0, true), currency_code) }}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-primary btn-line-modal"
+                data-bs-toggle="modal" data-bs-target="#lineDetailModal">{{ _('Ver detalle') }}</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-3">{{ _('Sin líneas registradas.') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ca-card mt-3" id="line-detail-panel">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Detalle de línea seleccionada') }}</h6>
+    <span class="badge bg-light text-dark" id="line-order-badge">#-</span>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-4"><strong>{{ _('Código') }}</strong><p class="mb-0" id="line-item-code">-</p></div>
+    <div class="col-md-8"><strong>{{ _('Descripción') }}</strong><p class="mb-0" id="line-item-name">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Unidad de medida') }}</strong><p class="mb-0" id="line-uom">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Cantidad') }}</strong><p class="mb-0" id="line-qty">0</p></div>
+    <div class="col-md-4"><strong>{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</strong><p class="mb-0" id="line-rate">0</p></div>
+    <div class="col-md-4"><strong>{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</strong><p class="mb-0" id="line-amount">0</p></div>
+    <div class="col-md-4"><strong>{{ _('Bodega') }}</strong><p class="mb-0" id="line-warehouse">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Cuenta') }}</strong><p class="mb-0" id="line-account">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Centro de costos') }}</strong><p class="mb-0" id="line-cost-center">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Unidad de negocio') }}</strong><p class="mb-0" id="line-unit">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Proyecto') }}</strong><p class="mb-0" id="line-project">-</p></div>
+    <div class="col-md-4"><strong>{{ _('Trazabilidad') }}</strong><p class="mb-0"><span id="line-source-type">-</span> / <span id="line-source-id">-</span> / <span id="line-source-item-id">-</span></p></div>
+    <div class="col-12"><strong>{{ _('Observaciones') }}</strong><p class="mb-0" id="line-remarks">-</p></div>
+  </div>
+</div>
+
+<div class="modal fade" id="lineDetailModal" tabindex="-1" aria-labelledby="lineDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="lineDetailModalLabel">{{ _('Detalle de línea') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">{{ _('No. línea') }}</dt>
+          <dd class="col-sm-8" id="modal-line-order">-</dd>
+          <dt class="col-sm-4">{{ _('Código') }}</dt>
+          <dd class="col-sm-8" id="modal-line-item-code">-</dd>
+          <dt class="col-sm-4">{{ _('Descripción') }}</dt>
+          <dd class="col-sm-8" id="modal-line-item-name">-</dd>
+          <dt class="col-sm-4">{{ _('Unidad de medida') }}</dt>
+          <dd class="col-sm-8" id="modal-line-uom">-</dd>
+          <dt class="col-sm-4">{{ _('Cantidad') }}</dt>
+          <dd class="col-sm-8" id="modal-line-qty">0</dd>
+          <dt class="col-sm-4">{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</dt>
+          <dd class="col-sm-8" id="modal-line-rate">0</dd>
+          <dt class="col-sm-4">{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</dt>
+          <dd class="col-sm-8" id="modal-line-amount">0</dd>
+          <dt class="col-sm-4">{{ _('Bodega') }}</dt>
+          <dd class="col-sm-8" id="modal-line-warehouse">-</dd>
+          <dt class="col-sm-4">{{ _('Cuenta') }}</dt>
+          <dd class="col-sm-8" id="modal-line-account">-</dd>
+          <dt class="col-sm-4">{{ _('Centro de costos') }}</dt>
+          <dd class="col-sm-8" id="modal-line-cost-center">-</dd>
+          <dt class="col-sm-4">{{ _('Unidad de negocio') }}</dt>
+          <dd class="col-sm-8" id="modal-line-unit">-</dd>
+          <dt class="col-sm-4">{{ _('Proyecto') }}</dt>
+          <dd class="col-sm-8" id="modal-line-project">-</dd>
+          <dt class="col-sm-4">{{ _('Trazabilidad') }}</dt>
+          <dd class="col-sm-8"><span id="modal-line-source-type">-</span> / <span id="modal-line-source-id">-</span> / <span id="modal-line-source-item-id">-</span></dd>
+          <dt class="col-sm-4">{{ _('Observaciones') }}</dt>
+          <dd class="col-sm-8" id="modal-line-remarks">-</dd>
+        </dl>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Cerrar') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.journal-line-row'));
+    if (!rows.length) return;
+
+    function readValue(value) {
+      return value && value.trim() ? value : '-';
+    }
+
+    function applyDetails(row) {
+      var data = row.dataset;
+      document.getElementById('line-order-badge').textContent = '#' + (data.order || '-');
+      document.getElementById('line-item-code').textContent = readValue(data.itemCode);
+      document.getElementById('line-item-name').textContent = readValue(data.itemName);
+      document.getElementById('line-uom').textContent = readValue(data.uom);
+      document.getElementById('line-qty').textContent = data.qty || '0';
+      document.getElementById('line-rate').textContent = data.rate || '0';
+      document.getElementById('line-amount').textContent = data.amount || '0';
+      document.getElementById('line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('line-account').textContent = readValue(data.account);
+      document.getElementById('line-cost-center').textContent = readValue(data.costCenter);
+      document.getElementById('line-unit').textContent = readValue(data.unit);
+      document.getElementById('line-project').textContent = readValue(data.project);
+      document.getElementById('line-source-type').textContent = readValue(data.sourceType);
+      document.getElementById('line-source-id').textContent = readValue(data.sourceId);
+      document.getElementById('line-source-item-id').textContent = readValue(data.sourceItemId);
+      document.getElementById('line-remarks').textContent = readValue(data.remarks);
+
+      document.getElementById('modal-line-order').textContent = data.order || '-';
+      document.getElementById('modal-line-item-code').textContent = readValue(data.itemCode);
+      document.getElementById('modal-line-item-name').textContent = readValue(data.itemName);
+      document.getElementById('modal-line-uom').textContent = readValue(data.uom);
+      document.getElementById('modal-line-qty').textContent = data.qty || '0';
+      document.getElementById('modal-line-rate').textContent = data.rate || '0';
+      document.getElementById('modal-line-amount').textContent = data.amount || '0';
+      document.getElementById('modal-line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('modal-line-account').textContent = readValue(data.account);
+      document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
+      document.getElementById('modal-line-unit').textContent = readValue(data.unit);
+      document.getElementById('modal-line-project').textContent = readValue(data.project);
+      document.getElementById('modal-line-source-type').textContent = readValue(data.sourceType);
+      document.getElementById('modal-line-source-id').textContent = readValue(data.sourceId);
+      document.getElementById('modal-line-source-item-id').textContent = readValue(data.sourceItemId);
+      document.getElementById('modal-line-remarks').textContent = readValue(data.remarks);
+    }
+
+    function setActiveRow(row) {
+      rows.forEach(function (item) { item.classList.remove('is-active'); });
+      row.classList.add('is-active');
+      applyDetails(row);
+    }
+
+    rows.forEach(function (row) {
+      row.addEventListener('click', function () {
+        setActiveRow(row);
+      });
+
+      var modalButton = row.querySelector('.btn-line-modal');
+      if (modalButton) {
+        modalButton.addEventListener('click', function (event) {
+          event.stopPropagation();
+          setActiveRow(row);
+        });
+      }
+    });
+
+    setActiveRow(rows[0]);
+  });
+</script>
+{% endmacro %}

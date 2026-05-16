@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import importlib
+from inspect import unwrap
 
 import pytest
 from werkzeug.exceptions import Conflict
@@ -267,6 +269,93 @@ def test_payment_references_reject_cross_company_invoice(app_ctx):
             _save_payment_references(payment)
 
 
+def test_payment_references_reject_duplicate_and_negative_allocations(app_ctx):
+    """Las referencias de pago rechazan duplicados y montos negativos."""
+
+    from cacao_accounting.bancos import _save_payment_references
+    from cacao_accounting.database import PaymentEntry, PurchaseInvoice, database
+
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        grand_total=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+    )
+    payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay")
+    database.session.add_all([invoice, payment])
+    database.session.flush()
+    database.session.commit()
+
+    duplicate_data = {
+        "reference_type_0": "purchase_invoice",
+        "reference_id_0": invoice.id,
+        "allocated_amount_0": "25.00",
+        "reference_type_1": "purchase_invoice",
+        "reference_id_1": invoice.id,
+        "allocated_amount_1": "10.00",
+    }
+    with app_ctx.test_request_context("/cash_management/payment/new", method="POST", data=duplicate_data):
+        with pytest.raises(Conflict):
+            _save_payment_references(payment)
+    database.session.rollback()
+
+    negative_data = {
+        "reference_type_0": "purchase_invoice",
+        "reference_id_0": invoice.id,
+        "allocated_amount_0": "-1.00",
+    }
+    with app_ctx.test_request_context("/cash_management/payment/new", method="POST", data=negative_data):
+        with pytest.raises(Conflict):
+            _save_payment_references(payment)
+    database.session.rollback()
+
+
+def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
+    """Cancelar un pago libera las referencias y restaura el saldo pendiente."""
+
+    from cacao_accounting.bancos import bancos_pago_cancel, _save_payment_references
+    from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, PurchaseInvoice, database
+
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        grand_total=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+        base_outstanding_amount=Decimal("100.00"),
+    )
+    payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay", docstatus=1)
+    database.session.add_all([invoice, payment])
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/cash_management/payment/new",
+        method="POST",
+        data={
+            "reference_type_0": "purchase_invoice",
+            "reference_id_0": invoice.id,
+            "allocated_amount_0": "25.00",
+        },
+    ):
+        _save_payment_references(payment)
+    database.session.commit()
+
+    bancos_module = importlib.import_module("cacao_accounting.bancos")
+    monkeypatch.setattr(bancos_module, "cancel_document", lambda document: setattr(document, "docstatus", 2))
+
+    with app_ctx.test_request_context(f"/cash_management/payment/{payment.id}/cancel", method="POST"):
+        response = unwrap(bancos_pago_cancel)(payment.id)
+
+    relation = database.session.execute(database.select(DocumentRelation)).scalar_one()
+    references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
+    refreshed_invoice = database.session.get(PurchaseInvoice, invoice.id)
+
+    assert response.status_code == 302
+    assert relation.status == "reverted"
+    assert references == []
+    assert refreshed_invoice is not None
+    assert refreshed_invoice.outstanding_amount == Decimal("100.00")
+
+
 def test_create_company_with_custom_fiscal_year_generates_12_periods(app_ctx):
     from cacao_accounting.setup.service import create_company
     from cacao_accounting.database import AccountingPeriod, FiscalYear, database
@@ -294,12 +383,16 @@ def test_create_company_with_custom_fiscal_year_generates_12_periods(app_ctx):
     )
     database.session.commit()
 
-    fiscal_year = database.session.execute(
-        database.select(FiscalYear).filter_by(entity=entity.code)
-    ).scalar_one()
-    periods = database.session.execute(
-        database.select(AccountingPeriod).filter_by(entity=entity.code, fiscal_year_id=fiscal_year.id).order_by(AccountingPeriod.start)
-    ).scalars().all()
+    fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(entity=entity.code)).scalar_one()
+    periods = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=entity.code, fiscal_year_id=fiscal_year.id)
+            .order_by(AccountingPeriod.start)
+        )
+        .scalars()
+        .all()
+    )
 
     assert len(periods) == 12
     assert periods[0].start == date(2025, 4, 1)
@@ -313,13 +406,17 @@ def test_closed_fiscal_year_blocks_all_postings(app_ctx):
     debit_account = Accounts(entity="cacao", code="EXP-009", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-009", name="Caja", active=True, enabled=True, group=False)
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
-    database.session.add_all([
-        debit_account,
-        credit_account,
-        fiscal_book,
-        FiscalYear(entity="cacao", name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31), is_closed=True),
-        ExchangeRate(origin="USD", destination="NIO", rate="35.00", date=date(2026, 5, 6)),
-    ])
+    database.session.add_all(
+        [
+            debit_account,
+            credit_account,
+            fiscal_book,
+            FiscalYear(
+                entity="cacao", name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31), is_closed=True
+            ),
+            ExchangeRate(origin="USD", destination="NIO", rate="35.00", date=date(2026, 5, 6)),
+        ]
+    )
     database.session.commit()
 
     journal = create_journal_draft(

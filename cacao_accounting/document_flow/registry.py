@@ -35,6 +35,10 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
 )
 
+COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
+CREAR_FACTURA = "Crear Factura"
+VENTAS_VENTAS_FACTURA_VENTA_NUEVO = "ventas.ventas_factura_venta_nuevo"
+
 
 @dataclass(frozen=True)
 class DocumentAction:
@@ -95,7 +99,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction("Crear Recepción", "purchase_receipt", "compras.compras_recepcion_nuevo", "from_order"),
-            DocumentAction("Crear Factura", "purchase_invoice", "compras.compras_factura_compra_nuevo", "from_order"),
+            DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_order"),
         ),
     ),
     "purchase_request": DocumentType(
@@ -177,7 +181,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Factura", "purchase_invoice", "compras.compras_factura_compra_nuevo", "from_receipt"),
+            DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_receipt"),
             DocumentAction("Crear Entrada de Almacén", "stock_entry", "inventario.inventario_entrada_nuevo", "source_id"),
         ),
     ),
@@ -207,9 +211,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         ),
         create_actions=(
             DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_purchase_invoice"),
-            DocumentAction(
-                "Crear Nota de Crédito", "purchase_invoice", "compras.compras_factura_compra_nuevo", "from_invoice"
-            ),
+            DocumentAction("Crear Nota de Crédito", "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_invoice"),
         ),
     ),
     "sales_order": DocumentType(
@@ -229,7 +231,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction("Crear Nota de Entrega", "delivery_note", "ventas.ventas_entrega_nuevo", "from_order"),
-            DocumentAction("Crear Factura", "sales_invoice", "ventas.ventas_factura_venta_nuevo", "from_order"),
+            DocumentAction(CREAR_FACTURA, "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_order"),
         ),
     ),
     "sales_request": DocumentType(
@@ -286,7 +288,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Factura", "sales_invoice", "ventas.ventas_factura_venta_nuevo", "from_note"),
+            DocumentAction(CREAR_FACTURA, "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_note"),
             DocumentAction(
                 "Crear Movimiento de Inventario", "stock_entry", "inventario.inventario_entrada_nuevo", "source_id"
             ),
@@ -318,7 +320,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         ),
         create_actions=(
             DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_sales_invoice"),
-            DocumentAction("Crear Nota de Crédito", "sales_invoice", "ventas.ventas_factura_venta_nuevo", "from_return"),
+            DocumentAction("Crear Nota de Crédito", "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_return"),
         ),
     ),
     "payment_entry": DocumentType(

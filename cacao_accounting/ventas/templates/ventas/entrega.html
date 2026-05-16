@@ -1,69 +1,63 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/entrega.html"></div>
-{%- endif -%}
-
+{% import "detail_view_macros.html" as dv_macros %}
+{% if TESTING %}<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/entrega.html">
+</div>{% endif %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_entrega_lista') }}" class="link-dark">Notas de Entrega</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-
-<div class="ca-card" style="max-width:960px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title">
-      <i class="bi bi-truck"></i> {{ registro.document_no or registro.id }}
-      {{ macros.document_status_for("delivery_note", registro, detail=True) }}
-    </h5>
-    <div class="d-flex gap-2 flex-wrap">
-      {{ macros.workflow_buttons(
+{% set buttons %}
+{% if registro.docstatus == 0 %}
+<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('ventas.ventas_entrega_editar', note_id=registro.id) }}">
+  <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
+</a>
+{% endif %}
+{% if registro.docstatus in [0, 1] %}
+<form method="post" action="{{ url_for('ventas.ventas_entrega_duplicar', note_id=registro.id) }}" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-files me-1"></i>{{ _('Duplicar') }}
+  </button>
+</form>
+{% endif %}
+{{ macros.workflow_buttons(
             registro.docstatus,
             url_for('ventas.ventas_entrega_submit', note_id=registro.id),
-            url_for('ventas.ventas_entrega_cancel', note_id=registro.id)) }}
-      {% if registro.docstatus == 1 %}
-        {{ macros.crear_dropdown([
+            url_for('ventas.ventas_entrega_cancel', note_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+{% if registro.docstatus == 1 %}
+{{ macros.crear_dropdown([
               ("Factura de Venta", url_for('ventas.ventas_factura_venta_nuevo', from_note=registro.id))
            ]) }}
-      {% endif %}
-    </div>
-  </div>
-  <div class="row g-3 p-3">
-    <div class="col-md-6">
-      <table class="ca-table">
-        <caption class="visually-hidden">Datos generales de la entrega</caption>
-        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
-        <tbody>
-          <tr><td style="color:#64748b;">Número de Documento</td><td>{{ registro.document_no or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Compañía</td><td>{{ registro.company or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Fecha</td><td>{{ registro.posting_date or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Estado</td><td>{{ macros.document_status_for("delivery_note", registro, detail=True) }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="col-md-6">
-      <table class="ca-table">
-        <caption class="visually-hidden">Datos del cliente</caption>
-        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
-        <tbody>
-          <tr><td style="color:#64748b;">Cliente</td><td>{{ registro.customer_name or registro.customer_id or "" }}</td></tr>
-          {% if registro.sales_order_id %}
-          <tr><td style="color:#64748b;">Orden de Venta</td>
-              <td><a href="{{ url_for('ventas.ventas_orden_venta', order_id=registro.sales_order_id) }}">{{ registro.sales_order_id }}</a></td></tr>
-          {% endif %}
-          <tr><td style="color:#64748b;">Observaciones</td><td>{{ registro.remarks or "" }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-{{ macros.lineas_tabla_lectura(items) }}
+{% endif %}
+{{ macros.detail_nav_buttons(
+            url_for('ventas.ventas_entrega_lista'),
+            url_for('ventas.ventas_entrega_nuevo')) }}
+{% endset %}
+{% set currency_code = document_currency_code(registro) %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Nota de Entrega'),
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Cliente'), registro.customer_name),
+      (_('Fecha'), registro.posting_date),
+      (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
+      (_('Moneda'), currency_code),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-truck'
+) }}
+{{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_trace("delivery_note", registro) }}
-
 {% endblock %}

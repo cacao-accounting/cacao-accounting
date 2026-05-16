@@ -1252,6 +1252,50 @@ def test_search_select_account_filters_and_validates_registry(app_ctx):
         search_select("account", "ban", {"not_allowed": ["x"]}, limit=10)
 
 
+def test_search_select_item_requires_registered_company_filter(app_ctx):
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from cacao_accounting.database import Item, ItemUOMConversion, UOM, database
+    from cacao_accounting.search_select import search_select
+
+    suffix = uuid4().hex[:8].upper()
+    base_uom = f"EA-{suffix}"
+    box_uom = f"BOX-{suffix}"
+    item_code = f"ITEM-{suffix}"
+    database.session.add_all(
+        [
+            UOM(code=base_uom, name="Unidad test"),
+            UOM(code=box_uom, name="Caja test"),
+            Item(
+                code=item_code,
+                name="Item con UOMs",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom=base_uom,
+                is_active=True,
+            ),
+            ItemUOMConversion(
+                item_code=item_code,
+                from_uom=box_uom,
+                to_uom=base_uom,
+                conversion_factor=Decimal("10"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    payload = search_select("item", item_code, {"company": ["cacao"]}, limit=10)
+
+    assert payload["doctype"] == "item"
+    assert payload["query"] == item_code
+    assert payload["results"][0]["default_uom"] == base_uom
+    assert payload["results"][0]["allowed_uoms"] == [base_uom, box_uom]
+
+    uom_payload = search_select("uom", "", {"code": [box_uom]}, limit=10)
+    assert [result["value"] for result in uom_payload["results"]] == [box_uom]
+
+
 def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx):
     from cacao_accounting.database import Accounts, User, database
 

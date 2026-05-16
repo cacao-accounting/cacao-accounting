@@ -59,6 +59,21 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 contabilidad.register_blueprint(gl, url_prefix="/gl")
 LISTA_ENTIDADES = redirect("/accounting/entity/list")
 
+CONTABILIDAD_LIBROS = "contabilidad.libros"
+SIN_PADRE = "Sin padre"
+CONTABILIDAD_CCOSTOS = "contabilidad.ccostos"
+CONTABILIDAD_PROYECTOS = "contabilidad.proyectos"
+CONTABILIDAD_FISCAL_YEAR_LIST = "contabilidad.fiscal_year_list"
+CONTABILIDAD_PERIODO_CONTABLE = "contabilidad.periodo_contable"
+CONTABILIDAD_VER_PLANTILLA_RECURRENTE = "contabilidad.ver_plantilla_recurrente"
+CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL = "contabilidad.asistente_cierre_mensual"
+CONTABILIDAD_VER_CIERRE_MENSUAL = "contabilidad.ver_cierre_mensual"
+CONTABILIDAD_VER_COMPROBANTE = "contabilidad.ver_comprobante"
+CONTABILIDAD_EDITAR_COMPROBANTE = "contabilidad.editar_comprobante"
+CONTABILIDAD_NAMING_SERIES_LIST = "contabilidad.naming_series_list"
+CONTABILIDAD_EXTERNAL_COUNTER_LIST = "contabilidad.external_counter_list"
+CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST = "contabilidad.fiscal_year_closing_list"
+
 
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
@@ -513,7 +528,7 @@ def eliminar_libro(id_unidad):
     if libro:
         database.session.delete(libro)
         database.session.commit()
-    return redirect(url_for("contabilidad.libros"))
+    return redirect(url_for(CONTABILIDAD_LIBROS))
 
 
 @contabilidad.route("/book/edit/<id_libro>", methods=["GET", "POST"])
@@ -527,7 +542,7 @@ def editar_libro(id_libro):
 
     libro = database.session.execute(database.select(Book).filter_by(code=id_libro)).scalar_one_or_none()
     if libro is None:
-        return redirect(url_for("contabilidad.libros"))
+        return redirect(url_for(CONTABILIDAD_LIBROS))
 
     formulario = FormularioLibro(obj=libro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -543,7 +558,7 @@ def editar_libro(id_libro):
         libro.currency = formulario.moneda.data
         libro.status = formulario.estado.data
         database.session.commit()
-        return redirect(url_for("contabilidad.libros"))
+        return redirect(url_for(CONTABILIDAD_LIBROS))
 
     return render_template(
         "contabilidad/book_crear.html",
@@ -577,7 +592,7 @@ def nuevo_libro():
         database.session.add(DATA)
         database.session.commit()
 
-        return redirect(url_for("contabilidad.libros"))
+        return redirect(url_for(CONTABILIDAD_LIBROS))
     return render_template(
         "contabilidad/book_crear.html",
         titulo=TITULO,
@@ -673,7 +688,7 @@ def nueva_cuenta():
 
     formulario = FormularioCuenta()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.padre.choices = [("", "Sin padre")]
+    formulario.padre.choices = [("", SIN_PADRE)]
     TITULO = "Nueva Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -721,7 +736,7 @@ def editar_cuenta(entity, id_cta):
     formulario = FormularioCuenta(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.entidad.data = registro.entity
-    formulario.padre.choices = [("", "Sin padre")]
+    formulario.padre.choices = [("", SIN_PADRE)]
     if registro.parent:
         padre_row = database.session.execute(
             database.select(Accounts).filter(Accounts.code == registro.parent, Accounts.entity == entity)
@@ -780,7 +795,7 @@ def nuevo_centro_costo():
 
     formulario = FormularioCentroCosto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.padre.choices = [("", "Sin padre")]
+    formulario.padre.choices = [("", SIN_PADRE)]
     TITULO = "Nuevo Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -797,7 +812,7 @@ def nuevo_centro_costo():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.ccostos"))
+        return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     return render_template(
         "contabilidad/centro-costo_crear.html",
@@ -817,12 +832,12 @@ def editar_centro_costo(id_cc):
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro is None:
-        return redirect(url_for("contabilidad.ccostos"))
+        return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     formulario = FormularioCentroCosto(obj=registro)
     formulario.id.data = registro.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.padre.choices = [("", "Sin padre")]
+    formulario.padre.choices = [("", SIN_PADRE)]
     TITULO = "Editar Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -854,7 +869,7 @@ def centro_costo(id_cc: str):
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalars().first()
     if registro is None:
-        return redirect(url_for("contabilidad.ccostos"))
+        return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     return render_template(
         "contabilidad/centro-costo.html",
@@ -875,7 +890,7 @@ def eliminar_centro_costo(id_cc):
     if registro:
         database.session.delete(registro)
         database.session.commit()
-    return redirect(url_for("contabilidad.ccostos"))
+    return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -934,7 +949,7 @@ def nuevo_proyecto():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.proyectos"))
+        return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template(
         "contabilidad/proyecto_crear.html",
@@ -954,7 +969,7 @@ def proyecto(project_id):
     registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if registro is None:
         flash(_("El proyecto indicado no existe."), "warning")
-        return redirect(url_for("contabilidad.proyectos"))
+        return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template("contabilidad/proyecto.html", registro=registro, statusweb=STATUS)
 
@@ -970,7 +985,7 @@ def editar_proyecto(project_id):
 
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto is None:
-        return redirect(url_for("contabilidad.proyectos"))
+        return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     formulario = FormularioProyecto(obj=proyecto)
     formulario.id.data = proyecto.code
@@ -986,7 +1001,7 @@ def editar_proyecto(project_id):
         proyecto.enabled = bool(formulario.habilitado.data)
         proyecto.status = formulario.status.data or "open"
         database.session.commit()
-        return redirect(url_for("contabilidad.proyectos"))
+        return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template(
         "contabilidad/proyecto_crear.html",
@@ -1008,7 +1023,7 @@ def eliminar_proyecto(project_id):
     if proyecto:
         database.session.delete(proyecto)
         database.session.commit()
-    return redirect(url_for("contabilidad.proyectos"))
+    return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -1064,7 +1079,7 @@ def fiscal_year_new():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.fiscal_year_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template(
         "contabilidad/fiscal_year_crear.html",
@@ -1084,7 +1099,7 @@ def fiscal_year_edit(fy_id):
 
     fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
     if fiscal_year is None:
-        return redirect(url_for("contabilidad.fiscal_year_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     formulario = FormularioFiscalYear(obj=fiscal_year)
     formulario.id.data = fiscal_year.name
@@ -1102,7 +1117,7 @@ def fiscal_year_edit(fy_id):
         fiscal_year.year_end_date = formulario.fin.data
         fiscal_year.is_closed = bool(formulario.cerrado.data)
         database.session.commit()
-        return redirect(url_for("contabilidad.fiscal_year_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template(
         "contabilidad/fiscal_year_crear.html",
@@ -1123,7 +1138,7 @@ def fiscal_year_detail(fy_id):
     registro = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
     if registro is None:
         flash(_("El año fiscal indicado no existe."), "warning")
-        return redirect(url_for("contabilidad.fiscal_year_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template("contabilidad/fiscal_year.html", registro=registro)
 
@@ -1140,7 +1155,7 @@ def fiscal_year_delete(fy_id):
     if fiscal_year:
         database.session.delete(fiscal_year)
         database.session.commit()
-    return redirect(url_for("contabilidad.fiscal_year_list"))
+    return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -1175,7 +1190,7 @@ def accounting_period_new():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.periodo_contable"))
+        return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     return render_template(
         "contabilidad/periodo_crear.html",
@@ -1196,7 +1211,7 @@ def accounting_period_edit(period_id):
 
     period = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
     if period is None:
-        return redirect(url_for("contabilidad.periodo_contable"))
+        return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     formulario = FormularioAccountingPeriod(obj=period)
     formulario.id.data = period.name
@@ -1215,7 +1230,7 @@ def accounting_period_edit(period_id):
         period.start = formulario.inicio.data
         period.end = formulario.fin.data
         database.session.commit()
-        return redirect(url_for("contabilidad.periodo_contable"))
+        return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     return render_template(
         "contabilidad/periodo_crear.html",
@@ -1237,7 +1252,7 @@ def accounting_period_delete(period_id):
     if period:
         database.session.delete(period)
         database.session.commit()
-    return redirect(url_for("contabilidad.periodo_contable"))
+    return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
 
 @contabilidad.route("/accounting_period/<period_id>")
@@ -1251,7 +1266,7 @@ def accounting_period_detail(period_id):
     registro = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
     if registro is None:
         flash(_("El período contable indicado no existe."), "warning")
-        return redirect(url_for("contabilidad.periodo_contable"))
+        return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     return render_template("contabilidad/periodo.html", registro=registro)
 
@@ -1504,7 +1519,7 @@ def aprobar_plantilla_recurrente(identifier: str):
     except RecurringJournalError as exc:
         flash(str(exc), "danger")
 
-    return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+    return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
 
 @contabilidad.route("/journal/recurring/<identifier>/cancel", methods=["POST"])
@@ -1518,7 +1533,7 @@ def cancelar_plantilla_recurrente(identifier: str):
     motivo = request.form.get("reason")
     if not motivo:
         flash("Debe indicar un motivo de cancelación.", "danger")
-        return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+        return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
     try:
         cancel_recurring_template(identifier, reason=motivo, user_id=str(current_user.id))
@@ -1526,7 +1541,7 @@ def cancelar_plantilla_recurrente(identifier: str):
     except RecurringJournalError as exc:
         flash(str(exc), "danger")
 
-    return redirect(url_for("contabilidad.ver_plantilla_recurrente", identifier=identifier))
+    return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
 
 @contabilidad.route("/period-close/monthly")
@@ -1572,20 +1587,20 @@ def nuevo_cierre_mensual():
     period = database.session.get(AccountingPeriod, period_id)
     if not period:
         flash("Periodo no encontrado.", "danger")
-        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     existing = database.session.execute(
         database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
     ).scalar_one_or_none()
     if existing:
         flash("Ya existe un cierre mensual para ese periodo.", "warning")
-        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=existing.id))
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=existing.id))
 
     close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
     database.session.add(close_run)
     database.session.commit()
     flash("Cierre mensual creado.", "success")
-    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+    return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 
 @contabilidad.route("/period-close/monthly/<identifier>")
@@ -1605,7 +1620,7 @@ def ver_cierre_mensual(identifier: str):
     close_run = database.session.get(PeriodCloseRun, identifier)
     if not close_run:
         flash("Cierre mensual no encontrado.", "warning")
-        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
     templates: Sequence[RecurringJournalTemplate] = []
@@ -1671,12 +1686,12 @@ def aplicar_recurrentes_cierre(identifier: str):
     close_run = database.session.get(PeriodCloseRun, identifier)
     if not close_run:
         flash("Cierre mensual no encontrado.", "danger")
-        return redirect(url_for("contabilidad.asistente_cierre_mensual"))
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
         flash("Periodo no encontrado.", "danger")
-        return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     template_ids = request.form.getlist("template_ids")
     if not template_ids:
@@ -1731,7 +1746,7 @@ def aplicar_recurrentes_cierre(identifier: str):
         for err in errors:
             flash(err, "danger")
 
-    return redirect(url_for("contabilidad.ver_cierre_mensual", identifier=close_run.id))
+    return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
@@ -1754,7 +1769,7 @@ def nuevo_comprobante():
             flash(str(exc), "danger")
         else:
             flash("Comprobante contable guardado como borrador.", "success")
-            return redirect(url_for("contabilidad.ver_comprobante", identifier=journal.id))
+            return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
     column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
@@ -1793,7 +1808,7 @@ def contabilizar_comprobante(identifier: str):
         flash(str(exc), "danger")
     else:
         flash("Comprobante contable contabilizado.", "success")
-    return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+    return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
 @contabilidad.route("/journal/<identifier>/reject", methods=["POST"])
@@ -1816,7 +1831,7 @@ def rechazar_comprobante(identifier: str):
         flash(str(exc), "danger")
     else:
         flash("Comprobante contable rechazado.", "warning")
-    return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+    return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
 @contabilidad.route("/journal/<identifier>/cancel", methods=["POST"])
@@ -1839,7 +1854,7 @@ def anular_comprobante(identifier: str):
         flash(str(exc), "danger")
     else:
         flash("Comprobante contable anulado con reversa contable.", "warning")
-    return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+    return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
 @contabilidad.route("/journal/<identifier>")
@@ -1850,7 +1865,7 @@ def ver_comprobante(identifier: str):
     """Ver comprobante contable."""
     from cacao_accounting.contabilidad.journal_repository import get_journal, list_journal_lines
     from cacao_accounting.contabilidad.journal_service import serialize_journal_for_form
-    from cacao_accounting.database import Accounts, Book, CostCenter, Currency, Entity, User
+    from cacao_accounting.database import Accounts, Book, CostCenter, Entity, User
 
     journal = get_journal(identifier)
     if journal is None:
@@ -1891,21 +1906,17 @@ def ver_comprobante(identifier: str):
     if not selected_books and journal.book:
         selected_books = [str(journal.book)]
 
-    entity = database.session.get(Entity, journal.entity) if journal.entity else None
+    entity = (
+        database.session.execute(database.select(Entity).filter_by(code=journal.entity)).scalars().first()
+        if journal.entity
+        else None
+    )
     company_currency_code = getattr(entity, "currency", None)
     currency_label = ""
     if journal.transaction_currency:
-        currency_row = database.session.get(Currency, journal.transaction_currency)
-        if currency_row is not None:
-            currency_label = f"{currency_row.code} - {currency_row.name}"
-        else:
-            currency_label = str(journal.transaction_currency)
+        currency_label = str(journal.transaction_currency)
     elif company_currency_code:
-        company_currency_row = database.session.get(Currency, company_currency_code)
-        if company_currency_row is not None:
-            currency_label = f"{company_currency_row.code} - {company_currency_row.name}"
-        else:
-            currency_label = f"{company_currency_code} - {_('Moneda local')}"
+        currency_label = str(company_currency_code)
     else:
         currency_label = _("Moneda local")
 
@@ -1984,10 +1995,10 @@ def duplicar_comprobante(identifier: str):
         duplicated = duplicate_journal_as_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     flash("Comprobante duplicado como nuevo borrador.", "success")
-    return redirect(url_for("contabilidad.editar_comprobante", identifier=duplicated.id))
+    return redirect(url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=duplicated.id))
 
 
 @contabilidad.route("/journal/<identifier>/revert", methods=["POST"])
@@ -2002,10 +2013,10 @@ def revertir_comprobante(identifier: str):
         reversed_draft = duplicate_journal_as_reversal_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     flash("Reversión creada como nuevo borrador editable.", "success")
-    return redirect(url_for("contabilidad.editar_comprobante", identifier=reversed_draft.id))
+    return redirect(url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=reversed_draft.id))
 
 
 @contabilidad.route("/journal/edit/<identifier>", methods=["GET", "POST"])
@@ -2029,7 +2040,7 @@ def editar_comprobante(identifier: str):
         return redirect(url_for("contabilidad.listar_comprobantes"))
     if journal.status != "draft":
         flash("Solo se puede editar un comprobante en borrador.", "warning")
-        return redirect(url_for("contabilidad.ver_comprobante", identifier=identifier))
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     if request.method == "POST":
         try:
@@ -2038,7 +2049,7 @@ def editar_comprobante(identifier: str):
             flash(str(exc), "danger")
         else:
             flash("Comprobante contable actualizado.", "success")
-            return redirect(url_for("contabilidad.ver_comprobante", identifier=journal.id))
+            return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Editar Comprobante Contable - " + APPNAME
     column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
@@ -2049,8 +2060,8 @@ def editar_comprobante(identifier: str):
         form_key=JOURNAL_FORM_KEY,
         view_key=DEFAULT_VIEW_KEY,
         initial_journal=serialize_journal_for_form(journal),
-        submit_url=url_for("contabilidad.editar_comprobante", identifier=identifier),
-        cancel_url=url_for("contabilidad.ver_comprobante", identifier=identifier),
+        submit_url=url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=identifier),
+        cancel_url=url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier),
         currencies=obtener_lista_monedas(),
     )
 
@@ -2167,7 +2178,7 @@ def naming_series_new():
             )
         )
         database.session.commit()
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     return render_template(
         "contabilidad/naming_series_nueva.html",
@@ -2187,7 +2198,7 @@ def naming_series_toggle_default(series_id: str):
 
     serie = database.session.get(NamingSeries, series_id)
     if not serie:
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     if not serie.is_default:
         enforce_single_default_series(
@@ -2200,7 +2211,7 @@ def naming_series_toggle_default(series_id: str):
         serie.is_default = False
 
     database.session.commit()
-    return redirect(url_for("contabilidad.naming_series_list"))
+    return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
 @contabilidad.route("/naming-series/<series_id>/edit", methods=["GET", "POST"])
@@ -2215,7 +2226,7 @@ def naming_series_edit(series_id: str):
 
     serie = database.session.get(NamingSeries, series_id)
     if serie is None:
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     form = FormularioNamingSeries(obj=serie)
     entidades = database.session.execute(database.select(Entity)).scalars().all()
@@ -2261,7 +2272,7 @@ def naming_series_edit(series_id: str):
                 log.warning(f"Sequence record not found for sequence_id={sequence_id} on series={serie.id}")
 
         database.session.commit()
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     return render_template(
         "contabilidad/naming_series_nueva.html",
@@ -2281,7 +2292,7 @@ def naming_series_delete(series_id: str):
 
     serie = database.session.get(NamingSeries, series_id)
     if serie is None:
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     has_history = (
         database.session.execute(
@@ -2296,7 +2307,7 @@ def naming_series_delete(series_id: str):
         database.session.delete(serie)
         database.session.commit()
 
-    return redirect(url_for("contabilidad.naming_series_list"))
+    return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
 @contabilidad.route("/naming-series/<series_id>/toggle-active", methods=["POST"])
@@ -2309,7 +2320,7 @@ def naming_series_toggle_active(series_id: str):
 
     serie = database.session.get(NamingSeries, series_id)
     if not serie:
-        return redirect(url_for("contabilidad.naming_series_list"))
+        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
     if serie.is_active:
         # Comprobar si la serie ya genero identificadores (no se puede eliminar, solo desactivar)
@@ -2331,7 +2342,7 @@ def naming_series_toggle_active(series_id: str):
         serie.is_active = True
 
     database.session.commit()
-    return redirect(url_for("contabilidad.naming_series_list"))
+    return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -2418,7 +2429,7 @@ def external_counter_new():
                 )
             )
         database.session.commit()
-        return redirect(url_for("contabilidad.external_counter_list"))
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
     return render_template(
         "contabilidad/external_counter_nuevo.html",
@@ -2441,7 +2452,7 @@ def external_counter_adjust(counter_id: str):
 
     counter = database.session.get(ExternalCounter, counter_id)
     if not counter:
-        return redirect(url_for("contabilidad.external_counter_list"))
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
     form = FormularioAjusteContadorExterno()
 
@@ -2460,7 +2471,7 @@ def external_counter_adjust(counter_id: str):
 
             log.warning(f"Error al ajustar contador externo {counter_id}: {exc}")
             flash(str(exc), "danger")
-        return redirect(url_for("contabilidad.external_counter_list"))
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
     return render_template(
         "contabilidad/external_counter_ajuste.html",
@@ -2480,7 +2491,7 @@ def external_counter_audit_log(counter_id: str):
 
     counter = database.session.get(ExternalCounter, counter_id)
     if not counter:
-        return redirect(url_for("contabilidad.external_counter_list"))
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
     registros = (
         database.session.execute(
@@ -2542,7 +2553,7 @@ def fiscal_year_closing_new():
     """Formulario para ejecutar un nuevo cierre de año fiscal."""
     if current_user.classification != "admin":
         flash("Solo el administrador del sistema puede ejecutar el cierre de año fiscal.", "danger")
-        return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
 
     from cacao_accounting.database import Entity, FiscalYear
     from cacao_accounting.contabilidad.fiscal_year_closing import (
@@ -2558,7 +2569,7 @@ def fiscal_year_closing_new():
         try:
             create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
             flash("Cierre de año fiscal ejecutado correctamente.", "success")
-            return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+            return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
         except FiscalYearClosingError as exc:
             flash(str(exc), "danger")
 
@@ -2583,7 +2594,7 @@ def fiscal_year_closing_reverse(fy_id):
     """Revierte un cierre de año fiscal."""
     if current_user.classification != "admin":
         flash("Solo el administrador del sistema puede revertir el cierre de año fiscal.", "danger")
-        return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
 
     from cacao_accounting.contabilidad.fiscal_year_closing import (
         FiscalYearClosingError,
@@ -2596,4 +2607,4 @@ def fiscal_year_closing_reverse(fy_id):
     except FiscalYearClosingError as exc:
         flash(str(exc), "danger")
 
-    return redirect(url_for("contabilidad.fiscal_year_closing_list"))
+    return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))

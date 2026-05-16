@@ -16,10 +16,16 @@
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i> Listado de Pagos.</h5>
-    <a href="{{ url_for('bancos.bancos_pago_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+    <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i> {{ page_heading or _('Listado de Pagos') }}</h5>
+    {% if not is_transfer_list %}
+    <a href="{{ new_url or url_for('bancos.bancos_pago_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% else %}
+    <a href="{{ url_for('bancos.bancos_transferencia_nueva') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nueva Transferencia') }}
+    </a>
+    {% endif %}
   </div>
   <table class="ca-table">
     <caption style="display: none;">Listado de pagos.</caption>

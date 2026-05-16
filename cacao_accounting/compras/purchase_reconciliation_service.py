@@ -586,37 +586,35 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         total_received_qty,
         receipt_id=receipt.id,
     )
-    if result.matching_result == MatchingResult.MATCH_FAILED.value:
-        return result
-
-    for invoice_item in invoice_items:
-        receipt_item = _first_available_line(receipt_groups[_line_key(invoice_item)].lines, order_mode=False)
-        invoice_qty = _line_qty(invoice_item)
-        receipt_qty = _line_qty(receipt_item)
-        receipt_rate = _line_rate(receipt_item)
-        invoice_rate = _line_rate(invoice_item)
-        matched_amount = invoice_qty * receipt_rate
-        invoiced_amount = invoice_qty * invoice_rate
-        price_difference = invoice_rate - receipt_rate
-        database.session.add(
-            PurchaseReconciliationItem(
-                purchase_reconciliation_id=reconciliation.id,
-                purchase_order_item_id=None,
-                purchase_receipt_item_id=receipt_item.id,
-                purchase_invoice_item_id=invoice_item.id,
-                item_code=invoice_item.item_code,
-                warehouse=receipt_item.warehouse,
-                uom=invoice_item.uom,
-                received_qty=receipt_qty,
-                invoiced_qty=invoice_qty,
-                matched_qty=invoice_qty,
-                received_amount=invoice_qty * receipt_rate,
-                invoiced_amount=invoiced_amount,
-                matched_amount=matched_amount,
-                price_difference=price_difference,
-                status="reconciled",
+    if result.matching_result != MatchingResult.MATCH_FAILED.value:
+        for invoice_item in invoice_items:
+            receipt_item = _first_available_line(receipt_groups[_line_key(invoice_item)].lines, order_mode=False)
+            invoice_qty = _line_qty(invoice_item)
+            receipt_qty = _line_qty(receipt_item)
+            receipt_rate = _line_rate(receipt_item)
+            invoice_rate = _line_rate(invoice_item)
+            matched_amount = invoice_qty * receipt_rate
+            invoiced_amount = invoice_qty * invoice_rate
+            price_difference = invoice_rate - receipt_rate
+            database.session.add(
+                PurchaseReconciliationItem(
+                    purchase_reconciliation_id=reconciliation.id,
+                    purchase_order_item_id=None,
+                    purchase_receipt_item_id=receipt_item.id,
+                    purchase_invoice_item_id=invoice_item.id,
+                    item_code=invoice_item.item_code,
+                    warehouse=receipt_item.warehouse,
+                    uom=invoice_item.uom,
+                    received_qty=receipt_qty,
+                    invoiced_qty=invoice_qty,
+                    matched_qty=invoice_qty,
+                    received_amount=invoice_qty * receipt_rate,
+                    invoiced_amount=invoiced_amount,
+                    matched_amount=matched_amount,
+                    price_difference=price_difference,
+                    status="reconciled",
+                )
             )
-        )
     return result
 
 
@@ -703,37 +701,35 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         total_ordered_qty,
         receipt_id=None,
     )
-    if result.matching_result == MatchingResult.MATCH_FAILED.value:
-        return result
-
-    for invoice_item in invoice_items:
-        order_item = _first_available_line(order_groups[_line_key(invoice_item)].lines, order_mode=True)
-        invoice_qty = _line_qty(invoice_item)
-        ordered_qty = _line_qty(order_item)
-        order_rate = _line_rate(order_item)
-        invoice_rate = _line_rate(invoice_item)
-        matched_amount = invoice_qty * order_rate
-        invoiced_amount = invoice_qty * invoice_rate
-        price_difference = invoice_rate - order_rate
-        database.session.add(
-            PurchaseReconciliationItem(
-                purchase_reconciliation_id=reconciliation.id,
-                purchase_order_item_id=order_item.id,
-                purchase_receipt_item_id=None,
-                purchase_invoice_item_id=invoice_item.id,
-                item_code=invoice_item.item_code,
-                warehouse=None,
-                uom=invoice_item.uom,
-                received_qty=ordered_qty,  # "received" = ordered in 2-way context
-                invoiced_qty=invoice_qty,
-                matched_qty=invoice_qty,
-                received_amount=invoice_qty * order_rate,
-                invoiced_amount=invoiced_amount,
-                matched_amount=matched_amount,
-                price_difference=price_difference,
-                status="reconciled",
+    if result.matching_result != MatchingResult.MATCH_FAILED.value:
+        for invoice_item in invoice_items:
+            order_item = _first_available_line(order_groups[_line_key(invoice_item)].lines, order_mode=True)
+            invoice_qty = _line_qty(invoice_item)
+            ordered_qty = _line_qty(order_item)
+            order_rate = _line_rate(order_item)
+            invoice_rate = _line_rate(invoice_item)
+            matched_amount = invoice_qty * order_rate
+            invoiced_amount = invoice_qty * invoice_rate
+            price_difference = invoice_rate - order_rate
+            database.session.add(
+                PurchaseReconciliationItem(
+                    purchase_reconciliation_id=reconciliation.id,
+                    purchase_order_item_id=order_item.id,
+                    purchase_receipt_item_id=None,
+                    purchase_invoice_item_id=invoice_item.id,
+                    item_code=invoice_item.item_code,
+                    warehouse=None,
+                    uom=invoice_item.uom,
+                    received_qty=ordered_qty,  # "received" = ordered in 2-way context
+                    invoiced_qty=invoice_qty,
+                    matched_qty=invoice_qty,
+                    received_amount=invoice_qty * order_rate,
+                    invoiced_amount=invoiced_amount,
+                    matched_amount=matched_amount,
+                    price_difference=price_difference,
+                    status="reconciled",
+                )
             )
-        )
     return result
 
 
