@@ -11,12 +11,14 @@ RUN chmod +x /usr/bin/tini
 WORKDIR /app
 
 COPY ./cacao_accounting/static/package.json /app/cacao_accounting/static/package.json
-RUN microdnf install -y --nodocs --best nodejs npm && cd /app/cacao_accounting/static && npm install --ignore-scripts && cd /app \
+RUN microdnf install -y --nodocs --best nodejs npm && cd /app/cacao_accounting/static \
+    && npm install --ignore-scripts && cd /app \
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best nodejs* npm \
     && microdnf clean all
 
 COPY requirements.txt /app/requirements.txt
-RUN microdnf install -y --nodocs --best --refresh python3.12 python3.12-cryptography python3.12-pip python3.12-psycopg2 \
+RUN microdnf install -y --nodocs --best --refresh python3.12 python3.12-cryptography \
+    python3.12-pip python3.12-psycopg2 \
     && microdnf install -y --nodocs --best pango \
     && /usr/bin/python3.12 -m pip --no-cache-dir install -r /app/requirements.txt \
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip \
