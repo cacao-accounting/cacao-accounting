@@ -7,6 +7,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import ComprobanteContable, GLEntry, Book, database
 
+
 @pytest.fixture
 def app():
     app = create_app(
@@ -20,12 +21,15 @@ def app():
     )
     with app.app_context():
         from cacao_accounting.database.helpers import inicia_base_de_datos
+
         inicia_base_de_datos(app, "admin", "admin", with_examples=True)
     yield app
+
 
 @pytest.fixture
 def client(app):
     return app.test_client()
+
 
 def login(client, username, password):
     client.get("/logout")
@@ -39,6 +43,7 @@ def login(client, username, password):
     if b"Solo un usuario administrador puede iniciar sesion" in resp.data:
         raise RuntimeError(f"Login forbidden for {username} (Desktop Mode?)")
     return resp
+
 
 def test_journal_entry_full_lifecycle_exhaustive(client, app):
     """
@@ -56,13 +61,9 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
             "lines": [
                 {"account": "11.01.001.001", "debit": "500.00", "credit": "0.00"},
                 {"account": "31.01", "debit": "0.00", "credit": "500.00"},
-            ]
+            ],
         }
-        resp = client.post(
-            "/accounting/journal/new",
-            data={"journal_payload": json.dumps(payload)},
-            follow_redirects=True
-        )
+        resp = client.post("/accounting/journal/new", data={"journal_payload": json.dumps(payload)}, follow_redirects=True)
         assert resp.status_code == 200
 
         journal = database.session.execute(
@@ -101,13 +102,12 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
 
         # Verify Reversal GL Entries
         # Should have another 6 lines with inverted values
-        reversal_entries = database.session.execute(
-            database.select(GLEntry).filter_by(voucher_id=journal.id)
-        ).scalars().all()
+        reversal_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
         assert len(reversal_entries) == 12
 
         total_balance = sum(e.debit - e.credit for e in reversal_entries)
         assert total_balance == 0
+
 
 def test_rbac_manager_vs_auxiliar_vs_user(client, app):
     with app.app_context():
@@ -133,12 +133,10 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
             "lines": [
                 {"account": "11.01.001.001", "debit": "100", "credit": "0"},
                 {"account": "31.01", "debit": "0", "credit": "100"},
-            ]
+            ],
         }
         client.post("/accounting/journal/new", data={"journal_payload": json.dumps(payload)})
-        journal = database.session.execute(
-            database.select(ComprobanteContable).filter_by(memo="Auxiliar Draft")
-        ).scalar_one()
+        journal = database.session.execute(database.select(ComprobanteContable).filter_by(memo="Auxiliar Draft")).scalar_one()
 
         # Auxiliar tries to submit -> Should be forbidden (403)
         resp = client.post(f"/accounting/journal/{journal.id}/submit")
@@ -155,10 +153,12 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
         resp = client.post(f"/accounting/journal/{journal.id}/cancel")
         assert resp.status_code == 403
 
+
 def test_negative_direct_access_bypassing_ui(client, app):
     """Try to access accounting resources with a non-accounting user."""
     with app.app_context():
         from cacao_accounting.database import User, database
+
         # 'compras' user has access to purchases but not accounting
         u = database.session.execute(database.select(User).filter_by(user="compras")).scalar_one()
         u.active = True
@@ -174,6 +174,7 @@ def test_negative_direct_access_bypassing_ui(client, app):
         resp = client.get("/accounting/journal/list")
         assert resp.status_code == 403
 
+
 def test_journal_validation_unbalanced(client, app):
     with app.app_context():
         login(client, "admin", "admin")
@@ -184,14 +185,11 @@ def test_journal_validation_unbalanced(client, app):
             "lines": [
                 {"account": "11.01.001.001", "debit": "100.00", "credit": "0.00"},
                 {"account": "31.01", "debit": "0.00", "credit": "50.00"},
-            ]
+            ],
         }
-        resp = client.post(
-            "/accounting/journal/new",
-            data={"journal_payload": json.dumps(payload)},
-            follow_redirects=True
-        )
+        resp = client.post("/accounting/journal/new", data={"journal_payload": json.dumps(payload)}, follow_redirects=True)
         assert b"El comprobante contable no esta balanceado" in resp.data
+
 
 def test_journal_validation_missing_cost_center(client, app):
     with app.app_context():
@@ -199,6 +197,7 @@ def test_journal_validation_missing_cost_center(client, app):
         # 52.01.001 is an expense account and requires cost center
         # We need to ensure account 52.01.001 exists and is set as expense in DB
         from cacao_accounting.database import Accounts, database
+
         acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="52.01.001")).scalar_one()
         acc.account_type = "expense"
         database.session.commit()
@@ -208,15 +207,11 @@ def test_journal_validation_missing_cost_center(client, app):
             "posting_date": date.today().isoformat(),
             "memo": "Missing Cost Center",
             "lines": [
-                {"account": "52.01.001", "debit": "100.00", "credit": "0.00"}, # No cost center
+                {"account": "52.01.001", "debit": "100.00", "credit": "0.00"},  # No cost center
                 {"account": "11.01.001.001", "debit": "0.00", "credit": "100.00"},
-            ]
+            ],
         }
-        resp = client.post(
-            "/accounting/journal/new",
-            data={"journal_payload": json.dumps(payload)},
-            follow_redirects=True
-        )
+        resp = client.post("/accounting/journal/new", data={"journal_payload": json.dumps(payload)}, follow_redirects=True)
         # In current implementation, JournalValidationError results in 200 with flash message
         # We check for the specific validation error message in the response data.
         assert b"Las cuentas de gasto requieren centro de costo" in resp.data

@@ -7,6 +7,9 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired
 
+COMPANIA = "Compañía"
+FECHA_DE_PUBLICACION = "Fecha de Publicación"
+
 
 class FormularioProveedor(FlaskForm):
     """Formulario para crear o editar un proveedor."""
@@ -15,7 +18,7 @@ class FormularioProveedor(FlaskForm):
     comercial_name = StringField("Nombre Comercial")
     tax_id = StringField("ID Fiscal")
     classification = StringField("Clasificación")
-    company = StringField("Compañía")
+    company = StringField(COMPANIA)
     payable_account_id = StringField("Cuenta por pagar")
     tax_template_id = StringField("Plantilla de impuestos")
     company_is_active = BooleanField("Activo en la compañía", default=True)
@@ -27,9 +30,9 @@ class FormularioOrdenCompra(FlaskForm):
     """Formulario para crear una orden de compra."""
 
     supplier_id = SelectField("Proveedor", choices=[])
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")
 
 
@@ -37,9 +40,9 @@ class FormularioRecepcionCompra(FlaskForm):
     """Formulario para crear una recepción de compra."""
 
     supplier_id = SelectField("Proveedor", choices=[])
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")
 
 
@@ -48,9 +51,9 @@ class FormularioFacturaCompra(FlaskForm):
 
     supplier_id = SelectField("Proveedor", choices=[])
     supplier_invoice_no = StringField("Número de Factura del Proveedor")
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     is_return = BooleanField("Es devolución")
     remarks = TextAreaField("Observaciones")
 
@@ -60,9 +63,9 @@ class FormularioSolicitudCompra(FlaskForm):
 
     requested_by = StringField("Solicitado por")
     department = StringField("Departamento")
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")
 
 
@@ -70,9 +73,9 @@ class FormularioCotizacionProveedor(FlaskForm):
     """Formulario para crear una cotización de proveedor."""
 
     supplier_id = SelectField("Proveedor", choices=[])
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")
 
 
@@ -80,7 +83,7 @@ class FormularioSolicitudCotizacion(FlaskForm):
     """Formulario para crear una solicitud de cotización de compra."""
 
     supplier_id = SelectField("Proveedor", choices=[])
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha de Publicación")
+    posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")

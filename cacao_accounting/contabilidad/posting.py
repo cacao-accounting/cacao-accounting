@@ -1139,11 +1139,18 @@ def _upsert_stock_bin(
         .first()
     )
     if not bin_row:
-        bin_row = StockBin(company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"))
+        bin_row = StockBin(
+            company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"), stock_value=Decimal("0")
+        )
         database.session.add(bin_row)
+
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
-    bin_row.valuation_rate = valuation_rate
     bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
+
+    if bin_row.actual_qty > 0:
+        bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
+    else:
+        bin_row.valuation_rate = Decimal("0")
 
 
 def _create_stock_movement(

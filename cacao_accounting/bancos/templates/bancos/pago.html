@@ -1,54 +1,42 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago.html"></div>
-{%- endif -%}
-
+{% import "detail_view_macros.html" as dv_macros %}
+{% if TESTING %}<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago.html"></div>{% endif %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_pago_lista') }}" class="link-dark">Pagos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-
-<div class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title">
-      <i class="bi bi-cash-stack"></i> {{ registro.document_no or registro.id }}
-      {{ macros.document_status_for("payment_entry", registro, detail=True) }}
-    </h5>
-    <div class="d-flex gap-2">
-      {% if registro.docstatus == 0 %}
-      <form method="post" action="{{ url_for('bancos.bancos_pago_submit', payment_id=registro.id) }}">
-        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Aprobar</button>
-      </form>
-      {% elif registro.docstatus == 1 %}
-      <form method="post" action="{{ url_for('bancos.bancos_pago_cancel', payment_id=registro.id) }}">
-        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i>Cancelar</button>
-      </form>
-      {% endif %}
-    </div>
-  </div>
-  <dl class="row p-3">
-    <dt class="col-sm-3">Número de Documento</dt>
-    <dd class="col-sm-9">{{ registro.document_no or "" }}</dd>
-    <dt class="col-sm-3">Compañía</dt>
-    <dd class="col-sm-9">{{ registro.company or "" }}</dd>
-    <dt class="col-sm-3">Fecha</dt>
-    <dd class="col-sm-9">{{ registro.posting_date or "" }}</dd>
-    <dt class="col-sm-3">Estado</dt>
-    <dd class="col-sm-9">{{ macros.document_status_for("payment_entry", registro, detail=True) }}</dd>
-    {% if registro.external_number %}
-    <dt class="col-sm-3">Número Externo</dt>
-    <dd class="col-sm-9"><span class="badge bg-secondary">{{ registro.external_number }}</span></dd>
-    {% endif %}
-  </dl>
-</div>
-
+{% set buttons %}
+      {{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('bancos.bancos_pago_submit', payment_id=registro.id),
+            url_for('bancos.bancos_pago_cancel', payment_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+      {{ macros.detail_nav_buttons(
+            url_for('bancos.bancos_pago_lista'),
+            url_for('bancos.bancos_pago_nuevo')) }}
+{% endset %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Registro de Pago'),
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Tipo de Pago'), registro.payment_type),
+      (_('Compañía'), registro.company),
+      (_('Tercero'), registro.party_name or registro.party_id),
+      (_('Fecha'), registro.posting_date),
+      (_('Monto Pagado'), registro.paid_amount),
+      (_('Monto Recibido'), registro.received_amount),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-cash-coin'
+) }}
 {{ macros.document_flow_trace("payment_entry", registro) }}
-
 {% endblock %}

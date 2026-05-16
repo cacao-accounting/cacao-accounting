@@ -233,6 +233,90 @@ describe('smart-select', function () {
     assert.ok(events.includes('change'));
   });
 
+  it('selectOptionValue keeps scalar value and visible label', function () {
+    const create = loadSmartSelect();
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+
+    const hiddenInput = {
+      value: '',
+      dispatchEvent: function () {},
+    };
+
+    component.$root = {
+      querySelector: function (selector) {
+        if (selector === 'input[type="hidden"][name="company"]') return hiddenInput;
+        return null;
+      },
+    };
+
+    component.selectOptionValue('cacao', 'cacao - Choco Sonrisas Sociedad Anonima');
+
+    assert.strictEqual(component.selectedValue, 'cacao');
+    assert.strictEqual(component.selectedLabel, 'cacao - Choco Sonrisas Sociedad Anonima');
+    assert.strictEqual(component.search, 'cacao - Choco Sonrisas Sociedad Anonima');
+    assert.strictEqual(hiddenInput.value, 'cacao');
+  });
+
+  it('selectOptionFromValues keeps scalar value and passes option payload to callback', function () {
+    const create = loadSmartSelect();
+    let selectedOption = null;
+    const component = create({
+      doctype: 'item',
+      name: 'item_code_0',
+      minChars: 1,
+      onSelect: function (option) {
+        selectedOption = option;
+      },
+    });
+
+    const hiddenInput = {
+      value: '',
+      dispatchEvent: function () {},
+    };
+
+    component.$root = {
+      querySelector: function (selector) {
+        if (selector === 'input[type="hidden"][name="item_code_0"]') return hiddenInput;
+        return null;
+      },
+    };
+
+    component.selectOptionFromValues('ART-001', 'ART-001 - Chocolate 100g', {
+      value: 'ART-001',
+      display_name: 'ART-001 - Chocolate 100g',
+      name: 'Chocolate 100g',
+    });
+
+    assert.strictEqual(component.selectedValue, 'ART-001');
+    assert.strictEqual(hiddenInput.value, 'ART-001');
+    assert.strictEqual(selectedOption.name, 'Chocolate 100g');
+  });
+
+  it('uses the input event value when fetching options', async function () {
+    let requestUrl = '';
+    const create = loadSmartSelect({
+      fetch: (url) => {
+        requestUrl = url;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+      },
+    });
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+
+    component.onInput({ target: { value: 'cacao' } });
+    await flushPromises();
+
+    assert.strictEqual(component.search, 'cacao');
+    assert.ok(decodeURIComponent(requestUrl).includes('q=cacao'));
+  });
+
   it('company selection stores scalar value in hidden input when option value is object', function () {
     const create = loadSmartSelect();
     const component = create({

@@ -43,6 +43,7 @@ from cacao_accounting.database import (
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 
+CHOCOLATE_100G = "Chocolate 100g"
 
 BASE_USUARIOS = [
     {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "system"},
@@ -551,7 +552,7 @@ def _make_unidades_medida() -> tuple:
 def _make_articulos() -> tuple:
     """Crea instancias frescas de Articulos."""
     return (
-        Item(code="ART-001", name="Chocolate 100g", item_type="goods", is_stock_item=True, default_uom="UND", is_active=True),
+        Item(code="ART-001", name=CHOCOLATE_100G, item_type="goods", is_stock_item=True, default_uom="UND", is_active=True),
         Item(
             code="SRV-001",
             name="Servicio de Entrega",
@@ -650,7 +651,7 @@ def _make_items_orden_compra() -> tuple:
         PurchaseOrderItem(
             purchase_order_id=PURCHASE_ORDER_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=10,
             uom="UND",
             rate=5.00,
@@ -665,7 +666,7 @@ def _make_items_orden_venta() -> tuple:
         SalesOrderItem(
             sales_order_id=SALES_ORDER_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=5,
             uom="UND",
             rate=8.00,
@@ -680,7 +681,7 @@ def _make_items_recepcion() -> tuple:
         PurchaseReceiptItem(
             purchase_receipt_id=PURCHASE_RECEIPT_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=10,
             uom="UND",
             rate=5.00,
@@ -696,7 +697,7 @@ def _make_items_factura_compra() -> tuple:
         PurchaseInvoiceItem(
             purchase_invoice_id=PURCHASE_INVOICE_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=10,
             uom="UND",
             rate=5.00,
@@ -711,7 +712,7 @@ def _make_items_entrega() -> tuple:
         DeliveryNoteItem(
             delivery_note_id=DELIVERY_NOTE_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=5,
             uom="UND",
             rate=8.00,
@@ -726,7 +727,7 @@ def _make_items_factura_venta() -> tuple:
         SalesInvoiceItem(
             sales_invoice_id=SALES_INVOICE_ID,
             item_code="ART-001",
-            item_name="Chocolate 100g",
+            item_name=CHOCOLATE_100G,
             qty=5,
             uom="UND",
             rate=8.00,

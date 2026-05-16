@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import pytest
+from werkzeug.serving import make_server
 
 try:
     from playwright.sync_api import expect, sync_playwright
@@ -60,15 +61,23 @@ def flask_server():
                     pass
         database.session.commit()
 
-    def run_app():
-        app.run(port=5006, debug=False, use_reloader=False)
-
-    server_thread = threading.Thread(target=run_app)
+    server = make_server("127.0.0.1", 5006, app)
+    server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
 
     time.sleep(2)
     yield "http://localhost:5006"
+
+    server.shutdown()
+    server_thread.join(timeout=5)
+
+    # Explicitly dispose SQLAlchemy connections so SQLite file is unlocked on Windows.
+    from cacao_accounting.database import database
+
+    with app.app_context():
+        database.session.remove()
+        database.engine.dispose()
 
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -116,6 +125,7 @@ def test_reports_navigation(flask_server, browser):
 
     context.close()
 
+
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_journal_entry_list_visibility(flask_server, browser):
     context = browser.new_context()
@@ -131,6 +141,7 @@ def test_journal_entry_list_visibility(flask_server, browser):
     expect(page.get_by_role("link", name="Nuevo")).to_be_visible()
 
     context.close()
+
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_rbac_user_restricted_visibility(flask_server, browser):

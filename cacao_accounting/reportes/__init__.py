@@ -68,6 +68,8 @@ else:
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
 
+REPORT_TABLE_HTML = "reportes/report_table.html"
+
 _COLUMN_LABELS = {
     "posting_date": "Posting Date",
     "accounting_period": "Period",
@@ -930,7 +932,7 @@ def subledger():
         )
     )
     return render_template(
-        "reportes/report_table.html",
+        REPORT_TABLE_HTML,
         titulo="Subledger AR/AP - " + APPNAME,
         report_title="Subledger AR/AP",
         rows=report.rows,
@@ -954,7 +956,7 @@ def aging():
         )
     )
     return render_template(
-        "reportes/report_table.html",
+        REPORT_TABLE_HTML,
         titulo="Aging AR/AP - " + APPNAME,
         report_title="Aging AR/AP",
         rows=report.rows,
@@ -977,7 +979,7 @@ def kardex():
         )
     )
     return render_template(
-        "reportes/report_table.html",
+        REPORT_TABLE_HTML,
         titulo="Kardex - " + APPNAME,
         report_title="Kardex",
         rows=report.rows,
@@ -995,7 +997,7 @@ def reconciliations():
         as_of_date=_date_arg("as_of_date"),
     )
     return render_template(
-        "reportes/report_table.html",
+        REPORT_TABLE_HTML,
         titulo="Reconciliaciones - " + APPNAME,
         report_title="Reconciliaciones",
         rows=report.rows,
@@ -1016,7 +1018,7 @@ def _operational_filters() -> OperationalReportFilters:
 
 def _render_operational_report(report_name: str, report):
     return render_template(
-        "reportes/report_table.html",
+        REPORT_TABLE_HTML,
         titulo=report_name + " - " + APPNAME,
         report_title=report_name,
         rows=report.rows,

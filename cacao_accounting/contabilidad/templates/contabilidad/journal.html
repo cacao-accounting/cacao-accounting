@@ -66,10 +66,13 @@
 
 <div class="ca-card">
     <div class="ca-card-header">
-        <h5 class="ca-card-title">
-            <i class="bi bi-receipt"></i> {{ registro.document_no or registro.serie or _('Comprobante contable') }}
-            <span class="badge {{ status_badge }} ms-2">{{ _(status_value) }}</span>
-        </h5>
+        <div>
+            <h5 class="ca-card-title mb-0">
+                <i class="bi bi-receipt"></i> {{ registro.document_no or registro.serie or _('Comprobante contable') }}
+                <span class="badge {{ status_badge }} ms-2">{{ _(status_value) }}</span>
+            </h5>
+            <small class="text-muted">{{ _('Comprobante manual') }}</small>
+        </div>
         <div class="d-flex gap-2 flex-wrap">
             {% if registro.status == "draft" %}
             <a class="btn btn-sm btn-outline-primary"
@@ -170,19 +173,21 @@
                     <th>{{ _('Cuenta') }}</th>
                     <th>{{ _('Centro de costos') }}</th>
                     <th>{{ _('Tercero') }}</th>
-                    <th class="text-end">{{ _('Debe') }}</th>
-                    <th class="text-end">{{ _('Haber') }}</th>
+                    <th class="text-end">{{ _('Debe') }}{% if currency_label %} ({{ currency_label }}){% endif %}</th>
+                    <th class="text-end">{{ _('Haber') }}{% if currency_label %} ({{ currency_label }}){% endif %}</th>
                     <th>{{ _('Acciones') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for linea in lineas %}
+                {% set debit_amount = linea.value if linea.value and linea.value > 0 else 0 %}
+                {% set credit_amount = -linea.value if linea.value and linea.value < 0 else 0 %}
                 <tr class="journal-line-row{% if loop.first %} is-active{% endif %}"
                     data-order="{{ linea.order or '' }}" data-account="{{ linea.account_label or linea.account or '' }}"
                     data-cost-center="{{ linea.cost_center_label or linea.cost_center or '' }}"
                     data-party-type="{{ linea.third_type or '' }}" data-party="{{ linea.third_code or '' }}"
-                    data-debit="{{ '%.2f'|format(linea.value if linea.value and linea.value > 0 else 0) }}"
-                    data-credit="{{ '%.2f'|format(-linea.value if linea.value and linea.value < 0 else 0) }}"
+                    data-debit="{{ '{:,.2f}'.format(debit_amount) }}"
+                    data-credit="{{ '{:,.2f}'.format(credit_amount) }}"
                     data-unit="{{ linea.unit or '' }}" data-project="{{ linea.project or '' }}"
                     data-reference-type="{{ linea.internal_reference or '' }}"
                     data-reference-name="{{ linea.internal_reference_id or linea.reference or '' }}"
@@ -193,9 +198,8 @@
                     <td>{{ linea.account_label or linea.account }}</td>
                     <td>{{ linea.cost_center_label or linea.cost_center or '-' }}</td>
                     <td>{{ linea.third_code or '-' }}</td>
-                    <td class="text-end">{{ '%.2f'|format(linea.value if linea.value and linea.value > 0 else 0) }}</td>
-                    <td class="text-end">{{ '%.2f'|format(-linea.value if linea.value and linea.value < 0 else 0) }}
-                    </td>
+                    <td class="text-end">{% if currency_label %}<span class="text-muted me-1">{{ currency_label }}</span>{% endif %}{{ "{:,.2f}".format(debit_amount) }}</td>
+                    <td class="text-end">{% if currency_label %}<span class="text-muted me-1">{{ currency_label }}</span>{% endif %}{{ "{:,.2f}".format(credit_amount) }}</td>
                     <td>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-sm btn-outline-primary btn-line-modal"
@@ -245,10 +249,10 @@
             <p class="mb-0"><span id="line-reference1">-</span> / <span id="line-reference2">-</span></p>
         </div>
 
-        <div class="col-md-4"><strong>{{ _('Debe') }}</strong>
+        <div class="col-md-4"><strong>{{ _('Debe') }}{% if currency_label %} ({{ currency_label }}){% endif %}</strong>
             <p class="mb-0" id="line-debit">0.00</p>
         </div>
-        <div class="col-md-4"><strong>{{ _('Haber') }}</strong>
+        <div class="col-md-4"><strong>{{ _('Haber') }}{% if currency_label %} ({{ currency_label }}){% endif %}</strong>
             <p class="mb-0" id="line-credit">0.00</p>
         </div>
         <div class="col-md-4"><strong>{{ _('Es anticipo') }}</strong>
@@ -301,10 +305,10 @@
                     <dt class="col-sm-4">{{ _('Referencia 2') }}</dt>
                     <dd class="col-sm-8" id="modal-line-reference2">-</dd>
 
-                    <dt class="col-sm-4">{{ _('Debe') }}</dt>
+                    <dt class="col-sm-4">{{ _('Debe') }}{% if currency_label %} ({{ currency_label }}){% endif %}</dt>
                     <dd class="col-sm-8" id="modal-line-debit">0.00</dd>
 
-                    <dt class="col-sm-4">{{ _('Haber') }}</dt>
+                    <dt class="col-sm-4">{{ _('Haber') }}{% if currency_label %} ({{ currency_label }}){% endif %}</dt>
                     <dd class="col-sm-8" id="modal-line-credit">0.00</dd>
 
                     <dt class="col-sm-4">{{ _('Es anticipo') }}</dt>

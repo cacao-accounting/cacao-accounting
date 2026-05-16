@@ -1,138 +1,255 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_pago_lista') }}" class="link-dark">Pagos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nuevo Pago</li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:860px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i> Nuevo Pago
-      {% if factura_compra_origen %}<small class="text-muted ms-2">desde Factura {{ factura_compra_origen.document_no or factura_compra_origen.id }}</small>{% endif %}
-      {% if factura_venta_origen %}<small class="text-muted ms-2">desde Factura {{ factura_venta_origen.document_no or factura_venta_origen.id }}</small>{% endif %}
-    </h5>
+<script>
+  window.paymentEntryForm = function (config) {
+    return {
+      header: {
+        payment_type: config.initial.payment_type || 'receive',
+        company: config.initial.company || '',
+        naming_series_id: '',
+        posting_date: config.initial.posting_date || new Date().toISOString().slice(0, 10),
+        bank_account_id: '',
+        currency: '',
+        paid_amount: config.initial.paid_amount || 0,
+        party_type: config.initial.party_type || 'customer',
+        party_id: config.initial.party_id || '',
+        remarks: config.initial.remarks || '',
+        external_counter_id: config.initial.external_counter_id || '',
+        external_number: '',
+      },
+      lines: config.initial.lines || [],
+      payload: '',
+
+      init: function () {
+        var self = this;
+        document.addEventListener('bank-account-selected', function (event) {
+            self.header.bank_account_id = event.detail.value;
+            if (event.detail.extra && event.detail.extra.currency) {
+                self.header.currency = event.detail.extra.currency;
+            }
+        });
+      },
+
+      calculateTotal: function() {
+        this.header.paid_amount = this.lines.reduce((sum, line) => sum + parseFloat(line.allocated_amount || 0), 0);
+      },
+
+      prepareSubmit: function (event) {
+        if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount <= 0) {
+          event.preventDefault();
+          alert("{{ _('Por favor complete los campos obligatorios.') }}");
+          return;
+        }
+
+        this.payload = JSON.stringify({
+          ...this.header,
+          lines: this.lines
+        });
+      }
+    };
+  };
+</script>
+
+<form method="post" x-data='paymentEntryForm({ initial: {{ initial_payment|tojson if initial_payment else "{}" }} })' @submit="prepareSubmit">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="payment_payload" :value="payload">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">{{ titulo }}</h4>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('bancos.bancos_pago_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('bancos.bancos_pago_lista') }}" class="btn btn-sm btn-outline-secondary">{{ _('Cancelar') }}</a>
+      <button class="btn btn-sm btn-primary" type="submit">
+        <i class="bi bi-save"></i> {{ _('Guardar borrador') }}
+      </button>
     </div>
   </div>
-  <form method="post" id="form-main">
-    {{ form.csrf_token }}
-    {% for invoice_id in from_purchase_invoice_ids %}
-      <input type="hidden" name="from_purchase_invoice" value="{{ invoice_id }}">
-    {% endfor %}
-    {% for invoice_id in from_sales_invoice_ids %}
-      <input type="hidden" name="from_sales_invoice" value="{{ invoice_id }}">
-    {% endfor %}
-    <div class="row g-3 p-3">
-      <div class="col-md-6">
-        <div class="mb-3">
-          {{ form.payment_type.label(class="form-label") }}
-          {{ form.payment_type(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.company.label(class="form-label") }}
-          {{ form.company(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.naming_series.label(class="form-label") }}
-          {{ form.naming_series(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.posting_date.label(class="form-label") }}
-          {{ form.posting_date(class="form-control", type="date") }}
-        </div>
-        <div class="mb-3">
-          {{ form.bank_account_id.label(class="form-label") }}
-          {{ form.bank_account_id(class="form-select") }}
-        </div>
+
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-3">
+          <label class="form-label">{{ _('Tipo de transacción') }}</label>
+          <select class="form-select" x-model="header.payment_type">
+              <option value="receive">{{ _('Pago entrante (Cobro)') }}</option>
+              <option value="pay">{{ _('Pago saliente') }}</option>
+          </select>
       </div>
       <div class="col-md-6">
-        <div class="mb-3">
-          {{ form.party_type.label(class="form-label") }}
-          {{ form.party_type(class="form-select") }}
+        <label class="form-label">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "company",
+            name: "company",
+            initialValue: "{{ initial_payment.company if initial_payment else "" }}"
+          })'>
+          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
+          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
         </div>
-        <div class="mb-3">
-          {{ form.party_id.label(class="form-label") }}
-          {{ form.party_id(class="form-select") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Secuencia') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "naming_series",
+            name: "naming_series_id",
+            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
+            filterSources: ["#company_val"],
+            autoSelectDefault: true
+          })'>
+          <input type="hidden" id="company_val" x-model="header.company">
+          <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
+          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
         </div>
-        <div class="mb-3">
-          {{ form.paid_amount.label(class="form-label") }}
-          {{ form.paid_amount(class="form-control") }}
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">{{ _('Cuenta Bancaria') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "bank_account",
+            name: "bank_account_id",
+            filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
+            filterSources: ["#company_val"],
+            onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
+          })'>
+          <input type="hidden" x-model="selectedValue">
+          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
         </div>
-        <div class="mb-3">
-          {{ form.remarks.label(class="form-label") }}
-          {{ form.remarks(class="form-control", rows=3) }}
-        </div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">{{ _('Moneda') }}</label>
+        <input class="form-control bg-light" x-model="header.currency" readonly>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Fecha') }}</label>
+        <input class="form-control" type="date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Monto total') }}</label>
+        <input class="form-control text-end fw-bold" type="number" step="0.01" x-model="header.paid_amount" required>
       </div>
     </div>
-    {# Sección de contador externo — cheque, número fiscal, recibo preimpreso #}
-    <div class="p-3 border-top">
-      <h6 class="text-muted mb-3"><i class="bi bi-123"></i> Numeración Externa (opcional)</h6>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
       <div class="row g-3">
-        <div class="col-md-6">
-          <div class="mb-3">
-            {{ form.external_counter_id.label(class="form-label") }}
-            {{ form.external_counter_id(class="form-select", id="external_counter_id") }}
-            <div class="form-text">Chequera, numeración fiscal o recibo preimpreso.</div>
+          <div class="col-md-3">
+              <label class="form-label">{{ _('Tipo tercero') }}</label>
+              <select class="form-select" x-model="header.party_type">
+                  <option value="customer">{{ _('Cliente') }}</option>
+                  <option value="supplier">{{ _('Proveedor') }}</option>
+              </select>
           </div>
-        </div>
-        <div class="col-md-6">
-          <div class="mb-3">
-            {{ form.external_number.label(class="form-label") }}
-            {{ form.external_number(class="form-control", id="external_number",
-               placeholder="Dejar vacío para usar el siguiente sugerido") }}
-            <div class="form-text">Si se omite, el sistema usa el siguiente número disponible del contador.</div>
+          <div class="col-md-9">
+              <label class="form-label">{{ _('Tercero') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                  doctype: "party",
+                  name: "party_id",
+                  filters: { party_type: function() { return $data.header.party_type } },
+                  filterSources: ["header.party_type"],
+                  initialValue: "{{ initial_payment.party_id if initial_payment else "" }}"
+                })'>
+                <input type="hidden" x-model="selectedValue" x-effect="header.party_id = selectedValue">
+                <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar tercero...') }}">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  </template>
+                </div>
+              </div>
           </div>
-        </div>
       </div>
-    </div>
-    {% if facturas_origen %}
-    <div class="p-3">
-      <h6 class="text-muted mb-2"><i class="bi bi-link-45deg"></i> Documentos a Pagar</h6>
-      <table class="ca-table">
-        <caption class="visually-hidden">Facturas origen del pago</caption>
-        <thead>
-          <tr>
-            <th scope="col">Documento</th>
-            <th scope="col">Tipo</th>
-            <th scope="col">Total</th>
-            <th scope="col">Saldo</th>
-            <th scope="col">Aplicar</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for origen in facturas_origen %}
-          <tr>
-            <td>
-              <a href="{{ origen.url }}">{{ origen.document.document_no or origen.document.id }}</a>
-              <input type="hidden" name="reference_type_{{ loop.index0 }}" value="{{ origen.reference_type }}">
-              <input type="hidden" name="reference_id_{{ loop.index0 }}" value="{{ origen.document.id }}">
-            </td>
-            <td>{{ origen.label }}</td>
-            <td>{{ origen.document.grand_total or "" }}</td>
-            <td>{{ origen.document.outstanding_amount or "" }}</td>
-            <td style="max-width:160px;">
-              <input class="form-control form-control-sm" name="allocated_amount_{{ loop.index0 }}"
-                     value="{{ origen.document.outstanding_amount or origen.document.grand_total or 0 }}">
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-  </form>
-</div>
+      <div class="row g-3 mt-1">
+          <div class="col-md-6">
+              <label class="form-label">{{ _('Contador externo') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                  doctype: "external_counter",
+                  name: "external_counter_id",
+                  filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
+                  filterSources: ["#company_val"]
+                })'>
+                <input type="hidden" x-model="selectedValue" x-effect="header.external_counter_id = selectedValue">
+                <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar contador externo...') }}">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  </template>
+                </div>
+              </div>
+          </div>
+          <div class="col-md-6">
+              <label class="form-label">{{ _('Número externo') }}</label>
+              <input class="form-control" type="text" x-model="header.external_number" :placeholder="'{{ _('Opcional: se sugiere automáticamente si está vacío') }}'">
+          </div>
+      </div>
+  </div>
+
+  <template x-if="lines.length > 0">
+      <div class="ca-card p-0 mb-3 overflow-hidden">
+          <div class="bg-light p-2 border-bottom">
+              <h6 class="mb-0"><i class="bi bi-link-45deg"></i> {{ _('Asignación a Facturas') }}</h6>
+          </div>
+          <table class="ca-table mb-0">
+              <thead>
+                  <tr>
+                      <th>{{ _('Documento') }}</th>
+                      <th class="text-end">{{ _('Total') }}</th>
+                      <th class="text-end">{{ _('Saldo Pendiente') }}</th>
+                      <th class="text-end" style="width: 150px;">{{ _('Monto a Aplicar') }}</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <template x-for="(line, index) in lines" :key="index">
+                      <tr>
+                          <td x-text="line.document_no"></td>
+                          <td class="text-end" x-text="line.total_amount"></td>
+                          <td class="text-end" x-text="line.outstanding_amount"></td>
+                          <td>
+                              <input type="number" step="0.01" class="form-control form-control-sm text-end"
+                                     x-model="line.allocated_amount" @input="calculateTotal()">
+                          </td>
+                      </tr>
+                  </template>
+              </tbody>
+          </table>
+      </div>
+  </template>
+
+  <div class="ca-card p-3 mb-3">
+      <label class="form-label">{{ _('Comentarios') }}</label>
+      <textarea class="form-control" rows="3" x-model="header.remarks"></textarea>
+  </div>
+
+</form>
 
 {% endblock %}

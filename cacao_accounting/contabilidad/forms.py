@@ -21,6 +21,11 @@ from wtforms.validators import DataRequired, InputRequired, Length, NumberRange,
 from cacao_accounting.database import Entity
 from cacao_accounting.setup.forms import CATALOG_CHOICES, COUNTRY_CHOICES, LANGUAGE_CHOICES
 
+PADDING_DIGITOS = "Padding (digitos)"
+CODIGO = "Código"
+FECHA_INICIO = "Fecha Inicio"
+FECHA_FIN = "Fecha Fin"
+
 ACCOUNT_TYPE_CHOICES = [
     ("", "— Seleccione —"),
     ("asset", "Activo"),
@@ -175,7 +180,7 @@ class FormularioNamingSeries(FlaskForm):
     prefix_template = StringField("Plantilla de Prefijo", validators=[DataRequired()])
     current_value = IntegerField("Ultimo Numero Interno Usado", default=0, validators=[InputRequired(), NumberRange(min=0)])
     increment = IntegerField("Incremento", default=1, validators=[InputRequired(), NumberRange(min=1)])
-    padding = IntegerField("Padding (digitos)", default=5, validators=[InputRequired(), NumberRange(min=1, max=20)])
+    padding = IntegerField(PADDING_DIGITOS, default=5, validators=[InputRequired(), NumberRange(min=1, max=20)])
     reset_policy = SelectField("Politica de Reinicio", choices=RESET_POLICY_CHOICES)
     is_active = BooleanField("Activa", default=True)
     is_default = BooleanField("Predeterminada para esta compania y documento")
@@ -184,7 +189,7 @@ class FormularioNamingSeries(FlaskForm):
 class FormularioMoneda(FlaskForm):
     """Formulario para crear y editar monedas."""
 
-    code = StringField("Código", validators=[DataRequired(), Length(max=10)])
+    code = StringField(CODIGO, validators=[DataRequired(), Length(max=10)])
     name = StringField("Nombre", validators=[DataRequired()])
     decimals = IntegerField("Decimales", default=2, validators=[Optional(), NumberRange(min=0, max=8)])
     active = BooleanField("Activo", default=True)
@@ -203,7 +208,7 @@ class FormularioTasaCambio(FlaskForm):
 class FormularioCuenta(FlaskForm):
     """Formulario para crear y editar cuentas contables."""
 
-    code = StringField("Código", validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
     grupo = BooleanField("Grupo", default=False)
@@ -246,8 +251,8 @@ class FormularioProyecto(FlaskForm):
     id = StringField("Codigo", validators=[DataRequired()])
     nombre = StringField("Nombre", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
-    inicio = DateField("Fecha Inicio", validators=[Optional()])
-    fin = DateField("Fecha Fin", validators=[Optional()])
+    inicio = DateField(FECHA_INICIO, validators=[Optional()])
+    fin = DateField(FECHA_FIN, validators=[Optional()])
     presupuesto = DecimalField("Presupuesto", places=2, validators=[Optional(), NumberRange(min=0)])
     habilitado = BooleanField("Habilitado", default=True)
     status = SelectField(
@@ -267,8 +272,8 @@ class FormularioFiscalYear(FlaskForm):
 
     id = StringField("Codigo", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
-    inicio = DateField("Fecha Inicio", validators=[DataRequired()])
-    fin = DateField("Fecha Fin", validators=[DataRequired()])
+    inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
+    fin = DateField(FECHA_FIN, validators=[DataRequired()])
     cerrado = BooleanField("Cerrado", default=False)
 
 
@@ -282,8 +287,8 @@ class FormularioAccountingPeriod(FlaskForm):
     status = StringField("Estado", validators=[DataRequired()])
     habilitado = BooleanField("Habilitado", default=True)
     cerrado = BooleanField("Cerrado", default=False)
-    inicio = DateField("Fecha Inicio", validators=[DataRequired()])
-    fin = DateField("Fecha Fin", validators=[DataRequired()])
+    inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
+    fin = DateField(FECHA_FIN, validators=[DataRequired()])
 
 
 class FormularioSecuencia(FlaskForm):
@@ -292,7 +297,7 @@ class FormularioSecuencia(FlaskForm):
     nombre = StringField("Nombre", validators=[DataRequired()])
     current_value = IntegerField("Valor Actual", default=0, validators=[NumberRange(min=0)])
     increment = IntegerField("Incremento", default=1, validators=[NumberRange(min=1)])
-    padding = IntegerField("Padding (digitos)", default=5, validators=[NumberRange(min=1, max=20)])
+    padding = IntegerField(PADDING_DIGITOS, default=5, validators=[NumberRange(min=1, max=20)])
     reset_policy = SelectField("Politica de Reinicio", choices=RESET_POLICY_CHOICES)
 
 
@@ -304,7 +309,7 @@ class FormularioExternalCounter(FlaskForm):
     counter_type = SelectField("Tipo", choices=EXTERNAL_COUNTER_TYPE_CHOICES)
     prefix = StringField("Prefijo", validators=[Optional()])
     last_used = IntegerField("Ultimo Numero Usado", default=0, validators=[NumberRange(min=0)])
-    padding = IntegerField("Padding (digitos)", default=5, validators=[NumberRange(min=1, max=20)])
+    padding = IntegerField(PADDING_DIGITOS, default=5, validators=[NumberRange(min=1, max=20)])
     is_active = BooleanField("Activo", default=True)
     description = TextAreaField("Descripcion", validators=[Optional()])
     naming_series_id = SelectField("Serie Interna Asociada (opcional)", validators=[Optional()])
@@ -325,8 +330,8 @@ class FormularioRecurringJournalTemplate(FlaskForm):
     ledger_id = SelectField("Libro", validators=[DataRequired()], validate_choice=False)
     name = StringField("Nombre de la Plantilla", validators=[DataRequired()])
     description = TextAreaField("Descripción", validators=[Optional()])
-    start_date = DateField("Fecha Inicio", validators=[DataRequired()])
-    end_date = DateField("Fecha Fin", validators=[DataRequired()])
+    start_date = DateField(FECHA_INICIO, validators=[DataRequired()])
+    end_date = DateField(FECHA_FIN, validators=[DataRequired()])
     frequency = SelectField(
         "Frecuencia",
         choices=[("monthly", "Mensual"), ("weekly", "Semanal"), ("daily", "Diario")],

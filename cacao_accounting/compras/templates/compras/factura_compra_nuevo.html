@@ -1,100 +1,82 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
 
 {%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html"></div>
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html">
+</div>
 {%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_factura_compra_lista') }}" class="link-dark">Facturas de Compra</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ document_type == 'purchase_credit_note' and 'Nueva Nota de Crédito' or document_type == 'purchase_debit_note' and 'Nueva Nota de Débito' or document_type == 'purchase_return' and 'Nueva Devolución' or 'Nueva Factura de Compra' }}</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_factura_compra_lista') }}"
+        class="link-dark">Facturas de Compra</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ (registro.document_no or registro.id) if edit else (document_type == 'purchase_credit_note' and 'Nueva Nota de Crédito' or document_type == 'purchase_debit_note' and 'Nueva Nota de Débito' or document_type == 'purchase_return' and 'Nueva Devolución' or 'Nueva Factura de Compra') }}
+    </li>
   </ol>
 </nav>
 
-<form method="post" id="form-main">
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {% if from_receipt_id %}<input type="hidden" name="from_receipt" value="{{ from_receipt_id }}">{% endif %}
-  {% if from_invoice_id %}
-    <input type="hidden" name="from_invoice" value="{{ from_invoice_id }}">
-  {% endif %}
+  {% if from_invoice_id %}<input type="hidden" name="from_invoice" value="{{ from_invoice_id }}">{% endif %}
   <input type="hidden" name="document_type" value="{{ document_type or 'purchase_invoice' }}">
-  {% if form.is_return.data %}
-    <input type="hidden" name="is_return" value="1">
-  {% endif %}
-  <div class="ca-card" style="max-width:860px;">
-    <div class="ca-card-header">
-      <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i>
-        {% if document_type == 'purchase_credit_note' %}
-          Nueva Nota de Crédito de Compra
-          {% if factura_origen %}<small class="text-muted ms-2">desde {{ factura_origen.document_no or factura_origen.id }}</small>{% endif %}
-        {% elif document_type == 'purchase_debit_note' %}
-          Nueva Nota de Débito de Compra
-          {% if factura_origen %}<small class="text-muted ms-2">desde {{ factura_origen.document_no or factura_origen.id }}</small>{% endif %}
-        {% elif document_type == 'purchase_return' %}
-          Nueva Devolución de Compra
-          {% if recepcion_origen %}<small class="text-muted ms-2">desde {{ recepcion_origen.document_no or recepcion_origen.id }}</small>{% endif %}
-        {% else %}
-          Nueva Factura de Compra
-          {% if orden_origen %}<small class="text-muted ms-2">desde {{ orden_origen.document_no or orden_origen.id }}</small>{% endif %}
-          {% if recepcion_origen %}<small class="text-muted ms-2">desde {{ recepcion_origen.document_no or recepcion_origen.id }}</small>{% endif %}
-        {% endif %}
-      </h5>
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-        <a href="{{ url_for('compras.compras_factura_compra_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
-      </div>
-    </div>
-    <div class="row g-3 p-3">
+  {% if form.is_return.data %}<input type="hidden" name="is_return" value="1">{% endif %}
+  {{ tf_macros.transaction_form_header(
+      edit and 'Editar Factura de Compra'
+      or document_type == 'purchase_credit_note' and 'Nota de Crédito de Compra'
+      or document_type == 'purchase_debit_note' and 'Nota de Débito de Compra'
+      or document_type == 'purchase_return' and 'Devolución de Compra'
+      or 'Factura de Compra',
+      cancel_url=url_for('compras.compras_factura_compra_lista')
+    ) }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
       <div class="col-md-6">
-        <div class="mb-3">
-          {{ form.supplier_id.label(class="form-label") }}
-          {{ form.supplier_id(class="form-select") }}
-        </div>
-        <div class="mb-3">
+        <label class="form-label" for="supplier_id">{{ _('Proveedor') }} <span class="text-danger">*</span></label>
+        {{ tf_macros.smart_select(
+            doctype="party",
+            name="supplier_id",
+            label=_("Proveedor"),
+            filters={"party_type": "supplier", "company": {"selector": "#company"}},
+        filter_sources=["#company"],
+        required_filters=["company"],
+        x_model="header.party",
+        on_select="function(opt){ header.party_label = opt.display_name; }"
+        ) }}
+        <div class="mt-3">
           {{ form.supplier_invoice_no.label(class="form-label") }}
           {{ form.supplier_invoice_no(class="form-control") }}
         </div>
       </div>
       <div class="col-md-6">
-        <div class="mb-3">
-          {{ form.company.label(class="form-label") }}
-          {{ form.company(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.naming_series.label(class="form-label") }}
-          {{ form.naming_series(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.posting_date.label(class="form-label") }}
-          {{ form.posting_date(class="form-control", type="date") }}
-        </div>
-        <div class="mb-3">
-          {{ form.remarks.label(class="form-label") }}
-          {{ form.remarks(class="form-control", rows=2) }}
-        </div>
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
       </div>
     </div>
   </div>
 
-  {% if from_return_id %}
-    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
-         source_api_url="/api/buying/purchase-invoice/" ~ from_return_id ~ "/items?target_type=purchase_invoice",
+  {% if from_invoice_id %}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id,
          source_label="Factura de Compra") }}
   {% elif from_receipt_id %}
-    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
-         source_api_url="/api/buying/purchase-receipt/" ~ from_receipt_id ~ "/items?target_type=purchase_invoice",
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id,
          source_label="Recepción de Compra") }}
   {% elif from_order_id %}
-    {{ macros.lineas_items(items_disponibles, uoms_disponibles,
-         source_api_url="/api/buying/purchase-order/" ~ from_order_id ~ "/items?target_type=purchase_invoice",
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id,
          source_label="Orden de Compra") }}
   {% else %}
-    {{ macros.lineas_items(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
   {% endif %}
 </form>
 

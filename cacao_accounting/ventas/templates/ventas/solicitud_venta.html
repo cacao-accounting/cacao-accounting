@@ -1,54 +1,65 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/solicitud_venta.html"></div>
-{%- endif -%}
-
+{% import "detail_view_macros.html" as dv_macros %}
+{% if TESTING %}<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/solicitud_venta.html">
+</div>{% endif %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_pedido_venta_lista') }}" class="link-dark">Pedidos de Venta</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-
-<div class="ca-card" style="max-width:960px;">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title">
-      <i class="bi bi-cart-plus"></i> {{ registro.document_no or registro.id }}
-      {{ macros.document_status_for("sales_request", registro, detail=True) }}
-    </h5>
-  </div>
-  <div class="row g-3 p-3">
-    <div class="col-md-6">
-      <table class="ca-table">
-        <caption class="visually-hidden">Datos generales del pedido</caption>
-        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
-        <tbody>
-          <tr><td style="color:#64748b;">Número de Documento</td><td>{{ registro.document_no or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Cliente</td><td>{{ registro.customer_name or registro.customer_id or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Compañía</td><td>{{ registro.company or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Fecha</td><td>{{ registro.posting_date or "" }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="col-md-6">
-      <table class="ca-table">
-        <caption class="visually-hidden">Montos y observaciones</caption>
-        <thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead>
-        <tbody>
-          <tr><td style="color:#64748b;">Total</td><td>{{ registro.grand_total or "" }}</td></tr>
-          <tr><td style="color:#64748b;">Observaciones</td><td>{{ registro.remarks or "" }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-{{ macros.lineas_tabla_lectura(items) }}
+{% set buttons %}
+{% if registro.docstatus == 0 %}
+<a class="btn btn-sm btn-outline-secondary"
+  href="{{ url_for('ventas.ventas_pedido_venta_editar', request_id=registro.id) }}">
+  <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
+</a>
+{% endif %}
+{% if registro.docstatus in [0, 1] %}
+<form method="post" action="{{ url_for('ventas.ventas_pedido_venta_duplicar', request_id=registro.id) }}"
+  class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-files me-1"></i>{{ _('Duplicar') }}
+  </button>
+</form>
+{% endif %}
+{{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('ventas.ventas_pedido_venta_submit', request_id=registro.id),
+            url_for('ventas.ventas_pedido_venta_cancel', request_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+{% if registro.docstatus == 1 %}
+{{ macros.crear_dropdown([
+              ("Cotización", url_for('ventas.ventas_cotizacion_nueva', from_request=registro.id))
+           ]) }}
+{% endif %}
+{{ macros.detail_nav_buttons(
+            url_for('ventas.ventas_pedido_venta_lista'),
+            url_for('ventas.ventas_pedido_venta_nuevo')) }}
+{% endset %}
+{% set currency_code = document_currency_code(registro) %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Pedido de Venta'),
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Cliente'), registro.customer_name),
+      (_('Fecha'), registro.posting_date),
+      (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
+      (_('Moneda'), currency_code),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-clipboard-check'
+) }}
+{{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_trace("sales_request", registro) }}
-
 {% endblock %}

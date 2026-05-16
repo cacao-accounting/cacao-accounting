@@ -1,37 +1,46 @@
-# PENDIENTE — Cacao Accounting (Backlog Priorizado)
+# PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
 ## Core y Posting
-- [ ] Resolver política formal de renumeración de `document_no` tras cambios en borradores.
+- [ ] Resolver politica formal de renumeracion de `document_no` tras cambios en borradores.
 - [ ] Implementar soporte completo para `GLEntryDimension` (dimensiones personalizadas) en posting.
 
 ## AR/AP y Terceros
 - [ ] Implementar modelo `PartyGroup` y su CRUD.
-- [ ] Completar edición/visualización por compañía para Cliente y Proveedor en nuevo patrón.
-- [ ] Gestión de múltiples direcciones y contactos para terceros.
-- [ ] Conciliación masiva de facturas contra pagos (interfaz dedicada).
-- [ ] Buckets configurables por compañía en reportes de Aging.
+- [ ] Completar edicion/visualizacion por compania para Cliente y Proveedor en nuevo patron.
+- [ ] Gestion de multiples direcciones y contactos para terceros.
+- [ ] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
+- [ ] Buckets configurables por compania en reportes de Aging.
 
-## Inventario y Valoración
-- [ ] Implementar "Stock Reconciliation" para ajuste de valuación (actualmente solo cantidad).
+## Inventario y Valoracion
+- [ ] Implementar "Stock Reconciliation" para ajuste de valuacion (actualmente solo cantidad).
 - [ ] Prorrateo de cargos capitalizables (fletes/seguros) en `StockValuationLayer`.
 
-## Administración y Seguridad
-- [ ] Matriz explícita de autorización Usuario ↔ Compañía/Libro.
-- [ ] Implementar Workflow de aprobación configurable (estados y transiciones).
-- [ ] Activar `AuditLog` automático para cambios en documentos operativos.
+## Administracion y Seguridad
+- [ ] Matriz explicita de autorizacion Usuario-Compania/Libro.
+- [ ] Implementar Workflow de aprobacion configurable (estados y transiciones).
+- [ ] Activar `AuditLog` automatico para cambios en documentos operativos.
 
-## Multi-Ledger y Revalorización
-- [ ] Implementar `LedgerMappingRule` para diferencias automáticas entre libros.
-- [ ] Implementar proceso de `ExchangeRevaluation` (revalorización cambiaria de cuentas monetarias).
-- [ ] UI para gestión de `DimensionType` y `DimensionValue`.
+## Multi-Ledger y Revalorizacion
+- [ ] Implementar `LedgerMappingRule` para diferencias automaticas entre libros.
+- [ ] Implementar proceso de `ExchangeRevaluation` (revalorizacion cambiaria de cuentas monetarias).
+- [ ] UI para gestion de `DimensionType` y `DimensionValue`.
 
 ## UI/UX y Reportes
-- [ ] Filtros de búsqueda en listados de Compras, Ventas y Bancos.
-- [ ] Migrar formularios operativos restantes al Smart Select Framework.
-- [ ] Implementar árbol gráfico de trazabilidad (Diagrama de Flujo).
+- [ ] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
+- [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
+- [ ] Filtros de busqueda en listados de Compras, Ventas y Bancos.
+- [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
+- [ ] Ampliar pruebas de interfaz para nuevos formularios bancarios (`pago_nuevo`, `nota_nueva`, `transferencia_nueva`) incluyendo escenarios multimoneda y contador externo.
+- [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).
 - [ ] Drill-down universal en el 100% de los reportes operativos.
-- [ ] Exportación consistente a Excel con formato financiero en todos los reportes.
+- [ ] Exportacion consistente a Excel con formato financiero en todos los reportes.
 
-## Nota de Integración (2026-05-14)
-- [x] Integración selectiva desde `ia/main` completada: base documental de `1965ac44a352de5af34d604b81400a2bc8aed74a` y endpoints/prueba de salud desde `bef4029e25000512539a27164f8915cf3b4b2acc`.
-- [ ] Verificar en CI la integración selectiva completa sobre `main`.
+## Pendientes Generales
+- [ ] Implementar mas reportes operativos usando el nuevo framework.
+- [ ] Seguir migrando formularios operativos al patron comun sin tocar todavia pagos bancarios ni documentos con origen complejo sin cobertura funcional suficiente.
+- [ ] Ampliar catalogos impositivos para otros paises.
+- [ ] Webhooks para integracion con sistemas externos.
+- [ ] Ampliar cobertura de pruebas Playwright en el nuevo flujo estandarizado.
+- [ ] Mejorar la estabilidad de los tests E2E en entornos de CI/Sandbox con latencia de red.
+- [ ] Continuar la estandarizacion de reportes HTML siguiendo el patron de `financial_report.html`.
+- [ ] Extender el uso de `smart-select` a dimensiones personalizadas si se requiere en el futuro.

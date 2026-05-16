@@ -21,6 +21,14 @@ JOURNAL_DEFAULT_COLUMNS: list[dict[str, Any]] = [
     {"field": "debit", "label": "Debe", "width": 2, "visible": True, "required": True},
     {"field": "credit", "label": "Haber", "width": 2, "visible": True, "required": True},
 ]
+TRANSACTION_DEFAULT_COLUMNS: list[dict[str, Any]] = [
+    {"field": "item_code", "label": "Código", "width": 2, "visible": True, "required": True},
+    {"field": "item_name", "label": "Descripción", "width": 3, "visible": True, "required": False},
+    {"field": "qty", "label": "Cantidad", "width": 1, "visible": True, "required": True},
+    {"field": "uom", "label": "UM", "width": 1, "visible": True, "required": True},
+    {"field": "rate", "label": "Precio", "width": 1, "visible": True, "required": True},
+    {"field": "amount", "label": "Importe", "width": 1, "visible": True, "required": False},
+]
 
 
 def default_form_preference(form_key: str, view_key: str = DEFAULT_VIEW_KEY) -> dict[str, Any]:
@@ -32,11 +40,13 @@ def default_form_preference(form_key: str, view_key: str = DEFAULT_VIEW_KEY) -> 
             "schema_version": DEFAULT_SCHEMA_VERSION,
             "columns": JOURNAL_DEFAULT_COLUMNS,
         }
+    # Para cualquier otro formulario de transaccion (compras, ventas, inventario)
+    # devolvemos el set de columnas estandar de items.
     return {
         "form_key": form_key,
         "view_key": view_key,
         "schema_version": DEFAULT_SCHEMA_VERSION,
-        "columns": [],
+        "columns": TRANSACTION_DEFAULT_COLUMNS,
     }
 
 
@@ -142,3 +152,9 @@ def _normalize_width(value: Any) -> int:
     except (TypeError, ValueError):
         width = 1
     return min(max(width, 1), 4)
+
+
+def get_column_preferences(user_id: str | None, form_key: str, view_key: str = DEFAULT_VIEW_KEY) -> list[dict[str, Any]]:
+    """Obtiene solo la lista de columnas de la preferencia del usuario."""
+    pref = get_form_preference(user_id, form_key, view_key)  # type: ignore[arg-type]
+    return pref.get("columns") or []

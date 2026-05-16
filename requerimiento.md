@@ -1,259 +1,641 @@
-Requerimiento — Nuevo reporte: Resumen de Movimiento por Cuenta
-1. Objetivo
+Requerimiento Formal de Desarrollo
 
-Implementar un nuevo reporte financiero llamado:
+Migración UX del módulo de Bancos utilizando el patrón de Comprobante Contable
 
-Resumen de Movimiento por Cuenta
+Objetivo
 
-El reporte debe funcionar como una sábana contable plana, similar a una Balanza de Comprobación, pero orientada al análisis flexible de movimientos por cuenta.
+Rediseñar y migrar los formularios y vistas del módulo de Bancos para utilizar el mismo patrón visual, estructura de interacción y experiencia de usuario implementada en:
 
-Debe permitir al usuario:
+cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html
 
-Ver saldos resumidos por cuenta contable.
-Agregar o quitar columnas dinámicamente.
-Guardar múltiples layouts personalizados.
-Descargar el reporte en Excel/CSV.
-Reutilizar los mismos filtros del Detalle de Movimiento Contable.
-Modelar distintas vistas del mismo reporte sin crear reportes separados.
-2. Concepto funcional
+cacao_accounting/contabilidad/templates/contabilidad/journal.html
 
-El reporte resume los movimientos contables agrupados por cuenta.
 
-Cada fila representa una cuenta contable.
+La implementación debe priorizar simplicidad, mantenibilidad y consistencia visual, evitando macros complejas, lógica duplicada y sobre ingeniería.
 
-Por defecto debe mostrar:
 
-Código de Cuenta	Nombre de Cuenta	Saldo Inicial	Débitos	Créditos	Saldo Final
+---
 
-Regla de saldos:
+Alcance
 
-Saldo positivo = saldo deudor
-Saldo negativo = saldo acreedor
+El alcance incluye:
 
-Esto aplica tanto para:
+1. Formularios de creación y edición.
 
-Saldo inicial
-Saldo final
-3. Relación con reportes existentes
 
-Este reporte debe compartir base lógica con:
+2. Vistas de detalle.
 
-Detalle de Movimiento Contable
-Balanza de Comprobación
-Framework centralizado de reportes financieros
 
-No debe implementarse como cálculo aislado.
+3. Flujo de captura de transacciones bancarias.
 
-Debe usar la misma fuente contable, filtros y reglas de cálculo del motor financiero común.
 
-4. Filtros
+4. Validaciones UX básicas.
 
-Debe compartir básicamente los mismos filtros del Detalle de Movimiento Contable.
 
-Filtros mínimos:
+5. Integración con Smart Select.
+
+
+6. Adaptación visual y estructural al patrón del comprobante contable.
+
+
+
+No incluye:
+
+Reescritura del motor contable.
+
+Automatización avanzada de conciliación.
+
+Procesos batch.
+
+Integraciones bancarias.
+
+Workflow de aprobación.
+
+
+
+---
+
+Objetivos Funcionales
+
+El módulo de Bancos deberá soportar cuatro transacciones principales:
+
+1. Pago
+
+
+2. Nota de Débito
+
+
+3. Nota de Crédito
+
+
+4. Transferencia entre cuentas
+
+
+
+Todas las transacciones deben compartir una experiencia de usuario uniforme.
+
+
+---
+
+Lineamientos Generales de UX
+
+Patrón de referencia
+
+La interfaz debe reutilizar el mismo patrón UX/UI del comprobante contable:
+
+Header superior de captura.
+
+Formulario dividido por bloques funcionales.
+
+Tabla dinámica de detalle.
+
+Inputs alineados horizontalmente.
+
+Navegación rápida por teclado.
+
+Smart Select para relaciones dependientes.
+
+Minimizar navegación entre pantallas.
+
+Flujo centrado en captura rápida operativa.
+
+
+
+---
+
+Requerimientos Globales
+
+Selección inicial obligatoria
+
+Toda transacción debe iniciar con:
+
+1. Selección de compañía.
+
+
+2. Selección de serie o secuencia.
+
+
+
+Estos campos gobiernan el resto del formulario.
+
+
+---
+
+Moneda automática
+
+La moneda:
+
+Debe obtenerse automáticamente desde la cuenta bancaria seleccionada.
+
+Debe mostrarse en pantalla en modo lectura.
+
+No debe ser editable manualmente.
+
+
+
+---
+
+Smart Select
+
+Debe utilizarse Smart Select en:
+
+Cuenta bancaria.
+
+Serie/secuencia.
+
+Cliente.
+
+Proveedor.
+
+Cuenta origen.
+
+Cuenta destino.
+
+
+La selección dependiente debe filtrar registros según:
+
+Compañía seleccionada.
+
+Tipo de transacción.
+
+Tipo de tercero.
+
+Moneda cuando aplique.
+
+
+
+---
+
+Requerimientos por Transacción
+
+
+---
+
+1. Pago
+
+Objetivo
+
+Registrar pagos entrantes o salientes asociados a clientes, proveedores o transferencias operativas.
+
+
+---
+
+Campos requeridos
+
+Encabezado
 
 Compañía
-Libro contable
-Período contable
-Rango de fechas
-Cuenta contable
-Rango de cuentas
-Centro de costos
-Unidad de negocio
-Proyecto
-Tipo de tercero
+
+Serie o secuencia
+
+Cuenta bancaria
+
+Fecha de transacción
+
+Tipo de pago:
+
+Pago entrante
+
+Pago saliente
+
+
+Forma de pago:
+
+Cheque
+
+Transferencia
+
+
+
+
+---
+
+Manejo de chequera
+
+Reglas
+
+Si:
+
+El pago es saliente
+
+La forma de pago es cheque
+
+La cuenta bancaria tiene chequera asociada
+
+
+Entonces:
+
+El sistema debe proponer automáticamente el próximo número de cheque disponible.
+
+
+
+---
+
+UX requerida
+
+El usuario:
+
+Debe poder visualizar claramente el número propuesto.
+
+Debe poder confirmar que coincide con la secuencia física de la chequera antes de grabar.
+
+
+
+---
+
+Restricciones
+
+Pagos por transferencia:
+
+No afectan la secuencia de chequera.
+
+No deben consumir números de cheque.
+
+
+
+---
+
+Información del tercero
+
+Campos requeridos
+
+Tipo de tercero:
+
+Cliente
+
+Proveedor
+
+
 Tercero
-Tipo de comprobante
-Estado
-Moneda
-ID visible del comprobante
-5. Columnas por defecto
 
-El layout inicial debe incluir:
 
-Campo	Descripción
-Código de Cuenta	Código contable de la cuenta
-Nombre de Cuenta	Nombre descriptivo de la cuenta
-Saldo Inicial	Saldo anterior al período filtrado
-Débitos	Débitos dentro del período filtrado
-Créditos	Créditos dentro del período filtrado
-Saldo Final	Saldo inicial + débitos - créditos
-6. Columnas dinámicas
 
-El usuario debe poder agregar o quitar columnas desde un selector de columnas.
+---
 
-Columnas sugeridas:
+Monto
 
-Código de cuenta
-Nombre de cuenta
-Nivel de cuenta
-Tipo de cuenta
-Sección contable
-Moneda
-Compañía
-Libro contable
-Saldo inicial
-Débitos
-Créditos
-Saldo final
-Cantidad de movimientos
-Primer movimiento
-Último movimiento
-Centro de costos
-Unidad de negocio
-Proyecto
-Tercero
-Tipo de tercero
-Tipo de comprobante
-7. Layouts guardados
+El monto:
 
-El usuario debe poder guardar múltiples layouts del reporte.
+Debe ingresarse en la moneda de la cuenta bancaria seleccionada.
 
-Cada layout debe conservar:
+Debe validar precisión decimal según la moneda.
 
-Nombre del layout
-Columnas visibles
-Orden de columnas
-Ancho de columnas
-Ordenamiento aplicado
-Filtros guardados, si el usuario decide incluirlos
-Agrupaciones, si existen
-Formato numérico
-Idioma de etiquetas del layout
 
-Ejemplos:
 
-Default
-Resumen por Cuenta
-Resumen por Cuenta y Centro de Costos
-Resumen por Cuenta y Proyecto
-Resumen por Cuenta y Tercero
-Auditoría por Libro Contable
-8. Internacionalización de layouts
+---
 
-Los layouts definidos por el usuario deben poder descargarse o visualizarse fácilmente en inglés.
+Asociación de pagos
 
-Ejemplo:
+Debe existir una tabla de asociación entre pagos y documentos.
 
-Código de Cuenta → Account Code
-Nombre de Cuenta → Account Name
-Saldo Inicial → Opening Balance
-Débitos → Debits
-Créditos → Credits
-Saldo Final → Ending Balance
 
-La traducción debe aplicarse a:
+---
 
-Encabezados de columnas
-Nombre de campos estándar
-Totales
-Subtotales
-Etiquetas del reporte
+Reglas funcionales
 
-No se deben traducir valores propios del usuario, como nombres de cuentas o nombres de centros de costo.
+Un pago puede:
 
-9. Exportación
+Aplicarse a uno o varios documentos individuales.
 
-El reporte debe permitir exportar:
+Quedar parcialmente aplicado.
 
-Excel
-CSV
+Quedar completamente sin aplicar.
 
-La exportación debe respetar:
+Registrarse como anticipo o transferencia.
 
-Layout seleccionado
-Columnas visibles
-Orden de columnas
-Filtros aplicados
-Idioma seleccionado
-Formato numérico
 
-Excel debe ser el formato principal para análisis externo.
 
-10. Navegación
+---
 
-Cada fila debe permitir navegación hacia el Detalle de Movimiento Contable.
+Tabla de asociación requerida
 
-Al hacer clic en una cuenta, el sistema debe abrir:
+La tabla debe permitir:
 
-/reports/account-movement
+Seleccionar documentos pendientes.
 
-con filtros preaplicados:
+Visualizar:
+
+referencia
+
+fecha
+
+saldo pendiente
+
+moneda
+
+monto aplicado
+
+
+Aplicar montos parciales.
+
+
+
+---
+
+2. Nota de Débito
+
+Objetivo
+
+Registrar disminuciones del saldo bancario.
+
+
+---
+
+Campos requeridos
 
 Compañía
-Libro contable
-Período o rango de fechas
+
+Serie o secuencia
+
+Cuenta bancaria
+
+Fecha
+
 Cuenta contable
-Estado
+
+Descripción
+
+Monto
+
+
+
+---
+
+Reglas
+
+Solo requiere seleccionar una cuenta contable.
+
+El monto debe ingresarse en la moneda de la cuenta bancaria.
+
+La operación disminuye el saldo de la cuenta bancaria.
+
+
+
+---
+
+3. Nota de Crédito
+
+Objetivo
+
+Registrar incrementos del saldo bancario.
+
+
+---
+
+Campos requeridos
+
+Compañía
+
+Serie o secuencia
+
+Cuenta bancaria
+
+Fecha
+
+Cuenta contable
+
+Descripción
+
+Monto
+
+
+
+---
+
+Reglas
+
+Solo requiere seleccionar una cuenta contable.
+
+El monto debe ingresarse en la moneda de la cuenta bancaria.
+
+La operación aumenta el saldo de la cuenta bancaria.
+
+
+
+---
+
+4. Transferencia entre cuentas
+
+Objetivo
+
+Registrar movimientos entre cuentas bancarias propias.
+
+
+---
+
+Campos requeridos
+
+Compañía
+
+Serie o secuencia
+
+Cuenta origen
+
+Cuenta destino
+
+Fecha de posteo
+
+Monto origen
+
+Descripción
+
+
+
+---
+
+Reglas de moneda
+
+Las cuentas:
+
+Pueden tener monedas distintas.
+
+El monto ingresado corresponde a la moneda de la cuenta origen.
+
+
+
+---
+
+Conversión monetaria
+
+La conversión:
+
+Debe manejarse exclusivamente en backend.
+
+Debe utilizar el tipo de cambio vigente para la fecha de posteo.
+
+
+
+---
+
+Validación obligatoria
+
+Si no existe tipo de cambio para la fecha:
+
+El sistema debe impedir el posteo.
+
+Debe mostrarse advertencia clara al usuario.
+
+
+
+---
+
+Requerimientos de Backend
+
+
+---
+
+Contabilización
+
+Todas las transacciones:
+
+Deben generar comprobante contable automáticamente.
+
+Deben mantener trazabilidad hacia el origen bancario.
+
+
+
+---
+
+Atomicidad
+
+Las operaciones:
+
+Deben ejecutarse dentro de transacciones de base de datos.
+
+No deben permitir estados parciales.
+
+
+
+---
+
+Validaciones mínimas
+
+Generales
+
+Cuenta bancaria activa.
+
+Serie activa.
+
+Fecha válida.
+
+Monto mayor que cero.
+
+
+
+---
+
+Pagos
+
+Validar disponibilidad de chequera.
+
+Validar correlativo de cheque.
+
+Validar saldo pendiente de documentos aplicados.
+
+
+
+---
+
+Transferencias
+
+Validar cuenta origen distinta de cuenta destino.
+
+Validar tipo de cambio existente.
+
+
+
+---
+
+Requerimientos de Vistas
+
+Vista de listado
+
+Todas las transacciones deben utilizar una vista homogénea con:
+
+Fecha
+
+Número
+
+Tipo
+
+Cuenta bancaria
+
 Moneda
-Dimensiones seleccionadas
-11. Diferencia con Balanza de Comprobación
 
-La Balanza de Comprobación debe orientarse a presentación contable tradicional.
+Monto
 
-El Resumen de Movimiento por Cuenta debe orientarse a análisis flexible.
+Estado
 
-Balanza de Comprobación = reporte financiero tradicional
-Resumen de Movimiento por Cuenta = sábana analítica configurable
-12. Criterios de aceptación
-CA-001 — Reporte disponible
+Usuario creador
 
-Debe existir un nuevo reporte llamado Resumen de Movimiento por Cuenta.
 
-CA-002 — Tabla plana
 
-El reporte debe mostrarse como tabla plana, no como árbol jerárquico.
+---
 
-CA-003 — Columnas por defecto
+Vista detalle
 
-Debe mostrar por defecto:
+Debe mostrar:
 
-Código de Cuenta
-Nombre de Cuenta
-Saldo Inicial
-Débitos
-Créditos
-Saldo Final
-CA-004 — Regla de signo
+Encabezado completo.
 
-Los saldos deben mostrarse así:
+Información contable asociada.
 
-positivo = deudor
-negativo = acreedor
-CA-005 — Filtros compartidos
+Asociación de documentos.
 
-Debe compartir los filtros principales del Detalle de Movimiento Contable.
+Historial básico.
 
-CA-006 — Columnas configurables
+Totales y moneda.
 
-El usuario debe poder agregar, quitar y reordenar columnas.
 
-CA-007 — Layouts múltiples
 
-El usuario debe poder guardar múltiples layouts del reporte.
+---
 
-CA-008 — Exportación según layout
+Requerimientos Técnicos
 
-Excel y CSV deben exportar exactamente las columnas visibles del layout seleccionado.
+Arquitectura
 
-CA-009 — Traducción a inglés
+La implementación debe:
 
-Los layouts deben poder visualizarse o descargarse en inglés sin modificar la definición original del usuario.
+Reutilizar componentes existentes del módulo contable.
 
-CA-010 — Navegación a movimientos
+Reutilizar estilos y estructura HTML del journal.
 
-Al hacer clic en una cuenta, debe abrirse el Detalle de Movimiento Contable filtrado por esa cuenta.
+Evitar duplicación innecesaria.
 
-13. Resultado esperado
 
-El nuevo reporte debe permitir crear una sábana financiera flexible, exportable y reutilizable, sin duplicar lógica contable.
 
-La idea central:
+---
 
-Un solo motor financiero.
-Un reporte plano configurable.
-Muchos layouts útiles listos para exportar a excel
+Restricciones explícitas
 
-Un solo motor financiero.
-Un reporte plano configurable.
-Muchos layouts útiles.
+No utilizar:
+
+Macros complejas.
+
+Formularios excesivamente dinámicos.
+
+JavaScript pesado.
+
+Componentes SPA.
+
+Dependencias frontend adicionales innecesarias.
+
+
+
+---
+
+Objetivo Final de UX
+
+El usuario debe percibir el módulo de Bancos como:
+
+Consistente con Contabilidad.
+
+Operativamente rápido.
+
+Claro para digitación masiva.
+
+Fácil de mantener.
+
+Predecible.
+
+Sin fricción visual ni funcional.

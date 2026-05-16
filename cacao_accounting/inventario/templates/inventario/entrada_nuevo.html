@@ -1,62 +1,57 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-
-{%- if TESTING -%}
-<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada_nuevo.html"></div>
-{%- endif -%}
-
+{% import "transaction_form_macros.html" as tf_macros %}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada_nuevo.html">
+</div>
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_entrada_lista') }}" class="link-dark">Entradas de Almacén</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nueva Entrada de Almacén</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}"
+        class="link-dark">{{ _('Inventarios') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ (registro.document_no or registro.id) if edit else _('Nuevo Movimiento') }}</li>
   </ol>
 </nav>
-
-<form method="post" id="form-main">
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
   {{ form.csrf_token }}
-  <div class="ca-card" style="max-width:860px;">
-    <div class="ca-card-header">
-      <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i> Nueva Entrada de Almacén</h5>
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-        <a href="{{ url_for('inventario.inventario_entrada_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+  {{ tf_macros.transaction_form_header("Editar Movimiento de Inventario" if edit else "Movimiento de Inventario") }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="mb-3">
+          <label class="form-label" for="purpose">{{ _('Propósito') }}</label>
+          {{ form.purpose(class="form-select") }}
+        </div>
       </div>
-    </div>
-    <div class="p-3">
-      <div class="mb-3">
-        {{ form.purpose.label(class="form-label") }}
-        {{ form.purpose(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.company.label(class="form-label") }}
-        {{ form.company(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.naming_series.label(class="form-label") }}
-        {{ form.naming_series(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.posting_date.label(class="form-label") }}
-        {{ form.posting_date(class="form-control", type="date") }}
-      </div>
-      <div class="mb-3">
-        {{ form.from_warehouse.label(class="form-label") }}
-        {{ form.from_warehouse(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.to_warehouse.label(class="form-label") }}
-        {{ form.to_warehouse(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.remarks.label(class="form-label") }}
-        {{ form.remarks(class="form-control", rows=3) }}
+      <div class="col-md-6">
+        <div class="mb-3">
+          <label class="form-label" for="from_warehouse">{{ _('Bodega Origen') }}</label>
+          {{ tf_macros.smart_select(
+              doctype="warehouse",
+              name="from_warehouse",
+              label=_("Bodega Origen"),
+              filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          x_model="header.from_warehouse"
+          ) }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="to_warehouse">{{ _('Bodega Destino') }}</label>
+          {{ tf_macros.smart_select(
+              doctype="warehouse",
+              name="to_warehouse",
+              label=_("Bodega Destino"),
+              filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          x_model="header.to_warehouse"
+          ) }}
+        </div>
       </div>
     </div>
   </div>
-  {{ macros.lineas_items(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
 </form>
-
 {% endblock %}

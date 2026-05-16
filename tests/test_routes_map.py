@@ -99,9 +99,7 @@ def test_all_static_get_routes_render_without_server_errors(app_ctx: Flask, clie
         response = client.get(route, follow_redirects=False)
         if route.startswith("/api/") and response.status_code == 404:
             continue
-        assert response.status_code in ALLOWED_STATUS_CODES, (
-            f"Ruta {route} devolvió estado inesperado {response.status_code}"
-        )
+        assert response.status_code in ALLOWED_STATUS_CODES, f"Ruta {route} devolvió estado inesperado {response.status_code}"
         assert response.status_code != 404, f"Ruta {route} devolvió 404"
         assert response.status_code < 500, f"Ruta {route} devolvió error de servidor {response.status_code}"
 

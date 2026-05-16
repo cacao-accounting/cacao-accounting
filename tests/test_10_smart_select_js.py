@@ -6,7 +6,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-
 SMART_SELECT_FILE = Path(__file__).resolve().parents[1] / "cacao_accounting" / "static" / "js" / "smart-select.js"
 
 
@@ -81,7 +80,6 @@ listeners['alpine:init']();
 }});
 """
     _run_node_script(script)
-
 
 
 def test_smart_select_preload_auto_selects_default_without_losing_options() -> None:

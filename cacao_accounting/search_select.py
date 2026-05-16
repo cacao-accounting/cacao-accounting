@@ -24,6 +24,7 @@ from cacao_accounting.database import (
     Entity,
     ExternalCounter,
     Item,
+    ItemUOMConversion,
     NamingSeries,
     Party,
     Project,
@@ -177,7 +178,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="code",
         label_builder=_uom_label,
-        allowed_filters={"is_active": "is_active"},
+        allowed_filters={"code": "code", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "account": SearchSelectSpec(
@@ -285,7 +286,12 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "description"),
         value_field="code",
         label_builder=_item_label,
-        allowed_filters={"is_active": "is_active", "item_type": "item_type", "is_stock_item": "is_stock_item"},
+        allowed_filters={
+            "company": "company",
+            "is_active": "is_active",
+            "item_type": "item_type",
+            "is_stock_item": "is_stock_item",
+        },
         default_filters={"is_active": True},
     ),
     "warehouse": SearchSelectSpec(
@@ -484,6 +490,10 @@ def _apply_request_filters(
         clean_values = [value for value in values if value != ""]
         if not clean_values:
             continue
+        if spec.model is Item and filter_name == "company":
+            # Item is global master data today; keep the company filter mandatory at the API boundary
+            # so callers cannot accidentally query the global catalog without company context.
+            continue
         if spec.model is Party and filter_name == "company":
             statement = statement.where(CompanyParty.company.in_(clean_values))
             continue
@@ -557,7 +567,27 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "account_no",
         "entity_type",
         "is_default",
+        "default_uom",
     ):
         if hasattr(row, field):
             payload[field] = getattr(row, field)
+    if isinstance(row, Item):
+        payload["allowed_uoms"] = _allowed_uoms_for_item(row)
     return payload
+
+
+def _allowed_uoms_for_item(item: Item) -> list[str]:
+    values = [item.default_uom] if item.default_uom else []
+    conversions = database.session.execute(
+        select(ItemUOMConversion.from_uom, ItemUOMConversion.to_uom).filter_by(item_code=item.code)
+    ).all()
+    for from_uom, to_uom in conversions:
+        values.extend([from_uom, to_uom])
+    seen: set[str] = set()
+    allowed_uoms: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        allowed_uoms.append(value)
+    return allowed_uoms

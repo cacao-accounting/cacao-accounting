@@ -7,11 +7,13 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired
 
+CODIGO = "Código"
+
 
 class FormularioArticulo(FlaskForm):
     """Formulario para crear o editar un artículo."""
 
-    code = StringField("Código", validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
     description = TextAreaField("Descripción")
     item_type = SelectField("Tipo", choices=[("goods", "Bien"), ("service", "Servicio")])
@@ -22,14 +24,14 @@ class FormularioArticulo(FlaskForm):
 class FormularioUOM(FlaskForm):
     """Formulario para crear o editar una unidad de medida."""
 
-    code = StringField("Código", validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
 
 
 class FormularioBodega(FlaskForm):
     """Formulario para crear o editar una bodega."""
 
-    code = StringField("Código", validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
     company = SelectField("Compañía", choices=[])
 
