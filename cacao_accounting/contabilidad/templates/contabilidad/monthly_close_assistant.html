@@ -224,6 +224,21 @@
   </div>
 </section>
 
+<section class="ca-card mb-3">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0">{{ _('Paso 2: revalorizaciÃ³n cambiaria') }}</h5>
+    <form action="{{ url_for('contabilidad.ejecutar_revalorizacion_cierre', identifier=close_run.id) }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-currency-exchange"></i> {{ _('Ejecutar paso') }}
+      </button>
+    </form>
+  </div>
+  <div class="p-3 text-muted">
+    {{ _('Ejecuta la revalorizaciÃ³n cambiaria del periodo usando las tasas de cierre y las partidas monetarias abiertas.') }}
+  </div>
+</section>
+
 <section class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title mb-0">{{ _('Historial de pasos') }}</h5>

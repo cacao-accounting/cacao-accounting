@@ -162,6 +162,7 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
     if entity_types is None:
         entity_types = [
             "journal_entry",
+            "exchange_revaluation",
             "sales_invoice",
             "purchase_invoice",
             "payment_entry",
@@ -195,6 +196,7 @@ def _default_entity_code(entity_type: str) -> str:
         "sales_invoice": "SI",
         "sales_quotation": "SQ",
         "payment_entry": "PAY",
+        "exchange_revaluation": "EXR",
         "stock_entry": "STE",
     }
     return map_codes.get(entity_type, entity_type[:3].upper())

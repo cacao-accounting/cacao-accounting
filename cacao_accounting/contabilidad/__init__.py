@@ -73,6 +73,8 @@ CONTABILIDAD_EDITAR_COMPROBANTE = "contabilidad.editar_comprobante"
 CONTABILIDAD_NAMING_SERIES_LIST = "contabilidad.naming_series_list"
 CONTABILIDAD_EXTERNAL_COUNTER_LIST = "contabilidad.external_counter_list"
 CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST = "contabilidad.fiscal_year_closing_list"
+CONTABILIDAD_REVALORIZACION_LIST = "contabilidad.revalorizaciones_cambiarias"
+CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -1747,6 +1749,193 @@ def aplicar_recurrentes_cierre(identifier: str):
             flash(err, "danger")
 
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+
+@contabilidad.route("/period-close/monthly/<identifier>/exchange-revaluation", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ejecutar_revalorizacion_cierre(identifier: str):
+    """Ejecuta revalorizacion cambiaria desde el asistente de cierre mensual."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import (
+        ExchangeRevaluationError,
+        ExchangeRevaluationService,
+    )
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, PeriodCloseRun
+
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash("Cierre mensual no encontrado.", "danger")
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
+
+    period = database.session.get(AccountingPeriod, close_run.period_id)
+    if not period:
+        flash("Periodo no encontrado.", "danger")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    try:
+        run = ExchangeRevaluationService().run(
+            company=close_run.company,
+            year=period.end.year,
+            month=period.end.month,
+            user_id=str(current_user.id),
+        )
+    except ExchangeRevaluationError as exc:
+        database.session.rollback()
+        database.session.add(
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="exchange_revaluation",
+                check_status="failed",
+                message=str(exc),
+            )
+        )
+        database.session.commit()
+        flash(str(exc), "danger")
+    else:
+        close_run.run_status = "in_progress"
+        database.session.add(
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="exchange_revaluation",
+                check_status="passed",
+                message=f"Revalorizacion {run.document_no or run.id}: {run.status}.",
+            )
+        )
+        database.session.commit()
+        flash("La revalorizacion fue ejecutada correctamente.", "success")
+        if run.status == "completed_no_changes":
+            flash("No se generaron diferencias cambiarias.", "info")
+
+    return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+
+@contabilidad.route("/exchange-revaluation")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def revalorizaciones_cambiarias():
+    """Listado de revalorizaciones cambiarias."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import Entity
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    runs = ExchangeRevaluationService().list_runs()
+    return render_template(
+        "contabilidad/exchange_revaluation_lista.html",
+        titulo="Revalorizacion cambiaria - " + APPNAME,
+        runs=runs,
+        companies=companies,
+    )
+
+
+@contabilidad.route("/exchange-revaluation/new", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def nueva_revalorizacion_cambiaria():
+    """Formulario minimo para ejecutar una revalorizacion cambiaria."""
+    from datetime import date
+
+    from cacao_accounting.contabilidad.exchange_revaluation_service import (
+        ExchangeRevaluationError,
+        ExchangeRevaluationService,
+    )
+    from cacao_accounting.database import Entity
+
+    if request.method == "POST":
+        company = request.form.get("company") or ""
+        year = request.form.get("year", type=int) or date.today().year
+        month = request.form.get("month", type=int) or date.today().month
+        try:
+            run = ExchangeRevaluationService().run(company=company, year=year, month=month, user_id=str(current_user.id))
+        except ExchangeRevaluationError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+        else:
+            flash("La revalorizacion fue ejecutada correctamente.", "success")
+            if run.status == "completed_no_changes":
+                flash("No se generaron diferencias cambiarias.", "info")
+            return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    return render_template(
+        "contabilidad/exchange_revaluation_nueva.html",
+        titulo="Nueva revalorizacion cambiaria - " + APPNAME,
+        companies=companies,
+    )
+
+
+@contabilidad.route("/exchange-revaluation/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_revalorizacion_cambiaria(identifier: str):
+    """Detalle solo lectura de una revalorizacion cambiaria."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import Accounts, Book, ExchangeRevaluation
+
+    run = database.session.get(ExchangeRevaluation, identifier)
+    if not run:
+        flash("Revalorizacion no encontrada.", "warning")
+        return redirect(url_for(CONTABILIDAD_REVALORIZACION_LIST))
+
+    service = ExchangeRevaluationService()
+    lines = service.list_lines(run.id)
+    account_ids = {line.account_id for line in lines if line.account_id}
+    ledger_ids = {line.ledger_id for line in lines if line.ledger_id}
+    accounts = (
+        {
+            account.id: account
+            for account in database.session.execute(database.select(Accounts).where(Accounts.id.in_(account_ids)))
+            .scalars()
+            .all()
+        }
+        if account_ids
+        else {}
+    )
+    ledgers = (
+        {
+            ledger.id: ledger
+            for ledger in database.session.execute(database.select(Book).where(Book.id.in_(ledger_ids))).scalars().all()
+        }
+        if ledger_ids
+        else {}
+    )
+    return render_template(
+        "contabilidad/exchange_revaluation.html",
+        titulo="Revalorizacion cambiaria - " + APPNAME,
+        run=run,
+        lines=lines,
+        accounts=accounts,
+        ledgers=ledgers,
+    )
+
+
+@contabilidad.route("/exchange-revaluation/<identifier>/void", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def anular_revalorizacion_cambiaria(identifier: str):
+    """Anula una revalorizacion cambiaria contabilizada."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import (
+        ExchangeRevaluationError,
+        ExchangeRevaluationService,
+    )
+
+    try:
+        run = ExchangeRevaluationService().void(
+            run_id=identifier,
+            user_id=str(current_user.id),
+            reason=request.form.get("reason") or None,
+        )
+    except ExchangeRevaluationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=identifier))
+
+    flash("Revalorizacion anulada correctamente.", "success")
+    return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
 
 
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
