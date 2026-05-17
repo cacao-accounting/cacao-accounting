@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     ItemUOMConversion,
     NamingSeries,
     Party,
+    PartyGroup,
     Project,
     TaxTemplate,
     Unit,
@@ -107,6 +108,10 @@ def _project_label(project: Project) -> str:
 def _party_label(party: Party) -> str:
     tax_suffix = f" ({party.tax_id})" if party.tax_id else ""
     return f"{party.name}{tax_suffix}"
+
+
+def _party_group_label(group: PartyGroup) -> str:
+    return group.name
 
 
 def _item_label(item: Item) -> str:
@@ -261,6 +266,33 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         label_builder=_party_label,
         allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
         default_filters={"is_active": True},
+    ),
+    "party_group": SearchSelectSpec(
+        doctype="party_group",
+        model=PartyGroup,
+        search_fields=("name", "description"),
+        value_field="id",
+        label_builder=_party_group_label,
+        allowed_filters={"group_type": "group_type", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "customer_group": SearchSelectSpec(
+        doctype="customer_group",
+        model=PartyGroup,
+        search_fields=("name", "description"),
+        value_field="id",
+        label_builder=_party_group_label,
+        allowed_filters={"group_type": "group_type", "is_active": "is_active"},
+        default_filters={"group_type": "customer", "is_active": True},
+    ),
+    "supplier_group": SearchSelectSpec(
+        doctype="supplier_group",
+        model=PartyGroup,
+        search_fields=("name", "description"),
+        value_field="id",
+        label_builder=_party_group_label,
+        allowed_filters={"group_type": "group_type", "is_active": "is_active"},
+        default_filters={"group_type": "supplier", "is_active": True},
     ),
     "customer": SearchSelectSpec(
         doctype="customer",
@@ -560,6 +592,7 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "code",
         "name",
         "company_name",
+        "group_type",
         "account_type",
         "party_type",
         "item_type",

@@ -143,6 +143,9 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_party_table_exists(self):
         self.assertIn("party", self.tables)
 
+    def test_party_group_table_exists(self):
+        self.assertIn("party_group", self.tables)
+
     def test_contact_table_exists(self):
         self.assertIn("contact", self.tables)
 
@@ -1230,6 +1233,7 @@ def test_all_domain_models_importable():
         SeriesSequenceMap,
         GeneratedIdentifierLog,
         # Party
+        PartyGroup,
         Party,
         Contact,
         Address,
@@ -1444,6 +1448,9 @@ class TestPartyClassificationField(unittest.TestCase):
     def test_party_has_classification_not_clasification(self):
         self.assertIn("classification", self.columns)
         self.assertNotIn("clasification", self.columns)
+
+    def test_party_has_party_group_id(self):
+        self.assertIn("party_group_id", self.columns)
 
 
 class TestPaymentTermsTable(unittest.TestCase):

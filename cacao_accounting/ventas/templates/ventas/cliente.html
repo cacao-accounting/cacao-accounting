@@ -22,6 +22,7 @@
     </h5>
     <div class="d-flex gap-2 flex-wrap">
       <a href="{{ url_for('ventas.ventas_cliente_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a href="{{ url_for('ventas.ventas_cliente_editar', customer_id=registro.id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
       <a href="{{ url_for('ventas.ventas_cliente_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
     </div>
   </div>
@@ -30,9 +31,19 @@
       <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Nombre comercial') }}</label><p>{{ registro.comercial_name or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('ID fiscal') }}</label><p>{{ registro.tax_id or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Tipo de Cliente') }}</label><p>{{ detail.group_label or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Clasificación') }}</label><p>{{ registro.classification or '-' }}</p></div>
     </div>
   </div>
 </div>
+
+{% set party_param = 'customer_id' %}
+{% set contact_create_url = url_for('ventas.ventas_cliente_contacto_crear', customer_id=registro.id) %}
+{% set contact_edit_endpoint = 'ventas.ventas_cliente_contacto_editar' %}
+{% set contact_deactivate_endpoint = 'ventas.ventas_cliente_contacto_desactivar' %}
+{% set address_create_url = url_for('ventas.ventas_cliente_direccion_crear', customer_id=registro.id) %}
+{% set address_edit_endpoint = 'ventas.ventas_cliente_direccion_editar' %}
+{% set address_deactivate_endpoint = 'ventas.ventas_cliente_direccion_desactivar' %}
+{% include "party_detail_sections.html" %}
 
 {% endblock %}

@@ -33,6 +33,7 @@ ENTITY_CODE = "entity.code"
 CURRENCY_CODE = "currency.code"
 ACCOUNT_ID = "accounts.id"
 PARTY_ID = "party.id"
+PARTY_GROUP_ID = "party_group.id"
 WAREHOUSE_CODE = "warehouse.code"
 ITEM_CODE = "item.code"
 UOM_CODE = "uom.code"
@@ -684,6 +685,18 @@ class ExternalNumberUsage(database.Model, BaseTabla):  # type: ignore[name-defin
 # <---------------------------------------------------------------------------------------------> #
 # Party System — Clientes y Proveedores (entidades globales).
 # <---------------------------------------------------------------------------------------------> #
+class PartyGroup(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Categoria global para clasificar clientes y proveedores."""
+
+    __tablename__ = "party_group"
+    __table_args__ = (UniqueConstraint("group_type", "name", name="uq_party_group_type_name"),)
+    # customer, supplier
+    group_type = database.Column(database.String(20), nullable=False, index=True)
+    name = database.Column(database.String(100), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+
+
 class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Entidad global para terceros (clientes y proveedores).
 
@@ -694,6 +707,7 @@ class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "party"
     # customer, supplier
     party_type = database.Column(database.String(20), nullable=False, index=True)
+    party_group_id = database.Column(database.String(26), database.ForeignKey(PARTY_GROUP_ID), nullable=True, index=True)
     name = database.Column(database.String(150), nullable=False)
     comercial_name = database.Column(database.String(150), nullable=True)
     tax_id = database.Column(database.String(50), nullable=True, index=True)

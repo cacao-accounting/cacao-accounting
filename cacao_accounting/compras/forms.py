@@ -18,6 +18,7 @@ class FormularioProveedor(FlaskForm):
     comercial_name = StringField("Nombre Comercial")
     tax_id = StringField("ID Fiscal")
     classification = StringField("Clasificación")
+    party_group_id = StringField("Tipo de Proveedor")
     company = StringField(COMPANIA)
     payable_account_id = StringField("Cuenta por pagar")
     tax_template_id = StringField("Plantilla de impuestos")

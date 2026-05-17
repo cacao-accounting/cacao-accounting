@@ -10,13 +10,13 @@
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _('Compras') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">{{ _('Proveedores') }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ _('Nuevo proveedor') }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Editar proveedor') if edit else _('Nuevo proveedor') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-person-plus"></i>{{ _('Nuevo proveedor') }}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-person-plus"></i>{{ _('Editar proveedor') if edit else _('Nuevo proveedor') }}</h5>
     <div class="d-flex gap-2 flex-wrap">
       <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
       <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
@@ -44,7 +44,45 @@
           </div>
           <div class="col-md-8">
             <label class="form-label" for="classification">{{ _('Clasificación') }}</label>
-            {{ form.classification(class="form-control form-control-sm", id="classification") }}
+            {{ form.classification(class="form-control form-control-sm", id="classification", readonly=True) }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="party_group_id">{{ _('Tipo de Proveedor') }}</label>
+            <div class="ca-smart-select" x-data='smartSelect({
+              doctype: "supplier_group",
+              name: "party_group_id",
+              minChars: 1,
+              initialValue: {{ ((registro.party_group_id if registro is defined and registro else request.form.get('party_group_id')) or '') | tojson }},
+              initialLabel: {{ (group_label or '') | tojson }},
+              messages: {
+                placeholder: {{ _('Buscar tipo de proveedor')|tojson }},
+                loading: {{ _('Buscando opciones...')|tojson }},
+                noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                minChars: {{ _('Escriba para buscar.')|tojson }},
+                clear: {{ _('Limpiar seleccion')|tojson }},
+                invalid: {{ _('Seleccione una opcion valida de la lista.')|tojson }},
+                error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+              }
+            })'>
+              <input type="hidden" name="party_group_id" x-model="selectedValue">
+              <div class="ca-smart-select-input-wrap">
+                <input class="form-control form-control-sm ca-smart-select-input" id="party_group_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off">
+                <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+              </div>
+              <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if registro is not defined or not registro or registro.is_active %}checked{% endif %}>
+              <label class="form-check-label" for="is_active">{{ _('Activo') }}</label>
+            </div>
           </div>
         </div>
       </div>
