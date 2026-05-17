@@ -196,6 +196,7 @@
 
   <div class="ca-journal-grid">
     <table class="table table-sm table-bordered ca-journal-table">
+      <caption>{{ _(title) }}</caption>
       <thead>
         <tr>
           <th style="width: 52px;">{{ _('No.') }}</th>
@@ -403,6 +404,7 @@
 
           <div x-show="!loadingSource">
             <table class="table table-sm ca-table">
+              <caption>{{ _("Documentos origen disponibles") }}</caption>
               <thead>
                 <tr>
                   <th style="width:5%"><input type="checkbox" @change="sourceDocuments.forEach(d => d.selected = $event.target.checked)"></th>
@@ -436,6 +438,7 @@
           </div>
           <div x-show="!loadingSource">
             <table class="table table-sm ca-table">
+              <caption>{{ _("Elementos de los documentos seleccionados") }}</caption>
               <thead>
                 <tr>
                   <th style="width:5%"><input type="checkbox" @change="sourceItems.forEach(i => i.selected = $event.target.checked)"></th>

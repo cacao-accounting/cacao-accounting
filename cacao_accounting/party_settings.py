@@ -79,7 +79,6 @@ def build_party_company_settings(
     party_id: str | None = None,
 ) -> PartyCompanySettings:
     """Construye los valores a prellenar en la tabla de configuracion por compania."""
-
     company_party = _party_company_record(party_id, company) if party_id else None
     party_account = _party_account_record(party_id, company) if party_id else None
     default_account = _default_company_account(company, party_type)
@@ -129,7 +128,6 @@ def draft_party_company_settings(
     values: Mapping[str, str | None],
 ) -> PartyCompanySettings:
     """Construye un estado temporal a partir del formulario enviado."""
-
     base = build_party_company_settings(party_type, company)
     if party_type == "customer":
         receivable_account_id = values.get("receivable_account_id") or base.receivable_account_id
@@ -201,7 +199,6 @@ def upsert_party_company_settings(
     allow_purchase_invoice_without_receipt: bool,
 ) -> None:
     """Crea o actualiza la configuracion de activacion del tercero por compania."""
-
     if party_type == "customer":
         _validate_account(company, receivable_account_id, "receivable")
         payable_account_id = None

@@ -395,7 +395,7 @@ def emit_economic_event(
     document_id: str,
     payload: dict[str, Any] | None = None,
 ) -> PurchaseEconomicEvent:
-    """Emite un evento economico inmutable al log de eventos."""
+    """Emit an immutable economic event to the event log."""
     event = PurchaseEconomicEvent(
         event_type=event_type,
         company=company,
@@ -513,7 +513,7 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
 
 
 def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
-    """Matching 3-way: compara Recepcion vs Factura validando cantidades recibidas."""
+    """Match purchase receipt vs invoice validating received quantities."""
     if not invoice.purchase_receipt_id:
         raise PurchaseReconciliationError("Matching 3-way requiere que la factura referencie una recepcion de compra.")
     receipt = database.session.get(PurchaseReceipt, invoice.purchase_receipt_id)
@@ -619,10 +619,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
 
 
 def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
-    """Matching 2-way: compara OC vs Factura, sin requerir recepcion previa.
-
-    Valida que las cantidades facturadas no superen las ordenadas en la OC.
-    """
+    """Match purchase order vs invoice without requiring a receipt."""
     from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem
 
     purchase_order_id = getattr(invoice, "purchase_order_id", None)
@@ -919,11 +916,7 @@ def get_purchase_reconciliation_panel_groups(company: str) -> list[PurchaseRecon
 
 
 def emit_goods_received_cancelled(purchase_receipt_id: str, company: str) -> None:
-    """Emite un evento GOODS_RECEIVED_CANCELLED cuando se anula una recepcion.
-
-    Debe ser llamado desde la capa de posting al cancelar un PurchaseReceipt.
-    Tambien cancela las conciliaciones 3-way que dependian de esa recepcion.
-    """
+    """Emit a GOODS_RECEIVED_CANCELLED event when a receipt is cancelled."""
     affected = (
         database.session.execute(
             select(PurchaseReconciliation)

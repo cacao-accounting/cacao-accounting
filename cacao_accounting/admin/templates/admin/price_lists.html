@@ -12,5 +12,7 @@
     <div class="col-md-2"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
   </div>
 </form>
-<table class="table table-sm"><thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Moneda") }}</th><th>{{ _("Compra") }}</th><th>{{ _("Venta") }}</th></tr></thead><tbody>{% for price_list in price_lists %}<tr><td>{{ price_list.name }}</td><td>{{ price_list.currency or "" }}</td><td>{{ price_list.is_buying }}</td><td>{{ price_list.is_selling }}</td></tr>{% endfor %}</tbody></table>
+<table class="table table-sm">
+  <caption>{{ _("Lista de listas de precios") }}</caption>
+  <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Moneda") }}</th><th>{{ _("Compra") }}</th><th>{{ _("Venta") }}</th></tr></thead><tbody>{% for price_list in price_lists %}<tr><td>{{ price_list.name }}</td><td>{{ price_list.currency or "" }}</td><td>{{ price_list.is_buying }}</td><td>{{ price_list.is_selling }}</td></tr>{% endfor %}</tbody></table>
 {% endblock %}

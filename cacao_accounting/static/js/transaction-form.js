@@ -11,7 +11,7 @@
   }
 
   function toNumber(value) {
-    const parsed = parseFloat(value || 0);
+    const parsed = Number.parseFloat(value || 0);
     if (Number.isNaN(parsed)) return 0;
     return parsed;
   }

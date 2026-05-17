@@ -12,6 +12,7 @@
   </div>
 </form>
 <table class="table table-sm">
+  <caption>{{ _("Lista de plantillas de impuestos y cargos") }}</caption>
   <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Líneas") }}</th></tr></thead>
   <tbody>{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ template.template_type }}</td><td>{{ template.company or "" }}</td><td><a href="{{ url_for('admin.items_plantilla_impuesto', template_id=template.id) }}">{{ _("Editar") }}</a></td></tr>{% endfor %}</tbody>
 </table>

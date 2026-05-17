@@ -845,7 +845,7 @@ def compras_proveedor_lista():
 @modulo_activo("purchases")
 @login_required
 def compras_purchase_reconciliation():
-    """Reporte operativo de conciliaciones de compra pendientes por linea."""
+    """Report pending purchase reconciliation lines."""
     company = request.args.get("company", "cacao")
     rows = get_purchase_reconciliation_pending(company=company)
     titulo = _("Conciliacion de Compras Pendiente") + " - " + APPNAME

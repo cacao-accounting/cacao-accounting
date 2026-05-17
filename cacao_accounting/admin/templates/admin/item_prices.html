@@ -13,5 +13,7 @@
     <div class="col-md-1"><button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button></div>
   </div>
 </form>
-<table class="table table-sm"><thead><tr><th>{{ _("Item") }}</th><th>{{ _("Lista") }}</th><th>{{ _("UOM") }}</th><th>{{ _("Precio") }}</th></tr></thead><tbody>{% for item_price in item_prices %}<tr><td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td></tr>{% endfor %}</tbody></table>
+<table class="table table-sm">
+  <caption>{{ _("Lista de precios por ítem") }}</caption>
+  <thead><tr><th>{{ _("Item") }}</th><th>{{ _("Lista") }}</th><th>{{ _("UOM") }}</th><th>{{ _("Precio") }}</th></tr></thead><tbody>{% for item_price in item_prices %}<tr><td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td></tr>{% endfor %}</tbody></table>
 {% endblock %}

@@ -13,7 +13,7 @@ JOURNAL_TRANSACTION_TYPE = "journal_entry"
 
 
 def add_journal(journal: ComprobanteContable, lines: list[ComprobanteContableDetalle]) -> ComprobanteContable:
-    """Persiste un comprobante contable manual y sus lineas."""
+    """Persist a manual journal entry and its lines."""
     database.session.add(journal)
     database.session.flush()
     for line in lines:

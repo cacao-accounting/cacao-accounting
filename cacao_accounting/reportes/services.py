@@ -1079,7 +1079,7 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
 
 
 def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
-    """Reporte de lotes."""
+    """Report inventory batches."""
     query = select(Batch)
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
@@ -1098,7 +1098,7 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
 
 
 def get_serial_report(filters: OperationalReportFilters) -> PaginatedReport:
-    """Reporte de numeros de serie."""
+    """Report inventory serial numbers."""
     query = select(SerialNumber)
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
