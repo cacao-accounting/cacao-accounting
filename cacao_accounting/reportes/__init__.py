@@ -839,7 +839,7 @@ def account_summary():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def account_movement():
-    """Reporte unificado de detalle de movimiento contable."""
+    """Report account movement detail."""
     filters, selected_view, saved_views = _resolve_view_context("account-movement", _financial_filters())
     report = get_account_movement_detail(filters) if _should_run_financial_report() else _empty_financial_report()
     if request.args.get("export") in {"csv", "xlsx"}:
@@ -867,7 +867,7 @@ def account_movement():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def trial_balance():
-    """Reporte de balanza de comprobación."""
+    """Report trial balance."""
     filters, selected_view, saved_views = _resolve_view_context("trial-balance", _financial_filters())
     report = get_trial_balance_report(filters) if _should_run_financial_report() else _empty_financial_report()
     return _render_financial_report(
@@ -885,7 +885,7 @@ def trial_balance():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def income_statement():
-    """Reporte de estado de resultado."""
+    """Report income statement."""
     filters, selected_view, saved_views = _resolve_view_context("income-statement", _financial_filters())
     report = get_income_statement_report(filters) if _should_run_financial_report() else _empty_financial_report()
     return _render_financial_report(
@@ -903,7 +903,7 @@ def income_statement():
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def balance_sheet():
-    """Reporte de balance general."""
+    """Report balance sheet."""
     filters, selected_view, saved_views = _resolve_view_context("balance-sheet", _financial_filters())
     report = get_balance_sheet_report(filters) if _should_run_financial_report() else _empty_financial_report()
     return _render_financial_report(
@@ -920,7 +920,7 @@ def balance_sheet():
 @login_required
 @modulo_activo("accounting")
 def subledger():
-    """Reporte AR/AP por documento."""
+    """Report AR/AP subledger by document."""
     company = request.args.get("company", "cacao")
     party_type = request.args.get("party_type", "customer")
     report = get_ar_ap_subledger(
@@ -944,7 +944,7 @@ def subledger():
 @login_required
 @modulo_activo("accounting")
 def aging():
-    """Reporte aging AR/AP."""
+    """Report AR/AP aging."""
     company = request.args.get("company", "cacao")
     party_type = request.args.get("party_type", "customer")
     report = get_aging_report(
@@ -968,7 +968,7 @@ def aging():
 @login_required
 @modulo_activo("inventory")
 def kardex():
-    """Reporte Kardex."""
+    """Report inventory kardex."""
     report = get_kardex(
         KardexFilters(
             company=request.args.get("company", "cacao"),
@@ -991,7 +991,7 @@ def kardex():
 @login_required
 @modulo_activo("accounting")
 def reconciliations():
-    """Reporte de reconciliaciones."""
+    """Report reconciliations."""
     report = get_reconciliation_report(
         company=request.args.get("company", "cacao"),
         as_of_date=_date_arg("as_of_date"),

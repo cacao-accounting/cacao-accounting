@@ -73,6 +73,7 @@
     <div class="ca-card-header"><h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Líneas de la plantilla') }}</h6></div>
     <div class="table-responsive">
         <table class="ca-table">
+            <caption>{{ _("Asientos contables definidos en la plantilla") }}</caption>
             <thead>
                 <tr>
                     <th>{{ _('Cuenta') }}</th>
@@ -114,6 +115,7 @@
     <div class="ca-card-header"><h6 class="ca-card-title mb-0">{{ _('Historial de Aplicaciones') }}</h6></div>
     <div class="table-responsive">
         <table class="ca-table">
+            <caption>{{ _("Historial de aplicaciones de la plantilla") }}</caption>
             <thead><tr><th>{{ _('Periodo') }}</th><th>{{ _('Fecha') }}</th><th>{{ _('Comprobante') }}</th><th>{{ _('Estado') }}</th></tr></thead>
             <tbody>
                 {% for app in aplicaciones %}
