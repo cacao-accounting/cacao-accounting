@@ -271,6 +271,9 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_tax_template_item_table_exists(self):
         self.assertIn("tax_template_item", self.tables)
 
+    def test_tax_rule_table_exists(self):
+        self.assertIn("tax_rule", self.tables)
+
     def test_price_list_table_exists(self):
         self.assertIn("price_list", self.tables)
 
@@ -1230,6 +1233,7 @@ def test_all_domain_models_importable():
         CompanyDefaultAccount,
         # Tax & Pricing
         Tax,
+        TaxRule,
         TaxTemplate,
         TaxTemplateItem,
         PriceList,

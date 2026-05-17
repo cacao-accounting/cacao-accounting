@@ -6,6 +6,20 @@
 - **Docstrings en `cacao_accounting`:** Verificación con `pydocstyle --convention=pep257` y análisis AST de elementos públicos (`TOTAL=0`) sin faltantes; no fue necesario modificar archivos Python del paquete.
 - **Verificación:** `black`, `ruff`, `flake8`, `mypy`, `pytest` y `pydocstyle` en verde.
 
+## 2026-05-17 (Cierre parcial de reglas fiscales, mapping contable y multimoneda)
+- **Solicitud:** Completar la implementación iniciada de impuestos/gastos atendiendo los reviews, con prioridad en CRUD de reglas fiscales, mapping de cuentas contables y multimoneda.
+- **Reglas fiscales:** Se agregó el modelo persistido `TaxRule`, el servicio `tax_rule_service.py` para crear/editar/eliminar/cargar reglas y la pantalla administrativa `/settings/tax-rules`.
+- **Mapping contable:** `AccountingMapper` ahora diferencia eventos `payment_confirmed` y `collection_confirmed`, generando líneas pro-forma para tercero, banco/caja, retenciones y cuentas de ganancia/pérdida cambiaria.
+- **Multimoneda:** `SettlementEngine` calcula diferencia cambiaria realizada y `JournalEntryLineProforma` conserva moneda documento/compañía, monto en ambas monedas y tipo de cambio usado.
+- **Verificación:** Validación focal en `.venv` con `ruff`, `flake8`, `mypy` y `pytest` para `tests/engines/test_settlement_engine.py`, `tests/engines/test_mapper.py`, `tests/test_tax_rules.py` y `tests/test_04database_schema.py` (`205 passed` en la corrida combinada).
+
+## 2026-05-17 (Motor fiscal/gastos listo para acoplarse a transacciones)
+- **Solicitud:** Cerrar los pendientes del review para dejar el motor de impuestos y otros gastos listo para acoplarlo a transacciones reales.
+- **Acoplamiento transaccional:** Se agregaron `document_builders.py` y `gl_posting_builder.py` para convertir `PurchaseReceipt`, `PurchaseInvoice`, `SalesInvoice` y `PaymentEntry` en `CalculationContext` y persistir el `JournalEntryProforma` resultante como `GLEntry` real dentro de `contabilidad/posting.py`.
+- **Cobertura funcional:** El flujo de posting ahora usa el motor en recepciones, facturas de compra/venta, notas de crédito y pagos/cobros; también carga reglas `TaxRule` persistidas desde BD y mantiene compatibilidad con `TaxTemplate` como fallback cuando no hay reglas configuradas.
+- **Fiscal DAG + settlement extendido:** `FiscalEngine` pasó a ordenar reglas por dependencias (DAG), `SettlementEngine` ahora calcula descuentos por pronto pago y revaluación no realizada, y `AccountingMapper` genera los offsets contables necesarios para diferencia cambiaria realizada/no realizada y descuentos de liquidación.
+- **Verificación:** `black --check cacao_accounting/`, `ruff`, `flake8`, `mypy`, `pydocstyle` focal y `pytest -v -s --exitfirst --slow=True` completo en `.venv` quedaron en verde (`672 passed`).
+
 ## 2026-05-16 (Merge limpio rama remota de registros bancarios)
 - **Solicitud:** Integrar `feat/banking-module-registers-16721791397278534001` sin perder funcionalidad local/remota y dejando el workflow de Python en verde.
 - **Resolucion de conflictos:** Se conservaron versiones locales en archivos no relacionados (Compras/Ventas/Inventario/tests/macros) y se integraron cambios bancarios de la rama remota en rutas/templates de pagos, notas y transferencias.
@@ -177,3 +191,18 @@
 - **Ajuste aplicado:** Se corrigieron los campos `GLEntry.reversal_of` y `GLEntryDimension.gl_entry_id` a `String(26)` para alinear referencias con `gl_entry.id` ULID.
 - **Pruebas E2E:** Se robusteció `tests/test_e2e_modules.py` para detectar errores reales vía `alert-danger` en lugar de buscar el literal `danger` en todo el HTML.
 - **Verificación:** Suite completa `pytest` ejecutada con éxito (`618 passed, 5 skipped`).
+
+## 2026-05-16 (Motores de Cálculo de Impuestos, Landed Cost y Liquidaciones)
+- **Implementación de Motores:** Se crearon tres motores de cálculo independientes y determinísticos: Fiscal Engine, Landed Cost Engine y Settlement Engine en `cacao_accounting/accounting_engine/`.
+- **Fiscal Engine:** Soporta impuestos en cascada, incluidos en precio, prioridades jerárquicas (Ítem > Tercero > Transacción) y detección de dependencias circulares.
+- **Landed Cost Engine:** Implementa prorrateo secuencial por valor, cantidad, peso, volumen e igualitario, asegurando la capitalización correcta de costos accesorios al inventario.
+- **Settlement Engine:** Gestiona retenciones proporcionales en pagos parciales y diferencias de cambio.
+- **Auditabilidad y Snapshots:** Sistema de snapshots JSON inmutables para cada cálculo confirmado y generación automática de pistas de auditoría (Audit Trail) detallando fórmulas y bases de cálculo.
+- **Documentación y Calidad:** Se crearon 12 manuales técnicos en `docs/tax-cost-engines/` y se validó el "Golden Test" de importación (Costo 1081.50, Total 1243.73).
+
+## 2026-05-17 (Refinamiento Enterprise de Motores de Cálculo)
+- **Precisión Financiera:** Se implementó el `RoundingManager` con soporte para múltiples políticas (HALF_UP, HALF_EVEN) y distribución de residuos para garantizar el balance matemático.
+- **Mapeo Contable Pro-forma:** Creación del `AccountingMapper` que traduce resultados de cálculo en asientos contables equilibrados, incluyendo ajustes automáticos por redondeo.
+- **Integridad de Snapshots:** Los snapshots JSON ahora incluyen un fingerprint SHA256 y versionado de motor para auditoría inmutable.
+- **Resolución de Reglas Avanzada:** El `RuleResolver` ahora evalúa condiciones dinámicas como vigencia por fechas, moneda y jurisdicción geográfica.
+- **Calidad de Código:** Tipado estático completo con Mypy y cumplimiento de Flake8/Ruff en todo el paquete `accounting_engine`.

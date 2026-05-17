@@ -1089,6 +1089,191 @@ def test_purchase_credit_note_balances_gl(app_ctx):
     assert any(entry.account_id == expense_account.id and entry.credit == Decimal("50.00") for entry in entries)
 
 
+def test_sales_credit_note_balances_gl(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        PartyAccount,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+
+    receivable_account = Accounts(
+        entity="cacao",
+        code="AR-CR",
+        name="Cuentas por cobrar",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="receivable",
+    )
+    income_account = Accounts(
+        entity="cacao",
+        code="INC-CR",
+        name="Ingreso CR",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    database.session.add_all([receivable_account, income_account])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="CUST-CR", company="cacao", receivable_account_id=receivable_account.id),
+            CompanyDefaultAccount(company="cacao", default_income=income_account.id),
+        ]
+    )
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-CR",
+        document_type="sales_credit_note",
+        is_return=True,
+        docstatus=1,
+        total=Decimal("50.00"),
+        grand_total=Decimal("50.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ITEM-CR",
+            item_name="Item CR",
+            qty=Decimal("1"),
+            uom="EA",
+            rate=Decimal("50.00"),
+            amount=Decimal("50.00"),
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == income_account.id and entry.debit == Decimal("50.00") for entry in entries)
+    assert any(entry.account_id == receivable_account.id and entry.credit == Decimal("50.00") for entry in entries)
+
+
+def test_post_purchase_invoice_uses_persisted_tax_rules_in_gl(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        TaxRule,
+        database,
+    )
+
+    payable_account = Accounts(
+        entity="cacao",
+        code="AP-TAX",
+        name="Cuentas por pagar impuesto",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    expense_account = Accounts(
+        entity="cacao",
+        code="EXP-TAX",
+        name="Gasto base impuesto",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    purchase_tax_account = Accounts(
+        entity="cacao",
+        code="VAT-TAX",
+        name="IVA compra",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="tax",
+    )
+    database.session.add_all([payable_account, expense_account, purchase_tax_account])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="SUPP-TAX", company="cacao", payable_account_id=payable_account.id),
+            CompanyDefaultAccount(
+                company="cacao",
+                default_expense=expense_account.id,
+                default_purchase_tax_account_id=purchase_tax_account.id,
+            ),
+            TaxRule(
+                company="cacao",
+                name="IVA compra 15%",
+                applies_to="purchase",
+                level="transaction",
+                concept="vat_purchase",
+                tax_type="tax",
+                calculation_method="percentage",
+                rate=Decimal("15"),
+                sequence=10,
+                accounting_treatment="separate_tax_account",
+                recognition_event="purchase_invoice_confirmed",
+                account_id=purchase_tax_account.id,
+                is_active=True,
+            ),
+        ]
+    )
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-TAX",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("115.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-TAX",
+            item_name="Item TAX",
+            qty=Decimal("1"),
+            uom="EA",
+            rate=Decimal("100.00"),
+            amount=Decimal("100.00"),
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="purchase_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == expense_account.id and entry.debit == Decimal("100.00") for entry in entries)
+    assert any(entry.account_id == purchase_tax_account.id and entry.debit == Decimal("15.00") for entry in entries)
+    assert any(entry.account_id == payable_account.id and entry.credit == Decimal("115.00") for entry in entries)
+
+
 def test_cancel_document_rejects_closed_accounting_period(app_ctx):
     from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl, PostingError
     from cacao_accounting.database import (
@@ -1320,6 +1505,166 @@ def test_post_payment_entry_uses_bank_account_gl_fallback(app_ctx):
     )
     assert any(entry.debit == Decimal("45.00") and entry.account_id == bank_gl_account.id for entry in entries)
     assert any(entry.credit == Decimal("45.00") and entry.party_id == "CUST-FB" for entry in entries)
+
+
+def test_post_payment_entry_with_discount_and_exchange_revaluation(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        CompanyDefaultAccount,
+        CompanyParty,
+        GLEntry,
+        PartyAccount,
+        PaymentEntry,
+        PaymentReference,
+        PaymentTerms,
+        SalesInvoice,
+        database,
+    )
+
+    receivable_account = Accounts(
+        entity="cacao",
+        code="AR-DISC",
+        name="Cuentas por cobrar descuento",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="receivable",
+    )
+    bank_gl_account = Accounts(
+        entity="cacao",
+        code="BANK-DISC",
+        name="Banco descuento",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    discount_account = Accounts(
+        entity="cacao",
+        code="DISC-DISC",
+        name="Descuento pronto pago",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    realized_gain_account = Accounts(
+        entity="cacao",
+        code="EXG-DISC",
+        name="Ganancia cambiaria",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    unrealized_gain_account = Accounts(
+        entity="cacao",
+        code="UXG-DISC",
+        name="Ganancia cambiaria no realizada",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    bank = Bank(name="Banco descuento")
+    database.session.add_all(
+        [
+            receivable_account,
+            bank_gl_account,
+            discount_account,
+            realized_gain_account,
+            unrealized_gain_account,
+            bank,
+        ]
+    )
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta descuento",
+        currency="USD",
+        gl_account_id=bank_gl_account.id,
+    )
+    payment_terms = PaymentTerms(name="2/10 neto", due_days=30, discount_days=10, discount_percent=Decimal("2"))
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        customer_id="CUST-DISC",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.5"),
+        total=Decimal("200.00"),
+        grand_total=Decimal("200.00"),
+        outstanding_amount=Decimal("200.00"),
+        base_outstanding_amount=Decimal("7300.00"),
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        payment_type="receive",
+        party_type="customer",
+        party_id="CUST-DISC",
+        bank_account_id=bank_account.id,
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.8"),
+        received_amount=Decimal("98.00"),
+        base_received_amount=Decimal("3606.40"),
+        docstatus=1,
+    )
+    database.session.add_all([bank_account, payment_terms, invoice, payment])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="CUST-DISC", company="cacao", receivable_account_id=receivable_account.id),
+            CompanyParty(company="cacao", party_id="CUST-DISC", is_active=True, payment_terms_id=payment_terms.id),
+            CompanyDefaultAccount(
+                company="cacao",
+                default_receivable=receivable_account.id,
+                default_bank=bank_gl_account.id,
+                payment_discount_account_id=discount_account.id,
+                exchange_gain_account_id=realized_gain_account.id,
+                unrealized_exchange_gain_account_id=unrealized_gain_account.id,
+            ),
+        ]
+    )
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            total_amount=Decimal("200.00"),
+            outstanding_amount=Decimal("200.00"),
+            allocated_amount=Decimal("100.00"),
+            allocation_date=payment.posting_date,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
+        .scalars()
+        .all()
+    )
+
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == bank_gl_account.id and entry.debit == Decimal("3606.4000") for entry in entries)
+    assert any(entry.account_id == receivable_account.id and entry.credit == Decimal("3650.0000") for entry in entries)
+    assert any(
+        entry.account_id == receivable_account.id
+        and entry.debit == Decimal("30.0000")
+        and entry.remarks.startswith("Unrealized Exchange Offset")
+        for entry in entries
+    )
+    assert any(entry.account_id == discount_account.id and entry.debit == Decimal("73.6000") for entry in entries)
+    assert any(entry.account_id == realized_gain_account.id and entry.credit == Decimal("30.0000") for entry in entries)
+    assert any(entry.account_id == unrealized_gain_account.id and entry.credit == Decimal("30.0000") for entry in entries)
 
 
 def test_post_bank_transaction_creates_balanced_gl_entries(app_ctx):
