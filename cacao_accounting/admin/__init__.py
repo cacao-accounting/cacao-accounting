@@ -16,6 +16,7 @@ from datetime import date
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -34,6 +35,7 @@ from cacao_accounting.database import (
     Entity,
     ItemPrice,
     Modules,
+    PartyGroup,
     PriceList,
     PurchaseMatchingConfig,
     Roles,
@@ -267,6 +269,81 @@ def lista_reglas_fiscales():
             return redirect(url_for("admin.lista_reglas_fiscales", edit=rule.id))
     rules = list_tax_rules()
     return render_template("admin/tax_rules.html", rules=rules, editing_rule=editing_rule)
+
+
+@admin.route("/settings/party-groups", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def lista_grupos_terceros():
+    """Administra tipos globales de clientes y proveedores."""
+    _require_system_admin()
+    group_type = request.args.get("group_type") or request.form.get("group_type") or ""
+    if group_type not in ("customer", "supplier"):
+        group_type = ""
+    if request.method == "POST":
+        group = PartyGroup(
+            group_type=request.form.get("group_type") or "customer",
+            name=request.form.get("name") or "",
+            description=request.form.get("description") or None,
+            is_active=request.form.get("is_active") is not None,
+        )
+        database.session.add(group)
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        else:
+            flash(_("Tipo de tercero creado correctamente."), "success")
+            return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
+    query = database.select(PartyGroup)
+    if group_type:
+        query = query.filter(PartyGroup.group_type == group_type)
+    groups = database.session.execute(query.order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
+    return render_template("admin/party_groups.html", groups=groups, group_type=group_type)
+
+
+@admin.route("/settings/party-groups/<group_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def editar_grupo_tercero(group_id: str):
+    """Edita un tipo global de tercero."""
+    _require_system_admin()
+    group = database.session.get(PartyGroup, group_id)
+    if not group:
+        abort(404)
+    if request.method == "POST":
+        group.group_type = request.form.get("group_type") or group.group_type
+        group.name = request.form.get("name") or ""
+        group.description = request.form.get("description") or None
+        group.is_active = request.form.get("is_active") is not None
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        else:
+            flash(_("Tipo de tercero actualizado correctamente."), "success")
+            return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
+    groups = (
+        database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
+    )
+    return render_template("admin/party_groups.html", groups=groups, editing_group=group, group_type=group.group_type)
+
+
+@admin.route("/settings/party-groups/<group_id>/toggle", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def alternar_grupo_tercero(group_id: str):
+    """Activa o desactiva un tipo global de tercero."""
+    _require_system_admin()
+    group = database.session.get(PartyGroup, group_id)
+    if not group:
+        abort(404)
+    group.is_active = not group.is_active
+    database.session.commit()
+    flash(_("Estado del tipo de tercero actualizado correctamente."), "success")
+    return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
 
 
 @admin.route("/settings/tax-rules/<rule_id>/edit", methods=["GET", "POST"])

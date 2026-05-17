@@ -16,6 +16,7 @@ class FormularioCliente(FlaskForm):
     tax_id = StringField("ID Fiscal")
     classification = StringField("Clasificación")
     company = StringField("Compañía")
+    party_group_id = StringField("Tipo de Cliente")
     receivable_account_id = StringField("Cuenta por cobrar")
     tax_template_id = StringField("Plantilla de impuestos")
     company_is_active = BooleanField("Activo en la compañía", default=True)

@@ -740,13 +740,16 @@ def test_financial_report_can_group_by_voucher_type_when_column_is_hidden(app_ct
 
 
 def test_search_select_party_type_labels_and_party_filter(app_ctx):
-    from cacao_accounting.database import CompanyParty, Modules, Party, User, database
+    from cacao_accounting.database import CompanyParty, Modules, Party, PartyGroup, User, database
 
     user = User(user="party-filter-user", name="Party Filter User", password=b"x", classification="admin", active=True)
     database.session.add_all(
         [
             Modules(module="accounting", default=True, enabled=True),
             user,
+            PartyGroup(id="PG-CUST", group_type="customer", name="Mayorista", is_active=True),
+            PartyGroup(id="PG-SUPP", group_type="supplier", name="Importador", is_active=True),
+            PartyGroup(id="PG-INACTIVE", group_type="supplier", name="Inactivo", is_active=False),
             Party(id="SUPP-F", party_type="supplier", name="Proveedor F", tax_id="SUPP-F", is_active=True),
             Party(id="CUST-F", party_type="customer", name="Cliente F", tax_id="CUST-F", is_active=True),
             CompanyParty(company="cacao", party_id="SUPP-F", is_active=True),
@@ -763,10 +766,14 @@ def test_search_select_party_type_labels_and_party_filter(app_ctx):
 
     party_type_payload = client.get("/api/search-select?doctype=party_type&q=prove").json
     supplier_payload = client.get("/api/search-select?doctype=party&q=Proveedor&company=cacao&party_type=supplier").json
+    customer_group_payload = client.get("/api/search-select?doctype=customer_group&q=may").json
+    supplier_group_payload = client.get("/api/search-select?doctype=party_group&group_type=supplier&q=i").json
 
     assert party_type_payload["results"][0]["value"] == "supplier"
     assert party_type_payload["results"][0]["display_name"] == "Proveedor"
     assert [item["value"] for item in supplier_payload["results"]] == ["SUPP-F"]
+    assert [item["display_name"] for item in customer_group_payload["results"]] == ["Mayorista"]
+    assert [item["display_name"] for item in supplier_group_payload["results"]] == ["Importador"]
 
 
 def test_trial_balance_uses_tree_presentation_without_level_column(app_ctx):

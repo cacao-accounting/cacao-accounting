@@ -56,6 +56,17 @@ from cacao_accounting.party_settings import (
     draft_party_company_settings,
     upsert_party_company_settings,
 )
+from cacao_accounting.party_management import (
+    apply_party_group,
+    build_party_detail_context,
+    create_party_address,
+    create_party_contact,
+    deactivate_party_address,
+    deactivate_party_contact,
+    party_group_label,
+    update_party_address,
+    update_party_contact,
+)
 from cacao_accounting.version import APPNAME
 
 # < --------------------------------------------------------------------------------------------- >
@@ -100,6 +111,14 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
         (str(series.id), f"{series.name} ({series.prefix_template})")
         for series in get_active_naming_series(entity_type=entity_type, company=company)
     ]
+
+
+def _party_or_404(party_id: str, party_type: str) -> Party:
+    """Obtiene un tercero por tipo o aborta."""
+    party = database.session.execute(database.select(Party).filter_by(id=party_id, party_type=party_type)).scalar_one_or_none()
+    if not party:
+        abort(404)
+    return party
 
 
 @compras.route("/")
@@ -889,9 +908,11 @@ def compras_proveedor_nuevo():
             comercial_name=request.form.get("comercial_name"),
             tax_id=request.form.get("tax_id"),
             classification=request.form.get("classification"),
+            is_active=request.form.get("is_active", "on") is not None,
         )
         try:
             database.session.add(proveedor)
+            apply_party_group(proveedor, request.form.get("party_group_id") or None)
             database.session.flush()
             company = request.form.get("company") or None
             if company:
@@ -922,6 +943,7 @@ def compras_proveedor_nuevo():
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings=company_settings,
+        group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
 
@@ -930,13 +952,163 @@ def compras_proveedor_nuevo():
 @login_required
 def compras_proveedor(supplier_id):
     """Detalle de proveedor."""
-    from flask import abort
-
     registro = database.session.execute(database.select(Party).filter_by(id=supplier_id, party_type="supplier")).first()
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
-    return render_template("compras/proveedor.html", registro=registro[0], titulo=titulo)
+    detail = build_party_detail_context(registro[0])
+    return render_template("compras/proveedor.html", registro=registro[0], detail=detail, titulo=titulo)
+
+
+@compras.route("/supplier/<supplier_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_editar(supplier_id: str):
+    """Formulario para editar un proveedor."""
+    from cacao_accounting.compras.forms import FormularioProveedor
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    proveedor = database.session.execute(
+        database.select(Party).filter_by(id=supplier_id, party_type="supplier")
+    ).scalar_one_or_none()
+    if not proveedor:
+        abort(404)
+    formulario = FormularioProveedor(obj=proveedor)
+    titulo = f"Editar Proveedor - {APPNAME}"
+    company_choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
+    company_settings = (
+        build_party_company_settings("supplier", selected_company, party_id=proveedor.id) if selected_company else None
+    )
+    if request.method == "POST":
+        try:
+            proveedor.name = request.form.get("name") or ""
+            proveedor.comercial_name = request.form.get("comercial_name") or None
+            proveedor.tax_id = request.form.get("tax_id") or None
+            proveedor.is_active = request.form.get("is_active") is not None
+            apply_party_group(proveedor, request.form.get("party_group_id") or None)
+            company = request.form.get("company") or None
+            if company:
+                upsert_party_company_settings(
+                    proveedor.id,
+                    "supplier",
+                    company,
+                    is_active=request.form.get("company_is_active") is not None,
+                    receivable_account_id=None,
+                    payable_account_id=request.form.get("payable_account_id") or None,
+                    tax_template_id=request.form.get("tax_template_id") or None,
+                    allow_purchase_invoice_without_order=request.form.get("allow_purchase_invoice_without_order") is not None,
+                    allow_purchase_invoice_without_receipt=(
+                        request.form.get("allow_purchase_invoice_without_receipt") is not None
+                    ),
+                )
+            database.session.commit()
+            flash(_("Proveedor actualizado correctamente."), "success")
+            return redirect(url_for("compras.compras_proveedor", supplier_id=proveedor.id))
+        except ValueError as exc:
+            database.session.rollback()
+            if selected_company:
+                company_settings = draft_party_company_settings("supplier", selected_company, request.form)
+            flash(str(exc), "danger")
+    return render_template(
+        "compras/proveedor_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        edit=True,
+        registro=proveedor,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+        group_label=party_group_label(proveedor.party_group_id),
+    )
+
+
+@compras.route("/supplier/<supplier_id>/contacts", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_contacto_crear(supplier_id: str):
+    """Crea un contacto para un proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    try:
+        create_party_contact(supplier_id, request.form)
+        database.session.commit()
+        flash(_("Contacto agregado correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/contacts/<link_id>/edit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
+    """Edita un contacto de proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    try:
+        update_party_contact(supplier_id, link_id, request.form)
+        database.session.commit()
+        flash(_("Contacto actualizado correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/contacts/<link_id>/deactivate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
+    """Desactiva un contacto de proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    deactivate_party_contact(supplier_id, link_id)
+    database.session.commit()
+    flash(_("Contacto desactivado correctamente."), "success")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/addresses", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_direccion_crear(supplier_id: str):
+    """Crea una direccion para un proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    try:
+        create_party_address(supplier_id, request.form)
+        database.session.commit()
+        flash(_("Direccion agregada correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/addresses/<link_id>/edit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
+    """Edita una direccion de proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    try:
+        update_party_address(supplier_id, link_id, request.form)
+        database.session.commit()
+        flash(_("Direccion actualizada correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/addresses/<link_id>/deactivate", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
+    """Desactiva una direccion de proveedor."""
+    _party_or_404(supplier_id, "supplier")
+    deactivate_party_address(supplier_id, link_id)
+    database.session.commit()
+    flash(_("Direccion desactivada correctamente."), "success")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
