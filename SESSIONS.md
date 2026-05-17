@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-17 (Fix missing pydocstyle)
+- **Solicitud:** Instalar `pydocstyle`, agregar docstrings faltantes en `cacao_accounting` y actualizar `AGENTS.md` con una regla breve de documentación.
+- **Ajuste aplicado:** Se agregó `pydocstyle` a `development.txt`, se incorporó su ejecución en `.github/workflows/python-package.yml` y `run_test.sh`, y se añadió en `AGENTS.md` la instrucción explícita de documentar módulos/clases/funciones con docstrings.
+- **Docstrings en `cacao_accounting`:** Verificación con `pydocstyle --convention=pep257` y análisis AST de elementos públicos (`TOTAL=0`) sin faltantes; no fue necesario modificar archivos Python del paquete.
+- **Verificación:** `black`, `ruff`, `flake8`, `mypy`, `pytest` y `pydocstyle` en verde.
+
 ## 2026-05-16 (Merge limpio rama remota de registros bancarios)
 - **Solicitud:** Integrar `feat/banking-module-registers-16721791397278534001` sin perder funcionalidad local/remota y dejando el workflow de Python en verde.
 - **Resolucion de conflictos:** Se conservaron versiones locales en archivos no relacionados (Compras/Ventas/Inventario/tests/macros) y se integraron cambios bancarios de la rama remota en rutas/templates de pagos, notas y transferencias.
