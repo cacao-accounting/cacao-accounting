@@ -55,6 +55,14 @@ from cacao_accounting.contabilidad.default_accounts import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.modulos import listado_modulos, obtener_modulos_disponibles, sincronizar_modulos
+from cacao_accounting.tax_rule_service import (
+    TaxRuleServiceError,
+    create_tax_rule,
+    delete_tax_rule,
+    get_tax_rule,
+    list_tax_rules,
+    update_tax_rule,
+)
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 
@@ -237,6 +245,66 @@ def items_plantilla_impuesto(template_id: str):
     )
     taxes = database.session.execute(database.select(Tax).filter_by(is_active=True).order_by(Tax.name)).scalars().all()
     return render_template("admin/tax_template_items.html", template=template, items=items, taxes=taxes)
+
+
+@admin.route("/settings/tax-rules", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def lista_reglas_fiscales():
+    """Administra reglas fiscales configurables."""
+    _require_system_admin()
+    editing_rule_id = request.args.get("edit")
+    editing_rule = get_tax_rule(editing_rule_id) if editing_rule_id else None
+    if request.method == "POST":
+        try:
+            rule = create_tax_rule(request.form)
+            database.session.commit()
+        except TaxRuleServiceError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Regla fiscal creada correctamente."), "success")
+            return redirect(url_for("admin.lista_reglas_fiscales", edit=rule.id))
+    rules = list_tax_rules()
+    return render_template("admin/tax_rules.html", rules=rules, editing_rule=editing_rule)
+
+
+@admin.route("/settings/tax-rules/<rule_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def editar_regla_fiscal(rule_id: str):
+    """Edita una regla fiscal."""
+    _require_system_admin()
+    rule = get_tax_rule(rule_id)
+    if not rule:
+        abort(404)
+    if request.method == "POST":
+        try:
+            update_tax_rule(rule, request.form)
+            database.session.commit()
+        except TaxRuleServiceError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Regla fiscal actualizada correctamente."), "success")
+            return redirect(url_for("admin.editar_regla_fiscal", rule_id=rule.id))
+    rules = list_tax_rules()
+    return render_template("admin/tax_rules.html", rules=rules, editing_rule=rule)
+
+
+@admin.route("/settings/tax-rules/<rule_id>/delete", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def eliminar_regla_fiscal(rule_id: str):
+    """Elimina una regla fiscal."""
+    _require_system_admin()
+    rule = get_tax_rule(rule_id)
+    if not rule:
+        abort(404)
+    delete_tax_rule(rule)
+    database.session.commit()
+    flash(_("Regla fiscal eliminada correctamente."), "success")
+    return redirect(url_for("admin.lista_reglas_fiscales"))
 
 
 @admin.route("/settings/price-lists", methods=["GET", "POST"])

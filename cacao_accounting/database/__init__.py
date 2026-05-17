@@ -1931,6 +1931,39 @@ class TaxTemplateItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_inclusive = database.Column(database.Boolean(), default=False, nullable=False)
 
 
+class TaxRule(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Regla fiscal configurable para el motor de calculo."""
+
+    __tablename__ = "tax_rule"
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True, index=True)
+    name = database.Column(database.String(100), nullable=False)
+    applies_to = database.Column(database.String(20), default="both", nullable=False, index=True)
+    level = database.Column(database.String(20), default="transaction", nullable=False, index=True)
+    concept = database.Column(database.String(50), nullable=False, index=True)
+    tax_type = database.Column(database.String(20), default="tax", nullable=False)
+    calculation_method = database.Column(database.String(20), default="percentage", nullable=False)
+    rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_mode = database.Column(database.String(30), default="goods", nullable=False)
+    include_concepts = database.Column(database.Text(), nullable=True)
+    exclude_concepts = database.Column(database.Text(), nullable=True)
+    sequence = database.Column(database.Integer(), default=10, nullable=False, index=True)
+    accounting_treatment = database.Column(database.String(50), default="separate_tax_account", nullable=False)
+    recognition_event = database.Column(database.String(30), default="invoice", nullable=False)
+    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    affects_inventory = database.Column(database.Boolean(), default=False, nullable=False)
+    affects_cost = database.Column(database.Boolean(), default=False, nullable=False)
+    affects_document_total = database.Column(database.Boolean(), default=True, nullable=False)
+    affects_settlement = database.Column(database.Boolean(), default=False, nullable=False)
+    participates_in_next_base = database.Column(database.Boolean(), default=False, nullable=False)
+    allocation_method = database.Column(database.String(30), nullable=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    country = database.Column(database.String(10), nullable=True)
+    valid_from = database.Column(database.Date(), nullable=True)
+    valid_to = database.Column(database.Date(), nullable=True)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Pricing — Listas de precios e items.
 # <---------------------------------------------------------------------------------------------> #

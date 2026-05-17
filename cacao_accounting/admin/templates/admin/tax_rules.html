@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% set rule = editing_rule %}
+{% block contenido %}
+<div class="ca-page-header">
+  <h4>{{ _("Reglas Fiscales") }}</h4>
+</div>
+
+<form
+  method="post"
+  action="{{ url_for('admin.editar_regla_fiscal', rule_id=rule.id) if rule else url_for('admin.lista_reglas_fiscales') }}"
+  class="mb-4"
+>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" value="{{ rule.name if rule else '' }}" required></div>
+    <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}" value="{{ rule.company if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="concept" placeholder="{{ _('Concepto') }}" value="{{ rule.concept if rule else '' }}" required></div>
+    <div class="col-md-2">
+      <select class="form-select" name="applies_to">
+        {% set applies_to = rule.applies_to if rule else 'both' %}
+        <option value="both" {% if applies_to == 'both' %}selected{% endif %}>{{ _("Compra y venta") }}</option>
+        <option value="purchase" {% if applies_to == 'purchase' %}selected{% endif %}>{{ _("Compra") }}</option>
+        <option value="sales" {% if applies_to == 'sales' %}selected{% endif %}>{{ _("Venta") }}</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      {% set level = rule.level if rule else 'transaction' %}
+      <select class="form-select" name="level">
+        <option value="item" {% if level == 'item' %}selected{% endif %}>{{ _("Ítem") }}</option>
+        <option value="party" {% if level == 'party' %}selected{% endif %}>{{ _("Tercero") }}</option>
+        <option value="transaction" {% if level == 'transaction' %}selected{% endif %}>{{ _("Transacción") }}</option>
+        <option value="company" {% if level == 'company' %}selected{% endif %}>{{ _("Compañía") }}</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      {% set tax_type = rule.tax_type if rule else 'tax' %}
+      <select class="form-select" name="tax_type">
+        <option value="tax" {% if tax_type == 'tax' %}selected{% endif %}>{{ _("Impuesto") }}</option>
+        <option value="withholding" {% if tax_type == 'withholding' %}selected{% endif %}>{{ _("Retención") }}</option>
+        <option value="charge" {% if tax_type == 'charge' %}selected{% endif %}>{{ _("Cargo") }}</option>
+        <option value="deduction" {% if tax_type == 'deduction' %}selected{% endif %}>{{ _("Descuento") }}</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      {% set calculation_method = rule.calculation_method if rule else 'percentage' %}
+      <select class="form-select" name="calculation_method">
+        <option value="percentage" {% if calculation_method == 'percentage' %}selected{% endif %}>{{ _("Porcentaje") }}</option>
+        <option value="fixed" {% if calculation_method == 'fixed' %}selected{% endif %}>{{ _("Monto fijo") }}</option>
+        <option value="manual" {% if calculation_method == 'manual' %}selected{% endif %}>{{ _("Monto manual") }}</option>
+        <option value="quantity" {% if calculation_method == 'quantity' %}selected{% endif %}>{{ _("Por cantidad") }}</option>
+      </select>
+    </div>
+    <div class="col-md-1"><input class="form-control" name="rate" placeholder="{{ _('Tasa') }}" value="{{ rule.rate if rule and rule.rate is not none else '0' }}"></div>
+    <div class="col-md-1"><input class="form-control" name="amount" placeholder="{{ _('Monto') }}" value="{{ rule.amount if rule and rule.amount is not none else '0' }}"></div>
+    <div class="col-md-2">
+      {% set base_mode = rule.base_mode if rule else 'goods' %}
+      <select class="form-select" name="base_mode">
+        <option value="goods" {% if base_mode == 'goods' %}selected{% endif %}>{{ _("Mercadería") }}</option>
+        <option value="accumulated" {% if base_mode == 'accumulated' %}selected{% endif %}>{{ _("Acumulado") }}</option>
+      </select>
+    </div>
+    <div class="col-md-2"><input class="form-control" name="include_concepts" placeholder="{{ _('Dependencias / incluir') }}" value="{{ rule.include_concepts if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="exclude_concepts" placeholder="{{ _('Excluir conceptos') }}" value="{{ rule.exclude_concepts if rule else '' }}"></div>
+    <div class="col-md-1"><input class="form-control" name="sequence" placeholder="{{ _('Orden') }}" value="{{ rule.sequence if rule else '10' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="accounting_treatment" placeholder="{{ _('Tratamiento contable') }}" value="{{ rule.accounting_treatment if rule else 'separate_tax_account' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="recognition_event" placeholder="{{ _('Reconocimiento') }}" value="{{ rule.recognition_event if rule else 'invoice' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="account_id" placeholder="{{ _('Cuenta contable') }}" value="{{ rule.account_id if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="currency" placeholder="{{ _('Moneda') }}" value="{{ rule.currency if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="country" placeholder="{{ _('País') }}" value="{{ rule.country if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" type="date" name="valid_from" value="{{ rule.valid_from.isoformat() if rule and rule.valid_from else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" type="date" name="valid_to" value="{{ rule.valid_to.isoformat() if rule and rule.valid_to else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="allocation_method" placeholder="{{ _('Método de prorrateo') }}" value="{{ rule.allocation_method if rule else '' }}"></div>
+    <div class="col-md-2 form-check ms-2"><input class="form-check-input" type="checkbox" name="affects_inventory" id="affects_inventory" {% if not rule or rule.affects_inventory %}checked{% endif %}><label class="form-check-label" for="affects_inventory">{{ _("Afecta inventario") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="affects_cost" id="affects_cost" {% if rule and rule.affects_cost %}checked{% endif %}><label class="form-check-label" for="affects_cost">{{ _("Afecta costo") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="affects_document_total" id="affects_document_total" {% if not rule or rule.affects_document_total %}checked{% endif %}><label class="form-check-label" for="affects_document_total">{{ _("Afecta total") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="affects_settlement" id="affects_settlement" {% if rule and rule.affects_settlement %}checked{% endif %}><label class="form-check-label" for="affects_settlement">{{ _("Afecta pago/cobro") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="participates_in_next_base" id="participates_in_next_base" {% if rule and rule.participates_in_next_base %}checked{% endif %}><label class="form-check-label" for="participates_in_next_base">{{ _("Participa en base posterior") }}</label></div>
+    <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not rule or rule.is_active %}checked{% endif %}><label class="form-check-label" for="is_active">{{ _("Activo") }}</label></div>
+    <div class="col-md-3">
+      <button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button>
+      {% if rule %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin.lista_reglas_fiscales') }}">{{ _("Nueva regla") }}</a>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
+<table class="table table-sm">
+  <caption>{{ _("Lista de reglas fiscales configuradas") }}</caption>
+  <thead>
+    <tr>
+      <th>{{ _("Nombre") }}</th>
+      <th>{{ _("Concepto") }}</th>
+      <th>{{ _("Ámbito") }}</th>
+      <th>{{ _("Nivel") }}</th>
+      <th>{{ _("Tratamiento") }}</th>
+      <th>{{ _("Moneda") }}</th>
+      <th>{{ _("Activo") }}</th>
+      <th>{{ _("Acciones") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for listed_rule in rules %}
+    <tr>
+      <td>{{ listed_rule.name }}</td>
+      <td>{{ listed_rule.concept }}</td>
+      <td>{{ listed_rule.applies_to }}</td>
+      <td>{{ listed_rule.level }}</td>
+      <td>{{ listed_rule.accounting_treatment }}</td>
+      <td>{{ listed_rule.currency or '' }}</td>
+      <td>{{ listed_rule.is_active }}</td>
+      <td class="d-flex gap-2">
+        <a href="{{ url_for('admin.editar_regla_fiscal', rule_id=listed_rule.id) }}">{{ _("Editar") }}</a>
+        <form method="post" action="{{ url_for('admin.eliminar_regla_fiscal', rule_id=listed_rule.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-link btn-sm p-0">{{ _("Eliminar") }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
