@@ -1786,6 +1786,9 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         nullable=True,
     )
     modified_by = database.Column(database.String(26), nullable=True)
+    exchange_revaluation_run_id = database.Column(
+        database.String(26), database.ForeignKey("exchange_revaluation.id"), nullable=True, index=True
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2167,9 +2170,21 @@ class ExchangeRevaluation(database.Model, DocBase):  # type: ignore[name-defined
     """Revalorizacion de moneda extranjera."""
 
     __tablename__ = "exchange_revaluation"
+    year = database.Column(database.Integer(), nullable=True, index=True)
+    month = database.Column(database.Integer(), nullable=True, index=True)
+    run_date = database.Column(database.Date(), nullable=True, index=True)
+    generated_journal = database.Column(database.Boolean(), default=False, nullable=False)
     target_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     journal_entry_id = database.Column(database.String(26), nullable=True)
+    reversal_journal_id = database.Column(database.String(26), nullable=True)
+    voided_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
+    voided_at = database.Column(database.DateTime(), nullable=True)
+    void_reason = database.Column(database.Text(), nullable=True)
+    processed_documents_count = database.Column(database.Integer(), default=0, nullable=False)
+    affected_documents_count = database.Column(database.Integer(), default=0, nullable=False)
+    total_gain = database.Column(database.Numeric(precision=20, scale=4), default=0, nullable=False)
+    total_loss = database.Column(database.Numeric(precision=20, scale=4), default=0, nullable=False)
 
 
 class ExchangeRevaluationItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2184,6 +2199,22 @@ class ExchangeRevaluationItem(database.Model, BaseTabla):  # type: ignore[name-d
     old_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     new_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     difference_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    source_document_type = database.Column(database.String(50), nullable=True, index=True)
+    source_document_id = database.Column(database.String(26), nullable=True, index=True)
+    source_document_no = database.Column(database.String(100), nullable=True, index=True)
+    partner_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
+    partner_type = database.Column(database.String(20), nullable=True, index=True)
+    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True, index=True)
+    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID), nullable=True, index=True)
+    original_currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    ledger_currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    open_amount_original = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    previous_ledger_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    closing_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    revalued_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    exchange_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    journal_line_id = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=True, index=True)
+    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID), nullable=True, index=True)
 
 
 # <---------------------------------------------------------------------------------------------> #

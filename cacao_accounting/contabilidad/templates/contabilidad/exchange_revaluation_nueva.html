@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}" class="link-dark">{{ _('RevalorizaciÃ³n cambiaria') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nueva') }}</li>
+  </ol>
+</nav>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-currency-exchange"></i> {{ _('Nueva revalorizaciÃ³n cambiaria') }}</h5>
+  </div>
+  <form method="post" class="p-3 row g-3 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-5">
+      <label class="form-label" for="company">{{ _('CompaÃ±Ã­a') }}</label>
+      <select class="form-select" id="company" name="company" required>
+        <option value="">{{ _('Seleccione') }}</option>
+        {% for company in companies %}
+        <option value="{{ company.code }}">{{ company.code }} - {{ company.name or company.company_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="month">{{ _('Mes') }}</label>
+      <input class="form-control" id="month" name="month" type="number" min="1" max="12" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="year">{{ _('AÃ±o') }}</label>
+      <input class="form-control" id="year" name="year" type="number" min="2000" max="2100" required>
+    </div>
+    <div class="col-md-1">
+      <button class="btn btn-primary w-100" type="submit">{{ _('Ejecutar') }}</button>
+    </div>
+  </form>
+</section>
+
+{% endblock %}
