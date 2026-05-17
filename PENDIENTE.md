@@ -39,6 +39,14 @@
 - [ ] Drill-down universal en el 100% de los reportes operativos.
 - [ ] Exportacion consistente a Excel con formato financiero en todos los reportes.
 
+## Motores de Cálculo y Contabilidad
+- [x] Implementar el "Posting Builder" definitivo basado en las propuestas de `AccountingMapper`.
+- [x] Evolucionar el motor de reglas hacia una implementación basada en Grafos de Dependencia (DAG) para cálculos complejos no secuenciales.
+- [x] Integrar `TaxRule` al flujo transaccional para construir `CalculationContext` desde BD sin cargar reglas manualmente en pruebas.
+- [x] Extender `SettlementEngine` para manejar descuentos por pronto pago y revaluaciones de moneda no realizadas.
+- [ ] Añadir soporte transaccional persistido para documentos específicos de importación cuando exista un doctype dedicado para `import_landed_cost_confirmed`.
+- [ ] Evaluar almacenamiento persistente del snapshot/fingerprint de cálculo en los documentos operativos para trazabilidad directa desde UI.
+
 ## Pendientes Generales
 - [ ] Implementar mas reportes operativos usando el nuevo framework.
 - [ ] Seguir migrando formularios operativos al patron comun sin tocar todavia pagos bancarios ni documentos con origen complejo sin cobertura funcional suficiente.

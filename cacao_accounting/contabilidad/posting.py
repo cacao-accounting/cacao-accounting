@@ -428,6 +428,28 @@ def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
     return entries
 
 
+def _post_with_calculation_engine(document: Any, ledger_code: str | None = None) -> list[GLEntry] | None:
+    """Post supported documents through the accounting-engine integration."""
+    from cacao_accounting.accounting_engine.document_builders import (
+        CalculationContextBuilderError,
+        build_calculation_context,
+    )
+    from cacao_accounting.accounting_engine.gl_posting_builder import post_proforma_to_gl
+    from cacao_accounting.accounting_engine.orchestrator.event_orchestrator import BusinessEventOrchestrator
+
+    try:
+        context = build_calculation_context(document)
+    except CalculationContextBuilderError as exc:
+        raise PostingError(str(exc)) from exc
+    if context is None:
+        return None
+    results = BusinessEventOrchestrator().handle_event(context)
+    proforma = results.get("proforma")
+    if proforma is None:
+        return None
+    return post_proforma_to_gl(document=document, context=context, proforma=proforma, ledger_code=ledger_code)
+
+
 def _signed_amount(document: Any, amount: Decimal) -> Decimal:
     return -amount if getattr(document, "is_return", False) or getattr(document, "is_reversal", False) else amount
 
@@ -607,71 +629,74 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
     if not items:
         raise PostingError("La factura de venta no contiene lineas para contabilizar.")
 
-    tax_result = _tax_result_for_document(document, items)
-    entries: list[GLEntry] = []
-    for context in _document_contexts(document, ledger_code=ledger_code):
-        amount_total = _invoice_items_total(items, document) + _signed_tax_delta(document, tax_result)
-        if amount_total > 0:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    account_id=receivable_account_id,
-                    debit=amount_total,
-                    credit=Decimal("0"),
-                    party_type="customer",
-                    party_id=document.customer_id,
-                    entry_remarks="Cuentas por cobrar",
-                )
-            )
-        else:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    account_id=receivable_account_id,
-                    debit=Decimal("0"),
-                    credit=abs(amount_total),
-                    party_type="customer",
-                    party_id=document.customer_id,
-                    entry_remarks="Cuentas por cobrar",
-                )
-            )
-
-        for item in items:
-            amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
-            if amount == 0:
-                continue
-            income_account_id = _require_account(
-                _account_id_for_item(item, company, "income"),
-                "Falta la cuenta de ingresos para una linea de factura de venta.",
-            )
-            if amount > 0:
+    result = _post_with_calculation_engine(document, ledger_code=ledger_code)
+    if result is None:
+        tax_result = _tax_result_for_document(document, items)
+        entries: list[GLEntry] = []
+        for context in _document_contexts(document, ledger_code=ledger_code):
+            amount_total = _invoice_items_total(items, document) + _signed_tax_delta(document, tax_result)
+            if amount_total > 0:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=income_account_id,
-                        debit=Decimal("0"),
-                        credit=amount,
-                        entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        account_id=receivable_account_id,
+                        debit=amount_total,
+                        credit=Decimal("0"),
+                        party_type="customer",
+                        party_id=document.customer_id,
+                        entry_remarks="Cuentas por cobrar",
                     )
                 )
             else:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=income_account_id,
-                        debit=abs(amount),
-                        credit=Decimal("0"),
-                        entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        account_id=receivable_account_id,
+                        debit=Decimal("0"),
+                        credit=abs(amount_total),
+                        party_type="customer",
+                        party_id=document.customer_id,
+                        entry_remarks="Cuentas por cobrar",
                     )
                 )
 
-        _append_sales_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
+            for item in items:
+                amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
+                if amount == 0:
+                    continue
+                income_account_id = _require_account(
+                    _account_id_for_item(item, company, "income"),
+                    "Falta la cuenta de ingresos para una linea de factura de venta.",
+                )
+                if amount > 0:
+                    entries.append(
+                        _create_gl_entry(
+                            context=context,
+                            account_id=income_account_id,
+                            debit=Decimal("0"),
+                            credit=amount,
+                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        )
+                    )
+                else:
+                    entries.append(
+                        _create_gl_entry(
+                            context=context,
+                            account_id=income_account_id,
+                            debit=abs(amount),
+                            credit=Decimal("0"),
+                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        )
+                    )
 
-    result = _add_entries(entries)
+            _append_sales_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
+
+        result = _add_entries(entries)
 
     from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
 
     if not document.grand_total:
+        tax_result = _tax_result_for_document(document, items)
         # Se asume que el debito a cuentas por cobrar (amount_total calculado arriba) es el total
         document.grand_total = abs(_invoice_items_total(items, document) + _signed_tax_delta(document, tax_result))
     refresh_outstanding_amount_cache(document)
@@ -699,66 +724,68 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     if getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
         _record_purchase_reconciliation(document, abs(item_amount_total))
 
-    entries: list[GLEntry] = []
-    for context in _document_contexts(document, ledger_code=ledger_code):
-        for item in items:
-            amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
-            if amount == 0:
-                continue
-            debit_account_type = "bridge" if getattr(document, "purchase_receipt_id", None) else "expense"
-            debit_account_id = _require_account(
-                _account_id_for_item(item, company, debit_account_type),
-                "Falta la cuenta de gasto o cuenta puente para una linea de factura de compra.",
-            )
-            if amount > 0:
+    result = _post_with_calculation_engine(document, ledger_code=ledger_code)
+    if result is None:
+        entries: list[GLEntry] = []
+        for context in _document_contexts(document, ledger_code=ledger_code):
+            for item in items:
+                amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
+                if amount == 0:
+                    continue
+                debit_account_type = "bridge" if getattr(document, "purchase_receipt_id", None) else "expense"
+                debit_account_id = _require_account(
+                    _account_id_for_item(item, company, debit_account_type),
+                    "Falta la cuenta de gasto o cuenta puente para una linea de factura de compra.",
+                )
+                if amount > 0:
+                    entries.append(
+                        _create_gl_entry(
+                            context=context,
+                            account_id=debit_account_id,
+                            debit=amount,
+                            credit=Decimal("0"),
+                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        )
+                    )
+                else:
+                    entries.append(
+                        _create_gl_entry(
+                            context=context,
+                            account_id=debit_account_id,
+                            debit=Decimal("0"),
+                            credit=abs(amount),
+                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        )
+                    )
+
+            _append_purchase_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
+
+            if amount_total > 0:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=debit_account_id,
-                        debit=amount,
-                        credit=Decimal("0"),
-                        entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        account_id=payable_account_id,
+                        debit=Decimal("0"),
+                        credit=amount_total,
+                        party_type="supplier",
+                        party_id=document.supplier_id,
+                        entry_remarks="Cuentas por pagar",
                     )
                 )
             else:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=debit_account_id,
-                        debit=Decimal("0"),
-                        credit=abs(amount),
-                        entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                        account_id=payable_account_id,
+                        debit=abs(amount_total),
+                        credit=Decimal("0"),
+                        party_type="supplier",
+                        party_id=document.supplier_id,
+                        entry_remarks="Cuentas por pagar",
                     )
                 )
 
-        _append_purchase_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
-
-        if amount_total > 0:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    account_id=payable_account_id,
-                    debit=Decimal("0"),
-                    credit=amount_total,
-                    party_type="supplier",
-                    party_id=document.supplier_id,
-                    entry_remarks="Cuentas por pagar",
-                )
-            )
-        else:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    account_id=payable_account_id,
-                    debit=abs(amount_total),
-                    credit=Decimal("0"),
-                    party_type="supplier",
-                    party_id=document.supplier_id,
-                    entry_remarks="Cuentas por pagar",
-                )
-            )
-
-    result = _add_entries(entries)
+        result = _add_entries(entries)
 
     from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
 
@@ -795,6 +822,10 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         raise PostingError("El monto del pago debe ser mayor que cero.")
 
     payment_type = getattr(document, "payment_type", "").lower()
+    if payment_type in {"pay", "receive"}:
+        engine_result = _post_with_calculation_engine(document, ledger_code=ledger_code)
+        if engine_result is not None:
+            return engine_result
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         if payment_type == "pay":
@@ -1548,29 +1579,35 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
 
     entries: list[GLEntry] = []
     if bridge_account_id:
-        for context in _document_contexts(document, ledger_code=ledger_code):
-            for line in _document_items(document):
-                qty = _line_qty_generic(line)
-                rate = _line_rate_generic(line)
-                amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
-                value = _signed_amount(document, amount)
-                inventory_account_id = _require_account(
-                    _account_id_for_item(line, company, "inventory"),
-                    "Falta la cuenta de inventario para una linea de recepcion de compra.",
-                )
-                entries.extend(
-                    _normal_entries_for_amount(
-                        context=context,
-                        debit_account_id=inventory_account_id,
-                        credit_account_id=bridge_account_id,
-                        amount=value,
-                        party_type="supplier",
-                        party_id=document.supplier_id,
-                        debit_remarks="Recepción de compra",
-                        credit_remarks="Cuenta puente compras",
+        engine_result = _post_with_calculation_engine(document, ledger_code=ledger_code)
+        if engine_result is not None:
+            result = engine_result
+        else:
+            for context in _document_contexts(document, ledger_code=ledger_code):
+                for line in _document_items(document):
+                    qty = _line_qty_generic(line)
+                    rate = _line_rate_generic(line)
+                    amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+                    value = _signed_amount(document, amount)
+                    inventory_account_id = _require_account(
+                        _account_id_for_item(line, company, "inventory"),
+                        "Falta la cuenta de inventario para una linea de recepcion de compra.",
                     )
-                )
-    result = _add_entries(entries)
+                    entries.extend(
+                        _normal_entries_for_amount(
+                            context=context,
+                            debit_account_id=inventory_account_id,
+                            credit_account_id=bridge_account_id,
+                            amount=value,
+                            party_type="supplier",
+                            party_id=document.supplier_id,
+                            debit_remarks="Recepción de compra",
+                            credit_remarks="Cuenta puente compras",
+                        )
+                    )
+            result = _add_entries(entries)
+    else:
+        result = _add_entries(entries)
 
     from cacao_accounting.compras.purchase_reconciliation_service import EventType, emit_economic_event
 
