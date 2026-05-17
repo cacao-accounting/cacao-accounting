@@ -57,6 +57,7 @@ class RevaluationCandidate:
     original_currency: str
     open_amount_original: Decimal
     normal_balance: str
+    total_amount_original: Decimal
     bank_account_id: str | None = None
     as_of_date: date | None = None
 
@@ -315,6 +316,7 @@ class ExchangeRevaluationService:
                         original_currency=currency,
                         open_amount_original=outstanding,
                         normal_balance="debit",
+                        total_amount_original=self._decimal(invoice.grand_total),
                         as_of_date=as_of_date,
                     )
                 )
@@ -350,6 +352,7 @@ class ExchangeRevaluationService:
                         original_currency=currency,
                         open_amount_original=outstanding,
                         normal_balance="credit",
+                        total_amount_original=self._decimal(invoice.grand_total),
                         as_of_date=as_of_date,
                     )
                 )
@@ -377,6 +380,7 @@ class ExchangeRevaluationService:
                     original_currency=account.currency,
                     open_amount_original=amount,
                     normal_balance="debit",
+                    total_amount_original=amount,
                     bank_account_id=account.id,
                     as_of_date=as_of_date,
                 )
@@ -568,7 +572,11 @@ class ExchangeRevaluationService:
                 .where(GLEntry.posting_date <= (candidate.as_of_date or date.today()))
                 .where(GLEntry.voucher_type != EXCHANGE_REVALUATION_ENTITY_TYPE)
             )
-        return self._normal_balance(database.session.execute(query).scalars().all(), candidate.normal_balance)
+        balance = self._normal_balance(database.session.execute(query).scalars().all(), candidate.normal_balance)
+        if candidate.total_amount_original > 0 and candidate.open_amount_original < candidate.total_amount_original:
+            proportion = candidate.open_amount_original / candidate.total_amount_original
+            return (balance * proportion).quantize(Decimal("0.0001"))
+        return balance
 
     def _active_revaluation_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
         items = (
