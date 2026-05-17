@@ -77,6 +77,7 @@ def create_default_entity(data: dict, status: str = "default", default: bool = T
 
 
 def create_default_book(entity: Entity) -> "Book":
+    """Create a default accounting book for the entity."""
     from cacao_accounting.database import Book
 
     existing_book = database.session.execute(
@@ -98,6 +99,7 @@ def create_default_book(entity: Entity) -> "Book":
 
 
 def create_default_cost_center(entity: Entity) -> "CostCenter":
+    """Create a default cost center for the entity."""
     from cacao_accounting.database import CostCenter
 
     existing_cost_center = database.session.execute(
@@ -153,6 +155,7 @@ def create_default_fiscal_year(
     year_end_date: "date | None" = None,
     reference_date: "date | None" = None,
 ) -> "FiscalYear":
+    """Create a default fiscal year for the entity."""
     from datetime import date as _date
     from cacao_accounting.database import FiscalYear
 
@@ -183,6 +186,7 @@ def create_default_fiscal_year(
 
 
 def create_default_accounting_period(entity: Entity, fiscal_year: "FiscalYear") -> "AccountingPeriod":
+    """Create default accounting periods for the fiscal year."""
     existing_period = database.session.execute(
         database.select(AccountingPeriod).filter_by(entity=entity.code, fiscal_year_id=fiscal_year.id)
     ).scalar_one_or_none()

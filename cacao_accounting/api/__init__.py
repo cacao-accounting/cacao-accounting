@@ -333,7 +333,7 @@ def api_document_flow_summary():
 
 
 def _source_items_or_abort(source_type: str, source_id: str):
-    """Helper para endpoints legacy de items por documento."""
+    """Get source items or abort with error status."""
     try:
         return get_source_items(source_type, source_id, request.args.get("target_type"))
     except DocumentFlowError as exc:

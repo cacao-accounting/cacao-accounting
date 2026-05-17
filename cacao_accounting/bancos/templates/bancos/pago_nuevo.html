@@ -50,7 +50,7 @@
       },
 
       calculateTotal: function() {
-        this.header.paid_amount = this.lines.reduce((sum, line) => sum + parseFloat(line.allocated_amount || 0), 0);
+        this.header.paid_amount = this.lines.reduce((sum, line) => sum + Number.parseFloat(line.allocated_amount || 0), 0);
       },
 
       prepareSubmit: function (event) {
@@ -220,6 +220,7 @@
               <h6 class="mb-0"><i class="bi bi-link-45deg"></i> {{ _('Asignación a Facturas') }}</h6>
           </div>
           <table class="ca-table mb-0">
+              <caption>{{ _("Facturas pendientes para asignación de pago") }}</caption>
               <thead>
                   <tr>
                       <th>{{ _('Documento') }}</th>
