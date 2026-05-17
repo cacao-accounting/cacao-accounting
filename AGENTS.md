@@ -28,6 +28,7 @@ Siempre considera los siguientes controles de calidad:
 - Formato con black
 - Chequeo de tipos con mypy
 - Chequeo estatico con ruff y flake8
+- Documentación adecuada del código mediante docstrings en módulos, clases y funciones
 - Pruebas unitarias con pytest
 
 Los tests unitarios se ejecutan con este comando:

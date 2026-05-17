@@ -1,5 +1,9 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-17
+- [x] Integrar `pydocstyle` al flujo de calidad (local y CI) con convención `pep257`.
+- [ ] Mantener cobertura de docstrings en nuevos cambios de `cacao_accounting`.
+
 ## Core y Posting
 - [ ] Resolver politica formal de renumeracion de `document_no` tras cambios en borradores.
 - [ ] Implementar soporte completo para `GLEntryDimension` (dimensiones personalizadas) en posting.

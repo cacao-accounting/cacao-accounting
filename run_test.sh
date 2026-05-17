@@ -7,6 +7,10 @@ echo Linting code with ruff
 echo
 python -m ruff check cacao_accounting/
 echo
+echo Ejecutando pydocstyle
+echo
+python -m pydocstyle cacao_accounting/ --convention=pep257
+echo
 echo Ejecutando bandit
 echo
 python -m bandit -r cacao_accounting/
