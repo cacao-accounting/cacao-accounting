@@ -12,6 +12,7 @@ black
 flake8
 ruff
 bandit
+pydocstyle
 
 # Cobertura de código
 coverage
