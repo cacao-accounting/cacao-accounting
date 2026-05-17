@@ -1,1196 +1,944 @@
-# Requerimiento técnico: motores de cálculo para impuestos, costos y liquidaciones
+# Requerimiento Funcional y Técnico
 
-## 1. Objetivo general
+# Exchange Revaluation (Revalorización Cambiaria NIIF Multiledger)
 
-Implementar una arquitectura centralizada de cálculo para manejar impuestos, cargos, costos accesorios, retenciones, prorrateos, pagos y cobros en compras y ventas.
+## Objetivo
 
-El sistema no debe calcular impuestos directamente dentro de facturas, pagos, compras, ventas o inventario. En su lugar, los documentos y eventos del sistema deben invocar motores especializados.
+Implementar un proceso completo de **Revalorización Cambiaria** conforme a **NIC 21 / NIIF**, integrado al motor contable multiledger de Cacao Accounting.
 
-Los motores deben ser:
+El proceso debe recalcular el valor contable de partidas monetarias abiertas usando tasas de cierre y reconocer diferencias cambiarias no realizadas en resultados.
 
-* configurables
-* determinísticos
-* auditables
-* reutilizables
-* independientes del ORM
-* independientes de la interfaz
-* aptos para simulación, borrador y confirmación
+La implementación debe:
 
----
-
-# 2. Motores requeridos
-
-## 2.1 Fiscal Engine
-
-Responsabilidad:
-
-Calcular impuestos, retenciones, cargos fiscales y obligaciones tributarias.
-
-Debe manejar:
-
-* IVA
-* ISC
-* DAI
-* impuestos municipales
-* retenciones
-* percepciones
-* impuestos incluidos en precio
-* impuestos en cascada
-* impuestos diferidos al pago/cobro
-* impuestos capitalizables
-* impuestos no capitalizables
-* impuestos por ítem
-* impuestos por tercero
-* impuestos por transacción
-
-No debe generar asientos directamente. Solo debe devolver el resultado fiscal calculado.
+* cumplir criterios NIIF,
+* soportar multiledger,
+* integrarse a AR/AP/Bancos,
+* operar a nivel documental,
+* ser totalmente auditable,
+* ser idempotente,
+* soportar múltiples ejecuciones por período,
+* permitir reversión/anulación,
+* integrarse al cierre mensual,
+* y funcionar también de forma independiente.
 
 ---
 
-## 2.2 Landed Cost Engine
+# Base NIIF
 
-Responsabilidad:
+La implementación debe alinearse con NIC 21:
 
-Calcular costos capitalizables asociados a inventario.
-
-Debe manejar:
-
-* flete
-* seguro
-* DAI
-* ISC capitalizable
-* manejo de carga
-* gastos portuarios
-* almacenamiento
-* comisiones de importación
-* otros cargos capitalizables
-* prorrateo entre ítems
-* ajustes de costo
-* diferencias entre costo estimado y costo final
-
-No debe registrar inventario directamente. Solo debe devolver el costo asignado por ítem.
+* Las partidas monetarias en moneda extranjera deben convertirse usando la tasa de cierre.
+* Las diferencias cambiarias deben reconocerse en resultados.
+* Solo deben revalorizarse partidas monetarias.
+* Solo deben revalorizarse saldos abiertos o pendientes.
+* La revalorización debe impactar el valor contable vigente del saldo pendiente.
 
 ---
 
-## 2.3 Settlement Engine
+# Alcance funcional
 
-Responsabilidad:
+## Debe revalorizar
 
-Calcular efectos financieros al momento de pagar o cobrar.
+### Accounts Receivable (AR)
 
-Debe manejar:
-
-* pagos
-* cobros
-* pagos parciales
-* cobros parciales
-* retenciones al pago
-* retenciones al cobro
-* anticipos
-* compensaciones
-* diferencias cambiarias
-* impuestos que se causan al momento del pago/cobro
-* saldos pendientes
-
-No debe mover bancos directamente. Solo debe devolver el desglose financiero.
+* Facturas abiertas
+* Notas de débito abiertas
+* Notas de crédito parcialmente aplicadas
+* Anticipos abiertos
+* Saldos pendientes parciales
 
 ---
 
-# 3. Principio arquitectónico obligatorio
+## Accounts Payable (AP)
 
-Los tres motores deben ser funciones puras.
-
-Ejemplo conceptual:
-
-```python
-result = fiscal_engine.calculate(context)
-result = landed_cost_engine.calculate(context)
-result = settlement_engine.calculate(context)
-```
-
-No deben:
-
-* hacer consultas a la base de datos
-* escribir registros
-* crear asientos
-* modificar inventario
-* modificar saldos
-* depender de sesiones ORM
-* depender de formularios o vistas
-
-Deben recibir un contexto completo y devolver un resultado completo.
+* Facturas proveedor abiertas
+* Notas de débito proveedor
+* Notas de crédito parcialmente aplicadas
+* Anticipos abiertos
+* Obligaciones pendientes
 
 ---
 
-# 4. Eventos de negocio soportados
+## Bancos
 
-El sistema debe trabajar sobre eventos de negocio, no únicamente sobre documentos.
+* Saldos bancarios monetarios
+* Cuentas bancarias en moneda extranjera
 
-## 4.1 Eventos de compra
+---
 
-```text
-purchase_order_created
-purchase_receipt_created
-purchase_invoice_created
-purchase_invoice_confirmed
-purchase_debit_note_created
-purchase_credit_note_created
-purchase_return_created
-purchase_payment_created
-purchase_payment_confirmed
-```
+## Otras cuentas monetarias
 
-## 4.2 Eventos de venta
+Solo si:
 
-```text
-sales_order_created
-sales_delivery_created
-sales_invoice_created
-sales_invoice_confirmed
-sales_debit_note_created
-sales_credit_note_created
-sales_return_created
-sales_collection_created
-sales_collection_confirmed
-```
-
-## 4.3 Eventos de inventario
-
-```text
-inventory_receipt_created
-inventory_receipt_confirmed
-inventory_cost_adjustment_created
-inventory_cost_adjustment_confirmed
-inventory_return_created
-```
-
-## 4.4 Eventos de liquidación internacional
-
-```text
-import_landed_cost_draft_created
-import_landed_cost_confirmed
-import_customs_clearance_created
-import_customs_clearance_confirmed
-```
-
-## 4.5 Eventos financieros
-
-```text
-payment_created
-payment_confirmed
-collection_created
-collection_confirmed
-payment_reversed
-collection_reversed
+```text id="3v6g6o"
+monetary_account = true
+exchange_revaluation_enabled = true
 ```
 
 ---
 
-# 5. Orquestador de eventos
+# No debe revalorizar
 
-Debe existir un componente central:
+* Inventarios
+* Activos fijos
+* Gastos
+* Ingresos
+* Patrimonio
+* Impuestos
+* Cuentas no monetarias
+* Documentos totalmente cerrados
+* Documentos totalmente conciliados
+* Moneda original del documento
 
-```text
-Business Event Orchestrator
+---
+
+# Arquitectura multiledger
+
+## Regla principal
+
+La moneda original del documento NO se revaloriza.
+
+Solo se revalorizan ledgers cuya moneda sea distinta a la moneda origen.
+
+---
+
+# Ejemplo
+
+Ledgers activos:
+
+```text id="62b6kq"
+NIO
+USD
+EUR
 ```
 
-Responsabilidad:
+Factura registrada originalmente en USD.
 
-* recibir el evento
-* construir el contexto de cálculo
-* invocar los motores necesarios
-* consolidar resultados
-* enviar resultados al generador contable
-* enviar resultados al módulo de inventario
-* guardar snapshot del cálculo
-* manejar reversión si aplica
+Resultado:
 
-Ejemplo:
+| Ledger | Revaloriza |
+| ------ | ---------- |
+| USD    | No         |
+| NIO    | Sí         |
+| EUR    | Sí         |
 
-```text
-purchase_invoice_confirmed
- ├── Fiscal Engine
- ├── Landed Cost Engine
- ├── Settlement Engine, si hay pago inmediato
- ├── Accounting Mapper
- ├── Inventory Mapper
- └── Snapshot Writer
+---
+
+# Integración subledger obligatoria
+
+La revalorización debe operar a nivel documental.
+
+NO se permiten ajustes globales resumidos por cuenta.
+
+---
+
+# Granularidad obligatoria
+
+Cada documento abierto debe generar su propia línea de revalorización.
+
+Ejemplos:
+
+* Factura
+* Nota débito
+* Nota crédito
+* Anticipo
+* Saldo bancario identificado
+
+---
+
+# Impacto obligatorio en AR/AP
+
+Los movimientos de revalorización deben impactar directamente:
+
+* saldo abierto documental,
+* subledger,
+* aging,
+* open items,
+* estado de cuenta.
+
+---
+
+# Resultado esperado
+
+Los reportes de:
+
+* AR Aging
+* AP Aging
+* Open Items
+* Estado de cuenta
+* Balance multiledger
+
+deben mostrar automáticamente valores revaluados.
+
+---
+
+# Configuración requerida
+
+## Configuración global compañía
+
+Agregar:
+
+```text id="1jk7pz"
+company.exchange_gain_account_id
+company.exchange_loss_account_id
 ```
 
 ---
 
-# 6. Contexto común de cálculo
+# Validaciones obligatorias
 
-Todos los motores deben recibir un objeto común llamado:
+El proceso debe fallar si:
 
-```text
-CalculationContext
+* no existe cuenta ganancia cambiaria,
+* no existe cuenta pérdida cambiaria,
+* falta tasa de cierre,
+* período cerrado,
+* ledger inactivo,
+* moneda inválida,
+* configuración inconsistente,
+* cuenta monetaria mal configurada.
+
+---
+
+# Tipos de comprobante
+
+Crear nuevo tipo:
+
+```text id="hzm4p2"
+exchange-revaluation
 ```
 
-## 6.1 Campos principales
+Debe diferenciarse de:
 
-```json
-{
-  "company_id": 1,
-  "document_type": "purchase_invoice",
-  "event_type": "purchase_invoice_confirmed",
-  "transaction_direction": "purchase",
-  "transaction_date": "2026-05-16",
-  "posting_date": "2026-05-16",
-  "party_type": "supplier",
-  "party_id": 25,
-  "currency": "USD",
-  "company_currency": "NIO",
-  "exchange_rate": 36.75,
-  "fiscal_exchange_rate": 36.75,
-  "price_includes_tax": false,
-  "items": [],
-  "charges": [],
-  "tax_rules": [],
-  "settlement": null,
-  "rounding_policy": {},
-  "accounting_policy": {},
-  "references": {}
-}
+* journal-entry
+* recurring-entry
+* closing-entry
+
+---
+
+# Menú
+
+Agregar:
+
+```text id="o7ifm2"
+Contabilidad → Revalorización cambiaria
 ```
 
 ---
 
-# 7. Modelo de ítems
+# Pantalla principal
 
-Cada línea de producto o servicio debe entregarse al motor con información suficiente.
+Debe listar:
 
-```json
-{
-  "line_id": "ITEM-001",
-  "item_id": 100,
-  "description": "Mercadería importada",
-  "quantity": 10,
-  "unit_price": 100,
-  "gross_amount": 1000,
-  "discount_amount": 0,
-  "net_amount": 1000,
-  "item_type": "inventory",
-  "uom": "unit",
-  "weight": 25,
-  "volume": 0.5,
-  "tax_profile_id": 3,
-  "cost_center_id": 1,
-  "warehouse_id": 2
-}
+| Campo                 |
+| --------------------- |
+| Número                |
+| Compañía              |
+| Mes                   |
+| Año                   |
+| Fecha                 |
+| Estado                |
+| Usuario               |
+| Total ganancia        |
+| Total pérdida         |
+| Documentos procesados |
+| Documentos afectados  |
+
+---
+
+# Estados
+
+```text id="jlwm4r"
+posted
+voided
+completed_no_changes
 ```
 
 ---
 
-# 8. Modelo de reglas fiscales
+# Nueva revalorización
 
-Debe existir una tabla o estructura equivalente:
+Formulario mínimo:
 
-```text
-tax_rule
+```text id="s1mxp5"
+- Compañía
+- Mes
+- Año
 ```
 
-## 8.1 Campos requeridos
+---
+
+# Flujo de ejecución
+
+## Paso 1
+
+Usuario selecciona:
 
 * compañía
-* nombre
-* ámbito: compra, venta, ambos
-* nivel: ítem, tercero, transacción
-* concepto fiscal
-* tipo: impuesto, retención, percepción, cargo, descuento
-* cálculo: porcentaje, monto fijo, monto manual, por cantidad
-* tasa
-* monto
-* base de cálculo
-* orden
-* dependencias
-* tratamiento contable
-* momento de reconocimiento
-* cuenta contable sugerida
-* afecta inventario
-* afecta costo
-* afecta total documento
-* afecta pago/cobro
-* participa en base de cálculo posterior
-* método de prorrateo
-* fecha inicio
-* fecha fin
-* activo
+* mes
+* año
 
 ---
 
-# 9. Jerarquía de resolución de reglas
+## Paso 2
 
-Las reglas deben resolverse en este orden de especificidad:
+Sistema:
 
-```text
-1. Ítem
-2. Tercero: cliente/proveedor
-3. Transacción
-4. Plantilla predeterminada de compañía
+* identifica ledgers activos,
+* identifica monedas destino,
+* obtiene tasas de cierre,
+* obtiene documentos abiertos,
+* obtiene saldos pendientes,
+* valida configuración.
+
+---
+
+## Paso 3
+
+Si existen errores:
+
+* NO contabilizar,
+* mostrar lista completa de errores.
+
+---
+
+## Paso 4
+
+Si existen diferencias:
+
+* generar comprobante,
+* contabilizar automáticamente,
+* estado `posted`.
+
+---
+
+## Paso 5
+
+Si NO existen diferencias:
+
+* guardar ejecución,
+* NO generar comprobante,
+* estado `completed_no_changes`.
+
+Mensaje:
+
+```text id="a8iv6f"
+La revalorización fue ejecutada correctamente.
+No se generaron diferencias cambiarias.
 ```
 
-La regla más específica prevalece sobre la más general, salvo cuando una regla indique explícitamente que es acumulativa.
+---
 
-## 9.1 Modos de combinación
+# UX
 
-Cada regla debe tener un campo:
+Debe reutilizar UX del comprobante contable.
 
-```text
-merge_strategy
+Referencias:
+
+```text id="smx1x0"
+journal.html
+journal_nuevo.html
 ```
 
-Valores:
+---
 
-* `override`
-* `append`
-* `exclude`
-* `replace_group`
+# Restricciones UX
+
+Usuario NO puede:
+
+* editar líneas,
+* cambiar cuentas,
+* cambiar montos,
+* cambiar tasas,
+* agregar líneas,
+* eliminar líneas.
+
+---
+
+# Información obligatoria visible
+
+* documento origen,
+* tercero,
+* moneda origen,
+* ledger destino,
+* tasa aplicada,
+* saldo original,
+* saldo revaluado,
+* diferencia,
+* fecha ejecución,
+* estado.
+
+---
+
+# Ejecuciones múltiples por período
+
+El sistema debe permitir múltiples ejecuciones dentro del mismo período.
 
 Ejemplo:
 
-```text
-Ítem exento     -> excluye IVA
-Cliente retenedor -> agrega retención
-Transacción importación -> agrega DAI, ISC, flete, seguro
+```text id="59mf6j"
+Mayo 2026
+- Run #1
+- Run #2
+- Run #3
 ```
 
 ---
 
-# 10. Momentos de reconocimiento
+# Regla de consistencia
 
-Cada impuesto, cargo o retención debe definir cuándo se reconoce.
+Cada ejecución debe ser independiente y auditable.
 
-Valores mínimos:
+Cada ejecución debe guardar:
 
-```text
-receipt
-invoice
-payment
-collection
-customs_clearance
-landed_cost_confirmation
-reversal
-```
-
-Ejemplos:
-
-* DAI capitalizable: `customs_clearance` o `invoice`
-* IVA crédito fiscal: `invoice`
-* Retención al proveedor: `payment`
-* Retención sufrida por cliente: `collection`
-* Flete estimado: `receipt`
-* Ajuste de flete real: `landed_cost_confirmation`
+* snapshot tasas,
+* snapshot saldos,
+* snapshot diferencias,
+* detalle documental procesado.
 
 ---
 
-# 11. Tratamientos contables
+# Idempotencia
 
-Cada línea calculada debe tener un tratamiento contable.
+El proceso debe ser idempotente.
 
-Valores mínimos:
+---
 
-```text
-capitalizable_inventory_cost
-separate_tax_account
-separate_expense_account
-withholding_payable
-withholding_receivable
-revenue_adjustment
-payable_adjustment
-receivable_adjustment
+# Regla técnica
+
+Cada nueva ejecución debe calcular diferencias contra el saldo contable ACTUAL.
+
+Incluyendo revalorizaciones previas activas.
+
+---
+
+# Fórmula principal
+
+\text{valor revaluado} = \text{saldo pendiente moneda origen} \times \text{tasa cierre}
+
+---
+
+# Diferencia incremental
+
+\text{diferencia nueva} = \text{valor revaluado actual} - \text{saldo ledger actual acumulado}
+
+---
+
+# Reglas contables
+
+## Activos monetarios
+
+Si aumenta:
+
+```text id="rzr56l"
+Dr Cuenta monetaria
+Cr Ganancia cambiaria
 ```
 
-Ejemplos:
+Si disminuye:
 
-DAI:
-
-```text
-capitalizable_inventory_cost
-```
-
-IVA compra:
-
-```text
-separate_tax_account
-```
-
-Retención al proveedor:
-
-```text
-withholding_payable
-```
-
-Retención sufrida en venta:
-
-```text
-withholding_receivable
+```text id="6y8axg"
+Dr Pérdida cambiaria
+Cr Cuenta monetaria
 ```
 
 ---
 
-# 12. Fiscal Engine
+## Pasivos monetarios
 
-## 12.1 Entrada
-
-Recibe:
-
-```text
-CalculationContext
-```
-
-## 12.2 Salida
-
-Devuelve:
-
-```json
-{
-  "engine": "fiscal",
-  "document_tax_total": 162.23,
-  "capitalizable_tax_total": 81.50,
-  "separate_tax_total": 162.23,
-  "withholding_total": 0,
-  "tax_lines": [],
-  "audit_trail": [],
-  "warnings": [],
-  "errors": []
-}
-```
-
-## 12.3 Línea fiscal calculada
-
-```json
-{
-  "line_id": "TAX-001",
-  "concept": "DAI",
-  "type": "tax",
-  "rate": 5,
-  "calculation_method": "percentage",
-  "base_amount": 1000,
-  "amount": 50,
-  "recognition_event": "customs_clearance",
-  "accounting_treatment": "capitalizable_inventory_cost",
-  "affects_inventory": true,
-  "affects_document_total": true,
-  "included_in_price": false,
-  "source_rule_id": 10,
-  "applies_to_items": ["ITEM-001"],
-  "depends_on": [],
-  "participates_in_next_base": true
-}
-```
+Aplicar lógica inversa según naturaleza.
 
 ---
 
-# 13. Cálculo en cascada
+# Contabilización obligatoria a nivel documental
 
-El motor debe soportar bases acumuladas.
+Cada documento debe generar líneas independientes.
 
 Ejemplo:
-
-```text
-Mercadería: 1000
-DAI 5% sobre mercadería = 50
-Base acumulada = 1050
-ISC 3% sobre mercadería + DAI = 31.50
-Base acumulada = 1081.50
-IVA 15% sobre mercadería + DAI + ISC = 162.23
-```
-
-Cada regla debe poder declarar:
-
-```json
-{
-  "base_mode": "accumulated",
-  "include_concepts": ["goods", "DAI", "ISC"],
-  "exclude_concepts": [],
-  "participates_in_next_base": true
-}
-```
-
----
-
-# 14. Landed Cost Engine
-
-## 14.1 Entrada
-
-Recibe:
-
-* ítems
-* cargos capitalizables
-* impuestos capitalizables calculados por Fiscal Engine
-* reglas de prorrateo
-* valores estimados o reales
-* moneda y tipo de cambio
-
-## 14.2 Salida
-
-```json
-{
-  "engine": "landed_cost",
-  "base_goods_total": 1000,
-  "capitalizable_charges_total": 81.50,
-  "inventory_value_total": 1081.50,
-  "allocations": [],
-  "audit_trail": [],
-  "warnings": [],
-  "errors": []
-}
-```
-
-## 14.3 Asignación por ítem
-
-```json
-{
-  "item_line_id": "ITEM-001",
-  "base_amount": 1000,
-  "allocated_costs": [
-    {
-      "concept": "DAI",
-      "amount": 50
-    },
-    {
-      "concept": "ISC",
-      "amount": 31.50
-    }
-  ],
-  "final_inventory_cost": 1081.50,
-  "unit_inventory_cost": 108.15
-}
-```
-
----
-
-# 15. Métodos de prorrateo
-
-El Landed Cost Engine debe soportar:
-
-```text
-by_value
-by_quantity
-by_weight
-by_volume
-equal
-manual
-```
-
-## 15.1 Prorrateo por valor
-
-```text
-proporción = valor del ítem / valor total de ítems
-costo asignado = cargo global × proporción
-```
-
-Ejemplo:
-
-```text
-Ítem A: 600
-Ítem B: 400
-Total: 1000
-
-Cargo capitalizable: 81.50
-
-A: 48.90
-B: 32.60
-```
-
----
-
-# 16. Settlement Engine
-
-## 16.1 Entrada
-
-Recibe:
-
-* documento por pagar o cobrar
-* saldo pendiente
-* monto del pago/cobro
-* moneda
-* tipo de cambio
-* reglas fiscales al pago/cobro
-* retenciones aplicables
-* anticipos
-* compensaciones
-
-## 16.2 Salida
-
-```json
-{
-  "engine": "settlement",
-  "gross_settlement_amount": 1000,
-  "cash_amount": 900,
-  "withholding_amount": 100,
-  "exchange_difference": 0,
-  "remaining_balance": 0,
-  "settlement_lines": [],
-  "audit_trail": [],
-  "warnings": [],
-  "errors": []
-}
-```
-
-## 16.3 Línea de liquidación
-
-```json
-{
-  "line_id": "SETTLE-001",
-  "concept": "Retención IR",
-  "type": "withholding",
-  "base_amount": 1000,
-  "rate": 10,
-  "amount": 100,
-  "recognition_event": "payment",
-  "accounting_treatment": "withholding_payable",
-  "account_id": 2105
-}
-```
-
----
-
-# 17. Pagos y cobros parciales
-
-El Settlement Engine debe calcular retenciones proporcionalmente.
-
-Ejemplo:
-
-```text
-Factura: 1000
-Retención total aplicable: 100
-Pago parcial: 500
-
-Retención proporcional:
-50
-```
-
-Resultado:
-
-```text
-Dr Proveedor 500
-Cr Banco 450
-Cr Retención por pagar 50
-```
-
----
-
-# 18. Asociación de motores con eventos
-
-## 18.1 Recepción de compra
-
-Evento:
-
-```text
-purchase_receipt_confirmed
-```
-
-Motores:
-
-```text
-Fiscal Engine, solo impuestos/cargos reconocibles en recepción
-Landed Cost Engine
-```
-
-Resultado:
-
-```text
-Dr Inventario
-Cr Mercadería recibida no facturada
-```
-
-Incluye solamente:
-
-* costo base
-* costos capitalizables estimados
-* impuestos capitalizables reconocibles en recepción
-
-No incluye:
-
-* IVA crédito fiscal, salvo que la política indique reconocimiento en recepción
-
----
-
-## 18.2 Factura de compra
-
-Evento:
-
-```text
-purchase_invoice_confirmed
-```
-
-Motores:
-
-```text
-Fiscal Engine
-Landed Cost Engine, si hay costos reales o ajustes
-```
-
-Resultado:
-
-```text
-Dr Mercadería recibida no facturada
-Dr IVA crédito fiscal
-Dr Gastos no capitalizables
-Cr Proveedor
-```
-
-Si existe diferencia entre recepción y factura:
-
-```text
-Dr/Cr Ajuste de costo inventario
-Dr/Cr Variación de precio/costo
-```
-
----
-
-## 18.3 Liquidación de importación
-
-Evento:
-
-```text
-import_landed_cost_confirmed
-```
-
-Motores:
-
-```text
-Fiscal Engine
-Landed Cost Engine
-```
-
-Debe calcular:
-
-* FOB
-* flete
-* seguro
-* CIF
-* DAI
-* ISC
-* IVA
-* gastos aduaneros
-* gastos capitalizables
-* gastos no capitalizables
-* costo final por ítem
-
----
-
-## 18.4 Factura de venta
-
-Evento:
-
-```text
-sales_invoice_confirmed
-```
-
-Motores:
-
-```text
-Fiscal Engine
-```
-
-Resultado:
-
-```text
-Dr Cliente
-Cr Ingresos
-Cr IVA por pagar
-Cr Otros impuestos por pagar
-```
-
-Si hay cargos de envío cobrados al cliente:
-
-```text
-Dr Cliente
-Cr Ingreso por envío / recuperación de gastos
-```
-
----
-
-## 18.5 Cobro de venta
-
-Evento:
-
-```text
-collection_confirmed
-```
-
-Motores:
-
-```text
-Settlement Engine
-Fiscal Engine, si hay impuestos o retenciones al cobro
-```
-
-Ejemplo con retención sufrida:
-
-```text
-Dr Banco
-Dr Retención sufrida / anticipo impuesto
-Cr Cliente
-```
-
----
-
-## 18.6 Pago a proveedor
-
-Evento:
-
-```text
-payment_confirmed
-```
-
-Motores:
-
-```text
-Settlement Engine
-Fiscal Engine, si hay retenciones al pago
-```
-
-Ejemplo:
-
-```text
-Dr Proveedor
-Cr Banco
-Cr Retención por pagar
-```
-
----
-
-## 18.7 Nota de crédito
-
-Evento:
-
-```text
-purchase_credit_note_confirmed
-sales_credit_note_confirmed
-```
-
-Motores:
-
-```text
-Fiscal Engine en modo reversión
-Landed Cost Engine, si afecta inventario
-Settlement Engine, si afecta saldos pagados/cobrados
-```
-
-Debe poder usar:
-
-```text
-reverse(reference_document)
-```
-
-No debe recalcular libremente si la nota referencia una factura existente.
-
----
-
-# 19. Snapshot obligatorio
-
-Al confirmar cualquier documento, el sistema debe guardar un snapshot del cálculo.
-
-Debe guardar:
-
-* reglas aplicadas
-* tasas
-* bases
-* montos
-* orden de cálculo
-* dependencias
-* cuentas sugeridas
-* prorrateos
-* redondeos
-* tipo de cambio
-* moneda
-* versión de reglas
-* resultado de cada motor
-
-Esto permite auditoría y reversión histórica.
-
----
-
-# 20. Auditoría de cálculo
-
-Cada motor debe devolver un `audit_trail`.
-
-Ejemplo:
-
-```json
-{
-  "step": 3,
-  "concept": "ISC",
-  "formula": "1050 * 0.03",
-  "base_amount": 1050,
-  "rate": 3,
-  "result": 31.50,
-  "reason": "ISC calculado sobre subtotal acumulado que incluye mercadería + DAI"
-}
-```
-
-La UI debe poder mostrar:
-
-```text
-¿Por qué este impuesto dio este monto?
-```
-
----
-
-# 21. Redondeo
-
-Debe existir una política central de redondeo.
-
-```text
-rounding_policy
-```
-
-Campos:
-
-* precisión fiscal
-* precisión contable
-* precisión por moneda
-* redondeo por línea
-* redondeo por documento
-* método:
-
-  * half_up
-  * half_even
-  * truncate
-* manejo de diferencia residual
-
-El sistema debe asignar diferencias mínimas de redondeo a la última línea elegible o a una cuenta de ajuste.
-
----
-
-# 22. Moneda y tipo de cambio
-
-Debe soportar:
-
-* moneda del documento
-* moneda de compañía
-* moneda fiscal
-* moneda de pago
-* tipo de cambio contable
-* tipo de cambio fiscal
-* tipo de cambio de pago
-
-En importaciones, el tipo de cambio fiscal puede diferir del contable.
-
----
-
-# 23. Generador contable
-
-Debe existir un componente separado:
-
-```text
-Accounting Mapper
-```
-
-Responsabilidad:
-
-Convertir resultados de los motores en propuestas de asiento.
-
-Los motores no generan asientos directamente.
-
-Ejemplo:
-
-```text
-Motor Result -> Accounting Mapper -> Journal Entry Draft
-```
-
----
-
-# 24. Generador de inventario
-
-Debe existir un componente separado:
-
-```text
-Inventory Mapper
-```
-
-Responsabilidad:
-
-Convertir resultado del Landed Cost Engine en movimientos de inventario.
-
-Ejemplo:
-
-```text
-Landed Cost Result -> Inventory Mapper -> Stock Ledger Entry
-```
-
----
-
-# 25. Estados de ejecución
-
-Los motores deben soportar tres modos:
-
-```text
-simulation
-draft
-confirmed
-```
-
-## simulation
-
-* no guarda nada
-* usado para previsualización
-
-## draft
-
-* calcula y permite editar documento
-
-## confirmed
-
-* calcula
-* congela snapshot
-* permite contabilización
-* permite inventario
-* permite cuentas por cobrar/pagar
-
----
-
-# 26. Validaciones mínimas
-
-El sistema debe validar:
-
-* regla sin cuenta contable
-* impuesto sin base
-* regla circular
-* regla vencida
-* tasa inválida
-* moneda sin tipo de cambio
-* cargo capitalizable sin método de prorrateo
-* retención al pago sin cuenta de retención
-* impuesto incluido en precio sin método de extracción
-* nota de crédito sin documento referencia, si requiere reversión exacta
-* diferencias entre recepción y factura sin política de ajuste
-
----
-
-# 27. Errores bloqueantes y advertencias
-
-Los motores deben devolver:
-
-```json
-{
-  "errors": [],
-  "warnings": []
-}
-```
-
-Errores bloquean confirmación.
-
-Advertencias permiten continuar con autorización.
-
-Ejemplo error:
-
-```text
-El cargo "Flete internacional" es capitalizable pero no tiene método de prorrateo.
-```
-
-Ejemplo advertencia:
-
-```text
-El tipo de cambio fiscal difiere del tipo de cambio contable.
-```
-
----
-
-# 28. Diseño de módulos sugerido
-
-```text
-accounting_engine/
-├── common/
-│   ├── money.py
-│   ├── rounding.py
-│   ├── currency.py
-│   ├── context.py
-│   └── result.py
-│
-├── fiscal/
-│   ├── engine.py
-│   ├── rules.py
-│   ├── resolver.py
-│   ├── calculator.py
-│   └── audit.py
-│
-├── landed_cost/
-│   ├── engine.py
-│   ├── allocator.py
-│   ├── adjustment.py
-│   └── audit.py
-│
-├── settlement/
-│   ├── engine.py
-│   ├── withholding.py
-│   ├── payment.py
-│   ├── exchange_difference.py
-│   └── audit.py
-│
-├── orchestration/
-│   ├── event_orchestrator.py
-│   ├── event_registry.py
-│   └── pipeline.py
-│
-├── mapping/
-│   ├── accounting_mapper.py
-│   └── inventory_mapper.py
-│
-└── snapshots/
-    ├── serializer.py
-    └── reverser.py
-```
-
----
-
-# 29. Ejemplo completo: compra internacional
-
-Entrada:
-
-```text
-Mercadería: 1000
-DAI: 5%
-ISC: 3%
-IVA: 15%
-```
-
-Cálculo:
-
-```text
-Mercadería: 1000.00
-DAI: 50.00
-Subtotal: 1050.00
-ISC: 31.50
-Subtotal: 1081.50
-IVA: 162.23
-Total factura: 1243.73
-Costo inventario: 1081.50
-```
-
-Recepción:
-
-```text
-Dr Inventario                         1081.50
-Cr Mercadería recibida no facturada   1081.50
-```
 
 Factura:
 
-```text
-Dr Mercadería recibida no facturada   1081.50
-Dr IVA crédito fiscal                  162.23
-Cr Proveedor                          1243.73
+```text id="31wfru"
+INV-1001
+USD 1,000
+```
+
+Debe generar:
+
+```text id="ct2b0y"
+Dr AR Customer ABC
+Cr Ganancia cambiaria
+```
+
+asociado explícitamente a:
+
+```text id="9k5m2k"
+source_document = INV-1001
 ```
 
 ---
 
-# 30. Criterio de aceptación principal
+# Reversión / anulación
 
-La implementación será aceptada cuando:
+La revalorización NO se edita.
 
-* compras y ventas usen el mismo Fiscal Engine
-* costos de importación usen Landed Cost Engine
-* pagos y cobros usen Settlement Engine
-* ningún documento calcule impuestos directamente
-* los impuestos se puedan configurar por ítem, tercero y transacción
-* los cargos capitalizables aumenten inventario
-* los impuestos no capitalizables vayan a cuenta separada
-* los pagos parciales calculen retenciones proporcionalmente
-* exista snapshot auditable
-* las notas de crédito puedan revertir cálculos históricos
-* el sistema soporte simulación antes de confirmar documentos
+Debe anularse completamente.
+
+---
+
+# Anulación debe
+
+* generar asiento reverso,
+* revertir impacto documental,
+* revertir saldos AR/AP,
+* recalcular aging,
+* mantener trazabilidad,
+* no eliminar registros históricos.
+
+---
+
+# Estados posteriores
+
+```text id="x6b09h"
+posted
+voided
+completed_no_changes
+```
+
+---
+
+# Modelo de datos
+
+## exchange_revaluation_run
+
+Campos mínimos:
+
+```text id="5xjlwm"
+id
+company_id
+year
+month
+status
+generated_journal
+journal_id
+reversal_journal_id
+created_by
+created_at
+voided_by
+voided_at
+void_reason
+processed_documents_count
+affected_documents_count
+total_gain
+total_loss
+```
+
+---
+
+## exchange_revaluation_line
+
+Campos mínimos:
+
+```text id="hvcx1l"
+id
+run_id
+source_document_type
+source_document_id
+partner_id
+account_id
+ledger_id
+original_currency_id
+ledger_currency_id
+open_amount_original
+previous_ledger_balance
+closing_rate
+revalued_balance
+exchange_difference
+journal_line_id
+```
+
+---
+
+# Journal lines
+
+Agregar:
+
+```text id="mkk57j"
+exchange_revaluation_run_id
+```
+
+Esto permitirá:
+
+* auditoría,
+* trazabilidad,
+* reversión,
+* reconstrucción histórica.
+
+---
+
+# Servicio interno
+
+Crear:
+
+```text id="6vxlm5"
+ExchangeRevaluationService
+```
+
+---
+
+# Responsabilidades del servicio
+
+* validar configuración,
+* obtener tasas,
+* obtener documentos abiertos,
+* calcular diferencias,
+* generar líneas documentales,
+* generar comprobante,
+* contabilizar,
+* revertir,
+* garantizar idempotencia,
+* recalcular incrementalmente.
+
+---
+
+# Integración cierre mensual
+
+Orden obligatorio:
+
+```text id="j29m09"
+1. Validar período
+2. Aplicar recurrentes
+3. Ejecutar revalorización
+4. Ajustes de cierre
+5. Validaciones
+6. Bloqueo período
+```
+
+---
+
+# Integración independiente
+
+Debe poder ejecutarse manualmente desde menú contable.
+
+Ambos flujos deben usar exactamente el mismo servicio.
+
+---
+
+# Corrección de errores
+
+Si la revalorización es incorrecta:
+
+```text id="f9pv6l"
+1. Anular revalorización
+2. Corregir documento fuente
+3. Ejecutar nuevamente
+```
+
+Nunca editar comprobante manualmente.
+
+---
+
+# Casos de prueba mínimos
+
+## Caso 1
+
+Factura USD abierta.
+
+Ledgers:
+
+* USD
+* NIO
+* EUR
+
+Resultado:
+
+* USD no revaloriza
+* NIO sí
+* EUR sí
+
+---
+
+## Caso 2
+
+Factura parcialmente pagada.
+
+Resultado:
+
+* solo saldo pendiente revaloriza.
+
+---
+
+## Caso 3
+
+Factura totalmente pagada.
+
+Resultado:
+
+* no revaloriza.
+
+---
+
+## Caso 4
+
+Cuenta bancaria USD.
+
+Resultado:
+
+* revaloriza ledgers destino.
+
+---
+
+## Caso 5
+
+Cuenta no monetaria.
+
+Resultado:
+
+* no revaloriza.
+
+---
+
+## Caso 6
+
+Falta tasa cierre.
+
+Resultado:
+
+* error controlado.
+
+---
+
+## Caso 7
+
+Falta cuenta ganancia/pérdida.
+
+Resultado:
+
+* error controlado.
+
+---
+
+## Caso 8
+
+Múltiples ejecuciones mismo período.
+
+Resultado:
+
+* cálculo incremental correcto.
+
+---
+
+## Caso 9
+
+Revalorización sin diferencias.
+
+Resultado:
+
+* guarda ejecución sin comprobante.
+
+---
+
+## Caso 10
+
+Anulación.
+
+Resultado:
+
+* reverso correcto y restauración documental.
+
+---
+
+## Caso 11
+
+Nueva ejecución posterior a anulación.
+
+Resultado:
+
+* recalcula correctamente.
+
+---
+
+## Caso 12
+
+Aging AR/AP.
+
+Resultado:
+
+* muestra saldo revaluado actualizado.
+
+---
+
+# Criterio final de aceptación
+
+La implementación estará completa cuando el sistema pueda ejecutar revalorizaciones cambiarias NIIF-compatible sobre partidas monetarias abiertas, operando a nivel documental, soportando multiledger, excluyendo moneda origen, integrándose a AR/AP/Bancos, permitiendo múltiples ejecuciones por período, calculando diferencias incrementalmente, generando comprobantes automáticos tipo `exchange-revaluation`, soportando reversión completa y reflejando correctamente saldos revaluados en subledgers y reportes contables.
+
+Ajustes al requerimiento
+Revalorizaciones múltiples por período
+Cambio de regla
+
+Eliminar restricción:
+
+UNA revalorización activa por compañía + período + ledger
+Nueva regla
+
+El sistema debe permitir ejecutar múltiples revalorizaciones dentro del mismo período.
+
+Ejemplo:
+
+Mayo 2026
+- Revalorización #1
+- Revalorización #2
+- Revalorización #3
+
+Esto es necesario porque:
+
+pueden corregirse documentos,
+pueden registrarse pagos tardíos,
+pueden cambiar tasas,
+pueden corregirse conciliaciones,
+pueden ingresarse documentos retroactivos.
+Reglas de consistencia
+
+Cada ejecución debe ser independiente y auditada.
+
+Cada ejecución debe:
+
+generar su propio comprobante,
+guardar snapshot de tasas,
+guardar snapshot de saldos abiertos,
+guardar detalle documental procesado.
+Cálculo incremental obligatorio
+
+La nueva ejecución NO debe duplicar diferencias ya contabilizadas.
+
+La revalorización debe calcularse contra el valor contable ACTUAL, incluyendo revalorizaciones previas activas.
+
+Es decir:
+
+diferencia nueva=valor revaluado actual−saldo ledger actual acumulado
+
+Esto convierte el proceso en acumulativo y consistente.
+
+Revalorizaciones sin afectación contable
+Nueva regla
+
+Si el proceso no genera diferencias:
+
+igualmente debe registrarse la ejecución,
+igualmente debe quedar auditada,
+NO debe generarse comprobante contable,
+debe notificarse al usuario:
+La revalorización fue ejecutada correctamente.
+No se generaron diferencias cambiarias.
+Modelo actualizado
+exchange_revaluation_run
+
+Agregar:
+
+generated_journal = true/false
+processed_documents_count
+affected_documents_count
+Confirmación funcional AR/AP
+
+Sí.
+
+Con este enfoque los reportes de:
+
+Accounts Receivable
+Accounts Payable
+Aging
+Open Items
+Estado de cuenta
+
+mostrarán automáticamente los saldos revaluados SI:
+
+Condición obligatoria
+
+La revalorización genera movimientos contables directamente sobre:
+
+cuenta contable AR/AP,
+subledger del documento,
+saldo abierto del documento.
+Requisito CRÍTICO
+
+La revalorización NO debe generar un ajuste global resumido por cuenta.
+
+Debe generar líneas a nivel documental.
+
+Granularidad obligatoria
+
+Cada documento monetario abierto genera su propia línea de revalorización.
+
+Ejemplos:
+
+Factura
+Nota de débito
+Nota de crédito
+Anticipo abierto
+Saldo bancario identificable
+Ejemplo
+
+Factura:
+
+INV-1001
+USD 1,000
+
+Debe generar:
+
+Dr AR Customer ABC
+Cr Ganancia cambiaria
+
+referenciando explícitamente:
+
+source_document = INV-1001
+Impacto esperado
+
+Gracias a esto:
+
+AR/AP Aging
+
+Mostrará:
+
+saldo original,
+saldo revaluado,
+diferencia cambiaria acumulada.
+Estado de cuenta cliente/proveedor
+
+Mostrará movimientos de revalorización asociados al documento.
+
+Conciliación
+
+La diferencia cambiaria queda asociada documentalmente.
+
+Requisito técnico importante
+
+Las líneas de revalorización deben mantener:
+
+source_document_type
+source_document_id
+partner_id
+currency_id
+ledger_id
+Requisito adicional altamente recomendado
+
+Agregar:
+
+exchange_revaluation_run_id
+
+en journal lines.
+
+Esto permitirá:
+
+trazabilidad,
+reversión,
+auditoría,
+reconstrucción histórica.
+Requisito contable importante
+
+La reversión/anulación debe revertir también el impacto documental.
+
+Es decir:
+
+AR/AP abiertos deben regresar a su saldo previo,
+aging debe recalcularse,
+balances deben reflejar reversión.
