@@ -8,9 +8,9 @@
 - [ ] Resolver politica formal de renumeracion de `document_no` tras cambios en borradores.
 
 ## AR/AP y Terceros
-- [ ] Implementar modelo `PartyGroup` y su CRUD.
-- [ ] Completar edicion/visualizacion por compania para Cliente y Proveedor en nuevo patron.
-- [ ] Gestion de multiples direcciones y contactos para terceros.
+- [x] Implementar modelo `PartyGroup` y su CRUD.
+- [x] Completar edicion/visualizacion por compania para Cliente y Proveedor en nuevo patron.
+- [x] Gestion de multiples direcciones y contactos para terceros.
 - [ ] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
 - [ ] Buckets configurables por compania en reportes de Aging.
 

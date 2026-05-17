@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-17 (AR/AP y terceros: tipos, edicion y contactos)
+- **Solicitud:** Resolver pendientes de AR/AP y Terceros: `PartyGroup`, edicion/visualizacion por compania para Cliente/Proveedor y multiples direcciones/contactos, incluyendo Tipo de Cliente / Tipo de Proveedor.
+- **Modelo y catalogo:** Se agrego `PartyGroup` global por `group_type` (`customer`/`supplier`) y `Party.party_group_id`, manteniendo `classification` como campo legacy sincronizado con el nombre del grupo.
+- **UI y administracion:** Administracion incluye CRUD `/settings/party-groups`; Cliente y Proveedor tienen selector Smart Select de tipo, rutas de edicion y detalle enriquecido con configuracion por compania.
+- **Contactos y direcciones:** Se exponen altas, edicion inline y desactivacion para multiples `Contact`/`Address` vinculados via `PartyContact` y `PartyAddress`, sin crear estructuras duplicadas.
+- **Verificacion:** Pruebas focales de esquema, search-select, flujos de terceros, Mypy, Ruff, Flake8, Black, pydocstyle focal y render general de vistas quedaron en verde.
+
 ## 2026-05-17 (Exchange Revaluation NIIF multiledger)
 - **Solicitud:** Finalizar la implementacion de revalorizacion de moneda contable segun `requerimiento.md` y marcar el pendiente de `ExchangeRevaluation` como completado.
 - **Servicio:** Se agrego `ExchangeRevaluationService` para ejecutar runs auditables por compania/periodo, calcular diferencias incrementales contra el saldo ledger actual, omitir la moneda origen, registrar runs sin diferencias y anular revalorizaciones con reversos GL append-only.
