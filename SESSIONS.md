@@ -5,7 +5,7 @@
 - **Servicio:** Se agrego `ExchangeRevaluationService` para ejecutar runs auditables por compania/periodo, calcular diferencias incrementales contra el saldo ledger actual, omitir la moneda origen, registrar runs sin diferencias y anular revalorizaciones con reversos GL append-only.
 - **Modelo y trazabilidad:** `ExchangeRevaluation`, `ExchangeRevaluationItem` y `GLEntry` conservan snapshots de saldos, tasas, ledger, documento, tercero, cuenta monetaria y `exchange_revaluation_run_id`.
 - **UI y cierre mensual:** Contabilidad incluye listado, formulario minimo, detalle solo lectura y anulacion de revalorizaciones; el asistente de cierre mensual ejecuta el mismo servicio despues de recurrentes.
-- **Verificacion:** Pruebas focales de servicio/rutas y regresion de esquema/cierre en verde (`206 passed`), con Ruff limpio en los archivos tocados.
+- **Verificacion:** Pruebas focales de servicio/rutas y regresion de esquema/cierre en verde; suite completa `pytest --slow=True` paso (`681 passed`). Black, Ruff, Flake8, Mypy focal y pydocstyle focal quedaron en verde.
 
 ## 2026-05-17 (Fix missing pydocstyle)
 - **Solicitud:** Instalar `pydocstyle`, agregar docstrings faltantes en `cacao_accounting` y actualizar `AGENTS.md` con una regla breve de documentación.
