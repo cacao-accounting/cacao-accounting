@@ -301,6 +301,47 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_exchange_revaluation_item_table_exists(self):
         self.assertIn("exchange_revaluation_item", self.tables)
 
+    def test_exchange_revaluation_run_columns_exist(self):
+        cols = self.inspector.get_columns("exchange_revaluation")
+        col_names = {c["name"] for c in cols}
+        for column in {
+            "year",
+            "month",
+            "run_date",
+            "generated_journal",
+            "journal_entry_id",
+            "reversal_journal_id",
+            "created_by",
+            "voided_by",
+            "voided_at",
+            "void_reason",
+            "processed_documents_count",
+            "affected_documents_count",
+            "total_gain",
+            "total_loss",
+        }:
+            self.assertIn(column, col_names)
+
+    def test_exchange_revaluation_item_columns_exist(self):
+        cols = self.inspector.get_columns("exchange_revaluation_item")
+        col_names = {c["name"] for c in cols}
+        for column in {
+            "source_document_type",
+            "source_document_id",
+            "partner_id",
+            "account_id",
+            "ledger_id",
+            "original_currency_id",
+            "ledger_currency_id",
+            "open_amount_original",
+            "previous_ledger_balance",
+            "closing_rate",
+            "revalued_balance",
+            "exchange_difference",
+            "journal_line_id",
+        }:
+            self.assertIn(column, col_names)
+
     def test_period_close_run_table_exists(self):
         self.assertIn("period_close_run", self.tables)
 

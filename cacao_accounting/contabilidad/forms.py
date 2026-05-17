@@ -141,6 +141,7 @@ class ComprobanteContableDetalle(FlaskForm):
 ENTITY_TYPE_CHOICES = [
     ("", "— Seleccione tipo de documento —"),
     ("journal_entry", "Comprobante de Diario"),
+    ("exchange_revaluation", "Revalorizacion Cambiaria"),
     ("sales_invoice", "Factura de Venta"),
     ("purchase_invoice", "Factura de Compra"),
     ("payment_entry", "Pago"),
