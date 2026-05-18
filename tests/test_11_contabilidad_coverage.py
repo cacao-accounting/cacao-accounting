@@ -1791,6 +1791,110 @@ def test_route_asistente_cierre_mensual(app_ctx):
     assert 'filters: { company: { selector: "#close-company" }, is_closed: false }' in html
 
 
+def test_route_new_exchange_revaluation_uses_smart_selects(app_ctx):
+    from cacao_accounting.database import User
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.get("/accounting/exchange-revaluation/new")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'doctype: "company"' in html
+    assert 'doctype: "fiscal_year_id"' in html
+    assert 'doctype: "accounting_period_id"' in html
+    assert 'name="company"' in html
+    assert 'name="fiscal_year_id"' in html
+    assert 'name="period_id"' in html
+    assert 'name="month"' not in html
+    assert 'name="year"' not in html
+
+
+def test_route_new_exchange_revaluation_creates_run_from_accounting_period(app_ctx):
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        Book,
+        CompanyDefaultAccount,
+        Accounts,
+        ExchangeRevaluation,
+        FiscalYear,
+        User,
+        database,
+    )
+
+    user = User.query.filter_by(user="admin").first()
+    gain_account = database.session.execute(
+        database.select(Accounts).filter_by(entity="cacao", code="42.01")
+    ).scalar_one_or_none()
+    loss_account = database.session.execute(
+        database.select(Accounts).filter_by(entity="cacao", code="52.03")
+    ).scalar_one_or_none()
+    if gain_account is None:
+        gain_account = Accounts(entity="cacao", code="42.01", name="Ganancia cambiaria", active=True, enabled=True)
+        database.session.add(gain_account)
+    if loss_account is None:
+        loss_account = Accounts(entity="cacao", code="52.03", name="Pérdida cambiaria", active=True, enabled=True)
+        database.session.add(loss_account)
+    database.session.flush()
+
+    company_defaults = database.session.execute(
+        database.select(CompanyDefaultAccount).filter_by(company="cacao")
+    ).scalar_one_or_none()
+    if company_defaults is None:
+        company_defaults = CompanyDefaultAccount(
+            company="cacao",
+            exchange_gain_account_id=gain_account.id,
+            exchange_loss_account_id=loss_account.id,
+        )
+        database.session.add(company_defaults)
+
+    book = database.session.execute(
+        database.select(Book).filter_by(entity="cacao", code="FISC")
+    ).scalar_one_or_none()
+    if book is None:
+        book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
+        database.session.add(book)
+
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-EVR-2026",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange-revaluation/new",
+        data={"company": "cacao", "fiscal_year_id": fiscal_year.id, "period_id": period.id},
+        follow_redirects=True,
+    )
+    html = response.get_data(as_text=True)
+
+    run = database.session.execute(
+        database.select(ExchangeRevaluation).filter_by(company="cacao", year=2026, month=5)
+    ).scalar_one_or_none()
+
+    assert response.status_code == 200
+    assert "La revalorizacion fue ejecutada correctamente." in html
+    assert run is not None
+
+
 def test_monthly_close_creates_run_and_shows_step_detail(app_ctx):
     from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseRun, User, database
 
