@@ -1835,28 +1835,39 @@ def revalorizaciones_cambiarias():
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
-    from datetime import date
 
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
         ExchangeRevaluationError,
         ExchangeRevaluationService,
     )
-    from cacao_accounting.database import Entity
+    from cacao_accounting.database import AccountingPeriod, Entity
 
     if request.method == "POST":
         company = request.form.get("company") or ""
-        year = request.form.get("year", type=int) or date.today().year
-        month = request.form.get("month", type=int) or date.today().month
-        try:
-            run = ExchangeRevaluationService().run(company=company, year=year, month=month, user_id=str(current_user.id))
-        except ExchangeRevaluationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        fiscal_year_id = request.form.get("fiscal_year_id") or ""
+        period_id = request.form.get("period_id") or ""
+
+        if not company:
+            flash("La compañía es requerida.", "danger")
+        elif not fiscal_year_id:
+            flash("El año fiscal es requerido.", "danger")
+        elif not period_id:
+            flash("El periodo contable es requerido.", "danger")
         else:
-            flash("La revalorizacion fue ejecutada correctamente.", "success")
-            if run.status == "completed_no_changes":
-                flash("No se generaron diferencias cambiarias.", "info")
-            return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
+            period = database.session.get(AccountingPeriod, period_id)
+            if not period or period.entity != company or period.fiscal_year_id != fiscal_year_id:
+                flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
+            else:
+                try:
+                    run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=str(current_user.id))
+                except ExchangeRevaluationError as exc:
+                    database.session.rollback()
+                    flash(str(exc), "danger")
+                else:
+                    flash("La revalorizacion fue ejecutada correctamente.", "success")
+                    if run.status == "completed_no_changes":
+                        flash("No se generaron diferencias cambiarias.", "info")
+                    return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(
@@ -1873,12 +1884,25 @@ def nueva_revalorizacion_cambiaria():
 def ver_revalorizacion_cambiaria(identifier: str):
     """Detalle solo lectura de una revalorizacion cambiaria."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
-    from cacao_accounting.database import Accounts, Book, ExchangeRevaluation
+    from cacao_accounting.database import AccountingPeriod, Accounts, Book, ExchangeRevaluation
 
     run = database.session.get(ExchangeRevaluation, identifier)
     if not run:
         flash("Revalorizacion no encontrada.", "warning")
         return redirect(url_for(CONTABILIDAD_REVALORIZACION_LIST))
+
+    period = None
+    if run.run_date:
+        period = (
+            database.session.execute(
+                database.select(AccountingPeriod)
+                .filter_by(entity=run.company)
+                .where(AccountingPeriod.start <= run.run_date)
+                .where(AccountingPeriod.end >= run.run_date)
+            )
+            .scalars()
+            .first()
+        )
 
     service = ExchangeRevaluationService()
     lines = service.list_lines(run.id)
@@ -1909,6 +1933,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
         lines=lines,
         accounts=accounts,
         ledgers=ledgers,
+        selected_period=period,
     )
 
 

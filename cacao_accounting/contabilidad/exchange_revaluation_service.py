@@ -77,9 +77,31 @@ class RevaluationLineDraft:
 class ExchangeRevaluationService:
     """Ejecuta y reversa revalorizaciones cambiarias auditables."""
 
-    def run(self, *, company: str, year: int, month: int, user_id: str | None = None) -> ExchangeRevaluation:
+    def run(
+        self,
+        *,
+        company: str,
+        year: int | None = None,
+        month: int | None = None,
+        period_id: str | None = None,
+        user_id: str | None = None,
+    ) -> ExchangeRevaluation:
         """Ejecuta una revalorizacion para compania y periodo."""
-        period = self._period_for(company, year, month)
+        if period_id:
+            period = database.session.get(AccountingPeriod, period_id)
+            if period is None:
+                raise ExchangeRevaluationError("No existe el periodo contable seleccionado.")
+            if period.entity != company:
+                raise ExchangeRevaluationError("El periodo contable no pertenece a la compañía seleccionada.")
+            if period.is_closed:
+                raise ExchangeRevaluationError("No se puede operar revalorizacion en un periodo cerrado o inexistente.")
+            year = period.end.year
+            month = period.end.month
+        elif year is None or month is None:
+            raise ExchangeRevaluationError("El año y el mes son requeridos para ejecutar la revalorización.")
+        else:
+            period = self._period_for(company, year, month)
+
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
         candidates = self._open_candidates(company, period.end)
