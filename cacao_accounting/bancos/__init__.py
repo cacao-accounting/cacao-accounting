@@ -860,6 +860,11 @@ def bancos_pago_nuevo():
                 "naming_series_id": request.form.get("naming_series"),
                 "external_counter_id": request.form.get("external_counter_id"),
                 "external_number": request.form.get("external_number"),
+                "target_bank_account_id": request.form.get("target_bank_account_id"),
+                "exchange_rate": request.form.get("exchange_rate"),
+                "cost_center_code": request.form.get("cost_center_code"),
+                "unit_code": request.form.get("unit_code"),
+                "project_code": request.form.get("project_code"),
             }
         try:
             payment_type = payload.get("payment_type") or "receive"
@@ -882,10 +887,15 @@ def bancos_pago_nuevo():
                 payment_type=payment_type,
                 company=company,
                 bank_account_id=bank_account_id,
+                target_bank_account_id=target_bank_account_id,
+                exchange_rate=Decimal(str(payload.get("exchange_rate") or "1")),
                 party_type=payload.get("party_type"),
                 party_id=payload.get("party_id"),
                 paid_from_account_id=paid_from_account_id,
                 paid_to_account_id=paid_to_account_id,
+                cost_center_code=payload.get("cost_center_code"),
+                unit_code=payload.get("unit_code"),
+                project_code=payload.get("project_code"),
                 remarks=payload.get("remarks"),
                 docstatus=0,
             )
