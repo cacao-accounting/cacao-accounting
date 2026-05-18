@@ -1433,12 +1433,19 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
     party_name = database.Column(database.String(200), nullable=True)
     bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID), nullable=True, index=True)
+    target_bank_account_id = database.Column(
+        database.String(26), database.ForeignKey(BANK_ACCOUNT_ID), nullable=True, index=True
+    )
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     paid_from_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     paid_to_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    cost_center_code = database.Column(database.String(10), nullable=True)
+    unit_code = database.Column(database.String(10), nullable=True)
+    project_code = database.Column(database.String(10), nullable=True)
     reference_no = database.Column(database.String(100), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
 

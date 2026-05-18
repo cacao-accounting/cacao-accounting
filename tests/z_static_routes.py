@@ -354,6 +354,48 @@ static_rutes = [
         ],
     ),
     Route(
+        url="/cash_management/transfer/list",
+        text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_lista.html".encode(
+                "utf-8"
+            ),
+        ],
+    ),
+    Route(
+        url="/cash_management/payment/debit-note/list",
+        text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_lista.html".encode(
+                "utf-8"
+            ),
+        ],
+    ),
+    Route(
+        url="/cash_management/payment/credit-note/list",
+        text=[
+            "La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_lista.html".encode(
+                "utf-8"
+            ),
+        ],
+    ),
+    Route(
+        url="/cash_management/payment/transfer/new",
+        text=[
+            "Nueva Transferencia Bancaria".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/cash_management/payment/debit-note/new",
+        text=[
+            "Nueva Nota de Débito Bancario".encode("utf-8"),
+        ],
+    ),
+    Route(
+        url="/cash_management/payment/credit-note/new",
+        text=[
+            "Nueva Nota de Crédito Bancario".encode("utf-8"),
+        ],
+    ),
+    Route(
         url="/cash_management/bank-transaction/list",
         text=[
             "La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/transaccion_lista.html".encode(
