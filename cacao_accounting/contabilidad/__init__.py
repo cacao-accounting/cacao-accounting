@@ -7,6 +7,7 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from collections.abc import Sequence
+from datetime import date
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -1846,28 +1847,53 @@ def nueva_revalorizacion_cambiaria():
         company = request.form.get("company") or ""
         fiscal_year_id = request.form.get("fiscal_year_id") or ""
         period_id = request.form.get("period_id") or ""
+        year = request.form.get("year")
+        month = request.form.get("month")
 
         if not company:
             flash("La compañía es requerida.", "danger")
-        elif not fiscal_year_id:
-            flash("El año fiscal es requerido.", "danger")
-        elif not period_id:
-            flash("El periodo contable es requerido.", "danger")
         else:
-            period = database.session.get(AccountingPeriod, period_id)
-            if not period or period.entity != company or period.fiscal_year_id != fiscal_year_id:
-                flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
-            else:
+            if not fiscal_year_id and year and month:
                 try:
-                    run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=str(current_user.id))
-                except ExchangeRevaluationError as exc:
-                    database.session.rollback()
-                    flash(str(exc), "danger")
+                    period_date = date(int(year), int(month), 1)
+                except ValueError:
+                    period_date = None
+                if period_date:
+                    period = (
+                        database.session.execute(
+                            database.select(AccountingPeriod)
+                            .filter_by(entity=company, enabled=True)
+                            .where(AccountingPeriod.start <= period_date)
+                            .where(AccountingPeriod.end >= period_date)
+                        )
+                        .scalars()
+                        .first()
+                    )
+                    if period:
+                        period_id = period.id
+                        fiscal_year_id = period.fiscal_year_id or fiscal_year_id
+
+            if not period_id:
+                flash("El periodo contable es requerido.", "danger")
+            else:
+                period = database.session.get(AccountingPeriod, period_id)
+                if not period or period.entity != company:
+                    flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
+                elif fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
+                    flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
                 else:
-                    flash("La revalorizacion fue ejecutada correctamente.", "success")
-                    if run.status == "completed_no_changes":
-                        flash("No se generaron diferencias cambiarias.", "info")
-                    return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
+                    try:
+                        run = ExchangeRevaluationService().run(
+                            company=company, period_id=period_id, user_id=str(current_user.id)
+                        )
+                    except ExchangeRevaluationError as exc:
+                        database.session.rollback()
+                        flash(str(exc), "danger")
+                    else:
+                        flash("La revalorizacion fue ejecutada correctamente.", "success")
+                        if run.status == "completed_no_changes":
+                            flash("No se generaron diferencias cambiarias.", "info")
+                        return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(

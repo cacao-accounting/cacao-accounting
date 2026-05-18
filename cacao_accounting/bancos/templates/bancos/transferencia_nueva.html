@@ -28,6 +28,7 @@
         target_bank_account_id: '',
         target_currency: '',
         paid_amount: 0,
+        exchange_rate: 1.0,
         remarks: '',
         external_number: '',
       },
@@ -70,6 +71,7 @@
           bank_account_id: this.header.bank_account_id,
           target_bank_account_id: this.header.target_bank_account_id,
           paid_amount: this.header.paid_amount,
+          exchange_rate: this.header.exchange_rate,
           remarks: this.header.remarks,
           external_number: this.header.external_number
         });
@@ -153,7 +155,7 @@
                     filterSources: ["#company_val"],
                     onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
                   })'>
-                  <input type="hidden" x-model="selectedValue">
+                  <input type="hidden" x-model="selectedValue" x-effect="header.bank_account_id = selectedValue">
                   <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar origen...') }}" required>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <template x-for="opt in options" :key="opt.value">
@@ -187,7 +189,7 @@
                     filterSources: ["#company_val"],
                     onSelect: function(opt) { $dispatch("target-bank-account-selected", opt) }
                   })'>
-                  <input type="hidden" x-model="selectedValue">
+                  <input type="hidden" x-model="selectedValue" x-effect="header.target_bank_account_id = selectedValue">
                   <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar destino...') }}" required>
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <template x-for="opt in options" :key="opt.value">
@@ -196,9 +198,19 @@
                   </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">{{ _('Moneda') }}</label>
-                <input class="form-control bg-light" x-model="header.target_currency" readonly>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Moneda') }}</label>
+                    <input class="form-control bg-light" x-model="header.target_currency" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Tipo de Cambio') }}</label>
+                    <input class="form-control text-end" type="number" step="0.0001" x-model="header.exchange_rate" :readonly="header.currency === header.target_currency" min="0.0001">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Monto esperado en destino') }}</label>
+                    <input class="form-control bg-light text-end" readonly :value="(header.paid_amount * header.exchange_rate).toFixed(2)">
+                </div>
             </div>
             <div class="mt-2 text-muted small">
                 <i class="bi bi-info-circle"></i> {{ _('Si las monedas son distintas, se aplicará el tipo de cambio del sistema al postear.') }}

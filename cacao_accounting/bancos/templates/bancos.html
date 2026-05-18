@@ -65,6 +65,18 @@
         <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
       </li>
       <li>
+        <a href="{{ url_for('bancos.bancos_transferencia_lista') }}">Transferencias Bancarias</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_nota_debito_lista') }}">Notas de Débito Bancarias</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_nota_credito_lista') }}">Notas de Crédito Bancarias</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
         <a href="{{ url_for('bancos.bancos_transaccion_lista') }}">Transacciones Bancarias</a>
         <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
       </li>
