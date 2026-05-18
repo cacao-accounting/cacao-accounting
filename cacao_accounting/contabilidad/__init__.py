@@ -1836,7 +1836,6 @@ def revalorizaciones_cambiarias():
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
-
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
         ExchangeRevaluationError,
         ExchangeRevaluationService,
