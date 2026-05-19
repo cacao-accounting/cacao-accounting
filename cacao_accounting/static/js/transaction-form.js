@@ -90,6 +90,30 @@
     });
   }
 
+  function defaultTaxSummary() {
+    return {
+      subtotal: '0',
+      document_tax_total: '0',
+      capitalizable_tax_total: '0',
+      separate_tax_total: '0',
+      withholding_total: '0',
+      grand_total: '0',
+    };
+  }
+
+  const FISCAL_PREVIEW_DOCUMENT_TYPES = new Set([
+    'purchase_request',
+    'purchase_order',
+    'purchase_receipt',
+    'purchase_invoice',
+    'sales_request',
+    'sales_order',
+    'delivery_note',
+    'sales_invoice',
+    'stock_entry',
+    'payment_entry',
+  ]);
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('transactionForm', (config) => {
       const messages = {
@@ -137,6 +161,16 @@
         activeIndex: null,
         modalLine: null,
         payload: '',
+        taxPreviewDebounceId: null,
+        taxCharges: {
+          loading: false,
+          error: '',
+          profile: null,
+          summary: defaultTaxSummary(),
+          lines: [],
+          activeIndex: null,
+          modalLine: null,
+        },
 
         init() {
           if (!this.header.party_type) {
@@ -147,6 +181,7 @@
             return this.normalizeLine(line);
           });
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
+          this.queueTaxPreview();
         },
 
         get visibleColumns() {
@@ -159,6 +194,14 @@
           return this.lines.reduce((total, line) => {
             return total + toNumber(line.amount);
           }, 0);
+        },
+
+        get documentTaxTotal() {
+          return toNumber(this.taxCharges.summary.document_tax_total);
+        },
+
+        get grandTotal() {
+          return this.totalAmount + this.documentTaxTotal;
         },
 
         newLine() {
@@ -237,6 +280,7 @@
 
         addRow() {
           this.lines.push(this.newLine());
+          this.queueTaxPreview();
         },
 
         addMultipleRows(count) {
@@ -246,6 +290,7 @@
         insertRow(index, direction) {
           const target = direction < 0 ? index : index + 1;
           this.lines.splice(target, 0, this.newLine());
+          this.queueTaxPreview();
         },
 
         moveRow(index, direction) {
@@ -254,24 +299,29 @@
           const current = this.lines[index];
           this.lines[index] = this.lines[target];
           this.lines[target] = current;
+          this.queueTaxPreview();
         },
 
         duplicateRow(index) {
           const copy = this.normalizeLine(this.lines[index]);
           copy.uid = createUid();
           this.lines.splice(index + 1, 0, copy);
+          this.queueTaxPreview();
         },
 
         removeRow(index) {
           if (this.lines.length === 1) {
             this.lines[index] = this.newLine();
+            this.queueTaxPreview();
             return;
           }
           this.lines.splice(index, 1);
+          this.queueTaxPreview();
         },
 
         calcAmount(line) {
           line.amount = toNumber(line.qty) * toNumber(line.rate);
+          this.queueTaxPreview();
         },
 
         openDetails(index) {
@@ -288,9 +338,217 @@
           }
           const modalEl = document.getElementById('lineDetailModal');
           if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+          this.queueTaxPreview();
         },
 
-        async fetchSource(apiUrl) {
+        documentType() {
+          if (config.documentType) return config.documentType;
+          const chunks = (this.formKey || '').split('.');
+          return chunks.length > 1 ? chunks[1] : '';
+        },
+
+        supportsFiscalPreview() {
+          if (config.enableFiscalPreview === false) return false;
+          return FISCAL_PREVIEW_DOCUMENT_TYPES.has(this.documentType());
+        },
+
+        buildFiscalPayload() {
+          return {
+            document_type: this.documentType(),
+            company: this.header.company || '',
+            currency: this.header.currency || '',
+            posting_date: this.header.posting_date || '',
+            party_type: this.header.party_type || '',
+            party_id: this.header.party || '',
+            purpose: this.header.purpose || '',
+            payment_type: this.header.payment_type || '',
+            lines: this.lines.map((line) => {
+              return {
+                uid: line.uid || '',
+                item_code: line.item_code || '',
+                item_name: line.item_name || '',
+                qty: toNumber(line.qty),
+                uom: line.uom || '',
+                rate: toNumber(line.rate),
+                amount: toNumber(line.amount),
+              };
+            }),
+            tax_lines: this.taxCharges.lines.map((line) => {
+	              return {
+	                source_rule_id: line.source_rule_id || '',
+	                manual: Boolean(line.manual),
+	                concept: line.concept || '',
+	                type: line.type || 'tax',
+	                calculation_method: line.calculation_method || 'percentage',
+	                base_mode: line.base_mode || 'goods',
+	                include_concepts: line.include_concepts || [],
+	                exclude_concepts: line.exclude_concepts || [],
+	                rate: toNumber(line.rate),
+	                amount: toNumber(line.amount),
+	                accounting_treatment: line.accounting_treatment || 'separate_tax_account',
+	                allocation_method: line.allocation_method || '',
+	                affects_inventory: Boolean(line.affects_inventory),
+	                affects_document_total: Boolean(line.affects_document_total),
+	                included_in_price: Boolean(line.included_in_price),
+                account_id: line.account_id || '',
+                notes: line.notes || '',
+              };
+            }),
+          };
+        },
+
+        queueTaxPreview() {
+          if (!this.supportsFiscalPreview()) return;
+          const hasWindowTimers = typeof window !== 'undefined' &&
+            typeof window.setTimeout === 'function' &&
+            typeof window.clearTimeout === 'function';
+          if (!hasWindowTimers) return;
+          if (this.taxPreviewDebounceId) {
+            window.clearTimeout(this.taxPreviewDebounceId);
+          }
+          this.taxPreviewDebounceId = window.setTimeout(() => {
+            this.fetchTaxPreview();
+          }, 250);
+        },
+
+        async fetchTaxPreview() {
+          if (!this.supportsFiscalPreview()) {
+            this.taxCharges.loading = false;
+            this.taxCharges.error = '';
+            return;
+          }
+          if (!this.header.company) return;
+          this.taxCharges.loading = true;
+          this.taxCharges.error = '';
+          const csrfInput = document.querySelector('input[name="csrf_token"]');
+          const csrfToken = csrfInput ? csrfInput.value : '';
+          try {
+            const response = await fetch('/api/fiscal/preview', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+              credentials: 'same-origin',
+              body: JSON.stringify(this.buildFiscalPayload()),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              this.taxCharges.error = (data && data.message) || 'No se pudo calcular.';
+              this.taxCharges.loading = false;
+              return;
+	            }
+	            this.taxCharges.profile = data.profile || null;
+	            this.taxCharges.summary = data.summary || this.taxCharges.summary;
+	            this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];
+	            this.taxCharges.loading = false;
+	          } catch (err) {
+	            this.taxCharges.error = 'No se pudo calcular.';
+            this.taxCharges.loading = false;
+          }
+        },
+
+	        openTaxLineDetails(index) {
+	          this.taxCharges.activeIndex = index;
+	          this.taxCharges.modalLine = this.normalizeTaxLine(this.taxCharges.lines[index] || {});
+	          const modalEl = document.getElementById('taxChargeDetailModal');
+	          if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+	        },
+
+	        saveTaxLineModal() {
+	          if (this.taxCharges.activeIndex !== null && this.taxCharges.modalLine) {
+	            if (this.taxCharges.modalLine.manual) {
+	              this.calcTaxLine(this.taxCharges.modalLine);
+	            }
+	            this.taxCharges.lines[this.taxCharges.activeIndex] = this.normalizeTaxLine(this.taxCharges.modalLine);
+	            this.recalculateTaxSummary();
+	          }
+	          const modalEl = document.getElementById('taxChargeDetailModal');
+	          if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+	        },
+
+	        newTaxLine() {
+	          return {
+	            line_id: createUid(),
+	            source_rule_id: `MANUAL-${createUid()}`,
+	            manual: true,
+	            concept: 'Cargo manual',
+	            type: 'charge',
+	            calculation_method: 'manual',
+	            base_mode: 'goods',
+	            base_amount: this.totalAmount,
+	            rate: 0,
+	            amount: 0,
+	            accounting_treatment: 'separate_tax_account',
+	            allocation_method: 'by_value',
+	            affects_inventory: false,
+	            affects_document_total: true,
+	            included_in_price: false,
+	            account_id: '',
+	            notes: '',
+	          };
+	        },
+
+	        normalizeTaxLine(line) {
+	          const normalized = { ...this.newTaxLine(), ...(line || {}) };
+	          normalized.manual = Boolean(normalized.manual || String(normalized.source_rule_id || '').startsWith('MANUAL-'));
+	          if (normalized.manual) {
+	            this.calcTaxLine(normalized);
+	          }
+	          return normalized;
+	        },
+
+	        addTaxLine() {
+	          const line = this.newTaxLine();
+	          this.taxCharges.lines.push(line);
+	          this.taxCharges.activeIndex = this.taxCharges.lines.length - 1;
+	          this.taxCharges.modalLine = { ...line };
+	          this.recalculateTaxSummary();
+	          const modalEl = document.getElementById('taxChargeDetailModal');
+	          if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+	        },
+
+	        removeTaxLine(index) {
+	          this.taxCharges.lines.splice(index, 1);
+	          this.recalculateTaxSummary();
+	        },
+
+	        calcTaxLine(line) {
+	          line.base_amount = toNumber(line.base_amount || this.totalAmount);
+	          line.rate = toNumber(line.rate);
+	          if (line.calculation_method === 'percentage') {
+	            line.amount = line.base_amount * line.rate / 100;
+	          } else {
+	            line.amount = toNumber(line.amount);
+	          }
+	        },
+
+	        recalculateTaxSummary() {
+	          const summary = defaultTaxSummary();
+	          const lines = this.taxCharges.lines || [];
+	          const documentTaxTotal = lines.reduce((total, line) => {
+	            if (line.type === 'withholding' || line.included_in_price || line.affects_document_total === false) return total;
+	            return total + toNumber(line.amount);
+	          }, 0);
+	          const capitalizableTaxTotal = lines.reduce((total, line) => {
+	            if (line.accounting_treatment !== 'capitalizable_inventory_cost') return total;
+	            return total + toNumber(line.amount);
+	          }, 0);
+	          const separateTaxTotal = lines.reduce((total, line) => {
+	            if (line.accounting_treatment !== 'separate_tax_account') return total;
+	            return total + toNumber(line.amount);
+	          }, 0);
+	          const withholdingTotal = lines.reduce((total, line) => {
+	            if (line.type !== 'withholding') return total;
+	            return total + toNumber(line.amount);
+	          }, 0);
+	          summary.subtotal = String(this.totalAmount);
+	          summary.document_tax_total = String(documentTaxTotal);
+	          summary.capitalizable_tax_total = String(capitalizableTaxTotal);
+	          summary.separate_tax_total = String(separateTaxTotal);
+	          summary.withholding_total = String(withholdingTotal);
+	          summary.grand_total = String(this.totalAmount + documentTaxTotal);
+	          this.taxCharges.summary = summary;
+	        },
+
+	        async fetchSource(apiUrl) {
           if (apiUrl) {
             this.loadingSource = true;
             this.autofillStep = 2;
@@ -388,6 +646,7 @@
             return line.item_code || line.item_name || line.source_id;
           });
           if (!this.lines.length) this.addRow();
+          this.queueTaxPreview();
         },
 
         moveColumn(index, direction) {
@@ -439,6 +698,14 @@
 
         formatMoney(value) {
           return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        serializedTaxLines() {
+          return JSON.stringify(this.taxCharges.lines || []);
+        },
+
+        serializedTaxSummary() {
+          return JSON.stringify(this.taxCharges.summary || {});
         }
       };
     });

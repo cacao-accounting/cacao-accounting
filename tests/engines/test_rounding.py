@@ -6,16 +6,19 @@
 from decimal import Decimal
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 
+
 def test_basic_rounding():
     rm = RoundingManager({"precision": 2, "mode": "HALF_UP"})
     assert rm.round(Decimal("10.555")) == Decimal("10.56")
     assert rm.round(Decimal("10.554")) == Decimal("10.55")
+
 
 def test_bankers_rounding():
     rm = RoundingManager({"precision": 2, "mode": "HALF_EVEN"})
     # Rounds to nearest even number
     assert rm.round(Decimal("10.525")) == Decimal("10.52")
     assert rm.round(Decimal("10.535")) == Decimal("10.54")
+
 
 def test_residual_distribution():
     rm = RoundingManager({"precision": 2})
@@ -26,14 +29,9 @@ def test_residual_distribution():
     assert sum(distributed) == total
     assert distributed == [Decimal("33.33"), Decimal("33.33"), Decimal("33.34")]
 
+
 def test_rounding_overrides():
-    policy = {
-        "precision": 2,
-        "overrides": {
-            "inventory": {"precision": 4},
-            "JPY": {"precision": 0}
-        }
-    }
+    policy = {"precision": 2, "overrides": {"inventory": {"precision": 4}, "JPY": {"precision": 0}}}
     rm = RoundingManager(policy)
 
     assert rm.round(Decimal("10.12345")) == Decimal("10.12")

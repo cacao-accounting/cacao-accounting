@@ -139,6 +139,125 @@ def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
     assert any(entry.credit == Decimal("100.00") and entry.account_id == income_account.id for entry in posted_entries)
 
 
+def test_submit_sales_invoice_uses_persisted_fiscal_snapshot(app_ctx):
+    from cacao_accounting.contabilidad.posting import submit_document
+    from cacao_accounting.database import (
+        Accounts,
+        DocumentTaxLine,
+        DocumentTaxSummary,
+        GLEntry,
+        PartyAccount,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+
+    receivable_account = Accounts(
+        entity="cacao",
+        code="AR-SNAP",
+        name="Cuentas por cobrar snapshot",
+        active=True,
+        enabled=True,
+        classification="asset",
+    )
+    income_account = Accounts(
+        entity="cacao",
+        code="IN-SNAP",
+        name="Ventas snapshot",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    sales_tax_account = Accounts(
+        entity="cacao",
+        code="TAX-SNAP",
+        name="IVA débito fiscal",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="tax",
+    )
+    database.session.add_all([receivable_account, income_account, sales_tax_account])
+    database.session.flush()
+    database.session.add(
+        PartyAccount(
+            party_id="CUST-SNAP",
+            company="cacao",
+            receivable_account_id=receivable_account.id,
+        )
+    )
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-SNAP",
+        customer_name="Cliente snapshot",
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("115.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ITEM-SNAP",
+            item_name="Servicio snapshot",
+            qty=Decimal("1"),
+            rate=Decimal("100.00"),
+            amount=Decimal("100.00"),
+            income_account_id=income_account.id,
+        )
+    )
+    summary = DocumentTaxSummary(
+        company="cacao",
+        document_type="sales_invoice",
+        document_id=invoice.id,
+        currency="NIO",
+        subtotal=Decimal("100.00"),
+        document_tax_total=Decimal("15.00"),
+        grand_total=Decimal("115.00"),
+    )
+    database.session.add(summary)
+    database.session.flush()
+    database.session.add(
+        DocumentTaxLine(
+            document_tax_summary_id=summary.id,
+            line_index=1,
+            rule_id="RULE-SNAP-1",
+            concept="IVA",
+            tax_type="tax",
+            calculation_method="manual",
+            base_amount=Decimal("100.00"),
+            rate=Decimal("15.00"),
+            amount=Decimal("15.00"),
+            accounting_treatment="separate_tax_account",
+            account_id=sales_tax_account.id,
+            affects_inventory=False,
+            affects_document_total=True,
+            included_in_price=False,
+            rule_snapshot_json='{"concept":"IVA","tax_type":"tax","sequence":1}',
+        )
+    )
+    database.session.commit()
+
+    submit_document(invoice)
+    database.session.commit()
+
+    posted_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert len(posted_entries) == 3
+    assert sum(entry.debit for entry in posted_entries) == Decimal("115.00")
+    assert sum(entry.credit for entry in posted_entries) == Decimal("115.00")
+    assert any(entry.credit == Decimal("100.00") and entry.account_id == income_account.id for entry in posted_entries)
+    assert any(entry.credit == Decimal("15.00") and entry.account_id == sales_tax_account.id for entry in posted_entries)
+    assert any(entry.debit == Decimal("115.00") and entry.account_id == receivable_account.id for entry in posted_entries)
+
+
 def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
@@ -563,6 +682,160 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
     assert all(not movement.is_cancelled for movement in stock_movements)
     assert sum(movement.qty_change for movement in stock_movements) == Decimal("0E-9")
     assert bin_row.actual_qty == Decimal("0.000000000")
+
+
+def test_purchase_receipt_lands_import_costs_into_initial_valuation_layers(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        Item,
+        ItemAccount,
+        LandedCostAllocation,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        StockBin,
+        StockValuationLayer,
+        TaxRule,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    inventory_account = Accounts(
+        entity="cacao",
+        code="INV-IMP",
+        name="Inventario importacion",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    bridge_account = Accounts(
+        entity="cacao",
+        code="BRIDGE-IMP",
+        name="Cuenta puente importacion",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="liability",
+    )
+    database.session.add_all(
+        [
+            inventory_account,
+            bridge_account,
+            UOM(code="EA-IMP", name="Each import"),
+            Item(code="IMP-A", name="Importado A", item_type="goods", is_stock_item=True, default_uom="EA-IMP"),
+            Item(code="IMP-B", name="Importado B", item_type="goods", is_stock_item=True, default_uom="EA-IMP"),
+            Warehouse(code="WH-IMP", name="Bodega importacion", company="cacao"),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
+            ItemAccount(item_code="IMP-A", company="cacao", inventory_account_id=inventory_account.id),
+            ItemAccount(item_code="IMP-B", company="cacao", inventory_account_id=inventory_account.id),
+            CompanyDefaultAccount(
+                company="cacao",
+                bridge_account_id=bridge_account.id,
+                default_inventory=inventory_account.id,
+            ),
+            TaxRule(
+                company="cacao",
+                name="Flete internacional",
+                applies_to="purchase",
+                level="transaction",
+                concept="international_freight",
+                tax_type="charge",
+                calculation_method="fixed",
+                amount=Decimal("40.00"),
+                sequence=10,
+                accounting_treatment="capitalizable_inventory_cost",
+                recognition_event="purchase_receipt_confirmed",
+                affects_inventory=True,
+                affects_document_total=False,
+                allocation_method="by_value",
+                is_active=True,
+            ),
+        ]
+    )
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-IMP",
+        docstatus=1,
+        total=Decimal("200.00"),
+        grand_total=Decimal("200.00"),
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add_all(
+        [
+            PurchaseReceiptItem(
+                purchase_receipt_id=receipt.id,
+                item_code="IMP-A",
+                item_name="Importado A",
+                qty=Decimal("1"),
+                uom="EA-IMP",
+                qty_in_base_uom=Decimal("1"),
+                rate=Decimal("100.00"),
+                amount=Decimal("100.00"),
+                warehouse="WH-IMP",
+            ),
+            PurchaseReceiptItem(
+                purchase_receipt_id=receipt.id,
+                item_code="IMP-B",
+                item_name="Importado B",
+                qty=Decimal("2"),
+                uom="EA-IMP",
+                qty_in_base_uom=Decimal("2"),
+                rate=Decimal("50.00"),
+                amount=Decimal("100.00"),
+                warehouse="WH-IMP",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    post_document_to_gl(receipt)
+    database.session.commit()
+
+    valuation_layers = (
+        database.session.execute(
+            database.select(StockValuationLayer)
+            .filter_by(voucher_type="purchase_receipt", voucher_id=receipt.id)
+            .order_by(StockValuationLayer.item_code)
+        )
+        .scalars()
+        .all()
+    )
+    allocations = (
+        database.session.execute(
+            database.select(LandedCostAllocation)
+            .filter_by(document_type="purchase_receipt", document_id=receipt.id)
+            .order_by(LandedCostAllocation.item_code)
+        )
+        .scalars()
+        .all()
+    )
+    bin_a = database.session.execute(database.select(StockBin).filter_by(item_code="IMP-A", warehouse="WH-IMP")).scalar_one()
+    bin_b = database.session.execute(database.select(StockBin).filter_by(item_code="IMP-B", warehouse="WH-IMP")).scalar_one()
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="purchase_receipt", voucher_id=receipt.id))
+        .scalars()
+        .all()
+    )
+
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert [layer.stock_value_difference for layer in valuation_layers] == [Decimal("120.0000"), Decimal("120.0000")]
+    assert [layer.rate for layer in valuation_layers] == [Decimal("120.000000000"), Decimal("60.000000000")]
+    assert [allocation.allocated_amount for allocation in allocations] == [Decimal("20.0000"), Decimal("20.0000")]
+    assert {allocation.stock_valuation_layer_id for allocation in allocations} == {layer.id for layer in valuation_layers}
+    assert bin_a.stock_value == Decimal("120.0000")
+    assert bin_a.valuation_rate == Decimal("120.000000000")
+    assert bin_b.stock_value == Decimal("120.0000")
+    assert bin_b.valuation_rate == Decimal("60.000000000")
 
 
 def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):

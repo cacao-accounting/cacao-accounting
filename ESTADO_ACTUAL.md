@@ -1,4 +1,17 @@
-# Estado Actual del Proyecto - 2026-05-17
+# Estado Actual del Proyecto - 2026-05-19
+
+- **MVP Fiscal (preview unificado):** Implementada matriz de comportamiento fiscal/gastos por tipo documental en `fiscal_preview_service.py`, con resolución por doctype y evento de reconocimiento.
+- **API Fiscal Unificada:** Disponible `POST /api/fiscal/preview` para cálculo/preview común consumible por formularios transaccionales.
+- **Preview fiscal canónico:** Los recálculos de preview priorizan reglas persistidas de `TaxRule` para conservar cascadas, dependencias y orden; las líneas reenviadas por el cliente ya no sustituyen reglas configuradas.
+- **Impuestos/cargos manuales:** El bloque transaccional permite añadir líneas fiscales manuales desde la UI; el backend las adjunta a las reglas canónicas sin duplicar líneas automáticas reenviadas por el cliente.
+- **Cobros bancarios:** `payment_entry` de tipo `receive` usa perfil de cobro (`sales` / `collection_confirmed`) para alinear preview, snapshot persistido y posting.
+- **Guard UI fiscal:** El framework transaccional omite auto-preview para doctypes fuera de matriz fiscal, evitando errores visuales en flujos como cotizaciones.
+- **UX Común “Impuestos y Cargos”:** Integrado en el framework transaccional compartido (Compras, Ventas, Inventario) con resumen de totales y modal de detalle por línea fiscal.
+- **Bancos (alcance ajustado por requerimiento):** El bloque fiscal quedó activo solo en **Entrada de Pagos**; Nota de Crédito, Nota de Débito y Transferencia no requieren estos campos en esta fase.
+- **Seguridad y calidad:** Corregida exposición de errores internos en API de preview; `codeql_checker` sin alertas, checks de calidad en verde para los cambios.
+- **Persistencia fiscal real:** Implementada para `purchase_invoice`, `sales_invoice` y `payment_entry` mediante `document_tax_summary` y `document_tax_line`, incluyendo snapshot inmutable por línea.
+- **Persistencia fiscal robusta:** Las cuentas fiscales vacías se guardan como `NULL` en `DocumentTaxLine.account_id`, evitando violaciones de FK cuando el usuario no selecciona cuenta.
+- **Contabilización fiscal histórica:** `submit_document` para `purchase_invoice`, `sales_invoice` y `payment_entry` consume primero el snapshot fiscal persistido antes de cualquier fallback dinámico.
 
 - **AR/AP y Terceros:** Implementado `PartyGroup` como catalogo global de tipos de cliente/proveedor y `Party.party_group_id` con sincronizacion hacia `classification` para compatibilidad.
 - **Clientes y Proveedores:** Los maestros permiten crear/editar/ver tipo de tercero, estado global y configuracion por compania (`CompanyParty`, `PartyAccount`, plantilla fiscal y flags de compra).
@@ -48,5 +61,7 @@
 - **Motor listo para transacciones:** `contabilidad/posting.py` ya puede usar el motor fiscal/gastos para `PurchaseReceipt`, `PurchaseInvoice`, `SalesInvoice` y `PaymentEntry` mediante builders de contexto y un posting builder que persiste `JournalEntryProforma` como `GLEntry`.
 - **TaxRule en flujo real:** El acoplamiento transaccional carga `TaxRule` desde BD por evento (`purchase_invoice_confirmed`, `sales_invoice_confirmed`, `payment_confirmed`, `collection_confirmed`, notas de crédito, etc.) y mantiene fallback a `TaxTemplate` para no romper documentos existentes.
 - **DAG + settlement ampliado:** `FiscalEngine` resuelve dependencias entre reglas vía ordenamiento topológico; `SettlementEngine` soporta descuentos por pronto pago y revaluación no realizada; `AccountingMapper` genera el offset del control AR/AP para la revaluación no realizada.
+- **Landed Cost transaccional:** `LandedCostEngine` calcula prorrateo de cargos capitalizables y el flujo real de recepción de compra materializa el costo aterrizado en la capa inicial de `StockValuationLayer` cuando los cargos ya son conocidos al ingreso. Para costos posteriores, la factura de compra puede persistir una capa de ajuste por valor sin cambiar cantidad.
+- **Trazabilidad de importación:** Se agregó `LandedCostAllocation` como tabla dedicada de prorrateo para no sobrecargar `StockValuationLayer`; cada asignación guarda línea documental, ítem, almacén, base, monto asignado, costo final y referencia opcional a la capa de valuación.
 - **Cobertura de eventos revisados:** El flujo real quedó cubierto para recepciones de compra, facturas de compra/venta, pagos/cobros y notas de crédito; el evento `import_landed_cost_confirmed` sigue disponible en motores/orquestador para casos de importación calculada.
 - **Validación actual:** En `.venv`, `black --check cacao_accounting/`, `ruff`, `flake8`, `mypy`, `pydocstyle` focal y `pytest -v -s --exitfirst --slow=True` completo están en verde (`672 passed`).
