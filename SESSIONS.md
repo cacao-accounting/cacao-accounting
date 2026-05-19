@@ -1,5 +1,41 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-19 (UX fiscal: alta manual de impuestos/cargos)
+- **Solicitud:** Resolver que el bloque `Impuestos y Cargos` no tenía acción para añadir nuevos impuestos/cargos, y revisar el pendiente de prorrateo capitalizable en inventario.
+- **Implementación UI:** `transaction-form.js` y `transaction_form_macros.html` agregan acción `Añadir impuesto/cargo`, modal editable para líneas manuales, eliminación de líneas manuales y recálculo local de resumen.
+- **Backend fiscal:** `fiscal_preview_service.py` conserva reglas canónicas persistidas y adjunta líneas manuales marcadas por el formulario, evitando duplicar líneas automáticas reenviadas.
+- **Backlog inventario:** Se precisó que el motor `LandedCostEngine` ya calcula prorrateos, pero sigue pendiente persistir dichas asignaciones en `StockValuationLayer` dentro del flujo transaccional.
+- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` + `tests/test_fiscal_preview.py` (`9 passed`) y `npm test -- --grep transaction-form` (`7 passing`).
+
+## 2026-05-19 (Fix FIXME fiscal: preview canónico, cobros y FK nullable)
+- **Solicitud:** Analizar `FIXME.md` y resolver los issues identificados sobre el MVP fiscal.
+- **Preview fiscal:** `fiscal_preview_service.py` ahora recarga reglas canónicas persistidas antes de considerar líneas reenviadas por el cliente, conservando solo campos editables como cuenta/notas del preview previo.
+- **Cobros:** `payment_entry` con `payment_type="receive"` resuelve un perfil fiscal de cobro con `applies_to="sales"` y `recognition_event="collection_confirmed"`.
+- **UX transaccional:** `transaction-form.js` omite llamadas automáticas al preview fiscal para doctypes fuera de la matriz, evitando errores iniciales en cotizaciones y otros flujos no soportados.
+- **Persistencia:** `fiscal_persistence_service.py` normaliza `account_id` vacío a `NULL` antes de guardar `DocumentTaxLine`.
+- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` (`6 passed`) y `npm test -- --grep transaction-form` (`6 passing`).
+
+## 2026-05-19 (Cierre review final: submit_document + robustez bancos)
+- **Solicitud:** Resolver dos pendientes finales de review: confirmar/garantizar consumo del snapshot fiscal en `submit_document` y robustecer manejo transaccional/errores en `bancos_pago_nuevo`.
+- **Implementación:** Se añadió prueba de integración en posting (`test_submit_sales_invoice_uses_persisted_fiscal_snapshot`) que valida GL generado desde snapshot persistido al ejecutar `submit_document`.
+- **Robustez Bancos:** Se reforzó `bancos_pago_nuevo` para tratar también errores `ArithmeticError` dentro del mismo rollback; se añadió prueba (`test_payment_creation_rolls_back_when_fiscal_payload_is_invalid`) que confirma rollback completo cuando el payload fiscal es inválido.
+- **Trazabilidad:** `PENDIENTE.md` y `ESTADO_ACTUAL.md` se actualizaron para marcar como completados persistencia fiscal real y consumo en posting.
+
+## 2026-05-19 (Seguimiento review: faltantes fiscales de persistencia y posting)
+- **Solicitud:** Atender comentario de revisión que señala brechas en la implementación fiscal MVP.
+- **Resultado:** Se dejó explícito en `PENDIENTE.md` y `ESTADO_ACTUAL.md` que aún faltan dos frentes críticos: (1) persistencia fiscal real por documento con snapshot inmutable de reglas; (2) integración de ese payload persistido en el posting de `purchase_invoice`, `sales_invoice` y `payment_entry`.
+- **Alcance de esta iteración:** Sin cambios funcionales en backend/UI; se actualizó trazabilidad del estado para evitar ambigüedad entre preview visual y persistencia/contabilización final.
+
+## 2026-05-19 (MVP fiscal: matriz + API preview + UX común con modal por línea)
+- **Solicitud:** Ejecutar el plan MVP ampliado para Compras, Ventas, Inventario y Bancos, incorporando matriz fiscal por tipo documental, API unificada de preview y bloque UX común de `Impuestos y Cargos`.
+- **Requisito UX confirmado:** Se mantiene patrón visual alineado al framework transaccional existente, con capacidad de ampliar cada línea fiscal en modal para capturar información adicional.
+- **Implementación core:** Se agregó `cacao_accounting/fiscal_preview_service.py` con matriz fiscal por documento y cálculo unificado usando `FiscalEngine` + `TaxRuleContext` persistidas.
+- **API unificada:** Nuevo endpoint `POST /api/fiscal/preview` en `cacao_accounting/api/__init__.py` para que todos los formularios consulten el mismo preview.
+- **UX común transaccional:** `transaction_form_macros.html` y `static/js/transaction-form.js` ahora incluyen bloque `Impuestos y Cargos`, resumen (`Subtotal/Impuestos/Total`) y modal por línea fiscal.
+- **Bancos (alcance final):** Se integró el bloque únicamente en **Entrada de Pagos** (`bancos/pago_nuevo.html`). Nota de Débito, Nota de Crédito y Transferencia interna quedaron explícitamente fuera de este alcance por requerimiento.
+- **Seguridad:** Se corrigió exposición de detalle de excepción en API de preview y se revalidó con `codeql_checker` (sin alertas).
+- **Verificación:** Black, Ruff, Flake8, Mypy, pydocstyle, pytest (`--slow=True`) y CodeQL en verde para los cambios de la iteración.
+
 ## 2026-05-17 (AR/AP y terceros: tipos, edicion y contactos)
 - **Solicitud:** Resolver pendientes de AR/AP y Terceros: `PartyGroup`, edicion/visualizacion por compania para Cliente/Proveedor y multiples direcciones/contactos, incluyendo Tipo de Cliente / Tipo de Proveedor.
 - **Modelo y catalogo:** Se agrego `PartyGroup` global por `group_type` (`customer`/`supplier`) y `Party.party_group_id`, manteniendo `classification` como campo legacy sincronizado con el nombre del grupo.
@@ -220,3 +256,10 @@
 - **Integridad de Snapshots:** Los snapshots JSON ahora incluyen un fingerprint SHA256 y versionado de motor para auditoría inmutable.
 - **Resolución de Reglas Avanzada:** El `RuleResolver` ahora evalúa condiciones dinámicas como vigencia por fechas, moneda y jurisdicción geográfica.
 - **Calidad de Código:** Tipado estático completo con Mypy y cumplimiento de Flake8/Ruff en todo el paquete `accounting_engine`.
+
+## 2026-05-19 (Materialización de costos de importación en inventario)
+- **Solicitud:** Atender el pendiente de prorrateo de cargos capitalizables para que el costo aterrizado se materialice dentro del flujo real de documentos, evitando sobrecargar una sola tabla.
+- **Diseño aplicado:** Se agregó `LandedCostAllocation` como tabla dedicada de detalle y trazabilidad del prorrateo; `StockValuationLayer` conserva solo el efecto de valuación.
+- **Recepción de compra:** Cuando los cargos de importación ya están disponibles al ingreso al almacén, `post_purchase_receipt` ejecuta el motor antes del stock ledger y crea la capa inicial con `final_inventory_cost`.
+- **Factura de compra:** Cuando el costo capitalizable aparece después de una recepción ya contabilizada, `post_purchase_invoice` persiste el prorrateo y crea una capa de ajuste por valor (`qty = 0`) contra el inventario existente.
+- **Pruebas:** Se agregó cobertura unitaria para una importación recibida con flete capitalizable prorrateado por valor, validando `LandedCostAllocation`, `StockValuationLayer` y `StockBin`.

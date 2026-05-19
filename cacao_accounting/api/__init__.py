@@ -34,6 +34,7 @@ from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.document_flow.status import _, document_status_payload
 from cacao_accounting.document_flow.tracing import document_flow_tree
+from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.search_select import SearchSelectError, search_select
 
@@ -127,6 +128,19 @@ def api_form_preferences(form_key: str, view_key: str):
         return jsonify(reset_form_preference(user_id=user_id, form_key=form_key, view_key=view_key))
     payload = request.get_json(silent=True) or {}
     return jsonify(save_form_preference(user_id=user_id, form_key=form_key, view_key=view_key, payload=payload))
+
+
+@api.route("/api/fiscal/preview", methods=["POST"])
+@login_required
+def api_fiscal_preview():
+    """Devuelve preview fiscal unificado para formularios del MVP."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = fiscal_preview(payload)
+    except ValueError as exc:
+        current_app.logger.warning("Fiscal preview validation error: %s", str(exc))
+        return jsonify({"error": _("No se pudo calcular el preview fiscal."), "message": _("Revise los datos enviados.")}), 400
+    return jsonify(result)
 
 
 @api.route("/api/buying/purchase-order/<order_id>/items")

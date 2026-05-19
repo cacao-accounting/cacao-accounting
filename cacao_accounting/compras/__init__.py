@@ -51,6 +51,7 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.party_settings import (
     build_party_company_settings,
     draft_party_company_settings,
@@ -1333,6 +1334,18 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     return total_qty, total
 
 
+def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
+    """Persiste el snapshot fiscal editable capturado en el formulario."""
+    persist_document_fiscal_snapshot(
+        company=str(invoice.company or ""),
+        document_type=invoice.document_type or PURCHASE_INVOICE,
+        document_id=invoice.id,
+        currency=None,
+        tax_lines=request.form.get("tax_lines_payload"),
+        tax_summary=request.form.get("tax_summary_payload"),
+    )
+
+
 @compras.route("/purchase-order/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2291,10 +2304,11 @@ def compras_factura_compra_nuevo():
             factura.base_grand_total = total
             factura.outstanding_amount = total
             factura.base_outstanding_amount = total
+            _persist_purchase_invoice_fiscal_snapshot(factura)
             database.session.commit()
             flash("Factura de compra creada correctamente.", "success")
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
-        except (DocumentFlowError, IdentifierConfigurationError) as exc:
+        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
     return render_template(
@@ -2364,25 +2378,30 @@ def compras_factura_compra_editar(invoice_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        registro.supplier_id = request.form.get("supplier_id") or None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _total_qty, total = _save_purchase_invoice_items(registro.id)
-        registro.total = total
-        registro.base_total = total
-        registro.grand_total = total
-        registro.base_grand_total = total
-        registro.outstanding_amount = total
-        registro.base_outstanding_amount = total
-        database.session.commit()
-        flash(_("Factura de compra actualizada correctamente."), "success")
-        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
+        try:
+            registro.supplier_id = request.form.get("supplier_id") or None
+            registro.company = request.form.get("company") or None
+            registro.posting_date = _parse_date(request.form.get("posting_date"))
+            registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
+            registro.remarks = request.form.get("remarks")
+            for item in database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+            ).scalars():
+                database.session.delete(item)
+            _total_qty, total = _save_purchase_invoice_items(registro.id)
+            registro.total = total
+            registro.base_total = total
+            registro.grand_total = total
+            registro.base_grand_total = total
+            registro.outstanding_amount = total
+            registro.base_outstanding_amount = total
+            _persist_purchase_invoice_fiscal_snapshot(registro)
+            database.session.commit()
+            flash(_("Factura de compra actualizada correctamente."), "success")
+            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
 
     lineas = database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)

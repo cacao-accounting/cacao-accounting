@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
@@ -26,6 +27,7 @@ from cacao_accounting.database import (
     GLEntry,
     Item,
     ItemAccount,
+    LandedCostAllocation,
     PartyAccount,
     PaymentEntry,
     PurchaseInvoice,
@@ -70,6 +72,14 @@ class LedgerContext:
     company_currency: str | None
     exchange_rate: Decimal | None
     document_remarks: str | None
+
+
+@dataclass(frozen=True)
+class EnginePostingResult:
+    """Resultado combinado de los motores de calculo y sus entradas GL."""
+
+    entries: list[GLEntry]
+    results: dict[str, Any]
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -428,7 +438,7 @@ def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
     return entries
 
 
-def _post_with_calculation_engine(document: Any, ledger_code: str | None = None) -> list[GLEntry] | None:
+def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None = None) -> EnginePostingResult | None:
     """Post supported documents through the accounting-engine integration."""
     from cacao_accounting.accounting_engine.document_builders import (
         CalculationContextBuilderError,
@@ -447,7 +457,14 @@ def _post_with_calculation_engine(document: Any, ledger_code: str | None = None)
     proforma = results.get("proforma")
     if proforma is None:
         return None
-    return post_proforma_to_gl(document=document, context=context, proforma=proforma, ledger_code=ledger_code)
+    entries = post_proforma_to_gl(document=document, context=context, proforma=proforma, ledger_code=ledger_code)
+    return EnginePostingResult(entries=entries, results=results)
+
+
+def _post_with_calculation_engine(document: Any, ledger_code: str | None = None) -> list[GLEntry] | None:
+    """Post supported documents through the accounting-engine integration."""
+    payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
+    return payload.entries if payload is not None else None
 
 
 def _signed_amount(document: Any, amount: Decimal) -> Decimal:
@@ -724,8 +741,15 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     if getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
         _record_purchase_reconciliation(document, abs(item_amount_total))
 
-    result = _post_with_calculation_engine(document, ledger_code=ledger_code)
-    if result is None:
+    engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
+    if engine_payload is not None:
+        result = engine_payload.entries
+        _persist_landed_cost_allocations(
+            document=document,
+            items=items,
+            landed_cost_result=engine_payload.results.get("landed_cost"),
+        )
+    else:
         entries: list[GLEntry] = []
         for context in _document_contexts(document, ledger_code=ledger_code):
             for item in items:
@@ -1184,6 +1208,127 @@ def _upsert_stock_bin(
         bin_row.valuation_rate = Decimal("0")
 
 
+def _has_landed_cost_allocations(document: Any) -> bool:
+    """Return whether landed cost allocations were already persisted."""
+    return (
+        database.session.execute(
+            select(LandedCostAllocation.id)
+            .filter_by(
+                company=_company_for(document),
+                document_type=_get_voucher_type(document),
+                document_id=_get_voucher_id(document),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _serializable_cost_details(costs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert landed cost allocation details into JSON-safe values."""
+    serialized: list[dict[str, Any]] = []
+    for cost in costs:
+        serialized.append(
+            {key: str(value) if isinstance(value, Decimal) else value for key, value in cost.items() if value is not None}
+        )
+    return serialized
+
+
+def _stock_bin_for(company: str, item_code: str, warehouse: str) -> StockBin | None:
+    """Fetch the stock bin for an item and warehouse."""
+    return (
+        database.session.execute(select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse))
+        .scalars()
+        .first()
+    )
+
+
+def _persist_landed_cost_allocations(
+    *,
+    document: Any,
+    items: Sequence[Any],
+    landed_cost_result: Any,
+    create_valuation_adjustment: bool = True,
+) -> None:
+    """Persist landed cost allocations and their inventory valuation effect."""
+    if landed_cost_result is None or getattr(landed_cost_result, "errors", None):
+        return
+    allocations = list(getattr(landed_cost_result, "allocations", []) or [])
+    if not allocations:
+        return
+    if _has_landed_cost_allocations(document):
+        raise PostingError("Este documento ya tiene prorrateos de costos capitalizables contabilizados.")
+
+    items_by_line_id = {str(item.id): item for item in items}
+    for allocation in allocations:
+        allocated_amount = _decimal_value(getattr(allocation, "allocated_total", None))
+        if allocated_amount == 0:
+            continue
+        item = items_by_line_id.get(str(allocation.item_line_id))
+        if item is None:
+            raise PostingError("El prorrateo de costo capitalizable no coincide con una linea de factura.")
+        warehouse = getattr(item, "warehouse", None)
+        if not warehouse:
+            raise PostingError("La linea con costo capitalizable requiere almacen para ajustar valuacion.")
+
+        stock_layer_id = getattr(item, "_stock_valuation_layer_id", None)
+        if create_valuation_adjustment:
+            bin_row = _stock_bin_for(document.company, item.item_code, warehouse)
+            if bin_row is None or _decimal_value(bin_row.actual_qty) <= 0:
+                raise PostingError("No hay inventario disponible para materializar el costo capitalizable.")
+
+            _upsert_stock_bin(
+                company=document.company,
+                item_code=item.item_code,
+                warehouse=warehouse,
+                qty_change=Decimal("0"),
+                valuation_rate=_decimal_value(bin_row.valuation_rate),
+                value_change=allocated_amount,
+            )
+            database.session.flush()
+            updated_bin = _stock_bin_for(document.company, item.item_code, warehouse)
+            if updated_bin is None:
+                raise PostingError("No se pudo actualizar la valuacion de inventario.")
+
+            stock_layer = StockValuationLayer(
+                item_code=item.item_code,
+                warehouse=warehouse,
+                company=document.company,
+                qty=Decimal("0"),
+                rate=_decimal_value(updated_bin.valuation_rate),
+                stock_value_difference=allocated_amount,
+                remaining_qty=max(_decimal_value(updated_bin.actual_qty), Decimal("0")),
+                remaining_stock_value=max(_decimal_value(updated_bin.stock_value), Decimal("0")),
+                voucher_type=_get_voucher_type(document),
+                voucher_id=_get_voucher_id(document),
+                posting_date=document.posting_date,
+            )
+            database.session.add(stock_layer)
+            database.session.flush()
+            stock_layer_id = stock_layer.id
+        database.session.add(
+            LandedCostAllocation(
+                company=document.company,
+                document_type=_get_voucher_type(document),
+                document_id=_get_voucher_id(document),
+                document_line_id=str(item.id),
+                item_code=item.item_code,
+                warehouse=warehouse,
+                posting_date=document.posting_date,
+                base_amount=_decimal_value(getattr(allocation, "base_amount", None)),
+                allocated_amount=allocated_amount,
+                final_inventory_cost=_decimal_value(getattr(allocation, "final_inventory_cost", None)),
+                unit_inventory_cost=_decimal_value(getattr(allocation, "unit_inventory_cost", None)),
+                allocation_method=None,
+                allocation_detail_json=json.dumps(
+                    _serializable_cost_details(list(getattr(allocation, "allocated_costs", []) or [])),
+                    sort_keys=True,
+                ),
+                stock_valuation_layer_id=stock_layer_id,
+            )
+        )
+
+
 def _create_stock_movement(
     *,
     document: Any,
@@ -1403,21 +1548,22 @@ def _create_stock_ledger_for_document(
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
-    database.session.add(
-        StockValuationLayer(
-            item_code=line.item_code,
-            warehouse=warehouse,
-            company=document.company,
-            qty=qty_change,
-            rate=valuation_rate,
-            stock_value_difference=value_change,
-            remaining_qty=max(qty_after, Decimal("0")),
-            remaining_stock_value=max(qty_after * valuation_rate, Decimal("0")),
-            voucher_type=_get_voucher_type(document),
-            voucher_id=_get_voucher_id(document),
-            posting_date=document.posting_date,
-        )
+    stock_layer = StockValuationLayer(
+        item_code=line.item_code,
+        warehouse=warehouse,
+        company=document.company,
+        qty=qty_change,
+        rate=valuation_rate,
+        stock_value_difference=value_change,
+        remaining_qty=max(qty_after, Decimal("0")),
+        remaining_stock_value=max(qty_after * valuation_rate, Decimal("0")),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+        posting_date=document.posting_date,
     )
+    database.session.add(stock_layer)
+    database.session.flush()
+    line._stock_valuation_layer_id = stock_layer.id
     return StockLedgerEntry(
         posting_date=document.posting_date,
         item_code=line.item_code,
@@ -1435,19 +1581,35 @@ def _create_stock_ledger_for_document(
     )
 
 
-def _create_stock_ledger_for_document_type(document: Any, sign: Decimal) -> list[StockLedgerEntry]:
+def _allocation_by_line_id(landed_cost_result: Any) -> dict[str, Any]:
+    """Index landed cost allocations by document line id."""
+    if landed_cost_result is None or getattr(landed_cost_result, "errors", None):
+        return {}
+    return {str(allocation.item_line_id): allocation for allocation in getattr(landed_cost_result, "allocations", []) or []}
+
+
+def _create_stock_ledger_for_document_type(
+    document: Any,
+    sign: Decimal,
+    landed_cost_result: Any = None,
+) -> list[StockLedgerEntry]:
     if _has_stock_ledger_entries(document):
         raise PostingError("Este documento ya tiene movimientos de inventario contabilizados.")
 
     items = _document_items(document)
     if not items:
         raise PostingError("El documento no contiene lineas de inventario para contabilizar.")
+    document._inventory_posting_items = items
 
+    allocations_by_line_id = _allocation_by_line_id(landed_cost_result)
     movements: list[StockLedgerEntry] = []
     for line in items:
         qty = _line_qty_generic(line)
         rate = _line_rate_generic(line)
         amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+        allocation = allocations_by_line_id.get(str(getattr(line, "id", "")))
+        if allocation is not None and sign > 0:
+            amount = _decimal_value(getattr(allocation, "final_inventory_cost", None))
         qty_change = _signed_amount(document, sign * qty)
         value_change = _signed_amount(document, sign * amount)
         warehouse = getattr(line, "warehouse", None)
@@ -1573,15 +1735,23 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
             bridge_account_id,
             "Falta la cuenta puente configurada para la compañia.",
         )
-    movements = _create_stock_ledger_for_document_type(document, Decimal("1"))
+    engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code) if bridge_account_id else None
+    landed_cost_result = engine_payload.results.get("landed_cost") if engine_payload is not None else None
+    movements = _create_stock_ledger_for_document_type(document, Decimal("1"), landed_cost_result=landed_cost_result)
     if not movements:
         raise PostingError("No se generaron movimientos de inventario para esta recepción de compra.")
+    if landed_cost_result is not None:
+        _persist_landed_cost_allocations(
+            document=document,
+            items=list(getattr(document, "_inventory_posting_items", []) or _document_items(document)),
+            landed_cost_result=landed_cost_result,
+            create_valuation_adjustment=False,
+        )
 
     entries: list[GLEntry] = []
     if bridge_account_id:
-        engine_result = _post_with_calculation_engine(document, ledger_code=ledger_code)
-        if engine_result is not None:
-            result = engine_result
+        if engine_payload is not None:
+            result = engine_payload.entries
         else:
             for context in _document_contexts(document, ledger_code=ledger_code):
                 for line in _document_items(document):

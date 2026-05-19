@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
+from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel.
@@ -97,6 +98,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     )
     if not items:
         raise CalculationContextBuilderError("La recepción de compra no contiene líneas para cálculo.")
+    event_type = "purchase_receipt_confirmed"
     bridge_account_id = _require_account_id(
         getattr(defaults, "bridge_account_id", None),
         "Falta la cuenta puente configurada para la compañía.",
@@ -128,10 +130,11 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             )
         )
         item_contexts.append(_item_context_from_purchase_receipt_item(item))
+    tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
         company_id=company,
         document_type="purchase_receipt",
-        event_type="purchase_receipt_confirmed",
+        event_type=event_type,
         transaction_direction="purchase",
         transaction_date=document.posting_date,
         posting_date=document.posting_date,
@@ -141,6 +144,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         company_currency=_company_currency(document, company),
         exchange_rate=_document_exchange_rate(document),
         items=item_contexts,
+        tax_rules=tax_rules,
         references=_build_references(
             company=company,
             party_id=document.supplier_id,
@@ -277,13 +281,19 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         payment_date=document.posting_date,
         references=references,
     )
-    tax_rules = build_tax_rule_contexts(
-        company=company,
-        applies_to=direction,
-        currency=transaction_currency,
-        at_date=document.posting_date,
+    tax_rules = build_tax_rule_contexts_from_snapshot(
+        document_type="payment_entry",
+        document_id=document.id,
         recognition_event=event_type,
     )
+    if not tax_rules:
+        tax_rules = build_tax_rule_contexts(
+            company=company,
+            applies_to=direction,
+            currency=transaction_currency,
+            at_date=document.posting_date,
+            recognition_event=event_type,
+        )
     return CalculationContext(
         company_id=company,
         document_type="payment_entry",
@@ -327,7 +337,7 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
 
 
 def _document_tax_rules(
-    document: PurchaseInvoice | SalesInvoice,
+    document: PurchaseInvoice | PurchaseReceipt | SalesInvoice,
     items: Iterable[Any],
     *,
     company: str,
@@ -335,6 +345,18 @@ def _document_tax_rules(
     event_type: str,
 ) -> list[TaxRuleContext]:
     """Load persisted tax rules and fall back to the current tax template if necessary."""
+    fallback_document_type = (
+        "purchase_receipt"
+        if isinstance(document, PurchaseReceipt)
+        else ("purchase_invoice" if applies_to == "purchase" else "sales_invoice")
+    )
+    persisted_rules = build_tax_rule_contexts_from_snapshot(
+        document_type=getattr(document, "document_type", None) or fallback_document_type,
+        document_id=document.id,
+        recognition_event=event_type,
+    )
+    if persisted_rules:
+        return persisted_rules
     tax_rules = build_tax_rule_contexts(
         company=company,
         applies_to=applies_to,

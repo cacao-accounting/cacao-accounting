@@ -38,6 +38,14 @@
       },
       lines: config.initial.lines || [],
       payload: '',
+      taxCharges: {
+        loading: false,
+        error: '',
+        summary: { subtotal: '0', document_tax_total: '0', grand_total: '0' },
+        lines: [],
+        activeIndex: null,
+        modalLine: null,
+      },
 
       init: function () {
         var self = this;
@@ -47,10 +55,69 @@
                 self.header.currency = event.detail.extra.currency;
             }
         });
+        this.fetchTaxPreview();
       },
 
       calculateTotal: function() {
         this.header.paid_amount = this.lines.reduce((sum, line) => sum + Number.parseFloat(line.allocated_amount || 0), 0);
+        this.fetchTaxPreview();
+      },
+
+      buildFiscalPayload: function() {
+        return {
+          document_type: 'payment_entry',
+          payment_type: this.header.payment_type,
+          company: this.header.company,
+          currency: this.header.currency,
+          posting_date: this.header.posting_date,
+          party_type: this.header.party_type,
+          party_id: this.header.party_id,
+          lines: [{ uid: 'PAYMENT-REF', item_code: 'PAYMENT', item_name: 'Payment', qty: 1, rate: this.header.paid_amount, amount: this.header.paid_amount }],
+          tax_lines: this.taxCharges.lines
+        };
+      },
+
+      fetchTaxPreview: async function() {
+        if (!this.header.company) return;
+        this.taxCharges.loading = true;
+        this.taxCharges.error = '';
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        const csrfToken = csrfInput ? csrfInput.value : '';
+        try {
+          const response = await fetch('/api/fiscal/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            credentials: 'same-origin',
+            body: JSON.stringify(this.buildFiscalPayload())
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            this.taxCharges.error = data.message || '{{ _("No se pudo calcular.") }}';
+            this.taxCharges.loading = false;
+            return;
+          }
+          this.taxCharges.summary = data.summary || this.taxCharges.summary;
+          this.taxCharges.lines = data.tax_lines || [];
+          this.taxCharges.loading = false;
+        } catch (err) {
+          this.taxCharges.error = '{{ _("No se pudo calcular.") }}';
+          this.taxCharges.loading = false;
+        }
+      },
+
+      openTaxLineDetails: function(index) {
+        this.taxCharges.activeIndex = index;
+        this.taxCharges.modalLine = Object.assign({}, this.taxCharges.lines[index] || {});
+        const modalEl = document.getElementById('taxChargeDetailModal');
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      },
+
+      saveTaxLineModal: function() {
+        if (this.taxCharges.activeIndex !== null && this.taxCharges.modalLine) {
+          this.taxCharges.lines[this.taxCharges.activeIndex] = Object.assign({}, this.taxCharges.modalLine);
+        }
+        const modalEl = document.getElementById('taxChargeDetailModal');
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
       },
 
       prepareSubmit: function (event) {
@@ -62,7 +129,9 @@
 
         this.payload = JSON.stringify({
           ...this.header,
-          lines: this.lines
+          lines: this.lines,
+          tax_lines: this.taxCharges.lines,
+          tax_summary: this.taxCharges.summary
         });
       }
     };
@@ -247,8 +316,81 @@
   </template>
 
   <div class="ca-card p-3 mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-percent"></i> {{ _('Impuestos y Cargos') }}</h6>
+          <button class="btn btn-sm btn-outline-primary" type="button" @click="fetchTaxPreview()">{{ _('Recalcular') }}</button>
+      </div>
+      <div class="alert alert-danger py-2" x-show="taxCharges.error" x-text="taxCharges.error"></div>
+      <table class="ca-table table table-sm mb-2">
+          <caption>{{ _("Detalle de impuestos y cargos") }}</caption>
+          <thead>
+              <tr>
+                  <th>{{ _('Concepto') }}</th>
+                  <th>{{ _('Tipo') }}</th>
+                  <th class="text-end">{{ _('Monto') }}</th>
+                  <th style="width:60px;">{{ _('Ver') }}</th>
+              </tr>
+          </thead>
+          <tbody>
+              <template x-for="(line, index) in taxCharges.lines" :key="line.line_id || index">
+                  <tr>
+                      <td x-text="line.concept"></td>
+                      <td x-text="line.type"></td>
+                      <td class="text-end" x-text="Number(line.amount || 0).toFixed(2)"></td>
+                      <td><button class="btn btn-sm btn-outline-secondary" type="button" @click="openTaxLineDetails(index)"><i class="bi bi-pencil"></i></button></td>
+                  </tr>
+              </template>
+              <tr x-show="!taxCharges.lines.length">
+                  <td colspan="4" class="text-center text-muted">{{ _('Sin líneas fiscales aplicables para este documento.') }}</td>
+              </tr>
+          </tbody>
+      </table>
+      <div class="text-end small">
+          <strong>{{ _('Impuestos y Cargos') }}:</strong>
+          <span x-text="Number(taxCharges.summary.document_tax_total || 0).toFixed(2)"></span>
+      </div>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
       <label class="form-label">{{ _('Comentarios') }}</label>
       <textarea class="form-control" rows="3" x-model="header.remarks"></textarea>
+  </div>
+
+  <div class="modal fade" id="taxChargeDetailModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+              <div class="modal-header">
+                  <h5 class="modal-title">{{ _('Detalle de impuesto/cargo') }}</h5>
+                  <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+              </div>
+              <div class="modal-body">
+                  <template x-if="taxCharges.activeIndex !== null && taxCharges.modalLine !== null">
+                      <div class="row g-3">
+                          <div class="col-md-6">
+                              <label class="form-label">{{ _('Concepto') }}</label>
+                              <input class="form-control" type="text" x-model="taxCharges.modalLine.concept" readonly>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label">{{ _('Tipo') }}</label>
+                              <input class="form-control" type="text" x-model="taxCharges.modalLine.type" readonly>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label">{{ _('Cuenta contable') }}</label>
+                              <input class="form-control" type="text" x-model="taxCharges.modalLine.account_id">
+                          </div>
+                          <div class="col-md-12">
+                              <label class="form-label">{{ _('Observaciones') }}</label>
+                              <textarea class="form-control" rows="3" x-model="taxCharges.modalLine.notes"></textarea>
+                          </div>
+                      </div>
+                  </template>
+              </div>
+              <div class="modal-footer">
+                  <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+                  <button class="btn btn-primary" type="button" @click="saveTaxLineModal()">{{ _('Guardar detalle') }}</button>
+              </div>
+          </div>
+      </div>
   </div>
 
 </form>

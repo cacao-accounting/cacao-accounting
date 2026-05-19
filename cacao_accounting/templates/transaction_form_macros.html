@@ -359,8 +359,71 @@
 
 <section class="border rounded-2 p-3 mt-3">
   <div class="ca-transaction-summary">
-    <strong>{{ _('Total') }}:</strong>
+    <strong>{{ _('Subtotal') }}:</strong>
     <span x-text="formatMoney(totalAmount)"></span>
+    <strong>{{ _('Impuestos y Cargos') }}:</strong>
+    <span x-text="formatMoney(documentTaxTotal)"></span>
+    <strong>{{ _('Total Documento') }}:</strong>
+    <span x-text="formatMoney(grandTotal)"></span>
+  </div>
+  <input type="hidden" name="tax_lines_payload" :value="serializedTaxLines()">
+  <input type="hidden" name="tax_summary_payload" :value="serializedTaxSummary()">
+</section>
+
+<section class="border rounded-2 p-3 mt-3">
+  <div class="ca-journal-toolbar mb-3">
+	    <h5 class="mb-0">{{ _('Impuestos y Cargos') }}</h5>
+	    <div class="d-flex gap-2 align-items-center">
+	      <span class="small text-muted" x-show="taxCharges.loading">{{ _('Calculando...') }}</span>
+	      <button class="btn btn-sm btn-outline-primary" type="button" @click="addTaxLine()">
+	        <i class="bi bi-plus-lg"></i> {{ _('Añadir impuesto/cargo') }}
+	      </button>
+	      <button class="btn btn-sm btn-outline-primary" type="button" @click="fetchTaxPreview()">
+	        <i class="bi bi-arrow-repeat"></i> {{ _('Recalcular') }}
+	      </button>
+    </div>
+  </div>
+
+  <div class="alert alert-danger py-2" role="alert" x-show="taxCharges.error" x-text="taxCharges.error"></div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered ca-journal-table mb-0">
+      <caption>{{ _('Detalle de impuestos y cargos') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Concepto') }}</th>
+          <th>{{ _('Tipo') }}</th>
+          <th class="text-end">{{ _('Base') }}</th>
+          <th class="text-end">{{ _('Tasa') }}</th>
+          <th class="text-end">{{ _('Monto') }}</th>
+	          <th style="width: 110px;">{{ _('Acciones') }}</th>
+	        </tr>
+	      </thead>
+      <tbody>
+        <template x-for="(taxLine, taxIndex) in taxCharges.lines" :key="taxLine.line_id || taxIndex">
+          <tr>
+            <td x-text="taxLine.concept"></td>
+            <td x-text="taxLine.type"></td>
+            <td class="text-end" x-text="formatMoney(taxLine.base_amount)"></td>
+            <td class="text-end" x-text="formatMoney(taxLine.rate)"></td>
+            <td class="text-end" x-text="formatMoney(taxLine.amount)"></td>
+	            <td class="text-center">
+	              <button class="btn btn-sm btn-outline-secondary" type="button" @click="openTaxLineDetails(taxIndex)"
+	                title="{{ _('Ver detalle') }}">
+	                <i class="bi bi-pencil"></i>
+	              </button>
+	              <button class="btn btn-sm btn-outline-danger" type="button" x-show="taxLine.manual"
+	                @click="removeTaxLine(taxIndex)" title="{{ _('Eliminar') }}">
+	                <i class="bi bi-trash"></i>
+	              </button>
+	            </td>
+          </tr>
+        </template>
+        <tr x-show="!taxCharges.lines.length">
+          <td colspan="6" class="text-center text-muted py-3">{{ _('Sin líneas fiscales aplicables para este documento.') }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -580,6 +643,116 @@
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
         <button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Guardar detalle') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="taxChargeDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ _('Detalle de impuesto/cargo') }}</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+      </div>
+      <div class="modal-body">
+        <template x-if="taxCharges.activeIndex !== null && taxCharges.modalLine !== null">
+          <div>
+            <div class="row g-3">
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Concepto') }}</label>
+	                <input class="form-control" type="text" x-model="taxCharges.modalLine.concept"
+	                  :readonly="!taxCharges.modalLine.manual">
+	              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Tipo') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.type"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="tax">{{ _('Impuesto') }}</option>
+	                  <option value="charge">{{ _('Cargo') }}</option>
+	                  <option value="withholding">{{ _('Retención') }}</option>
+	                  <option value="deduction">{{ _('Deducción') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-4">
+	                <label class="form-label">{{ _('Base') }}</label>
+	                <input class="form-control text-end" type="number" step="0.0001"
+	                  x-model.number="taxCharges.modalLine.base_amount"
+	                  :readonly="!taxCharges.modalLine.manual">
+	              </div>
+	              <div class="col-md-4">
+	                <label class="form-label">{{ _('Tasa') }}</label>
+	                <input class="form-control text-end" type="number" step="0.0001"
+	                  x-model.number="taxCharges.modalLine.rate"
+	                  :readonly="!taxCharges.modalLine.manual">
+	              </div>
+	              <div class="col-md-4">
+	                <label class="form-label">{{ _('Monto') }}</label>
+	                <input class="form-control text-end" type="number" step="0.0001"
+	                  x-model.number="taxCharges.modalLine.amount"
+	                  :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
+	              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Método de cálculo') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.calculation_method"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="manual">{{ _('Manual') }}</option>
+	                  <option value="percentage">{{ _('Porcentaje') }}</option>
+	                  <option value="fixed">{{ _('Fijo') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Tratamiento contable') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.accounting_treatment"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="separate_tax_account">{{ _('Cuenta separada') }}</option>
+	                  <option value="capitalizable_inventory_cost">{{ _('Capitalizable a inventario') }}</option>
+	                  <option value="expense">{{ _('Gasto') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Prorrateo') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.allocation_method"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="by_value">{{ _('Por valor') }}</option>
+	                  <option value="by_quantity">{{ _('Por cantidad') }}</option>
+	                  <option value="by_weight">{{ _('Por peso') }}</option>
+	                  <option value="by_volume">{{ _('Por volumen') }}</option>
+	                  <option value="equal">{{ _('Partes iguales') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-6 d-flex align-items-end">
+	                <div class="form-check">
+	                  <input class="form-check-input" id="tax-affects-inventory" type="checkbox"
+	                    x-model="taxCharges.modalLine.affects_inventory" :disabled="!taxCharges.modalLine.manual">
+	                  <label class="form-check-label" for="tax-affects-inventory">{{ _('Afecta inventario') }}</label>
+	                </div>
+	              </div>
+	              <div class="col-md-12">
+                <label class="form-label">{{ _('Cuenta contable') }}</label>
+                {{ smart_select(
+                    doctype="account",
+                    name="modal_tax_account",
+                    label=_("Cuenta contable"),
+                    filters={"company": {"selector": "#company"}},
+                    filter_sources=["#company"],
+                    required_filters=["company"],
+                    x_model="taxCharges.modalLine.account_id",
+                    initial_value_expr="taxCharges.modalLine.account_id",
+                    initial_label_expr="taxCharges.modalLine.account_id"
+                ) }}
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label">{{ _('Observaciones') }}</label>
+              <textarea class="form-control" rows="3" x-model="taxCharges.modalLine.notes"></textarea>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+        <button class="btn btn-primary" type="button" @click="saveTaxLineModal()">{{ _('Guardar detalle') }}</button>
       </div>
     </div>
   </div>

@@ -1850,9 +1850,7 @@ def test_route_new_exchange_revaluation_creates_run_from_accounting_period(app_c
         )
         database.session.add(company_defaults)
 
-    book = database.session.execute(
-        database.select(Book).filter_by(entity="cacao", code="FISC")
-    ).scalar_one_or_none()
+    book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FISC")).scalar_one_or_none()
     if book is None:
         book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
         database.session.add(book)
