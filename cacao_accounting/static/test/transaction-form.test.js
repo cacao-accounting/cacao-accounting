@@ -52,6 +52,7 @@ describe('transaction-form', function () {
     delete global.document;
     delete global.bootstrap;
     delete global.Alpine;
+    delete global.fetch;
   });
 
   it('uses required default columns when preferences are empty', function () {
@@ -191,5 +192,60 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines[0].account, 'inventory-cacao');
     assert.strictEqual(component.lines[0].remarks, 'Updated');
     assert.strictEqual(component.lines[0].amount, 10);
+  });
+
+  it('skips fiscal preview calls for document types outside the fiscal matrix', async function () {
+    const create = loadTransactionForm();
+    let called = false;
+    global.fetch = async () => {
+      called = true;
+      throw new Error('unexpected preview call');
+    };
+    const component = create({
+      formKey: 'sales.sales_quotation',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao' },
+    });
+
+    component.init();
+    await component.fetchTaxPreview();
+
+    assert.strictEqual(component.supportsFiscalPreview(), false);
+    assert.strictEqual(called, false);
+    assert.strictEqual(component.taxCharges.error, '');
+  });
+
+  it('adds manual tax or charge lines and updates fiscal totals', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', qty: 2, rate: 50 }],
+    });
+
+    component.init();
+    component.addTaxLine();
+    component.taxCharges.modalLine.concept = 'Flete';
+    component.taxCharges.modalLine.type = 'charge';
+    component.taxCharges.modalLine.amount = 12.5;
+    component.taxCharges.modalLine.accounting_treatment = 'capitalizable_inventory_cost';
+    component.taxCharges.modalLine.affects_inventory = true;
+    component.saveTaxLineModal();
+
+    assert.strictEqual(component.taxCharges.lines.length, 1);
+    assert.strictEqual(component.taxCharges.lines[0].manual, true);
+    assert.strictEqual(component.taxCharges.lines[0].concept, 'Flete');
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '12.5');
+    assert.strictEqual(component.taxCharges.summary.capitalizable_tax_total, '12.5');
+    assert.strictEqual(component.grandTotal, 112.5);
+
+    const payload = component.buildFiscalPayload();
+    assert.strictEqual(payload.tax_lines[0].manual, true);
+    assert.strictEqual(payload.tax_lines[0].allocation_method, 'by_value');
   });
 });

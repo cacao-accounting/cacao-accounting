@@ -277,6 +277,12 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_tax_rule_table_exists(self):
         self.assertIn("tax_rule", self.tables)
 
+    def test_document_tax_summary_table_exists(self):
+        self.assertIn("document_tax_summary", self.tables)
+
+    def test_document_tax_line_table_exists(self):
+        self.assertIn("document_tax_line", self.tables)
+
     def test_price_list_table_exists(self):
         self.assertIn("price_list", self.tables)
 

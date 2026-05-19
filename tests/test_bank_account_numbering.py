@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from inspect import unwrap
+import json
 
 import pytest
 
@@ -261,3 +262,37 @@ def test_payment_creation_explicit_values_override_bank_account_defaults(app_ctx
     assert response.status_code == 302
     assert payment.naming_series_id == explicit_series.id
     assert payment.external_counter_id == explicit_counter.id
+
+
+def test_payment_creation_rolls_back_when_fiscal_payload_is_invalid(app_ctx):
+    from cacao_accounting.bancos import bancos_pago_nuevo
+    from cacao_accounting.database import PaymentEntry, database
+
+    series = _make_payment_series()
+    counter = _make_checkbook()
+    account = _make_bank_account(series, counter, "NIO")
+    database.session.commit()
+
+    payload = {
+        "payment_type": "pay",
+        "company": "cacao",
+        "posting_date": date(2026, 5, 13).isoformat(),
+        "bank_account_id": account.id,
+        "party_type": "supplier",
+        "party_id": "SUPP-ERR",
+        "paid_amount": "10.00",
+        "tax_lines": "{invalid_json}",
+        "tax_summary": {"document_tax_total": "1.00"},
+    }
+    with app_ctx.test_request_context(
+        "/cash_management/payment/new",
+        method="POST",
+        data={"payment_payload": json.dumps(payload)},
+    ):
+        response = unwrap(bancos_pago_nuevo)()
+
+    created_payment = database.session.execute(
+        database.select(PaymentEntry).filter_by(bank_account_id=account.id, party_id="SUPP-ERR")
+    ).scalar_one_or_none()
+    assert isinstance(response, str)
+    assert created_payment is None

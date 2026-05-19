@@ -985,6 +985,32 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
 
 
+class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Detalle persistido del prorrateo de costos capitalizables por linea."""
+
+    __tablename__ = "landed_cost_allocation"
+    __table_args__ = (UniqueConstraint("document_type", "document_id", "document_line_id", name="uq_landed_cost_line"),)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_line_id = database.Column(database.String(26), nullable=False, index=True)
+    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE), nullable=False, index=True)
+    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True, index=True)
+    posting_date = database.Column(database.Date(), nullable=False, index=True)
+    base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    final_inventory_cost = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    unit_inventory_cost = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    allocation_method = database.Column(database.String(30), nullable=True)
+    allocation_detail_json = database.Column(database.Text(), nullable=True)
+    stock_valuation_layer_id = database.Column(
+        database.String(26),
+        database.ForeignKey("stock_valuation_layer.id"),
+        nullable=True,
+        index=True,
+    )
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Purchasing — Compras y Cuentas por Pagar.
 # <---------------------------------------------------------------------------------------------> #
@@ -1986,6 +2012,55 @@ class TaxRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     valid_from = database.Column(database.Date(), nullable=True)
     valid_to = database.Column(database.Date(), nullable=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
+
+
+class DocumentTaxSummary(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Snapshot fiscal consolidado por documento."""
+
+    __tablename__ = "document_tax_summary"
+    __table_args__ = (UniqueConstraint("document_type", "document_id", name="uq_document_tax_summary_document"),)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    subtotal = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    document_tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    capitalizable_tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    separate_tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    withholding_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    source_payload_json = database.Column(database.Text(), nullable=True)
+
+
+class DocumentTaxLine(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Línea fiscal persistida y desacoplada de reglas futuras."""
+
+    __tablename__ = "document_tax_line"
+    __table_args__ = (UniqueConstraint("document_tax_summary_id", "line_index", name="uq_document_tax_line_idx"),)
+    document_tax_summary_id = database.Column(
+        database.String(26),
+        database.ForeignKey("document_tax_summary.id"),
+        nullable=False,
+        index=True,
+    )
+    line_index = database.Column(database.Integer(), nullable=False)
+    rule_id = database.Column(database.String(26), nullable=True, index=True)
+    concept = database.Column(database.String(100), nullable=False)
+    tax_type = database.Column(database.String(30), nullable=False)
+    calculation_method = database.Column(database.String(30), nullable=False, default="manual")
+    base_amount = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    accounting_treatment = database.Column(database.String(50), nullable=False, default="separate_tax_account")
+    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    affects_inventory = database.Column(database.Boolean(), default=False, nullable=False)
+    affects_document_total = database.Column(database.Boolean(), default=True, nullable=False)
+    included_in_price = database.Column(database.Boolean(), default=False, nullable=False)
+    notes = database.Column(database.Text(), nullable=True)
+    allocation_method = database.Column(database.String(30), nullable=True)
+    metadata_json = database.Column(database.Text(), nullable=True)
+    rule_snapshot_json = database.Column(database.Text(), nullable=True)
+    source_payload_json = database.Column(database.Text(), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #

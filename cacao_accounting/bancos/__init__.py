@@ -57,6 +57,7 @@ from cacao_accounting.document_flow.service import compute_outstanding_amount, r
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.version import APPNAME
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
@@ -844,29 +845,29 @@ def bancos_pago_nuevo():
     from cacao_accounting.form_preferences import get_column_preferences
 
     if request.method == "POST":
-        payload_raw = request.form.get("payment_payload")
-        if payload_raw:
-            payload = json.loads(payload_raw)
-        else:
-            # Fallback para pruebas unitarias que no envían payment_payload
-            payload = {
-                "payment_type": request.form.get("payment_type"),
-                "company": request.form.get("company"),
-                "bank_account_id": request.form.get("bank_account_id"),
-                "posting_date": request.form.get("posting_date"),
-                "paid_amount": request.form.get("paid_amount") or request.form.get("received_amount"),
-                "party_id": request.form.get("party_id"),
-                "party_type": request.form.get("party_type"),
-                "naming_series_id": request.form.get("naming_series"),
-                "external_counter_id": request.form.get("external_counter_id"),
-                "external_number": request.form.get("external_number"),
-                "target_bank_account_id": request.form.get("target_bank_account_id"),
-                "exchange_rate": request.form.get("exchange_rate"),
-                "cost_center_code": request.form.get("cost_center_code"),
-                "unit_code": request.form.get("unit_code"),
-                "project_code": request.form.get("project_code"),
-            }
         try:
+            payload_raw = request.form.get("payment_payload")
+            if payload_raw:
+                payload = json.loads(payload_raw)
+            else:
+                # Fallback para pruebas unitarias que no envían payment_payload
+                payload = {
+                    "payment_type": request.form.get("payment_type"),
+                    "company": request.form.get("company"),
+                    "bank_account_id": request.form.get("bank_account_id"),
+                    "posting_date": request.form.get("posting_date"),
+                    "paid_amount": request.form.get("paid_amount") or request.form.get("received_amount"),
+                    "party_id": request.form.get("party_id"),
+                    "party_type": request.form.get("party_type"),
+                    "naming_series_id": request.form.get("naming_series"),
+                    "external_counter_id": request.form.get("external_counter_id"),
+                    "external_number": request.form.get("external_number"),
+                    "target_bank_account_id": request.form.get("target_bank_account_id"),
+                    "exchange_rate": request.form.get("exchange_rate"),
+                    "cost_center_code": request.form.get("cost_center_code"),
+                    "unit_code": request.form.get("unit_code"),
+                    "project_code": request.form.get("project_code"),
+                }
             payment_type = payload.get("payment_type") or "receive"
             company = payload.get("company")
             bank_account_id = payload.get("bank_account_id")
@@ -933,11 +934,19 @@ def bancos_pago_nuevo():
 
             if allocated and amount != allocated and payment_type in ("pay", "receive"):
                 raise ValueError(_("El monto del pago debe coincidir con el monto asignado a referencias."))
+            persist_document_fiscal_snapshot(
+                company=str(payment.company or ""),
+                document_type="payment_entry",
+                document_id=payment.id,
+                currency=payload.get("currency"),
+                tax_lines=payload.get("tax_lines"),
+                tax_summary=payload.get("tax_summary"),
+            )
 
             database.session.commit()
             flash(_("Pago registrado correctamente."), "success")
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
-        except (IdentifierConfigurationError, ValueError) as exc:
+        except (IdentifierConfigurationError, ValueError, ArithmeticError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
 
