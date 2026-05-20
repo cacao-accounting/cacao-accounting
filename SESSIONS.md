@@ -263,3 +263,9 @@
 - **Recepción de compra:** Cuando los cargos de importación ya están disponibles al ingreso al almacén, `post_purchase_receipt` ejecuta el motor antes del stock ledger y crea la capa inicial con `final_inventory_cost`.
 - **Factura de compra:** Cuando el costo capitalizable aparece después de una recepción ya contabilizada, `post_purchase_invoice` persiste el prorrateo y crea una capa de ajuste por valor (`qty = 0`) contra el inventario existente.
 - **Pruebas:** Se agregó cobertura unitaria para una importación recibida con flete capitalizable prorrateado por valor, validando `LandedCostAllocation`, `StockValuationLayer` y `StockBin`.
+
+## 2026-05-20 (Política definitiva para `document_no` en borradores)
+- **Solicitud:** Formalizar que las secuencias y series deben llevar consecutivo riguroso; si una numeración fue emitida con datos incorrectos, el registro se anula y se crea uno nuevo.
+- **Decisión:** `document_no` es irreversible una vez asignado, incluso en borradores. No se libera, no se reutiliza y no se renumera por cambios posteriores de fecha, compañía o serie.
+- **Implementación:** `assign_document_identifier` ahora es idempotente para documentos ya numerados; retorna sin consumir secuencia ni alterar numeración interna/externa.
+- **Prueba:** Se agregó cobertura para verificar que una factura en borrador conserva su `document_no` y no incrementa la secuencia al intentar reasignar tras cambiar la fecha.
