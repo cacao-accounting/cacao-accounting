@@ -1,854 +1,749 @@
-Requerimiento Técnico — Servicio Centralizado de Importación Tabular
-
-Proyecto: Cacao Accounting
+Requerimiento técnico: Importación de líneas de detalle
 
 1. Objetivo
 
-Implementar un servicio centralizado de importación tabular para Cacao Accounting, capaz de importar registros masivos desde archivos:
+Implementar una funcionalidad reutilizable para importar líneas de detalle dentro de documentos existentes o en edición, mediante pegado desde hojas de cálculo o carga de archivo .xlsx, validando las líneas contra backend antes de insertarlas en el formulario.
 
-CSV
-XLS
-XLSX
-ODS
-
-El servicio debe soportar:
-
-Importaciones simples.
-
-Importaciones transaccionales con encabezado y detalle.
-
-Validación estructural.
-
-Validación de negocio.
-
-Vista previa antes de confirmar.
-
-Ejecución síncrona o asíncrona según volumen.
-
-Auditoría.
-
-Reutilización por múltiples módulos.
+La funcionalidad no debe crear documentos completos ni guardar automáticamente el registro.
 
 
-La funcionalidad está orientada principalmente a:
+---
 
-Implementaciones iniciales.
+2. Alcance funcional
 
-Migraciones.
+2.1 Documentos objetivo iniciales
 
-Cargas masivas operativas.
+Prioridad de implementación:
 
-Integración tabular controlada.
+1. Solicitud de compra
+
+
+2. Orden de compra
+
+
+3. Cotización de venta
+
+
+4. Orden de venta
+
+
+5. Comprobante contable
+
+
+6. Facturas
+
+
+7. Bancos / inventario
+
+
+
+La prioridad inicial debe enfocarse en documentos que inician procesos:
+
+Source to Pay:
+Solicitud de compra → Orden de compra → Recepción → Factura proveedor → Pago
+
+Order to Cash:
+Cotización → Orden de venta → Entrega → Factura cliente → Cobro
+
+
+---
+
+3. UX requerida
+
+Cada formulario con líneas de detalle debe incluir un botón:
+
+Importar líneas
+
+Al hacer clic, se abre un modal.
+
+
+---
+
+4. Modal de importación
+
+4.1 Contenido del modal
+
+El modal debe mostrar:
+
+Nombre del documento.
+
+Columnas aceptadas.
+
+Columnas requeridas.
+
+Área para pegar desde Excel/LibreOffice/Google Sheets.
+
+Opción para descargar plantilla .xlsx.
+
+Opción para cargar archivo .xlsx.
+
+Vista previa de líneas parseadas.
+
+Errores por fila y columna.
+
+Nota visual indicando:
+
+
+Las líneas importadas se agregarán al final del detalle actual.
+
+
+---
+
+5. Estados del modal
+
+5.1 Estado inicial
+
+Cancelar | Validar
+
+El botón Insertar líneas no debe mostrarse inicialmente.
+
+
+---
+
+5.2 Después de pegar o cargar archivo
+
+Cancelar | Validar
+
+El usuario puede revisar la vista previa.
+
+
+---
+
+5.3 Después de validación fallida
+
+Cancelar | Validar
+
+Se muestran errores por fila/campo.
+
+
+---
+
+5.4 Después de validación exitosa
+
+Cancelar | Insertar líneas
+
+El botón Validar se oculta y aparece Insertar líneas.
+
+
+---
+
+5.5 Si el usuario modifica datos después de validar
+
+El estado debe volver automáticamente a:
+
+Cancelar | Validar
+
+La validación previa queda invalidada.
+
+
+---
+
+6. Reglas funcionales
+
+6.1 Importar líneas no guarda el documento
+
+La acción Insertar líneas solo agrega líneas al formulario actual.
+
+El guardado final debe hacerse usando el botón normal del documento.
+
+Importar líneas ≠ Guardar documento
+
+
+---
+
+6.2 Cancelar
+
+La acción Cancelar debe cerrar el modal sin modificar el formulario.
+
+
+---
+
+6.3 Insertar líneas
+
+La acción Insertar líneas solo debe estar disponible si el backend validó correctamente todas las líneas.
+
+Al insertar:
+
+Se agregan las líneas al detalle del formulario.
+
+Se recalculan totales visuales.
+
+Se disparan eventos normales del formulario.
+
+El documento queda pendiente de guardar.
 
 
 
 ---
 
-2. Restricción por modo de operación
+7. Regla crítica: append-only
 
-Regla
+La funcionalidad de importación debe ser estrictamente append-only.
 
-La funcionalidad no debe estar disponible cuando el sistema opere en:
+7.1 Comportamiento obligatorio
 
-Desktop Mode
+Las líneas importadas:
 
-Backend
+Deben agregarse al final del detalle.
 
-Toda ruta relacionada debe validar:
+No deben reemplazar líneas existentes.
 
-if current_app.config["DESKTOP_MODE"]:
-    abort(403)
+No deben borrar líneas existentes.
 
-Frontend
+No deben modificar líneas existentes.
 
-No mostrar:
+No deben reordenar líneas existentes.
 
-Menú.
 
-Accesos rápidos.
+7.2 Ejemplo esperado
 
-Botones.
+Si el documento tiene:
 
-Rutas navegables.
+3 líneas manuales
+
+Y el usuario importa:
+
+10 líneas válidas
+
+El resultado debe ser:
+
+13 líneas totales
+
+Las líneas originales deben permanecer intactas.
+
+
+---
+
+8. Arquitectura propuesta
+
+8.1 Frontend
+
+Crear una librería JavaScript reutilizable:
+
+lineImport({
+  doctype: "purchase_request",
+  targetTable: "#items-table",
+  context: {
+    company_id: 1,
+    currency_id: 2
+  }
+})
+
+La librería frontend no debe contener lógica específica por documento.
+
+Debe obtener del backend el schema de columnas soportadas.
+
+
+---
+
+8.2 Backend
+
+Crear un registro central de schemas:
+
+LineImportSchemaRegistry
+
+Cada documento debe registrar su definición:
+
+purchase_request
+purchase_order
+sales_quote
+sales_order
+journal_entry
+purchase_invoice
+sales_invoice
+bank_transaction
+
+
+---
+
+9. API requerida
+
+9.1 Obtener schema de importación
+
+GET /api/line-import/schema?doctype=purchase_request
+
+Respuesta esperada:
+
+{
+  "doctype": "purchase_request",
+  "label": "Solicitud de compra",
+  "columns": [
+    {
+      "key": "item_code",
+      "label": "Artículo",
+      "required": true,
+      "type": "string",
+      "aliases": ["producto", "item", "codigo", "código"]
+    },
+    {
+      "key": "description",
+      "label": "Descripción",
+      "required": false,
+      "type": "string"
+    },
+    {
+      "key": "quantity",
+      "label": "Cantidad",
+      "required": true,
+      "type": "decimal"
+    },
+    {
+      "key": "uom",
+      "label": "Unidad",
+      "required": true,
+      "type": "string"
+    },
+    {
+      "key": "required_date",
+      "label": "Fecha requerida",
+      "required": false,
+      "type": "date"
+    }
+  ]
+}
+
+
+---
+
+9.2 Validar líneas antes de insertar
+
+POST /api/line-import/validate
+
+Payload:
+
+{
+  "doctype": "purchase_request",
+  "context": {
+    "company_id": 1,
+    "currency_id": 2
+  },
+  "rows": [
+    {
+      "item_code": "ITEM-001",
+      "description": "Laptop",
+      "quantity": 2,
+      "uom": "Unidad",
+      "required_date": "2026-05-20"
+    }
+  ]
+}
+
+Respuesta exitosa:
+
+{
+  "valid": true,
+  "rows": [
+    {
+      "item_id": 15,
+      "item_code": "ITEM-001",
+      "description": "Laptop",
+      "quantity": 2,
+      "uom_id": 1,
+      "uom": "Unidad",
+      "required_date": "2026-05-20"
+    }
+  ],
+  "errors": []
+}
+
+Respuesta con errores:
+
+{
+  "valid": false,
+  "rows": [],
+  "errors": [
+    {
+      "row": 3,
+      "field": "item_code",
+      "message": "El artículo no existe."
+    },
+    {
+      "row": 5,
+      "field": "quantity",
+      "message": "La cantidad debe ser mayor que cero."
+    }
+  ]
+}
+
+
+---
+
+10. Procesamiento frontend
+
+La librería debe soportar:
+
+10.1 Pegado desde hoja de cálculo
+
+El usuario puede copiar desde:
+
+Excel
+
+LibreOffice Calc
+
+Google Sheets
+
+
+Y pegar directamente en el modal.
+
+El frontend debe interpretar:
+
+Tabulaciones como columnas.
+
+Saltos de línea como filas.
+
+Primera fila como encabezado, cuando aplique.
 
 
 
 ---
 
-3. Arquitectura general
+10.2 Carga de archivo .xlsx
 
-Debe existir un único framework de importación reutilizable.
+Solo se soporta .xlsx en la primera versión.
 
-Estructura sugerida
+No se soporta inicialmente:
 
-cacao_accounting/
-    imports/
-        adapters/
-        readers/
-        services/
-        validators/
-        templates/
-        models/
-        routes/
-        utils/
+.xls
 
+.ods
 
----
+.csv
 
-4. Filosofía de diseño
+importación asíncrona
 
-Principio fundamental
+workers
 
-El archivo tabular NO define el contexto del documento.
-
-El contexto se define previamente en UI mediante un lote de importación.
-
-El archivo solo contiene:
-
-Datos variables.
-
-Líneas.
-
-Referencias externas.
-
-Valores operativos.
+procesamiento backend de archivos
 
 
 
 ---
 
-5. Flujo funcional
+10.3 Plantilla .xlsx
 
-Paso 1 — Crear importación
+El frontend debe generar o descargar una plantilla basada en el schema enviado por backend.
 
-Usuario selecciona:
+La plantilla debe incluir:
 
-Compañía
-Tipo de registro
-Serie/secuencia si aplica
-Libro contable solo para comprobantes manuales
+Encabezados de columnas.
 
-Paso 2 — Crear lote
+Indicador de columnas requeridas.
 
-Se crea:
-
-ImportBatch(status=0)
-
-Paso 3 — Descargar plantilla
-
-La plantilla se genera dinámicamente según:
-
-tipo de registro
-
-Paso 4 — Subir archivo
-
-El usuario carga:
-
-csv
-xls
-xlsx
-ods
-
-Paso 5 — Validación
-
-El sistema:
-
-Lee archivo.
-
-Normaliza datos.
-
-Valida estructura.
-
-Valida negocio.
-
-Genera preview.
-
-
-Paso 6 — Confirmación
-
-Usuario confirma.
-
-Paso 7 — Ejecución
-
-Dependiendo del tamaño:
-
-<= 100 filas → sync
-> 100 filas → async thread
-
-Paso 8 — Resultado
-
-Mostrar:
-
-Documentos creados.
-
-Errores.
-
-Advertencias.
-
-Estado final.
-
-Reporte descargable.
+Opcionalmente una fila de ejemplo.
 
 
 
 ---
 
-6. Modelo principal
+11. Validaciones
 
-ImportBatch
+11.1 Validación frontend básica
 
-class ImportBatch(db.Model):
-    id
-    company_id
-    record_type
-    sequence_id
-    accounting_book_id
-    source_format
-    source_filename
-    source_path
-    total_rows
-    processed_rows
-    success_rows
-    error_rows
-    warning_rows
-    status
-    cancel_requested
-    created_by_id
-    created_at
-    started_at
-    completed_at
+El frontend puede validar:
+
+Columnas requeridas presentes.
+
+Tipos simples.
+
+Filas vacías.
+
+Números inválidos.
+
+Fechas inválidas.
+
+Columnas desconocidas.
+
+Datos faltantes.
+
+
+Estas validaciones son solo auxiliares.
 
 
 ---
 
-7. Estados
+11.2 Validación backend obligatoria
 
-0 = no iniciado
-1 = archivo cargado
-2 = validado
-3 = listo para importar
-4 = procesando
-5 = completado
-6 = completado con errores
-7 = fallido
-8 = cancelado
+El backend es la autoridad.
 
+Debe validar:
 
----
+Permisos del usuario.
 
-8. Modelo de errores
+Compañía.
 
-class ImportBatchError(db.Model):
-    id
-    batch_id
-    row_number
-    document_ref
-    field_name
-    error_type
-    message
-    created_at
+Documento soportado.
 
+Campos requeridos.
 
----
+Existencia de productos.
 
-9. Contexto obligatorio en UI
+Existencia de cuentas contables.
 
-Debe seleccionarse antes de cargar archivo
+Unidades de medida.
 
-company_id
-record_type
-sequence_id
+Impuestos.
 
-Solo para comprobantes manuales
+Centros de costo.
 
-accounting_book_id
+Proyectos.
 
-El archivo NO puede redefinir:
+Bodegas.
 
-company_id
-record_type
-sequence_id
-accounting_book_id
+Moneda.
 
+Reglas contables.
 
----
+Reglas del documento.
 
-10. Columnas reservadas prohibidas
+Cantidades mayores que cero.
 
-Rechazar archivos que contengan:
+Montos válidos.
 
-company_id
-empresa
-compañía
-record_type
-tipo_registro
-sequence_id
-serie
-secuencia
-accounting_book_id
-libro_contable
-
-
----
-
-11. Formatos soportados
-
-CSV
-
-Reader:
-
-csv
-
-XLSX
-
-Reader:
-
-openpyxl
-
-XLS
-
-Reader:
-
-xlrd
-
-ODS
-
-Reader:
-
-odfpy
-
-
----
-
-12. Pipeline de lectura
-
-Todos los formatos deben normalizarse a:
-
-NormalizedTable(
-    columns=[],
-    rows=[],
-    source_format=""
-)
-
-Después del parseo, todo el pipeline debe ser idéntico.
-
-
----
-
-13. Readers
-
-Estructura
-
-readers/
-    base.py
-    csv_reader.py
-    xls_reader.py
-    xlsx_reader.py
-    ods_reader.py
-
-Interface
-
-class BaseReader:
-    def read(self, file_path) -> NormalizedTable:
-        ...
-
-
----
-
-14. Servicio central
-
-Clase principal
-
-class ImportService:
-    def validate(batch_id)
-    def preview(batch_id)
-    def execute(batch_id)
-    def cancel(batch_id)
-
-
----
-
-15. Adaptadores por módulo
-
-Estructura
-
-adapters/
-    journal_entry.py
-    purchase_order.py
-    customer.py
-    vendor.py
-
-Interface
-
-class BaseImportAdapter:
-    columns = []
-    required_columns = []
-
-    def validate_row()
-    def validate_document()
-    def build_document()
-    def persist_document()
-
-
----
-
-16. Agrupación de documentos
-
-Regla
-
-Los documentos se agrupan mediante:
-
-document_ref
-
-document_ref
-
-Debe poder persistirse como:
-
-factura proveedor,
-
-referencia externa,
-
-referencia contable,
-
-documento fuente,
-
-referencia migración,
-
-etc.
-
-
-Regla
-
-document_ref NO reemplaza numeración interna.
-
-La serie/secuencia oficial la genera el backend.
-
-
----
-
-17. Ejemplo — comprobante contable
-
-Columnas
-
-document_ref
-fecha
-cuenta
-centro_costo
-tercero
-descripcion
-debito
-credito
-referencia
-
-Validaciones
-
-mínimo dos líneas,
-
-balanceado,
-
-cuenta válida,
-
-período abierto,
-
-no débito y crédito simultáneo,
-
-montos válidos.
+Compatibilidad con el contexto del documento.
 
 
 
 ---
 
-18. Ejemplo — orden de compra
+12. Contrato de columnas
 
-Columnas
+Cada columna debe definirse con metadata mínima:
 
-document_ref
-fecha
-proveedor
-producto
-descripcion
-cantidad
-precio_unitario
-impuesto
-bodega
+{
+  "key": "quantity",
+  "label": "Cantidad",
+  "required": true,
+  "type": "decimal",
+  "aliases": ["cantidad", "qty"],
+  "default": null,
+  "help": "Cantidad solicitada"
+}
 
+Tipos soportados inicialmente:
 
----
-
-19. Validación estructural
-
-Validar
-
-extensión,
-
-formato,
-
-columnas requeridas,
-
-columnas duplicadas,
-
-archivo vacío,
-
-filas máximas,
-
-tamaño máximo.
-
+string
+decimal
+integer
+date
+boolean
+currency
 
 
 ---
 
-20. Validación de negocio
+13. Seguridad
 
-Validar
+La funcionalidad debe cumplir:
 
-compañía,
+No confiar en datos validados solo por frontend.
 
-permisos,
+Validar permisos en backend.
 
-serie,
+Validar acceso a compañía.
 
-período abierto,
+No guardar archivos subidos.
 
-cuentas,
+No persistir líneas hasta que el usuario guarde el documento.
 
-terceros,
+Limitar cantidad máxima de filas por importación.
 
-productos,
+Rechazar archivos que no sean .xlsx.
 
-impuestos,
-
-monedas,
-
-tipos de cambio.
+Manejar errores sin exponer trazas internas.
 
 
+Límite inicial recomendado:
 
----
-
-21. Validación de período contable
-
-Obligatoria
-
-Antes de postear:
-
-assert_period_open(company_id, date)
-
-Debe ejecutarse:
-
-durante preview,
-
-antes de persistir.
-
+500 líneas por importación client-side
 
 
 ---
 
-22. Ejecución síncrona/asíncrona
+14. Comportamiento esperado por documento
 
-Configuración
+14.1 Solicitud de compra
 
-IMPORT_SYNC_MAX_ROWS = 100
+Columnas mínimas:
 
-Reglas
-
-<= 100 filas → sync
-> 100 filas → background thread
-
-
----
-
-23. Async simple
-
-Tecnología
-
-threading.Thread
-
-No usar inicialmente
-
-Redis
-
-Celery
-
-RabbitMQ
-
-RQ
-
+Artículo
+Descripción
+Cantidad
+Unidad
+Fecha requerida
+Centro de costo
+Proyecto
 
 
 ---
 
-24. Background executor
+14.2 Orden de compra
 
-Requerimiento
+Columnas mínimas:
 
-El thread debe llamar exactamente el mismo pipeline:
-
-ImportService.execute(batch_id)
-
-No duplicar lógica.
-
-
----
-
-25. Recuperación ante reinicio
-
-Al iniciar la app:
-
-Buscar lotes:
-
-status = procesando
-
-Con timeout excedido.
-
-Marcarlos como:
-
-fallido/interrumpido
+Artículo
+Descripción
+Cantidad
+Unidad
+Precio
+Impuesto
+Centro de costo
+Proyecto
+Fecha requerida
 
 
 ---
 
-26. Idempotencia
+14.3 Cotización de venta
 
-No permitir ejecutar dos veces el mismo lote.
+Columnas mínimas:
 
-Validar
-
-if batch.status != READY:
-    reject()
-
-
----
-
-27. Persistencia de archivo
-
-Guardar archivo en:
-
-instance/imports/<batch_id>/
-
-Nunca depender del archivo temporal del request.
+Artículo
+Descripción
+Cantidad
+Unidad
+Precio
+Descuento
+Impuesto
 
 
 ---
 
-28. Seguridad
+14.4 Orden de venta
 
-Prohibido
+Columnas mínimas:
 
-macros,
-
-fórmulas ejecutables,
-
-xlsm,
-
-scripts embebidos.
-
-
-Validar
-
-tamaño,
-
-mime type,
-
-extensión,
-
-sanitización nombre archivo.
-
+Artículo
+Descripción
+Cantidad
+Unidad
+Precio
+Descuento
+Impuesto
+Bodega
+Fecha de entrega
 
 
 ---
 
-29. Fórmulas
+14.5 Comprobante contable
 
-Rechazar fórmulas en campos críticos:
+Columnas mínimas:
 
-fecha
-cuenta
-debito
-credito
-cantidad
-precio
+Cuenta
+Descripción
+Débito
+Crédito
+Centro de costo
+Proyecto
+Referencia
 
 
 ---
 
-30. Preview obligatorio
+15. Criterios de aceptación
 
-Antes de importar mostrar:
+La implementación se considera completa cuando:
 
-documentos detectados,
+1. Existe botón Importar líneas en los documentos priorizados.
 
-filas,
 
-errores,
+2. El modal carga el schema desde backend según doctype.
 
-advertencias,
 
-primeras líneas.
+3. El modal muestra columnas soportadas y requeridas.
+
+
+4. El usuario puede pegar datos desde una hoja de cálculo.
+
+
+5. El usuario puede descargar plantilla .xlsx.
+
+
+6. El usuario puede subir plantilla .xlsx.
+
+
+7. El frontend parsea datos y muestra vista previa.
+
+
+8. El modal inicia mostrando solo Cancelar y Validar.
+
+
+9. El botón Insertar líneas no aparece antes de validar.
+
+
+10. La validación se ejecuta en backend.
+
+
+11. Los errores se muestran por fila y campo.
+
+
+12. Si hay errores, no se permite insertar líneas.
+
+
+13. Si la validación es exitosa, se oculta Validar y aparece Insertar líneas.
+
+
+14. Si el usuario modifica datos después de validar, debe validar nuevamente.
+
+
+15. Insertar líneas agrega datos al formulario, pero no guarda el documento.
+
+
+16. Cancelar no modifica el formulario.
+
+
+17. El guardado final sigue usando el flujo normal del documento.
+
+
+18. El backend vuelve a validar el documento completo al guardar.
+
+
+19. Insertar líneas debe ser estrictamente append-only.
+
+
+20. Las líneas existentes antes de la importación deben conservarse intactas.
+
+
+21. Las líneas importadas deben agregarse al final del detalle.
+
+
+22. Cancelar o fallar validación no debe modificar líneas existentes.
+
 
 
 
 ---
 
-31. Cancelación
+16. No incluido en la primera versión
 
-Permitir:
+Queda fuera del alcance inicial:
 
-cancel_requested = True
+Importación masiva de documentos completos.
 
-El proceso debe verificarlo entre documentos.
+Procesamiento backend de archivos.
 
+Workers.
 
----
+Colas.
 
-32. Transaccionalidad
+.csv.
 
-Regla
+.xls.
 
-Procesar documento por documento.
+.ods.
 
-No usar
+Guardado automático.
 
-Una transacción gigante para miles de filas.
+Importación asíncrona.
 
+Mapeo visual avanzado de columnas.
 
----
-
-33. Integración con dominio
-
-La importación NO debe hacer inserts directos.
-
-Debe usar servicios del dominio.
-
-Correcto
-
-ImportService
-→ JournalService
-→ PostingService
-
-Incorrecto
-
-Excel → INSERT SQL directo
-
-
----
-
-34. Historial
-
-Pantalla con:
-
-fecha,
-
-usuario,
-
-tipo,
-
-estado,
-
-filas,
-
-errores,
-
-duración.
+Transformaciones complejas de datos.
 
 
 
 ---
 
-35. Reporte de errores
+17. Resultado esperado
 
-Debe poder descargarse:
-
-fila
-document_ref
-campo
-valor
-mensaje_error
-
-
----
-
-36. Plantillas
-
-Generar plantillas para:
-
-xlsx
-ods
-csv
-
-
----
-
-37. Compatibilidad
-
-Compatible con:
-
-Microsoft Excel,
-
-LibreOffice Calc,
-
-OpenOffice.
-
-
-
----
-
-38. Permisos
-
-Nuevos permisos
-
-imports.view
-imports.create
-imports.upload
-imports.validate
-imports.execute
-imports.cancel
-imports.download_template
-
-
----
-
-39. Módulos iniciales soportados
-
-Primera fase:
-
-comprobantes contables,
-
-órdenes de compra,
-
-clientes,
-
-proveedores,
-
-catálogo de cuentas.
-
-
-
----
-
-40. Criterios de aceptación
-
-La funcionalidad se considera completa cuando:
-
-existe un único framework centralizado,
-
-soporta csv/xls/xlsx/ods,
-
-funciona con sync/async,
-
-respeta períodos cerrados,
-
-usa contexto desde UI,
-
-no permite redefinir contexto en archivo,
-
-soporta preview,
-
-soporta errores descargables,
-
-soporta importaciones multi-documento,
-
-utiliza servicios del dominio,
-
-funciona sin infraestructura adicional,
-
-no está disponible en desktop mode.
+Una funcionalidad transversal llamada Importar líneas, basada en una librería frontend genérica y schemas definidos por backend, que permita reducir drásticamente la digitación manual en documentos de compra, venta, contabilidad e inventario, sin comprometer la validación contable ni la seguridad del sistema.
