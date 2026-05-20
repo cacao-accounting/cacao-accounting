@@ -383,6 +383,12 @@ def assign_document_identifier(
 ) -> None:
     """Asigna document_no, naming_series_id y (opcionalmente) external_number a un documento.
 
+    La asignacion es irreversible para conservar consecutivos rigurosos: si el
+    documento ya tiene `document_no`, esta funcion no renumera, no consume una
+    nueva secuencia y no modifica numeracion interna o externa. Si el numero se
+    genero con compania, fecha o serie incorrecta, el registro debe anularse y
+    crearse uno nuevo.
+
     El flujo completo es:
     1. Validar y normalizar posting_date.
     2. Validar periodo contable no cerrado.
@@ -403,6 +409,9 @@ def assign_document_identifier(
         external_context: Contexto adicional para seleccion contextual de contador (payment_method, etc.)
         allow_closing: Permite asignar identificador en periodos cerrados si es comprobante de cierre.
     """
+    if str(getattr(document, "document_no", "") or "").strip():
+        return
+
     posting_date = parse_posting_date(posting_date_raw)
     company = getattr(document, "company", None)
     validate_accounting_period(company=company, posting_date=posting_date, allow_closing=allow_closing)

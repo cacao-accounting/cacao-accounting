@@ -130,6 +130,49 @@ def test_transaction_documents_receive_bootstrapped_identifiers(app_ctx):
         assert log.posting_date == date(2026, 5, 4)
 
 
+def test_assigned_identifier_is_not_renumbered_for_draft_changes(app_ctx):
+    """Un `document_no` emitido se conserva aunque cambien datos del borrador."""
+
+    from cacao_accounting.database import GeneratedIdentifierLog, PurchaseInvoice, Sequence, database
+    from cacao_accounting.document_identifiers import assign_document_identifier
+
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 4))
+    database.session.add(invoice)
+    database.session.flush()
+
+    assign_document_identifier(
+        document=invoice,
+        entity_type="purchase_invoice",
+        posting_date_raw=invoice.posting_date,
+        naming_series_id=None,
+    )
+    original_document_no = invoice.document_no
+    original_series_id = invoice.naming_series_id
+    generated_log = database.session.execute(
+        database.select(GeneratedIdentifierLog).filter_by(full_identifier=original_document_no)
+    ).scalar_one()
+    sequence = database.session.get(Sequence, generated_log.sequence_id)
+    assert sequence is not None
+    original_sequence_value = sequence.current_value
+
+    invoice.posting_date = date(2026, 6, 1)
+    assign_document_identifier(
+        document=invoice,
+        entity_type="purchase_invoice",
+        posting_date_raw=invoice.posting_date,
+        naming_series_id=None,
+    )
+
+    log_count = database.session.execute(
+        database.select(database.func.count(GeneratedIdentifierLog.id)).filter_by(entity_id=invoice.id)
+    ).scalar_one()
+
+    assert invoice.document_no == original_document_no
+    assert invoice.naming_series_id == original_series_id
+    assert sequence.current_value == original_sequence_value
+    assert log_count == 1
+
+
 def test_identifier_rejects_closed_accounting_period(app_ctx):
     """La fecha de contabilización no puede caer en un periodo cerrado."""
 

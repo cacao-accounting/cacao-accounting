@@ -13,7 +13,7 @@
 - [x] Permitir añadir impuestos/cargos manuales desde el bloque transaccional y conservarlos junto a reglas fiscales canónicas.
 
 ## Core y Posting
-- [ ] Resolver politica formal de renumeracion de `document_no` tras cambios en borradores.
+- [x] Resolver politica formal de renumeracion de `document_no` tras cambios en borradores: la numeracion emitida se conserva; si fue incorrecta, se anula el registro y se crea uno nuevo.
 
 ## AR/AP y Terceros
 - [x] Implementar modelo `PartyGroup` y su CRUD.

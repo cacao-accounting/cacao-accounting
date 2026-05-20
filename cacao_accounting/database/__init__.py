@@ -565,6 +565,8 @@ class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-de
 
     Garantiza unicidad y trazabilidad de todos los identificadores del sistema.
     Los tokens se resuelven usando posting_date, nunca created_at.
+    Un identificador emitido no se libera ni se reutiliza; si un borrador se
+    numeró con datos incorrectos, debe anularse y crearse un registro nuevo.
     """
 
     __tablename__ = "generated_identifier_log"
