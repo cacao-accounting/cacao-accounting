@@ -1,944 +1,854 @@
-# Requerimiento Funcional y Técnico
+Requerimiento Técnico — Servicio Centralizado de Importación Tabular
 
-# Exchange Revaluation (Revalorización Cambiaria NIIF Multiledger)
+Proyecto: Cacao Accounting
 
-## Objetivo
+1. Objetivo
 
-Implementar un proceso completo de **Revalorización Cambiaria** conforme a **NIC 21 / NIIF**, integrado al motor contable multiledger de Cacao Accounting.
+Implementar un servicio centralizado de importación tabular para Cacao Accounting, capaz de importar registros masivos desde archivos:
 
-El proceso debe recalcular el valor contable de partidas monetarias abiertas usando tasas de cierre y reconocer diferencias cambiarias no realizadas en resultados.
+CSV
+XLS
+XLSX
+ODS
 
-La implementación debe:
+El servicio debe soportar:
 
-* cumplir criterios NIIF,
-* soportar multiledger,
-* integrarse a AR/AP/Bancos,
-* operar a nivel documental,
-* ser totalmente auditable,
-* ser idempotente,
-* soportar múltiples ejecuciones por período,
-* permitir reversión/anulación,
-* integrarse al cierre mensual,
-* y funcionar también de forma independiente.
+Importaciones simples.
 
----
+Importaciones transaccionales con encabezado y detalle.
 
-# Base NIIF
+Validación estructural.
 
-La implementación debe alinearse con NIC 21:
+Validación de negocio.
 
-* Las partidas monetarias en moneda extranjera deben convertirse usando la tasa de cierre.
-* Las diferencias cambiarias deben reconocerse en resultados.
-* Solo deben revalorizarse partidas monetarias.
-* Solo deben revalorizarse saldos abiertos o pendientes.
-* La revalorización debe impactar el valor contable vigente del saldo pendiente.
+Vista previa antes de confirmar.
 
----
+Ejecución síncrona o asíncrona según volumen.
 
-# Alcance funcional
+Auditoría.
 
-## Debe revalorizar
+Reutilización por múltiples módulos.
 
-### Accounts Receivable (AR)
 
-* Facturas abiertas
-* Notas de débito abiertas
-* Notas de crédito parcialmente aplicadas
-* Anticipos abiertos
-* Saldos pendientes parciales
+La funcionalidad está orientada principalmente a:
+
+Implementaciones iniciales.
+
+Migraciones.
+
+Cargas masivas operativas.
+
+Integración tabular controlada.
+
+
 
 ---
 
-## Accounts Payable (AP)
+2. Restricción por modo de operación
 
-* Facturas proveedor abiertas
-* Notas de débito proveedor
-* Notas de crédito parcialmente aplicadas
-* Anticipos abiertos
-* Obligaciones pendientes
+Regla
 
----
+La funcionalidad no debe estar disponible cuando el sistema opere en:
 
-## Bancos
+Desktop Mode
 
-* Saldos bancarios monetarios
-* Cuentas bancarias en moneda extranjera
+Backend
 
----
+Toda ruta relacionada debe validar:
 
-## Otras cuentas monetarias
+if current_app.config["DESKTOP_MODE"]:
+    abort(403)
 
-Solo si:
+Frontend
 
-```text id="3v6g6o"
-monetary_account = true
-exchange_revaluation_enabled = true
-```
+No mostrar:
 
----
+Menú.
 
-# No debe revalorizar
+Accesos rápidos.
 
-* Inventarios
-* Activos fijos
-* Gastos
-* Ingresos
-* Patrimonio
-* Impuestos
-* Cuentas no monetarias
-* Documentos totalmente cerrados
-* Documentos totalmente conciliados
-* Moneda original del documento
+Botones.
+
+Rutas navegables.
+
+
 
 ---
 
-# Arquitectura multiledger
+3. Arquitectura general
 
-## Regla principal
+Debe existir un único framework de importación reutilizable.
 
-La moneda original del documento NO se revaloriza.
+Estructura sugerida
 
-Solo se revalorizan ledgers cuya moneda sea distinta a la moneda origen.
+cacao_accounting/
+    imports/
+        adapters/
+        readers/
+        services/
+        validators/
+        templates/
+        models/
+        routes/
+        utils/
 
----
-
-# Ejemplo
-
-Ledgers activos:
-
-```text id="62b6kq"
-NIO
-USD
-EUR
-```
-
-Factura registrada originalmente en USD.
-
-Resultado:
-
-| Ledger | Revaloriza |
-| ------ | ---------- |
-| USD    | No         |
-| NIO    | Sí         |
-| EUR    | Sí         |
 
 ---
 
-# Integración subledger obligatoria
+4. Filosofía de diseño
 
-La revalorización debe operar a nivel documental.
+Principio fundamental
 
-NO se permiten ajustes globales resumidos por cuenta.
+El archivo tabular NO define el contexto del documento.
 
----
+El contexto se define previamente en UI mediante un lote de importación.
 
-# Granularidad obligatoria
+El archivo solo contiene:
 
-Cada documento abierto debe generar su propia línea de revalorización.
+Datos variables.
 
-Ejemplos:
+Líneas.
 
-* Factura
-* Nota débito
-* Nota crédito
-* Anticipo
-* Saldo bancario identificado
+Referencias externas.
 
----
+Valores operativos.
 
-# Impacto obligatorio en AR/AP
 
-Los movimientos de revalorización deben impactar directamente:
-
-* saldo abierto documental,
-* subledger,
-* aging,
-* open items,
-* estado de cuenta.
 
 ---
 
-# Resultado esperado
+5. Flujo funcional
 
-Los reportes de:
-
-* AR Aging
-* AP Aging
-* Open Items
-* Estado de cuenta
-* Balance multiledger
-
-deben mostrar automáticamente valores revaluados.
-
----
-
-# Configuración requerida
-
-## Configuración global compañía
-
-Agregar:
-
-```text id="1jk7pz"
-company.exchange_gain_account_id
-company.exchange_loss_account_id
-```
-
----
-
-# Validaciones obligatorias
-
-El proceso debe fallar si:
-
-* no existe cuenta ganancia cambiaria,
-* no existe cuenta pérdida cambiaria,
-* falta tasa de cierre,
-* período cerrado,
-* ledger inactivo,
-* moneda inválida,
-* configuración inconsistente,
-* cuenta monetaria mal configurada.
-
----
-
-# Tipos de comprobante
-
-Crear nuevo tipo:
-
-```text id="hzm4p2"
-exchange-revaluation
-```
-
-Debe diferenciarse de:
-
-* journal-entry
-* recurring-entry
-* closing-entry
-
----
-
-# Menú
-
-Agregar:
-
-```text id="o7ifm2"
-Contabilidad → Revalorización cambiaria
-```
-
----
-
-# Pantalla principal
-
-Debe listar:
-
-| Campo                 |
-| --------------------- |
-| Número                |
-| Compañía              |
-| Mes                   |
-| Año                   |
-| Fecha                 |
-| Estado                |
-| Usuario               |
-| Total ganancia        |
-| Total pérdida         |
-| Documentos procesados |
-| Documentos afectados  |
-
----
-
-# Estados
-
-```text id="jlwm4r"
-posted
-voided
-completed_no_changes
-```
-
----
-
-# Nueva revalorización
-
-Formulario mínimo:
-
-```text id="s1mxp5"
-- Compañía
-- Mes
-- Año
-```
-
----
-
-# Flujo de ejecución
-
-## Paso 1
+Paso 1 — Crear importación
 
 Usuario selecciona:
 
-* compañía
-* mes
-* año
+Compañía
+Tipo de registro
+Serie/secuencia si aplica
+Libro contable solo para comprobantes manuales
+
+Paso 2 — Crear lote
+
+Se crea:
+
+ImportBatch(status=0)
+
+Paso 3 — Descargar plantilla
+
+La plantilla se genera dinámicamente según:
+
+tipo de registro
+
+Paso 4 — Subir archivo
+
+El usuario carga:
+
+csv
+xls
+xlsx
+ods
+
+Paso 5 — Validación
+
+El sistema:
+
+Lee archivo.
+
+Normaliza datos.
+
+Valida estructura.
+
+Valida negocio.
+
+Genera preview.
+
+
+Paso 6 — Confirmación
+
+Usuario confirma.
+
+Paso 7 — Ejecución
+
+Dependiendo del tamaño:
+
+<= 100 filas → sync
+> 100 filas → async thread
+
+Paso 8 — Resultado
+
+Mostrar:
+
+Documentos creados.
+
+Errores.
+
+Advertencias.
+
+Estado final.
+
+Reporte descargable.
+
+
 
 ---
 
-## Paso 2
+6. Modelo principal
 
-Sistema:
+ImportBatch
 
-* identifica ledgers activos,
-* identifica monedas destino,
-* obtiene tasas de cierre,
-* obtiene documentos abiertos,
-* obtiene saldos pendientes,
-* valida configuración.
+class ImportBatch(db.Model):
+    id
+    company_id
+    record_type
+    sequence_id
+    accounting_book_id
+    source_format
+    source_filename
+    source_path
+    total_rows
+    processed_rows
+    success_rows
+    error_rows
+    warning_rows
+    status
+    cancel_requested
+    created_by_id
+    created_at
+    started_at
+    completed_at
 
----
-
-## Paso 3
-
-Si existen errores:
-
-* NO contabilizar,
-* mostrar lista completa de errores.
-
----
-
-## Paso 4
-
-Si existen diferencias:
-
-* generar comprobante,
-* contabilizar automáticamente,
-* estado `posted`.
 
 ---
 
-## Paso 5
+7. Estados
 
-Si NO existen diferencias:
+0 = no iniciado
+1 = archivo cargado
+2 = validado
+3 = listo para importar
+4 = procesando
+5 = completado
+6 = completado con errores
+7 = fallido
+8 = cancelado
 
-* guardar ejecución,
-* NO generar comprobante,
-* estado `completed_no_changes`.
-
-Mensaje:
-
-```text id="a8iv6f"
-La revalorización fue ejecutada correctamente.
-No se generaron diferencias cambiarias.
-```
 
 ---
 
-# UX
+8. Modelo de errores
 
-Debe reutilizar UX del comprobante contable.
+class ImportBatchError(db.Model):
+    id
+    batch_id
+    row_number
+    document_ref
+    field_name
+    error_type
+    message
+    created_at
 
-Referencias:
-
-```text id="smx1x0"
-journal.html
-journal_nuevo.html
-```
-
----
-
-# Restricciones UX
-
-Usuario NO puede:
-
-* editar líneas,
-* cambiar cuentas,
-* cambiar montos,
-* cambiar tasas,
-* agregar líneas,
-* eliminar líneas.
 
 ---
 
-# Información obligatoria visible
+9. Contexto obligatorio en UI
 
-* documento origen,
-* tercero,
-* moneda origen,
-* ledger destino,
-* tasa aplicada,
-* saldo original,
-* saldo revaluado,
-* diferencia,
-* fecha ejecución,
-* estado.
+Debe seleccionarse antes de cargar archivo
 
----
-
-# Ejecuciones múltiples por período
-
-El sistema debe permitir múltiples ejecuciones dentro del mismo período.
-
-Ejemplo:
-
-```text id="59mf6j"
-Mayo 2026
-- Run #1
-- Run #2
-- Run #3
-```
-
----
-
-# Regla de consistencia
-
-Cada ejecución debe ser independiente y auditable.
-
-Cada ejecución debe guardar:
-
-* snapshot tasas,
-* snapshot saldos,
-* snapshot diferencias,
-* detalle documental procesado.
-
----
-
-# Idempotencia
-
-El proceso debe ser idempotente.
-
----
-
-# Regla técnica
-
-Cada nueva ejecución debe calcular diferencias contra el saldo contable ACTUAL.
-
-Incluyendo revalorizaciones previas activas.
-
----
-
-# Fórmula principal
-
-\text{valor revaluado} = \text{saldo pendiente moneda origen} \times \text{tasa cierre}
-
----
-
-# Diferencia incremental
-
-\text{diferencia nueva} = \text{valor revaluado actual} - \text{saldo ledger actual acumulado}
-
----
-
-# Reglas contables
-
-## Activos monetarios
-
-Si aumenta:
-
-```text id="rzr56l"
-Dr Cuenta monetaria
-Cr Ganancia cambiaria
-```
-
-Si disminuye:
-
-```text id="6y8axg"
-Dr Pérdida cambiaria
-Cr Cuenta monetaria
-```
-
----
-
-## Pasivos monetarios
-
-Aplicar lógica inversa según naturaleza.
-
----
-
-# Contabilización obligatoria a nivel documental
-
-Cada documento debe generar líneas independientes.
-
-Ejemplo:
-
-Factura:
-
-```text id="31wfru"
-INV-1001
-USD 1,000
-```
-
-Debe generar:
-
-```text id="ct2b0y"
-Dr AR Customer ABC
-Cr Ganancia cambiaria
-```
-
-asociado explícitamente a:
-
-```text id="9k5m2k"
-source_document = INV-1001
-```
-
----
-
-# Reversión / anulación
-
-La revalorización NO se edita.
-
-Debe anularse completamente.
-
----
-
-# Anulación debe
-
-* generar asiento reverso,
-* revertir impacto documental,
-* revertir saldos AR/AP,
-* recalcular aging,
-* mantener trazabilidad,
-* no eliminar registros históricos.
-
----
-
-# Estados posteriores
-
-```text id="x6b09h"
-posted
-voided
-completed_no_changes
-```
-
----
-
-# Modelo de datos
-
-## exchange_revaluation_run
-
-Campos mínimos:
-
-```text id="5xjlwm"
-id
 company_id
-year
-month
-status
-generated_journal
-journal_id
-reversal_journal_id
-created_by
-created_at
-voided_by
-voided_at
-void_reason
-processed_documents_count
-affected_documents_count
-total_gain
-total_loss
-```
+record_type
+sequence_id
+
+Solo para comprobantes manuales
+
+accounting_book_id
+
+El archivo NO puede redefinir:
+
+company_id
+record_type
+sequence_id
+accounting_book_id
+
 
 ---
 
-## exchange_revaluation_line
+10. Columnas reservadas prohibidas
 
-Campos mínimos:
+Rechazar archivos que contengan:
 
-```text id="hvcx1l"
-id
-run_id
-source_document_type
-source_document_id
-partner_id
-account_id
-ledger_id
-original_currency_id
-ledger_currency_id
-open_amount_original
-previous_ledger_balance
-closing_rate
-revalued_balance
-exchange_difference
-journal_line_id
-```
+company_id
+empresa
+compañía
+record_type
+tipo_registro
+sequence_id
+serie
+secuencia
+accounting_book_id
+libro_contable
+
 
 ---
 
-# Journal lines
+11. Formatos soportados
 
-Agregar:
+CSV
 
-```text id="mkk57j"
-exchange_revaluation_run_id
-```
+Reader:
 
-Esto permitirá:
+csv
 
-* auditoría,
-* trazabilidad,
-* reversión,
-* reconstrucción histórica.
+XLSX
 
----
+Reader:
 
-# Servicio interno
+openpyxl
 
-Crear:
+XLS
 
-```text id="6vxlm5"
-ExchangeRevaluationService
-```
+Reader:
 
----
+xlrd
 
-# Responsabilidades del servicio
+ODS
 
-* validar configuración,
-* obtener tasas,
-* obtener documentos abiertos,
-* calcular diferencias,
-* generar líneas documentales,
-* generar comprobante,
-* contabilizar,
-* revertir,
-* garantizar idempotencia,
-* recalcular incrementalmente.
+Reader:
+
+odfpy
+
 
 ---
 
-# Integración cierre mensual
+12. Pipeline de lectura
 
-Orden obligatorio:
+Todos los formatos deben normalizarse a:
 
-```text id="j29m09"
-1. Validar período
-2. Aplicar recurrentes
-3. Ejecutar revalorización
-4. Ajustes de cierre
-5. Validaciones
-6. Bloqueo período
-```
+NormalizedTable(
+    columns=[],
+    rows=[],
+    source_format=""
+)
 
----
+Después del parseo, todo el pipeline debe ser idéntico.
 
-# Integración independiente
-
-Debe poder ejecutarse manualmente desde menú contable.
-
-Ambos flujos deben usar exactamente el mismo servicio.
 
 ---
 
-# Corrección de errores
+13. Readers
 
-Si la revalorización es incorrecta:
+Estructura
 
-```text id="f9pv6l"
-1. Anular revalorización
-2. Corregir documento fuente
-3. Ejecutar nuevamente
-```
+readers/
+    base.py
+    csv_reader.py
+    xls_reader.py
+    xlsx_reader.py
+    ods_reader.py
 
-Nunca editar comprobante manualmente.
+Interface
 
----
+class BaseReader:
+    def read(self, file_path) -> NormalizedTable:
+        ...
 
-# Casos de prueba mínimos
-
-## Caso 1
-
-Factura USD abierta.
-
-Ledgers:
-
-* USD
-* NIO
-* EUR
-
-Resultado:
-
-* USD no revaloriza
-* NIO sí
-* EUR sí
 
 ---
 
-## Caso 2
+14. Servicio central
 
-Factura parcialmente pagada.
+Clase principal
 
-Resultado:
+class ImportService:
+    def validate(batch_id)
+    def preview(batch_id)
+    def execute(batch_id)
+    def cancel(batch_id)
 
-* solo saldo pendiente revaloriza.
-
----
-
-## Caso 3
-
-Factura totalmente pagada.
-
-Resultado:
-
-* no revaloriza.
 
 ---
 
-## Caso 4
+15. Adaptadores por módulo
 
-Cuenta bancaria USD.
+Estructura
 
-Resultado:
+adapters/
+    journal_entry.py
+    purchase_order.py
+    customer.py
+    vendor.py
 
-* revaloriza ledgers destino.
+Interface
 
----
+class BaseImportAdapter:
+    columns = []
+    required_columns = []
 
-## Caso 5
+    def validate_row()
+    def validate_document()
+    def build_document()
+    def persist_document()
 
-Cuenta no monetaria.
-
-Resultado:
-
-* no revaloriza.
-
----
-
-## Caso 6
-
-Falta tasa cierre.
-
-Resultado:
-
-* error controlado.
 
 ---
 
-## Caso 7
+16. Agrupación de documentos
 
-Falta cuenta ganancia/pérdida.
+Regla
 
-Resultado:
+Los documentos se agrupan mediante:
 
-* error controlado.
+document_ref
 
----
+document_ref
 
-## Caso 8
+Debe poder persistirse como:
 
-Múltiples ejecuciones mismo período.
+factura proveedor,
 
-Resultado:
+referencia externa,
 
-* cálculo incremental correcto.
+referencia contable,
 
----
+documento fuente,
 
-## Caso 9
+referencia migración,
 
-Revalorización sin diferencias.
+etc.
 
-Resultado:
 
-* guarda ejecución sin comprobante.
+Regla
 
----
+document_ref NO reemplaza numeración interna.
 
-## Caso 10
+La serie/secuencia oficial la genera el backend.
 
-Anulación.
-
-Resultado:
-
-* reverso correcto y restauración documental.
 
 ---
 
-## Caso 11
+17. Ejemplo — comprobante contable
 
-Nueva ejecución posterior a anulación.
+Columnas
 
-Resultado:
+document_ref
+fecha
+cuenta
+centro_costo
+tercero
+descripcion
+debito
+credito
+referencia
 
-* recalcula correctamente.
+Validaciones
+
+mínimo dos líneas,
+
+balanceado,
+
+cuenta válida,
+
+período abierto,
+
+no débito y crédito simultáneo,
+
+montos válidos.
+
+
 
 ---
 
-## Caso 12
+18. Ejemplo — orden de compra
 
-Aging AR/AP.
+Columnas
 
-Resultado:
+document_ref
+fecha
+proveedor
+producto
+descripcion
+cantidad
+precio_unitario
+impuesto
+bodega
 
-* muestra saldo revaluado actualizado.
 
 ---
 
-# Criterio final de aceptación
+19. Validación estructural
 
-La implementación estará completa cuando el sistema pueda ejecutar revalorizaciones cambiarias NIIF-compatible sobre partidas monetarias abiertas, operando a nivel documental, soportando multiledger, excluyendo moneda origen, integrándose a AR/AP/Bancos, permitiendo múltiples ejecuciones por período, calculando diferencias incrementalmente, generando comprobantes automáticos tipo `exchange-revaluation`, soportando reversión completa y reflejando correctamente saldos revaluados en subledgers y reportes contables.
+Validar
 
-Ajustes al requerimiento
-Revalorizaciones múltiples por período
-Cambio de regla
+extensión,
 
-Eliminar restricción:
+formato,
 
-UNA revalorización activa por compañía + período + ledger
-Nueva regla
+columnas requeridas,
 
-El sistema debe permitir ejecutar múltiples revalorizaciones dentro del mismo período.
+columnas duplicadas,
 
-Ejemplo:
+archivo vacío,
 
-Mayo 2026
-- Revalorización #1
-- Revalorización #2
-- Revalorización #3
+filas máximas,
 
-Esto es necesario porque:
+tamaño máximo.
 
-pueden corregirse documentos,
-pueden registrarse pagos tardíos,
-pueden cambiar tasas,
-pueden corregirse conciliaciones,
-pueden ingresarse documentos retroactivos.
-Reglas de consistencia
 
-Cada ejecución debe ser independiente y auditada.
 
-Cada ejecución debe:
+---
 
-generar su propio comprobante,
-guardar snapshot de tasas,
-guardar snapshot de saldos abiertos,
-guardar detalle documental procesado.
-Cálculo incremental obligatorio
+20. Validación de negocio
 
-La nueva ejecución NO debe duplicar diferencias ya contabilizadas.
+Validar
 
-La revalorización debe calcularse contra el valor contable ACTUAL, incluyendo revalorizaciones previas activas.
+compañía,
 
-Es decir:
+permisos,
 
-diferencia nueva=valor revaluado actual−saldo ledger actual acumulado
+serie,
 
-Esto convierte el proceso en acumulativo y consistente.
+período abierto,
 
-Revalorizaciones sin afectación contable
-Nueva regla
+cuentas,
 
-Si el proceso no genera diferencias:
+terceros,
 
-igualmente debe registrarse la ejecución,
-igualmente debe quedar auditada,
-NO debe generarse comprobante contable,
-debe notificarse al usuario:
-La revalorización fue ejecutada correctamente.
-No se generaron diferencias cambiarias.
-Modelo actualizado
-exchange_revaluation_run
+productos,
 
-Agregar:
+impuestos,
 
-generated_journal = true/false
-processed_documents_count
-affected_documents_count
-Confirmación funcional AR/AP
+monedas,
 
-Sí.
+tipos de cambio.
 
-Con este enfoque los reportes de:
 
-Accounts Receivable
-Accounts Payable
-Aging
-Open Items
-Estado de cuenta
 
-mostrarán automáticamente los saldos revaluados SI:
+---
 
-Condición obligatoria
+21. Validación de período contable
 
-La revalorización genera movimientos contables directamente sobre:
+Obligatoria
 
-cuenta contable AR/AP,
-subledger del documento,
-saldo abierto del documento.
-Requisito CRÍTICO
+Antes de postear:
 
-La revalorización NO debe generar un ajuste global resumido por cuenta.
+assert_period_open(company_id, date)
 
-Debe generar líneas a nivel documental.
+Debe ejecutarse:
 
-Granularidad obligatoria
+durante preview,
 
-Cada documento monetario abierto genera su propia línea de revalorización.
+antes de persistir.
 
-Ejemplos:
 
-Factura
-Nota de débito
-Nota de crédito
-Anticipo abierto
-Saldo bancario identificable
-Ejemplo
 
-Factura:
+---
 
-INV-1001
-USD 1,000
+22. Ejecución síncrona/asíncrona
 
-Debe generar:
+Configuración
 
-Dr AR Customer ABC
-Cr Ganancia cambiaria
+IMPORT_SYNC_MAX_ROWS = 100
 
-referenciando explícitamente:
+Reglas
 
-source_document = INV-1001
-Impacto esperado
+<= 100 filas → sync
+> 100 filas → background thread
 
-Gracias a esto:
 
-AR/AP Aging
+---
 
-Mostrará:
+23. Async simple
 
-saldo original,
-saldo revaluado,
-diferencia cambiaria acumulada.
-Estado de cuenta cliente/proveedor
+Tecnología
 
-Mostrará movimientos de revalorización asociados al documento.
+threading.Thread
 
-Conciliación
+No usar inicialmente
 
-La diferencia cambiaria queda asociada documentalmente.
+Redis
 
-Requisito técnico importante
+Celery
 
-Las líneas de revalorización deben mantener:
+RabbitMQ
 
-source_document_type
-source_document_id
-partner_id
-currency_id
-ledger_id
-Requisito adicional altamente recomendado
+RQ
 
-Agregar:
 
-exchange_revaluation_run_id
 
-en journal lines.
+---
 
-Esto permitirá:
+24. Background executor
 
-trazabilidad,
-reversión,
-auditoría,
-reconstrucción histórica.
-Requisito contable importante
+Requerimiento
 
-La reversión/anulación debe revertir también el impacto documental.
+El thread debe llamar exactamente el mismo pipeline:
 
-Es decir:
+ImportService.execute(batch_id)
 
-AR/AP abiertos deben regresar a su saldo previo,
-aging debe recalcularse,
-balances deben reflejar reversión.
+No duplicar lógica.
+
+
+---
+
+25. Recuperación ante reinicio
+
+Al iniciar la app:
+
+Buscar lotes:
+
+status = procesando
+
+Con timeout excedido.
+
+Marcarlos como:
+
+fallido/interrumpido
+
+
+---
+
+26. Idempotencia
+
+No permitir ejecutar dos veces el mismo lote.
+
+Validar
+
+if batch.status != READY:
+    reject()
+
+
+---
+
+27. Persistencia de archivo
+
+Guardar archivo en:
+
+instance/imports/<batch_id>/
+
+Nunca depender del archivo temporal del request.
+
+
+---
+
+28. Seguridad
+
+Prohibido
+
+macros,
+
+fórmulas ejecutables,
+
+xlsm,
+
+scripts embebidos.
+
+
+Validar
+
+tamaño,
+
+mime type,
+
+extensión,
+
+sanitización nombre archivo.
+
+
+
+---
+
+29. Fórmulas
+
+Rechazar fórmulas en campos críticos:
+
+fecha
+cuenta
+debito
+credito
+cantidad
+precio
+
+
+---
+
+30. Preview obligatorio
+
+Antes de importar mostrar:
+
+documentos detectados,
+
+filas,
+
+errores,
+
+advertencias,
+
+primeras líneas.
+
+
+
+---
+
+31. Cancelación
+
+Permitir:
+
+cancel_requested = True
+
+El proceso debe verificarlo entre documentos.
+
+
+---
+
+32. Transaccionalidad
+
+Regla
+
+Procesar documento por documento.
+
+No usar
+
+Una transacción gigante para miles de filas.
+
+
+---
+
+33. Integración con dominio
+
+La importación NO debe hacer inserts directos.
+
+Debe usar servicios del dominio.
+
+Correcto
+
+ImportService
+→ JournalService
+→ PostingService
+
+Incorrecto
+
+Excel → INSERT SQL directo
+
+
+---
+
+34. Historial
+
+Pantalla con:
+
+fecha,
+
+usuario,
+
+tipo,
+
+estado,
+
+filas,
+
+errores,
+
+duración.
+
+
+
+---
+
+35. Reporte de errores
+
+Debe poder descargarse:
+
+fila
+document_ref
+campo
+valor
+mensaje_error
+
+
+---
+
+36. Plantillas
+
+Generar plantillas para:
+
+xlsx
+ods
+csv
+
+
+---
+
+37. Compatibilidad
+
+Compatible con:
+
+Microsoft Excel,
+
+LibreOffice Calc,
+
+OpenOffice.
+
+
+
+---
+
+38. Permisos
+
+Nuevos permisos
+
+imports.view
+imports.create
+imports.upload
+imports.validate
+imports.execute
+imports.cancel
+imports.download_template
+
+
+---
+
+39. Módulos iniciales soportados
+
+Primera fase:
+
+comprobantes contables,
+
+órdenes de compra,
+
+clientes,
+
+proveedores,
+
+catálogo de cuentas.
+
+
+
+---
+
+40. Criterios de aceptación
+
+La funcionalidad se considera completa cuando:
+
+existe un único framework centralizado,
+
+soporta csv/xls/xlsx/ods,
+
+funciona con sync/async,
+
+respeta períodos cerrados,
+
+usa contexto desde UI,
+
+no permite redefinir contexto en archivo,
+
+soporta preview,
+
+soporta errores descargables,
+
+soporta importaciones multi-documento,
+
+utiliza servicios del dominio,
+
+funciona sin infraestructura adicional,
+
+no está disponible en desktop mode.
