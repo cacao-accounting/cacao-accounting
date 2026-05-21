@@ -97,10 +97,11 @@
 
 <script>
   function normalizeJournalImportHeader(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s*\*+\s*$/, '');
+    var header = String(value || '').trim().toLowerCase();
+    while (header.endsWith('*')) {
+      header = header.slice(0, -1).trimEnd();
+    }
+    return header;
   }
 
   function findJournalImportColumnIndex(headers, column) {
