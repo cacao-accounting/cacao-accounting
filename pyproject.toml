@@ -73,6 +73,12 @@ exclude = [
 	".ruff_cache",
 ]
 
+[tool.pylint.format]
+max-line-length = 127
+
+[tool.pylint."messages control"]
+disable = ["C0415", "C0103"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
