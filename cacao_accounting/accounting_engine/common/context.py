@@ -254,9 +254,9 @@ class JournalEntryProforma:
     @property
     def is_balanced(self) -> bool:
         """Check if entry is balanced."""
-        debits = sum((line.debit for line in self.lines), Decimal("0"))
-        credits = sum((line.credit for line in self.lines), Decimal("0"))
-        return debits == credits
+        total_debits = sum((line.debit for line in self.lines), Decimal("0"))
+        total_credits = sum((line.credit for line in self.lines), Decimal("0"))
+        return total_debits == total_credits
 
 
 @dataclass(frozen=True)
