@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.listar') }}" class="link-dark">{{ _("Presupuestos") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.detalle', budget_id=budget.id) }}" class="link-dark">{{ budget.budget_code }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Importar") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ _("Importar Líneas de Presupuesto") }}</h4>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="p-4">
+    {% if not staged_lines %}
+    <h5>1. {{ _("Instrucciones") }}</h5>
+    <p>{{ _("Prepare un archivo CSV, XLS, XLSX o ODS con las siguientes columnas:") }}</p>
+    <ul>
+      {% for col in columns %}
+      <li><strong>{{ col.name }}</strong> ({{ col.type }}{{ ", obligatorio" if col.required else "" }})</li>
+      {% endfor %}
+    </ul>
+
+    <form method="post" enctype="multipart/form-data" class="mt-4">
+      <div class="mb-3" style="max-width: 400px;">
+        <label class="form-label">{{ _("Seleccionar archivo") }}</label>
+        <input type="file" name="file" class="form-control" accept=".csv, .xlsx, .xls, .ods" required>
+      </div>
+      <button type="submit" class="btn btn-primary">{{ _("Validar y Previsualizar") }}</button>
+    </form>
+    {% else %}
+    <h5>2. {{ _("Previsualizar e Insertar") }}</h5>
+    <p class="text-success"><i class="bi bi-check-circle"></i> {{ _("Archivo validado. Previsualizando las primeras 100 líneas.") }}</p>
+
+    <div class="table-responsive mt-3" style="max-height: 400px;">
+      <table class="ca-table">
+        <thead>
+          <tr>
+            <th>{{ _("Fila") }}</th>
+            <th>{{ _("Cuenta ID") }}</th>
+            <th>{{ _("Centro ID") }}</th>
+            <th>{{ _("Período ID") }}</th>
+            <th>{{ _("U. Negocio ID") }}</th>
+            <th>{{ _("Proyecto ID") }}</th>
+            <th class="text-end">{{ _("Monto") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in staged_lines %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ row.account_id }}</td>
+            <td>{{ row.cost_center_id }}</td>
+            <td>{{ row.period_id }}</td>
+            <td>{{ row.business_unit_id or "—" }}</td>
+            <td>{{ row.project_id or "—" }}</td>
+            <td class="text-end">{{ row.amount|format_currency }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form method="post" class="mt-4">
+      <input type="hidden" name="import_id" value="{{ import_id }}">
+      <p class="alert alert-warning">{{ _("Nota: Esta acción insertará todas las líneas validadas en el presupuesto. No se puede deshacer masivamente.") }}</p>
+      <button type="submit" class="btn btn-success btn-lg">{{ _("Confirmar Importación") }}</button>
+      <a href="{{ url_for('contabilidad.presupuestos.importar', budget_id=budget.id) }}" class="btn btn-outline-secondary">{{ _("Subir otro archivo") }}</a>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

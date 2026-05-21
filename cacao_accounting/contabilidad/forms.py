@@ -340,3 +340,27 @@ class FormularioRecurringJournalTemplate(FlaskForm):
         validators=[DataRequired()],
     )
     currency = SelectField("Moneda", validators=[DataRequired()])
+
+
+class FormularioBudget(FlaskForm):
+    """Formulario para el encabezado del presupuesto."""
+
+    company = SelectField("Compañía", validators=[DataRequired()])
+    ledger_id = SelectField("Libro Contable", validators=[DataRequired()], validate_choice=False)
+    fiscal_year_id = SelectField("Año Fiscal", validators=[DataRequired()], validate_choice=False)
+    budget_code = StringField("Código", validators=[DataRequired(), Length(max=50)])
+    name = StringField("Nombre", validators=[DataRequired(), Length(max=100)])
+    description = TextAreaField("Descripción", validators=[Optional()])
+    currency_id = SelectField("Moneda", validators=[DataRequired()])
+
+
+class FormularioBudgetLine(FlaskForm):
+    """Formulario para una línea de presupuesto."""
+
+    account_id = SelectField("Cuenta Contable", validators=[DataRequired()], validate_choice=False)
+    cost_center_id = SelectField("Centro de Costo", validators=[DataRequired()], validate_choice=False)
+    business_unit_id = SelectField("Unidad de Negocio", validators=[Optional()], validate_choice=False)
+    project_id = SelectField("Proyecto", validators=[Optional()], validate_choice=False)
+    period_id = SelectField("Período Contable", validators=[DataRequired()], validate_choice=False)
+    amount = DecimalField("Monto", places=4, validators=[InputRequired(), NumberRange(min=0)])
+    description = StringField("Descripción", validators=[Optional(), Length(max=200)])

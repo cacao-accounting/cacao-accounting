@@ -1,50 +1,5 @@
 {% extends "base.html" %}
-{# smart_select_field: label, name, doctype, value, field_id, min_chars, filters(dict), filter_sources(list), required_filters(list) #}
-{% macro smart_select_field(label, name, doctype, value='', field_id='', min_chars=1, filters=None, filter_sources=None, required_filters=None) -%}
-<label class="form-label mb-0">
-  {{ _(label) }}
-  <div class="ca-smart-select" x-data='smartSelect({
-      doctype: {{ doctype|tojson }},
-      name: {{ name|tojson }},
-      minChars: {{ min_chars }},
-      preload: true,
-      preloadOnFocus: true,
-      loadOnFilterChange: true,
-      initialValue: {{ value|tojson }},
-      initialLabel: {{ value|tojson }},
-      filters: {{ (filters or {})|tojson }},
-      filterSources: {{ (filter_sources or [])|tojson }},
-      requiredFilters: {{ (required_filters or [])|tojson }},
-      messages: {
-        placeholder: {{ _("Buscar...")|tojson }},
-        loading: {{ _("Buscando...")|tojson }},
-        noResults: {{ _("Sin resultados")|tojson }},
-        minChars: {{ _("Escriba para buscar")|tojson }},
-        clear: {{ _("Limpiar")|tojson }},
-        invalid: {{ _("Seleccione una opción válida")|tojson }},
-        error: {{ _("No se pudo buscar")|tojson }}
-      }
-    })'>
-    <input type="hidden" id="{{ field_id or name }}" name="{{ name }}" x-model="selectedValue">
-    <div class="ca-smart-select-input-wrap">
-      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus"
-        @blur="closeSoon" :placeholder="messages.placeholder">
-      <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
-        :title="messages.clear">×</button>
-    </div>
-    <div class="ca-smart-select-menu" x-show="open" x-cloak>
-      <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-      <template x-for="option in options" :key="option.value">
-        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
-          <span x-text="option.display_name"></span>
-        </button>
-      </template>
-      <div class="ca-smart-select-state" x-show="!loading && !options.length" x-text="messages.noResults"></div>
-      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
-    </div>
-  </div>
-</label>
-{%- endmacro %}
+{% from "reportes/report_macros.html" import smart_select_field %}
 {% block contenido %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">

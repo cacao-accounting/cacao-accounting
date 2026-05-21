@@ -36,6 +36,7 @@ else:
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.contabilidad.presupuesto import presupuestos
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_catalogo,
     obtener_catalogo_base,
@@ -58,6 +59,7 @@ from cacao_accounting.version import APPNAME
 # <------------------------------------------------------------------------------------------------------------------------> #
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 contabilidad.register_blueprint(gl, url_prefix="/gl")
+contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
 LISTA_ENTIDADES = redirect("/accounting/entity/list")
 
 CONTABILIDAD_LIBROS = "contabilidad.libros"
