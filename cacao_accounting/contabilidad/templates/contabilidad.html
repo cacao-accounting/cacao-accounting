@@ -129,6 +129,15 @@
 
       {% if acceso.autorizado %}
       <li>
+        <a href="{{ url_for('contabilidad.presupuestos.listar') }}">Administrar Presupuestos</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.presupuestos.reporte') }}">Real versus Presupuesto</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <hr class="my-1">
+      <li>
         <a href="{{ url_for('reportes.account_movement') }}">Detalle de Movimiento Contable</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>

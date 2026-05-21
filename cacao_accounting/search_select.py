@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     Bank,
     BankAccount,
     Book,
+    Budget,
     CompanyParty,
     CostCenter,
     Currency,
@@ -345,6 +346,20 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
             "is_stock_item": "is_stock_item",
         },
         default_filters={"is_active": True},
+    ),
+    "budget": SearchSelectSpec(
+        doctype="budget",
+        model=Budget,
+        search_fields=("name", "budget_code"),
+        value_field="id",
+        label_builder=lambda b: f"{b.budget_code} - {b.name}",
+        allowed_filters={
+            "company": "company",
+            "fiscal_year_id": "fiscal_year_id",
+            "ledger_id": "ledger_id",
+            "status": "status",
+        },
+        default_filters={},
     ),
     "warehouse": SearchSelectSpec(
         doctype="warehouse",

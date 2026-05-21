@@ -2505,3 +2505,79 @@ class StockBalanceSnapshot(database.Model, BaseTabla):  # type: ignore[name-defi
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+
+
+class Budget(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Encabezado de presupuesto."""
+
+    __tablename__ = "budget"
+    __table_args__ = (
+        UniqueConstraint("company", "ledger_id", "fiscal_year_id", "budget_code", name="uq_budget_code"),
+    )
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID), nullable=False, index=True)
+    fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID), nullable=False, index=True)
+    budget_code = database.Column(database.String(50), nullable=False, index=True)
+    name = database.Column(database.String(100), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
+    currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=False)
+    status = database.Column(database.String(20), default="draft", nullable=False, index=True)
+
+    approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
+    approved_at = database.Column(database.DateTime, nullable=True)
+    closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
+    closed_at = database.Column(database.DateTime, nullable=True)
+
+
+class BudgetLine(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Linea de presupuesto normalizada."""
+
+    __tablename__ = "budget_line"
+    __table_args__ = (
+        UniqueConstraint(
+            "budget_id",
+            "account_id",
+            "cost_center_id",
+            "period_id",
+            "business_unit_id",
+            "project_id",
+            name="uq_budget_line",
+        ),
+    )
+    budget_id = database.Column(database.String(26), database.ForeignKey("budget.id"), nullable=False, index=True)
+    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=False, index=True)
+    cost_center_id = database.Column(
+        database.String(26), database.ForeignKey("cost_center.id"), nullable=False, index=True
+    )
+    business_unit_id = database.Column(database.String(26), database.ForeignKey("unit.id"), nullable=True, index=True)
+    project_id = database.Column(database.String(26), database.ForeignKey("project.id"), nullable=True, index=True)
+    period_id = database.Column(database.String(26), database.ForeignKey("accounting_period.id"), nullable=False, index=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    description = database.Column(database.String(200), nullable=True)
+
+
+class BudgetImport(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Lote de importación de presupuesto."""
+
+    __tablename__ = "budget_import"
+    budget_id = database.Column(database.String(26), database.ForeignKey("budget.id"), nullable=False, index=True)
+    filename = database.Column(database.String(255), nullable=False)
+    # validated, imported, failed
+    status = database.Column(database.String(20), default="validated", nullable=False)
+    rows_read = database.Column(database.Integer(), default=0)
+    rows_inserted = database.Column(database.Integer(), default=0)
+    errors_count = database.Column(database.Integer(), default=0)
+
+
+class BudgetImportLine(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Línea temporal de importación para previsualización."""
+
+    __tablename__ = "budget_import_line"
+    import_id = database.Column(database.String(26), database.ForeignKey("budget_import.id"), nullable=False, index=True)
+    account_id = database.Column(database.String(26), nullable=True)
+    cost_center_id = database.Column(database.String(26), nullable=True)
+    business_unit_id = database.Column(database.String(26), nullable=True)
+    project_id = database.Column(database.String(26), nullable=True)
+    period_id = database.Column(database.String(26), nullable=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    description = database.Column(database.String(255), nullable=True)
