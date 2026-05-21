@@ -191,6 +191,9 @@
       </button>
       <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
       <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
+      <button class="btn btn-sm btn-outline-info" type="button" x-show="viewKey === 'draft' && supportsLineImport()" @click="openImportModal()">
+        <i class="bi bi-file-earmark-spreadsheet"></i> {{ _('Importar líneas') }}
+      </button>
     </div>
   </div>
 
@@ -753,6 +756,120 @@
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
         <button class="btn btn-primary" type="button" @click="saveTaxLineModal()">{{ _('Guardar detalle') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalImportLines" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ _('Asistente de Importación de Líneas') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3" x-show="importModal.schema">
+          <h6>{{ _('Columnas aceptadas:') }}</h6>
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <template x-for="col in importModal.schema.columns" :key="col.key">
+              <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title="col.required ? '{{ _('Requerido') }}' : '{{ _('Opcional') }}'">
+                <span x-text="col.label"></span>
+                <template x-if="col.required"><span class="ms-1">*</span></template>
+              </span>
+            </template>
+          </div>
+          <p class="small text-muted">{{ _('Puede incluir columnas con nombres alternativos (ej: Artículo, Producto, Item).') }}</p>
+          <div class="alert alert-info py-2 small mb-0">
+            <i class="bi bi-info-circle me-2"></i> {{ _('Las líneas importadas se agregarán al final del detalle actual.') }}
+          </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-3" id="importTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste-panel" type="button" role="tab">{{ _('Pegar desde Excel/Google Sheets') }}</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-panel" type="button" role="tab">{{ _('Subir Archivo XLSX') }}</button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="importTabsContent">
+          <div class="tab-pane fade show active" id="paste-panel" role="tabpanel">
+            <div class="mb-3">
+              <label class="form-label">{{ _('Pegue aquí las celdas incluyendo el encabezado:') }}</label>
+              <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText" @input="onPasteAreaInput()" placeholder="Item	Cantidad	Precio..."></textarea>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="upload-panel" role="tabpanel">
+            <div class="mb-3">
+              <label class="form-label">{{ _('Seleccione archivo XLSX:') }}</label>
+              <input type="file" class="form-control" accept=".xlsx" @change="handleFileUpload($event)">
+              <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="downloadTemplate()">
+                  <i class="bi bi-download"></i> {{ _('Descargar Plantilla') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4" x-show="importModal.parsedRows.length > 0">
+          <h6>{{ _('Vista previa de datos') }} (<span x-text="importModal.parsedRows.length"></span> {{ _('líneas') }})</h6>
+          <div class="table-responsive" style="max-height: 300px;">
+            <table class="table table-sm table-bordered">
+              <thead>
+                <tr>
+                  <template x-for="col in importModal.schema.columns" :key="col.key">
+                    <th x-text="col.label"></th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, idx) in importModal.parsedRows.slice(0, 50)" :key="idx">
+                  <tr>
+                    <template x-for="col in importModal.schema.columns" :key="col.key">
+                      <td x-text="row[col.key] || ''"></td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="small text-muted" x-show="importModal.parsedRows.length > 50">{{ _('Mostrando solo las primeras 50 líneas.') }}</p>
+          </div>
+        </div>
+
+        <div class="mt-3" x-show="importModal.errors.length > 0">
+          <div class="alert alert-danger">
+            <h6>{{ _('Errores de validación:') }}</h6>
+            <ul class="mb-0">
+              <template x-for="(err, idx) in importModal.errors" :key="idx">
+                <li>
+                  <template x-if="err.row !== undefined">
+                    <span class="fw-bold" x-text="'{{ _('Fila') }} ' + err.row + ': '"></span>
+                  </template>
+                  <span x-text="err.message"></span>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <div class="mt-3" x-show="importModal.isValidated && importModal.errors.length === 0">
+          <div class="alert alert-success py-2">
+            <i class="bi bi-check-circle-fill me-2"></i> {{ _('Datos validados correctamente. Listo para insertar.') }}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+        <button type="button" class="btn btn-primary" :disabled="importModal.parsedRows.length === 0 || importModal.validating" x-show="!importModal.isValidated" @click="validateImport()">
+          <span x-show="importModal.validating" class="spinner-border spinner-border-sm me-1"></span>
+          {{ _('Validar datos') }}
+        </button>
+        <button type="button" class="btn btn-success" x-show="importModal.isValidated" @click="insertImportedLines()">
+          {{ _('Insertar líneas') }}
+        </button>
       </div>
     </div>
   </div>

@@ -896,7 +896,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
 
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
-    """Persiste el snapshot fiscal editable capturado en el formulario."""
+    """Persist the editable fiscal snapshot captured in the form."""
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
         document_type=invoice.document_type or "sales_invoice",

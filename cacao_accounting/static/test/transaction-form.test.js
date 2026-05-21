@@ -156,6 +156,78 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines[0].amount, 10);
   });
 
+  it('matches required template headers and aliases when parsing pasted imports', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.importModal.schema = {
+      columns: [
+        { key: 'item_code', label: 'Artículo', aliases: ['item'] },
+        { key: 'quantity', label: 'Cantidad', aliases: ['qty'] },
+      ],
+    };
+    component.importModal.pastedText = 'Artículo *\tqty\nITEM-001\t2\n\t\n';
+
+    component.parsePastedText();
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [
+      { item_code: 'ITEM-001', quantity: '2' },
+    ]);
+  });
+
+  it('keeps existing rows intact when appending imported lines', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [{ code: 'ITEM-001', name: 'Caja de cacao', uom: 'UND' }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 0,
+      initialLines: [{ item_code: 'MANUAL-001', item_name: 'Manual', qty: 3, rate: 5, amount: 15 }],
+    });
+
+    component.init();
+    component.importModal.doctype = 'purchase_request';
+    component.importModal.isValidated = true;
+    component.importModal.parsedRows = [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', quantity: 2, uom: 'UND' }];
+
+    component.insertImportedLines();
+
+    assert.strictEqual(component.lines.length, 2);
+    assert.strictEqual(component.lines[0].item_code, 'MANUAL-001');
+    assert.strictEqual(component.lines[0].item_name, 'Manual');
+    assert.strictEqual(component.lines[0].qty, 3);
+    assert.strictEqual(component.lines[0].rate, 5);
+    assert.strictEqual(component.lines[0].amount, 15);
+    assert.strictEqual(component.lines[1].item_code, 'ITEM-001');
+    assert.strictEqual(component.lines[1].qty, 2);
+  });
+
+  it('only enables line import for supported doctypes', function () {
+    const create = loadTransactionForm();
+    const supported = create({
+      formKey: 'purchases.purchase_order',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    supported.init();
+
+    const unsupported = create({
+      formKey: 'sales.delivery_note',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    unsupported.init();
+
+    assert.strictEqual(supported.supportsLineImport(), true);
+    assert.strictEqual(unsupported.supportsLineImport(), false);
+  });
+
   it('opens line detail with existing analytical values and saves edits back to the row', function () {
     const create = loadTransactionForm();
     const component = create({
