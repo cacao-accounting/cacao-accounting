@@ -24,3 +24,5 @@ teritorio==2025.11.11
 waitress==3.0.2
 weasyprint==68.1
 wtforms==3.2.1
+xlrd==2.0.2
+odfpy==1.4.1

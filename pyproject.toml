@@ -23,6 +23,12 @@ classifiers = [
 ]
 dynamic = ["version", "dependencies"]
 
+[project.optional-dependencies]
+extra-formats = [
+    "xlrd>=2.0.2",
+    "odfpy>=1.4.1",
+]
+
 [project.scripts]
 cacaoctl="cacao_accounting:command"
 

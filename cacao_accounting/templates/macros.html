@@ -168,6 +168,14 @@
     {%- endif %}
     {%- endfor %}
     {%- endif %}
+    {% if not MODO_ESCRITORIO and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado -%}
+    <li class="nav-item">
+      <a href="{{ url_for('imports.index') }}" class="nav-link {% if request.blueprint == 'imports' %}active{% endif %}">
+        <i class="bi bi-file-earmark-arrow-up"></i>
+        Importaciones
+      </a>
+    </li>
+    {%- endif %}
     {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
     <li class="nav-item">
       <a href="{{ url_for('admin.admin_') }}" class="nav-link {% if request.blueprint == 'admin' %}active{% endif %}">

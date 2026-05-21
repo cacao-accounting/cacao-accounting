@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+{% set acceso = permisos(modulo=id_modulo("imports"), usuario=usuario.id) %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ _("Lote de Importación") }}: {{ batch.id }}</h2>
+        <div>
+            <a href="{{ url_for('imports.index') }}" class="btn btn-outline-secondary">{{ _("Volver") }}</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">{{ _("Información del Lote") }}</div>
+                <div class="card-body">
+                    <p>
+                        <strong>{{ _("Estado") }}:</strong>
+                        {% if batch.import_status == 0 %} <span class="badge bg-secondary">{{ _("No iniciado") }}</span>
+                        {% elif batch.import_status == 1 %} <span class="badge bg-info">{{ _("Archivo cargado") }}</span>
+                        {% elif batch.import_status == 2 %} <span class="badge bg-warning">{{ _("Validado con errores") }}</span>
+                        {% elif batch.import_status == 3 %} <span class="badge bg-primary">{{ _("Listo para importar") }}</span>
+                        {% elif batch.import_status == 4 %} <span class="badge bg-warning text-dark">{{ _("Procesando") }}</span>
+                        {% elif batch.import_status == 5 %} <span class="badge bg-success">{{ _("Completado") }}</span>
+                        {% elif batch.import_status == 6 %} <span class="badge bg-warning">{{ _("Completado con errores") }}</span>
+                        {% elif batch.import_status == 7 %} <span class="badge bg-danger">{{ _("Fallido") }}</span>
+                        {% elif batch.import_status == 8 %} <span class="badge bg-dark">{{ _("Cancelado") }}</span>
+                        {% endif %}
+                    </p>
+                    <p><strong>{{ _("Compañía") }}:</strong> {{ batch.company.company_name }}</p>
+                    <p><strong>{{ _("Tipo de Registro") }}:</strong> {{ batch.record_type }}</p>
+                    <p><strong>{{ _("Archivo") }}:</strong> {{ batch.source_filename or _("No cargado") }}</p>
+                    <hr>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-info dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            {{ _("Descargar Plantilla") }}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('imports.download_template', record_type=batch.record_type, format='csv') }}">CSV</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('imports.download_template', record_type=batch.record_type, format='xlsx') }}">XLSX</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('imports.download_template', record_type=batch.record_type, format='ods') }}">ODS</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            {% if batch.import_status == 0 and acceso.actualizar %}
+            <div class="card mb-4">
+                <div class="card-header">{{ _("Cargar Archivo") }}</div>
+                <div class="card-body">
+                    <form action="{{ url_for('imports.upload', batch_id=batch.id) }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <input type="file" name="file" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">{{ _("Subir") }}</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-grid gap-2">
+                {% if batch.import_status == 1 and acceso.validar %}
+                <form action="{{ url_for('imports.validate', batch_id=batch.id) }}" method="POST">
+                    <button type="submit" class="btn btn-info w-100">{{ _("Validar") }}</button>
+                </form>
+                {% endif %}
+
+                {% if batch.import_status == 3 and acceso.autorizar %}
+                <form action="{{ url_for('imports.execute', batch_id=batch.id) }}" method="POST">
+                    <button type="submit" class="btn btn-success w-100">{{ _("Ejecutar Importación") }}</button>
+                </form>
+                {% endif %}
+
+                {% if batch.import_status == 4 and acceso.anular %}
+                <form action="{{ url_for('imports.cancel', batch_id=batch.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger w-100">{{ _("Solicitar Cancelación") }}</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            {% if preview.errors %}
+            <div class="alert alert-danger">
+                <h4>{{ _("Errores Detectados") }}</h4>
+                <ul class="mb-0">
+                    {% for error in preview.errors %}
+                    <li>
+                        {% if error.row_number %} Fila {{ error.row_number }}: {% endif %}
+                        {% if error.document_ref %} [{{ error.document_ref }}] {% endif %}
+                        {{ error.message }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if preview.sample_rows %}
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    {{ _("Vista Previa (Primeras 10 filas)") }}
+                    <span class="badge bg-secondary">{{ preview.total_documents }} {{ _("documentos detectados") }}</span>
+                </div>
+                <div class="card-body p-0 overflow-auto">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                {% for col in preview.columns %}
+                                <th>{{ col }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview.sample_rows %}
+                            <tr>
+                                {% for val in row %}
+                                <td>{{ val }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <caption>{{ _("Vista previa de los datos a importar") }}</caption>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

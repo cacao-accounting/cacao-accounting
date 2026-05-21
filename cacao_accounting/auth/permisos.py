@@ -26,7 +26,7 @@ from cacao_accounting.logs import log
 
 # Solo usuarios con el rol de administrador tienen acceso al modulo administrativo
 # por eso no se incluye en esta lista.
-MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales"]
+MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales", "imports"]
 
 
 class RegistroPermisosRol:

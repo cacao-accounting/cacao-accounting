@@ -66,3 +66,11 @@
 - **Trazabilidad de importación:** Se agregó `LandedCostAllocation` como tabla dedicada de prorrateo para no sobrecargar `StockValuationLayer`; cada asignación guarda línea documental, ítem, almacén, base, monto asignado, costo final y referencia opcional a la capa de valuación.
 - **Cobertura de eventos revisados:** El flujo real quedó cubierto para recepciones de compra, facturas de compra/venta, pagos/cobros y notas de crédito; el evento `import_landed_cost_confirmed` sigue disponible en motores/orquestador para casos de importación calculada.
 - **Validación actual:** En `.venv`, `black --check cacao_accounting/`, `ruff`, `flake8`, `mypy`, `pydocstyle` focal y `pytest -v -s --exitfirst --slow=True` completo están en verde (`672 passed`).
+
+- **Servicio Centralizado de Importación:** Implementado framework de importación tabular en `cacao_accounting/imports` con soporte para CSV (con auto-detección de delimitador), XLS, XLSX y ODS (extracción robusta de tipos). Permite carga masiva de Catálogo de Cuentas, Clientes, Proveedores, Comprobantes Contables y Órdenes de Compra.
+- **Control de Modo Escritorio:** El servicio de importación cuenta con guardias de seguridad que bloquean el acceso y la ejecución si `MODO_ESCRITORIO` está habilitado, tanto en rutas backend como en UI.
+- **Procesamiento de Grado Enterprise:**
+  - Soporta validación estructural/negocio, previsualización de datos y ejecución asíncrona (daemon threads).
+  - Garantiza la integridad vía rollbacks automáticos por documento y bloqueos de concurrencia (`with_for_update`).
+  - Validación de períodos contables cerrados y protección contra inyección de fórmulas en archivos.
+  - Generación de plantillas en formatos CSV, XLSX y ODS.
