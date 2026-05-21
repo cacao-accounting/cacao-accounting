@@ -1,47 +1,58 @@
 {% extends "base.html" %}
-{% block content %}
+{% block contenido %}
+{% from "reportes/report_macros.html" import smart_select_field %}
 <div class="container mt-4">
-    <h2>{{ _("Nueva Importación") }}</h2>
-    <form method="POST" class="mt-4" x-data="{ record_type: '' }">
-        <div class="mb-3">
-            <label class="form-label">{{ _("Compañía") }}</label>
-            <select name="company_id" class="form-select" required>
-                {% for company in companies %}
-                <option value="{{ company.code }}">{{ company.company_name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">{{ _("Serie / Secuencia") }} ({{ _("Opcional") }})</label>
-            <select name="sequence_id" class="form-select">
-                <option value="">-- {{ _("Seleccionar") }} --</option>
-                {% for seq in sequences %}
-                <option value="{{ seq.id }}">{{ seq.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">{{ _("Tipo de Registro") }}</label>
-            <select name="record_type" class="form-select" required x-model="record_type">
-                <option value="">-- {{ _("Seleccionar") }} --</option>
-                {% for rt in record_types %}
-                <option value="{{ rt.value }}">{{ rt.label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="mb-3" x-show="record_type === 'journal_entry'">
-            <label class="form-label">{{ _("Libro Contable") }} ({{ _("Opcional") }})</label>
-            <select name="accounting_book_id" class="form-select">
-                <option value="">-- {{ _("Seleccionar") }} --</option>
-                {% for book in books %}
-                <option value="{{ book.code }}">{{ book.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary">{{ _("Crear Lote") }}</button>
-            <a href="{{ url_for('imports.index') }}" class="btn btn-secondary">{{ _("Cancelar") }}</a>
-        </div>
-    </form>
+    {%- if TESTING -%}
+    <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/imports/templates/imports/new.html"></div>
+    {%- endif -%}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb lh-sm">
+            <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('imports.index') }}" class="link-dark">{{ _("Importaciones") }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva") }}</li>
+        </ol>
+    </nav>
+
+    <div class="ca-page-header">
+        <h4><i class="bi bi-file-earmark-arrow-up me-2"></i>{{ _("Nueva Importación") }}</h4>
+    </div>
+
+    <div class="ca-card mt-3" style="max-width: 760px;">
+        <form method="POST" class="row g-3" x-data="{ recordType: '' }">
+            <div class="col-12">
+                {{ smart_select_field("Compañía", "company_id", "company", "", "import-company", 1) }}
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="import-record-type">{{ _("Tipo de Registro") }}</label>
+                <select id="import-record-type" name="record_type" class="form-select" required x-model="recordType">
+                    <option value="">-- {{ _("Seleccionar") }} --</option>
+                    {% for group in record_type_groups %}
+                    <optgroup label="{{ _(group["label"]) }}">
+                        {% for rt in group["items"] %}
+                        <option value="{{ rt.value }}">{{ _(rt.label) }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
+                </select>
+                <input type="hidden" id="import-entity-type" :value="recordType">
+            </div>
+
+            <div class="col-12">
+                {{ smart_select_field("Serie / Secuencia", "sequence_id", "naming_series", "", "import-sequence", 1, {"company": {"selector": "#import-company"}, "entity_type": {"selector": "#import-entity-type"}}, ["#import-company", "#import-entity-type"], ["company", "entity_type"]) }}
+            </div>
+
+            <template x-if="recordType === 'journal_entry'">
+                <div class="col-12">
+                    {{ smart_select_field("Libro Contable", "accounting_book_id", "book", "", "import-book", 1, {"company": {"selector": "#import-company"}}, ["#import-company"], ["company"]) }}
+                </div>
+            </template>
+
+            <div class="col-12 d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">{{ _("Crear Lote") }}</button>
+                <a href="{{ url_for('imports.index') }}" class="btn btn-outline-secondary">{{ _("Cancelar") }}</a>
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}

@@ -96,6 +96,45 @@
 </nav>
 
 <script>
+  function normalizeJournalImportHeader(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s*\*+\s*$/, '');
+  }
+
+  function findJournalImportColumnIndex(headers, column) {
+    var aliases = Array.isArray(column.aliases) ? column.aliases : [];
+    var candidates = [column.key, column.label].concat(aliases)
+      .map(normalizeJournalImportHeader)
+      .filter(Boolean);
+    return headers.findIndex(function (header) {
+      return candidates.indexOf(header) >= 0;
+    });
+  }
+
+  function mapJournalImportedRows(rawRows, schema) {
+    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
+    var headers = (rawRows[0] || []).map(normalizeJournalImportHeader);
+    return rawRows
+      .slice(1)
+      .map(function (row) {
+        var obj = {};
+        schema.columns.forEach(function (column) {
+          var foundIndex = findJournalImportColumnIndex(headers, column);
+          if (foundIndex !== -1) {
+            obj[column.key] = row[foundIndex] !== undefined ? String(row[foundIndex]).trim() : '';
+          }
+        });
+        return obj;
+      })
+      .filter(function (row) {
+        return Object.values(row).some(function (value) {
+          return value !== null && value !== undefined && String(value).trim() !== '';
+        });
+      });
+  }
+
   window.journalEntryForm = function (config) {
     return {
       formKey: config.formKey,
@@ -121,6 +160,15 @@
       lines: (config.initialJournal && config.initialJournal.lines) || [],
       activeIndex: null,
       modalLine: null,
+      importModal: {
+        doctype: 'journal_entry',
+        schema: null,
+        pastedText: '',
+        parsedRows: [],
+        errors: [],
+        validating: false,
+        isValidated: false
+      },
       payload: '',
 
       normalizeLine: function (line) {
@@ -304,6 +352,99 @@
           this.lines[this.activeIndex] = Object.assign({}, this.modalLine);
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).hide();
+      },
+
+      openImportModal: function () {
+        var self = this;
+        this.importModal.schema = null;
+        this.importModal.pastedText = '';
+        this.importModal.parsedRows = [];
+        this.importModal.errors = [];
+        this.importModal.isValidated = false;
+        fetch('/api/line-import/schema?doctype=journal_entry', {
+          credentials: 'same-origin'
+        })
+          .then(function (response) { return response.json(); })
+          .then(function (schema) {
+            self.importModal.schema = schema;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).show();
+          })
+          .catch(function () {
+            self.importModal.errors = [{ message: '{{ _("No se pudo cargar la plantilla de importación.") }}' }];
+          });
+      },
+
+      parseImportedText: function () {
+        var text = this.importModal.pastedText.trim();
+        this.importModal.isValidated = false;
+        this.importModal.errors = [];
+        if (!text) {
+          this.importModal.parsedRows = [];
+          return;
+        }
+        var rows = text.split(/\r?\n/).map(function (line) { return line.split('\t'); });
+        this.importModal.parsedRows = mapJournalImportedRows(rows, this.importModal.schema);
+      },
+
+      validateImport: function () {
+        var self = this;
+        var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
+        var company = this.resolveCompanyValue();
+        this.importModal.validating = true;
+        this.importModal.errors = [];
+        fetch('/api/line-import/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            doctype: 'journal_entry',
+            context: { company_id: company },
+            rows: this.importModal.parsedRows
+          })
+        })
+          .then(function (response) { return response.json(); })
+          .then(function (payload) {
+            if (payload.valid) {
+              self.importModal.parsedRows = payload.rows || [];
+              self.importModal.isValidated = true;
+              return;
+            }
+            self.importModal.errors = payload.errors || [{ message: payload.error || '{{ _("No se pudo validar.") }}' }];
+            self.importModal.isValidated = false;
+          })
+          .catch(function () {
+            self.importModal.errors = [{ message: '{{ _("Error de conexión al validar.") }}' }];
+            self.importModal.isValidated = false;
+          })
+          .finally(function () {
+            self.importModal.validating = false;
+          });
+      },
+
+      insertImportedLines: function () {
+        if (!this.importModal.isValidated) return;
+        this.lines = this.lines.filter(function (line) {
+          return line.account || line.debit || line.credit || line.remarks;
+        });
+        this.importModal.parsedRows.forEach(function (row) {
+          var line = this.newLine();
+          line.account = row.account || '';
+          line.account_label = row.account || '';
+          line.cost_center = row.cost_center || '';
+          line.cost_center_label = row.cost_center || '';
+          line.debit = row.debit || '';
+          line.credit = row.credit || '';
+          line.project = row.project || '';
+          line.reference_name = row.reference || '';
+          line.remarks = row.description || '';
+          this.lines.push(line);
+        }, this);
+        if (!this.lines.length) this.addMultipleRows(2);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).hide();
       },
 
       moveColumn: function (index, direction) {
@@ -646,6 +787,9 @@
     <div class="ca-journal-toolbar mb-3">
       <h5 class="mb-0">{{ _('Asientos contables') }}</h5>
       <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-success" type="button" @click="openImportModal()">
+          <i class="bi bi-file-earmark-spreadsheet"></i> {{ _('Importar líneas') }}
+        </button>
         <button class="btn btn-sm btn-outline-secondary" type="button"
           @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
         <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
@@ -1111,6 +1255,104 @@
         <div class="modal-footer">
           <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
           <button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Actualizar') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="journalImportLinesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ _('Importar líneas') }}
+          </h5>
+          <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3" x-show="importModal.schema">
+            <h6>{{ _('Columnas aceptadas') }}</h6>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <template x-for="column in importModal.schema.columns" :key="column.key">
+                <span class="badge" :class="column.required ? 'bg-primary' : 'bg-secondary'">
+                  <span x-text="column.label"></span>
+                  <template x-if="column.required"><span class="ms-1">*</span></template>
+                </span>
+              </template>
+            </div>
+            <div class="alert alert-info py-2 small mb-0">
+              <i class="bi bi-info-circle me-2"></i>
+              {{ _('Pegue líneas desde una hoja de cálculo incluyendo encabezados. Las líneas importadas se agregarán al detalle actual.') }}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">{{ _('Pegar líneas') }}</label>
+            <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText"
+              @input="parseImportedText()" placeholder="Cuenta	Descripción	Débito	Crédito"></textarea>
+          </div>
+
+          <div class="mt-4" x-show="importModal.parsedRows.length > 0">
+            <h6>{{ _('Vista previa de datos') }} (<span x-text="importModal.parsedRows.length"></span>
+              {{ _('líneas') }})</h6>
+            <div class="table-responsive" style="max-height: 300px;">
+              <table class="table table-sm table-bordered">
+                <caption>{{ _("Vista previa de líneas importadas") }}</caption>
+                <thead>
+                  <tr>
+                    <template x-for="column in importModal.schema.columns" :key="column.key">
+                      <th x-text="column.label"></th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(row, index) in importModal.parsedRows.slice(0, 50)" :key="index">
+                    <tr>
+                      <template x-for="column in importModal.schema.columns" :key="column.key">
+                        <td x-text="row[column.key] || ''"></td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mt-3" x-show="importModal.errors.length > 0">
+            <div class="alert alert-danger">
+              <h6>{{ _('Errores de validación') }}</h6>
+              <ul class="mb-0">
+                <template x-for="(error, index) in importModal.errors" :key="index">
+                  <li>
+                    <template x-if="error.row !== undefined">
+                      <span class="fw-bold" x-text="'{{ _('Fila') }} ' + error.row + ': '"></span>
+                    </template>
+                    <span x-text="error.message"></span>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-3" x-show="importModal.isValidated && importModal.errors.length === 0">
+            <div class="alert alert-success py-2">
+              <i class="bi bi-check-circle-fill me-2"></i>
+              {{ _('Datos validados correctamente. Listo para insertar.') }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+          <button class="btn btn-primary" type="button"
+            :disabled="importModal.parsedRows.length === 0 || importModal.validating"
+            x-show="!importModal.isValidated" @click="validateImport()">
+            <span class="spinner-border spinner-border-sm me-1" x-show="importModal.validating"></span>
+            {{ _('Validar datos') }}
+          </button>
+          <button class="btn btn-success" type="button" x-show="importModal.isValidated"
+            @click="insertImportedLines()">
+            {{ _('Insertar líneas') }}
+          </button>
         </div>
       </div>
     </div>

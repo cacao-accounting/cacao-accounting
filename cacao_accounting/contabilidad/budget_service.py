@@ -228,10 +228,12 @@ class BudgetService:
             BudgetLine.account_id == data["account_id"],
             BudgetLine.cost_center_id == data["cost_center_id"],
             BudgetLine.period_id == data["period_id"],
-            BudgetLine.business_unit_id.is_(None) if business_unit_id is None
-            else BudgetLine.business_unit_id == business_unit_id,
-            BudgetLine.project_id.is_(None) if project_id is None
-            else BudgetLine.project_id == project_id,
+            (
+                BudgetLine.business_unit_id.is_(None)
+                if business_unit_id is None
+                else BudgetLine.business_unit_id == business_unit_id
+            ),
+            BudgetLine.project_id.is_(None) if project_id is None else BudgetLine.project_id == project_id,
         )
         if exclude_line_id:
             query = query.filter(BudgetLine.id != exclude_line_id)

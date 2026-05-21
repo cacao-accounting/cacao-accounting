@@ -458,7 +458,7 @@ def compras_cotizacion_proveedor_nueva():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
-        "availableSourceTypes": [{"value": "request_for_quotation", "label": _("Solicitud de Cotización")}],
+        "availableSourceTypes": [{"value": "purchase_quotation", "label": _("Solicitud de Cotización")}],
     }
     if request.method == "POST":
         try:
@@ -577,7 +577,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
-        "availableSourceTypes": [{"value": "request_for_quotation", "label": _("Solicitud de Cotización")}],
+        "availableSourceTypes": [{"value": "purchase_quotation", "label": _("Solicitud de Cotización")}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),

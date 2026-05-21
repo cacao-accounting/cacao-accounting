@@ -116,16 +116,52 @@
 
   const LINE_IMPORT_DOCUMENT_TYPES = new Set([
     'purchase_request',
+    'purchase_quotation',
+    'supplier_quotation',
     'purchase_order',
     'purchase_receipt',
     'purchase_invoice',
+    'sales_request',
     'sales_quotation',
     'sales_order',
+    'delivery_note',
     'sales_invoice',
     'journal_entry',
     'bank_transaction',
     'stock_entry',
   ]);
+
+  const OPERATIONAL_DOCUMENT_LABELS = {
+    purchase_request: 'Solicitud de Compra',
+    purchase_quotation: 'Solicitud de Cotización',
+    supplier_quotation: 'Cotización de Proveedor',
+    purchase_order: 'Orden de Compra',
+    purchase_receipt: 'Recepción de Compra',
+    purchase_invoice: 'Factura de Compra',
+    sales_request: 'Pedido de Venta',
+    sales_quotation: 'Cotización de Venta',
+    sales_order: 'Orden de Venta',
+    delivery_note: 'Nota de Entrega',
+    sales_invoice: 'Factura de Venta',
+    stock_entry: 'Movimiento de Inventario',
+  };
+
+  function normalizeAvailableSourceTypes(formKey, configuredTypes) {
+    const documentType = String(formKey || '').split('.')[1] || '';
+    const configured = Array.isArray(configuredTypes) ? [...configuredTypes] : [];
+    if (!Object.prototype.hasOwnProperty.call(OPERATIONAL_DOCUMENT_LABELS, documentType)) {
+      return configured;
+    }
+
+    const sourceTypes = [{ value: documentType, label: OPERATIONAL_DOCUMENT_LABELS[documentType] }, ...configured];
+    const seen = new Set();
+    return sourceTypes.filter((sourceType) => {
+      const value = sourceType && sourceType.value;
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+  }
 
   function normalizeImportHeader(value) {
     return String(value || '')
@@ -222,7 +258,7 @@
         availableItems: normalizeItems(config.items),
         availableUoms: Array.isArray(config.uoms) ? [...config.uoms] : [],
         availableWarehouses: Array.isArray(config.warehouses) ? [...config.warehouses] : [],
-        availableSourceTypes: Array.isArray(config.availableSourceTypes) ? config.availableSourceTypes : [],
+        availableSourceTypes: normalizeAvailableSourceTypes(config.formKey, config.availableSourceTypes),
         searchCriteria: {
           source_type: config.initialSourceType || ''
         },

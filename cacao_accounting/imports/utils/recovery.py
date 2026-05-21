@@ -4,16 +4,29 @@
 """Utilidades para el servicio de importación."""
 
 from datetime import datetime, timedelta
+
+from sqlalchemy import inspect
+
 from cacao_accounting.database import database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 
 
-def recover_crashed_batches():
-    """Busca lotes que quedaron en estado 'procesando' por mucho tiempo y los marca como fallidos."""
-    # Consideramos timeout después de 4 horas
+def _import_tables_exist() -> bool:
+    """Indica si las tablas requeridas para recuperar importaciones existen."""
+    inspector = inspect(database.engine)
+    return inspector.has_table(ImportBatch.__tablename__) and inspector.has_table(ImportBatchError.__tablename__)
+
+
+def recover_crashed_batches() -> int:
+    """Marca como fallidos los lotes de importación que excedieron el tiempo límite."""
+    if not _import_tables_exist():
+        return 0
+
     timeout_limit = datetime.now() - timedelta(hours=4)
 
     batches = ImportBatch.query.filter(ImportBatch.import_status == 4, ImportBatch.started_at < timeout_limit).all()
+    if not batches:
+        return 0
 
     for batch in batches:
         batch.import_status = 7  # Fallido
@@ -26,3 +39,4 @@ def recover_crashed_batches():
         database.session.add(batch)
 
     database.session.commit()
+    return len(batches)

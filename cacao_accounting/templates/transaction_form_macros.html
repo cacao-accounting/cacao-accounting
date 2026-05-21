@@ -118,9 +118,13 @@
       <i class="bi bi-sliders"></i> {{ _('Columnas') }}
     </button>
     {% if cancel_url %}
-    <a href="{{ cancel_url }}" class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
+    <a href="{{ cancel_url }}" class="btn btn-sm btn-outline-danger">
+      <i class="bi bi-x-circle"></i> {{ _('Cancelar') }}
+    </a>
     {% else %}
-    <button class="btn btn-sm btn-outline-danger" type="button" onclick="history.back()">{{ _('Cancelar') }}</button>
+    <button class="btn btn-sm btn-outline-danger" type="button" onclick="history.back()">
+      <i class="bi bi-x-circle"></i> {{ _('Cancelar') }}
+    </button>
     {% endif %}
     <button class="btn btn-sm btn-primary" type="submit" form="form-main">
       <i class="bi bi-save"></i> {{ submit_label or _('Guardar') }}
@@ -189,8 +193,12 @@
               @click="fetchSource('{{ source_api_url or '' }}')">
         <i class="bi bi-arrow-repeat"></i> {{ _('Actualizar Elementos') }}
       </button>
-      <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
-      <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">
+        <i class="bi bi-plus-square"></i> {{ _('Añadir múltiple') }}
+      </button>
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">
+        <i class="bi bi-plus-lg"></i> {{ _('Añadir fila') }}
+      </button>
       <button class="btn btn-sm btn-outline-info" type="button" x-show="viewKey === 'draft' && supportsLineImport()" @click="openImportModal()">
         <i class="bi bi-file-earmark-spreadsheet"></i> {{ _('Importar líneas') }}
       </button>
@@ -536,7 +544,9 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
+        </button>
         <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 1" :disabled="!sourceDocuments.some(d => d.selected)" @click="fetchSourceItems()">
           {{ _('Siguiente') }} <i class="bi bi-arrow-right ms-1"></i>
         </button>
@@ -644,8 +654,12 @@
         </template>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
-        <button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Guardar detalle') }}</button>
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
+        </button>
+        <button class="btn btn-primary" type="button" @click="saveModalLine()">
+          <i class="bi bi-check-lg me-1"></i>{{ _('Guardar detalle') }}
+        </button>
       </div>
     </div>
   </div>
@@ -754,8 +768,12 @@
         </template>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
-        <button class="btn btn-primary" type="button" @click="saveTaxLineModal()">{{ _('Guardar detalle') }}</button>
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
+        </button>
+        <button class="btn btn-primary" type="button" @click="saveTaxLineModal()">
+          <i class="bi bi-check-lg me-1"></i>{{ _('Guardar detalle') }}
+        </button>
       </div>
     </div>
   </div>
@@ -787,10 +805,14 @@
 
         <ul class="nav nav-tabs mb-3" id="importTabs" role="tablist">
           <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste-panel" type="button" role="tab">{{ _('Pegar desde Excel/Google Sheets') }}</button>
+            <button class="nav-link active" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste-panel" type="button" role="tab">
+              <i class="bi bi-clipboard me-1"></i>{{ _('Pegar desde Excel/Google Sheets') }}
+            </button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-panel" type="button" role="tab">{{ _('Subir Archivo XLSX') }}</button>
+            <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-panel" type="button" role="tab">
+              <i class="bi bi-upload me-1"></i>{{ _('Subir Archivo XLSX') }}
+            </button>
           </li>
         </ul>
 
@@ -862,13 +884,15 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
+        </button>
         <button type="button" class="btn btn-primary" :disabled="importModal.parsedRows.length === 0 || importModal.validating" x-show="!importModal.isValidated" @click="validateImport()">
           <span x-show="importModal.validating" class="spinner-border spinner-border-sm me-1"></span>
-          {{ _('Validar datos') }}
+          <i class="bi bi-check2-circle me-1" x-show="!importModal.validating"></i>{{ _('Validar datos') }}
         </button>
         <button type="button" class="btn btn-success" x-show="importModal.isValidated" @click="insertImportedLines()">
-          {{ _('Insertar líneas') }}
+          <i class="bi bi-box-arrow-in-down me-1"></i>{{ _('Insertar líneas') }}
         </button>
       </div>
     </div>
@@ -896,8 +920,12 @@
         </template>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" @click="resetPreferences()">{{ _('Restablecer') }}</button>
-        <button class="btn btn-primary" type="button" @click="savePreferences()">{{ _('Actualizar') }}</button>
+        <button class="btn btn-outline-secondary" type="button" @click="resetPreferences()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Restablecer') }}
+        </button>
+        <button class="btn btn-primary" type="button" @click="savePreferences()">
+          <i class="bi bi-check-lg me-1"></i>{{ _('Actualizar') }}
+        </button>
       </div>
     </div>
   </div>

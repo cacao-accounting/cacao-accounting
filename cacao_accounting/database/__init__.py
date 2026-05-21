@@ -2511,9 +2511,7 @@ class Budget(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Encabezado de presupuesto."""
 
     __tablename__ = "budget"
-    __table_args__ = (
-        UniqueConstraint("company", "ledger_id", "fiscal_year_id", "budget_code", name="uq_budget_code"),
-    )
+    __table_args__ = (UniqueConstraint("company", "ledger_id", "fiscal_year_id", "budget_code", name="uq_budget_code"),)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
     ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID), nullable=False, index=True)
     fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID), nullable=False, index=True)
@@ -2546,9 +2544,7 @@ class BudgetLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     budget_id = database.Column(database.String(26), database.ForeignKey("budget.id"), nullable=False, index=True)
     account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=False, index=True)
-    cost_center_id = database.Column(
-        database.String(26), database.ForeignKey("cost_center.id"), nullable=False, index=True
-    )
+    cost_center_id = database.Column(database.String(26), database.ForeignKey("cost_center.id"), nullable=False, index=True)
     business_unit_id = database.Column(database.String(26), database.ForeignKey("unit.id"), nullable=True, index=True)
     project_id = database.Column(database.String(26), database.ForeignKey("project.id"), nullable=True, index=True)
     period_id = database.Column(database.String(26), database.ForeignKey("accounting_period.id"), nullable=False, index=True)
