@@ -47,6 +47,9 @@ from cacao_accounting.database.helpers import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
+from cacao_accounting.logs import log
+from cacao_accounting.imports.routes import imports
+from cacao_accounting.imports.utils.recovery import recover_crashed_batches
 from cacao_accounting.inventario import inventario
 from cacao_accounting.modulos import (
     registrar_modulos_adicionales,
@@ -126,6 +129,7 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(reportes)
             app.register_blueprint(ventas, url_prefix="/sales")
             app.register_blueprint(setup_wizard, url_prefix="/setup")
+            app.register_blueprint(imports, url_prefix="/imports")
 
     else:
         raise RuntimeError(ERROR2)
@@ -273,6 +277,12 @@ def create_app(ajustes: dict | None = None) -> Flask:
     iniciar_extenciones(app=cacao_app)
     registrar_blueprints(app=cacao_app)
     registrar_rutas_predeterminadas(app=cacao_app)
+
+    with cacao_app.app_context():
+        try:
+            recover_crashed_batches()
+        except Exception as e:
+            log.error("Error al recuperar lotes de importación: %s", e)
 
     return cacao_app
 

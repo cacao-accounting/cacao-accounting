@@ -269,3 +269,19 @@
 - **Decisión:** `document_no` es irreversible una vez asignado, incluso en borradores. No se libera, no se reutiliza y no se renumera por cambios posteriores de fecha, compañía o serie.
 - **Implementación:** `assign_document_identifier` ahora es idempotente para documentos ya numerados; retorna sin consumir secuencia ni alterar numeración interna/externa.
 - **Prueba:** Se agregó cobertura para verificar que una factura en borrador conserva su `document_no` y no incrementa la secuencia al intentar reasignar tras cambiar la fecha.
+
+## 2026-05-20 (Servicio Centralizado de Importación Tabular)
+- **Solicitud:** Implementar un servicio centralizado para importar registros (Cuentas, Clientes, Proveedores, Comprobantes, Órdenes de Compra) desde CSV, XLS, XLSX y ODS, inhabilitándolo en modo escritorio.
+- **Implementación Core:** Creado paquete `cacao_accounting.imports` con una arquitectura de Lectores (CSV, XLS vía xlrd, XLSX vía openpyxl, ODS vía odfpy) y Adaptadores por módulo.
+- **Servicio y UI:** `ImportService` gestiona el ciclo de vida del lote (Pendiente -> Validado -> Procesando -> Completado). Se agregó UI web completa para carga, previsualización y ejecución de importaciones.
+- **Seguridad:** Implementado el flag `MODO_ESCRITORIO` en `before_request` del blueprint y visibilidad de UI para cumplir con la restricción de inhabilitación en despliegues locales.
+- **Resiliencia:** El procesamiento de documentos incluye rollbacks por registro para evitar estados corruptos del `database.session` y se integró un proceso de recuperación de lotes huérfanos al inicio de la aplicación.
+- **Docker:** Actualizado `Dockerfile` con dependencias del sistema necesarias para el procesamiento de archivos.
+- **Validación:** Creadas pruebas unitarias para lectores, rutas y servicios en `tests/imports/`. Se resolvieron fallos de linting D401 y se garantizó la compatibilidad con el esquema de base de datos actual.
+- **Refinamiento Enterprise:**
+  - Implementada normalización inmediata de datos a diccionarios para corregir bug crítico en agrupamiento.
+  - Agregada validación de períodos contables abiertos en todo el pipeline de importación.
+  - Implementada protección contra inyección de fórmulas en lectores de hojas de cálculo.
+  - Mejorada la robustez de ejecución con bloqueos de base de datos (`with_for_update`) e hilos daemon.
+  - Soporte para auto-detección de delimitadores en CSV y extracción de tipos avanzada en ODS.
+  - Implementada generación de plantillas en formatos CSV, XLSX y ODS con descarga vía UI.

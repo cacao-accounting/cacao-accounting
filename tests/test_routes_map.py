@@ -55,6 +55,7 @@ def app_ctx() -> Iterator[Flask]:
                 Modules(module="purchases", default=True, enabled=True),
                 Modules(module="inventory", default=True, enabled=True),
                 Modules(module="sales", default=True, enabled=True),
+                Modules(module="imports", default=True, enabled=True),
             ]
         )
         database.session.commit()
