@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ _("Nueva Importación") }}</h2>
+    <form method="POST" class="mt-4" x-data="{ record_type: '' }">
+        <div class="mb-3">
+            <label class="form-label">{{ _("Compañía") }}</label>
+            <select name="company_id" class="form-select" required>
+                {% for company in companies %}
+                <option value="{{ company.code }}">{{ company.company_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">{{ _("Serie / Secuencia") }} ({{ _("Opcional") }})</label>
+            <select name="sequence_id" class="form-select">
+                <option value="">-- {{ _("Seleccionar") }} --</option>
+                {% for seq in sequences %}
+                <option value="{{ seq.id }}">{{ seq.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">{{ _("Tipo de Registro") }}</label>
+            <select name="record_type" class="form-select" required x-model="record_type">
+                <option value="">-- {{ _("Seleccionar") }} --</option>
+                {% for rt in record_types %}
+                <option value="{{ rt.value }}">{{ rt.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3" x-show="record_type === 'journal_entry'">
+            <label class="form-label">{{ _("Libro Contable") }} ({{ _("Opcional") }})</label>
+            <select name="accounting_book_id" class="form-select">
+                <option value="">-- {{ _("Seleccionar") }} --</option>
+                {% for book in books %}
+                <option value="{{ book.code }}">{{ book.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary">{{ _("Crear Lote") }}</button>
+            <a href="{{ url_for('imports.index') }}" class="btn btn-secondary">{{ _("Cancelar") }}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

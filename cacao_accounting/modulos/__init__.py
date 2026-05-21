@@ -62,6 +62,12 @@ admin = {
     "habilitado": True,
 }
 
+imports = {
+    "modulo": "imports",
+    "estandar": True,
+    "habilitado": True,
+}
+
 MODULOS_STANDAR = [
     contabilidad,
     bancos,
@@ -69,6 +75,7 @@ MODULOS_STANDAR = [
     inventario,
     ventas,
     admin,
+    imports,
 ]
 
 # <---------------------------------------------------------------------------------------------> #

@@ -1480,6 +1480,12 @@ class TestPaymentTermsTable(unittest.TestCase):
     def test_payment_terms_table_exists(self):
         self.assertIn("payment_terms", self.tables)
 
+    def test_import_batch_table_exists(self):
+        self.assertIn("import_batch", self.tables)
+
+    def test_import_batch_error_table_exists(self):
+        self.assertIn("import_batch_error", self.tables)
+
     def test_payment_terms_has_name(self):
         self.assertIn("name", self.columns)
 
