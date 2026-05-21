@@ -157,7 +157,8 @@ def upload(batch_id):
             flash("Formato de archivo no soportado", "danger")
             return redirect(url_for("imports.detail", batch_id=batch_id))
 
-        import_dir = os.path.join(current_app.instance_path, "imports", batch_id)
+        safe_batch_id = secure_filename(str(batch.id))
+        import_dir = os.path.join(current_app.instance_path, "imports", safe_batch_id)
         os.makedirs(import_dir, exist_ok=True)
         file_path = os.path.join(import_dir, filename)
         file.save(file_path)
