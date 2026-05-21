@@ -114,6 +114,79 @@
     'payment_entry',
   ]);
 
+  const LINE_IMPORT_DOCUMENT_TYPES = new Set([
+    'purchase_request',
+    'purchase_order',
+    'purchase_receipt',
+    'purchase_invoice',
+    'sales_quotation',
+    'sales_order',
+    'sales_invoice',
+    'journal_entry',
+    'bank_transaction',
+    'stock_entry',
+  ]);
+
+  function normalizeImportHeader(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s*\*+\s*$/, '');
+  }
+
+  function findImportColumnIndex(headers, column) {
+    const candidates = [column.key, column.label, ...(Array.isArray(column.aliases) ? column.aliases : [])]
+      .map((value) => normalizeImportHeader(value))
+      .filter(Boolean);
+    return headers.findIndex((header) => candidates.includes(header));
+  }
+
+  function mapImportedRows(rawRows, schema) {
+    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
+
+    const headers = (rawRows[0] || []).map((value) => normalizeImportHeader(value));
+    return rawRows
+      .slice(1)
+      .map((row) => {
+        const obj = {};
+        schema.columns.forEach((col) => {
+          const foundIndex = findImportColumnIndex(headers, col);
+          if (foundIndex !== -1) {
+            obj[col.key] = row[foundIndex] !== undefined ? String(row[foundIndex]).trim() : '';
+          }
+        });
+        return obj;
+      })
+      .filter((row) => Object.values(row).some((val) => val !== null && val !== undefined && String(val).trim() !== ''));
+  }
+
+  function normalizeWorksheetValue(value) {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (typeof value === 'object') {
+      if (Array.isArray(value.richText)) {
+        return value.richText.map((part) => part.text || '').join('');
+      }
+      if (value.text !== undefined) return String(value.text);
+      if (value.result !== undefined) return normalizeWorksheetValue(value.result);
+      if (value.hyperlink !== undefined) return String(value.text || value.hyperlink);
+    }
+    return String(value);
+  }
+
+  function worksheetToRows(worksheet) {
+    if (!worksheet) return [];
+    const rows = [];
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      const values = [];
+      for (let index = 1; index <= row.cellCount; index += 1) {
+        values.push(normalizeWorksheetValue(row.getCell(index).value));
+      }
+      rows.push(values);
+    });
+    return rows;
+  }
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('transactionForm', (config) => {
       const messages = {
@@ -161,6 +234,17 @@
         activeIndex: null,
         modalLine: null,
         payload: '',
+        importModal: {
+          show: false,
+          doctype: '',
+          schema: null,
+          pastedText: '',
+          parsedRows: [],
+          errors: [],
+          validating: false,
+          isValidated: false,
+          fileLoading: false,
+        },
         taxPreviewDebounceId: null,
         taxCharges: {
           loading: false,
@@ -350,6 +434,10 @@
         supportsFiscalPreview() {
           if (config.enableFiscalPreview === false) return false;
           return FISCAL_PREVIEW_DOCUMENT_TYPES.has(this.documentType());
+        },
+
+        supportsLineImport() {
+          return LINE_IMPORT_DOCUMENT_TYPES.has(this.documentType());
         },
 
         buildFiscalPayload() {
@@ -706,7 +794,196 @@
 
         serializedTaxSummary() {
           return JSON.stringify(this.taxCharges.summary || {});
-        }
+        },
+
+        async openImportModal() {
+          if (!this.supportsLineImport()) return;
+          this.importModal.doctype = this.documentType();
+          this.importModal.schema = null;
+          this.importModal.pastedText = "";
+          this.importModal.parsedRows = [];
+          this.importModal.errors = [];
+          this.importModal.isValidated = false;
+
+          try {
+            const response = await fetch(
+              `/api/line-import/schema?doctype=${this.importModal.doctype}`,
+              { credentials: "same-origin" }
+            );
+            if (response.ok) {
+              this.importModal.schema = await response.json();
+              const modalEl = document.getElementById("modalImportLines");
+              if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+          } catch (err) {
+            console.error("Error fetching import schema:", err);
+          }
+        },
+
+        onPasteAreaInput() {
+          this.importModal.isValidated = false;
+          this.parsePastedText();
+        },
+
+        parsePastedText() {
+          const text = this.importModal.pastedText.trim();
+          if (!text) {
+            this.importModal.parsedRows = [];
+            return;
+          }
+
+          const lines = text.split(/\r?\n/);
+          const rows = lines.map((line) => line.split("\t"));
+          this.importModal.parsedRows = mapImportedRows(rows, this.importModal.schema);
+        },
+
+        async validateImport() {
+          this.importModal.validating = true;
+          this.importModal.errors = [];
+
+          const csrfInput = document.querySelector('input[name="csrf_token"]');
+          const csrfToken = csrfInput ? csrfInput.value : "";
+
+          try {
+            const response = await fetch("/api/line-import/validate", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+              },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                doctype: this.importModal.doctype,
+                context: {
+                  company_id: this.header.company,
+                  currency_id: this.header.currency,
+                },
+                rows: this.importModal.parsedRows,
+              }),
+            });
+
+            const data = await response.json();
+            if (data.valid) {
+              this.importModal.isValidated = true;
+              this.importModal.parsedRows = data.rows;
+            } else {
+              this.importModal.errors = data.errors || [];
+              this.importModal.isValidated = false;
+            }
+          } catch (err) {
+            this.importModal.errors = [
+              { message: "Error de conexión al validar." },
+            ];
+          } finally {
+            this.importModal.validating = false;
+          }
+        },
+
+        insertImportedLines() {
+          if (!this.importModal.isValidated) return;
+
+          // Safer placeholder clearing: if grid has only one empty row, clear it before appending
+          if (
+            this.lines.length === 1 &&
+            !this.lines[0].item_code &&
+            !this.lines[0].account &&
+            !this.lines[0].item_name &&
+            !this.lines[0].source_id
+          ) {
+            this.lines = [];
+          }
+
+          // Append-only behavior: push to existing lines
+          this.importModal.parsedRows.forEach((row) => {
+            const line = this.newLine();
+            Object.keys(row).forEach((key) => {
+              if (key in line || key === "item_id") {
+                line[key] = row[key];
+              }
+            });
+
+            // Handle specific mappings
+            if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
+            if (row.rate !== undefined) line.rate = toNumber(row.rate);
+            if (row.account !== undefined) line.account = row.account;
+
+            // Journal Entry specific mapping for debit/credit into value/rate
+            if (this.importModal.doctype === "journal_entry") {
+              const dr = toNumber(row.debit);
+              const cr = toNumber(row.credit);
+              if (dr > 0) {
+                line.rate = dr;
+                line.qty = 1;
+                line.debit = dr;
+                line.credit = 0;
+              } else if (cr > 0) {
+                line.rate = -cr;
+                line.qty = 1;
+                line.debit = 0;
+                line.credit = cr;
+              }
+            }
+
+            if (line.item_code) {
+              this.syncLineFromItem(line, true);
+            }
+            this.calcAmount(line);
+            this.lines.push(line);
+          });
+
+          if (!this.lines.length) this.addRow();
+
+          const modalEl = document.getElementById("modalImportLines");
+          if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+          this.queueTaxPreview();
+        },
+
+        async downloadTemplate() {
+          if (!this.importModal.schema) return;
+          const headers = this.importModal.schema.columns.map((c) => {
+            return c.required ? `${c.label} *` : c.label;
+          });
+          const workbook = new ExcelJS.Workbook();
+          const worksheet = workbook.addWorksheet("Plantilla");
+          worksheet.addRow(headers);
+          const buffer = await workbook.xlsx.writeBuffer();
+          const blob = new Blob(
+            [buffer],
+            { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+          );
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${this.importModal.doctype}_template.xlsx`;
+          link.click();
+          window.URL.revokeObjectURL(url);
+        },
+
+        async handleFileUpload(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          if (!/\.xlsx$/i.test(file.name || '')) {
+            this.importModal.errors = [{ message: "Solo se permiten archivos .xlsx." }];
+            this.importModal.parsedRows = [];
+            event.target.value = '';
+            return;
+          }
+
+          this.importModal.fileLoading = true;
+          this.importModal.isValidated = false;
+          this.importModal.errors = [];
+
+          try {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(await file.arrayBuffer());
+            this.importModal.parsedRows = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
+          } catch (err) {
+            console.error("Error processing XLSX:", err);
+            this.importModal.errors = [{ message: "Error al procesar el archivo XLSX." }];
+          } finally {
+            this.importModal.fileLoading = false;
+          }
+        },
       };
     });
   });

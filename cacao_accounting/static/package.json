@@ -15,7 +15,8 @@
   "homepage": "https://github.com/cacao-accounting/cacao-accounting#readme",
   "dependencies": {
     "bootstrap": "^5.3.3",
-    "bootstrap-icons": "^1.11.3"
+    "bootstrap-icons": "^1.11.3",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "chai": "^5.1.2",
