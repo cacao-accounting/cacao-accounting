@@ -157,7 +157,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         }
 
     def persist_document(self, document: Any) -> None:
-        """Persiste encabezado, asigna identificador y guarda líneas."""
+        """Persist header, assign identifier, and save document lines."""
         header = document["header"]
         database.session.add(header)
         database.session.flush()
