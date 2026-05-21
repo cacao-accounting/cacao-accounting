@@ -219,14 +219,15 @@ def download_template(record_type):
         adapter = service._get_adapter(record_type)
         template_dir = os.path.join(current_app.instance_path, "templates")
         os.makedirs(template_dir, exist_ok=True)
+        output_name = secure_filename(f"template_{record_type}.{fmt if fmt in {'xlsx', 'ods'} else 'csv'}")
 
         if fmt == "xlsx":
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.append(adapter.columns)
-            template_path = os.path.join(template_dir, f"template_{record_type}.xlsx")
+            template_path = os.path.join(template_dir, output_name)
             wb.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=f"template_{record_type}.xlsx")
+            return send_file(template_path, as_attachment=True, download_name=output_name)
 
         elif fmt == "ods":
             doc = opendocument.OpenDocumentSpreadsheet()
@@ -238,17 +239,17 @@ def download_template(record_type):
                 tc = odf_table.TableCell(valuetype="string")
                 tc.addElement(opendocument.teletype.Text(col))
                 spreadsheet.addElement(tc)
-            template_path = os.path.join(template_dir, f"template_{record_type}.ods")
+            template_path = os.path.join(template_dir, output_name)
             doc.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=f"template_{record_type}.ods")
+            return send_file(template_path, as_attachment=True, download_name=output_name)
 
         else:
             # Default to CSV
             content = ",".join(adapter.columns)
-            template_path = os.path.join(template_dir, f"template_{record_type}.csv")
+            template_path = os.path.join(template_dir, output_name)
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(content)
-            return send_file(template_path, as_attachment=True, download_name=f"template_{record_type}.csv")
+            return send_file(template_path, as_attachment=True, download_name=output_name)
 
     except Exception as e:
         flash(str(e), "danger")
