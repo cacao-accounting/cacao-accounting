@@ -164,10 +164,11 @@
   }
 
   function normalizeImportHeader(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s*\*+\s*$/, '');
+    var header = String(value || '').trim().toLowerCase();
+    while (header.endsWith('*')) {
+      header = header.slice(0, -1).trimEnd();
+    }
+    return header;
   }
 
   function findImportColumnIndex(headers, column) {
