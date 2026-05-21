@@ -103,7 +103,7 @@ class BudgetReportService:
             BudgetLine.business_unit_id,
             BudgetLine.project_id,
             BudgetLine.period_id,
-            BudgetLine.amount
+            BudgetLine.amount,
         ).filter(BudgetLine.budget_id == budget_id, BudgetLine.period_id.in_(period_range_ids))
 
         if cost_center_id:
@@ -126,7 +126,7 @@ class BudgetReportService:
                 GLEntry.accounting_period_id,
                 Accounts.classification,
                 func.sum(GLEntry.debit).label("debit"),
-                func.sum(GLEntry.credit).label("credit")
+                func.sum(GLEntry.credit).label("credit"),
             )
             .join(Accounts, GLEntry.account_id == Accounts.id)
             .filter(
@@ -149,7 +149,7 @@ class BudgetReportService:
             GLEntry.unit_code,
             GLEntry.project_code,
             GLEntry.accounting_period_id,
-            Accounts.classification
+            Accounts.classification,
         ).all()
 
         # Mapeos auxiliares (cc_map/u_map/p_map already built above for filter translation)
@@ -219,34 +219,42 @@ class BudgetReportService:
             total_budget += budget_val
             total_actual += actual_val
 
-            rows.append(ReportRow(values={
-                "period_group": g_name,
-                "account_code": acc.code if acc else "",
-                "account_name": acc.name if acc else "",
-                "cost_center": cc_names.get(cc_id, ""),
-                "business_unit": u_names.get(u_id, ""),
-                "project": p_names.get(proj_id, ""),
-                "budget": budget_val,
-                "actual": actual_val,
-                "variance": variance,
-                "variance_pct": (variance / budget_val * 100) if budget_val != 0 else None
-            }))
+            rows.append(
+                ReportRow(
+                    values={
+                        "period_group": g_name,
+                        "account_code": acc.code if acc else "",
+                        "account_name": acc.name if acc else "",
+                        "cost_center": cc_names.get(cc_id, ""),
+                        "business_unit": u_names.get(u_id, ""),
+                        "project": p_names.get(proj_id, ""),
+                        "budget": budget_val,
+                        "actual": actual_val,
+                        "variance": variance,
+                        "variance_pct": (variance / budget_val * 100) if budget_val != 0 else None,
+                    }
+                )
+            )
 
         rows.sort(key=lambda x: (x.values["period_group"], x.values["account_code"]))
 
         columns = [
-            "period_group", "account_code", "account_name", "cost_center",
-            "business_unit", "project", "budget", "actual", "variance", "variance_pct",
+            "period_group",
+            "account_code",
+            "account_name",
+            "cost_center",
+            "business_unit",
+            "project",
+            "budget",
+            "actual",
+            "variance",
+            "variance_pct",
         ]
         return PaginatedReport(
             rows=rows,
-            totals={
-                "budget": total_budget,
-                "actual": total_actual,
-                "variance": total_actual - total_budget
-            },
+            totals={"budget": total_budget, "actual": total_actual, "variance": total_actual - total_budget},
             columns=columns,
-            ledger_currency=budget.currency_id
+            ledger_currency=budget.currency_id,
         )
 
     def _get_period_groupings(self, periods: List[AccountingPeriod], granularity: str) -> Dict[str, List[str]]:

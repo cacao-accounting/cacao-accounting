@@ -206,26 +206,71 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines[1].qty, 2);
   });
 
-  it('only enables line import for supported doctypes', function () {
+  it('enables line import for operational doctypes', function () {
     const create = loadTransactionForm();
-    const supported = create({
-      formKey: 'purchases.purchase_order',
-      items: [],
-      uoms: [],
-      defaultRows: 1,
+    [
+      'purchases.purchase_request',
+      'purchases.purchase_quotation',
+      'purchases.supplier_quotation',
+      'purchases.purchase_order',
+      'purchases.purchase_receipt',
+      'purchases.purchase_invoice',
+      'sales.sales_request',
+      'sales.sales_quotation',
+      'sales.sales_order',
+      'sales.delivery_note',
+      'sales.sales_invoice',
+      'inventory.stock_entry',
+    ].forEach((formKey) => {
+      const supported = create({
+        formKey,
+        items: [],
+        uoms: [],
+        defaultRows: 1,
+      });
+      supported.init();
+      assert.strictEqual(supported.supportsLineImport(), true, formKey);
     });
-    supported.init();
 
     const unsupported = create({
-      formKey: 'sales.delivery_note',
+      formKey: 'sales.customer',
       items: [],
       uoms: [],
       defaultRows: 1,
     });
     unsupported.init();
-
-    assert.strictEqual(supported.supportsLineImport(), true);
     assert.strictEqual(unsupported.supportsLineImport(), false);
+  });
+
+  it('adds same-document update sources to operational doctypes', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_order',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      availableSourceTypes: [
+        { value: 'purchase_request', label: 'Solicitud de Compra' },
+      ],
+    });
+    component.init();
+
+    assert.deepStrictEqual(
+      component.availableSourceTypes.map((sourceType) => sourceType.value),
+      ['purchase_order', 'purchase_request']
+    );
+
+    const firstDocument = create({
+      formKey: 'sales.sales_request',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    firstDocument.init();
+    assert.deepStrictEqual(
+      firstDocument.availableSourceTypes.map((sourceType) => sourceType.value),
+      ['sales_request']
+    );
   });
 
   it('opens line detail with existing analytical values and saves edits back to the row', function () {

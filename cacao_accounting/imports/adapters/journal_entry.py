@@ -5,6 +5,9 @@
 
 from datetime import date
 from typing import List, Dict, Any
+from sqlalchemy import or_, select
+
+from cacao_accounting.database import Book, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
@@ -76,7 +79,7 @@ class JournalEntryAdapter(BaseImportAdapter):
         payload = {
             "company": context.get("company_id"),
             "posting_date": document_data[0].get("fecha"),
-            "books": [context.get("accounting_book_id")] if context.get("accounting_book_id") else [],
+            "books": self._resolve_books(context),
             "naming_series_id": context.get("sequence_id"),
             "reference": document_data[0].get("document_ref"),
             "memo": f"Importación masiva: {document_data[0].get('document_ref')}",
@@ -89,3 +92,23 @@ class JournalEntryAdapter(BaseImportAdapter):
         """Persist the journal entry to the database."""
         user_id = document.get("created_by") or "admin"
         create_journal_draft(document, user_id=user_id)
+
+    def _resolve_books(self, context: Dict[str, Any]) -> list[str]:
+        """Resolve selected book or all active company books when none is selected."""
+        selected_book = context.get("accounting_book_id")
+        if selected_book:
+            return [str(selected_book)]
+
+        company_id = context.get("company_id")
+        if not company_id:
+            return []
+
+        books = database.session.execute(
+            select(Book)
+            .where(
+                Book.entity == company_id,
+                or_(Book.status == "activo", Book.status.is_(None)),
+            )
+            .order_by(Book.is_primary.desc(), Book.code)
+        ).scalars()
+        return [book.code for book in books if book.code]

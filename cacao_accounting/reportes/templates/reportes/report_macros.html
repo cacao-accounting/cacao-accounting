@@ -1,6 +1,6 @@
 {# smart_select_field: label, name, doctype, value, field_id, min_chars, filters(dict), filter_sources(list), required_filters(list) #}
 {% macro smart_select_field(label, name, doctype, value='', field_id='', min_chars=1, filters=None, filter_sources=None, required_filters=None) -%}
-<label class="form-label mb-0">
+<label class="form-label mb-0 w-100">
   {{ _(label) }}
   <div class="ca-smart-select" x-data='smartSelect({
       doctype: {{ doctype|tojson }},

@@ -191,12 +191,10 @@ def nueva_linea(budget_id):
         for a in database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
     ]
     form.cost_center_id.choices = [
-        (c.id, f"{c.code} - {c.name}")
-        for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()
+        (c.id, f"{c.code} - {c.name}") for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()
     ]
     form.period_id.choices = [
-        (p.id, p.name)
-        for p in database.session.query(AccountingPeriod).filter_by(fiscal_year_id=budget.fiscal_year_id).all()
+        (p.id, p.name) for p in database.session.query(AccountingPeriod).filter_by(fiscal_year_id=budget.fiscal_year_id).all()
     ]
     form.business_unit_id.choices = [("", "— Ninguna —")] + [
         (u.id, u.name) for u in database.session.query(Unit).filter_by(entity=budget.company).all()
@@ -253,12 +251,10 @@ def editar_linea(line_id):
         for a in database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
     ]
     form.cost_center_id.choices = [
-        (c.id, f"{c.code} - {c.name}")
-        for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()
+        (c.id, f"{c.code} - {c.name}") for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()
     ]
     form.period_id.choices = [
-        (p.id, p.name)
-        for p in database.session.query(AccountingPeriod).filter_by(fiscal_year_id=budget.fiscal_year_id).all()
+        (p.id, p.name) for p in database.session.query(AccountingPeriod).filter_by(fiscal_year_id=budget.fiscal_year_id).all()
     ]
     form.business_unit_id.choices = [("", "— Ninguna —")] + [
         (u.id, u.name) for u in database.session.query(Unit).filter_by(entity=budget.company).all()
@@ -390,9 +386,7 @@ def importar(budget_id):
 
                     from cacao_accounting.database import BudgetImportLine
 
-                    staged_lines = (
-                        database.session.query(BudgetImportLine).filter_by(import_id=import_obj.id).limit(100).all()
-                    )
+                    staged_lines = database.session.query(BudgetImportLine).filter_by(import_id=import_obj.id).limit(100).all()
 
                     return render_template(
                         "contabilidad/presupuestos/import.html",
