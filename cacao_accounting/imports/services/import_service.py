@@ -14,10 +14,22 @@ from cacao_accounting.imports.readers.xls_reader import XLSReader
 from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 from cacao_accounting.imports.readers.ods_reader import ODSReader
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
-from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
 from cacao_accounting.imports.adapters.customer import CustomerAdapter
 from cacao_accounting.imports.adapters.vendor import VendorAdapter
 from cacao_accounting.imports.adapters.chart_of_accounts import ChartOfAccountsAdapter
+from cacao_accounting.imports.adapters.transaction_documents import (
+    DeliveryNoteAdapter,
+    PurchaseInvoiceAdapter,
+    PurchaseOrderAdapter,
+    PurchaseQuotationAdapter,
+    PurchaseReceiptAdapter,
+    PurchaseRequestAdapter,
+    SalesInvoiceAdapter,
+    SalesOrderAdapter,
+    SalesQuotationAdapter,
+    SalesRequestAdapter,
+    SupplierQuotationAdapter,
+)
 from cacao_accounting.imports.utils.validation import is_period_open
 
 IMPORT_SYNC_MAX_ROWS = 100
@@ -30,10 +42,20 @@ class ImportService:
 
     ADAPTERS: Dict[str, Type] = {
         "journal_entry": JournalEntryAdapter,
-        "purchase_order": PurchaseOrderAdapter,
         "customer": CustomerAdapter,
         "vendor": VendorAdapter,
         "chart_of_accounts": ChartOfAccountsAdapter,
+        "purchase_request": PurchaseRequestAdapter,
+        "purchase_quotation": PurchaseQuotationAdapter,
+        "supplier_quotation": SupplierQuotationAdapter,
+        "purchase_order": PurchaseOrderAdapter,
+        "purchase_receipt": PurchaseReceiptAdapter,
+        "purchase_invoice": PurchaseInvoiceAdapter,
+        "sales_request": SalesRequestAdapter,
+        "sales_quotation": SalesQuotationAdapter,
+        "sales_order": SalesOrderAdapter,
+        "delivery_note": DeliveryNoteAdapter,
+        "sales_invoice": SalesInvoiceAdapter,
     }
 
     FORBIDDEN_COLUMNS = [

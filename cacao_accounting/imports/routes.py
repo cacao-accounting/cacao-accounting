@@ -19,7 +19,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from cacao_accounting.database import database, Entity, NamingSeries, Book
+from cacao_accounting.database import database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
@@ -65,15 +65,20 @@ def new():
     """Crear un nuevo lote de importación."""
     check_permission("crear")
     if request.method == "POST":
+        company_id = request.form.get("company_id")
         record_type = request.form.get("record_type")
         accounting_book_id = request.form.get("accounting_book_id") or None
+
+        if not company_id or not record_type:
+            flash("Debe seleccionar compañía y tipo de registro.", "danger")
+            return redirect(url_for("imports.new"))
 
         if record_type != "journal_entry" and accounting_book_id:
             flash("El libro contable solo se permite para comprobantes contables.", "danger")
             return redirect(url_for("imports.new"))
 
         batch = ImportBatch(
-            company_id=request.form.get("company_id"),
+            company_id=company_id,
             record_type=record_type,
             sequence_id=request.form.get("sequence_id") or None,
             accounting_book_id=accounting_book_id,
@@ -84,24 +89,41 @@ def new():
         database.session.commit()
         return redirect(url_for("imports.detail", batch_id=batch.id))
 
-    companies = Entity.query.filter_by(enabled=True).all()
-    # Simplified list of record types for now
-    record_types = [
-        {"value": "journal_entry", "label": "Comprobantes Contables"},
-        {"value": "purchase_order", "label": "Órdenes de Compra"},
-        {"value": "customer", "label": "Clientes"},
-        {"value": "vendor", "label": "Proveedores"},
-        {"value": "chart_of_accounts", "label": "Catálogo de Cuentas"},
+    record_type_groups = [
+        {
+            "label": "Source to Pay",
+            "items": [
+                {"value": "purchase_request", "label": "Solicitud de Compra"},
+                {"value": "purchase_quotation", "label": "Solicitud de Cotización"},
+                {"value": "supplier_quotation", "label": "Cotización de Proveedor"},
+                {"value": "purchase_order", "label": "Orden de Compra"},
+                {"value": "purchase_receipt", "label": "Recepción de Compra"},
+                {"value": "purchase_invoice", "label": "Factura de Compra"},
+            ],
+        },
+        {
+            "label": "Order to Cash",
+            "items": [
+                {"value": "sales_request", "label": "Pedido de Venta"},
+                {"value": "sales_quotation", "label": "Cotización de Venta"},
+                {"value": "sales_order", "label": "Orden de Venta"},
+                {"value": "delivery_note", "label": "Nota de Entrega"},
+                {"value": "sales_invoice", "label": "Factura de Venta"},
+            ],
+        },
+        {
+            "label": "Contabilidad y Maestros",
+            "items": [
+                {"value": "journal_entry", "label": "Comprobantes Contables"},
+                {"value": "chart_of_accounts", "label": "Catálogo de Cuentas"},
+                {"value": "customer", "label": "Clientes"},
+                {"value": "vendor", "label": "Proveedores"},
+            ],
+        },
     ]
-    sequences = NamingSeries.query.all()
-    books = Book.query.all()
-
     return render_template(
         "imports/new.html",
-        companies=companies,
-        record_types=record_types,
-        sequences=sequences,
-        books=books,
+        record_type_groups=record_type_groups,
     )
 
 

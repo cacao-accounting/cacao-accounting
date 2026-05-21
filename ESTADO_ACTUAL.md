@@ -1,5 +1,14 @@
 # Estado Actual del Proyecto - 2026-05-19
 
+- **Importaciones / Recuperación:** El arranque de Flask ya no registra error cuando no existen tablas de importación o no hay lotes en proceso vencidos; la recuperación solo marca como fallidos lotes reales atascados por más de cuatro horas.
+- **Importaciones / UI:** El módulo lateral de Importaciones renderiza contenido en `base.html`, muestra un estado vacío cuando no hay lotes y usa `smart-select` en orden Compañía → Tipo de registro → Serie/Secuencia filtrada; el Libro Contable solo aparece para comprobantes contables.
+- **Importaciones / Flujos Operativos:** El módulo permite crear lotes para documentos del flujo Source to Pay y Order to Cash: solicitudes, cotizaciones, órdenes, recepciones/entregas y facturas de compra/venta.
+- **Importaciones / Comprobantes Contables:** Cuando no se selecciona Libro Contable, la importación usa todos los libros activos de la compañía; seleccionar uno restringe el lote a ese libro.
+- **Transaccionales / Líneas:** Source to Pay, Order to Cash e Inventario ofrecen `Importar líneas` para carga masiva. Los documentos derivados conservan `Actualizar Elementos` desde documentos origen reales con ítems abiertos de la misma compañía y tercero.
+- **Transaccionales / Acciones:** Todos los registros de Compras, Ventas e Inventario muestran `Actualizar Elementos` e `Importar líneas`; `Actualizar Elementos` incluye registros existentes del mismo tipo documental cuando aplica.
+- **Transaccionales / Iconografía:** El macro compartido agrega iconos a los botones visibles de cabecera, grilla, modales, importación, impuestos y preferencias.
+- **Comprobante Contable / Líneas:** El comprobante manual ofrece `Importar líneas` para cuentas/débitos/créditos y no muestra `Actualizar Elementos`, ya que no maneja ítems ni documentos origen.
+- **Contabilidad / Presupuesto:** La pantalla principal de Contabilidad muestra una sección independiente **Presupuesto** para `Administrar Presupuestos` y `Real versus Presupuesto`, separada de los reportes contables generales.
 - **Politica de numeracion documental:** `document_no` es irreversible una vez emitido. Los borradores conservan su numero aunque cambien fecha, compania o serie; si se genero una numeracion incorrecta, el registro debe anularse y crearse uno nuevo para preservar consecutivos rigurosos y trazabilidad sin huecos por eliminacion fisica.
 - **MVP Fiscal (preview unificado):** Implementada matriz de comportamiento fiscal/gastos por tipo documental en `fiscal_preview_service.py`, con resolución por doctype y evento de reconocimiento.
 - **API Fiscal Unificada:** Disponible `POST /api/fiscal/preview` para cálculo/preview común consumible por formularios transaccionales.

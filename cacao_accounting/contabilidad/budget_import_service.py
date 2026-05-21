@@ -77,6 +77,7 @@ class BudgetImportService:
     def _parse_xlsx(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo XLSX usando openpyxl."""
         from openpyxl import load_workbook
+
         wb = load_workbook(io.BytesIO(file_content), data_only=True)
         ws = wb.active
         return self._matrix_to_dicts(ws.values)
@@ -84,6 +85,7 @@ class BudgetImportService:
     def _parse_xls(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo XLS usando xlrd."""
         import xlrd
+
         wb = xlrd.open_workbook(file_contents=file_content)
         ws = wb.sheet_by_index(0)
         values = []
@@ -167,8 +169,7 @@ class BudgetImportService:
 
         # Cachés
         accounts_map = {
-            a.code: a.id
-            for a in database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
+            a.code: a.id for a in database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
         }
         cc_map = {c.code: c.id for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()}
         unit_map = {u.code: u.id for u in database.session.query(Unit).filter_by(entity=budget.company).all()}
@@ -227,11 +228,17 @@ class BudgetImportService:
                             if comb in existing_lines or comb in row_combs_to_add:
                                 row_errors.append(f"Duplicado para {p_name}.")
                             else:
-                                row_lines_to_add.append({
-                                    "account_id": account_id, "cost_center_id": cc_id, "period_id": p_id,
-                                    "business_unit_id": unit_id, "project_id": project_id, "amount": amount,
-                                    "description": row.get("Descripción")
-                                })
+                                row_lines_to_add.append(
+                                    {
+                                        "account_id": account_id,
+                                        "cost_center_id": cc_id,
+                                        "period_id": p_id,
+                                        "business_unit_id": unit_id,
+                                        "project_id": project_id,
+                                        "amount": amount,
+                                        "description": row.get("Descripción"),
+                                    }
+                                )
                                 row_combs_to_add.append(comb)
                                 row_total += amount
                     except InvalidOperation:

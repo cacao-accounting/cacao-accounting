@@ -282,7 +282,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
         try:
             recover_crashed_batches()
         except Exception as e:
-            log.error("Error al recuperar lotes de importación: %s", e)
+            log.error("Error al recuperar lotes de importación: {}", e)
 
     return cacao_app
 

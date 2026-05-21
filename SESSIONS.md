@@ -1,5 +1,22 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-21 (Importaciones: recuperación silenciosa sin lotes pendientes)
+- **Solicitud:** Evitar el log de error `Error al recuperar lotes de importación` cuando no hay lotes pendientes o el esquema de importaciones aún no está inicializado.
+- **Implementación:** `recover_crashed_batches()` ahora verifica que existan las tablas requeridas, retorna `0` cuando no hay lotes vencidos y solo hace `commit` si recupera lotes reales; el log de arranque usa formato correcto de Loguru.
+- **Cobertura:** Se añadieron pruebas para arranque sin tablas, recuperación sin pendientes y marcado de un lote procesando vencido como fallido.
+- **Ajuste UI:** Las plantillas de Importaciones usan el bloque `contenido` correcto de `base.html`; el índice muestra estado vacío accionable y el formulario de nuevo lote usa `smart-select` en orden Compañía → Tipo de registro → Serie/Secuencia filtrada por compañía y registro, con Libro Contable solo para comprobantes contables.
+- **Cobertura S2P/O2C:** El selector de tipo de registro ahora agrupa Source to Pay y Order to Cash, y el servicio incorpora adaptadores transaccionales para solicitudes, cotizaciones, órdenes, recepciones/entregas y facturas de compra/venta.
+- **Comprobantes contables:** En importación, no seleccionar Libro Contable se interpreta como todos los libros activos de la compañía; si se selecciona uno, se importa solo para ese libro.
+- **Importar líneas y Actualizar Elementos:** Source to Pay, Order to Cash e Inventario muestran `Importar líneas` para carga masiva de detalle. Los documentos derivados mantienen `Actualizar Elementos` desde fuentes reales con ítems abiertos de la misma compañía y tercero; Cotización de Proveedor usa el doctype real `purchase_quotation` para traer líneas desde Solicitud de Cotización.
+- **Acciones operativas:** Todos los formularios transaccionales de Compras, Ventas e Inventario exponen ambas acciones: `Actualizar Elementos`, incluyendo registros existentes del mismo tipo documental con líneas abiertas, e `Importar líneas`.
+- **Botones con iconos:** El macro transaccional agrega iconos a las acciones visibles principales, modales de actualización/importación, detalle de línea, impuestos y preferencias de columnas.
+- **Comprobante contable manual:** El formulario de comprobantes mantiene `Importar líneas` mediante la API común de line import para cuentas/débitos/créditos, pero no muestra `Actualizar Elementos` porque sus líneas no son ítems ni se derivan de documentos operativos.
+
+## 2026-05-21 (Contabilidad: sección propia para Presupuesto)
+- **Solicitud:** Mover las entradas de administración de presupuestos y reporte Real versus Presupuesto fuera del bloque general de reportes del módulo de Contabilidad.
+- **Implementación UI:** `contabilidad.html` ahora presenta una tarjeta independiente **Presupuesto** con `Administrar Presupuestos` y `Real versus Presupuesto`; la tarjeta **Reportes del Módulo** queda reservada para reportes contables generales.
+- **Cobertura:** Se actualizó la ruta estática de `/accounting/` para verificar que la nueva sección y sus dos enlaces sigan renderizando.
+
 ## 2026-05-19 (UX fiscal: alta manual de impuestos/cargos)
 - **Solicitud:** Resolver que el bloque `Impuestos y Cargos` no tenía acción para añadir nuevos impuestos/cargos, y revisar el pendiente de prorrateo capitalizable en inventario.
 - **Implementación UI:** `transaction-form.js` y `transaction_form_macros.html` agregan acción `Añadir impuesto/cargo`, modal editable para líneas manuales, eliminación de líneas manuales y recálculo local de resumen.

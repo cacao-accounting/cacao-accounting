@@ -368,24 +368,34 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
 
 
 ALLOWED_FLOWS: dict[tuple[str, str], FlowSpec] = {
+    ("purchase_request", "purchase_request"): FlowSpec("purchase_request", "purchase_request", "reuse"),
     ("purchase_request", "purchase_quotation"): FlowSpec("purchase_request", "purchase_quotation", "quotation"),
     ("purchase_request", "purchase_order"): FlowSpec("purchase_request", "purchase_order", "order"),
+    ("purchase_quotation", "purchase_quotation"): FlowSpec("purchase_quotation", "purchase_quotation", "reuse"),
     ("purchase_quotation", "supplier_quotation"): FlowSpec("purchase_quotation", "supplier_quotation", "quotation"),
+    ("supplier_quotation", "supplier_quotation"): FlowSpec("supplier_quotation", "supplier_quotation", "reuse"),
     ("supplier_quotation", "purchase_order"): FlowSpec("supplier_quotation", "purchase_order", "order"),
+    ("purchase_order", "purchase_order"): FlowSpec("purchase_order", "purchase_order", "reuse"),
     ("purchase_order", "purchase_receipt"): FlowSpec("purchase_order", "purchase_receipt", "receipt"),
     ("purchase_order", "purchase_invoice"): FlowSpec("purchase_order", "purchase_invoice", "billing"),
+    ("purchase_receipt", "purchase_receipt"): FlowSpec("purchase_receipt", "purchase_receipt", "reuse"),
     ("purchase_receipt", "purchase_invoice"): FlowSpec("purchase_receipt", "purchase_invoice", "billing"),
     ("purchase_receipt", "stock_entry"): FlowSpec("purchase_receipt", "stock_entry", "stock"),
     ("purchase_invoice", "purchase_invoice"): FlowSpec("purchase_invoice", "purchase_invoice", "return"),
     ("purchase_invoice", "payment_entry"): FlowSpec("purchase_invoice", "payment_entry", "payment"),
+    ("sales_request", "sales_request"): FlowSpec("sales_request", "sales_request", "reuse"),
     ("sales_request", "sales_quotation"): FlowSpec("sales_request", "sales_quotation", "quotation"),
+    ("sales_quotation", "sales_quotation"): FlowSpec("sales_quotation", "sales_quotation", "reuse"),
     ("sales_quotation", "sales_order"): FlowSpec("sales_quotation", "sales_order", "order"),
+    ("sales_order", "sales_order"): FlowSpec("sales_order", "sales_order", "reuse"),
     ("sales_order", "delivery_note"): FlowSpec("sales_order", "delivery_note", "delivery"),
     ("sales_order", "sales_invoice"): FlowSpec("sales_order", "sales_invoice", "billing"),
+    ("delivery_note", "delivery_note"): FlowSpec("delivery_note", "delivery_note", "reuse"),
     ("delivery_note", "sales_invoice"): FlowSpec("delivery_note", "sales_invoice", "billing"),
     ("delivery_note", "stock_entry"): FlowSpec("delivery_note", "stock_entry", "stock"),
     ("sales_invoice", "sales_invoice"): FlowSpec("sales_invoice", "sales_invoice", "return"),
     ("sales_invoice", "payment_entry"): FlowSpec("sales_invoice", "payment_entry", "payment"),
+    ("stock_entry", "stock_entry"): FlowSpec("stock_entry", "stock_entry", "reuse"),
 }
 
 

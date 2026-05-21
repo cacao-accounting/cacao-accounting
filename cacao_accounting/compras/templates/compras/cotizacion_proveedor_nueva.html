@@ -55,7 +55,7 @@
 
   {% if from_rfq_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=request_for_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id,
          source_label="Solicitud de Cotización") }}
   {% else %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}

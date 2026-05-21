@@ -122,9 +122,9 @@
     </ul>
   </div>
 
-  {# ── Columna 3: Reportes ──────────────────────────── #}
+  {# ── Columna 3: Presupuesto ───────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
+    <h5><i class="bi bi-wallet2"></i> Presupuesto</h5>
     <ul class="ca-module-links">
 
       {% if acceso.autorizado %}
@@ -136,7 +136,22 @@
         <a href="{{ url_for('contabilidad.presupuestos.reporte') }}">Real versus Presupuesto</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
-      <hr class="my-1">
+      {% else %}
+      <li class="ca-no-access">
+        <span>Presupuesto</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+
+  {# ── Columna 4: Reportes ──────────────────────────── #}
+  <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
+    <ul class="ca-module-links">
+
+      {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('reportes.account_movement') }}">Detalle de Movimiento Contable</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>

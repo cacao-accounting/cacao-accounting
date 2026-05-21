@@ -227,6 +227,10 @@ def test_journal_new_route_renders_new_backend_form(app_ctx):
     assert "loadOnFilterChange: true" in html
     assert 'requiredFilters: ["company"]' in html
     assert 'doctype: "currency"' in html
+    assert "Importar líneas" in html
+    assert "journalImportLinesModal" in html
+    assert "/api/line-import/schema?doctype=journal_entry" in html
+    assert "Actualizar Elementos" not in html
     assert 'name="csrf_token"' in html
     assert "Buscar cuenta bancaria" not in html
     assert "/accounting/gl/new" not in html

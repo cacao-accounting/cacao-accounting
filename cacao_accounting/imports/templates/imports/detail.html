@@ -1,7 +1,10 @@
 {% extends "base.html" %}
-{% block content %}
+{% block contenido %}
 {% set acceso = permisos(modulo=id_modulo("imports"), usuario=usuario.id) %}
 <div class="container mt-4">
+    {%- if TESTING -%}
+    <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/imports/templates/imports/detail.html"></div>
+    {%- endif -%}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>{{ _("Lote de Importación") }}: {{ batch.id }}</h2>
         <div>

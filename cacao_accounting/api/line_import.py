@@ -19,11 +19,15 @@ line_import_bp = Blueprint("line_import", __name__)
 
 DOCTYPES_MODULES = {
     "purchase_request": "purchases",
+    "purchase_quotation": "purchases",
+    "supplier_quotation": "purchases",
     "purchase_order": "purchases",
     "purchase_receipt": "purchases",
     "purchase_invoice": "purchases",
+    "sales_request": "sales",
     "sales_quotation": "sales",
     "sales_order": "sales",
+    "delivery_note": "sales",
     "sales_invoice": "sales",
     "journal_entry": "accounting",
     "bank_transaction": "cash",
@@ -84,14 +88,15 @@ def validate_lines():
 
     company_id = context.get("company_id")
     if not company_id:
-        return jsonify(
-            {
-                "valid": False,
-                "errors": [
-                    {"row": None, "field": "company_id", "message": _("Compañía no especificada en el contexto.")}
-                ],
-            }
-        ), 400
+        return (
+            jsonify(
+                {
+                    "valid": False,
+                    "errors": [{"row": None, "field": "company_id", "message": _("Compañía no especificada en el contexto.")}],
+                }
+            ),
+            400,
+        )
 
     # Company and permission check
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -102,6 +107,7 @@ def validate_lines():
         return jsonify({"error": _("La compañía seleccionada no existe.")}), 400
 
     from flask_login import current_user
+
     module_name = DOCTYPES_MODULES.get(doctype, "general")
     permiso = Permisos(modulo=obtener_id_modulo_por_nombre(module_name), usuario=current_user.id)
     if not permiso.autorizado or not permiso.importar:

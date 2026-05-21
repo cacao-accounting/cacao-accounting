@@ -37,6 +37,7 @@
 - [x] Implementar proceso de `ExchangeRevaluation` (revalorizacion cambiaria de cuentas monetarias).
 
 ## UI/UX y Reportes
+- [x] Separar el submódulo de Presupuesto en una sección propia dentro de la pantalla principal de Contabilidad.
 - [ ] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
 - [ ] Filtros de busqueda en listados de Compras, Ventas y Bancos.
@@ -54,6 +55,14 @@
 - [ ] Añadir soporte transaccional persistido para documentos específicos de importación cuando exista un doctype dedicado para `import_landed_cost_confirmed`.
 
 ## Pendientes Generales
+- [x] Evitar logs de error durante el arranque cuando la recuperación de importaciones no tiene lotes pendientes que procesar.
+- [x] Corregir el módulo lateral de Importaciones para renderizar contenido y usar `smart-select` en campos de contexto.
+- [x] Exponer en Importaciones los tipos de registro del flujo Source to Pay y Order to Cash.
+- [x] Interpretar ausencia de Libro Contable al importar comprobantes como todos los libros activos de la compañía.
+- [x] Mantener `Importar líneas` disponible para Source to Pay, Order to Cash e Inventario y conservar `Actualizar Elementos` desde documentos origen reales con ítems abiertos.
+- [x] Mostrar `Actualizar Elementos` e `Importar líneas` en todos los registros transaccionales de Compras, Ventas e Inventario, incluyendo fuentes del mismo tipo documental.
+- [x] Agregar iconos a los botones visibles del macro transaccional compartido y reportes operativos tocados.
+- [x] Mantener `Importar líneas` en comprobantes contables sin mostrar `Actualizar Elementos`.
 - [ ] Implementar mas reportes operativos usando el nuevo framework.
 - [ ] Seguir migrando formularios operativos al patron comun sin tocar todavia pagos bancarios ni documentos con origen complejo sin cobertura funcional suficiente.
 - [ ] Ampliar catalogos impositivos para otros paises.
