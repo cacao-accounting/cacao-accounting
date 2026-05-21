@@ -19,3 +19,8 @@ echo Testing code with pytest
 echo
 echo
 CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -v -s --exitfirst --slow=True
+echo
+echo Testing code with npm
+echo
+echo
+npm test
