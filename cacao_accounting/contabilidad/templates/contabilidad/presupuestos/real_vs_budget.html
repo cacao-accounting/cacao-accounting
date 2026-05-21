@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from "reportes/report_macros.html" import smart_select_field %}
+
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Real versus Presupuesto") }}</li>
+  </ol>
+</nav>
+
+<div x-data="{ collapsed: false }" class="ca-report-layout">
+  <aside class="ca-report-filters ca-card" :class="{ 'ca-report-filters-collapsed': collapsed }">
+    <div class="ca-card-header d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title mb-0">{{ _("Filtros") }}</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapsed = !collapsed">
+        <span x-show="!collapsed">{{ _("Colapsar") }}</span>
+        <span x-show="collapsed">{{ _("Expandir") }}</span>
+      </button>
+    </div>
+    <div class="p-3" x-show="!collapsed">
+      <form method="post" class="d-grid gap-2">
+        {{ smart_select_field("Compañía", "company", "company", filters.company or '', "report-company") }}
+        {{ smart_select_field("Año Fiscal", "fiscal_year_id", "fiscal_year", filters.fiscal_year_id or '', "report-fiscal-year", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Libro Contable", "ledger_id", "book", filters.ledger_id or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Presupuesto", "budget_id", "budget", filters.budget_id or '', "report-budget", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}, "ledger_id": {"selector": "#report-ledger"}, "status": "approved"}, ["#report-company", "#report-fiscal-year", "#report-ledger"], ["company", "fiscal_year_id", "ledger_id"]) }}
+
+        <hr class="my-2">
+        <h6>{{ _("Rango de Periodos") }}</h6>
+        {{ smart_select_field("Desde", "period_from_id", "accounting_period_id", filters.period_from_id or '', "report-period-from", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
+        {{ smart_select_field("Hasta", "period_to_id", "accounting_period_id", filters.period_to_id or '', "report-period-to", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
+
+        <hr class="my-2">
+        <h6>{{ _("Rango de Cuentas") }}</h6>
+        {{ smart_select_field("Cuenta Desde", "account_from", "account_code", filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Cuenta Hasta", "account_to", "account_code", filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+
+        <hr class="my-2">
+        <h6>{{ _("Dimensiones") }}</h6>
+        {{ smart_select_field("Centro de Costos", "cost_center_id", "cost_center", filters.cost_center_id or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Unidad de Negocio", "business_unit_id", "unit", filters.business_unit_id or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Proyecto", "project_id", "project", filters.project_id or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+
+        <label class="form-label mb-0 mt-2">{{ _("Vista") }}</label>
+        <select name="granularity" class="form-select">
+          <option value="month" {{ 'selected' if filters.granularity == 'month' }}>{{ _("Mensual") }}</option>
+          <option value="quarter" {{ 'selected' if filters.granularity == 'quarter' }}>{{ _("Trimestral") }}</option>
+          <option value="semester" {{ 'selected' if filters.granularity == 'semester' }}>{{ _("Semestral") }}</option>
+          <option value="year" {{ 'selected' if filters.granularity == 'year' }}>{{ _("Anual") }}</option>
+        </select>
+
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button class="btn btn-primary" type="submit">{{ _("Generar Reporte") }}</button>
+          <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar") }}</a>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <section class="ca-report-results ca-card">
+    <div class="ca-card-header d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title mb-0">{{ _("Real versus Presupuesto") }}</h5>
+    </div>
+
+    {% if report_data %}
+    <div class="ca-report-table-wrapper">
+      <table class="ca-table ca-report-table">
+        <thead>
+          <tr>
+            <th>{{ _("Período") }}</th>
+            <th>{{ _("Cuenta") }}</th>
+            <th>{{ _("Nombre de Cuenta") }}</th>
+            <th>{{ _("Centro de Costo") }}</th>
+            <th>{{ _("U. Negocio") }}</th>
+            <th>{{ _("Proyecto") }}</th>
+            <th class="text-end">{{ _("Real") }}</th>
+            <th class="text-end">{{ _("Presupuesto") }}</th>
+            <th class="text-end">{{ _("Variación") }}</th>
+            <th class="text-end">{{ _("Var %") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report_data.rows %}
+          <tr>
+            <td>{{ row.values.period_group }}</td>
+            <td>{{ row.values.account_code }}</td>
+            <td>{{ row.values.account_name }}</td>
+            <td>{{ row.values.cost_center }}</td>
+            <td>{{ row.values.business_unit }}</td>
+            <td>{{ row.values.project }}</td>
+            <td class="text-end">{{ format_money_with_currency(row.values.actual) }}</td>
+            <td class="text-end">{{ format_money_with_currency(row.values.budget) }}</td>
+            <td class="text-end text-{{ 'danger' if row.values.variance > 0 else 'success' }}">
+              {{ format_money_with_currency(row.values.variance) }}
+            </td>
+            <td class="text-end">
+              {% if row.values.variance_pct is not none %}
+              {{ "{:,.2f}%".format(row.values.variance_pct) }}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="ca-report-totals-sticky">
+      <div class="ca-total-item">
+        <span class="ca-total-label">{{ _("Total Real") }}</span>
+        <strong class="ca-total-value">{{ format_money_with_currency(report_data.totals.actual) }}</strong>
+      </div>
+      <div class="ca-total-item">
+        <span class="ca-total-label">{{ _("Total Presupuesto") }}</span>
+        <strong class="ca-total-value">{{ format_money_with_currency(report_data.totals.budget) }}</strong>
+      </div>
+      <div class="ca-total-item">
+        <span class="ca-total-label">{{ _("Variación Total") }}</span>
+        <strong class="ca-total-value text-{{ 'danger' if report_data.totals.variance > 0 else 'success' }}">
+          {{ format_money_with_currency(report_data.totals.variance) }}
+        </strong>
+      </div>
+    </div>
+    {% else %}
+    <div class="p-5 text-center text-muted">
+      <i class="bi bi-info-circle fs-2"></i>
+      <p class="mt-2">{{ _("Seleccione los filtros y presione 'Generar Reporte'.") }}</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<style>
+  .ca-report-layout{display:flex;gap:1rem;min-height:70vh}
+  .ca-report-filters{width:300px;position:sticky;top:88px;align-self:flex-start;max-height:calc(100vh - 110px);overflow-y:auto;flex-shrink:0}
+  .ca-report-filters-collapsed{width:auto}
+  .ca-report-results{flex:1;min-width:0;display:flex;flex-direction:column}
+  .ca-report-table-wrapper{overflow:auto;max-height:calc(100vh - 250px)}
+  .ca-report-totals-sticky{position:sticky;bottom:0;display:flex;gap:2rem;padding:.75rem 1rem;border-top:1px solid var(--ca-border,#dee2e6);background:var(--ca-bg,#fff)}
+  .ca-total-item{display:flex;flex-direction:column}
+  .ca-total-label{font-size:.75rem;color:#6c757d}
+</style>
+{% endblock %}

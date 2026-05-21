@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.listar') }}" class="link-dark">{{ _("Presupuestos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Editar") if budget else _("Nuevo") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-wallet2 me-2"></i>{{ _("Editar Presupuesto") if budget else _("Nuevo Presupuesto") }}</h4>
+</div>
+
+<div class="ca-card mt-3" style="max-width: 800px;">
+  <form method="post" class="p-4">
+    {{ form.hidden_tag() }}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Compañía") }}</label>
+        {{ form.company(class="form-select", id="budget-company") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Año Fiscal") }}</label>
+        {% from "reportes/report_macros.html" import smart_select_field %}
+        {{ smart_select_field("Año Fiscal", "fiscal_year_id", "fiscal_year", form.fiscal_year_id.data, "budget-fiscal-year", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Libro Contable") }}</label>
+        {{ smart_select_field("Libro Contable", "ledger_id", "book", form.ledger_id.data, "budget-ledger", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Moneda") }}</label>
+        {{ form.currency_id(class="form-select") }}
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">{{ _("Código") }}</label>
+        {{ form.budget_code(class="form-control", placeholder="ej. PPTO-2026-BASE") }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">{{ _("Nombre") }}</label>
+        {{ form.name(class="form-control") }}
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">{{ _("Descripción") }}</label>
+        {{ form.description(class="form-control", rows=3) }}
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> {{ _("Guardar") }}
+      </button>
+      <a href="{{ url_for('contabilidad.presupuestos.listar') }}" class="btn btn-outline-secondary">
+        {{ _("Cancelar") }}
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}
