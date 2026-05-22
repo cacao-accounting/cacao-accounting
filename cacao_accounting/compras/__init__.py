@@ -1372,7 +1372,13 @@ def compras_orden_compra_nuevo():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
+    from_rfq_id = request.args.get("from_rfq") or request.form.get("from_rfq")
+    from_supplier_quotation_id = request.args.get("from_supplier_quotation") or request.form.get("from_supplier_quotation")
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    rfq_origen = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else None
+    supplier_quotation_origen = (
+        database.session.get(SupplierQuotation, from_supplier_quotation_id) if from_supplier_quotation_id else None
+    )
     titulo = "Nueva Orden de Compra - " + APPNAME
     if request.method == "POST":
         try:
@@ -1415,13 +1421,23 @@ def compras_orden_compra_nuevo():
         "columns": get_column_preferences(current_user.id, "purchases.purchase_order"),
         "availableSourceTypes": [
             {"value": "purchase_request", "label": _("Solicitud de Compra")},
+            {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
         ],
-        "initialSourceType": "purchase_request" if from_request_id else "",
+        "initialSourceType": (
+            "purchase_request"
+            if from_request_id
+            else "purchase_quotation"
+            if from_rfq_id
+            else "supplier_quotation"
+            if from_supplier_quotation_id
+            else ""
+        ),
     }
-    if solicitud_origen:
+    source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
+    if source_origen:
         transaction_config["initialHeader"] = {
-            "company": solicitud_origen.company or "",
+            "company": source_origen.company or "",
             "posting_date": str(date.today()),
         }
     return render_template(
@@ -1429,7 +1445,11 @@ def compras_orden_compra_nuevo():
         form=formulario,
         titulo=titulo,
         from_request_id=from_request_id,
+        from_rfq_id=from_rfq_id,
+        from_supplier_quotation_id=from_supplier_quotation_id,
         solicitud_origen=solicitud_origen,
+        rfq_origen=rfq_origen,
+        supplier_quotation_origen=supplier_quotation_origen,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,

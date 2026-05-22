@@ -42,12 +42,6 @@
             url_for('compras.compras_orden_compra_cancel', order_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Recibo de Compra", url_for('compras.compras_recepcion_nuevo', from_order=registro.id)),
-              ("Factura de Compra", url_for('compras.compras_factura_compra_nuevo', from_order=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_orden_compra_lista'),
             url_for('compras.compras_orden_compra_nuevo')) }}

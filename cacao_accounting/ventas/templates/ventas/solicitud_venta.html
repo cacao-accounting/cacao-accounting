@@ -35,11 +35,6 @@
             url_for('ventas.ventas_pedido_venta_cancel', request_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Cotización", url_for('ventas.ventas_cotizacion_nueva', from_request=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_pedido_venta_lista'),
             url_for('ventas.ventas_pedido_venta_nuevo')) }}

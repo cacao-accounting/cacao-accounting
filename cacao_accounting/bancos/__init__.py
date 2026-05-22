@@ -44,7 +44,9 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
+    PurchaseOrder,
     ReconciliationItem,
+    SalesOrder,
     SalesInvoice,
     SeriesExternalCounterMap,
     User,
@@ -716,7 +718,16 @@ def _invoice_outstanding(invoice) -> Decimal:
     return compute_outstanding_amount(invoice)
 
 
-def _payment_source_rows(purchase_invoice_ids: list[str], sales_invoice_ids: list[str]) -> list[dict]:
+def _payment_source_rows(
+    purchase_invoice_ids: list[str],
+    sales_invoice_ids: list[str],
+    purchase_order_ids: list[str],
+    sales_order_ids: list[str],
+    purchase_credit_note_ids: list[str],
+    purchase_debit_note_ids: list[str],
+    sales_credit_note_ids: list[str],
+    sales_debit_note_ids: list[str],
+) -> list[dict]:
     """Construye las filas origen para el formulario de pago."""
     rows = []
     for invoice_id in purchase_invoice_ids:
@@ -741,7 +752,92 @@ def _payment_source_rows(purchase_invoice_ids: list[str], sales_invoice_ids: lis
                     "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
                 }
             )
+    for order_id in purchase_order_ids:
+        order = database.session.get(PurchaseOrder, order_id)
+        if order:
+            rows.append(
+                {
+                    "reference_type": "purchase_order",
+                    "label": _("Orden de Compra"),
+                    "document": order,
+                    "url": url_for("compras.compras_orden_compra", order_id=order.id),
+                }
+            )
+    for order_id in sales_order_ids:
+        order = database.session.get(SalesOrder, order_id)
+        if order:
+            rows.append(
+                {
+                    "reference_type": "sales_order",
+                    "label": _("Orden de Venta"),
+                    "document": order,
+                    "url": url_for("ventas.ventas_orden_venta", order_id=order.id),
+                }
+            )
+    for invoice_id in purchase_credit_note_ids:
+        invoice = database.session.get(PurchaseInvoice, invoice_id)
+        if invoice and invoice.document_type == "purchase_credit_note":
+            rows.append(
+                {
+                    "reference_type": "purchase_invoice",
+                    "flow_source_type": "purchase_credit_note",
+                    "label": _("Nota de Crédito de Compra"),
+                    "document": invoice,
+                    "url": url_for("compras.compras_factura_compra", invoice_id=invoice.id),
+                }
+            )
+    for invoice_id in purchase_debit_note_ids:
+        invoice = database.session.get(PurchaseInvoice, invoice_id)
+        if invoice and invoice.document_type == "purchase_debit_note":
+            rows.append(
+                {
+                    "reference_type": "purchase_invoice",
+                    "flow_source_type": "purchase_debit_note",
+                    "label": _("Nota de Débito de Compra"),
+                    "document": invoice,
+                    "url": url_for("compras.compras_factura_compra", invoice_id=invoice.id),
+                }
+            )
+    for invoice_id in sales_credit_note_ids:
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        if invoice and invoice.document_type == "sales_credit_note":
+            rows.append(
+                {
+                    "reference_type": "sales_invoice",
+                    "flow_source_type": "sales_credit_note",
+                    "label": _("Nota de Crédito de Venta"),
+                    "document": invoice,
+                    "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
+                }
+            )
+    for invoice_id in sales_debit_note_ids:
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        if invoice and invoice.document_type == "sales_debit_note":
+            rows.append(
+                {
+                    "reference_type": "sales_invoice",
+                    "flow_source_type": "sales_debit_note",
+                    "label": _("Nota de Débito de Venta"),
+                    "document": invoice,
+                    "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
+                }
+            )
     return rows
+
+
+def _payment_profile_from_source_type(flow_source_type: str) -> tuple[str, str]:
+    """Resuelve party_type/payment_type según el tipo documental origen."""
+    mapping = {
+        "purchase_invoice": ("supplier", "pay"),
+        "sales_invoice": ("customer", "receive"),
+        "purchase_order": ("supplier", "pay"),
+        "sales_order": ("customer", "receive"),
+        "purchase_credit_note": ("supplier", "receive"),
+        "purchase_debit_note": ("supplier", "pay"),
+        "sales_credit_note": ("customer", "pay"),
+        "sales_debit_note": ("customer", "receive"),
+    }
+    return mapping.get(flow_source_type, ("customer", "receive"))
 
 
 def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = None) -> Decimal:
@@ -804,8 +900,9 @@ def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = N
         )
         database.session.add(reference)
         database.session.flush()
+        relation_source_type = (getattr(invoice, "document_type", None) or reference_type).strip().lower()
         create_document_relation(
-            source_type=reference_type,
+            source_type=relation_source_type,
             source_id=reference_id,
             source_item_id=None,
             target_type="payment_entry",
@@ -952,18 +1049,34 @@ def bancos_pago_nuevo():
 
     from_purchase_invoice_ids = request.values.getlist("from_purchase_invoice")
     from_sales_invoice_ids = request.values.getlist("from_sales_invoice")
-    facturas_origen = _payment_source_rows(from_purchase_invoice_ids, from_sales_invoice_ids)
+    from_purchase_order_ids = request.values.getlist("from_purchase_order")
+    from_sales_order_ids = request.values.getlist("from_sales_order")
+    from_purchase_credit_note_ids = request.values.getlist("from_purchase_credit_note")
+    from_purchase_debit_note_ids = request.values.getlist("from_purchase_debit_note")
+    from_sales_credit_note_ids = request.values.getlist("from_sales_credit_note")
+    from_sales_debit_note_ids = request.values.getlist("from_sales_debit_note")
+    source_rows = _payment_source_rows(
+        from_purchase_invoice_ids,
+        from_sales_invoice_ids,
+        from_purchase_order_ids,
+        from_sales_order_ids,
+        from_purchase_credit_note_ids,
+        from_purchase_debit_note_ids,
+        from_sales_credit_note_ids,
+        from_sales_debit_note_ids,
+    )
 
     initial_payment = {}
-    if facturas_origen:
-        first = facturas_origen[0]["document"]
-        initial_payment = {
-            "company": first.company,
-            "party_id": getattr(first, "supplier_id", None) or getattr(first, "customer_id", None),
-            "party_type": "supplier" if facturas_origen[0]["reference_type"] == "purchase_invoice" else "customer",
-            "payment_type": "pay" if facturas_origen[0]["reference_type"] == "purchase_invoice" else "receive",
-            "paid_amount": float(sum((compute_outstanding_amount(row["document"]) for row in facturas_origen), Decimal("0"))),
-            "lines": [
+    if source_rows:
+        first_row = source_rows[0]
+        first = first_row["document"]
+        first_flow_source_type = first_row.get("flow_source_type", first_row["reference_type"])
+        party_type, payment_type = _payment_profile_from_source_type(first_flow_source_type)
+        initial_amount = Decimal("0")
+        lines: list[dict] = []
+        if first_row["reference_type"] in ("purchase_invoice", "sales_invoice"):
+            initial_amount = sum((compute_outstanding_amount(row["document"]) for row in source_rows), Decimal("0"))
+            lines = [
                 {
                     "reference_type": row["reference_type"],
                     "reference_id": row["document"].id,
@@ -972,8 +1085,18 @@ def bancos_pago_nuevo():
                     "outstanding_amount": float(compute_outstanding_amount(row["document"])),
                     "allocated_amount": float(compute_outstanding_amount(row["document"])),
                 }
-                for row in facturas_origen
-            ],
+                for row in source_rows
+            ]
+        else:
+            initial_amount = sum((Decimal(str(row["document"].grand_total or 0)) for row in source_rows), Decimal("0"))
+
+        initial_payment = {
+            "company": first.company,
+            "party_id": getattr(first, "supplier_id", None) or getattr(first, "customer_id", None),
+            "party_type": party_type,
+            "payment_type": payment_type,
+            "paid_amount": float(initial_amount),
+            "lines": lines,
         }
 
     transaction_config = {

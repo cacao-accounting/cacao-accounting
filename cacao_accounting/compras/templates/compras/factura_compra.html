@@ -42,13 +42,6 @@
             url_for('compras.compras_factura_compra_cancel', invoice_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Pago", url_for('bancos.bancos_pago_nuevo', from_purchase_invoice=registro.id)),
-              ("Nota de Crédito", url_for('compras.compras_factura_compra_nuevo', document_type='purchase_credit_note', from_invoice=registro.id)),
-              ("Nota de Débito", url_for('compras.compras_factura_compra_nuevo', document_type='purchase_debit_note', from_invoice=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_factura_compra_lista'),
             url_for('compras.compras_factura_compra_nuevo')) }}
@@ -75,6 +68,6 @@
 ) }}
 
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
-{{ macros.document_flow_trace("purchase_invoice", registro) }}
+{{ macros.document_flow_trace(registro.document_type or "purchase_invoice", registro) }}
 
 {% endblock %}

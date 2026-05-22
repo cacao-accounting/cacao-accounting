@@ -35,11 +35,6 @@
             url_for('compras.compras_cotizacion_proveedor_cancel', quotation_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Orden de Compra", url_for('compras.compras_orden_compra_nuevo', from_supplier_quotation=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_cotizacion_proveedor_lista'),
             url_for('compras.compras_cotizacion_proveedor_nueva')) }}
