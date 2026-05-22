@@ -23,6 +23,9 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
   {{ form.csrf_token }}
+  {% if from_request_id %}
+  <input type="hidden" name="from_request" value="{{ from_request_id }}">
+  {% endif %}
   {% if from_quotation_id %}
   <input type="hidden" name="from_quotation" value="{{ from_quotation_id }}">
   {% endif %}
@@ -49,10 +52,14 @@
     </div>
   </div>
 
-  {% if from_quotation_id %}
+    {% if from_quotation_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=sales_quotation&target_type=sales_order&source_id=" ~ from_quotation_id,
          source_label="Cotización") }}
+    {% elif from_request_id %}
+    {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+      source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_order&source_id=" ~ from_request_id,
+      source_label="Pedido de Venta") }}
   {% else %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
   {% endif %}

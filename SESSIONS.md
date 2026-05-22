@@ -1,5 +1,50 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-22 (Eliminacion de remanente legacy en acciones Crear)
+- **Solicitud:** No dejar implementacion legacy tras la unificacion de acciones `Crear` basada en `document_flow`.
+- **Limpieza final:** Se elimino la macro obsoleta `crear_dropdown` de `cacao_accounting/templates/macros.html` al no tener llamadas activas en templates.
+- **Resultado:** Todas las acciones de creacion en detalles quedan centralizadas exclusivamente en `document_flow_trace` + `create_actions` del backend.
+- **Verificacion:** Busqueda global en templates sin coincidencias de `crear_dropdown(` y sin errores de plantilla en `macros.html`.
+
+## 2026-05-21 (Unificación UI `Crear` basada 100% en document_flow)
+- **Solicitud:** Eliminar acciones `Crear` hardcodeadas en vistas de detalle para evitar divergencia UI/backend.
+- **UI Compras/Ventas:** Se removieron dropdowns manuales `macros.crear_dropdown(...)` en detalles transaccionales de Solicitud/Cotización/Orden/Recepción/Factura, manteniendo workflow y navegación.
+- **Estrategia unificada:** Las acciones de creación quedan centralizadas en `document_flow_trace`, consumiendo exclusivamente `create_actions` del backend.
+- **Consistencia de notas:** Los detalles de factura/nota conservan trazabilidad dinámica por `registro.document_type`, evitando mezclar acciones entre factura normal y notas.
+- **Verificación:** Regresión en verde: `tests/test_03webactions.py` + `tests/test_01vistas.py` (`20 passed`).
+
+## 2026-05-21 (Expansión notas -> pago/reembolso + alineación matriz)
+- **Solicitud:** Completar pares faltantes `credit/debit notes -> payment_entry`, con prefill operativo en Bancos y alinear documentación de `relaciones.md`.
+- **Flujo documental:** `registry.py` agrega tipos documentales explícitos `purchase_credit_note`, `purchase_debit_note`, `sales_credit_note`, `sales_debit_note` con acciones de `Crear` hacia `payment_entry`.
+- **Contrato de relaciones:** Se incorporan pares `purchase_credit_note -> payment_entry`, `purchase_debit_note -> payment_entry`, `sales_credit_note -> payment_entry`, `sales_debit_note -> payment_entry` en `ALLOWED_FLOWS`.
+- **Bancos / Prefill:** `bancos_pago_nuevo` ahora acepta `from_purchase_credit_note`, `from_purchase_debit_note`, `from_sales_credit_note`, `from_sales_debit_note` y define `payment_type`/`party_type` según tipo de nota.
+- **Trazabilidad:** Al registrar referencias de pago, `create_document_relation` usa `invoice.document_type` real (nota vs factura) para evitar pérdida semántica en flujo.
+- **UI detalle:** Facturas/Notas de Compra y Venta ahora usan `registro.document_type` en `document_flow_trace` y muestran acciones de pago/reembolso consistentes por tipo documental.
+- **Matriz funcional:** `modulos/relaciones.md` se actualiza para reflejar estado implementado y decisión de modelar devolución de venta operativa sobre `sales_credit_note`.
+- **Verificación:** Pruebas en verde: `tests/test_05document_flow.py` (`17 passed`) y `tests/test_03webactions.py` (`19 passed`).
+
+## 2026-05-21 (Expansión create_actions/ALLOWED_FLOWS: anticipos y notas desde recepción)
+- **Solicitud:** Iniciar implementación de la expansión pendiente de pares en la matriz de `modulos/relaciones.md`.
+- **Flujo documental:** `registry.py` incorpora acciones `Crear Pago` desde Orden de Compra y Orden de Venta, además de `Crear Nota de Crédito` y `Crear Nota de Débito` desde Recepción de Compra.
+- **Contrato de relaciones:** Se agregaron pares `purchase_order -> payment_entry`, `sales_order -> payment_entry`, `purchase_receipt -> purchase_credit_note` y `purchase_receipt -> purchase_debit_note` en `ALLOWED_FLOWS`.
+- **Backend Bancos:** `bancos_pago_nuevo` ahora acepta origen desde `from_purchase_order` y `from_sales_order` para prefill básico de pago/anticipo.
+- **Cobertura:** `tests/test_05document_flow.py` amplía validaciones de acciones nuevas, URLs con `query_params` para notas desde recepción y presencia de pares nuevos en `is_allowed_flow`.
+- **Verificación:** Pruebas en verde: `tests/test_05document_flow.py` (`16 passed`) y `tests/test_03webactions.py` (`19 passed`).
+
+## 2026-05-21 (Hardening pre-merge de flujo documental)
+- **Solicitud:** Atender observaciones antes de merge para alinear contrato `create_actions`, reglas de habilitación y consistencia entre UI y backend.
+- **Implementación backend:** `document_flow/tracing.py` ahora serializa `model_target_type`, `enabled` y `condition`; además filtra acciones deshabilitadas (`enabled=False`) antes de exponerlas al panel dinámico.
+- **Consistencia de flujos:** `document_flow/registry.py` amplía `ALLOWED_FLOWS` con pares lógicos para notas de débito/crédito y devoluciones en Compras y Ventas (Purchase Order/Receipt/Invoice y Delivery Note/Sales Invoice).
+- **Cobertura:** `tests/test_05document_flow.py` incorpora validación de `create_url` + `query_params` para acciones derivadas y prueba explícita de exclusión de acciones deshabilitadas.
+- **Verificación:** Pruebas en verde tras cambios: `tests/test_05document_flow.py` (`14 passed`) y `tests/test_03webactions.py` (`19 passed`).
+
+## 2026-05-21 (Inicio implementación matriz de relaciones: fase núcleo + UI dinámica)
+- **Solicitud:** Iniciar implementación de brechas definidas en `modulos/relaciones.md` para acercar el flujo documental al resultado funcional esperado.
+- **Implementación (fase inicial):** `document_flow` ahora serializa `create_actions` con URL navegable (`create_url`) y soporte de `query_params`; esto habilita acciones de creación dinámicas en el panel de trazabilidad.
+- **Registro de flujos:** `registry.py` amplió acciones `Crear` en tipos existentes con rutas ya soportadas: Solicitud de Compra incorpora Solicitud de Cotización; Pedido de Venta incorpora Orden de Venta; se agregan acciones de Devolución y Nota de Débito/Crédito en Compra/Venta donde ya existe endpoint de factura con `document_type`.
+- **UI:** `macros.document_flow_trace` ahora muestra sección **Acciones disponibles** con botones dinámicos derivados del resumen de flujo, reduciendo dependencia de botones hardcodeados en detalles.
+- **Verificación:** Pruebas focales en verde tras cambios: `tests/test_05document_flow.py` (`9 passed`) y `tests/test_03webactions.py` (`19 passed`).
+
 ## 2026-05-21 (Importaciones: recuperación silenciosa sin lotes pendientes)
 - **Solicitud:** Evitar el log de error `Error al recuperar lotes de importación` cuando no hay lotes pendientes o el esquema de importaciones aún no está inicializado.
 - **Implementación:** `recover_crashed_batches()` ahora verifica que existan las tablas requeridas, retorna `0` cuando no hay lotes vencidos y solo hace `commit` si recupera lotes reales; el log de arranque usa formato correcto de Loguru.
