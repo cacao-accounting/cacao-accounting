@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-22 (Simplificacion de `modulos/relaciones.md`)
+- **Solicitud:** Simplificar `modulos/relaciones.md` para reflejar solo los parches cubiertos por la implementacion actual.
+- **Cambio aplicado:** Se reemplazo la propuesta extensa por una matriz resumida y operativa alineada al contrato real de `document_flow` (`DOCUMENT_TYPES` + `ALLOWED_FLOWS`).
+- **Alineacion UI/Backend:** Se dejo explicito que las acciones `Crear` se gobiernan por `document_flow_trace` sin via legacy hardcodeada.
+- **Resultado:** Documento mas corto, mantenible y sincronizado con el estado real del sistema.
+
 ## 2026-05-22 (Eliminacion de remanente legacy en acciones Crear)
 - **Solicitud:** No dejar implementacion legacy tras la unificacion de acciones `Crear` basada en `document_flow`.
 - **Limpieza final:** Se elimino la macro obsoleta `crear_dropdown` de `cacao_accounting/templates/macros.html` al no tener llamadas activas en templates.

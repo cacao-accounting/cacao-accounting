@@ -1,5 +1,8 @@
 # Estado Actual del Proyecto - 2026-05-19
 
+- **Documentacion de relaciones (2026-05-22):** `modulos/relaciones.md` fue simplificado para reflejar unicamente flujos implementados y vigentes en `document_flow`.
+- **Criterio de consistencia:** La matriz funcional documentada ahora se mantiene alineada a `DOCUMENT_TYPES` + `ALLOWED_FLOWS` y a acciones dinamicas en UI.
+
 - **Legacy eliminado (2026-05-22):** Se removio la macro legacy `crear_dropdown` de `cacao_accounting/templates/macros.html`; no quedan referencias activas en templates.
 - **Estrategia final de creacion:** Las acciones `Crear` en detalles operativos quedan 100% gobernadas por `document_flow_trace` y `create_actions` del backend.
 
