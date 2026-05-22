@@ -2,6 +2,7 @@
 
 ## Seguimiento 2026-05-21 (Matriz de relaciones operativas)
 - [~] Ejecutar implementación completa de la matriz definida en `modulos/relaciones.md` (en progreso: núcleo `document_flow` + acciones dinámicas en trazabilidad).
+- [x] Simplificar `modulos/relaciones.md` para reflejar solo flujos cubiertos por la implementación actual y evitar desalineación con backend.
 - [x] Completar contrato de `create_actions` en trazabilidad (`model_target_type`, `enabled`, `condition`) y filtrar acciones deshabilitadas.
 - [x] Alinear `ALLOWED_FLOWS` con pares lógicos de notas/devoluciones ya expuestos en acciones dinámicas de Compras y Ventas.
 - [x] Implementar anticipos desde órdenes (`purchase_order`/`sales_order` -> `payment_entry`) en `create_actions` y `ALLOWED_FLOWS`.
