@@ -20,12 +20,6 @@
             url_for('compras.compras_solicitud_cotizacion_cancel', quotation_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Cotización de Proveedor", url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id)),
-              ("Comparar Ofertas", url_for('compras.compras_comparativo_ofertas', rfq_id=registro.id))
-           ]) }}
-{% endif %}
 {% if registro.docstatus == 0 %}
 <a class="btn btn-sm btn-outline-secondary"
   href="{{ url_for('compras.compras_solicitud_cotizacion_editar', quotation_id=registro.id) }}">

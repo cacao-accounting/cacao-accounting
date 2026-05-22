@@ -17,7 +17,10 @@
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
   {{ form.csrf_token }}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
-  {% set title = "Orden de Compra" ~ ((" desde " ~ (solicitud_origen.document_no or solicitud_origen.id)) if solicitud_origen else "") %}
+  {% if from_rfq_id %}<input type="hidden" name="from_rfq" value="{{ from_rfq_id }}">{% endif %}
+  {% if from_supplier_quotation_id %}<input type="hidden" name="from_supplier_quotation" value="{{ from_supplier_quotation_id }}">{% endif %}
+  {% set source_origin = solicitud_origen or rfq_origen or supplier_quotation_origen %}
+  {% set title = "Orden de Compra" ~ ((" desde " ~ (source_origin.document_no or source_origin.id)) if source_origin else "") %}
   {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
@@ -40,7 +43,19 @@
       </div>
     </div>
   </div>
-  {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_order&source_id=" ~ from_request_id if from_request_id else None %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label="Solicitud de Compra") }}
+  {% if from_request_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_order&source_id=" ~ from_request_id %}
+    {% set source_label = "Solicitud de Compra" %}
+  {% elif from_rfq_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=purchase_order&source_id=" ~ from_rfq_id %}
+    {% set source_label = "Solicitud de Cotización" %}
+  {% elif from_supplier_quotation_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=supplier_quotation&target_type=purchase_order&source_id=" ~ from_supplier_quotation_id %}
+    {% set source_label = "Cotización de Proveedor" %}
+  {% else %}
+    {% set source_api_url = None %}
+    {% set source_label = "" %}
+  {% endif %}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
 </form>
 {% endblock %}

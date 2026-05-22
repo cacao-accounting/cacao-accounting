@@ -33,11 +33,6 @@
             url_for('ventas.ventas_entrega_cancel', note_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Factura de Venta", url_for('ventas.ventas_factura_venta_nuevo', from_note=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_entrega_lista'),
             url_for('ventas.ventas_entrega_nuevo')) }}

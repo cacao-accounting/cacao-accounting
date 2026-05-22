@@ -1,5 +1,35 @@
 # Estado Actual del Proyecto - 2026-05-19
 
+- **Legacy eliminado (2026-05-22):** Se removio la macro legacy `crear_dropdown` de `cacao_accounting/templates/macros.html`; no quedan referencias activas en templates.
+- **Estrategia final de creacion:** Las acciones `Crear` en detalles operativos quedan 100% gobernadas por `document_flow_trace` y `create_actions` del backend.
+
+- **UI / Unificación de acciones Crear (2026-05-21):** Las vistas de detalle transaccionales de Compras y Ventas ya no mantienen dropdowns `Crear` hardcodeados; la creación se rige por `document_flow_trace` y `create_actions` del backend.
+- **Consistencia UI/Backend:** Se eliminó duplicidad de reglas en templates, reduciendo riesgo de desalineación entre botones visibles y `ALLOWED_FLOWS`.
+- **Validación de vistas:** Regresión `tests/test_03webactions.py` + `tests/test_01vistas.py` en verde (`20 passed`).
+
+- **Flujo Documental / Notas hacia Bancos (2026-05-21):** Se implementaron pares `purchase_credit_note`, `purchase_debit_note`, `sales_credit_note`, `sales_debit_note` hacia `payment_entry` con acciones `Crear` dedicadas.
+- **Bancos / Prefill por tipo de nota:** `bancos_pago_nuevo` soporta parámetros `from_*_credit_note` y `from_*_debit_note`, resolviendo `payment_type`/`party_type` según semántica de reembolso o cobro/pago.
+- **Trazabilidad semántica:** Las relaciones de pago usan el `document_type` real de la nota (no solo `purchase_invoice`/`sales_invoice`) al persistir `DocumentRelation`.
+- **UI / Panel de flujo:** Los detalles de factura/nota en Compras y Ventas usan `registro.document_type` para consultar flujo y acciones correctas por tipo documental.
+- **Matriz funcional:** `modulos/relaciones.md` quedó alineado con esta expansión y documenta que la devolución de venta operativa se canaliza con `sales_credit_note`.
+- **Validación técnica:** `tests/test_05document_flow.py` (`17 passed`) y `tests/test_03webactions.py` (`19 passed`) en verde tras los cambios.
+
+- **Flujo Documental / Expansión (2026-05-21):** Se habilitó `Crear Pago` desde Orden de Compra y Orden de Venta en acciones dinámicas de trazabilidad.
+- **Flujo Documental / Compras:** Recepción de Compra ahora expone también `Crear Nota de Crédito` y `Crear Nota de Débito` (además de devolución/factura) con `query_params` de tipo documental.
+- **Consistencia de matriz:** `ALLOWED_FLOWS` agrega pares de anticipos desde órdenes y notas desde recepción para mantener alineación UI/backend.
+- **Bancos / Prefill:** `bancos_pago_nuevo` acepta origen desde `from_purchase_order` y `from_sales_order`, precargando contexto básico del tercero y compañía.
+- **Validación técnica:** `tests/test_05document_flow.py` (`16 passed`) y `tests/test_03webactions.py` (`19 passed`) en verde tras la expansión.
+
+- **Flujo Documental / Hardening pre-merge (2026-05-21):** `document_flow_summary` ahora expone `model_target_type`, `enabled` y `condition` en cada acción, y filtra acciones deshabilitadas para evitar divergencias UI/backend.
+- **Flujo Documental / Consistencia de pares:** `ALLOWED_FLOWS` incluye pares lógicos para notas de débito/crédito y devoluciones en compras/ventas alineados con acciones dinámicas expuestas.
+- **Contrato de URLs dinámicas:** Se validó construcción de `create_url` con `query_params` para notas y devoluciones derivadas de facturas/entregas/recepciones.
+- **Validación técnica:** `tests/test_05document_flow.py` (`14 passed`) y `tests/test_03webactions.py` (`19 passed`) en verde después de los ajustes.
+
+- **Flujo Documental / Implementación en curso (2026-05-21):** Se inició la ejecución de la nueva matriz de relaciones; `document_flow` ya entrega `create_actions` con URL resoluble y parámetros de query para tipos documentales derivados.
+- **Flujo Documental / Registro:** Se ampliaron acciones `Crear` en `registry.py` para relaciones ya soportadas por rutas existentes (incluyendo devolución y notas débito/crédito sobre facturas de compra/venta, además de acciones adicionales en solicitudes/pedidos).
+- **UI / Trazabilidad:** El panel `Flujo documental` muestra ahora una sección dinámica **Acciones disponibles** con botones de creación navegables, derivadas del backend y no únicamente de plantillas hardcodeadas.
+- **Validación técnica:** Pruebas focales de flujo y acciones web en verde (`tests/test_05document_flow.py`, `tests/test_03webactions.py`).
+
 - **Importaciones / Recuperación:** El arranque de Flask ya no registra error cuando no existen tablas de importación o no hay lotes en proceso vencidos; la recuperación solo marca como fallidos lotes reales atascados por más de cuatro horas.
 - **Importaciones / UI:** El módulo lateral de Importaciones renderiza contenido en `base.html`, muestra un estado vacío cuando no hay lotes y usa `smart-select` en orden Compañía → Tipo de registro → Serie/Secuencia filtrada; el Libro Contable solo aparece para comprobantes contables.
 - **Importaciones / Flujos Operativos:** El módulo permite crear lotes para documentos del flujo Source to Pay y Order to Cash: solicitudes, cotizaciones, órdenes, recepciones/entregas y facturas de compra/venta.

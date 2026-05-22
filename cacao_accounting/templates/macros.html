@@ -317,6 +317,22 @@
     </div>
 
     <div x-show="!loading && loaded">
+      {# ── Acciones disponibles (crear) ────────────────────── #}
+      <template x-if="createActions.length > 0">
+        <div class="px-3 pt-2">
+          <p class="small fw-semibold text-muted mb-1">
+            <i class="bi bi-plus-circle me-1"></i>{{ _('Acciones disponibles') }}
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <template x-for="action in createActions" :key="action.endpoint + '-' + action.target_type + '-' + action.label">
+              <a :href="action.create_url" class="btn btn-sm btn-outline-primary" x-show="action.create_url">
+                <i class="bi bi-plus-lg me-1"></i><span x-text="action.label"></span>
+              </a>
+            </template>
+          </div>
+        </div>
+      </template>
+
       {# ── Documentos origen (upstream) ─────────────────────── #}
       <template x-if="upstream.length > 0">
         <div class="px-3 pt-2">
@@ -408,21 +424,6 @@
       </button>
     </form>
   {% endif %}
-{% endmacro %}
-
-{# ─── "Crear" dropdown shortcuts (shown when docstatus == 1) ──── #}
-{% macro crear_dropdown(opciones) %}
-  {# opciones: list of (label, url) #}
-  <div class="dropdown">
-    <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-      <i class="bi bi-plus-circle me-1"></i>Crear
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end">
-      {% for label, url in opciones %}
-        <li><a class="dropdown-item" href="{{ url }}">{{ label }}</a></li>
-      {% endfor %}
-    </ul>
-  </div>
 {% endmacro %}
 
 {% macro detail_nav_buttons(list_url, new_url) %}

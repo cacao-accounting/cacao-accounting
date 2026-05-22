@@ -42,13 +42,6 @@
             url_for('compras.compras_recepcion_cancel', receipt_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
-{% if registro.docstatus == 1 %}
-{{ macros.crear_dropdown([
-              ("Factura de Compra", url_for('compras.compras_factura_compra_nuevo', from_receipt=registro.id)),
-              ("Devolución", url_for('compras.compras_factura_compra_nuevo', document_type='purchase_return', from_receipt=registro.id)),
-              ("Entrada de Almacén", url_for('inventario.inventario_entrada_nuevo', purpose='material_receipt', source_type='purchase_receipt', source_id=registro.id))
-           ]) }}
-{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_recepcion_lista'),
             url_for('compras.compras_recepcion_nuevo')) }}

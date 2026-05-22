@@ -1,5 +1,18 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-21 (Matriz de relaciones operativas)
+- [~] Ejecutar implementación completa de la matriz definida en `modulos/relaciones.md` (en progreso: núcleo `document_flow` + acciones dinámicas en trazabilidad).
+- [x] Completar contrato de `create_actions` en trazabilidad (`model_target_type`, `enabled`, `condition`) y filtrar acciones deshabilitadas.
+- [x] Alinear `ALLOWED_FLOWS` con pares lógicos de notas/devoluciones ya expuestos en acciones dinámicas de Compras y Ventas.
+- [x] Implementar anticipos desde órdenes (`purchase_order`/`sales_order` -> `payment_entry`) en `create_actions` y `ALLOWED_FLOWS`.
+- [x] Implementar notas desde recepción (`purchase_receipt` -> `purchase_credit_note`/`purchase_debit_note`) en `create_actions` y `ALLOWED_FLOWS`.
+- [x] Implementar notas hacia pago/reembolso (`purchase_credit_note`/`purchase_debit_note`/`sales_credit_note`/`sales_debit_note` -> `payment_entry`) con prefill operativo en Bancos.
+- [x] Unificar acciones `Crear` hardcodeadas en vistas detalle para usar estrategia 100% basada en `document_flow`.
+- [x] Eliminar remanente legacy de `Crear` (`macros.crear_dropdown`) para cerrar via antigua y dejar un unico camino dinamico.
+- [ ] Completar expansión de `create_actions` y `ALLOWED_FLOWS` para todos los pares funcionales acordados, priorizando faltantes reales por módulo.
+- [ ] Completar backend de creación/prefill básico para nuevas acciones `Crear` aún no soportadas por rutas actuales.
+- [ ] Añadir cobertura de pruebas para nuevos caminos de devolución y notas débito/crédito en Compras y Ventas.
+
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [x] Definir matriz fiscal/gastos por tipo documental para el alcance MVP.
 - [x] Exponer API unificada `POST /api/fiscal/preview` para formularios transaccionales.

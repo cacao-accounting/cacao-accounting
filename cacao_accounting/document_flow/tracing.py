@@ -112,12 +112,10 @@ def document_flow_summary(document_type: str, document_id: str) -> dict[str, Any
     downstream_groups = _build_groups(downstream_rows, use_source=False, current_id=document_id, current_type=doctype)
 
     spec = DOCUMENT_TYPES.get(doctype)
+    document = get_document(doctype, document_id)
     create_actions = []
-    if spec:
-        create_actions = [
-            {"label": action.label, "target_type": action.target_type, "endpoint": action.endpoint}
-            for action in spec.create_actions
-        ]
+    if spec and _is_create_actions_enabled(document):
+        create_actions = [_create_action_payload(action, document_id) for action in spec.create_actions if action.enabled]
 
     return {
         "document_type": doctype,
@@ -125,6 +123,38 @@ def document_flow_summary(document_type: str, document_id: str) -> dict[str, Any
         "upstream": upstream_groups,
         "downstream": downstream_groups,
         "create_actions": create_actions,
+    }
+
+
+def _is_create_actions_enabled(document: Any) -> bool:
+    """Indica si el documento puede exponer acciones `Crear` en UI."""
+    if not document:
+        return False
+    return getattr(document, "docstatus", None) == 1
+
+
+def _create_action_payload(action: Any, document_id: str) -> dict[str, Any]:
+    """Serializa una accion de creacion con URL navegable cuando es posible."""
+    from flask import url_for
+
+    create_url: str | None
+    endpoint_args: dict[str, str] = {action.source_param: document_id}
+    if action.query_params:
+        endpoint_args.update(action.query_params)
+    try:
+        create_url = url_for(action.endpoint, **endpoint_args)
+    except Exception:  # noqa: BLE001 — url_for puede fallar fuera de contexto de peticion
+        create_url = None
+    return {
+        "label": action.label,
+        "target_type": action.target_type,
+        "model_target_type": action.model_target_type,
+        "endpoint": action.endpoint,
+        "source_param": action.source_param,
+        "query_params": action.query_params or {},
+        "condition": action.condition,
+        "enabled": action.enabled,
+        "create_url": create_url,
     }
 
 

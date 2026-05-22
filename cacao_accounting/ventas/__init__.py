@@ -927,8 +927,10 @@ def ventas_orden_venta_nuevo():
         for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_request_id = request.args.get("from_request") or request.form.get("from_request")
     from_quotation_id = request.args.get("from_quotation") or request.form.get("from_quotation")
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
+    solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
     cotizacion_origen = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -946,7 +948,14 @@ def ventas_orden_venta_nuevo():
             {"value": "sales_request", "label": _("Pedido de Venta")},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
+        "initialSourceType": "sales_request" if from_request_id else "sales_quotation" if from_quotation_id else "",
     }
+    source_origen = solicitud_origen or cotizacion_origen
+    if source_origen:
+        transaction_config["initialHeader"] = {
+            "company": source_origen.company or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         try:
             customer_id = request.form.get("customer_id") or None
@@ -984,8 +993,10 @@ def ventas_orden_venta_nuevo():
         form=formulario,
         titulo=titulo,
         orden_origen=orden_origen,
+        solicitud_origen=solicitud_origen,
         cotizacion_origen=cotizacion_origen,
         from_order_id=from_order_id,
+        from_request_id=from_request_id,
         from_quotation_id=from_quotation_id,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
