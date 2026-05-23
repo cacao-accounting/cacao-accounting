@@ -1720,6 +1720,97 @@ def test_compute_outstanding_amount_as_of_date_filters_allocations(app_ctx):
     assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 10)) == Decimal("125.00")
 
 
+def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_ctx):
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PaymentEntry,
+        PaymentReference,
+        PurchaseInvoice,
+        SalesInvoice,
+        database,
+    )
+    from cacao_accounting.document_flow.service import compute_outstanding_amount
+
+    purchase_credit_note = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        document_type="purchase_credit_note",
+        grand_total=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+        docstatus=1,
+    )
+    sales_debit_note = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        document_type="sales_debit_note",
+        grand_total=Decimal("80.00"),
+        outstanding_amount=Decimal("80.00"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="receive")
+    database.session.add_all([purchase_credit_note, sales_debit_note, payment])
+    database.session.flush()
+
+    purchase_reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="purchase_invoice",
+        reference_id=purchase_credit_note.id,
+        total_amount=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+        allocated_amount=Decimal("30.00"),
+        allocation_date=payment.posting_date,
+    )
+    sales_reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="sales_invoice",
+        reference_id=sales_debit_note.id,
+        total_amount=Decimal("80.00"),
+        outstanding_amount=Decimal("80.00"),
+        allocated_amount=Decimal("15.00"),
+        allocation_date=payment.posting_date,
+    )
+    database.session.add_all([purchase_reference, sales_reference])
+    database.session.flush()
+    database.session.add_all(
+        [
+            DocumentRelation(
+                source_type="purchase_credit_note",
+                source_id=purchase_credit_note.id,
+                source_item_id=None,
+                target_type="payment_entry",
+                target_id=payment.id,
+                target_item_id=purchase_reference.id,
+                company="cacao",
+                qty=Decimal("1"),
+                uom=None,
+                rate=Decimal("30.00"),
+                amount=Decimal("30.00"),
+                relation_type="refund",
+                status="active",
+            ),
+            DocumentRelation(
+                source_type="sales_debit_note",
+                source_id=sales_debit_note.id,
+                source_item_id=None,
+                target_type="payment_entry",
+                target_id=payment.id,
+                target_item_id=sales_reference.id,
+                company="cacao",
+                qty=Decimal("1"),
+                uom=None,
+                rate=Decimal("15.00"),
+                amount=Decimal("15.00"),
+                relation_type="collection",
+                status="active",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    assert compute_outstanding_amount(purchase_credit_note) == Decimal("70.00")
+    assert compute_outstanding_amount(sales_debit_note) == Decimal("65.00")
+
+
 def test_post_payment_entry_uses_bank_account_gl_fallback(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import Accounts, Bank, BankAccount, GLEntry, PartyAccount, PaymentEntry, database
@@ -1938,6 +2029,164 @@ def test_post_payment_entry_with_discount_and_exchange_revaluation(app_ctx):
     assert any(entry.account_id == discount_account.id and entry.debit == Decimal("73.6000") for entry in entries)
     assert any(entry.account_id == realized_gain_account.id and entry.credit == Decimal("30.0000") for entry in entries)
     assert any(entry.account_id == unrealized_gain_account.id and entry.credit == Decimal("30.0000") for entry in entries)
+
+
+def test_post_payment_entry_without_references_uses_advance_account(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import Accounts, CompanyDefaultAccount, GLEntry, PaymentEntry, database
+
+    bank_account = Accounts(
+        entity="cacao",
+        code="BANK-ADV-001",
+        name="Banco anticipos",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    supplier_advance_account = Accounts(
+        entity="cacao",
+        code="ADV-SUP-001",
+        name="Anticipo proveedor",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="asset",
+    )
+    database.session.add_all([bank_account, supplier_advance_account])
+    database.session.flush()
+    database.session.add(
+        CompanyDefaultAccount(
+            company="cacao",
+            default_bank=bank_account.id,
+            supplier_advance_account_id=supplier_advance_account.id,
+        )
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        payment_type="pay",
+        party_type="supplier",
+        party_id="SUPP-ADV",
+        paid_amount=Decimal("100.00"),
+        base_paid_amount=Decimal("100.00"),
+        paid_from_account_id=bank_account.id,
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
+        .scalars()
+        .all()
+    )
+    assert any(entry.account_id == supplier_advance_account.id and entry.debit == Decimal("100.0000") for entry in entries)
+    assert any(entry.account_id == bank_account.id and entry.credit == Decimal("100.0000") for entry in entries)
+
+
+def test_post_payment_entry_partial_reference_balances_open_amount_with_advance(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        PartyAccount,
+        PaymentEntry,
+        PaymentReference,
+        PurchaseInvoice,
+        database,
+    )
+
+    bank_account = Accounts(
+        entity="cacao",
+        code="BANK-PART-001",
+        name="Banco parcial",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    payable_account = Accounts(
+        entity="cacao",
+        code="AP-PART-001",
+        name="CxP parcial",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    supplier_advance_account = Accounts(
+        entity="cacao",
+        code="ADV-PART-001",
+        name="Anticipo parcial proveedor",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="asset",
+    )
+    database.session.add_all([bank_account, payable_account, supplier_advance_account])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="SUPP-PART", company="cacao", payable_account_id=payable_account.id),
+            CompanyDefaultAccount(
+                company="cacao",
+                default_bank=bank_account.id,
+                supplier_advance_account_id=supplier_advance_account.id,
+            ),
+        ]
+    )
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-PART",
+        grand_total=Decimal("60.00"),
+        outstanding_amount=Decimal("60.00"),
+        base_outstanding_amount=Decimal("60.00"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="pay",
+        party_type="supplier",
+        party_id="SUPP-PART",
+        paid_amount=Decimal("100.00"),
+        base_paid_amount=Decimal("100.00"),
+        paid_from_account_id=bank_account.id,
+        docstatus=1,
+    )
+    database.session.add_all([invoice, payment])
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_invoice",
+            reference_id=invoice.id,
+            total_amount=Decimal("60.00"),
+            outstanding_amount=Decimal("60.00"),
+            allocated_amount=Decimal("60.00"),
+            allocation_date=payment.posting_date,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
+        .scalars()
+        .all()
+    )
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == payable_account.id and entry.debit == Decimal("60.0000") for entry in entries)
+    assert any(entry.account_id == supplier_advance_account.id and entry.debit == Decimal("40.0000") for entry in entries)
+    assert any(entry.account_id == bank_account.id and entry.credit == Decimal("100.0000") for entry in entries)
 
 
 def test_post_bank_transaction_creates_balanced_gl_entries(app_ctx):

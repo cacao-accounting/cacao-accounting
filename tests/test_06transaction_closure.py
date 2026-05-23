@@ -255,12 +255,14 @@ def test_payment_references_update_purchase_and_sales_invoice_balances(app_ctx):
         posting_date=date(2026, 5, 4),
         grand_total=Decimal("100.00"),
         outstanding_amount=Decimal("100.00"),
+        docstatus=1,
     )
     sales_invoice = SalesInvoice(
         company="cacao",
         posting_date=date(2026, 5, 4),
         grand_total=Decimal("80.00"),
         outstanding_amount=Decimal("80.00"),
+        docstatus=1,
     )
     payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay")
     database.session.add_all([purchase_invoice, sales_invoice, payment])
@@ -275,11 +277,11 @@ def test_payment_references_update_purchase_and_sales_invoice_balances(app_ctx):
         "allocated_amount_1": "15.00",
     }
     with app_ctx.test_request_context("/cash_management/payment/new", method="POST", data=data):
-        allocated = _save_payment_references(payment)
+        ref_totals = _save_payment_references(payment)
 
     references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
 
-    assert allocated == Decimal("40.00")
+    assert ref_totals["allocated"] == Decimal("40.00")
     assert len(references) == 2
     assert purchase_invoice.outstanding_amount == Decimal("75.00")
     assert sales_invoice.outstanding_amount == Decimal("65.00")
@@ -297,6 +299,7 @@ def test_payment_references_reject_cross_company_invoice(app_ctx):
         posting_date=date(2026, 5, 4),
         grand_total=Decimal("100.00"),
         outstanding_amount=Decimal("100.00"),
+        docstatus=1,
     )
     payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay")
     database.session.add_all([invoice, payment])
@@ -323,6 +326,7 @@ def test_payment_references_reject_duplicate_and_negative_allocations(app_ctx):
         posting_date=date(2026, 5, 4),
         grand_total=Decimal("100.00"),
         outstanding_amount=Decimal("100.00"),
+        docstatus=1,
     )
     payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay")
     database.session.add_all([invoice, payment])
@@ -353,6 +357,99 @@ def test_payment_references_reject_duplicate_and_negative_allocations(app_ctx):
     database.session.rollback()
 
 
+def test_payment_references_reject_draft_documents_and_party_mismatch(app_ctx):
+    """Las referencias de pago exigen documento aprobado y tercero coincidente."""
+
+    from cacao_accounting.bancos import _save_payment_references
+    from cacao_accounting.database import PaymentEntry, PurchaseInvoice, SalesInvoice, database
+
+    draft_invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-OK",
+        grand_total=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+        docstatus=0,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        party_type="customer",
+        party_id="CUST-OTHER",
+    )
+    database.session.add_all([draft_invoice, payment])
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/cash_management/payment/new",
+        method="POST",
+        data={
+            "reference_type_0": "purchase_invoice",
+            "reference_id_0": draft_invoice.id,
+            "allocated_amount_0": "10.00",
+        },
+    ):
+        with pytest.raises(ValueError, match="aprobado"):
+            _save_payment_references(payment)
+    database.session.rollback()
+
+    mismatch_invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-OK",
+        grand_total=Decimal("90.00"),
+        outstanding_amount=Decimal("90.00"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        party_type="customer",
+        party_id="CUST-OTHER",
+    )
+    database.session.add_all([mismatch_invoice, payment])
+    database.session.flush()
+    with app_ctx.test_request_context(
+        "/cash_management/payment/new",
+        method="POST",
+        data={
+            "reference_type_0": "sales_invoice",
+            "reference_id_0": mismatch_invoice.id,
+            "allocated_amount_0": "10.00",
+        },
+    ):
+        with pytest.raises(Conflict, match="no coincide"):
+            _save_payment_references(payment)
+    database.session.rollback()
+
+
+def test_validate_payment_header_rejects_cross_company_bank_account(app_ctx):
+    """El encabezado del pago exige una cuenta bancaria de la misma compañía."""
+
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco validación")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="otra", account_name="Cuenta otra compañía")
+    database.session.add(bank_account)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="misma compañía"):
+        _validate_payment_header(
+            payment_type="pay",
+            company="cacao",
+            bank_account_id=bank_account.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type="supplier",
+            party_id="SUPP-1",
+        )
+
+
 def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
     """Cancelar un pago libera las referencias y restaura el saldo pendiente."""
 
@@ -365,6 +462,7 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
         grand_total=Decimal("100.00"),
         outstanding_amount=Decimal("100.00"),
         base_outstanding_amount=Decimal("100.00"),
+        docstatus=1,
     )
     payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="pay", docstatus=1)
     database.session.add_all([invoice, payment])
@@ -394,7 +492,7 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
 
     assert response.status_code == 302
     assert relation.status == "reverted"
-    assert references == []
+    assert len(references) == 1
     assert refreshed_invoice is not None
     assert refreshed_invoice.outstanding_amount == Decimal("100.00")
 

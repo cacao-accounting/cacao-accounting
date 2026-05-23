@@ -1464,6 +1464,7 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     target_bank_account_id = database.Column(
         database.String(26), database.ForeignKey(BANK_ACCOUNT_ID), nullable=True, index=True
     )
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1475,6 +1476,8 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     unit_code = database.Column(database.String(10), nullable=True)
     project_code = database.Column(database.String(10), nullable=True)
     reference_no = database.Column(database.String(100), nullable=True)
+    reference_date = database.Column(database.Date(), nullable=True)
+    mode_of_payment = database.Column(database.String(50), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1484,11 +1487,24 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "payment_reference"
     payment_id = database.Column(database.String(26), database.ForeignKey("payment_entry.id"), nullable=False, index=True)
     reference_type = database.Column(database.String(50), nullable=False, index=True)
+    flow_source_type = database.Column(database.String(50), nullable=True, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
+    reference_document_no = database.Column(database.String(100), nullable=True)
+    reference_date = database.Column(database.Date(), nullable=True, index=True)
+    party_type = database.Column(database.String(20), nullable=True, index=True)
+    party_id = database.Column(database.String(26), nullable=True, index=True)
+    company = database.Column(database.String(26), nullable=True, index=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     total_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    outstanding_amount_after = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    difference_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     allocation_date = database.Column(database.Date(), nullable=True, index=True)
+    discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    gain_loss_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    notes = database.Column(database.Text(), nullable=True)
 
 
 class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2570,6 +2586,7 @@ class BudgetImportLine(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "budget_import_line"
     import_id = database.Column(database.String(26), database.ForeignKey("budget_import.id"), nullable=False, index=True)
+    row_index = database.Column(database.Integer(), nullable=False, default=0, index=True)
     account_id = database.Column(database.String(26), nullable=True)
     cost_center_id = database.Column(database.String(26), nullable=True)
     business_unit_id = database.Column(database.String(26), nullable=True)

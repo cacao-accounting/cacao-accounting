@@ -1,4 +1,31 @@
-# Estado Actual del Proyecto - 2026-05-19
+# Estado Actual del Proyecto - 2026-05-23
+
+- **Payment Entry / Impuestos y Cargos visibles (2026-05-23):** El formulario `/cash_management/payment/new` vuelve a exponer el cálculo fiscal de forma explícita.
+  - La sección **Impuestos y Cargos** aparece abierta por defecto y deja de estar escondida bajo "Deducciones o Pérdida".
+  - La UI incluye acciones visibles para `Añadir impuesto/cargo` y `Recalcular`, reutilizando el endpoint fiscal `/api/fiscal/preview`.
+  - Las líneas manuales permiten capturar método de cálculo, base, tasa, monto, tratamiento contable, prorrateo, cuenta contable y observaciones.
+  - Se mantiene la persistencia existente de `tax_lines` y `tax_summary` en `payment_entry`.
+
+- **Payment Entry / UX de formulario y detalle (2026-05-22):** El formulario `/cash_management/payment/new` queda alineado al flujo operativo solicitado.
+  - Encabezado ordenado: Tipo de pago, Fecha, Compañía, Cuenta bancaria, Forma de pago, Secuencia y Moneda.
+  - Compañía, Cuenta bancaria, Forma de pago, Secuencia, Tipo de tercero y Tercero usan `smart-select`; el tercero se filtra por Cliente/Proveedor según el selector previo.
+  - La moneda se deriva de la cuenta bancaria y el tipo de cambio no se edita en UI; queda bajo control backend/posting para libros activos.
+  - El contador externo y número de cheque solo se muestran para cheques; el número de cheque es no editable y proviene del contador configurado.
+  - El backend ignora contadores externos en pagos que no son cheque y no acepta número externo manual para cheques.
+  - `bancos/pago.html` adopta un layout tipo `journal.html`, con cabecera, datos bancarios, referencias y asientos contables.
+
+- **Payment Entry / Implementación completa (2026-05-22):** Se completó la implementación de `payment_entry` según `requerimiento.md` y `payment.md`.
+  - `pago.html` (vista de detalle) ahora muestra tabla de referencias aplicadas (tipo, documento, total, saldo previo, aplicado, descuento) y tabla de asientos contables GL.
+  - Se añadió campo `Cuenta Bancaria` y `Referencia` en el encabezado del detalle.
+  - La sección de referencias del formulario `pago_nuevo.html` se titula "Referencias del Pago" para consistencia con tests.
+  - `PaymentEntry` persiste moneda y `PaymentReference` conserva snapshot mínimo de auditoría: tipo lógico, documento visible, fecha, tercero, compañía, moneda, saldo posterior, tasa y diferencia.
+  - Anticipos desde Orden de Compra/Orden de Venta precargan línea de referencia, crean `DocumentRelation` activa y permanecen como pago abierto disponible para aplicación futura.
+  - El formulario de pagos carga candidatos manuales desde `/api/document-flow/payment-reference-candidates`, filtrados por compañía, tercero y tipo documental.
+  - Los pagos/cobros `pay`/`receive` requieren tercero explícito, y las notas crédito/débito validan dirección de pago/cobro según semántica del documento.
+  - La anulación conserva `PaymentReference`, revierte relaciones documentales y recalcula saldos sin borrar historial funcional.
+  - El handler `bancos_pago_nuevo` ahora captura excepciones `HTTPException` (incluye `Conflict` por mismatch de compañía/tercero) y las muestra como flash `danger`.
+  - Cobertura de pruebas ampliada: snapshots de referencia, endpoint de candidatos, prefill desde órdenes, anticipos abiertos, bloqueo por documento borrador/cancelado, mismatch de compañía/tercero y verificación de vista de detalle.
+  - Corregido test de cierre `test_06transaction_closure` para usar la API actual de `_save_payment_references` (retorna dict con `allocated`/`discount`/`gain_loss`).
 
 - **Documentacion de relaciones (2026-05-22):** `modulos/relaciones.md` fue simplificado para reflejar unicamente flujos implementados y vigentes en `document_flow`.
 - **Criterio de consistencia:** La matriz funcional documentada ahora se mantiene alineada a `DOCUMENT_TYPES` + `ALLOWED_FLOWS` y a acciones dinamicas en UI.

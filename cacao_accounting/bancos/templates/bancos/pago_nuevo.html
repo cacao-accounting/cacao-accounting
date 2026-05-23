@@ -5,6 +5,109 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_nuevo.html"></div>
 {%- endif -%}
 
+<style>
+  .ca-payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .ca-payment-toolbar {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .ca-payment-section {
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1.5rem;
+  }
+
+  .ca-payment-section-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #333;
+  }
+
+  .ca-payment-grid {
+    overflow-x: auto;
+  }
+
+  .ca-payment-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .ca-payment-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px;
+    border: 1px solid #dee2e6;
+  }
+
+  .ca-payment-table td {
+    padding: 8px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+  }
+
+  .ca-payment-actions {
+    display: flex;
+    gap: .25rem;
+    justify-content: center;
+  }
+
+  .ca-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    background-color: #fcfcfc;
+    padding: 1rem;
+    border: 1px solid #f0f0f0;
+    border-radius: 4px;
+    margin-top: 1rem;
+  }
+
+  .ca-summary-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .ca-summary-label {
+    color: #666;
+  }
+
+  .ca-summary-value {
+    font-weight: 600;
+  }
+
+  .ca-collapsible-section {
+    border-top: 1px solid #eee;
+    padding-top: 1rem;
+  }
+
+  .ca-collapsible-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+  }
+
+  [x-cloak] { display: none !important; }
+</style>
+
 <nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
@@ -24,46 +127,219 @@
     return {
       header: {
         payment_type: config.initial.payment_type || 'receive',
-        company: config.initial.company || '',
-        naming_series_id: '',
         posting_date: config.initial.posting_date || new Date().toISOString().slice(0, 10),
-        bank_account_id: '',
-        currency: '',
-        paid_amount: config.initial.paid_amount || 0,
+        mode_of_payment: config.initial.mode_of_payment || 'transfer',
+        company: config.initial.company || '',
+        company_label: '',
+        naming_series_id: '',
         party_type: config.initial.party_type || 'customer',
         party_id: config.initial.party_id || '',
+        party_name: '',
+        bank_account_id: '',
+        currency: config.initial.currency || '',
+        paid_amount: config.initial.paid_amount || 0,
+        reference_no: '',
+        reference_date: '',
+        cost_center_code: '',
+        unit_code: '',
+        project_code: '',
         remarks: config.initial.remarks || '',
         external_counter_id: config.initial.external_counter_id || '',
         external_number: '',
+        bank_default_external_counter_id: '',
+        bank_default_external_number: '',
+        advance_mode: Boolean(config.initial.advance_mode || false),
       },
       lines: config.initial.lines || [],
       payload: '',
+      references: {
+        activeIndex: null,
+        modalLine: null,
+      },
       taxCharges: {
         loading: false,
         error: '',
-        summary: { subtotal: '0', document_tax_total: '0', grand_total: '0' },
+        summary: {
+          subtotal: '0',
+          document_tax_total: '0',
+          capitalizable_tax_total: '0',
+          separate_tax_total: '0',
+          withholding_total: '0',
+          grand_total: '0'
+        },
         lines: [],
         activeIndex: null,
         modalLine: null,
+      },
+      ui: {
+        showAccounts: true,
+        showTaxCharges: true,
+        showDimensions: false,
+        showInformation: false
       },
 
       init: function () {
         var self = this;
         document.addEventListener('bank-account-selected', function (event) {
-            self.header.bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                self.header.currency = event.detail.extra.currency;
-            }
+          self.applyBankAccount(event.detail || {});
+        });
+        this.$watch('header.mode_of_payment', (val) => {
+          if (val !== 'check') {
+            this.header.external_counter_id = '';
+            this.header.external_number = '';
+          } else {
+            this.header.external_counter_id = this.header.bank_default_external_counter_id || this.header.external_counter_id;
+            this.header.external_number = this.header.bank_default_external_number || this.header.external_number;
+          }
+        });
+        this.$watch('header.party_id', (val) => {
+          if (val && this.header.company) this.fetchPendingReferences();
+        });
+        this.$watch('header.company', (val) => {
+          if (val && this.header.party_id) this.fetchPendingReferences();
         });
         this.fetchTaxPreview();
       },
 
-      calculateTotal: function() {
-        this.header.paid_amount = this.lines.reduce((sum, line) => sum + Number.parseFloat(line.allocated_amount || 0), 0);
+      isCheckPayment: function () {
+        return this.header.mode_of_payment === 'check';
+      },
+
+      applyBankAccount: function (option) {
+        this.header.bank_account_id = option.value || '';
+        this.header.currency = option.currency || (option.extra && option.extra.currency) || '';
+        this.header.bank_default_external_counter_id = option.default_external_counter_id
+          || (option.extra && option.extra.default_external_counter_id)
+          || '';
+        this.header.bank_default_external_number = option.default_external_number
+          || (option.extra && option.extra.default_external_number)
+          || '';
+        if (this.isCheckPayment()) {
+          this.header.external_counter_id = this.header.bank_default_external_counter_id || this.header.external_counter_id || '';
+          this.header.external_number = this.header.bank_default_external_number || this.header.external_number || '';
+        }
+      },
+
+      parseNumber: function (value) {
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      },
+
+      formatCurrency: function (val) {
+        return (this.header.currency || 'NIO') + ' ' + this.parseNumber(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+
+      normalizeReferenceAllocation: function (line) {
+        if (!line) return;
+        const allocated = this.parseNumber(line.allocated_amount || 0);
+        const outstanding = this.parseNumber(line.outstanding_amount || 0);
+        if (allocated < 0) {
+          line.allocated_amount = 0;
+          return;
+        }
+        if (outstanding > 0 && allocated > outstanding) {
+          line.allocated_amount = outstanding;
+          return;
+        }
+        line.allocated_amount = allocated;
+      },
+
+      calculateTotal: function () {
+        this.lines.forEach((line) => this.normalizeReferenceAllocation(line));
         this.fetchTaxPreview();
       },
 
-      buildFiscalPayload: function() {
+      totalApplied: function () {
+        return this.lines.reduce((sum, line) => sum + this.parseNumber(line.allocated_amount || 0), 0);
+      },
+
+      unallocatedAmount: function () {
+        const headerTotal = this.parseNumber(this.header.paid_amount || 0);
+        const delta = headerTotal - this.totalApplied();
+        return delta > 0 ? delta : 0;
+      },
+
+      removeReferenceLine: function (index) {
+        this.lines.splice(index, 1);
+        this.calculateTotal();
+      },
+
+      openReferenceLineDetails: function (index) {
+        this.references.activeIndex = index;
+        this.references.modalLine = Object.assign({}, this.lines[index] || {});
+        const modalEl = document.getElementById('referenceLineDetailModal');
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      },
+
+      saveReferenceLineModal: function () {
+        if (this.references.activeIndex !== null && this.references.modalLine) {
+          this.normalizeReferenceAllocation(this.references.modalLine);
+          this.lines[this.references.activeIndex] = Object.assign({}, this.references.modalLine);
+          this.calculateTotal();
+        }
+        const modalEl = document.getElementById('referenceLineDetailModal');
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+      },
+
+      fetchPendingReferences: async function () {
+        if (!this.header.company || !this.header.party_id) return;
+        const party_type = this.header.party_type;
+        const company = this.header.company;
+        const party_id = this.header.party_id;
+
+        // Limpiar líneas si el tercero cambió radicalmente (opcional, pero seguro)
+        // this.lines = [];
+
+        const sourceTypes = party_type === 'customer'
+          ? ['sales_invoice', 'sales_debit_note', 'sales_credit_note']
+          : ['purchase_invoice', 'purchase_debit_note', 'purchase_credit_note'];
+        const isAdvanceFlow = this.header.advance_mode
+          || this.lines.some((line) => ['sales_order', 'purchase_order'].includes(line.flow_source_type || line.reference_type));
+        if (isAdvanceFlow) {
+          sourceTypes.push(party_type === 'customer' ? 'sales_order' : 'purchase_order');
+        }
+
+        const params = new URLSearchParams({
+          company,
+          party_id,
+          party_type,
+          advance_mode: isAdvanceFlow ? '1' : '0'
+        });
+        sourceTypes.forEach((source_type) => params.append('source_type', source_type));
+        try {
+          const response = await fetch(`/api/document-flow/payment-reference-candidates?${params.toString()}`, { credentials: 'same-origin' });
+          const data = await response.json();
+          if (response.ok && data.items) {
+            const existingKeys = new Set(this.lines.map(l => `${l.flow_source_type || l.reference_type || ''}:${l.reference_id}`));
+            data.items.forEach(item => {
+              const itemKey = `${item.flow_source_type || item.source_type || item.reference_type || ''}:${item.reference_id || item.source_id}`;
+              if (!existingKeys.has(itemKey)) {
+                this.lines.push({
+                  reference_type: item.reference_type || item.source_type,
+                  flow_source_type: item.flow_source_type || item.source_type,
+                  reference_id: item.reference_id || item.source_id,
+                  document_no: item.document_no,
+                  reference_date: item.document_date,
+                  currency: item.currency,
+                  reference_label: item.source_label || item.flow_source_type || item.source_type,
+                  total_amount: item.grand_total,
+                  outstanding_amount: item.pending_amount,
+                  allocated_amount: 0,
+                  discount_amount: 0,
+                  gain_loss_amount: 0,
+                  exchange_rate: 1,
+                  notes: ''
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching payment reference candidates:', err);
+        }
+        this.calculateTotal();
+      },
+
+      buildFiscalPayload: function () {
         return {
           document_type: 'payment_entry',
           payment_type: this.header.payment_type,
@@ -77,7 +353,7 @@
         };
       },
 
-      fetchTaxPreview: async function() {
+      fetchTaxPreview: async function () {
         if (!this.header.company) return;
         this.taxCharges.loading = true;
         this.taxCharges.error = '';
@@ -105,25 +381,123 @@
         }
       },
 
-      openTaxLineDetails: function(index) {
+      openTaxLineDetails: function (index) {
         this.taxCharges.activeIndex = index;
         this.taxCharges.modalLine = Object.assign({}, this.taxCharges.lines[index] || {});
         const modalEl = document.getElementById('taxChargeDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
       },
 
-      saveTaxLineModal: function() {
+      saveTaxLineModal: function () {
         if (this.taxCharges.activeIndex !== null && this.taxCharges.modalLine) {
-          this.taxCharges.lines[this.taxCharges.activeIndex] = Object.assign({}, this.taxCharges.modalLine);
+          const line = this.normalizeTaxLine(this.taxCharges.modalLine);
+          this.taxCharges.lines[this.taxCharges.activeIndex] = line;
+          this.recalculateTaxSummary();
         }
         const modalEl = document.getElementById('taxChargeDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+      },
+
+      newTaxLine: function () {
+        const uid = 'MANUAL-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+        return {
+          line_id: uid,
+          source_rule_id: uid,
+          manual: true,
+          concept: '{{ _("Cargo manual") }}',
+          type: 'charge',
+          calculation_method: 'manual',
+          base_mode: 'goods',
+          base_amount: this.parseNumber(this.header.paid_amount || 0),
+          rate: 0,
+          amount: 0,
+          accounting_treatment: 'separate_tax_account',
+          allocation_method: 'by_value',
+          affects_inventory: false,
+          affects_document_total: true,
+          included_in_price: false,
+          account_id: '',
+          notes: ''
+        };
+      },
+
+      normalizeTaxLine: function (line) {
+        const normalized = Object.assign(this.newTaxLine(), line || {});
+        normalized.manual = Boolean(
+          normalized.manual || String(normalized.source_rule_id || '').startsWith('MANUAL-')
+        );
+        if (normalized.manual) {
+          this.calculateTaxLine(normalized);
+        }
+        return normalized;
+      },
+
+      addTaxLine: function () {
+        const line = this.newTaxLine();
+        this.taxCharges.lines.push(line);
+        this.taxCharges.activeIndex = this.taxCharges.lines.length - 1;
+        this.taxCharges.modalLine = Object.assign({}, line);
+        this.recalculateTaxSummary();
+        const modalEl = document.getElementById('taxChargeDetailModal');
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      },
+
+      removeTaxLine: function (index) {
+        this.taxCharges.lines.splice(index, 1);
+        this.recalculateTaxSummary();
+      },
+
+      calculateTaxLine: function (line) {
+        line.base_amount = this.parseNumber(line.base_amount || this.header.paid_amount || 0);
+        line.rate = this.parseNumber(line.rate || 0);
+        if (line.calculation_method === 'percentage') {
+          line.amount = line.base_amount * line.rate / 100;
+        } else {
+          line.amount = this.parseNumber(line.amount || 0);
+        }
+      },
+
+      recalculateTaxSummary: function () {
+        const lines = this.taxCharges.lines || [];
+        const documentTaxTotal = lines.reduce((total, line) => {
+          if (line.type === 'withholding' || line.included_in_price || line.affects_document_total === false) return total;
+          return total + this.parseNumber(line.amount || 0);
+        }, 0);
+        const capitalizableTaxTotal = lines.reduce((total, line) => {
+          if (line.accounting_treatment !== 'capitalizable_inventory_cost') return total;
+          return total + this.parseNumber(line.amount || 0);
+        }, 0);
+        const separateTaxTotal = lines.reduce((total, line) => {
+          if (line.accounting_treatment !== 'separate_tax_account') return total;
+          return total + this.parseNumber(line.amount || 0);
+        }, 0);
+        const withholdingTotal = lines.reduce((total, line) => {
+          if (line.type !== 'withholding') return total;
+          return total + this.parseNumber(line.amount || 0);
+        }, 0);
+        const subtotal = this.parseNumber(this.header.paid_amount || 0);
+        this.taxCharges.summary = {
+          subtotal: String(subtotal),
+          document_tax_total: String(documentTaxTotal),
+          capitalizable_tax_total: String(capitalizableTaxTotal),
+          separate_tax_total: String(separateTaxTotal),
+          withholding_total: String(withholdingTotal),
+          grand_total: String(subtotal + documentTaxTotal)
+        };
       },
 
       prepareSubmit: function (event) {
         if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount <= 0) {
           event.preventDefault();
           alert("{{ _('Por favor complete los campos obligatorios.') }}");
+          return;
+        }
+        for (const line of this.lines) {
+          this.normalizeReferenceAllocation(line);
+        }
+        if (this.totalApplied() > this.parseNumber(this.header.paid_amount || 0) + 0.01) {
+          event.preventDefault();
+          alert("{{ _('El total aplicado no puede ser mayor al monto total del pago.') }}");
           return;
         }
 
@@ -138,12 +512,15 @@
   };
 </script>
 
-<form method="post" x-data='paymentEntryForm({ initial: {{ initial_payment|tojson if initial_payment else "{}" }} })' @submit="prepareSubmit">
+<form class="ca-payment-form" method="post" x-data='paymentEntryForm({ initial: {{ initial_payment|tojson if initial_payment else "{}" }} })' @submit="prepareSubmit">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="payment_payload" :value="payload">
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">{{ titulo }}</h4>
+  <div class="ca-payment-toolbar">
+    <div>
+      <h4 class="mb-1">{{ titulo }}</h4>
+      <p class="text-muted mb-0">{{ _('Borrador') }}</p>
+    </div>
     <div class="d-flex gap-2">
       <a href="{{ url_for('bancos.bancos_pago_lista') }}" class="btn btn-sm btn-outline-secondary">{{ _('Cancelar') }}</a>
       <button class="btn btn-sm btn-primary" type="submit">
@@ -152,24 +529,32 @@
     </div>
   </div>
 
-  <div class="ca-card p-3 mb-3">
+  <section class="ca-payment-section">
+    <div class="ca-payment-section-title">{{ _('Tipo de Pago') }}</div>
     <div class="row g-3">
       <div class="col-md-3">
-          <label class="form-label">{{ _('Tipo de transacción') }}</label>
-          <select class="form-select" x-model="header.payment_type">
-              <option value="receive">{{ _('Pago entrante (Cobro)') }}</option>
-              <option value="pay">{{ _('Pago saliente') }}</option>
+          <label class="form-label text-muted small mb-1">{{ _('Tipo de pago') }} <span class="text-danger">*</span></label>
+          <select class="form-select bg-light" x-model="header.payment_type">
+              <option value="receive">{{ _('Recibir/Recibido') }}</option>
+              <option value="pay">{{ _('Pagar/Pagado') }}</option>
           </select>
       </div>
-      <div class="col-md-6">
-        <label class="form-label">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+      <div class="col-md-3">
+        <label class="form-label text-muted small mb-1">{{ _('Fecha de Contabilización') }} <span class="text-danger">*</span></label>
+        <input class="form-control bg-light" type="date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label text-muted small mb-1">{{ _('Compañía') }} <span class="text-danger">*</span></label>
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "company",
             name: "company",
-            initialValue: "{{ initial_payment.company if initial_payment else "" }}"
+            initialValue: "{{ initial_payment.company if initial_payment else "" }}",
+            preload: true,
+            preloadOnFocus: true,
+            onSelect: function(opt) { header.company = opt.value; header.company_label = opt.display_name; }
           })'>
-          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
-          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
+          <input type="hidden" id="company_val" x-model="selectedValue" x-effect="header.company = selectedValue">
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
               <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
@@ -178,36 +563,20 @@
         </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label">{{ _('Secuencia') }}</label>
-        <div class="ca-smart-select" x-data='smartSelect({
-            doctype: "naming_series",
-            name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
-            autoSelectDefault: true
-          })'>
-          <input type="hidden" id="company_val" x-model="header.company">
-          <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
-          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}">
-          <div class="ca-smart-select-menu" x-show="open" x-cloak>
-            <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-            </template>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Cuenta Bancaria') }} <span class="text-danger">*</span></label>
+        <label class="form-label text-muted small mb-1">{{ _('Cuenta Bancaria') }} <span class="text-danger">*</span></label>
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "bank_account",
             name: "bank_account_id",
             filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
             filterSources: ["#company_val"],
+            requiredFilters: ["company"],
+            preload: true,
+            loadOnFilterChange: true,
+            preloadOnFocus: true,
             onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
           })'>
           <input type="hidden" x-model="selectedValue">
-          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
               <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
@@ -215,41 +584,130 @@
           </div>
         </div>
       </div>
-      <div class="col-md-2">
-        <label class="form-label">{{ _('Moneda') }}</label>
+      <div class="col-md-3">
+        <label class="form-label text-muted small mb-1">{{ _('Forma de pago') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "mode_of_payment",
+            name: "mode_of_payment",
+            initialValue: "transfer",
+            initialLabel: "{{ _('Transferencia') }}",
+            preload: true,
+            preloadOnFocus: true,
+            onSelect: function(opt) { header.mode_of_payment = opt.value; }
+          })'>
+          <input type="hidden" x-model="selectedValue" x-effect="header.mode_of_payment = selectedValue">
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Forma de pago...') }}" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label text-muted small mb-1">{{ _('Secuencia') }}</label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "naming_series",
+            name: "naming_series_id",
+            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
+            filterSources: ["#company_val"],
+            requiredFilters: ["company"],
+            preload: true,
+            loadOnFilterChange: true,
+            preloadOnFocus: true,
+            autoSelectDefault: true
+          })'>
+          <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}">
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="opt in options" :key="opt.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label text-muted small mb-1">{{ _('Moneda') }}</label>
         <input class="form-control bg-light" x-model="header.currency" readonly>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">{{ _('Fecha') }}</label>
-        <input class="form-control" type="date" x-model="header.posting_date" required>
+      <div class="col-md-3" x-show="isCheckPayment()" x-cloak>
+          <label class="form-label text-muted small mb-1">{{ _('Contador externo') }}</label>
+          <div class="ca-smart-select" x-data='smartSelect({
+              doctype: "external_counter",
+              name: "external_counter_id",
+              filters: {
+                company: { selector: "#company_val" },
+                counter_type: function() { return "checkbook" },
+                is_active: function() { return "True" },
+                naming_series_id: function() { return header.naming_series_id }
+              },
+              filterSources: ["#company_val"],
+              requiredFilters: ["company"],
+              preload: true,
+              loadOnFilterChange: true,
+              preloadOnFocus: true,
+              onSelect: function(opt) {
+                header.external_counter_id = opt.value;
+                header.external_number = opt.next_suggested_formatted || "";
+              }
+            })'>
+            <input type="hidden" x-model="selectedValue">
+            <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar chequera...') }}">
+            <div class="ca-smart-select-menu" x-show="open" x-cloak>
+              <template x-for="opt in options" :key="opt.value">
+                <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              </template>
+            </div>
+          </div>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">{{ _('Monto total') }}</label>
-        <input class="form-control text-end fw-bold" type="number" step="0.01" x-model="header.paid_amount" required>
+      <div class="col-md-3" x-show="isCheckPayment()" x-cloak>
+          <label class="form-label text-muted small mb-1">{{ _('Número de cheque a emitir') }}</label>
+          <input class="form-control bg-light" type="text" x-model="header.external_number" readonly placeholder="{{ _('Definido por el contador externo') }}">
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="ca-card p-3 mb-3">
+  <section class="ca-payment-section">
+      <div class="ca-payment-section-title">{{ _('Pago de / a') }}</div>
       <div class="row g-3">
-          <div class="col-md-3">
-              <label class="form-label">{{ _('Tipo tercero') }}</label>
-              <select class="form-select" x-model="header.party_type">
-                  <option value="customer">{{ _('Cliente') }}</option>
-                  <option value="supplier">{{ _('Proveedor') }}</option>
-              </select>
+          <div class="col-md-4">
+              <label class="form-label text-muted small mb-1">{{ _('Tipo de tercero') }} <span class="text-danger">*</span></label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                  doctype: "party_type",
+                  name: "party_type",
+                  initialValue: "{{ initial_payment.party_type if initial_payment else "customer" }}",
+                  initialLabel: "{{ _('Cliente') if not initial_payment or initial_payment.party_type == 'customer' else _('Proveedor') }}",
+                  preload: true,
+                  preloadOnFocus: true,
+                  onSelect: function(opt) {
+                    header.party_type = opt.value;
+                    header.party_id = "";
+                    header.party_name = "";
+                  }
+                })'>
+                <input type="hidden" id="party_type_val" x-model="selectedValue" x-effect="header.party_type = selectedValue || header.party_type">
+                <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Tipo de tercero...') }}" required>
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="opt in options" :key="opt.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  </template>
+                </div>
+              </div>
           </div>
-          <div class="col-md-9">
-              <label class="form-label">{{ _('Tercero') }}</label>
+          <div class="col-md-8">
+              <label class="form-label text-muted small mb-1">{{ _('Tercero') }}</label>
               <div class="ca-smart-select" x-data='smartSelect({
                   doctype: "party",
                   name: "party_id",
-                  filters: { party_type: function() { return $data.header.party_type } },
-                  filterSources: ["header.party_type"],
-                  initialValue: "{{ initial_payment.party_id if initial_payment else "" }}"
+                  filters: { party_type: { selector: "#party_type_val" } },
+                  filterSources: ["#party_type_val"],
+                  requiredFilters: ["party_type"],
+                  initialValue: "{{ initial_payment.party_id if initial_payment else "" }}",
+                  preloadOnFocus: true,
+                  onSelect: function(opt) { header.party_id = opt.value; header.party_name = opt.display_name; }
                 })'>
-                <input type="hidden" x-model="selectedValue" x-effect="header.party_id = selectedValue">
-                <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar tercero...') }}">
+                <input type="hidden" x-model="selectedValue">
+                <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar tercero...') }}">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
                   <template x-for="opt in options" :key="opt.value">
                     <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
@@ -257,103 +715,317 @@
                 </div>
               </div>
           </div>
+          <div class="col-md-12">
+              <label class="form-label text-muted small mb-1">{{ _('Nombre de Parte') }}</label>
+              <input class="form-control bg-light" type="text" x-model="header.party_name">
+          </div>
       </div>
-      <div class="row g-3 mt-1">
-          <div class="col-md-6">
-              <label class="form-label">{{ _('Contador externo') }}</label>
-              <div class="ca-smart-select" x-data='smartSelect({
-                  doctype: "external_counter",
-                  name: "external_counter_id",
-                  filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-                  filterSources: ["#company_val"]
-                })'>
-                <input type="hidden" x-model="selectedValue" x-effect="header.external_counter_id = selectedValue">
-                <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar contador externo...') }}">
-                <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value">
-                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-                  </template>
-                </div>
+  </section>
+
+  <section class="ca-payment-section">
+      <div class="ca-payment-section-title">{{ _('Importe') }}</div>
+      <div class="row g-3">
+        <div class="col-md-12">
+            <label class="form-label text-muted small mb-1">{{ _('Cantidad Pagada') }} (<span x-text="header.currency || 'NIO'"></span>) <span class="text-danger">*</span></label>
+            <input class="form-control bg-light text-start fw-bold" type="number" step="0.01" x-model="header.paid_amount" @input="calculateTotal()" required>
+        </div>
+      </div>
+  </section>
+
+  <section class="ca-payment-section">
+      <div class="ca-payment-section-title d-flex justify-content-between align-items-center">
+          <span>{{ _('Referencias del Pago') }}</span>
+          <div class="d-flex gap-2">
+              <button class="btn btn-xs btn-outline-secondary" type="button" @click="fetchPendingReferences()">
+                  <i class="bi bi-arrow-clockwise"></i> {{ _('Cargar pendientes') }}
+              </button>
+              <button class="btn btn-xs btn-outline-danger" type="button" @click="lines = []; calculateTotal()">
+                  <i class="bi bi-trash"></i> {{ _('Limpiar') }}
+              </button>
+          </div>
+      </div>
+      <div class="ca-payment-grid">
+        <table class="ca-payment-table mb-2">
+            <caption>{{ _("Referencias de pago") }}</caption>
+            <thead>
+                <tr>
+                    <th style="width: 30px;"><input type="checkbox"></th>
+                    <th style="width: 40px;">{{ _('No.') }}</th>
+                    <th>{{ _('Tipo') }}</th>
+                    <th>{{ _('Nombre') }}</th>
+                    <th class="text-end">{{ _('Total') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+                    <th class="text-end">{{ _('Saldo pendiente') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+                    <th class="text-end">{{ _('Monto aplicado') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+                    <th style="width: 60px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="(line, index) in lines" :key="index">
+                    <tr>
+                        <td class="text-center"><input type="checkbox"></td>
+                        <td class="text-center" x-text="index + 1"></td>
+                        <td x-text="line.reference_label || line.flow_source_type || line.reference_type"></td>
+                        <td x-text="line.document_no"></td>
+                        <td class="text-end" x-text="parseNumber(line.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                        <td class="text-end" x-text="parseNumber(line.outstanding_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                        <td class="text-end">
+                            <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end border-0 bg-transparent"
+                                   x-model="line.allocated_amount" @input="normalizeReferenceAllocation(line); calculateTotal()">
+                        </td>
+                         <td>
+                             <div class="ca-payment-actions">
+                               <button class="btn btn-sm text-primary p-0" type="button" @click="openReferenceLineDetails(index)" title="{{ _('Editar') }}">
+                                   <i class="bi bi-pencil"></i>
+                               </button>
+                               <button class="btn btn-sm text-danger p-0" type="button" @click="removeReferenceLine(index)" title="{{ _('Eliminar') }}">
+                                   <i class="bi bi-trash"></i>
+                               </button>
+                               <button class="btn btn-sm text-success p-0" type="button" @click="line.allocated_amount = line.outstanding_amount; calculateTotal()" title="{{ _('Pagar todo') }}">
+                                   <i class="bi bi-check-all"></i>
+                               </button>
+                             </div>
+                         </td>
+                     </tr>
+                 </template>
+                 <tr x-show="!lines.length">
+                     <td colspan="8" class="text-center text-muted py-4">{{ _('No hay documentos referenciados.') }}</td>
+                 </tr>
+            </tbody>
+        </table>
+      </div>
+
+      <div class="ca-summary-grid">
+          <div>
+              <div class="ca-summary-item">
+                  <span class="ca-summary-label">{{ _('Monto Total Asignado') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
+                  <span class="ca-summary-value" x-text="formatCurrency(totalApplied())"></span>
               </div>
           </div>
+          <div>
+              <div class="ca-summary-item">
+                  <span class="ca-summary-label">{{ _('Monto sin asignar') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
+                  <span class="ca-summary-value" x-text="formatCurrency(unallocatedAmount())"></span>
+              </div>
+              <div class="ca-summary-item">
+                  <span class="ca-summary-label">{{ _('Diferencia de Monto') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
+                  <span class="ca-summary-value" x-text="formatCurrency(0)"></span>
+              </div>
+              <div class="ca-summary-item mt-2 pt-2 border-top">
+                  <span class="ca-summary-label">{{ _('Total Impuestos y Cargos') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
+                  <span class="ca-summary-value" x-text="formatCurrency(taxCharges.summary.document_tax_total)"></span>
+              </div>
+          </div>
+      </div>
+  </section>
+
+  <section class="ca-payment-section ca-collapsible-section">
+      <div class="ca-collapsible-header" @click="ui.showTaxCharges = !ui.showTaxCharges">
+          <span>{{ _('Impuestos y Cargos') }}</span>
+          <div class="d-flex gap-2 align-items-center">
+              <span class="small text-muted" x-show="taxCharges.loading">{{ _('Calculando...') }}</span>
+              <button class="btn btn-sm btn-outline-primary" type="button" @click.stop="addTaxLine()">
+                  <i class="bi bi-plus-lg"></i> {{ _('Añadir impuesto/cargo') }}
+              </button>
+              <button class="btn btn-sm btn-outline-primary" type="button" @click.stop="fetchTaxPreview()">
+                  <i class="bi bi-arrow-repeat"></i> {{ _('Recalcular') }}
+              </button>
+              <i class="bi" :class="ui.showTaxCharges ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+          </div>
+      </div>
+      <div class="mt-2" x-show="ui.showTaxCharges" x-transition x-cloak>
+          <div class="alert alert-danger py-2" x-show="taxCharges.error" x-text="taxCharges.error"></div>
+          <div class="table-responsive">
+            <table class="ca-payment-table">
+                <caption>{{ _("Detalle de impuestos y cargos") }}</caption>
+                <thead>
+                    <tr>
+                        <th style="width: 30px;"><input type="checkbox"></th>
+                        <th style="width: 40px;">{{ _('No.') }}</th>
+                        <th>{{ _('Concepto') }}</th>
+                        <th>{{ _('Tipo') }}</th>
+                        <th class="text-end">{{ _('Base') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+                        <th class="text-end">{{ _('Tasa') }}</th>
+                        <th class="text-end">{{ _('Importe') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+                        <th style="width: 92px;">{{ _('Acciones') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(line, index) in taxCharges.lines" :key="line.line_id || index">
+                        <tr>
+                            <td class="text-center"><input type="checkbox"></td>
+                            <td class="text-center" x-text="index + 1"></td>
+                            <td x-text="line.concept"></td>
+                            <td x-text="line.type"></td>
+                            <td class="text-end" x-text="Number(line.base_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                            <td class="text-end" x-text="Number(line.rate || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                            <td class="text-end" x-text="Number(line.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                            <td>
+                                <div class="ca-payment-actions">
+                                    <button class="btn btn-sm text-primary p-0" type="button" @click="openTaxLineDetails(index)" title="{{ _('Editar') }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm text-danger p-0" type="button" x-show="line.manual" @click="removeTaxLine(index)" title="{{ _('Eliminar') }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="!taxCharges.lines.length">
+                        <td colspan="8" class="text-center text-muted py-3">{{ _('Sin líneas fiscales aplicables para este pago.') }}</td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+      </div>
+  </section>
+
+  <section class="ca-payment-section">
+      <div class="ca-payment-section-title">{{ _('ID de transacción') }}</div>
+      <div class="row g-3">
           <div class="col-md-6">
-              <label class="form-label">{{ _('Número externo') }}</label>
-              <input class="form-control" type="text" x-model="header.external_number" :placeholder="'{{ _('Opcional: se sugiere automáticamente si está vacío') }}'">
+              <label class="form-label text-muted small mb-1">{{ _('No. de referencia bancaria') }}</label>
+              <input class="form-control bg-light" type="text" x-model="header.reference_no">
+          </div>
+          <div class="col-md-6">
+              <label class="form-label text-muted small mb-1">{{ _('Fecha de referencia') }}</label>
+              <input class="form-control bg-light" type="date" x-model="header.reference_date">
           </div>
       </div>
-  </div>
+  </section>
 
-  <template x-if="lines.length > 0">
-      <div class="ca-card p-0 mb-3 overflow-hidden">
-          <div class="bg-light p-2 border-bottom">
-              <h6 class="mb-0"><i class="bi bi-link-45deg"></i> {{ _('Asignación a Facturas') }}</h6>
+  <section class="ca-payment-section ca-collapsible-section">
+    <div class="ca-collapsible-header" @click="ui.showDimensions = !ui.showDimensions">
+        <span>{{ _('Dimensiones contables') }}</span>
+        <i class="bi" :class="ui.showDimensions ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </div>
+    <div class="row g-3 mt-1" x-show="ui.showDimensions" x-transition x-cloak>
+        <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">{{ _('Centro de costo') }}</label>
+            <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "cost_center",
+                name: "cost_center_code",
+                filters: { company: { selector: "#company_val" } },
+                filterSources: ["#company_val"]
+              })'>
+              <input type="hidden" x-model="selectedValue" x-effect="header.cost_center_code = selectedValue">
+              <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Centro de costo...') }}">
+              <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                <template x-for="opt in options" :key="opt.value">
+                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                </template>
+              </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">{{ _('Unidad de negocio') }}</label>
+            <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "unit",
+                name: "unit_code",
+                filters: { company: { selector: "#company_val" } },
+                filterSources: ["#company_val"]
+              })'>
+              <input type="hidden" x-model="selectedValue" x-effect="header.unit_code = selectedValue">
+              <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Unidad...') }}">
+              <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                <template x-for="opt in options" :key="opt.value">
+                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                </template>
+              </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">{{ _('Proyecto') }}</label>
+            <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "project",
+                name: "project_code",
+                filters: { company: { selector: "#company_val" } },
+                filterSources: ["#company_val"]
+              })'>
+              <input type="hidden" x-model="selectedValue" x-effect="header.project_code = selectedValue">
+              <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Proyecto...') }}">
+              <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                <template x-for="opt in options" :key="opt.value">
+                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                </template>
+              </div>
+            </div>
+        </div>
+    </div>
+  </section>
+
+  <section class="ca-payment-section ca-collapsible-section">
+      <div class="ca-collapsible-header" @click="ui.showInformation = !ui.showInformation">
+          <span>{{ _('Mas información') }}</span>
+          <i class="bi" :class="ui.showInformation ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      </div>
+      <div class="row g-3 mt-1" x-show="ui.showInformation" x-transition x-cloak>
+          <div class="col-md-12">
+              <label class="form-label text-muted small mb-1">{{ _('Comentarios') }}</label>
+              <textarea class="form-control bg-light" rows="3" x-model="header.remarks"></textarea>
           </div>
-          <table class="ca-table mb-0">
-              <caption>{{ _("Facturas pendientes para asignación de pago") }}</caption>
-              <thead>
-                  <tr>
-                      <th>{{ _('Documento') }}</th>
-                      <th class="text-end">{{ _('Total') }}</th>
-                      <th class="text-end">{{ _('Saldo Pendiente') }}</th>
-                      <th class="text-end" style="width: 150px;">{{ _('Monto a Aplicar') }}</th>
-                  </tr>
-              </thead>
-              <tbody>
-                  <template x-for="(line, index) in lines" :key="index">
-                      <tr>
-                          <td x-text="line.document_no"></td>
-                          <td class="text-end" x-text="line.total_amount"></td>
-                          <td class="text-end" x-text="line.outstanding_amount"></td>
-                          <td>
-                              <input type="number" step="0.01" class="form-control form-control-sm text-end"
-                                     x-model="line.allocated_amount" @input="calculateTotal()">
-                          </td>
-                      </tr>
+      </div>
+  </section>
+
+  <div class="modal fade" id="referenceLineDetailModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+              <div class="modal-header">
+                  <h5 class="modal-title">{{ _('Detalle de referencia') }}</h5>
+                  <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+              </div>
+              <div class="modal-body">
+                  <template x-if="references.activeIndex !== null && references.modalLine !== null">
+                      <div class="row g-3">
+                          <div class="col-md-6">
+                              <label class="form-label text-muted small mb-1">{{ _('Tipo') }}</label>
+                              <input class="form-control bg-light" type="text" x-model="references.modalLine.reference_label" readonly>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label text-muted small mb-1">{{ _('Documento') }}</label>
+                              <input class="form-control bg-light" type="text" x-model="references.modalLine.document_no" readonly>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Fecha') }}</label>
+                              <input class="form-control bg-light" type="text" x-model="references.modalLine.reference_date" readonly>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Moneda') }}</label>
+                              <input class="form-control bg-light" type="text" x-model="references.modalLine.currency" readonly>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Total') }}</label>
+                              <input class="form-control bg-light text-end" type="number" step="0.01" x-model="references.modalLine.total_amount" readonly>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Saldo pendiente') }}</label>
+                              <input class="form-control bg-light text-end" type="number" step="0.01" x-model="references.modalLine.outstanding_amount" readonly>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Monto aplicado') }}</label>
+                              <input class="form-control text-end" type="number" step="0.01" min="0" :max="references.modalLine.outstanding_amount || null" x-model="references.modalLine.allocated_amount">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Descuento') }}</label>
+                              <input class="form-control text-end" type="number" step="0.01" min="0" x-model="references.modalLine.discount_amount">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Ganancia/Pérdida') }}</label>
+                              <input class="form-control text-end" type="number" step="0.01" x-model="references.modalLine.gain_loss_amount">
+                          </div>
+                          <div class="col-md-8">
+                              <label class="form-label text-muted small mb-1">{{ _('Observaciones') }}</label>
+                              <textarea class="form-control" rows="1" x-model="references.modalLine.notes"></textarea>
+                          </div>
+                      </div>
                   </template>
-              </tbody>
-          </table>
+              </div>
+              <div class="modal-footer">
+                  <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+                  <button class="btn btn-primary" type="button" @click="saveReferenceLineModal()">{{ _('Actualizar') }}</button>
+              </div>
+          </div>
       </div>
-  </template>
-
-  <div class="ca-card p-3 mb-3">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0"><i class="bi bi-percent"></i> {{ _('Impuestos y Cargos') }}</h6>
-          <button class="btn btn-sm btn-outline-primary" type="button" @click="fetchTaxPreview()">{{ _('Recalcular') }}</button>
-      </div>
-      <div class="alert alert-danger py-2" x-show="taxCharges.error" x-text="taxCharges.error"></div>
-      <table class="ca-table table table-sm mb-2">
-          <caption>{{ _("Detalle de impuestos y cargos") }}</caption>
-          <thead>
-              <tr>
-                  <th>{{ _('Concepto') }}</th>
-                  <th>{{ _('Tipo') }}</th>
-                  <th class="text-end">{{ _('Monto') }}</th>
-                  <th style="width:60px;">{{ _('Ver') }}</th>
-              </tr>
-          </thead>
-          <tbody>
-              <template x-for="(line, index) in taxCharges.lines" :key="line.line_id || index">
-                  <tr>
-                      <td x-text="line.concept"></td>
-                      <td x-text="line.type"></td>
-                      <td class="text-end" x-text="Number(line.amount || 0).toFixed(2)"></td>
-                      <td><button class="btn btn-sm btn-outline-secondary" type="button" @click="openTaxLineDetails(index)"><i class="bi bi-pencil"></i></button></td>
-                  </tr>
-              </template>
-              <tr x-show="!taxCharges.lines.length">
-                  <td colspan="4" class="text-center text-muted">{{ _('Sin líneas fiscales aplicables para este documento.') }}</td>
-              </tr>
-          </tbody>
-      </table>
-      <div class="text-end small">
-          <strong>{{ _('Impuestos y Cargos') }}:</strong>
-          <span x-text="Number(taxCharges.summary.document_tax_total || 0).toFixed(2)"></span>
-      </div>
-  </div>
-
-  <div class="ca-card p-3 mb-3">
-      <label class="form-label">{{ _('Comentarios') }}</label>
-      <textarea class="form-control" rows="3" x-model="header.remarks"></textarea>
   </div>
 
   <div class="modal fade" id="taxChargeDetailModal" tabindex="-1" aria-hidden="true">
@@ -367,19 +1039,86 @@
                   <template x-if="taxCharges.activeIndex !== null && taxCharges.modalLine !== null">
                       <div class="row g-3">
                           <div class="col-md-6">
-                              <label class="form-label">{{ _('Concepto') }}</label>
-                              <input class="form-control" type="text" x-model="taxCharges.modalLine.concept" readonly>
+                              <label class="form-label text-muted small mb-1">{{ _('Concepto') }}</label>
+                              <input class="form-control" type="text" x-model="taxCharges.modalLine.concept" :readonly="!taxCharges.modalLine.manual">
                           </div>
                           <div class="col-md-6">
-                              <label class="form-label">{{ _('Tipo') }}</label>
-                              <input class="form-control" type="text" x-model="taxCharges.modalLine.type" readonly>
+                              <label class="form-label text-muted small mb-1">{{ _('Tipo') }}</label>
+                              <select class="form-select" x-model="taxCharges.modalLine.type" :disabled="!taxCharges.modalLine.manual">
+                                  <option value="tax">{{ _('Impuesto') }}</option>
+                                  <option value="charge">{{ _('Cargo') }}</option>
+                                  <option value="withholding">{{ _('Retención') }}</option>
+                                  <option value="deduction">{{ _('Deducción') }}</option>
+                              </select>
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Base') }}</label>
+                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.base_amount" :readonly="!taxCharges.modalLine.manual">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Tasa') }}</label>
+                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.rate" :readonly="!taxCharges.modalLine.manual">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Monto') }}</label>
+                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.amount" :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
                           </div>
                           <div class="col-md-6">
-                              <label class="form-label">{{ _('Cuenta contable') }}</label>
-                              <input class="form-control" type="text" x-model="taxCharges.modalLine.account_id">
+                              <label class="form-label text-muted small mb-1">{{ _('Método de cálculo') }}</label>
+                              <select class="form-select" x-model="taxCharges.modalLine.calculation_method" :disabled="!taxCharges.modalLine.manual">
+                                  <option value="manual">{{ _('Manual') }}</option>
+                                  <option value="percentage">{{ _('Porcentaje') }}</option>
+                                  <option value="fixed">{{ _('Fijo') }}</option>
+                              </select>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label text-muted small mb-1">{{ _('Tratamiento contable') }}</label>
+                              <select class="form-select" x-model="taxCharges.modalLine.accounting_treatment" :disabled="!taxCharges.modalLine.manual">
+                                  <option value="separate_tax_account">{{ _('Cuenta separada') }}</option>
+                                  <option value="capitalizable_inventory_cost">{{ _('Capitalizable a inventario') }}</option>
+                                  <option value="expense">{{ _('Gasto') }}</option>
+                              </select>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label text-muted small mb-1">{{ _('Prorrateo') }}</label>
+                              <select class="form-select" x-model="taxCharges.modalLine.allocation_method" :disabled="!taxCharges.modalLine.manual">
+                                  <option value="by_value">{{ _('Por valor') }}</option>
+                                  <option value="by_quantity">{{ _('Por cantidad') }}</option>
+                                  <option value="by_weight">{{ _('Por peso') }}</option>
+                                  <option value="by_volume">{{ _('Por volumen') }}</option>
+                                  <option value="equal">{{ _('Partes iguales') }}</option>
+                              </select>
+                          </div>
+                          <div class="col-md-6 d-flex align-items-end">
+                              <div class="form-check">
+                                  <input class="form-check-input" id="payment-tax-affects-inventory" type="checkbox" x-model="taxCharges.modalLine.affects_inventory" :disabled="!taxCharges.modalLine.manual">
+                                  <label class="form-check-label" for="payment-tax-affects-inventory">{{ _('Afecta inventario') }}</label>
+                              </div>
+                          </div>
+                          <div class="col-md-6">
+                              <label class="form-label text-muted small mb-1">{{ _('Cuenta contable') }}</label>
+                              <div class="ca-smart-select" x-data='smartSelect({
+                                  doctype: "account",
+                                  name: "modal_payment_tax_account",
+                                  filters: { company: { selector: "#company_val" } },
+                                  filterSources: ["#company_val"],
+                                  requiredFilters: ["company"],
+                                  initialValue: taxCharges.modalLine.account_id,
+                                  initialLabel: taxCharges.modalLine.account_id,
+                                  preloadOnFocus: true,
+                                  onSelect: function(opt) { taxCharges.modalLine.account_id = opt.value; }
+                                })'>
+                                <input type="hidden" x-model="selectedValue" x-effect="taxCharges.modalLine.account_id = selectedValue">
+                                <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}">
+                                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                                  <template x-for="opt in options" :key="opt.value">
+                                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                                  </template>
+                                </div>
+                              </div>
                           </div>
                           <div class="col-md-12">
-                              <label class="form-label">{{ _('Observaciones') }}</label>
+                              <label class="form-label text-muted small mb-1">{{ _('Observaciones') }}</label>
                               <textarea class="form-control" rows="3" x-model="taxCharges.modalLine.notes"></textarea>
                           </div>
                       </div>
