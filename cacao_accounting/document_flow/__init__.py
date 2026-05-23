@@ -12,6 +12,7 @@ from cacao_accounting.document_flow.service import (
     get_document_flow_items,
     get_pending_lines,
     list_source_documents,
+    payment_reference_candidates,
     refresh_source_caches_for_target,
     revert_relations_for_target,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "get_document_flow_items",
     "get_pending_lines",
     "list_source_documents",
+    "payment_reference_candidates",
     "refresh_source_caches_for_target",
     "revert_relations_for_target",
 ]

@@ -18,7 +18,9 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
+    PurchaseOrder,
     SalesInvoice,
+    SalesOrder,
     database,
 )
 from cacao_accounting.document_flow.registry import (
@@ -85,17 +87,62 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
     """Devuelve las referencias de pago asociadas a una factura."""
     raw_document_type = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
     document_type = normalize_doctype(str(raw_document_type or ""))
-    if document_type not in {"sales_invoice", "purchase_invoice"}:
+    document_id = getattr(document, "id", "")
+    if document_type not in {
+        "sales_invoice",
+        "purchase_invoice",
+        "sales_credit_note",
+        "purchase_credit_note",
+        "sales_debit_note",
+        "purchase_debit_note",
+    }:
         return []
-    query = select(PaymentReference).filter_by(reference_type=document_type, reference_id=getattr(document, "id", ""))
+
+    relation_query = (
+        select(PaymentReference)
+        .join(
+            DocumentRelation,
+            DocumentRelation.target_item_id == PaymentReference.id,
+        )
+        .where(
+            DocumentRelation.source_type == document_type,
+            DocumentRelation.source_id == document_id,
+            DocumentRelation.target_type == "payment_entry",
+            DocumentRelation.status == "active",
+        )
+    )
     if as_of_date is not None:
-        query = query.where(
+        relation_query = relation_query.where(
             or_(
                 PaymentReference.allocation_date.is_(None),
                 PaymentReference.allocation_date <= as_of_date,
             )
         )
-    return list(database.session.execute(query).scalars().all())
+    references = list(database.session.execute(relation_query).scalars().all())
+    if references:
+        return references
+
+    physical_reference_type = "purchase_invoice" if document_type.startswith("purchase_") else "sales_invoice"
+    fallback_query = (
+        select(PaymentReference)
+        .outerjoin(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
+        )
+        .where(
+            PaymentReference.reference_type == physical_reference_type,
+            PaymentReference.reference_id == document_id,
+            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+        )
+    )
+    if as_of_date is not None:
+        fallback_query = fallback_query.where(
+            or_(
+                PaymentReference.allocation_date.is_(None),
+                PaymentReference.allocation_date <= as_of_date,
+            )
+        )
+    return list(database.session.execute(fallback_query).scalars().all())
 
 
 def compute_outstanding_amount(document: Any, as_of_date: date | None = None) -> Decimal:
@@ -109,6 +156,188 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
     )
     outstanding = grand_total - allocated
     return outstanding if outstanding > 0 else Decimal("0")
+
+
+def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
+    """Calcula el saldo no aplicado (abierto) de un pago."""
+    if getattr(payment, "docstatus", 0) == 2:
+        return Decimal("0")
+    payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
+    if payment_total <= 0:
+        return Decimal("0")
+    reference_rows = database.session.execute(
+        select(
+            PaymentReference.id,
+            PaymentReference.reference_type,
+            PaymentReference.flow_source_type,
+            PaymentReference.allocated_amount,
+            PaymentReference.discount_amount,
+            PaymentReference.gain_loss_amount,
+            DocumentRelation.status,
+        )
+        .outerjoin(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
+        )
+        .where(PaymentReference.payment_id == payment.id)
+    ).all()
+    if not reference_rows:
+        return payment_total
+    consumed_by_reference: dict[str, Decimal] = {}
+    relation_status_by_reference: dict[str, set[str]] = {}
+    for (
+        reference_id,
+        reference_type,
+        flow_source_type,
+        allocated_amount,
+        discount_amount,
+        gain_loss_amount,
+        relation_status,
+    ) in reference_rows:
+        source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
+        if source_type in {"purchase_order", "sales_order"}:
+            continue
+        cash_consumed = (
+            decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
+        )
+        if cash_consumed < 0:
+            cash_consumed = Decimal("0")
+        consumed_by_reference.setdefault(str(reference_id), cash_consumed)
+        if relation_status:
+            relation_status_by_reference.setdefault(str(reference_id), set()).add(str(relation_status))
+    consumed = Decimal("0")
+    for reference_id, cash_consumed in consumed_by_reference.items():
+        statuses = relation_status_by_reference.get(reference_id, set())
+        if not statuses or "active" in statuses:
+            consumed += cash_consumed
+    remaining = payment_total - consumed
+    return remaining if remaining > 0 else Decimal("0")
+
+
+def _payment_candidate_date(document: Any) -> date | None:
+    """Resuelve la fecha representativa de un candidato de pago."""
+    value = (
+        getattr(document, "posting_date", None)
+        or getattr(document, "bill_date", None)
+        or getattr(document, "transaction_date", None)
+        or getattr(document, "due_date", None)
+    )
+    return value if isinstance(value, date) else None
+
+
+def _payment_candidate_party(document: Any, source_type: str) -> tuple[str, str | None]:
+    """Resuelve tipo e id de tercero para un candidato de pago."""
+    source_key = normalize_doctype(source_type)
+    if source_key.startswith("purchase_"):
+        return "supplier", getattr(document, "supplier_id", None)
+    return "customer", getattr(document, "customer_id", None)
+
+
+def _payment_candidate_physical_type(source_type: str) -> str:
+    """Devuelve el tipo físico persistido para la referencia de pago."""
+    source_key = normalize_doctype(source_type)
+    if source_key in {"purchase_credit_note", "purchase_debit_note"}:
+        return "purchase_invoice"
+    if source_key in {"sales_credit_note", "sales_debit_note"}:
+        return "sales_invoice"
+    return source_key
+
+
+def _payment_order_allocated(source_type: str, source_id: str) -> Decimal:
+    """Calcula anticipos activos ya vinculados a una orden."""
+    rows = database.session.execute(
+        select(PaymentReference.allocated_amount)
+        .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .where(
+            DocumentRelation.source_type == source_type,
+            DocumentRelation.source_id == source_id,
+            DocumentRelation.target_type == "payment_entry",
+            DocumentRelation.status == "active",
+        )
+    ).scalars()
+    return sum((decimal_or_zero(amount) for amount in rows), Decimal("0"))
+
+
+def _payment_candidate_outstanding(document: Any, source_type: str) -> Decimal:
+    """Calcula el saldo disponible de un candidato para referencia de pago."""
+    source_key = normalize_doctype(source_type)
+    total = decimal_or_zero(getattr(document, "grand_total", None))
+    if source_key in {"purchase_order", "sales_order"}:
+        pending = total - _payment_order_allocated(source_key, str(getattr(document, "id", "")))
+        return pending if pending > 0 else Decimal("0")
+    return compute_outstanding_amount(document)
+
+
+def payment_reference_candidates(
+    *,
+    company: str,
+    party_type: str,
+    party_id: str,
+    source_types: list[str],
+    include_orders: bool = False,
+) -> list[dict[str, Any]]:
+    """Devuelve documentos candidatos para la tabla de referencias de pago."""
+    if not company or party_type not in {"supplier", "customer"} or not party_id:
+        raise DocumentFlowError("Debe indicar compania, tipo de tercero y tercero.", 400)
+    allowed_by_party = (
+        {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
+        if party_type == "supplier"
+        else {"sales_invoice", "sales_debit_note", "sales_credit_note", "sales_order"}
+    )
+    model_by_type: dict[str, Any] = {
+        "purchase_invoice": PurchaseInvoice,
+        "purchase_debit_note": PurchaseInvoice,
+        "purchase_credit_note": PurchaseInvoice,
+        "purchase_order": PurchaseOrder,
+        "sales_invoice": SalesInvoice,
+        "sales_debit_note": SalesInvoice,
+        "sales_credit_note": SalesInvoice,
+        "sales_order": SalesOrder,
+    }
+    rows: list[dict[str, Any]] = []
+    for raw_source_type in source_types:
+        source_type = normalize_doctype(raw_source_type)
+        if source_type not in allowed_by_party:
+            continue
+        if source_type in {"purchase_order", "sales_order"} and not include_orders:
+            continue
+        model = model_by_type.get(source_type)
+        if model is None:
+            continue
+        query = database.select(model).filter_by(company=company, docstatus=1)
+        if source_type in {"purchase_credit_note", "purchase_debit_note", "sales_credit_note", "sales_debit_note"}:
+            query = query.filter_by(document_type=source_type)
+        elif hasattr(model, "document_type"):
+            query = query.filter_by(document_type=source_type)
+        if party_type == "supplier":
+            query = query.filter_by(supplier_id=party_id)
+        else:
+            query = query.filter_by(customer_id=party_id)
+        for document in database.session.execute(query).scalars().all():
+            outstanding = _payment_candidate_outstanding(document, source_type)
+            if outstanding <= 0:
+                continue
+            document_date = _payment_candidate_date(document)
+            physical_type = _payment_candidate_physical_type(source_type)
+            rows.append(
+                {
+                    "source_type": source_type,
+                    "reference_type": physical_type,
+                    "flow_source_type": source_type,
+                    "reference_id": document.id,
+                    "source_id": document.id,
+                    "document_no": getattr(document, "document_no", None) or document.id,
+                    "document_date": document_date.isoformat() if document_date else "",
+                    "party_type": party_type,
+                    "party_id": party_id,
+                    "company": company,
+                    "currency": getattr(document, "currency", None) or "",
+                    "grand_total": _to_json_number(getattr(document, "grand_total", None)),
+                    "pending_amount": _to_json_number(outstanding),
+                    "source_label": source_type,
+                }
+            )
+    return rows
 
 
 def refresh_outstanding_amount_cache(document: Any, as_of_date: date | None = None) -> Decimal:

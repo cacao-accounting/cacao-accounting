@@ -81,13 +81,19 @@ class AccountingMapper:
         settlement: SettlementResult,
     ) -> list[JournalEntryLineProforma]:
         """Map payment and collection events."""
+        advance_account = context.references.custom_references.get("advance_account_id")
+        use_advance_as_party_balance = bool(
+            context.references.custom_references.get("use_advance_as_party_balance") and advance_account
+        )
         lines = [
-            self._build_party_line(
+            self._build_line(
                 context,
-                amount=settlement.gross_settlement_amount,
+                str(advance_account or "") if use_advance_as_party_balance else context.references.get("party_account", ""),
+                settlement.gross_settlement_amount,
                 side="debit" if context.transaction_direction == "purchase" else "credit",
                 description=f"Settlement - {context.document_type}",
                 exchange_rate=self._document_exchange_rate(context),
+                party_id=None if use_advance_as_party_balance else context.party_id,
             )
         ]
         cash_account = self._resolve_cash_account(context)
@@ -325,6 +331,20 @@ class AccountingMapper:
         debits = sum((line.debit for line in lines), Decimal("0"))
         credits = sum((line.credit for line in lines), Decimal("0"))
         diff = debits - credits
+        advance_account = context.references.custom_references.get("advance_account_id")
+        open_payment_amount = Decimal(str(context.references.custom_references.get("open_payment_amount", "0")))
+        if advance_account and open_payment_amount > 0 and diff != 0:
+            lines.append(
+                self._build_line(
+                    context,
+                    str(advance_account),
+                    abs(diff),
+                    side="credit" if diff > 0 else "debit",
+                    description=f"Open Payment Balance - {context.document_type}",
+                    exchange_rate=self._settlement_exchange_rate(context),
+                )
+            )
+            return JournalEntryProforma(lines=lines, memo=f"Pro-forma for {context.document_type}")
         rounding_account = context.references.get("default_rounding_account_id")
         if rounding_account:
             lines.append(

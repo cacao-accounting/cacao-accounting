@@ -138,7 +138,7 @@ def _create_action_payload(action: Any, document_id: str) -> dict[str, Any]:
     from flask import url_for
 
     create_url: str | None
-    endpoint_args: dict[str, str] = {action.source_param: document_id}
+    endpoint_args: dict[str, Any] = {action.source_param: document_id}
     if action.query_params:
         endpoint_args.update(action.query_params)
     try:

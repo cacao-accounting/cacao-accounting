@@ -85,4 +85,10 @@ def test_forms_render_tax_charges_block(request):
             assert payment_form.status_code == 200
             html_payment = payment_form.get_data(as_text=True)
             assert "Impuestos y Cargos" in html_payment
+            assert "Añadir impuesto/cargo" in html_payment
+            assert "Recalcular" in html_payment
             assert "taxChargeDetailModal" in html_payment
+            assert "Método de cálculo" in html_payment
+            assert "Referencias del Pago" in html_payment
+            assert "referenceLineDetailModal" in html_payment
+            assert "Monto sin asignar" in html_payment

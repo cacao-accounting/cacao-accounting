@@ -383,10 +383,7 @@ def importar(budget_id):
                 try:
                     import_service = BudgetImportService()
                     import_obj = import_service.validate_import(budget_id, file.filename, file.read(), str(current_user.id))
-
-                    from cacao_accounting.database import BudgetImportLine
-
-                    staged_lines = database.session.query(BudgetImportLine).filter_by(import_id=import_obj.id).limit(100).all()
+                    staged_lines = import_service.get_staged_lines(import_obj.id, limit=100)
 
                     return render_template(
                         "contabilidad/presupuestos/import.html",

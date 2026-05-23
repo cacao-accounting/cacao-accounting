@@ -39,6 +39,7 @@ from cacao_accounting.database import (
     TaxTemplateItem,
     database,
 )
+from cacao_accounting.document_flow.service import compute_payment_unallocated_amount
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
@@ -248,11 +249,12 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
     if actual_cash_amount <= 0:
         raise CalculationContextBuilderError("El monto del pago debe ser mayor que cero.")
     references = list(database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all())
-    allocated_total = sum((_decimal_value(reference.allocated_amount) for reference in references), Decimal("0"))
+    settlement_references = [reference for reference in references if not _is_order_payment_reference(reference)]
+    allocated_total = sum((_decimal_value(reference.allocated_amount) for reference in settlement_references), Decimal("0"))
     outstanding_total = sum(
         (
             _decimal_value(reference.outstanding_amount or reference.total_amount or reference.allocated_amount)
-            for reference in references
+            for reference in settlement_references
         ),
         Decimal("0"),
     )
@@ -261,10 +263,11 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
     company_currency = _company_currency(document, company)
     transaction_currency = _document_currency(document, company)
     company_open_balance = Decimal("0")
-    if references:
-        company_open_balance = _estimated_company_open_balance(references, settlement_amount, document_total)
+    if settlement_references:
+        company_open_balance = _estimated_company_open_balance(settlement_references, settlement_amount, document_total)
     if company_open_balance <= 0:
         company_open_balance = _decimal_value(getattr(document, base_amount_field, None))
+    open_payment_amount = compute_payment_unallocated_amount(document)
     document_exchange_rate = (
         (company_open_balance / document_total).quantize(Decimal("0.000000001"))
         if references and document_total > 0 and company_open_balance > 0
@@ -275,12 +278,16 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         company_amount=_decimal_value(getattr(document, base_amount_field, None)),
         transaction_amount=actual_cash_amount,
     )
-    eligible_discount_amount = _eligible_discount_amount(
-        company=company,
-        party_id=document.party_id,
-        payment_date=document.posting_date,
-        references=references,
-    )
+    manual_discount_total = sum((_decimal_value(ref.discount_amount) for ref in settlement_references), Decimal("0"))
+    if manual_discount_total > 0:
+        eligible_discount_amount = manual_discount_total
+    else:
+        eligible_discount_amount = _eligible_discount_amount(
+            company=company,
+            party_id=document.party_id,
+            payment_date=document.posting_date,
+            references=settlement_references,
+        )
     tax_rules = build_tax_rule_contexts_from_snapshot(
         document_type="payment_entry",
         document_id=document.id,
@@ -330,6 +337,8 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
                 "settlement_exchange_rate": settlement_exchange_rate,
                 "actual_cash_amount": actual_cash_amount,
                 "eligible_discount_amount": eligible_discount_amount,
+                "use_advance_as_party_balance": not settlement_references,
+                "open_payment_amount": open_payment_amount,
             },
         ),
         settlement_amount=settlement_amount,
@@ -446,6 +455,11 @@ def _build_references(
     custom["unrealized_exchange_gain_account_id"] = getattr(defaults, "unrealized_exchange_gain_account_id", None)
     custom["unrealized_exchange_loss_account_id"] = getattr(defaults, "unrealized_exchange_loss_account_id", None)
     custom["payment_discount_account_id"] = getattr(defaults, "payment_discount_account_id", None)
+    custom["advance_account_id"] = (
+        getattr(defaults, "supplier_advance_account_id", None)
+        if direction == "purchase"
+        else getattr(defaults, "customer_advance_account_id", None)
+    )
     return AccountingReferences(
         party_account=party_account,
         cash_account=cash_account or getattr(defaults, "default_bank", None) or getattr(defaults, "default_cash", None),
@@ -527,8 +541,17 @@ def _eligible_discount_amount(
 
 def _payment_reference_document(reference: PaymentReference) -> PurchaseInvoice | SalesInvoice | None:
     """Resolve the invoice linked to a payment reference."""
+    if _is_order_payment_reference(reference):
+        return None
     model = PurchaseInvoice if reference.reference_type == "purchase_invoice" else SalesInvoice
     return cast(PurchaseInvoice | SalesInvoice | None, database.session.get(model, reference.reference_id))
+
+
+def _is_order_payment_reference(reference: PaymentReference) -> bool:
+    """Return True when the reference only traces an advance source order."""
+    reference_type = str(reference.reference_type or "")
+    flow_source_type = str(getattr(reference, "flow_source_type", "") or "")
+    return reference_type in {"purchase_order", "sales_order"} or flow_source_type in {"purchase_order", "sales_order"}
 
 
 def _estimated_company_open_balance(
@@ -679,7 +702,12 @@ def _company_defaults(company: str) -> CompanyDefaultAccount | None:
 def _document_currency(document: Any, company: str) -> str:
     """Resolve the transaction currency for the document."""
     entity = database.session.get(Entity, company)
-    return str(getattr(document, "transaction_currency", None) or getattr(entity, "currency", None) or "NIO")
+    return str(
+        getattr(document, "transaction_currency", None)
+        or getattr(document, "currency", None)
+        or getattr(entity, "currency", None)
+        or "NIO"
+    )
 
 
 def _company_currency(document: Any, company: str) -> str:

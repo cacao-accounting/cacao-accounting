@@ -9,7 +9,7 @@
 from datetime import date
 from decimal import Decimal
 import json
-from typing import cast
+from typing import Any, cast
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -39,7 +39,9 @@ from cacao_accounting.database import (
     BankAccount,
     BankMatchingRule,
     BankTransaction,
+    DocumentRelation,
     ExternalCounter,
+    GLEntry,
     NamingSeries,
     PaymentEntry,
     PaymentReference,
@@ -55,6 +57,7 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_bank_transaction, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
+from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.service import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -715,7 +718,18 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
 
 def _invoice_outstanding(invoice) -> Decimal:
     """Devuelve el saldo vivo calculado de una factura."""
-    return compute_outstanding_amount(invoice)
+    computed = compute_outstanding_amount(invoice)
+    cached_values = []
+    for attr in ("outstanding_amount", "base_outstanding_amount"):
+        raw = getattr(invoice, attr, None)
+        if raw is None:
+            continue
+        value = Decimal(str(raw))
+        if value >= 0:
+            cached_values.append(value)
+    if not cached_values:
+        return computed
+    return min([computed, *cached_values])
 
 
 def _payment_source_rows(
@@ -840,7 +854,114 @@ def _payment_profile_from_source_type(flow_source_type: str) -> tuple[str, str]:
     return mapping.get(flow_source_type, ("customer", "receive"))
 
 
-def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = None) -> Decimal:
+def _reference_party_info(document: Any) -> tuple[str, str | None]:
+    """Devuelve el tipo e id de tercero esperado para un documento AR/AP."""
+    raw_type = normalize_doctype(str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "")))
+    if raw_type.startswith("purchase_"):
+        return "supplier", getattr(document, "supplier_id", None)
+    return "customer", getattr(document, "customer_id", None)
+
+
+def _payment_reference_date(document: object) -> date | None:
+    """Devuelve la fecha representativa para snapshot de referencia de pago."""
+    raw_date = (
+        getattr(document, "posting_date", None)
+        or getattr(document, "bill_date", None)
+        or getattr(document, "transaction_date", None)
+        or getattr(document, "due_date", None)
+    )
+    return raw_date if isinstance(raw_date, date) else None
+
+
+def _flow_source_type(reference_type: str, document: object, line: dict) -> str:
+    """Resuelve el tipo lógico de origen que debe conservarse en trazabilidad."""
+    explicit = str(line.get("flow_source_type") or "").strip().lower()
+    if explicit:
+        return normalize_doctype(explicit)
+    return normalize_doctype(str(getattr(document, "document_type", None) or reference_type))
+
+
+def _physical_reference_type(reference_type: str, flow_source_type: str) -> str:
+    """Normaliza el tipo físico que apunta a la tabla real referenciada."""
+    source_key = normalize_doctype(flow_source_type or reference_type)
+    if source_key in {"purchase_credit_note", "purchase_debit_note"}:
+        return "purchase_invoice"
+    if source_key in {"sales_credit_note", "sales_debit_note"}:
+        return "sales_invoice"
+    return normalize_doctype(reference_type)
+
+
+def _order_outstanding(order: PurchaseOrder | SalesOrder, source_type: str) -> Decimal:
+    """Calcula el monto de anticipo aún disponible para una orden."""
+    rows = database.session.execute(
+        database.select(PaymentReference.allocated_amount)
+        .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .where(
+            DocumentRelation.source_type == source_type,
+            DocumentRelation.source_id == order.id,
+            DocumentRelation.target_type == "payment_entry",
+            DocumentRelation.status == "active",
+        )
+    ).scalars()
+    allocated = sum((Decimal(str(value or "0")) for value in rows), Decimal("0"))
+    total = Decimal(str(getattr(order, "grand_total", None) or "0"))
+    pending = total - allocated
+    return pending if pending > 0 else Decimal("0")
+
+
+def _reference_outstanding(document: Any, flow_source_type: str) -> Decimal:
+    """Calcula el saldo aplicable antes de la referencia."""
+    if flow_source_type in {"purchase_order", "sales_order"}:
+        return _order_outstanding(cast(PurchaseOrder | SalesOrder, document), flow_source_type)
+    return _invoice_outstanding(document)
+
+
+def _validate_payment_header(
+    *,
+    payment_type: str,
+    company: str | None,
+    bank_account_id: str | None,
+    posting_date_raw: str | None,
+    amount: Decimal,
+    party_type: str | None,
+    party_id: str | None,
+    target_bank_account_id: str | None = None,
+) -> None:
+    """Valida los campos obligatorios del encabezado de Payment Entry."""
+    if not company:
+        raise ValueError(_("La compañía es obligatoria."))
+    if not bank_account_id:
+        raise ValueError(_("La cuenta bancaria es obligatoria."))
+    if not posting_date_raw:
+        raise ValueError(_("La fecha del pago es obligatoria."))
+    if amount <= 0:
+        raise ValueError(_("El monto del pago debe ser mayor que cero."))
+
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account:
+        raise ValueError(_("La cuenta bancaria seleccionada no existe."))
+    if bank_account.company != company:
+        raise ValueError(_("La cuenta bancaria no pertenece a la misma compañía del pago."))
+
+    if target_bank_account_id:
+        target_bank_account = database.session.get(BankAccount, target_bank_account_id)
+        if not target_bank_account:
+            raise ValueError(_("La cuenta bancaria destino no existe."))
+        if target_bank_account.company != company:
+            raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
+
+    if payment_type in ("pay", "receive") and (not party_type or not party_id):
+        raise ValueError(_("El tercero es obligatorio para pagos y cobros."))
+    if party_id and party_type not in ("supplier", "customer"):
+        raise ValueError(_("El tipo de tercero del pago no es válido."))
+
+
+def _save_payment_references(
+    payment: PaymentEntry,
+    lines: list[dict] | None = None,
+    *,
+    allow_order_references: bool = False,
+) -> dict[str, Decimal]:
     """Guarda referencias de pago y actualiza saldos vivos de facturas."""
     if lines is None:
         lines = []
@@ -855,13 +976,18 @@ def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = N
             )
             i += 1
 
-    total_allocated = Decimal("0")
+    totals = {
+        "allocated": Decimal("0"),
+        "discount": Decimal("0"),
+        "gain_loss": Decimal("0"),
+    }
     processed_reference_keys: set[tuple[str, str]] = set()
     for line in lines:
         reference_type = line.get("reference_type", "")
         reference_id = line.get("reference_id", "")
         allocated = Decimal(str(line.get("allocated_amount", "0")))
-        reference_key = (reference_type, reference_id)
+        requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
+        reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
         if reference_key in processed_reference_keys:
             from werkzeug.exceptions import Conflict
 
@@ -873,36 +999,89 @@ def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = N
 
                 raise Conflict(_("El monto asignado no puede ser negativo."))
             continue
-        if reference_type == "purchase_invoice":
-            invoice = database.session.get(PurchaseInvoice, reference_id)
-        elif reference_type == "sales_invoice":
-            invoice = database.session.get(SalesInvoice, reference_id)
+        if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
+            raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
+        if reference_type in ("purchase_invoice", "purchase_order", "purchase_credit_note", "purchase_debit_note"):
+            model = PurchaseInvoice if "invoice" in reference_type or "note" in reference_type else PurchaseOrder
+            invoice = database.session.get(model, reference_id)
+        elif reference_type in ("sales_invoice", "sales_order", "sales_credit_note", "sales_debit_note"):
+            model = SalesInvoice if "invoice" in reference_type or "note" in reference_type else SalesOrder
+            invoice = database.session.get(model, reference_id)
         else:
-            raise ValueError(_("Tipo de referencia inválido."))
+            raise ValueError(_("Tipo de referencia inválido: {0}").format(reference_type))
         if not invoice:
             raise ValueError(_("Documento referenciado no existe."))
         invoice = cast(PurchaseInvoice | SalesInvoice, invoice)
+        if getattr(invoice, "docstatus", 0) != 1:
+            raise ValueError(_("El documento referenciado debe estar aprobado."))
         if payment.company and invoice.company and payment.company != invoice.company:
             from werkzeug.exceptions import Conflict
 
             raise Conflict(_("El documento referenciado no pertenece a la misma compañía."))
-        outstanding = compute_outstanding_amount(invoice)
+        expected_party_type, expected_party_id = _reference_party_info(invoice)
+        if payment.party_type and payment.party_type != expected_party_type:
+            from werkzeug.exceptions import Conflict
+
+            raise Conflict(_("El tercero del pago no es compatible con el documento referenciado."))
+        if payment.party_id and expected_party_id and payment.party_id != expected_party_id:
+            from werkzeug.exceptions import Conflict
+
+            raise Conflict(_("El tercero del pago no coincide con el documento referenciado."))
+        flow_source_type = _flow_source_type(reference_type, invoice, line)
+        expected_payment_type_by_note = {
+            "purchase_credit_note": "receive",
+            "purchase_debit_note": "pay",
+            "sales_credit_note": "pay",
+            "sales_debit_note": "receive",
+        }
+        expected_payment_type = expected_payment_type_by_note.get(flow_source_type)
+        if expected_payment_type and payment.payment_type != expected_payment_type:
+            raise ValueError(_("El tipo de pago no corresponde con el tipo de nota referenciada."))
+        physical_reference_type = _physical_reference_type(reference_type, flow_source_type)
+        outstanding = _reference_outstanding(invoice, flow_source_type)
+        if outstanding <= 0:
+            raise ValueError(
+                _("El documento {0} no tiene saldo pendiente (Saldo: {1}).").format(
+                    getattr(invoice, "document_no", reference_id), outstanding
+                )
+            )
         if allocated > outstanding + Decimal("0.01"):
-            raise ValueError(_("El monto aplicado no puede ser mayor al saldo pendiente."))
+            raise ValueError(
+                _("El monto aplicado ({0}) no puede ser mayor al saldo pendiente ({1}) del documento {2}.").format(
+                    allocated, outstanding, getattr(invoice, "document_no", reference_id)
+                )
+            )
+        discount_amount = Decimal(str(line.get("discount_amount") or "0"))
+        gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
+        difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
+        reference_date = _payment_reference_date(invoice)
+        outstanding_after = outstanding - allocated
         reference = PaymentReference(
             payment_id=payment.id,
-            reference_type=reference_type,
+            reference_type=physical_reference_type,
+            flow_source_type=flow_source_type,
             reference_id=reference_id,
+            reference_document_no=getattr(invoice, "document_no", None) or reference_id,
+            reference_date=reference_date,
+            party_type=expected_party_type,
+            party_id=expected_party_id,
+            company=getattr(invoice, "company", None),
+            currency=getattr(invoice, "currency", None) or getattr(payment, "currency", None),
             total_amount=invoice.grand_total,
             outstanding_amount=outstanding,
+            outstanding_amount_after=outstanding_after,
             allocated_amount=allocated,
+            exchange_rate=Decimal(str(line.get("exchange_rate") or getattr(invoice, "exchange_rate", None) or 1)),
+            difference_amount=difference_amount,
             allocation_date=payment.posting_date,
+            discount_amount=discount_amount,
+            gain_loss_amount=gain_loss_amount,
+            notes=line.get("notes"),
         )
         database.session.add(reference)
         database.session.flush()
-        relation_source_type = (getattr(invoice, "document_type", None) or reference_type).strip().lower()
         create_document_relation(
-            source_type=relation_source_type,
+            source_type=flow_source_type,
             source_id=reference_id,
             source_item_id=None,
             target_type="payment_entry",
@@ -913,10 +1092,13 @@ def _save_payment_references(payment: PaymentEntry, lines: list[dict] | None = N
             rate=allocated,
             amount=allocated,
         )
-        invoice.outstanding_amount = outstanding - allocated
-        invoice.base_outstanding_amount = invoice.outstanding_amount
-        total_allocated += allocated
-    return total_allocated
+        if flow_source_type not in {"purchase_order", "sales_order"}:
+            invoice.outstanding_amount = outstanding_after
+            invoice.base_outstanding_amount = invoice.outstanding_amount
+        totals["allocated"] += allocated
+        totals["discount"] += discount_amount
+        totals["gain_loss"] += gain_loss_amount
+    return totals
 
 
 def _refresh_payment_reference_document(reference_type: str, reference_id: str) -> None:
@@ -924,6 +1106,12 @@ def _refresh_payment_reference_document(reference_type: str, reference_id: str) 
     model_map = {
         "purchase_invoice": PurchaseInvoice,
         "sales_invoice": SalesInvoice,
+        "purchase_order": PurchaseOrder,
+        "sales_order": SalesOrder,
+        "purchase_credit_note": PurchaseInvoice,
+        "purchase_debit_note": PurchaseInvoice,
+        "sales_credit_note": SalesInvoice,
+        "sales_debit_note": SalesInvoice,
     }
     model = model_map.get(reference_type)
     if not model:
@@ -960,7 +1148,7 @@ def bancos_pago_nuevo():
                     "external_counter_id": request.form.get("external_counter_id"),
                     "external_number": request.form.get("external_number"),
                     "target_bank_account_id": request.form.get("target_bank_account_id"),
-                    "exchange_rate": request.form.get("exchange_rate"),
+                    "mode_of_payment": request.form.get("mode_of_payment"),
                     "cost_center_code": request.form.get("cost_center_code"),
                     "unit_code": request.form.get("unit_code"),
                     "project_code": request.form.get("project_code"),
@@ -970,6 +1158,16 @@ def bancos_pago_nuevo():
             bank_account_id = payload.get("bank_account_id")
             amount = Decimal(str(payload.get("paid_amount") or "0"))
             target_bank_account_id = payload.get("target_bank_account_id")
+            _validate_payment_header(
+                payment_type=payment_type,
+                company=company,
+                bank_account_id=bank_account_id,
+                posting_date_raw=payload.get("posting_date"),
+                amount=amount,
+                party_type=payload.get("party_type"),
+                party_id=payload.get("party_id"),
+                target_bank_account_id=target_bank_account_id,
+            )
 
             paid_from_account_id = payload.get("paid_from_account_id")
             paid_to_account_id = payload.get("paid_to_account_id")
@@ -981,19 +1179,35 @@ def bancos_pago_nuevo():
                 if target_bank and not paid_to_account_id:
                     paid_to_account_id = target_bank.gl_account_id
 
+            reference_date_raw = payload.get("reference_date")
+            reference_date = date.fromisoformat(reference_date_raw) if reference_date_raw else None
+            bank_account = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
+            payment_currency = bank_account.currency if bank_account else None
+            if not payment_currency:
+                raise ValueError(_("La cuenta bancaria seleccionada no tiene moneda configurada."))
+            mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
+
             payment = PaymentEntry(
                 payment_type=payment_type,
                 company=company,
                 bank_account_id=bank_account_id,
                 target_bank_account_id=target_bank_account_id,
-                exchange_rate=Decimal(str(payload.get("exchange_rate") or "1")),
+                currency=payment_currency,
+                transaction_currency=payment_currency,
+                exchange_rate=None,
+                paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
+                received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
                 party_type=payload.get("party_type"),
                 party_id=payload.get("party_id"),
+                party_name=payload.get("party_name"),
                 paid_from_account_id=paid_from_account_id,
                 paid_to_account_id=paid_to_account_id,
                 cost_center_code=payload.get("cost_center_code"),
                 unit_code=payload.get("unit_code"),
                 project_code=payload.get("project_code"),
+                reference_no=payload.get("reference_no"),
+                reference_date=reference_date,
+                mode_of_payment=mode_of_payment,
                 remarks=payload.get("remarks"),
                 docstatus=0,
             )
@@ -1010,32 +1224,44 @@ def bancos_pago_nuevo():
 
             default_series_id, default_counter_id = _payment_numbering_defaults(payment.bank_account_id)
             naming_series_id = payload.get("naming_series_id") or default_series_id
-            external_counter_id = payload.get("external_counter_id") or default_counter_id
+            external_counter_id = None
+            external_number = None
+            if mode_of_payment == "check":
+                external_counter_id = payload.get("external_counter_id") or default_counter_id
 
             ext_context = {
                 "payment_type": payment_type,
-                "bank_account_id": payment.bank_account_id,
+                "mode_of_payment": mode_of_payment,
             }
+            if mode_of_payment == "check":
+                ext_context["bank_account_id"] = payment.bank_account_id
             assign_document_identifier(
                 document=payment,
                 entity_type="payment_entry",
                 posting_date_raw=payload.get("posting_date"),
                 naming_series_id=naming_series_id,
                 external_counter_id=external_counter_id,
-                external_number=payload.get("external_number") or None,
+                external_number=external_number,
                 external_context=ext_context,
             )
 
             lines = payload.get("lines") or []
-            allocated = _save_payment_references(payment, lines)
+            ref_totals = _save_payment_references(
+                payment,
+                lines,
+                allow_order_references=bool(payload.get("advance_mode")),
+            )
+            allocated = ref_totals["allocated"]
+            discount = ref_totals["discount"]
+            gain_loss = ref_totals["gain_loss"]
 
-            if allocated and amount != allocated and payment_type in ("pay", "receive"):
-                raise ValueError(_("El monto del pago debe coincidir con el monto asignado a referencias."))
+            if (allocated - discount - gain_loss) > amount + Decimal("0.01"):
+                raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
             persist_document_fiscal_snapshot(
                 company=str(payment.company or ""),
                 document_type="payment_entry",
                 document_id=payment.id,
-                currency=payload.get("currency"),
+                currency=payment.currency,
                 tax_lines=payload.get("tax_lines"),
                 tax_summary=payload.get("tax_summary"),
             )
@@ -1046,6 +1272,14 @@ def bancos_pago_nuevo():
         except (IdentifierConfigurationError, ValueError, ArithmeticError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
+        except Exception as exc:  # noqa: BLE001
+            from werkzeug.exceptions import HTTPException
+
+            database.session.rollback()
+            if isinstance(exc, HTTPException):
+                flash(exc.description or str(exc), "danger")
+            else:
+                raise
 
     from_purchase_invoice_ids = request.values.getlist("from_purchase_invoice")
     from_sales_invoice_ids = request.values.getlist("from_sales_invoice")
@@ -1074,29 +1308,36 @@ def bancos_pago_nuevo():
         party_type, payment_type = _payment_profile_from_source_type(first_flow_source_type)
         initial_amount = Decimal("0")
         lines: list[dict] = []
-        if first_row["reference_type"] in ("purchase_invoice", "sales_invoice"):
-            initial_amount = sum((compute_outstanding_amount(row["document"]) for row in source_rows), Decimal("0"))
-            lines = [
+        for row in source_rows:
+            document = row["document"]
+            flow_source_type = row.get("flow_source_type", row["reference_type"])
+            outstanding = _reference_outstanding(document, flow_source_type)
+            initial_amount += outstanding
+            reference_date_value = _payment_reference_date(document)
+            lines.append(
                 {
                     "reference_type": row["reference_type"],
-                    "reference_id": row["document"].id,
-                    "document_no": row["document"].document_no or row["document"].id,
-                    "total_amount": float(row["document"].grand_total or 0),
-                    "outstanding_amount": float(compute_outstanding_amount(row["document"])),
-                    "allocated_amount": float(compute_outstanding_amount(row["document"])),
+                    "flow_source_type": flow_source_type,
+                    "reference_id": document.id,
+                    "document_no": document.document_no or document.id,
+                    "reference_date": reference_date_value.isoformat() if reference_date_value else "",
+                    "currency": getattr(document, "currency", None) or "",
+                    "reference_label": row.get("label", ""),
+                    "total_amount": float(document.grand_total or 0),
+                    "outstanding_amount": float(outstanding),
+                    "allocated_amount": float(outstanding),
                 }
-                for row in source_rows
-            ]
-        else:
-            initial_amount = sum((Decimal(str(row["document"].grand_total or 0)) for row in source_rows), Decimal("0"))
+            )
 
         initial_payment = {
             "company": first.company,
             "party_id": getattr(first, "supplier_id", None) or getattr(first, "customer_id", None),
             "party_type": party_type,
             "payment_type": payment_type,
+            "currency": getattr(first, "currency", None) or "",
             "paid_amount": float(initial_amount),
             "lines": lines,
+            "advance_mode": any(row["reference_type"] in ("purchase_order", "sales_order") for row in source_rows),
         }
 
     transaction_config = {
@@ -1118,14 +1359,17 @@ def bancos_pago_nuevo():
 def bancos_pago(payment_id):
     """Detalle de pago."""
     from flask import abort
-    from cacao_accounting.gl.service import obtener_entradas_libro_mayor
 
     registro = database.session.get(PaymentEntry, payment_id)
     if not registro:
         abort(404)
 
     # Entradas contables
-    lineas_gl = obtener_entradas_libro_mayor(voucher_type="payment_entry", voucher_id=payment_id)
+    lineas_gl = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment_id))
+        .scalars()
+        .all()
+    )
 
     # Referencias (facturas aplicadas)
     referencias = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment_id)).scalars().all()
@@ -1195,10 +1439,10 @@ def bancos_pago_cancel(payment_id: str):
             database.session.execute(database.select(PaymentReference).filter_by(payment_id=registro.id)).scalars().all()
         )
         affected_docs = {
-            (ref.reference_type, ref.reference_id) for ref in references if ref.reference_type and ref.reference_id
+            (ref.flow_source_type or ref.reference_type, ref.reference_id)
+            for ref in references
+            if (ref.flow_source_type or ref.reference_type) and ref.reference_id
         }
-        for ref in references:
-            database.session.delete(ref)
         for reference_type, reference_id in affected_docs:
             _refresh_payment_reference_document(reference_type, reference_id)
         database.session.commit()

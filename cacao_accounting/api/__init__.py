@@ -28,6 +28,7 @@ from cacao_accounting.document_flow import (
     get_document_flow_items,
     get_pending_lines,
     list_source_documents,
+    payment_reference_candidates,
 )
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
@@ -267,6 +268,32 @@ def api_document_flow_pending_lines():
     except DocumentFlowError as exc:
         abort(exc.status_code)
     return jsonify({"target_type": target_type, "items": lines})
+
+
+@api.route("/api/document-flow/payment-reference-candidates")
+@login_required
+def api_document_flow_payment_reference_candidates():
+    """Devuelve documentos candidatos para referencias de Payment Entry."""
+    company = request.args.get("company") or request.args.get("company_id") or ""
+    party_type = request.args.get("party_type") or ""
+    party_id = request.args.get("party_id") or request.args.get("party") or ""
+    source_types = (
+        request.args.getlist("source_type") or request.args.getlist("source_types[]") or request.args.getlist("source_types")
+    )
+    include_orders = (request.args.get("advance_mode") or "").lower() in {"1", "true", "yes", "on"}
+    if not source_types:
+        abort(400)
+    try:
+        candidates = payment_reference_candidates(
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+            source_types=source_types,
+            include_orders=include_orders,
+        )
+    except DocumentFlowError as exc:
+        abort(exc.status_code)
+    return jsonify({"items": candidates})
 
 
 @api.route("/api/document-flow/create-target", methods=["POST"])
