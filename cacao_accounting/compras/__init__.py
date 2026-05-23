@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -46,6 +47,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
+    document_flow_summary,
     refresh_source_caches_for_target,
     revert_relations_for_target,
 )
@@ -240,8 +242,16 @@ def compras_solicitud_compra(request_id: str):
     if not registro:
         abort(404)
     items = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_id)).all()
+    create_actions = document_flow_summary("purchase_request", request_id).get("create_actions", [])
+    create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or request_id) + " - " + APPNAME
-    return render_template("compras/solicitud_compra.html", registro=registro, items=items, titulo=titulo)
+    return render_template(
+        "compras/solicitud_compra.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        create_actions_json=create_actions_json,
+    )
 
 
 @compras.route("/purchase-request/<request_id>/edit", methods=["GET", "POST"])
@@ -1427,11 +1437,7 @@ def compras_orden_compra_nuevo():
         "initialSourceType": (
             "purchase_request"
             if from_request_id
-            else "purchase_quotation"
-            if from_rfq_id
-            else "supplier_quotation"
-            if from_supplier_quotation_id
-            else ""
+            else "purchase_quotation" if from_rfq_id else "supplier_quotation" if from_supplier_quotation_id else ""
         ),
     }
     source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
@@ -2041,8 +2047,16 @@ def compras_recepcion(receipt_id):
     if not registro:
         abort(404)
     items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)).all()
+    create_actions = document_flow_summary("purchase_receipt", receipt_id).get("create_actions", [])
+    create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or registro.id) + " - " + APPNAME
-    return render_template("compras/recepcion.html", registro=registro, items=items, titulo=titulo)
+    return render_template(
+        "compras/recepcion.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        create_actions_json=create_actions_json,
+    )
 
 
 @compras.route("/purchase-receipt/<receipt_id>/edit", methods=["GET", "POST"])

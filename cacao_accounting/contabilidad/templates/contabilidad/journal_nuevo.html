@@ -605,9 +605,9 @@
         <i class="bi bi-sliders"></i> {{ _('Columnas') }}
       </button>
       <a href="{{ cancel_url or url_for('contabilidad.conta') }}"
-        class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
+        class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
       <button class="btn btn-sm btn-primary" type="submit">
-        <i class="bi bi-save"></i> {{ _('Guardar borrador') }}
+        <i class="bi bi-save"></i> {{ _('Guardar') }}
       </button>
     </div>
   </div>
@@ -792,8 +792,8 @@
           <i class="bi bi-file-earmark-spreadsheet"></i> {{ _('Importar líneas') }}
         </button>
         <button class="btn btn-sm btn-outline-secondary" type="button"
-          @click="addMultipleRows(5)">{{ _('Añadir múltiple') }}</button>
-        <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
+          @click="addMultipleRows(5)"><i class="bi bi-plus-square"></i> {{ _('Añadir múltiple') }}</button>
+        <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()"><i class="bi bi-plus-lg"></i> {{ _('Añadir fila') }}</button>
       </div>
     </div>
     <div class="ca-journal-grid" id="new-GL-ROWS">

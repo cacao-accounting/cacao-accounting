@@ -38,9 +38,9 @@
 
         <hr class="my-2">
         <h6>{{ _("Dimensiones") }}</h6>
-        {{ smart_select_field("Centro de Costos", "cost_center_id", "cost_center", filters.cost_center_id or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Unidad de Negocio", "business_unit_id", "unit", filters.business_unit_id or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Proyecto", "project_id", "project", filters.project_id or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Centro de Costos", "cost_center_id", "cost_center_id", filters.cost_center_id or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Unidad de Negocio", "business_unit_id", "unit_id", filters.business_unit_id or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field("Proyecto", "project_id", "project_id", filters.project_id or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
 
         <label class="form-label mb-0 mt-2">{{ _("Vista") }}</label>
         <select name="granularity" class="form-select">

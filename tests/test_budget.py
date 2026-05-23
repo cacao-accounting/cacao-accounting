@@ -3,12 +3,22 @@
 
 import pytest
 from decimal import Decimal
-from datetime import date
 from cacao_accounting import create_app
 from cacao_accounting.contabilidad.budget_service import BudgetService, BudgetError
 from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
-from cacao_accounting.database import Budget, BudgetLine, database, User, Entity, Book, FiscalYear, Accounts, CostCenter, AccountingPeriod
+from cacao_accounting.database import (
+    BudgetLine,
+    database,
+    User,
+    Entity,
+    Book,
+    FiscalYear,
+    Accounts,
+    CostCenter,
+    AccountingPeriod,
+)
 from cacao_accounting.database.helpers import inicia_base_de_datos
+
 
 @pytest.fixture()
 def app_ctx():
@@ -24,9 +34,11 @@ def app_ctx():
     with app.app_context():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         from cacao_accounting.datos.dev import master_data
+
         if not database.session.execute(database.select(Entity).filter_by(code="cacao")).first():
             master_data()
         yield app
+
 
 def test_budget_lifecycle(app_ctx):
     service = BudgetService()
@@ -44,7 +56,7 @@ def test_budget_lifecycle(app_ctx):
         "fiscal_year_id": fy.id,
         "budget_code": "TEST-2026",
         "name": "Presupuesto de Prueba",
-        "currency_id": "NIO"
+        "currency_id": "NIO",
     }
     budget = service.create_budget(data, str(admin_user.id))
     assert budget.status == "draft"
@@ -69,15 +81,12 @@ def test_budget_lifecycle(app_ctx):
 
     # 4. Reporte
     report_service = BudgetReportService()
-    report = report_service.get_real_vs_budget_report({
-        "company": "cacao",
-        "budget_id": budget.id,
-        "ledger_id": book.id,
-        "fiscal_year_id": fy.id,
-        "granularity": "month"
-    })
+    report = report_service.get_real_vs_budget_report(
+        {"company": "cacao", "budget_id": budget.id, "ledger_id": book.id, "fiscal_year_id": fy.id, "granularity": "month"}
+    )
     assert len(report.rows) > 0
     assert report.totals["budget"] == Decimal("1000")
+
 
 def test_duplicate_budget_code(app_ctx):
     service = BudgetService()
@@ -91,15 +100,18 @@ def test_duplicate_budget_code(app_ctx):
         "fiscal_year_id": fy.id,
         "budget_code": "DUP-CODE",
         "name": "P1",
-        "currency_id": "NIO"
+        "currency_id": "NIO",
     }
     service.create_budget(data, str(admin_user.id))
 
     with pytest.raises(BudgetError, match="El código de presupuesto ya existe"):
         service.create_budget(data, str(admin_user.id))
 
+
 def test_budget_import(app_ctx):
     from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+    from cacao_accounting.database import BudgetImportLine
+
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
@@ -109,10 +121,17 @@ def test_budget_import(app_ctx):
     cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    budget = service.create_budget({
-        "company": "cacao", "ledger_id": book.id, "fiscal_year_id": fy.id,
-        "budget_code": "IMPORT-TEST", "name": "Import Test", "currency_id": "NIO"
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "IMPORT-TEST",
+            "name": "Import Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
     # CSV content
     csv_content = f"Cuenta,Centro de Costo,Unidad de Negocio,Proyecto,Descripción,{per.name},Total\n"
@@ -122,6 +141,9 @@ def test_budget_import(app_ctx):
     batch = import_service.validate_import(budget.id, "test.csv", csv_content.encode("utf-8"), str(admin_user.id))
     assert batch.status == "validated"
     assert batch.rows_inserted == 1
+    staged = database.session.query(BudgetImportLine).filter_by(import_id=batch.id).all()
+    assert len(staged) == 1
+    assert staged[0].row_index == 2
 
     # 2. Commit to live
     import_service.insert_lines(batch.id, str(admin_user.id))
@@ -130,6 +152,7 @@ def test_budget_import(app_ctx):
     lines = database.session.query(BudgetLine).filter_by(budget_id=budget.id).all()
     assert len(lines) == 1
     assert lines[0].amount == Decimal("500")
+
 
 def test_budget_uniqueness_validation(app_ctx):
     service = BudgetService()
@@ -140,22 +163,29 @@ def test_budget_uniqueness_validation(app_ctx):
     cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    budget = service.create_budget({
-        "company": "cacao", "ledger_id": book.id, "fiscal_year_id": fy.id,
-        "budget_code": "UNIQUE-TEST", "name": "Unique Test", "currency_id": "NIO"
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "UNIQUE-TEST",
+            "name": "Unique Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
-    line_data = {
-        "account_id": acc.id, "cost_center_id": cc.id, "period_id": per.id, "amount": 100
-    }
+    line_data = {"account_id": acc.id, "cost_center_id": cc.id, "period_id": per.id, "amount": 100}
     service.add_budget_line(budget.id, line_data, str(admin_user.id))
 
     with pytest.raises(BudgetError, match="Ya existe una línea para esta combinación"):
         service.add_budget_line(budget.id, line_data, str(admin_user.id))
 
+
 def test_budget_import_rollback(app_ctx):
     from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
-    from cacao_accounting.database import BudgetImport, BudgetImportLine
+    from cacao_accounting.database import BudgetImportLine
+
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
@@ -165,10 +195,17 @@ def test_budget_import_rollback(app_ctx):
     cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    budget = service.create_budget({
-        "company": "cacao", "ledger_id": book.id, "fiscal_year_id": fy.id,
-        "budget_code": "ROLLBACK-TEST", "name": "Rollback Test", "currency_id": "NIO"
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "ROLLBACK-TEST",
+            "name": "Rollback Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
     # Create a batch with two lines with DIFFERENT accounts to pass validate_import
     csv_content = f"Cuenta,Centro de Costo,Unidad de Negocio,Proyecto,Descripción,{per.name},Total\n"
@@ -181,7 +218,7 @@ def test_budget_import_rollback(app_ctx):
 
     # Manipulate staging: set a required field to None to force a DB error on insert
     line2 = database.session.query(BudgetImportLine).filter_by(import_id=batch.id).all()[1]
-    line2.amount = None # BudgetLine.amount is NOT NULL
+    line2.amount = None  # BudgetLine.amount is NOT NULL
     database.session.commit()
 
     with pytest.raises(BudgetError, match="Error atómico en inserción"):
@@ -195,19 +232,74 @@ def test_budget_import_rollback(app_ctx):
     database.session.refresh(batch)
     assert batch.status == "failed"
 
+
 def test_budget_import_unknown_column(app_ctx):
     from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
     fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
     book = database.session.query(Book).filter_by(entity="cacao").first()
 
-    budget = service.create_budget({
-        "company": "cacao", "ledger_id": book.id, "fiscal_year_id": fy.id,
-        "budget_code": "UNKNOWN-COL", "name": "Unknown Col", "currency_id": "NIO"
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "UNKNOWN-COL",
+            "name": "Unknown Col",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
     csv_content = "Cuenta,Centro de Costo,UnknownColumn\n100,200,Error\n"
     with pytest.raises(BudgetError, match="Columna desconocida detectada"):
         import_service.validate_import(budget.id, "test.csv", csv_content.encode("utf-8"), str(admin_user.id))
+
+
+def test_budget_report_filters_with_dimension_ids(app_ctx):
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "FILTER-ID-TEST",
+            "name": "Filtro por ID",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 250,
+        },
+        str(admin_user.id),
+    )
+
+    report = BudgetReportService().get_real_vs_budget_report(
+        {
+            "company": "cacao",
+            "budget_id": budget.id,
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "granularity": "month",
+            "cost_center_id": cc.id,
+        }
+    )
+    assert len(report.rows) >= 1
+    assert report.totals["budget"] == Decimal("250")

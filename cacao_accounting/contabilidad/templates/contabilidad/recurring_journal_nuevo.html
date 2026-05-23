@@ -155,13 +155,7 @@
       <p class="text-muted mb-0">{{ _('Borrador') }}</p>
     </div>
     <div class="d-flex gap-2">
-      <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger">{{ _('Cancelar') }}</a>
-      <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-save"></i> {{ _('Guardar plantilla') }}</button>
-    </div>
-  </div>
-
-  <section class="border rounded-2 p-3">
-    <div class="row g-3">
+        <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
       <div class="col-md-4">
         <label class="form-label">{{ form.code.label }} <span class="text-danger">*</span></label>
         {{ form.code(class="form-control form-control-sm", **{"x-model": "header.code"}) }}
@@ -293,7 +287,7 @@
   <section class="border rounded-2 p-3">
     <div class="ca-journal-toolbar mb-3">
       <h5 class="mb-0">{{ _('Asientos contables') }}</h5>
-      <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()">{{ _('Añadir fila') }}</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="addRow()"><i class="bi bi-plus-lg"></i> {{ _('Añadir fila') }}</button>
     </div>
     <div class="ca-journal-grid">
       <table class="table table-sm table-bordered ca-journal-table">

@@ -44,6 +44,11 @@ _DEDUP_QUERY_LIMIT_MIN = 25
 _STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "report_status": (("submitted", "Contabilizado"), ("cancelled", "Cancelado")),
     "party_type": (("customer", "Cliente"), ("supplier", "Proveedor")),
+    "mode_of_payment": (
+        ("transfer", "Transferencia"),
+        ("check", "Cheque"),
+        ("cash", "Efectivo"),
+    ),
 }
 
 
@@ -261,6 +266,15 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         allowed_filters={"company": "entity", "is_active": "active"},
         default_filters={"group": False, "active": True, "enabled": True},
     ),
+    "cost_center_id": SearchSelectSpec(
+        doctype="cost_center_id",
+        model=CostCenter,
+        search_fields=("code", "name"),
+        value_field="id",
+        label_builder=_cost_center_label,
+        allowed_filters={"company": "entity", "is_active": "active"},
+        default_filters={"group": False, "active": True, "enabled": True},
+    ),
     "unit": SearchSelectSpec(
         doctype="unit",
         model=Unit,
@@ -270,11 +284,29 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         allowed_filters={"company": "entity"},
         default_filters={},
     ),
+    "unit_id": SearchSelectSpec(
+        doctype="unit_id",
+        model=Unit,
+        search_fields=("code", "name"),
+        value_field="id",
+        label_builder=_unit_label,
+        allowed_filters={"company": "entity"},
+        default_filters={},
+    ),
     "project": SearchSelectSpec(
         doctype="project",
         model=Project,
         search_fields=("code", "name"),
         value_field="code",
+        label_builder=_project_label,
+        allowed_filters={"company": "entity", "is_active": "enabled", "status": "status"},
+        default_filters={"enabled": True},
+    ),
+    "project_id": SearchSelectSpec(
+        doctype="project_id",
+        model=Project,
+        search_fields=("code", "name"),
+        value_field="id",
         label_builder=_project_label,
         allowed_filters={"company": "entity", "is_active": "enabled", "status": "status"},
         default_filters={"enabled": True},
@@ -633,12 +665,22 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "item_type",
         "account_name",
         "account_no",
+        "currency",
         "entity_type",
         "is_default",
         "default_uom",
+        "default_naming_series_id",
+        "default_external_counter_id",
     ):
         if hasattr(row, field):
             payload[field] = getattr(row, field)
+    if isinstance(row, BankAccount) and row.default_external_counter_id:
+        counter = database.session.get(ExternalCounter, row.default_external_counter_id)
+        if counter:
+            payload["default_external_number"] = counter.next_suggested_formatted
+    if isinstance(row, ExternalCounter):
+        payload["next_suggested"] = row.next_suggested
+        payload["next_suggested_formatted"] = row.next_suggested_formatted
     if isinstance(row, Item):
         payload["allowed_uoms"] = _allowed_uoms_for_item(row)
     return payload

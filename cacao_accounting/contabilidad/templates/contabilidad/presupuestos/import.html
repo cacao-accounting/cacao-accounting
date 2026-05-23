@@ -52,7 +52,7 @@
         <tbody>
           {% for row in staged_lines %}
           <tr>
-            <td>{{ loop.index }}</td>
+            <td>{{ row.row_index or loop.index }}</td>
             <td>{{ row.account_id }}</td>
             <td>{{ row.cost_center_id }}</td>
             <td>{{ row.period_id }}</td>

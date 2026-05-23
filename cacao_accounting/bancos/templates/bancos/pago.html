@@ -1,16 +1,71 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "detail_view_macros.html" as dv_macros %}
 {% if TESTING %}<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago.html"></div>{% endif %}
-<nav aria-label="breadcrumb">
+
+<style>
+  .ca-kv-list {
+    display: grid;
+    gap: .6rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ca-kv-item label {
+    color: #64748b;
+    display: block;
+    font-size: .75rem;
+    font-weight: 700;
+    margin-bottom: .15rem;
+    text-transform: uppercase;
+  }
+
+  .ca-kv-item p {
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .ca-kv-list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> {{ _('Inicio') }}
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Caja y Bancos') }}</a>
+    </li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
-{% set buttons %}
+
+{% set status_value = _('Borrador') %}
+{% set status_badge = 'bg-secondary' %}
+{% if registro.docstatus == 1 %}
+  {% set status_value = _('Aprobado') %}
+  {% set status_badge = 'bg-success' %}
+{% elif registro.docstatus == 2 %}
+  {% set status_value = _('Anulado') %}
+  {% set status_badge = 'bg-dark' %}
+{% endif %}
+{% set payment_amount = registro.received_amount if registro.payment_type == 'receive' else registro.paid_amount %}
+{% set payment_label = _('Recibir') if registro.payment_type == 'receive' else _('Pagar') %}
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <div>
+      <h5 class="ca-card-title mb-0">
+        <i class="bi bi-cash-coin"></i> {{ registro.document_no or registro.id }}
+        <span class="badge {{ status_badge }} ms-2">{{ status_value }}</span>
+      </h5>
+      <small class="text-muted">{{ _('Registro de Pago') }} · {{ payment_label }}</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
       {{ macros.workflow_buttons(
             registro.docstatus,
             url_for('bancos.bancos_pago_submit', payment_id=registro.id),
@@ -20,23 +75,183 @@
       {{ macros.detail_nav_buttons(
             url_for('bancos.bancos_pago_lista'),
             url_for('bancos.bancos_pago_nuevo')) }}
-{% endset %}
-{{ dv_macros.detail_header(
-    registro.document_no or registro.id,
-    _('Registro de Pago'),
-    registro.docstatus,
-    buttons,
-    [
-      (_('Número'), registro.document_no),
-      (_('Tipo de Pago'), registro.payment_type),
-      (_('Compañía'), registro.company),
-      (_('Tercero'), registro.party_name or registro.party_id),
-      (_('Fecha'), registro.posting_date),
-      (_('Monto Pagado'), registro.paid_amount),
-      (_('Monto Recibido'), registro.received_amount),
-      (_('Observaciones'), registro.remarks)
-    ],
-    'bi-cash-coin'
-) }}
+    </div>
+  </div>
+
+  <div class="row g-3 p-3">
+    <div class="col-md-6">
+      <div class="ca-kv-list">
+        <div class="ca-kv-item">
+          <label>{{ _('Compañía') }}</label>
+          <p>{{ registro.company or '-' }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Fecha de contabilización') }}</label>
+          <p>{{ registro.posting_date or '-' }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Tipo de pago') }}</label>
+          <p>{{ payment_label }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Forma de pago') }}</label>
+          <p>{{ registro.mode_of_payment or '-' }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Secuencia') }}</label>
+          <p>{{ registro.naming_series_id or '-' }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Estado') }}</label>
+          <p><span class="badge {{ status_badge }}">{{ status_value }}</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="ca-kv-list">
+        <div class="ca-kv-item">
+          <label>{{ _('Cuenta bancaria') }}</label>
+          <p>{{ banco.account_name if banco else (registro.bank_account_id or '-') }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Moneda') }}</label>
+          <p>{{ registro.currency or (banco.currency if banco else '-') }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Monto') }}</label>
+          <p class="fw-semibold">{{ registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Tipo de cambio') }}</label>
+          <p>{{ _('Gestionado por backend/libros activos') }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Tercero') }}</label>
+          <p>{{ registro.party_name or registro.party_id or '-' }}</p>
+        </div>
+        <div class="ca-kv-item">
+          <label>{{ _('Usuario') }}</label>
+          <p>{{ creador.nickname if creador else '-' }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-credit-card-2-front me-1"></i>{{ _('Datos bancarios') }}</h6>
+  </div>
+  <div class="row g-3 p-3">
+    <div class="col-md-3">
+      <strong>{{ _('Referencia') }}</strong>
+      <p class="mb-0">{{ registro.reference_no or '-' }}</p>
+    </div>
+    <div class="col-md-3">
+      <strong>{{ _('Fecha de referencia') }}</strong>
+      <p class="mb-0">{{ registro.reference_date or '-' }}</p>
+    </div>
+    {% if registro.mode_of_payment == 'check' %}
+    <div class="col-md-3">
+      <strong>{{ _('Contador externo') }}</strong>
+      <p class="mb-0">{{ registro.external_counter_id or '-' }}</p>
+    </div>
+    <div class="col-md-3">
+      <strong>{{ _('Número de cheque') }}</strong>
+      <p class="mb-0">{{ registro.external_number or '-' }}</p>
+    </div>
+    {% endif %}
+    <div class="col-md-12">
+      <strong>{{ _('Observaciones') }}</strong>
+      <p class="mb-0">{{ registro.remarks or '-' }}</p>
+    </div>
+  </div>
+</div>
+
+{% if referencias %}
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Referencias del Pago') }}</h6>
+    <small class="text-muted">{{ _('Documentos aplicados o trazados por este pago') }}</small>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table mb-0">
+      <caption class="visually-hidden">{{ _('Referencias del Pago') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('No.') }}</th>
+          <th>{{ _('Tipo') }}</th>
+          <th>{{ _('Documento') }}</th>
+          <th>{{ _('Fecha') }}</th>
+          <th>{{ _('Tercero') }}</th>
+          <th class="text-end">{{ _('Total') }}</th>
+          <th class="text-end">{{ _('Saldo previo') }}</th>
+          <th class="text-end">{{ _('Aplicado') }}</th>
+          <th class="text-end">{{ _('Saldo posterior') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ref in referencias %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ ref.flow_source_type or ref.reference_type }}</td>
+          <td>{{ ref.reference_document_no or ref.reference_id }}</td>
+          <td>{{ ref.reference_date or ref.allocation_date or '-' }}</td>
+          <td>{{ ref.party_id or '-' }}</td>
+          <td class="text-end">{{ ref.currency or registro.currency or '' }} {{ "{:,.2f}".format(ref.total_amount or 0) }}</td>
+          <td class="text-end">{{ ref.currency or registro.currency or '' }} {{ "{:,.2f}".format(ref.outstanding_amount or 0) }}</td>
+          <td class="text-end fw-semibold">{{ ref.currency or registro.currency or '' }} {{ "{:,.2f}".format(ref.allocated_amount or 0) }}</td>
+          <td class="text-end">{{ ref.currency or registro.currency or '' }} {{ "{:,.2f}".format(ref.outstanding_amount_after or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="7" class="text-end fw-semibold">{{ _('Total aplicado') }}</td>
+          <td class="text-end fw-semibold">{{ registro.currency or '' }} {{ "{:,.2f}".format(referencias | sum(attribute='allocated_amount')) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if lineas_gl %}
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-journal-text me-1"></i>{{ _('Asientos Contables') }}</h6>
+    <small class="text-muted">{{ _('Entradas GL generadas por el pago') }}</small>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table mb-0">
+      <caption class="visually-hidden">{{ _('Asientos Contables') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Libro') }}</th>
+          <th>{{ _('Cuenta') }}</th>
+          <th>{{ _('Tercero') }}</th>
+          <th class="text-end">{{ _('Débito') }}</th>
+          <th class="text-end">{{ _('Crédito') }}</th>
+          <th>{{ _('Notas') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for gl in lineas_gl %}
+        <tr>
+          <td>{{ gl.ledger_id or '-' }}</td>
+          <td>{{ gl.account_id }}</td>
+          <td>{{ gl.party_id or '-' }}</td>
+          <td class="text-end">{{ gl.company_currency or registro.currency or '' }} {{ "{:,.2f}".format(gl.debit or 0) }}</td>
+          <td class="text-end">{{ gl.company_currency or registro.currency or '' }} {{ "{:,.2f}".format(gl.credit or 0) }}</td>
+          <td>{{ gl.remarks or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {{ macros.document_flow_trace("payment_entry", registro) }}
 {% endblock %}

@@ -251,6 +251,26 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_payment_reference_table_exists(self):
         self.assertIn("payment_reference", self.tables)
 
+    def test_payment_entry_has_currency_field(self):
+        cols = {c["name"] for c in self.inspector.get_columns("payment_entry")}
+        self.assertIn("currency", cols)
+
+    def test_payment_reference_has_snapshot_fields(self):
+        cols = {c["name"] for c in self.inspector.get_columns("payment_reference")}
+        expected = {
+            "flow_source_type",
+            "reference_document_no",
+            "reference_date",
+            "party_type",
+            "party_id",
+            "company",
+            "currency",
+            "outstanding_amount_after",
+            "exchange_rate",
+            "difference_amount",
+        }
+        self.assertTrue(expected.issubset(cols))
+
     def test_bank_transaction_table_exists(self):
         self.assertIn("bank_transaction", self.tables)
 
@@ -408,6 +428,23 @@ class TestSchemaTableCreation(unittest.TestCase):
 
     def test_stock_balance_snapshot_table_exists(self):
         self.assertIn("stock_balance_snapshot", self.tables)
+
+    # Budgeting
+    def test_budget_table_exists(self):
+        self.assertIn("budget", self.tables)
+
+    def test_budget_line_table_exists(self):
+        self.assertIn("budget_line", self.tables)
+
+    def test_budget_import_table_exists(self):
+        self.assertIn("budget_import", self.tables)
+
+    def test_budget_import_line_table_exists(self):
+        self.assertIn("budget_import_line", self.tables)
+
+    def test_budget_import_line_has_row_index(self):
+        cols = {c["name"] for c in self.inspector.get_columns("budget_import_line")}
+        self.assertIn("row_index", cols)
 
     def test_minimum_90_tables(self):
         """El esquema debe tener al menos 90 tablas."""

@@ -1,5 +1,28 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-23 (Payment Entry: opción visible de cálculo fiscal)
+- **Solicitud:** En `/cash_management/payment/new`, agregar la opción de cálculo de impuestos porque el formulario de pagos no la exponía claramente.
+- **Implementación UI:** `bancos/pago_nuevo.html` ahora muestra una sección explícita **Impuestos y Cargos**, abierta por defecto, con acciones para `Añadir impuesto/cargo` y `Recalcular`.
+- **Detalle fiscal:** El modal fiscal permite editar líneas manuales con concepto, tipo, base, tasa, monto, método de cálculo, tratamiento contable, prorrateo, cuenta y observaciones; las líneas automáticas siguen viniendo de `/api/fiscal/preview`.
+- **Cobertura:** `tests/test_fiscal_preview.py::test_forms_render_tax_charges_block` valida que el formulario de pagos renderice las acciones fiscales y el modal de cálculo.
+
+## 2026-05-22 (Corrección UX de Payment Entry: header, tercero y cheque)
+- **Solicitud:** Ajustar `/cash_management/payment/new` porque la app en 8080 mostraba errores de encabezado y luego alinear `pago.html` con el UX de `journal.html`.
+- **Formulario nuevo:** El encabezado queda ordenado como Tipo de pago, Fecha, Compañía, Cuenta bancaria, Forma de pago, Secuencia y Moneda; todos los selectores principales usan `smart-select`.
+- **Tercero:** Se separa en dos selectores explícitos: Tipo de tercero y Tercero filtrado por Cliente/Proveedor según la selección previa.
+- **Cheques:** El contador externo solo aparece para `mode_of_payment=check`; el número de cheque es de solo lectura y se toma del contador, sin edición manual en el formulario.
+- **Backend:** La moneda se toma de la cuenta bancaria, el tipo de cambio queda gestionado por backend/posting y los contadores externos se ignoran para pagos que no sean cheque.
+- **Detalle:** `bancos/pago.html` adopta la estructura visual de `journal.html`, con tarjeta de cabecera, datos clave, referencias y asientos GL.
+- **Verificación parcial:** `tests/test_payment_entry_improved.py` en verde (`37 passed`).
+
+## 2026-05-22 (Cierre gaps Payment Entry: referencias, anticipos y candidatos)
+- **Solicitud:** Implementar el plan para cerrar gaps detectados en `requerimiento.md` y `payment.md` sobre `payment_entry`.
+- **Modelo:** `PaymentEntry` ahora conserva moneda y `PaymentReference` guarda snapshot mínimo para auditoría/conciliación futura: tipo lógico, documento visible, fecha, tercero, compañía, moneda, saldo posterior, tasa y diferencia.
+- **Anticipos:** Los pagos creados desde Orden de Compra/Venta precargan referencia a la orden, crean `DocumentRelation` activa y se mantienen como pago abierto disponible para aplicación futura, sin reducir saldos AR/AP de facturas.
+- **Carga manual:** Se agregó endpoint de candidatos de referencia para pagos, filtrado por compañía/tercero/tipo documental; `pago_nuevo.html` lo usa para cargar facturas, notas y órdenes compatibles.
+- **Validaciones:** `pay`/`receive` exige tercero; notas crédito/débito validan dirección de pago/cobro; anulación conserva `PaymentReference` y revierte relaciones sin borrar historial funcional.
+- **Verificación:** `tests/test_payment_entry_improved.py` (`31 passed`), `tests/test_06transaction_closure.py` + `tests/test_07posting_engine.py` (`40 passed`) y `tests/test_04database_schema.py` (`210 passed`).
+
 ## 2026-05-22 (Simplificacion de `modulos/relaciones.md`)
 - **Solicitud:** Simplificar `modulos/relaciones.md` para reflejar solo los parches cubiertos por la implementacion actual.
 - **Cambio aplicado:** Se reemplazo la propuesta extensa por una matriz resumida y operativa alineada al contrato real de `document_flow` (`DOCUMENT_TYPES` + `ALLOWED_FLOWS`).

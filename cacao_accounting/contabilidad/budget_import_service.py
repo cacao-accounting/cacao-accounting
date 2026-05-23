@@ -230,6 +230,7 @@ class BudgetImportService:
                             else:
                                 row_lines_to_add.append(
                                     {
+                                        "row_index": i,
                                         "account_id": account_id,
                                         "cost_center_id": cc_id,
                                         "period_id": p_id,
@@ -272,6 +273,17 @@ class BudgetImportService:
         database.session.commit()
         return import_batch
 
+    def get_staged_lines(self, import_id: str, limit: int = 100) -> list[BudgetImportLine]:
+        """Obtiene líneas en staging para previsualización de importación."""
+        query = (
+            database.session.query(BudgetImportLine)
+            .filter_by(import_id=import_id)
+            .order_by(BudgetImportLine.row_index.asc(), BudgetImportLine.created.asc())
+        )
+        if limit > 0:
+            query = query.limit(limit)
+        return query.all()
+
     def insert_lines(self, import_id: str, user_id: str):
         """Transfiere líneas de staging a BudgetLine atómicamente."""
         batch = database.session.get(BudgetImport, import_id)
@@ -279,7 +291,7 @@ class BudgetImportService:
             raise BudgetError("Lote de importación no válido o ya procesado.")
 
         try:
-            staging_lines = database.session.query(BudgetImportLine).filter_by(import_id=import_id).all()
+            staging_lines = self.get_staged_lines(import_id=import_id, limit=0)
             for sl in staging_lines:
                 line = BudgetLine(
                     budget_id=batch.budget_id,
@@ -300,6 +312,8 @@ class BudgetImportService:
             database.session.commit()
         except Exception as e:
             database.session.rollback()
-            batch.status = "failed"
+            failed_batch = database.session.get(BudgetImport, import_id)
+            if failed_batch:
+                failed_batch.status = "failed"
             database.session.commit()
             raise BudgetError(f"Error atómico en inserción: {str(e)}")
