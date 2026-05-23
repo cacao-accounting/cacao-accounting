@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-23 (Compras/Ventas: accesos administrativos de terceros)
+- **Solicitud:** La bitacora indicaba soporte para tipos de clientes/proveedores, contactos y direcciones, pero los accesos no estaban visibles en los menus administrativos de Compras y Ventas.
+- **Implementacion UI:** `compras.html` agrega accesos a **Tipos de Proveedor** y **Contactos y Direcciones de Proveedores** dentro de Configuracion del Modulo; `ventas.html` agrega **Tipos de Cliente** y **Contactos y Direcciones de Clientes**.
+- **Rutas reutilizadas:** Los tipos apuntan a `/settings/party-groups` filtrado por `supplier`/`customer`; contactos y direcciones apuntan a los listados de Proveedores/Clientes, donde se gestionan desde el detalle del tercero.
+- **Cobertura:** Se agrego prueba focal en `tests/test_party_management.py` y se ampliaron expectativas de rutas estaticas para las pantallas principales de Compras y Ventas.
+
 ## 2026-05-23 (Payment Entry: opción visible de cálculo fiscal)
 - **Solicitud:** En `/cash_management/payment/new`, agregar la opción de cálculo de impuestos porque el formulario de pagos no la exponía claramente.
 - **Implementación UI:** `bancos/pago_nuevo.html` ahora muestra una sección explícita **Impuestos y Cargos**, abierta por defecto, con acciones para `Añadir impuesto/cargo` y `Recalcular`.
@@ -376,3 +382,11 @@
   - Mejorada la robustez de ejecución con bloqueos de base de datos (`with_for_update`) e hilos daemon.
   - Soporte para auto-detección de delimitadores en CSV y extracción de tipos avanzada en ODS.
   - Implementada generación de plantillas en formatos CSV, XLSX y ODS con descarga vía UI.
+
+## 2026-05-23 (Conciliacion masiva AR/AP y Stock Reconciliation con valuacion)
+- **Solicitud:** Implementar la conciliacion masiva de facturas contra pagos existentes y extender Stock Reconciliation para ajustar cantidad y valor.
+- **AR/AP:** Se agrego `/cash_management/payment-reconciliation` y `/api/document-flow/payment-reconciliation-candidates`, con servicio que aplica pagos/cobros aprobados contra documentos abiertos, validando compania, tercero, direccion AR/AP, saldos y duplicados.
+- **Persistencia AR/AP:** Cada aplicacion crea `PaymentReference`, `DocumentRelation` y `ReconciliationItem`, actualiza saldos pendientes y conserva compatibilidad con cancelaciones append-only.
+- **Inventario:** `stock_reconciliation` ahora guarda snapshots de cantidad/tasa/valor actual y objetivo por linea, genera SLE/SVL y actualiza `StockBin` por diferencia de cantidad y/o valor.
+- **Contabilidad:** La diferencia de valuacion se contabiliza balanceada contra la cuenta de inventario asignada a la bodega y una cuenta global de diferencia del documento, aplicando centro de costos, unidad de negocio y proyecto globales a todo el comprobante.
+- **Validacion:** Pruebas focales nuevas cubren conciliacion AR/AP, render de pantallas, ajuste de valor de inventario, cuenta de bodega, dimensiones globales y cancelacion con reversos.

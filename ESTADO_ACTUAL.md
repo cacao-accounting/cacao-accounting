@@ -1,5 +1,18 @@
 # Estado Actual del Proyecto - 2026-05-23
 
+- **Conciliacion AR/AP masiva y Stock Reconciliation con valuacion (2026-05-23):** Se implementaron los dos pendientes prioritarios de conciliacion.
+  - Caja y Bancos expone `/cash_management/payment-reconciliation` para aplicar pagos/cobros aprobados existentes contra facturas abiertas AR/AP sin crear pagos nuevos.
+  - El servicio valida compania, tercero, direccion AR/AP, saldos disponibles, documentos aprobados y duplicados; persiste `PaymentReference`, `DocumentRelation` y `ReconciliationItem` manteniendo historial append-only.
+  - Inventario incorpora Stock Reconciliation como documento de cantidad y valor objetivo, con snapshots auditables de cantidad/tasa/valor actual y diferencias.
+  - La valuacion crea `StockLedgerEntry`, `StockValuationLayer` incluso con `qty=0` para ajustes solo de valor, actualiza `StockBin` y genera GL balanceado por diferencia de valor.
+  - El asiento de conciliacion usa la cuenta de inventario asignada globalmente a la bodega; la contrapartida y dimensiones globales del documento (cuenta de diferencia, centro de costos, unidad de negocio y proyecto) balancean el comprobante.
+  - Las cancelaciones conservan trazabilidad append-only con reversos GL y movimientos inversos de inventario.
+
+- **Compras/Ventas / Accesos administrativos de terceros (2026-05-23):** Las pantallas principales de los modulos ahora muestran los accesos de administracion de terceros ya soportados.
+  - Compras expone **Tipos de Proveedor** y **Contactos y Direcciones de Proveedores** en Configuracion del Modulo.
+  - Ventas expone **Tipos de Cliente** y **Contactos y Direcciones de Clientes** en Configuracion del Modulo.
+  - Los tipos reutilizan `/settings/party-groups` filtrado por tipo de tercero; contactos/direcciones se gestionan desde el detalle de Cliente/Proveedor.
+
 - **Payment Entry / Impuestos y Cargos visibles (2026-05-23):** El formulario `/cash_management/payment/new` vuelve a exponer el cálculo fiscal de forma explícita.
   - La sección **Impuestos y Cargos** aparece abierta por defecto y deja de estar escondida bajo "Deducciones o Pérdida".
   - La UI incluye acciones visibles para `Añadir impuesto/cargo` y `Recalcular`, reutilizando el endpoint fiscal `/api/fiscal/preview`.

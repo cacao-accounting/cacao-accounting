@@ -88,6 +88,10 @@
         <a href="{{ url_for('bancos.bancos_conciliacion_bancaria') }}">{{ _("Conciliación Bancaria") }}</a>
         <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
       </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_conciliacion_facturas_pagos') }}">{{ _("Conciliación Facturas/Pagos") }}</a>
+        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Entradas de Pago</span>

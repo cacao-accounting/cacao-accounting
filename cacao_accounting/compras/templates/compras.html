@@ -32,9 +32,25 @@
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">Proveedores</a>
         <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
       </li>
+      <li>
+        <a href="{{ url_for('admin.lista_grupos_terceros', group_type='supplier') }}">Tipos de Proveedor</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}">Contactos y Direcciones de Proveedores</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Proveedores</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Tipos de Proveedor</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Contactos y Direcciones de Proveedores</span>
         <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
       </li>
       {% endif %}

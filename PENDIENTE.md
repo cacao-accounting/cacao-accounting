@@ -1,11 +1,10 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
-## Seguimiento 2026-05-23 (Payment Entry - completado)
-- [x] Formulario `/cash_management/payment/new` expone sección visible de **Impuestos y Cargos** con acciones para añadir líneas fiscales manuales y recalcular preview fiscal.
+## Seguimiento 2026-05-23 (Conciliaciones - completado)
+- [x] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
+- [x] Implementar "Stock Reconciliation" para ajuste de valuacion (cantidad + valor objetivo).
 
 ## Seguimiento 2026-05-22 (Payment Entry - completado)
-- [x] Formulario `/cash_management/payment/new` alineado: encabezado con smart-select, tercero en dos pasos, moneda desde cuenta bancaria, tipo de cambio backend y cheque no editable desde contador.
-- [x] Vista `bancos/pago.html` alineada al patrón visual de `journal.html`.
 - [ ] Acciones `Crear` en detalle de solicitud de compra (`purchase_request` → cotización de proveedor) — pre-existing gap en `ALLOWED_FLOWS`.
 - [ ] Acción `Crear Entrada de Almacén` desde recepción de compra — pre-existing gap en `ALLOWED_FLOWS`.
 
@@ -19,11 +18,9 @@
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
 ## AR/AP y Terceros
-- [ ] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
 - [ ] Buckets configurables por compania en reportes de Aging.
 
 ## Inventario y Valoracion
-- [ ] Implementar "Stock Reconciliation" para ajuste de valuacion (actualmente solo cantidad).
 - [ ] Completar UI/documento dedicado para liquidaciones de importacion complejas cuando el costo aterrizado se confirme en un evento posterior a la recepcion.
 
 ## Administracion y Seguridad

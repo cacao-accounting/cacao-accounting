@@ -57,6 +57,7 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_bank_transaction, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
+from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.service import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.document_flow.status import _
@@ -204,6 +205,46 @@ def bancos_pago_lista():
     )
     titulo = "Listado de Pagos - " + APPNAME
     return render_template("bancos/pago_lista.html", consulta=consulta, titulo=titulo)
+
+
+@bancos.route("/payment-reconciliation", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+def bancos_conciliacion_facturas_pagos():
+    """Interfaz dedicada para aplicar pagos existentes contra facturas."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    if request.method == "POST":
+        try:
+            payload = json.loads(request.form.get("payment_reconciliation_payload") or "{}")
+            allocation_date = date.fromisoformat(payload.get("allocation_date") or date.today().isoformat())
+            reconciliation = apply_payment_reconciliation(
+                company=str(payload.get("company") or ""),
+                party_type=str(payload.get("party_type") or ""),
+                party_id=str(payload.get("party_id") or ""),
+                allocation_date=allocation_date,
+                lines=list(payload.get("lines") or []),
+            )
+            database.session.commit()
+            flash(_("Conciliación de facturas y pagos aplicada correctamente."), "success")
+            return redirect(url_for("bancos.bancos_conciliacion_facturas_pagos", reconciliation_id=reconciliation.id))
+        except (ValueError, json.JSONDecodeError) as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+        except Exception as exc:  # noqa: BLE001
+            from cacao_accounting.document_flow import DocumentFlowError
+
+            database.session.rollback()
+            if isinstance(exc, DocumentFlowError):
+                flash(str(exc), "danger")
+            else:
+                raise
+
+    return render_template(
+        "bancos/conciliacion_facturas_pagos.html",
+        titulo="Conciliación Facturas/Pagos - " + APPNAME,
+        companies=obtener_lista_entidades_por_id_razonsocial(),
+    )
 
 
 @bancos.route("/transfer/list")

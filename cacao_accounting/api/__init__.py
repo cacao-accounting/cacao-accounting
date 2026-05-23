@@ -28,8 +28,10 @@ from cacao_accounting.document_flow import (
     get_document_flow_items,
     get_pending_lines,
     list_source_documents,
+    payment_reconciliation_candidates,
     payment_reference_candidates,
 )
+from cacao_accounting.database import StockBin, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.service import get_source_items
@@ -294,6 +296,54 @@ def api_document_flow_payment_reference_candidates():
     except DocumentFlowError as exc:
         abort(exc.status_code)
     return jsonify({"items": candidates})
+
+
+@api.route("/api/document-flow/payment-reconciliation-candidates")
+@login_required
+def api_document_flow_payment_reconciliation_candidates():
+    """Devuelve pagos abiertos y documentos pendientes para conciliacion masiva."""
+    company = request.args.get("company") or request.args.get("company_id") or ""
+    party_type = request.args.get("party_type") or ""
+    party_id = request.args.get("party_id") or request.args.get("party") or None
+    currency = request.args.get("currency") or None
+    try:
+        candidates = payment_reconciliation_candidates(
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+            currency=currency,
+        )
+    except DocumentFlowError as exc:
+        abort(exc.status_code)
+    return jsonify(candidates)
+
+
+@api.route("/api/inventory/stock-bin-snapshot")
+@login_required
+def api_inventory_stock_bin_snapshot():
+    """Devuelve existencia y valuacion actual por item/bodega."""
+    company = request.args.get("company") or ""
+    item_code = request.args.get("item_code") or ""
+    warehouse = request.args.get("warehouse") or ""
+    if not company or not item_code or not warehouse:
+        abort(400)
+    bin_row = (
+        database.session.execute(
+            database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+        )
+        .scalars()
+        .first()
+    )
+    return jsonify(
+        {
+            "item_code": item_code,
+            "warehouse": warehouse,
+            "company": company,
+            "actual_qty": float(bin_row.actual_qty or 0) if bin_row else 0,
+            "valuation_rate": float(bin_row.valuation_rate or 0) if bin_row else 0,
+            "stock_value": float(bin_row.stock_value or 0) if bin_row else 0,
+        }
+    )
 
 
 @api.route("/api/document-flow/create-target", methods=["POST"])

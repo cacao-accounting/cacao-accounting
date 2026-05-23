@@ -41,6 +41,7 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
+    Warehouse,
     Entity,
     database,
 )
@@ -257,6 +258,23 @@ def _account_id_for_item(item: Any, company: str, account_type: str) -> str | No
         if value:
             return str(value)
     return _resolve_item_account_id(getattr(item, "item_code", None), company, account_type)
+
+
+def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> str | None:
+    """Resuelve la cuenta de inventario asignada a la bodega de una conciliacion."""
+    warehouse_code = (
+        getattr(line, "target_warehouse", None)
+        or getattr(line, "source_warehouse", None)
+        or getattr(document, "to_warehouse", None)
+        or getattr(document, "from_warehouse", None)
+    )
+    if warehouse_code:
+        warehouse = (
+            database.session.execute(select(Warehouse).filter_by(company=company, code=warehouse_code)).scalars().first()
+        )
+        if warehouse and warehouse.inventory_account_id:
+            return str(warehouse.inventory_account_id)
+    return _account_id_for_item(line, company, "inventory")
 
 
 def _account_id_for_comprobante_line(line: Any, company: str) -> str:
@@ -479,6 +497,9 @@ def _normal_entries_for_amount(
     amount: Decimal,
     party_type: str | None = None,
     party_id: str | None = None,
+    cost_center_code: str | None = None,
+    unit_code: str | None = None,
+    project_code: str | None = None,
     debit_remarks: str | None = None,
     credit_remarks: str | None = None,
 ) -> list[GLEntry]:
@@ -491,6 +512,9 @@ def _normal_entries_for_amount(
                 credit=Decimal("0"),
                 party_type=party_type,
                 party_id=party_id,
+                cost_center_code=cost_center_code,
+                unit_code=unit_code,
+                project_code=project_code,
                 entry_remarks=debit_remarks,
             ),
             _create_gl_entry(
@@ -498,6 +522,9 @@ def _normal_entries_for_amount(
                 account_id=credit_account_id,
                 debit=Decimal("0"),
                 credit=amount,
+                cost_center_code=cost_center_code,
+                unit_code=unit_code,
+                project_code=project_code,
                 entry_remarks=credit_remarks,
             ),
         ]
@@ -509,6 +536,9 @@ def _normal_entries_for_amount(
                 account_id=credit_account_id,
                 debit=reversed_amount,
                 credit=Decimal("0"),
+                cost_center_code=cost_center_code,
+                unit_code=unit_code,
+                project_code=project_code,
                 entry_remarks=credit_remarks,
             ),
             _create_gl_entry(
@@ -518,6 +548,9 @@ def _normal_entries_for_amount(
                 credit=reversed_amount,
                 party_type=party_type,
                 party_id=party_id,
+                cost_center_code=cost_center_code,
+                unit_code=unit_code,
+                project_code=project_code,
                 entry_remarks=debit_remarks,
             ),
         ]
@@ -1398,6 +1431,86 @@ def _create_stock_movement(
     )
 
 
+def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntryItem) -> StockLedgerEntry | None:
+    """Crea movimiento de inventario para una conciliacion de cantidad/valor objetivo."""
+    warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
+    if not warehouse:
+        raise PostingError("La conciliación requiere bodega.")
+    current_qty = _decimal_value(line.current_qty)
+    counted_qty = _decimal_value(line.counted_qty)
+    qty_change = _decimal_value(line.qty_difference)
+    if line.qty_difference is None:
+        qty_change = counted_qty - current_qty
+    current_value = _decimal_value(line.current_stock_value)
+    target_value = _decimal_value(line.target_stock_value)
+    value_change = _decimal_value(line.stock_value_difference)
+    if line.stock_value_difference is None:
+        value_change = target_value - current_value
+    if qty_change == 0 and value_change == 0:
+        return None
+    if counted_qty < 0 or target_value < 0:
+        raise PostingError("La conciliacion no permite cantidad o valor objetivo negativo.")
+    if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
+        raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
+
+    valuation_rate = target_value / counted_qty if counted_qty > 0 else Decimal("0")
+    line.current_qty = current_qty
+    line.counted_qty = counted_qty
+    line.qty_difference = qty_change
+    line.current_stock_value = current_value
+    line.target_stock_value = target_value
+    line.stock_value_difference = value_change
+    line.target_valuation_rate = valuation_rate
+    line.valuation_rate = valuation_rate
+    line.qty = abs(qty_change)
+    line.qty_in_base_uom = abs(qty_change)
+    line.amount = abs(value_change)
+    _upsert_stock_bin(
+        company=document.company,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        qty_change=qty_change,
+        valuation_rate=valuation_rate,
+        value_change=value_change,
+    )
+    database.session.flush()
+    updated_bin = _stock_bin_for(document.company, line.item_code, warehouse)
+    if not updated_bin:
+        raise PostingError("No se pudo actualizar el stock conciliado.")
+    qty_after = _decimal_value(updated_bin.actual_qty)
+    stock_value_after = _decimal_value(updated_bin.stock_value)
+    database.session.add(
+        StockValuationLayer(
+            item_code=line.item_code,
+            warehouse=warehouse,
+            company=document.company,
+            qty=qty_change,
+            rate=_decimal_value(updated_bin.valuation_rate),
+            stock_value_difference=value_change,
+            remaining_qty=max(qty_after, Decimal("0")),
+            remaining_stock_value=max(stock_value_after, Decimal("0")),
+            voucher_type=_get_voucher_type(document),
+            voucher_id=_get_voucher_id(document),
+            posting_date=document.posting_date,
+        )
+    )
+    return StockLedgerEntry(
+        posting_date=document.posting_date,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        company=document.company,
+        qty_change=qty_change,
+        qty_after_transaction=qty_after,
+        valuation_rate=_decimal_value(updated_bin.valuation_rate),
+        stock_value_difference=value_change,
+        stock_value=stock_value_after,
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+        batch_id=getattr(line, "batch_id", None),
+        serial_no=getattr(line, "serial_no", None),
+    )
+
+
 def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     if _has_stock_ledger_entries(document):
         raise PostingError("Este documento ya tiene movimientos de inventario contabilizados.")
@@ -1410,6 +1523,11 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     movements: list[StockLedgerEntry] = []
     for line in items:
         _stock_item_for(line)
+        if purpose == "stock_reconciliation":
+            movement = _create_stock_reconciliation_movement(document, line)
+            if movement is not None:
+                movements.append(movement)
+            continue
         qty = _line_qty(line)
         valuation_rate = _line_rate(line)
         value = _decimal_value(line.amount) or (qty * valuation_rate)
@@ -1456,25 +1574,11 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
                     value_change=value,
                 )
             )
-        elif purpose == "stock_reconciliation":
-            warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
-            if not warehouse:
-                raise PostingError("La conciliación requiere bodega origen o destino.")
-            qty_change = qty if (line.target_warehouse or document.to_warehouse) else -qty
-            value_change = value if qty_change >= 0 else -value
-            movements.append(
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=warehouse,
-                    qty_change=qty_change,
-                    valuation_rate=valuation_rate,
-                    value_change=value_change,
-                )
-            )
         else:
             raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
 
+    if not movements:
+        raise PostingError("La conciliacion no contiene diferencias de cantidad o valuacion.")
     database.session.add_all(movements)
     return movements
 
@@ -1688,6 +1792,8 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
+    updated_bin = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
+    stock_value_after = _decimal_value(updated_bin.stock_value) if updated_bin else qty_after * valuation_rate
     database.session.add(
         StockValuationLayer(
             item_code=movement.item_code,
@@ -1697,7 +1803,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
             rate=valuation_rate,
             stock_value_difference=value_change,
             remaining_qty=max(qty_after, Decimal("0")),
-            remaining_stock_value=max(qty_after * valuation_rate, Decimal("0")),
+            remaining_stock_value=max(stock_value_after, Decimal("0")),
             voucher_type=movement.voucher_type,
             voucher_id=movement.voucher_id,
             posting_date=posting_date,
@@ -1712,7 +1818,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         qty_after_transaction=qty_after,
         valuation_rate=valuation_rate,
         stock_value_difference=value_change,
-        stock_value=qty_after * valuation_rate,
+        stock_value=stock_value_after,
         voucher_type=movement.voucher_type,
         voucher_id=movement.voucher_id,
         batch_id=movement.batch_id,
@@ -1916,19 +2022,63 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in items:
-            amount = _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
+            amount = (
+                abs(_decimal_value(line.stock_value_difference))
+                if purpose == "stock_reconciliation"
+                else _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
+            )
             if amount <= 0:
                 continue
             inventory_account_id = _require_account(
-                _account_id_for_item(line, company, "inventory"),
+                (
+                    _warehouse_inventory_account_id(document, line, company)
+                    if purpose == "stock_reconciliation"
+                    else _account_id_for_item(line, company, "inventory")
+                ),
                 "Falta la cuenta de inventario para la linea de stock.",
             )
             offset_type = "bridge" if purpose == "material_receipt" else "inventory_adjustment"
+            offset_account = (
+                getattr(document, "adjustment_account_id", None)
+                if purpose == "stock_reconciliation"
+                else _account_id_for_item(line, company, offset_type)
+            )
             offset_account_id = _require_account(
-                _account_id_for_item(line, company, offset_type),
+                offset_account or _account_id_for_item(line, company, offset_type),
                 "Falta la cuenta de contrapartida para la linea de stock.",
             )
-            if purpose in ("material_receipt", "adjustment_positive"):
+            dimension_kwargs = {
+                "cost_center_code": getattr(document, "cost_center_code", None),
+                "unit_code": getattr(document, "unit_code", None),
+                "project_code": getattr(document, "project_code", None),
+            }
+            if purpose == "stock_reconciliation":
+                value_difference = _decimal_value(line.stock_value_difference)
+                if value_difference > 0:
+                    entries.extend(
+                        _normal_entries_for_amount(
+                            context=context,
+                            debit_account_id=inventory_account_id,
+                            credit_account_id=offset_account_id,
+                            amount=amount,
+                            **dimension_kwargs,
+                            debit_remarks="Ajuste de valor de inventario",
+                            credit_remarks="Conciliación de inventario",
+                        )
+                    )
+                else:
+                    entries.extend(
+                        _normal_entries_for_amount(
+                            context=context,
+                            debit_account_id=offset_account_id,
+                            credit_account_id=inventory_account_id,
+                            amount=amount,
+                            **dimension_kwargs,
+                            debit_remarks="Conciliación de inventario",
+                            credit_remarks="Ajuste de valor de inventario",
+                        )
+                    )
+            elif purpose in ("material_receipt", "adjustment_positive"):
                 entries.extend(
                     _normal_entries_for_amount(
                         context=context,
@@ -2074,6 +2224,7 @@ def cancel_document(document: Any) -> list[GLEntry]:
             raise PostingError("El documento no tiene movimientos de inventario para reversar.")
         for movement in original_movements:
             stock_reversals.append(_create_stock_reversal(document, movement))
+            movement.is_cancelled = True
         database.session.add_all(stock_reversals)
 
     if isinstance(document, PurchaseReceipt):

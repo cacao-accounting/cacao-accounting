@@ -32,9 +32,25 @@
         <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Clientes</a>
         <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
       </li>
+      <li>
+        <a href="{{ url_for('admin.lista_grupos_terceros', group_type='customer') }}">Tipos de Cliente</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Contactos y Direcciones de Clientes</a>
+        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Clientes</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Tipos de Cliente</span>
+        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+      </li>
+      <li class="ca-no-access">
+        <span>Contactos y Direcciones de Clientes</span>
         <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
       </li>
       {% endif %}

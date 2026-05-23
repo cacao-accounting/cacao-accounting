@@ -4,6 +4,8 @@
 from __future__ import annotations
 import json
 from datetime import date
+from decimal import Decimal
+
 import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import (
@@ -1613,3 +1615,253 @@ def test_payment_detail_view_matches_payment_header_changes(app_ctx):
     assert "transfer" in html
     assert "Cuenta bancaria" in html
     assert "Gestionado por backend/libros activos" in html
+
+
+def _open_payment(
+    *,
+    party: Party,
+    payment_type: str,
+    amount: Decimal,
+    document_no: str,
+) -> PaymentEntry:
+    """Crea un pago aprobado sin referencias para pruebas de conciliacion masiva."""
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date.today(),
+        payment_type=payment_type,
+        party_type=party.party_type,
+        party_id=party.id,
+        party_name=party.name,
+        bank_account_id=bank.id,
+        currency=bank.currency or "NIO",
+        paid_amount=amount if payment_type == "pay" else None,
+        received_amount=amount if payment_type == "receive" else None,
+        docstatus=1,
+        document_no=document_no,
+    )
+    database.session.add(payment)
+    database.session.flush()
+    return payment
+
+
+def test_mass_payment_reconciliation_applies_customer_payment_to_multiple_sales_invoices(app_ctx):
+    """La conciliacion masiva aplica un cobro abierto contra varias facturas AR."""
+    from cacao_accounting.document_flow.service import (
+        apply_payment_reconciliation,
+        compute_payment_unallocated_amount,
+    )
+
+    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("500.00"), document_no="PAY-AR-001")
+    invoices = [
+        SalesInvoice(
+            company="cacao",
+            customer_id=customer.id,
+            posting_date=date.today(),
+            document_type="sales_invoice",
+            docstatus=1,
+            grand_total=amount,
+            outstanding_amount=amount,
+            base_outstanding_amount=amount,
+            document_no=document_no,
+        )
+        for amount, document_no in ((Decimal("300.00"), "SI-MASS-001"), (Decimal("200.00"), "SI-MASS-002"))
+    ]
+    database.session.add_all(invoices)
+    database.session.commit()
+
+    reconciliation = apply_payment_reconciliation(
+        company="cacao",
+        party_type="customer",
+        party_id=customer.id,
+        allocation_date=date.today(),
+        lines=[
+            {
+                "payment_id": payment.id,
+                "reference_type": "sales_invoice",
+                "reference_id": invoices[0].id,
+                "allocated_amount": "300.00",
+            },
+            {
+                "payment_id": payment.id,
+                "reference_type": "sales_invoice",
+                "reference_id": invoices[1].id,
+                "allocated_amount": "200.00",
+            },
+        ],
+    )
+    database.session.commit()
+
+    assert reconciliation.recon_type == "AR"
+    assert compute_payment_unallocated_amount(payment) == Decimal("0")
+    assert [invoice.outstanding_amount for invoice in invoices] == [Decimal("0.0000"), Decimal("0.0000")]
+    assert database.session.execute(database.select(PaymentReference)).scalars().all()
+    relations = (
+        database.session.execute(database.select(DocumentRelation).filter_by(target_type="payment_entry")).scalars().all()
+    )
+    assert len(relations) == 2
+
+
+def test_mass_payment_reconciliation_applies_supplier_payment_to_purchase_invoices(app_ctx):
+    """La conciliacion masiva aplica un pago abierto contra facturas AP."""
+    from cacao_accounting.document_flow.service import apply_payment_reconciliation, compute_payment_unallocated_amount
+
+    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    payment = _open_payment(party=supplier, payment_type="pay", amount=Decimal("600.00"), document_no="PAY-AP-001")
+    invoices = [
+        PurchaseInvoice(
+            company="cacao",
+            supplier_id=supplier.id,
+            posting_date=date.today(),
+            document_type="purchase_invoice",
+            docstatus=1,
+            grand_total=amount,
+            outstanding_amount=amount,
+            base_outstanding_amount=amount,
+            document_no=document_no,
+        )
+        for amount, document_no in ((Decimal("250.00"), "PI-MASS-001"), (Decimal("350.00"), "PI-MASS-002"))
+    ]
+    database.session.add_all(invoices)
+    database.session.commit()
+
+    reconciliation = apply_payment_reconciliation(
+        company="cacao",
+        party_type="supplier",
+        party_id=supplier.id,
+        allocation_date=date.today(),
+        lines=[
+            {
+                "payment_id": payment.id,
+                "reference_type": "purchase_invoice",
+                "reference_id": invoice.id,
+                "allocated_amount": str(invoice.grand_total),
+            }
+            for invoice in invoices
+        ],
+    )
+    database.session.commit()
+
+    assert reconciliation.recon_type == "AP"
+    assert compute_payment_unallocated_amount(payment) == Decimal("0")
+    assert [invoice.outstanding_amount for invoice in invoices] == [Decimal("0.0000"), Decimal("0.0000")]
+
+
+def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(app_ctx):
+    """La aplicacion masiva bloquea saldos excedidos y documentos de otro tercero."""
+    from cacao_accounting.document_flow.service import DocumentFlowError, apply_payment_reconciliation
+
+    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    other_customer = Party(id="customer_mass_mismatch", party_type="customer", name="Cliente distinto conciliacion")
+    payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("100.00"), document_no="PAY-ERR-001")
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=Decimal("150.00"),
+        outstanding_amount=Decimal("150.00"),
+        base_outstanding_amount=Decimal("150.00"),
+    )
+    other_invoice = SalesInvoice(
+        company="cacao",
+        customer_id=other_customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=Decimal("50.00"),
+        outstanding_amount=Decimal("50.00"),
+        base_outstanding_amount=Decimal("50.00"),
+    )
+    database.session.add_all([other_customer, invoice, other_invoice])
+    database.session.commit()
+
+    with pytest.raises(DocumentFlowError, match="excede el saldo disponible"):
+        apply_payment_reconciliation(
+            company="cacao",
+            party_type="customer",
+            party_id=customer.id,
+            allocation_date=date.today(),
+            lines=[
+                {
+                    "payment_id": payment.id,
+                    "reference_type": "sales_invoice",
+                    "reference_id": invoice.id,
+                    "allocated_amount": "120.00",
+                }
+            ],
+        )
+    database.session.rollback()
+
+    with pytest.raises(DocumentFlowError, match="no coincide con el tercero"):
+        apply_payment_reconciliation(
+            company="cacao",
+            party_type="customer",
+            party_id=customer.id,
+            allocation_date=date.today(),
+            lines=[
+                {
+                    "payment_id": payment.id,
+                    "reference_type": "sales_invoice",
+                    "reference_id": other_invoice.id,
+                    "allocated_amount": "50.00",
+                }
+            ],
+        )
+
+
+def test_payment_reconciliation_screen_menu_and_candidates_endpoint_render(app_ctx):
+    """La pantalla administrativa y su endpoint JSON quedan visibles en Caja y Bancos."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("80.00"), document_no="PAY-UI-001")
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=Decimal("80.00"),
+        outstanding_amount=Decimal("80.00"),
+        base_outstanding_amount=Decimal("80.00"),
+        document_no="SI-UI-001",
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    menu_response = client.get("/cash_management/")
+    screen_response = client.get("/cash_management/payment-reconciliation")
+    api_response = client.get(
+        "/api/document-flow/payment-reconciliation-candidates",
+        query_string={"company": "cacao", "party_type": "customer", "party_id": customer.id},
+    )
+
+    assert menu_response.status_code == 200
+    assert b"Conciliaci\xc3\xb3n Facturas/Pagos" in menu_response.data
+    assert screen_response.status_code == 200
+    assert b"payment-reconciliation-screen" in screen_response.data
+    assert api_response.status_code == 200
+    payload = api_response.get_json()
+    assert any(row["payment_id"] == payment.id for row in payload["payments"])
+    assert any(row["reference_id"] == invoice.id for row in payload["documents"])
+
+
+def test_stock_reconciliation_screen_exposes_global_accounting_dimension_fields(app_ctx):
+    """La conciliacion de inventario expone cuenta de diferencia y dimensiones globales."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    response = client.get("/inventory/stock-entry/reconciliation/new")
+    warehouse_response = client.get("/inventory/warehouse/new")
+
+    assert response.status_code == 200
+    assert b"Cuenta de diferencia" in response.data
+    assert b"Centro de costos" in response.data
+    assert b"Unidad de negocio" in response.data
+    assert b"Proyecto" in response.data
+    assert warehouse_response.status_code == 200
+    assert b"Cuenta de inventario" in warehouse_response.data
