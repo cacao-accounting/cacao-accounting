@@ -10,7 +10,7 @@ from decimal import Decimal
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from cacao_accounting.database import Item, StockEntry, StockEntryItem, UOM, Warehouse, database
+from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
@@ -366,6 +366,7 @@ def inventario_bodega_nuevo():
             code=request.form.get("code"),
             name=request.form.get("name"),
             company=request.form.get("company"),
+            inventory_account_id=request.form.get("inventory_account_id") or None,
         )
         database.session.add(bodega)
         database.session.commit()
@@ -460,6 +461,74 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     return total
 
 
+def _stock_bin_snapshot(company: str | None, item_code: str, warehouse: str | None) -> tuple[Decimal, Decimal, Decimal]:
+    """Devuelve cantidad, tasa y valor actual para item/bodega."""
+    if not company or not warehouse:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    bin_row = (
+        database.session.execute(
+            database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+        )
+        .scalars()
+        .first()
+    )
+    if not bin_row:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    return (
+        Decimal(str(bin_row.actual_qty or "0")),
+        Decimal(str(bin_row.valuation_rate or "0")),
+        Decimal(str(bin_row.stock_value or "0")),
+    )
+
+
+def _item_default_uom(item_code: str) -> str | None:
+    """Devuelve la unidad base del item por codigo."""
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
+    return item.default_uom if item else None
+
+
+def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
+    """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
+    i = 0
+    total_difference = Decimal("0")
+    while request.form.get(f"item_code_{i}"):
+        item_code = request.form.get(f"item_code_{i}", "").strip()
+        warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
+        if item_code:
+            current_qty, current_rate, current_value = _stock_bin_snapshot(entry.company, item_code, warehouse)
+            counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
+            target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
+            target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
+            qty_difference = counted_qty - current_qty
+            value_difference = target_value - current_value
+            uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
+            line = StockEntryItem(
+                stock_entry_id=entry.id,
+                item_code=item_code,
+                source_warehouse=warehouse,
+                target_warehouse=warehouse,
+                qty=abs(qty_difference),
+                uom=uom,
+                qty_in_base_uom=abs(qty_difference),
+                basic_rate=target_rate,
+                amount=abs(value_difference),
+                valuation_rate=target_rate,
+                current_qty=current_qty,
+                counted_qty=counted_qty,
+                qty_difference=qty_difference,
+                current_valuation_rate=current_rate,
+                target_valuation_rate=target_rate,
+                current_stock_value=current_value,
+                target_stock_value=target_value,
+                stock_value_difference=value_difference,
+            )
+            database.session.add(line)
+            database.session.flush()
+            total_difference += abs(value_difference)
+        i += 1
+    return total_difference
+
+
 @inventario.route("/stock-entry/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/material-receipt/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/material-issue/new", methods=["GET", "POST"])
@@ -510,12 +579,17 @@ def inventario_entrada_nuevo():
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
+            posted_purpose = request.form.get("purpose") or "material_receipt"
             entry = StockEntry(
-                purpose=request.form.get("purpose") or "material_receipt",
+                purpose=posted_purpose,
                 company=request.form.get("company") or None,
                 posting_date=posting_date,
                 from_warehouse=request.form.get("from_warehouse") or None,
                 to_warehouse=request.form.get("to_warehouse") or None,
+                adjustment_account_id=request.form.get("adjustment_account_id") or None,
+                cost_center_code=request.form.get("cost_center_code") or None,
+                unit_code=request.form.get("unit_code") or None,
+                project_code=request.form.get("project_code") or None,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -527,13 +601,25 @@ def inventario_entrada_nuevo():
                 posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
-            entry.total_amount = _save_stock_entry_items(entry)
+            if posted_purpose == "stock_reconciliation":
+                entry.total_amount = _save_stock_reconciliation_items(entry)
+            else:
+                entry.total_amount = _save_stock_entry_items(entry)
             database.session.commit()
             flash("Entrada de almacén creada correctamente.", "success")
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
+    if purpose == "stock_reconciliation":
+        return render_template(
+            "inventario/stock_reconciliation_nuevo.html",
+            form=formulario,
+            titulo=titulo,
+            items_disponibles=items_disponibles,
+            uoms_disponibles=uoms_disponibles,
+            transaction_config=transaction_config,
+        )
     return render_template(
         "inventario/entrada_nuevo.html",
         form=formulario,

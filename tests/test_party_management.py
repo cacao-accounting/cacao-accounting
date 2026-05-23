@@ -148,3 +148,18 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     )
     database.session.refresh(supplier)
     assert supplier.name == "Proveedor Editado"
+
+
+def test_purchase_and_sales_admin_menus_show_party_management_links(client):
+    """Compras y ventas exponen accesos administrativos de terceros."""
+    buying_response = client.get("/buying/")
+    assert buying_response.status_code == 200
+    assert b"Tipos de Proveedor" in buying_response.data
+    assert b"Contactos y Direcciones de Proveedores" in buying_response.data
+    assert b"/settings/party-groups?group_type=supplier" in buying_response.data
+
+    sales_response = client.get("/sales/")
+    assert sales_response.status_code == 200
+    assert b"Tipos de Cliente" in sales_response.data
+    assert b"Contactos y Direcciones de Clientes" in sales_response.data
+    assert b"/settings/party-groups?group_type=customer" in sales_response.data

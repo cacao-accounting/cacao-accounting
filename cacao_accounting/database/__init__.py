@@ -857,6 +857,7 @@ class Warehouse(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(20), index=True, nullable=False)
     name = database.Column(database.String(150), nullable=False)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
+    inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     parent_warehouse = database.Column(database.String(20), nullable=True)
     is_group = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
@@ -896,6 +897,10 @@ class StockEntry(database.Model, DocBase):  # type: ignore[name-defined]
     from_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
     to_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
     total_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    cost_center_code = database.Column(database.String(10), nullable=True)
+    unit_code = database.Column(database.String(10), database.ForeignKey("unit.code"), nullable=True)
+    project_code = database.Column(database.String(10), database.ForeignKey("project.code"), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -915,6 +920,14 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    current_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    counted_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    qty_difference = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    current_valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    target_valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    current_stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    target_stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    stock_value_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
 
 
 class StockLedgerEntry(database.Model):  # type: ignore[name-defined]

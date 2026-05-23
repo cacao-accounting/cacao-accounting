@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventarios") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva Conciliación de Inventario") }}</li>
+  </ol>
+</nav>
+
+<form method="post" id="form-main" x-data="stockReconciliationForm()">
+  {{ form.csrf_token }}
+  <input type="hidden" name="purpose" value="stock_reconciliation">
+
+  <div class="ca-journal-toolbar mb-3">
+    <div>
+      <h4 class="mb-1">{{ _("Nueva Conciliación de Inventario") }}</h4>
+      <p class="text-muted mb-0">{{ _("Borrador") }}</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="addLine()">
+        <i class="bi bi-plus-lg me-1"></i>{{ _("Añadir fila") }}
+      </button>
+      <button class="btn btn-sm btn-primary" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _("Guardar") }}
+      </button>
+    </div>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="company">{{ _("Compañía") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="company",
+            name="company",
+            label=_("Compañía"),
+            preload=True,
+            required=True,
+            x_model="header.company"
+        ) }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="naming_series">{{ _("Secuencia") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="naming_series",
+            name="naming_series",
+            label=_("Secuencia"),
+            filters={"company": {"selector": "#company"}, "entity_type": "stock_entry"},
+            filter_sources=["#company"],
+            required_filters=["company"],
+            auto_select_default=True,
+            load_on_filter_change=True
+        ) }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="posting_date">{{ _("Fecha") }}</label>
+        <input class="form-control" type="date" id="posting_date" name="posting_date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="adjustment_account_id">{{ _("Cuenta de diferencia") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="account",
+            name="adjustment_account_id",
+            label=_("Cuenta de diferencia"),
+            filters={"company": {"selector": "#company"}},
+            filter_sources=["#company"],
+            required_filters=["company"],
+            preload=True,
+            x_model="header.adjustment_account_id"
+        ) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="cost_center_code">{{ _("Centro de costos") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="cost_center",
+            name="cost_center_code",
+            label=_("Centro de costos"),
+            filters={"company": {"selector": "#company"}},
+            filter_sources=["#company"],
+            required_filters=["company"],
+            preload=True,
+            x_model="header.cost_center_code"
+        ) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="unit_code">{{ _("Unidad de negocio") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="unit",
+            name="unit_code",
+            label=_("Unidad de negocio"),
+            filters={"company": {"selector": "#company"}},
+            filter_sources=["#company"],
+            required_filters=["company"],
+            preload=True,
+            x_model="header.unit_code"
+        ) }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="project_code">{{ _("Proyecto") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="project",
+            name="project_code",
+            label=_("Proyecto"),
+            filters={"company": {"selector": "#company"}},
+            filter_sources=["#company"],
+            required_filters=["company"],
+            preload=True,
+            x_model="header.project_code"
+        ) }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _("Observaciones") }}</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="2"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="ca-card p-3">
+    <div class="ca-card-header px-0 pt-0">
+      <h5 class="ca-card-title">{{ _("Líneas de conciliación") }}</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _("Stock Reconciliation") }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _("Item") }}</th>
+            <th>{{ _("Bodega") }}</th>
+            <th class="text-end">{{ _("Cantidad actual") }}</th>
+            <th class="text-end">{{ _("Cantidad contada") }}</th>
+            <th class="text-end">{{ _("Diferencia cantidad") }}</th>
+            <th class="text-end">{{ _("Tasa actual") }}</th>
+            <th class="text-end">{{ _("Tasa objetivo") }}</th>
+            <th class="text-end">{{ _("Valor actual") }}</th>
+            <th class="text-end">{{ _("Valor objetivo") }}</th>
+            <th class="text-end">{{ _("Diferencia valor") }}</th>
+            <th>{{ _("Acciones") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="(line, index) in lines" :key="line.uid">
+            <tr>
+              <td>
+                <input type="hidden" :name="'item_code_' + index" x-model="line.item_code">
+                <input class="form-control form-control-sm" type="text" x-model="line.item_code" @change="loadSnapshot(line)" placeholder="{{ _('Código') }}">
+                <input type="hidden" :name="'uom_' + index" x-model="line.uom">
+              </td>
+              <td>
+                <input type="hidden" :name="'warehouse_' + index" x-model="line.warehouse">
+                <input class="form-control form-control-sm" type="text" x-model="line.warehouse" @change="loadSnapshot(line)" placeholder="{{ _('Bodega') }}">
+              </td>
+              <td class="text-end">
+                <span x-text="formatQty(line.current_qty)"></span>
+                <input type="hidden" :name="'current_qty_' + index" :value="line.current_qty">
+              </td>
+              <td>
+                <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" :name="'counted_qty_' + index" x-model.number="line.counted_qty" @input="recalculate(line)">
+              </td>
+              <td class="text-end" x-text="formatQty(qtyDifference(line))"></td>
+              <td class="text-end">
+                <span x-text="formatMoney(line.current_valuation_rate)"></span>
+                <input type="hidden" :name="'current_valuation_rate_' + index" :value="line.current_valuation_rate">
+              </td>
+              <td>
+                <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" :name="'target_valuation_rate_' + index" x-model.number="line.target_valuation_rate" @input="rateChanged(line)">
+              </td>
+              <td class="text-end">
+                <span x-text="formatMoney(line.current_stock_value)"></span>
+                <input type="hidden" :name="'current_stock_value_' + index" :value="line.current_stock_value">
+              </td>
+              <td>
+                <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" :name="'target_stock_value_' + index" x-model.number="line.target_stock_value" @input="valueChanged(line)">
+              </td>
+              <td class="text-end" x-text="formatMoney(valueDifference(line))"></td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger" type="button" @click="lines.splice(index, 1)">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+
+<script>
+function stockReconciliationForm() {
+  return {
+    header: {
+      company: '',
+      posting_date: new Date().toISOString().slice(0, 10),
+      adjustment_account_id: '',
+      cost_center_code: '',
+      unit_code: '',
+      project_code: '',
+    },
+    lines: [],
+    init() {
+      this.addLine();
+    },
+    addLine() {
+      this.lines.push({
+        uid: `${Date.now()}-${Math.random()}`,
+        item_code: '',
+        warehouse: '',
+        uom: '',
+        current_qty: 0,
+        counted_qty: 0,
+        current_valuation_rate: 0,
+        target_valuation_rate: 0,
+        current_stock_value: 0,
+        target_stock_value: 0,
+      });
+    },
+    formatQty(value) {
+      return Number(value || 0).toFixed(4);
+    },
+    formatMoney(value) {
+      return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    qtyDifference(line) {
+      return Number(line.counted_qty || 0) - Number(line.current_qty || 0);
+    },
+    valueDifference(line) {
+      return Number(line.target_stock_value || 0) - Number(line.current_stock_value || 0);
+    },
+    recalculate(line) {
+      line.target_stock_value = Number(line.counted_qty || 0) * Number(line.target_valuation_rate || 0);
+    },
+    rateChanged(line) {
+      line.target_stock_value = Number(line.counted_qty || 0) * Number(line.target_valuation_rate || 0);
+    },
+    valueChanged(line) {
+      const qty = Number(line.counted_qty || 0);
+      line.target_valuation_rate = qty > 0 ? Number(line.target_stock_value || 0) / qty : 0;
+    },
+    async loadSnapshot(line) {
+      if (!this.header.company || !line.item_code || !line.warehouse) return;
+      const params = new URLSearchParams({
+        company: this.header.company,
+        item_code: line.item_code,
+        warehouse: line.warehouse,
+      });
+      const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, { credentials: 'same-origin' });
+      if (!response.ok) return;
+      const snapshot = await response.json();
+      line.current_qty = Number(snapshot.actual_qty || 0);
+      line.counted_qty = line.current_qty;
+      line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
+      line.target_valuation_rate = line.current_valuation_rate;
+      line.current_stock_value = Number(snapshot.stock_value || 0);
+      line.target_stock_value = line.current_stock_value;
+    },
+  };
+}
+</script>
+{% endblock %}
