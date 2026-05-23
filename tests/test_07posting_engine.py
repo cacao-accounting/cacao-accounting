@@ -63,7 +63,7 @@ def test_gl_entry_constraint_rejects_unbalanced_records(app_ctx):
 
 
 def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
-    from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
         GLEntry,
