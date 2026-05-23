@@ -63,7 +63,7 @@ def test_gl_entry_constraint_rejects_unbalanced_records(app_ctx):
 
 
 def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
-    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
         GLEntry,
@@ -2455,3 +2455,187 @@ def test_stock_transfer_creates_stock_ledger_without_gl(app_ctx):
     assert entries == []
     assert len(stock_entries) == 2
     assert sorted(line.qty_change for line in stock_entries) == [Decimal("-2.000000000"), Decimal("2.000000000")]
+
+
+def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_and_global_dimensions(app_ctx):
+    from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        CostCenter,
+        GLEntry,
+        Item,
+        Project,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        StockValuationLayer,
+        UOM,
+        Unit,
+        Warehouse,
+        database,
+    )
+
+    warehouse_inventory = Accounts(
+        entity="cacao",
+        code="INV-WH-REC",
+        name="Inventario bodega conciliacion",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    item_inventory = Accounts(
+        entity="cacao",
+        code="INV-ITEM-REC",
+        name="Inventario item conciliacion",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    adjustment_account = Accounts(
+        entity="cacao",
+        code="ADJ-REC",
+        name="Diferencias de inventario",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    database.session.add_all(
+        [
+            warehouse_inventory,
+            item_inventory,
+            adjustment_account,
+            UOM(code="REC", name="Reconciliacion"),
+            Item(code="ITEM-REC", name="Item reconciliacion", item_type="goods", is_stock_item=True, default_uom="REC"),
+            CostCenter(entity="cacao", code="CCREC", name="Centro reconciliacion", active=True, enabled=True),
+            Unit(entity="cacao", code="UREC", name="Unidad reconciliacion", enabled=True),
+            Project(entity="cacao", code="PREC", name="Proyecto reconciliacion"),
+        ]
+    )
+    database.session.flush()
+    database.session.add(
+        Warehouse(
+            code="WH-REC",
+            name="Bodega reconciliacion",
+            company="cacao",
+            inventory_account_id=warehouse_inventory.id,
+        )
+    )
+    database.session.add(
+        CompanyDefaultAccount(
+            company="cacao",
+            default_inventory=item_inventory.id,
+            inventory_adjustment_account_id=adjustment_account.id,
+            default_expense=adjustment_account.id,
+        )
+    )
+    database.session.add(
+        StockBin(
+            company="cacao",
+            item_code="ITEM-REC",
+            warehouse="WH-REC",
+            actual_qty=Decimal("10"),
+            valuation_rate=Decimal("10"),
+            stock_value=Decimal("100"),
+        )
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="stock_reconciliation",
+        to_warehouse="WH-REC",
+        docstatus=1,
+        adjustment_account_id=adjustment_account.id,
+        cost_center_code="CCREC",
+        unit_code="UREC",
+        project_code="PREC",
+    )
+    database.session.add(entry)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ITEM-REC",
+            target_warehouse="WH-REC",
+            qty=Decimal("0"),
+            qty_in_base_uom=Decimal("0"),
+            uom="REC",
+            current_qty=Decimal("10"),
+            counted_qty=Decimal("10"),
+            qty_difference=Decimal("0"),
+            current_valuation_rate=Decimal("10"),
+            target_valuation_rate=Decimal("12"),
+            current_stock_value=Decimal("100"),
+            target_stock_value=Decimal("120"),
+            stock_value_difference=Decimal("20"),
+        )
+    )
+    database.session.commit()
+
+    entries = post_document_to_gl(entry)
+    database.session.commit()
+
+    gl_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
+        .scalars()
+        .all()
+    )
+    stock_entries = (
+        database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
+        .scalars()
+        .all()
+    )
+    valuation_layers = (
+        database.session.execute(
+            database.select(StockValuationLayer).filter_by(voucher_type="stock_entry", voucher_id=entry.id)
+        )
+        .scalars()
+        .all()
+    )
+    bin_row = database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code="ITEM-REC", warehouse="WH-REC")
+    ).scalar_one()
+
+    assert entries == gl_entries
+    assert len(gl_entries) == 2
+    assert sum(line.debit for line in gl_entries) == sum(line.credit for line in gl_entries)
+    assert any(line.account_id == warehouse_inventory.id and line.debit == Decimal("20.0000") for line in gl_entries)
+    assert any(line.account_id == adjustment_account.id and line.credit == Decimal("20.0000") for line in gl_entries)
+    assert {line.cost_center_code for line in gl_entries} == {"CCREC"}
+    assert {line.unit_code for line in gl_entries} == {"UREC"}
+    assert {line.project_code for line in gl_entries} == {"PREC"}
+    assert all(line.account_id != item_inventory.id for line in gl_entries)
+    assert len(stock_entries) == 1
+    assert stock_entries[0].qty_change == Decimal("0E-9")
+    assert len(valuation_layers) == 1
+    assert valuation_layers[0].qty == Decimal("0E-9")
+    assert bin_row.actual_qty == Decimal("10.000000000")
+    assert bin_row.stock_value == Decimal("120.0000")
+    assert bin_row.valuation_rate == Decimal("12.000000000")
+
+    reversals = cancel_document(entry)
+    database.session.commit()
+
+    refreshed_bin = database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code="ITEM-REC", warehouse="WH-REC")
+    ).scalar_one()
+    all_gl_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
+        .scalars()
+        .all()
+    )
+    all_stock_entries = (
+        database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
+        .scalars()
+        .all()
+    )
+    assert len(reversals) == 2
+    assert sum(line.debit for line in all_gl_entries) == sum(line.credit for line in all_gl_entries)
+    assert refreshed_bin.actual_qty == Decimal("10.000000000")
+    assert refreshed_bin.stock_value == Decimal("100.0000")
+    assert len(all_stock_entries) == 2
+    assert sum(line.stock_value_difference for line in all_stock_entries) == Decimal("0.0000")

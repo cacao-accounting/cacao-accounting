@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/bodega_nuevo.html"></div>
@@ -35,7 +36,19 @@
     </div>
     <div class="mb-3">
       {{ form.company.label(class="form-label") }}
-      {{ form.company(class="form-select") }}
+      {{ form.company(class="form-select", id="company") }}
+    </div>
+    <div class="mb-3">
+      {{ form.inventory_account_id.label(class="form-label") }}
+      {{ tf_macros.smart_select(
+          doctype="account",
+          name="inventory_account_id",
+          label="Cuenta de inventario",
+          filters={"company": {"selector": "#company"}, "account_type": "inventory"},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          preload=True
+      ) }}
     </div>
   </form>
 </div>

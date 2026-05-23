@@ -19,6 +19,8 @@ from cacao_accounting.database import (
     PaymentReference,
     PurchaseInvoice,
     PurchaseOrder,
+    Reconciliation,
+    ReconciliationItem,
     SalesInvoice,
     SalesOrder,
     database,
@@ -338,6 +340,251 @@ def payment_reference_candidates(
                 }
             )
     return rows
+
+
+def payment_reconciliation_candidates(
+    *,
+    company: str,
+    party_type: str,
+    party_id: str | None = None,
+    currency: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Devuelve pagos abiertos y documentos pendientes para conciliacion AR/AP."""
+    if not company or party_type not in {"supplier", "customer"}:
+        raise DocumentFlowError("Debe indicar compania y tipo de tercero.", 400)
+
+    payment_query = (
+        select(PaymentEntry)
+        .filter_by(company=company, party_type=party_type, docstatus=1)
+        .where(PaymentEntry.payment_type.in_(("pay", "receive")))
+    )
+    if party_id:
+        payment_query = payment_query.filter_by(party_id=party_id)
+    if currency:
+        payment_query = payment_query.filter_by(currency=currency)
+
+    payments: list[dict[str, Any]] = []
+    for payment in database.session.execute(payment_query.order_by(PaymentEntry.posting_date, PaymentEntry.id)).scalars():
+        unallocated = compute_payment_unallocated_amount(payment)
+        if unallocated <= 0:
+            continue
+        payments.append(
+            {
+                "payment_id": payment.id,
+                "document_no": getattr(payment, "document_no", None) or payment.id,
+                "payment_type": payment.payment_type,
+                "posting_date": payment.posting_date.isoformat() if payment.posting_date else "",
+                "party_type": payment.party_type,
+                "party_id": payment.party_id,
+                "party_name": payment.party_name or "",
+                "company": payment.company,
+                "currency": payment.currency or "",
+                "unallocated_amount": _to_json_number(unallocated),
+            }
+        )
+
+    source_types = (
+        ["purchase_invoice", "purchase_debit_note", "purchase_credit_note"]
+        if party_type == "supplier"
+        else ["sales_invoice", "sales_debit_note", "sales_credit_note"]
+    )
+    documents = (
+        payment_reference_candidates(
+            company=company,
+            party_type=party_type,
+            party_id=party_id or "",
+            source_types=source_types,
+        )
+        if party_id
+        else []
+    )
+    if currency:
+        documents = [document for document in documents if document.get("currency") in {"", currency}]
+
+    return {"payments": payments, "documents": documents}
+
+
+def _payment_reference_model(reference_type: str) -> type[PurchaseInvoice] | type[SalesInvoice]:
+    """Devuelve el modelo fisico de una referencia AR/AP."""
+    source_key = normalize_doctype(reference_type)
+    if source_key.startswith("purchase_"):
+        return PurchaseInvoice
+    if source_key.startswith("sales_"):
+        return SalesInvoice
+    raise DocumentFlowError("Tipo de referencia invalido.", 400)
+
+
+def _payment_reference_party(document: Any, source_type: str) -> tuple[str, str | None]:
+    """Resuelve el tercero esperado para una referencia AR/AP."""
+    return _payment_candidate_party(document, source_type)
+
+
+def _payment_type_matches_source(payment_type: str, source_type: str) -> bool:
+    """Valida que el tipo de pago sea compatible con factura o nota."""
+    expected = {
+        "purchase_invoice": "pay",
+        "purchase_debit_note": "pay",
+        "purchase_credit_note": "receive",
+        "sales_invoice": "receive",
+        "sales_debit_note": "receive",
+        "sales_credit_note": "pay",
+    }.get(normalize_doctype(source_type))
+    return expected is None or payment_type == expected
+
+
+def _cash_consumed(allocated: Decimal, discount: Decimal, gain_loss: Decimal) -> Decimal:
+    """Calcula el efectivo consumido por una aplicacion de pago."""
+    consumed = allocated - discount - gain_loss
+    return consumed if consumed > 0 else Decimal("0")
+
+
+def apply_payment_reconciliation(
+    *,
+    company: str,
+    party_type: str,
+    party_id: str,
+    allocation_date: date,
+    lines: list[dict[str, Any]],
+) -> Reconciliation:
+    """Aplica pagos existentes contra documentos AR/AP abiertos."""
+    if not lines:
+        raise DocumentFlowError("La conciliacion requiere al menos una linea.")
+    if not company or party_type not in {"supplier", "customer"} or not party_id:
+        raise DocumentFlowError("Debe indicar compania, tipo de tercero y tercero.", 400)
+
+    reconciliation = Reconciliation(
+        company=company,
+        party_id=party_id,
+        recon_date=allocation_date,
+        recon_type="AP" if party_type == "supplier" else "AR",
+    )
+    database.session.add(reconciliation)
+    database.session.flush()
+
+    processed: set[tuple[str, str, str]] = set()
+    payment_remaining: dict[str, Decimal] = {}
+    for raw_line in lines:
+        payment_id = str(raw_line.get("payment_id") or "")
+        reference_id = str(raw_line.get("reference_id") or "")
+        flow_source_type = normalize_doctype(str(raw_line.get("flow_source_type") or raw_line.get("reference_type") or ""))
+        reference_type = normalize_doctype(
+            str(raw_line.get("reference_type") or _payment_candidate_physical_type(flow_source_type))
+        )
+        allocated = decimal_or_zero(raw_line.get("allocated_amount"))
+        discount = decimal_or_zero(raw_line.get("discount_amount"))
+        gain_loss = decimal_or_zero(raw_line.get("gain_loss_amount"))
+        difference = decimal_or_zero(raw_line.get("difference_amount") or gain_loss)
+
+        if allocated <= 0:
+            raise DocumentFlowError("El monto aplicado debe ser mayor que cero.", 409)
+        key = (payment_id, flow_source_type, reference_id)
+        if key in processed:
+            raise DocumentFlowError("No se puede aplicar la misma factura dos veces en un pago.", 409)
+        processed.add(key)
+
+        payment = database.session.get(PaymentEntry, payment_id)
+        if not payment or payment.docstatus != 1:
+            raise DocumentFlowError("El pago debe existir y estar aprobado.", 404)
+        if payment.company != company or payment.party_type != party_type or payment.party_id != party_id:
+            raise DocumentFlowError("El pago no coincide con la compania o tercero de la conciliacion.", 409)
+        if not _payment_type_matches_source(payment.payment_type, flow_source_type):
+            raise DocumentFlowError("El tipo de pago no corresponde con el documento referenciado.", 409)
+
+        if payment_id not in payment_remaining:
+            payment_remaining[payment_id] = compute_payment_unallocated_amount(payment)
+        consumed = _cash_consumed(allocated, discount, gain_loss)
+        if consumed > payment_remaining[payment_id] + Decimal("0.01"):
+            raise DocumentFlowError("El monto aplicado excede el saldo disponible del pago.", 409)
+
+        model = _payment_reference_model(flow_source_type)
+        document = database.session.get(model, reference_id)
+        if not document or getattr(document, "docstatus", 0) != 1:
+            raise DocumentFlowError("El documento referenciado debe existir y estar aprobado.", 404)
+        if getattr(document, "company", None) != company:
+            raise DocumentFlowError("El documento referenciado no pertenece a la misma compania.", 409)
+        expected_party_type, expected_party_id = _payment_reference_party(document, flow_source_type)
+        if expected_party_type != party_type or expected_party_id != party_id:
+            raise DocumentFlowError("El documento referenciado no coincide con el tercero.", 409)
+
+        existing = database.session.execute(
+            select(PaymentReference.id)
+            .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+            .where(
+                PaymentReference.payment_id == payment.id,
+                DocumentRelation.source_type == flow_source_type,
+                DocumentRelation.source_id == reference_id,
+                DocumentRelation.target_type == "payment_entry",
+                DocumentRelation.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if existing:
+            raise DocumentFlowError("El documento ya esta aplicado a este pago.", 409)
+
+        outstanding = compute_outstanding_amount(document, as_of_date=allocation_date)
+        if outstanding <= 0:
+            raise DocumentFlowError("El documento referenciado no tiene saldo pendiente.", 409)
+        if allocated > outstanding + Decimal("0.01"):
+            raise DocumentFlowError("El monto aplicado excede el saldo pendiente del documento.", 409)
+
+        physical_type = _payment_candidate_physical_type(flow_source_type)
+        outstanding_after = outstanding - allocated
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type=physical_type or reference_type,
+            flow_source_type=flow_source_type,
+            reference_id=reference_id,
+            reference_document_no=getattr(document, "document_no", None) or reference_id,
+            reference_date=_payment_candidate_date(document),
+            party_type=party_type,
+            party_id=party_id,
+            company=company,
+            currency=getattr(document, "currency", None) or getattr(payment, "currency", None),
+            total_amount=getattr(document, "grand_total", None),
+            outstanding_amount=outstanding,
+            outstanding_amount_after=outstanding_after,
+            allocated_amount=allocated,
+            exchange_rate=decimal_or_zero(raw_line.get("exchange_rate"))
+            or decimal_or_zero(getattr(document, "exchange_rate", None))
+            or Decimal("1"),
+            difference_amount=difference,
+            allocation_date=allocation_date,
+            discount_amount=discount,
+            gain_loss_amount=gain_loss,
+            notes=raw_line.get("notes"),
+        )
+        database.session.add(reference)
+        database.session.flush()
+        create_document_relation(
+            source_type=flow_source_type,
+            source_id=reference_id,
+            source_item_id=None,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=reference.id,
+            qty=Decimal("1"),
+            rate=allocated,
+            amount=allocated,
+        )
+        document.outstanding_amount = outstanding_after
+        document.base_outstanding_amount = outstanding_after
+        payment_remaining[payment_id] -= consumed
+        database.session.add(
+            ReconciliationItem(
+                reconciliation_id=reconciliation.id,
+                reference_type=flow_source_type,
+                reference_id=reference_id,
+                amount=allocated,
+                allocated_amount=allocated,
+                reconciliation_date=allocation_date,
+                source_type="payment_entry",
+                source_id=payment.id,
+                target_type=flow_source_type,
+                target_id=reference_id,
+            )
+        )
+
+    return reconciliation
 
 
 def refresh_outstanding_amount_cache(document: Any, as_of_date: date | None = None) -> Decimal:

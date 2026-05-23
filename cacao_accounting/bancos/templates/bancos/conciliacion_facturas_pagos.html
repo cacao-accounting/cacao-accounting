@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Conciliación Facturas/Pagos") }}</li>
+  </ol>
+</nav>
+
+<form
+  method="post"
+  id="payment-reconciliation-form"
+  data-testid="payment-reconciliation-screen"
+  x-data="paymentReconciliation()"
+  @submit="payload = JSON.stringify(buildPayload())"
+>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="payment_reconciliation_payload" :value="payload">
+
+  <div class="ca-page-header">
+    <h4><i class="bi bi-intersect me-2"></i>{{ _("Conciliación Facturas/Pagos") }}</h4>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label" for="company">{{ _("Compañía") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="company",
+            name="company",
+            label=_("Compañía"),
+            preload=True,
+            required=True,
+            x_model="filters.company"
+        ) }}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="party_type">{{ _("Tipo de tercero") }}</label>
+        <select class="form-select" id="party_type" x-model="filters.party_type" @change="filters.party_id = ''; filters.party_label = ''; clearCandidates()">
+          <option value="customer">{{ _("Cliente") }}</option>
+          <option value="supplier">{{ _("Proveedor") }}</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="party_id">{{ _("Tercero") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="party",
+            name="party_id",
+            label=_("Tercero"),
+            filters={"party_type": {"selector": "#party_type"}, "company": {"selector": "#company"}},
+            filter_sources=["#party_type", "#company"],
+            required_filters=["party_type", "company"],
+            x_model="filters.party_id",
+            on_select="function(opt){ filters.party_label = opt.display_name || opt.label || ''; }"
+        ) }}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="currency">{{ _("Moneda") }}</label>
+        {{ tf_macros.smart_select(
+            doctype="currency",
+            name="currency",
+            label=_("Moneda"),
+            x_model="filters.currency"
+        ) }}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="allocation_date">{{ _("Fecha de aplicación") }}</label>
+        <input class="form-control" type="date" id="allocation_date" x-model="filters.allocation_date" required>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="loadCandidates()">
+        <i class="bi bi-arrow-repeat me-1"></i>{{ _("Cargar candidatos") }}
+      </button>
+      <button class="btn btn-sm btn-primary" type="submit" :disabled="!lines.length">
+        <i class="bi bi-check2-circle me-1"></i>{{ _("Aplicar conciliación") }}
+      </button>
+      <span class="text-danger small align-self-center" x-text="error"></span>
+    </div>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <div class="ca-card-header px-0 pt-0">
+      <h5 class="ca-card-title">{{ _("Pagos abiertos") }}</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _("Pagos abiertos para conciliación") }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _("Pago") }}</th>
+            <th>{{ _("Tipo") }}</th>
+            <th>{{ _("Fecha") }}</th>
+            <th>{{ _("Moneda") }}</th>
+            <th class="text-end">{{ _("Disponible") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="payment in payments" :key="payment.payment_id">
+            <tr>
+              <td x-text="payment.document_no"></td>
+              <td x-text="payment.payment_type"></td>
+              <td x-text="payment.posting_date"></td>
+              <td x-text="payment.currency"></td>
+              <td class="text-end" x-text="formatMoney(payment.unallocated_amount)"></td>
+            </tr>
+          </template>
+          <tr x-show="!payments.length"><td colspan="5" class="text-center text-muted py-3">{{ _("No hay pagos abiertos.") }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ca-card p-3">
+    <div class="ca-card-header px-0 pt-0 d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title">{{ _("Aplicaciones") }}</h5>
+      <button class="btn btn-sm btn-outline-primary" type="button" @click="addLine()">
+        <i class="bi bi-plus-lg me-1"></i>{{ _("Añadir aplicación") }}
+      </button>
+    </div>
+    <div class="table-responsive">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _("Aplicaciones de pagos contra facturas") }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _("Pago") }}</th>
+            <th>{{ _("Documento") }}</th>
+            <th class="text-end">{{ _("Saldo") }}</th>
+            <th class="text-end">{{ _("Aplicado") }}</th>
+            <th class="text-end">{{ _("Descuento") }}</th>
+            <th class="text-end">{{ _("Diferencia") }}</th>
+            <th>{{ _("Notas") }}</th>
+            <th>{{ _("Acciones") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="(line, index) in lines" :key="line.uid">
+            <tr>
+              <td>
+                <select class="form-select form-select-sm" x-model="line.payment_id">
+                  <option value="">{{ _("Seleccione") }}</option>
+                  <template x-for="payment in payments" :key="payment.payment_id">
+                    <option :value="payment.payment_id" x-text="payment.document_no + ' - ' + formatMoney(payment.unallocated_amount)"></option>
+                  </template>
+                </select>
+              </td>
+              <td>
+                <select class="form-select form-select-sm" x-model="line.reference_key" @change="selectDocument(line)">
+                  <option value="">{{ _("Seleccione") }}</option>
+                  <template x-for="document in documents" :key="document.flow_source_type + ':' + document.reference_id">
+                    <option :value="document.flow_source_type + ':' + document.reference_id" x-text="document.document_no"></option>
+                  </template>
+                </select>
+              </td>
+              <td class="text-end" x-text="formatMoney(line.outstanding_amount)"></td>
+              <td><input class="form-control form-control-sm text-end" type="number" min="0.0001" step="0.0001" x-model.number="line.allocated_amount"></td>
+              <td><input class="form-control form-control-sm text-end" type="number" min="0" step="0.0001" x-model.number="line.discount_amount"></td>
+              <td><input class="form-control form-control-sm text-end" type="number" step="0.0001" x-model.number="line.gain_loss_amount"></td>
+              <td><input class="form-control form-control-sm" type="text" x-model="line.notes"></td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger" type="button" @click="lines.splice(index, 1)">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="!lines.length"><td colspan="8" class="text-center text-muted py-3">{{ _("Agregue aplicaciones para registrar la conciliación.") }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+
+<script>
+function paymentReconciliation() {
+  return {
+    filters: {
+      company: '',
+      party_type: 'customer',
+      party_id: '',
+      party_label: '',
+      currency: '',
+      allocation_date: new Date().toISOString().slice(0, 10),
+    },
+    payments: [],
+    documents: [],
+    lines: [],
+    payload: '{}',
+    error: '',
+    formatMoney(value) {
+      return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    clearCandidates() {
+      this.payments = [];
+      this.documents = [];
+      this.lines = [];
+    },
+    async loadCandidates() {
+      this.error = '';
+      const params = new URLSearchParams({
+        company: this.filters.company || '',
+        party_type: this.filters.party_type || '',
+        party_id: this.filters.party_id || '',
+        currency: this.filters.currency || '',
+      });
+      const response = await fetch(`/api/document-flow/payment-reconciliation-candidates?${params.toString()}`, { credentials: 'same-origin' });
+      if (!response.ok) {
+        this.error = '{{ _("No se pudieron cargar candidatos.") }}';
+        return;
+      }
+      const data = await response.json();
+      this.payments = data.payments || [];
+      this.documents = data.documents || [];
+      this.lines = [];
+    },
+    addLine() {
+      this.lines.push({
+        uid: `${Date.now()}-${Math.random()}`,
+        payment_id: '',
+        reference_key: '',
+        reference_type: '',
+        flow_source_type: '',
+        reference_id: '',
+        outstanding_amount: 0,
+        allocated_amount: 0,
+        discount_amount: 0,
+        gain_loss_amount: 0,
+        notes: '',
+      });
+    },
+    selectDocument(line) {
+      const document = this.documents.find((item) => `${item.flow_source_type}:${item.reference_id}` === line.reference_key);
+      if (!document) return;
+      line.reference_type = document.reference_type;
+      line.flow_source_type = document.flow_source_type;
+      line.reference_id = document.reference_id;
+      line.outstanding_amount = Number(document.pending_amount || 0);
+      line.allocated_amount = Number(document.pending_amount || 0);
+    },
+    buildPayload() {
+      return {
+        company: this.filters.company,
+        party_type: this.filters.party_type,
+        party_id: this.filters.party_id,
+        allocation_date: this.filters.allocation_date,
+        lines: this.lines
+          .filter((line) => line.payment_id && line.reference_id && Number(line.allocated_amount || 0) > 0)
+          .map((line) => ({
+            payment_id: line.payment_id,
+            reference_type: line.reference_type,
+            flow_source_type: line.flow_source_type,
+            reference_id: line.reference_id,
+            allocated_amount: line.allocated_amount,
+            discount_amount: line.discount_amount || 0,
+            gain_loss_amount: line.gain_loss_amount || 0,
+            difference_amount: line.gain_loss_amount || 0,
+            notes: line.notes || '',
+          })),
+      };
+    },
+  };
+}
+</script>
+{% endblock %}
