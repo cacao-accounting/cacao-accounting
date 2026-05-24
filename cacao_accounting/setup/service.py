@@ -24,6 +24,7 @@ from cacao_accounting.document_flow.status import _
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
 from cacao_accounting.database import Entity, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
+from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.repository import (
     create_default_accounting_period,
     create_default_book,
@@ -83,6 +84,10 @@ def create_company(
     default: bool = False,
 ) -> "Entity":
     """Crea una compañia con los registros contables mínimos necesarios."""
+    company_count = database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
+    if force_single_entity() and company_count >= 1:
+        raise ValueError("Esta instalaciÃ³n solo permite una compaÃ±Ã­a.")
+
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
     create_default_cost_center(entity)

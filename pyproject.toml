@@ -98,3 +98,9 @@ disable_error_code = [
 markers = [
     "slow: Pruebas unitarias que tardan mucho en ejecurse, normalmente requieren un set de datos real.",
 ]
+norecursedirs = [
+    "build",
+    "dist",
+    "*.egg-info",
+    "cacao_accounting-*",
+]

@@ -12,6 +12,7 @@ from pathlib import Path
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
+from cacao_accounting.runtime_mode import detect_desktop_mode
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -86,29 +87,10 @@ else:
 
 
 def probar_modo_escritorio() -> bool:
-    """Función utilitaria para establecer nodo de escritorio."""
-    # Probamos si estamos en un paquete SNAP
-    # Referencias
-    #  - https://snapcraft.io/docs/environment-variables
-    if environ.get("SNAP_NAME", default=False):
-        return True
-
-    # Probamos si estamos en un paquete FLATPAK
-    # Referencias:
-    #  - https://www.systutorials.com/docs/linux/man/1-flatpak-run/
-    elif environ.get("FLATPAK_ID", default=False):
-        return True
-
-    # Probamos si se ha establecido la variable de entorno CACAO_ACCOUNTING-DESKTOP
-    # En el codigo fuente de la distribución de escritorio se establece esta opción
-    # previo a importar la aplicación principal.
-    elif str(environ.get("CACAO_ACCOUNTING_DESKTOP", "False")).lower() == "true":
-        return True
-
-    else:
-        return False
+    """Compatibility wrapper for the centralized runtime mode detector."""
+    return detect_desktop_mode()
 
 
-MODO_ESCRITORIO = probar_modo_escritorio()
+MODO_ESCRITORIO = detect_desktop_mode()
 
 TESTING_MODE = environ.get("CACAO_TEST", False) or environ.get("CI", False) or environ.get("PYTEST_VERSION") is not None

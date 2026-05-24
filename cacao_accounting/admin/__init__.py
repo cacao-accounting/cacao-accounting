@@ -57,6 +57,7 @@ from cacao_accounting.contabilidad.default_accounts import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.modulos import listado_modulos, obtener_modulos_disponibles, sincronizar_modulos
+from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
     create_tax_rule,
@@ -74,6 +75,7 @@ CUENTAS_PREDETERMINADAS = "admin.cuentas_predeterminadas"
 USUARIO_NO_ENCONTRADO = "Usuario no encontrado."
 LISTA_USUARIOS = "admin.lista_usuarios"
 LISTA_ROLES = "admin.lista_roles"
+DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
 
 
 def _require_system_admin() -> None:
@@ -545,6 +547,16 @@ def _obtener_usuario(usuario_id: str) -> User | None:
     return database.session.get(User, usuario_id)
 
 
+def _user_count() -> int:
+    """Return the number of users currently stored."""
+    return int(database.session.execute(database.select(database.func.count(User.id))).scalar() or 0)
+
+
+def _can_create_user() -> bool:
+    """Return whether the current runtime allows creating another user."""
+    return not (is_desktop_mode() and _user_count() >= 1)
+
+
 def _obtener_roles_disponibles() -> list[Roles]:
     """Lista los roles disponibles en el sistema."""
     return list(database.session.execute(database.select(Roles).order_by(Roles.name)).scalars().all())
@@ -606,6 +618,7 @@ def lista_usuarios():
         "admin/usuarios.html",
         usuarios=usuarios,
         roles_por_usuario=roles_por_usuario,
+        can_create_user=_can_create_user(),
     )
 
 
@@ -614,6 +627,12 @@ def lista_usuarios():
 @modulo_activo("admin")
 def crear_usuario():
     """Crea un nuevo usuario en el sistema."""
+    if not _can_create_user():
+        if request.method == "POST":
+            abort(403)
+        flash(DESKTOP_SINGLE_ADMIN_MESSAGE, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+
     form = UserCreateForm()
     if form.validate_on_submit():
         existen_usuario = database.session.execute(
