@@ -420,11 +420,14 @@
 {% if is_cloud_mode() %}
 {% set tasks = document_collaboration_tasks(document_type, document.id) %}
 {% set users = collaboration_active_users() %}
-<div class="ca-card mt-3" x-data="{ collaborationSection: 'comment' }">
-  <div class="ca-card-header">
+<div class="ca-card mt-3" x-data="{ open: false, collaborationSection: 'comment' }">
+  <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
     <h6 class="ca-card-title mb-0"><i class="bi bi-cloud-check me-1"></i>{{ _('Colaboracion') }}</h6>
+    <button class="btn btn-sm btn-outline-secondary" type="button" @click.stop="open = !open" :aria-expanded="open.toString()">
+      <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
   </div>
-  <div class="p-3">
+  <div class="p-3" x-show="open" x-cloak>
     <div class="btn-group btn-group-sm mb-3" role="group" aria-label="{{ _('Colaboracion') }}">
       <button
         class="btn"
@@ -526,11 +529,11 @@
 {%- set inferred_docstatus = 1 if status_value == 'submitted' else (2 if status_value == 'cancelled' else 0) -%}
 {%- set effective_docstatus = docstatus if docstatus is not none else (document.docstatus|default(inferred_docstatus)) -%}
 {%- set api_url = url_for('api.api_document_flow_tree') ~ '?document_type=' ~ document_type ~ '&document_id=' ~ document.id -%}
-<div class="ca-document-flow mt-3"
+<div class="ca-card ca-document-flow mt-3"
      x-data='documentFlowTree({ apiUrl: {{ api_url | tojson }}, docstatus: {{ effective_docstatus | int }}, createActions: {{ create_actions_json | safe }} })'>
-  <div class="ca-document-flow__header" @click="toggle()">
+  <div class="ca-card-header" role="button" tabindex="0" @click="toggle()" @keydown.enter.prevent="toggle()" @keydown.space.prevent="toggle()">
     <div class="d-flex align-items-start gap-2">
-      <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      <i class="bi bi-diagram-3 mt-1"></i>
       <div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <h6 class="ca-document-flow__title mb-0">{{ _('Flujo documental') }}</h6>
@@ -539,16 +542,19 @@
         <p class="ca-document-flow__subtitle mb-0">{{ _('Trazabilidad completa de esta transacción') }}</p>
       </div>
     </div>
-    <div class="d-flex align-items-center gap-2" @click.stop>
+    <button class="btn btn-sm btn-outline-secondary" type="button" @click.stop="toggle()" :aria-expanded="open.toString()">
+      <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
+  </div>
+
+  <div x-show="open" x-cloak class="ca-document-flow__body p-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
       <button type="button" class="btn btn-sm btn-outline-secondary" @click="expandAll()">{{ _('Expandir todo') }}</button>
       <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapseAll()">{{ _('Contraer todo') }}</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" @click="load()">
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="load()" aria-label="{{ _('Actualizar flujo documental') }}">
         <i class="bi bi-arrow-clockwise"></i>
       </button>
     </div>
-  </div>
-
-  <div x-show="open" x-cloak class="ca-document-flow__body">
     <template x-if="isDraft">
       <div class="ca-document-flow__empty">
         <i class="bi bi-info-circle me-1"></i>
@@ -920,14 +926,17 @@
 {% set older = timeline[: total - page_size] if total > page_size else [] %}
 {% set recent = timeline[total - page_size :] if total > page_size else timeline %}
 {% set collapse_id = 'audit-older-' ~ (timeline | first).event.document_id if timeline else 'audit-older' %}
-<div class="ca-card mt-3">
-    <div class="ca-card-header">
+<div class="ca-card mt-3" x-data="{ open: false }">
+    <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
         <h6 class="ca-card-title mb-0">
             <i class="bi bi-clock-history me-1"></i>{{ _('Historial del documento') }}
             {% if total %}<span class="badge bg-light text-dark ms-1 fw-normal">{{ total }}</span>{% endif %}
         </h6>
+        <button class="btn btn-sm btn-outline-secondary" type="button" @click.stop="open = !open" :aria-expanded="open.toString()">
+            <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+        </button>
     </div>
-    <div class="p-3">
+    <div class="p-3" x-show="open" x-cloak>
         {% if timeline %}
         {% set action_map = {
             'created':                _('creó este documento'),

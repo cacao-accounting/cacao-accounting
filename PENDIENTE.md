@@ -1,5 +1,11 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (UI responsive documental - completado)
+- [x] Mover acciones de detalle a menu compacto en pantallas pequenas para documentos compartidos por Contabilidad, Bancos, Compras e Inventario/Almacen.
+- [x] Convertir Historial del documento en panel colapsable cerrado por defecto.
+- [x] Convertir Colaboracion en panel colapsable cerrado por defecto.
+- [x] Alinear visualmente Historial, Colaboracion y Flujo documental con la misma tarjeta/cabecera colapsable.
+
 ## Seguimiento 2026-05-24 (Modo Desktop/Cloud sin migraciones - completado)
 - [x] Centralizar deteccion desktop/cloud/single-entity en `runtime_mode.py`.
 - [x] Mantener `config.MODO_ESCRITORIO` como alias compatible sin duplicar checks.

@@ -468,3 +468,8 @@
 - **Inventario:** `stock_reconciliation` ahora guarda snapshots de cantidad/tasa/valor actual y objetivo por linea, genera SLE/SVL y actualiza `StockBin` por diferencia de cantidad y/o valor.
 - **Contabilidad:** La diferencia de valuacion se contabiliza balanceada contra la cuenta de inventario asignada a la bodega y una cuenta global de diferencia del documento, aplicando centro de costos, unidad de negocio y proyecto globales a todo el comprobante.
 - **Validacion:** Pruebas focales nuevas cubren conciliacion AR/AP, render de pantallas, ajuste de valor de inventario, cuenta de bodega, dimensiones globales y cancelacion con reversos.
+
+## 2026-05-24 (Ajustes visuales responsive en detalles documentales)
+- **Solicitud:** Aplicar cambios visuales a formularios/detalles de Contabilidad, Bancos, Compras, Inventario/Almacen y documentos operativos: acciones en menu de hamburguesa en pantalla pequena, Historial y Colaboracion colapsables cerrados por defecto, y consistencia visual entre Historial, Colaboracion y Flujo documental.
+- **Implementacion:** Se agrego CSS responsive para `.ca-detail-actions-*`; `detail_header`, `journal.html` y `bancos/pago.html` renderizan acciones inline en escritorio y dropdown en movil; `audit_timeline` y `document_collaboration_panel` usan Alpine con `open: false`; `document_flow_tree` adopta la misma tarjeta/cabecera colapsable y deja sus controles dentro del cuerpo.
+- **Validacion:** `venv\Scripts\python -m pytest tests/test_audit_trail_journal.py tests/test_03webactions.py -q --exitfirst` paso en verde (`23 passed`). Ruff sobre HTML/Jinja no aplica porque interpreta plantillas como Python.
