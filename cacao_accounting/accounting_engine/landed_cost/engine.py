@@ -168,20 +168,33 @@ class LandedCostEngine:
         current_item_value: Optional[Decimal] = None,
         total_current_value: Optional[Decimal] = None,
     ) -> Decimal:
-        if method == "by_value":
-            return item.net_amount / total_value if total_value > 0 else Decimal("0")
-        if method == "by_current_value":
-            if current_item_value is not None and total_current_value and total_current_value > 0:
-                return current_item_value / total_current_value
+        """Calculate an item's proportional landed-cost share."""
+        match method:
+            case "by_value":
+                return self._ratio(item.net_amount, total_value)
+            case "by_current_value":
+                return self._current_value_share(current_item_value, total_current_value)
+            case "by_quantity":
+                return self._ratio(item.quantity, total_qty)
+            case "by_weight":
+                return self._ratio(item.weight * item.quantity, total_weight)
+            case "by_volume":
+                return self._ratio(item.volume * item.quantity, total_volume)
+            case "equal":
+                return self._ratio(Decimal("1"), total_count)
+            case _:
+                return Decimal("0")
+
+    def _current_value_share(
+        self,
+        current_item_value: Optional[Decimal],
+        total_current_value: Optional[Decimal],
+    ) -> Decimal:
+        """Calculate a share based on the running item value."""
+        if current_item_value is None or total_current_value is None:
             return Decimal("0")
-        if method == "by_quantity":
-            return item.quantity / total_qty if total_qty > 0 else Decimal("0")
-        if method == "by_weight":
-            item_weight = item.weight * item.quantity
-            return item_weight / total_weight if total_weight > 0 else Decimal("0")
-        if method == "by_volume":
-            item_volume = item.volume * item.quantity
-            return item_volume / total_volume if total_volume > 0 else Decimal("0")
-        if method == "equal":
-            return Decimal("1") / total_count if total_count > 0 else Decimal("0")
-        return Decimal("0")
+        return self._ratio(current_item_value, total_current_value)
+
+    def _ratio(self, numerator: Decimal, denominator: Decimal) -> Decimal:
+        """Return a safe Decimal ratio."""
+        return numerator / denominator if denominator > 0 else Decimal("0")
