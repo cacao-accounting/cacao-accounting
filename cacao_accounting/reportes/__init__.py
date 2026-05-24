@@ -24,6 +24,7 @@ from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.reportes.services import (
     AgingFilters,
+    BankingFilters,
     FinancialReportFilters,
     KardexFilters,
     OperationalReportFilters,
@@ -34,9 +35,12 @@ from cacao_accounting.reportes.services import (
     get_aging_report,
     get_ar_ap_subledger,
     get_batch_report,
+    get_bank_balance_summary,
+    get_bank_movement_detail,
     get_balance_sheet_report,
     get_gross_margin,
     get_income_statement_report,
+    get_inventory_existence,
     get_inventory_valuation,
     get_kardex,
     get_purchases_by_item,
@@ -106,6 +110,25 @@ _COLUMN_LABELS = {
     "voucher_status": "Status",
     "section": "Section",
     "amount": "Amount",
+    "bank_account": "Bank Account",
+    "party_name": "Party",
+    "payment_type": "Payment Type",
+    "incoming_amount": "Incoming Amount",
+    "outgoing_amount": "Outgoing Amount",
+    "receipts_amount": "Receipts",
+    "payments_amount": "Payments",
+    "account_no": "Account Number",
+    "item_name": "Item Name",
+    "balance_qty": "Balance Qty",
+    "incoming_qty": "Incoming Qty",
+    "outgoing_qty": "Outgoing Qty",
+    "value_change": "Value Change",
+    "original_amount": "Original Amount",
+    "paid_amount": "Paid Amount",
+    "outstanding_amount": "Outstanding Amount",
+    "days": "Days",
+    "bucket": "Bucket",
+    "remarks": "Remarks",
 }
 _MONEY_COLUMNS = {
     "debit",
@@ -124,8 +147,18 @@ _MONEY_COLUMNS = {
     "expense",
     "gross_profit",
     "net_profit",
+    "incoming_amount",
+    "outgoing_amount",
+    "receipts_amount",
+    "payments_amount",
+    "original_amount",
+    "paid_amount",
+    "outstanding_amount",
+    "value_change",
+    "stock_value",
+    "remaining_stock_value",
 }
-_RIGHT_ALIGN_COLUMNS = _MONEY_COLUMNS | {"level"}
+_RIGHT_ALIGN_COLUMNS = _MONEY_COLUMNS | {"level", "incoming_qty", "outgoing_qty", "balance_qty", "actual_qty", "days"}
 _ALWAYS_VISIBLE_COLUMNS = {
     "debit",
     "credit",
@@ -601,9 +634,75 @@ def _empty_financial_report() -> PaginatedReport:
 
 
 def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
-    columns = report.columns or (list(report.rows[0].values.keys()) if report.rows else [])
-    data_rows = [[row.values.get(column) for column in columns] for row in report.rows]
+    rows = getattr(report, "rows", [])
+    columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
+    data_rows = [[row.values.get(column) for column in columns] for row in rows]
     return columns, data_rows
+
+
+def _export_operational_report(report, report_code: str, title: str, filter_payload: dict[str, object]):
+    export_format = request.args.get("export")
+    if export_format not in {"csv", "xlsx"}:
+        return None
+
+    columns, rows = _report_to_matrix(report)
+    if export_format == "csv":
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(columns)
+        writer.writerows(rows)
+        return send_file(
+            BytesIO(buffer.getvalue().encode("utf-8")),
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=f"{report_code}.csv",
+        )
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = report_code[:31]
+    sheet.append([title])
+    sheet.append([_("Fecha de generación"), date.today().isoformat()])
+    sheet.append([_("Usuario"), getattr(current_user, "user", "")])
+    sheet.append([])
+    if columns:
+        sheet.append([_column_label(column, report.ledger_currency) for column in columns])
+        sheet.freeze_panes = "A5"
+    for row in rows:
+        sheet.append([_format_cell(column, row[index], report.ledger_currency) for index, column in enumerate(columns)])
+    if report.totals:
+        sheet.append([])
+    for total_name, total_value in report.totals.items():
+        sheet.append(
+            [
+                _("TOTAL"),
+                _column_label(total_name, report.ledger_currency),
+                _format_cell(total_name, total_value, report.ledger_currency),
+            ]
+        )
+    for column_cells in sheet.columns:
+        values = [str(cell.value or "") for cell in column_cells]
+        max_length = max((len(value) for value in values), default=10)
+        sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max(max_length + 2, 12), 60)
+    for column in range(1, sheet.max_column + 1):
+        sheet.cell(row=4, column=column).alignment = Alignment(horizontal="center")
+
+    filters_sheet = workbook.create_sheet(_("Filtros"))
+    filters_sheet.append([_("Filtro"), _("Valor")])
+    for key, value in filter_payload.items():
+        if value in (None, "", False):
+            continue
+        filters_sheet.append([_(key.replace("_", " ").title()), str(value)])
+    filters_sheet.freeze_panes = "A2"
+    content = BytesIO()
+    workbook.save(content)
+    content.seek(0)
+    return send_file(
+        content,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"{report_code}.xlsx",
+    )
 
 
 def _export_financial_report(report, report_code: str, title: str, report_filters: FinancialReportFilters):
@@ -816,6 +915,48 @@ def _render_financial_report(
     )
 
 
+def _render_operational_framework(
+    report_code: str,
+    report_title: str,
+    report,
+    *,
+    module_home_endpoint: str,
+    module_home_label: str,
+    filter_mode: str,
+    filter_state: dict[str, object],
+    context_summary: dict[str, str],
+):
+    export_response = _export_operational_report(report, report_code, report_title, filter_state)
+    if export_response is not None:
+        return export_response
+    rows = getattr(report, "rows", [])
+    totals_raw = getattr(report, "totals", {})
+    ledger_currency = getattr(report, "ledger_currency", None)
+    columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
+    display_headers = {column: _column_label(column, ledger_currency) for column in columns}
+    display_rows = [
+        {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns}
+        for row in rows
+    ]
+    totals = {key: _format_cell(key, value, ledger_currency) for key, value in totals_raw.items()}
+    return render_template(
+        "reportes/operational_report.html",
+        titulo=f"{report_title} - {APPNAME}",
+        report_title=report_title,
+        report_code=report_code,
+        columns=columns,
+        display_headers=display_headers,
+        display_rows=display_rows,
+        totals=totals,
+        filter_mode=filter_mode,
+        filter_state=filter_state,
+        context_summary=context_summary,
+        right_align_columns=_RIGHT_ALIGN_COLUMNS,
+        module_home_url=url_for(module_home_endpoint),
+        module_home_label=module_home_label,
+    )
+
+
 @reportes.route("/reports/account-summary")
 @login_required
 @modulo_activo("accounting")
@@ -969,21 +1110,70 @@ def aging():
 @modulo_activo("inventory")
 def kardex():
     """Report inventory kardex."""
-    report = get_kardex(
-        KardexFilters(
-            company=request.args.get("company", "cacao"),
-            item_code=request.args.get("item_code") or None,
-            warehouse=request.args.get("warehouse") or None,
-            date_from=_date_arg("date_from"),
-            date_to=_date_arg("date_to"),
-        )
+    company = _resolve_company(request.args.get("company", "cacao"))
+    filters = KardexFilters(
+        company=company,
+        item_code=request.args.get("item_code") or None,
+        warehouse=request.args.get("warehouse") or None,
+        date_from=_date_arg("date_from"),
+        date_to=_date_arg("date_to"),
     )
-    return render_template(
-        REPORT_TABLE_HTML,
-        titulo="Kardex - " + APPNAME,
-        report_title="Kardex",
-        rows=report.rows,
-        totals=report.totals,
+    report = get_kardex(filters)
+    return _render_operational_framework(
+        "kardex",
+        _("Kardex"),
+        report,
+        module_home_endpoint="inventario.inventario_",
+        module_home_label=_("Inventario"),
+        filter_mode="kardex",
+        filter_state={
+            "company": company,
+            "item_code": filters.item_code or "",
+            "warehouse": filters.warehouse or "",
+            "date_from": filters.date_from.isoformat() if filters.date_from else "",
+            "date_to": filters.date_to.isoformat() if filters.date_to else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            date_from=filters.date_from.isoformat() if filters.date_from else None,
+            date_to=filters.date_to.isoformat() if filters.date_to else None,
+        ),
+    )
+
+
+@reportes.route("/reports/inventory-existence")
+@login_required
+@modulo_activo("inventory")
+def inventory_existence():
+    """Genera reporte de existencias a una fecha clave."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _date_arg("as_of_date")
+    filters = KardexFilters(
+        company=company,
+        item_code=request.args.get("item_code") or None,
+        warehouse=request.args.get("warehouse") or None,
+        date_to=as_of_date,
+    )
+    report = get_inventory_existence(filters)
+    return _render_operational_framework(
+        "inventory-existence",
+        _("Existencia de Inventario"),
+        report,
+        module_home_endpoint="inventario.inventario_",
+        module_home_label=_("Inventario"),
+        filter_mode="inventory_existence",
+        filter_state={
+            "company": company,
+            "item_code": filters.item_code or "",
+            "warehouse": filters.warehouse or "",
+            "as_of_date": as_of_date.isoformat() if as_of_date else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            as_of_date=as_of_date.isoformat() if as_of_date else None,
+        ),
     )
 
 
@@ -1023,6 +1213,193 @@ def _render_operational_report(report_name: str, report):
         report_title=report_name,
         rows=report.rows,
         totals=report.totals,
+    )
+
+
+def _operational_context_summary(report, **values: object) -> dict[str, str]:
+    total_rows = getattr(report, "total_rows", len(getattr(report, "rows", [])))
+    summary = {"company": str(values.get("company") or "—"), "records": str(total_rows)}
+    for key, value in values.items():
+        if key == "company":
+            continue
+        summary[key] = "—" if value in (None, "") else str(value)
+    return summary
+
+
+@reportes.route("/reports/bank-movement")
+@login_required
+@modulo_activo(("cash", "banking"))
+def bank_movement():
+    """Genera reporte de detalle de movimiento bancario."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    filters = BankingFilters(
+        company=company,
+        bank_account_id=request.args.get("bank_account_id") or None,
+        date_from=_date_arg("date_from"),
+        date_to=_date_arg("date_to"),
+    )
+    report = get_bank_movement_detail(filters)
+    return _render_operational_framework(
+        "bank-movement",
+        _("Detalle de Movimiento Bancario"),
+        report,
+        module_home_endpoint="bancos.bancos_",
+        module_home_label=_("Bancos"),
+        filter_mode="bank_movement",
+        filter_state={
+            "company": company,
+            "bank_account_id": filters.bank_account_id or "",
+            "date_from": filters.date_from.isoformat() if filters.date_from else "",
+            "date_to": filters.date_to.isoformat() if filters.date_to else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            date_from=filters.date_from.isoformat() if filters.date_from else None,
+            date_to=filters.date_to.isoformat() if filters.date_to else None,
+        ),
+    )
+
+
+@reportes.route("/reports/bank-balance-summary")
+@login_required
+@modulo_activo(("cash", "banking"))
+def bank_balance_summary():
+    """Genera reporte de resumen de saldos bancarios."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    filters = BankingFilters(
+        company=company,
+        bank_account_id=request.args.get("bank_account_id") or None,
+        as_of_date=_date_arg("as_of_date"),
+    )
+    report = get_bank_balance_summary(filters)
+    return _render_operational_framework(
+        "bank-balance-summary",
+        _("Resumen de Saldos Bancarios"),
+        report,
+        module_home_endpoint="bancos.bancos_",
+        module_home_label=_("Bancos"),
+        filter_mode="bank_balance_summary",
+        filter_state={
+            "company": company,
+            "bank_account_id": filters.bank_account_id or "",
+            "as_of_date": filters.as_of_date.isoformat() if filters.as_of_date else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            as_of_date=filters.as_of_date.isoformat() if filters.as_of_date else None,
+        ),
+    )
+
+
+@reportes.route("/reports/accounts-payable")
+@login_required
+@modulo_activo("purchases")
+def accounts_payable():
+    """Genera reporte de cuentas por pagar por proveedor a fecha clave."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _date_arg("as_of_date")
+    party_id = request.args.get("party_id") or None
+    report = get_ar_ap_subledger(
+        SubledgerFilters(company=company, party_type="supplier", party_id=party_id, as_of_date=as_of_date)
+    )
+    return _render_operational_framework(
+        "accounts-payable",
+        _("Cuentas por Pagar"),
+        report,
+        module_home_endpoint="compras.compras_",
+        module_home_label=_("Compras"),
+        filter_mode="accounts_payable",
+        filter_state={
+            "company": company,
+            "party_id": party_id or "",
+            "as_of_date": as_of_date.isoformat() if as_of_date else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            party_type=_("Proveedor"),
+            as_of_date=as_of_date.isoformat() if as_of_date else None,
+        ),
+    )
+
+
+@reportes.route("/reports/ap-aging")
+@login_required
+@modulo_activo("purchases")
+def ap_aging():
+    """Genera aging de cuentas por pagar."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _date_arg("as_of_date") or date.today()
+    party_id = request.args.get("party_id") or None
+    report = get_aging_report(AgingFilters(company=company, party_type="supplier", party_id=party_id, as_of_date=as_of_date))
+    return _render_operational_framework(
+        "ap-aging",
+        _("Aging de Cuentas por Pagar"),
+        report,
+        module_home_endpoint="compras.compras_",
+        module_home_label=_("Compras"),
+        filter_mode="ap_aging",
+        filter_state={"company": company, "party_id": party_id or "", "as_of_date": as_of_date.isoformat()},
+        context_summary=_operational_context_summary(
+            report, company=company, party_type=_("Proveedor"), as_of_date=as_of_date.isoformat()
+        ),
+    )
+
+
+@reportes.route("/reports/accounts-receivable")
+@login_required
+@modulo_activo("sales")
+def accounts_receivable():
+    """Genera reporte de cuentas por cobrar por cliente a fecha clave."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _date_arg("as_of_date")
+    party_id = request.args.get("party_id") or None
+    report = get_ar_ap_subledger(
+        SubledgerFilters(company=company, party_type="customer", party_id=party_id, as_of_date=as_of_date)
+    )
+    return _render_operational_framework(
+        "accounts-receivable",
+        _("Cuentas por Cobrar"),
+        report,
+        module_home_endpoint="ventas.ventas_",
+        module_home_label=_("Ventas"),
+        filter_mode="accounts_receivable",
+        filter_state={
+            "company": company,
+            "party_id": party_id or "",
+            "as_of_date": as_of_date.isoformat() if as_of_date else "",
+        },
+        context_summary=_operational_context_summary(
+            report,
+            company=company,
+            party_type=_("Cliente"),
+            as_of_date=as_of_date.isoformat() if as_of_date else None,
+        ),
+    )
+
+
+@reportes.route("/reports/ar-aging")
+@login_required
+@modulo_activo("sales")
+def ar_aging():
+    """Genera aging de cuentas por cobrar."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _date_arg("as_of_date") or date.today()
+    party_id = request.args.get("party_id") or None
+    report = get_aging_report(AgingFilters(company=company, party_type="customer", party_id=party_id, as_of_date=as_of_date))
+    return _render_operational_framework(
+        "ar-aging",
+        _("Aging de Cuentas por Cobrar"),
+        report,
+        module_home_endpoint="ventas.ventas_",
+        module_home_label=_("Ventas"),
+        filter_mode="ar_aging",
+        filter_state={"company": company, "party_id": party_id or "", "as_of_date": as_of_date.isoformat()},
+        context_summary=_operational_context_summary(
+            report, company=company, party_type=_("Cliente"), as_of_date=as_of_date.isoformat()
+        ),
     )
 
 

@@ -113,11 +113,11 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}">Saldo de Cuentas</a>
+        <a href="{{ url_for('reportes.bank_balance_summary') }}">Resumen de Saldos Bancarios</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('bancos.bancos_transaccion_lista') }}">Libro de Bancos</a>
+        <a href="{{ url_for('reportes.bank_movement') }}">Detalle de Movimiento Bancario</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       {% else %}
