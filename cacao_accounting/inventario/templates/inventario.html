@@ -105,15 +105,27 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('inventario.inventario_bodega_lista') }}">Existencias</a>
+        <a href="{{ url_for('reportes.inventory_existence') }}">Existencia de Inventario</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_articulo_lista') }}">Valorización de Inventario</a>
+        <a href="{{ url_for('reportes.stock_balance') }}">Balance de Stock</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">Kardex</a>
+        <a href="{{ url_for('reportes.inventory_valuation') }}">Valorización de Inventario</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.kardex') }}">Kardex</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.batches') }}">Lotes</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.serials') }}">Seriales</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       {% else %}

@@ -109,15 +109,23 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Ventas por Cliente</a>
+        <a href="{{ url_for('reportes.ar_aging') }}">Aging de Cuentas por Cobrar</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}">Cuentas por Cobrar</a>
+        <a href="{{ url_for('reportes.accounts_receivable') }}">Cuentas por Cobrar</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('ventas.ventas_orden_venta_lista') }}">Pedidos Pendientes</a>
+        <a href="{{ url_for('reportes.sales_by_customer') }}">Ventas por Cliente</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.sales_by_item') }}">Ventas por Artículo</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.gross_margin') }}">Margen Bruto</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       {% else %}
