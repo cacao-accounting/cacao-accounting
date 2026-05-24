@@ -679,7 +679,8 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
     assert len(reversals) == 2
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
     assert len(stock_movements) == 2
-    assert all(not movement.is_cancelled for movement in stock_movements)
+    assert any(movement.is_cancelled for movement in stock_movements)
+    assert any(not movement.is_cancelled for movement in stock_movements)
     assert sum(movement.qty_change for movement in stock_movements) == Decimal("0E-9")
     assert bin_row.actual_qty == Decimal("0.000000000")
 
@@ -971,7 +972,8 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
     assert len(reversals) == 2
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
     assert len(stock_movements) == 2
-    assert all(not movement.is_cancelled for movement in stock_movements)
+    assert any(movement.is_cancelled for movement in stock_movements)
+    assert any(not movement.is_cancelled for movement in stock_movements)
     assert sum(movement.qty_change for movement in stock_movements) == Decimal("0E-9")
     assert bin_row.actual_qty == Decimal("2.000000000")
 

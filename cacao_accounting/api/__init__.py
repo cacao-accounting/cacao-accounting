@@ -37,6 +37,7 @@ from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.document_flow.status import _, document_status_payload
 from cacao_accounting.document_flow.tracing import document_flow_tree
+from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.search_select import SearchSelectError, search_select
@@ -194,6 +195,14 @@ def api_delivery_note_items(note_id: str):
     """Devuelve las líneas de una nota de entrega en formato JSON."""
     items = _source_items_or_abort("delivery_note", note_id)
     return jsonify({"note_id": note_id, "items": items})
+
+
+@api.route("/api/inventory/stock-entry/<entry_id>/items")
+@login_required
+def api_stock_entry_items(entry_id: str):
+    """Devuelve las líneas de un movimiento de inventario en formato JSON."""
+    items = _source_items_or_abort("stock_entry", entry_id)
+    return jsonify({"entry_id": entry_id, "items": items})
 
 
 @api.route("/api/buying/purchase-invoice/<invoice_id>/items")
@@ -406,12 +415,33 @@ def api_document_flow_recalculate_status(document_type: str, document_id: str):
 @api.route("/api/document-flow/tree")
 @login_required
 def api_document_flow_tree():
-    """Devuelve trazabilidad upstream/downstream de un documento."""
+    """Devuelve árbol recursivo upstream/downstream de un documento.
+
+    Parámetros de query:
+        document_type   Tipo documental (requerido).
+        document_id     ID del documento (requerido).
+        direction       ``all`` (defecto), ``upstream`` o ``downstream``.
+        max_depth       Profundidad máxima (defecto 10).
+        max_nodes       Número máximo de nodos (defecto 100).
+        legacy          Si ``1``, usa el formato plano original de document_flow_tree.
+    """
     document_type = request.args.get("document_type", "")
     document_id = request.args.get("document_id", "")
     if not document_type or not document_id:
         abort(400)
-    return jsonify(document_flow_tree(document_type, document_id))
+    if (request.args.get("legacy") or "").lower() in {"1", "true"}:
+        return jsonify(document_flow_tree(document_type, document_id))
+    direction = request.args.get("direction", "all")
+    if direction not in {"all", "upstream", "downstream"}:
+        abort(400)
+    try:
+        max_depth = int(request.args.get("max_depth") or 10)
+        max_nodes = int(request.args.get("max_nodes") or 100)
+    except ValueError:
+        abort(400)
+    return jsonify(
+        build_document_flow_tree(document_type, document_id, direction=direction, max_depth=max_depth, max_nodes=max_nodes)
+    )
 
 
 @api.route("/api/document-flow/summary")

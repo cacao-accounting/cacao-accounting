@@ -1,6 +1,7 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
 {% extends "base.html" %}
 {% block contenido %}
+{% import "macros.html" as macros %}
 
 <style>
     .journal-line-row.is-active {
@@ -393,5 +394,7 @@
         setActiveRow(rows[0]);
     })();
 </script>
+
+{{ macros.document_flow_tree("journal_entry", registro) }}
 
 {% endblock %}

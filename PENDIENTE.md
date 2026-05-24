@@ -1,12 +1,18 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Flujo Documental Expandible - completado)
+- [x] Registrar `journal_entry` dentro del árbol de flujo documental y mostrarlo en la vista de comprobante contable.
+- [x] Crear relaciones contables desde líneas de journal con `internal_reference` / `internal_reference_id`.
+- [x] Garantizar que `apply_advance_to_invoice` cree `PaymentReference` y `DocumentRelation`.
+- [x] Eliminar la implementación inline duplicada de `documentFlowTree`.
+
 ## Seguimiento 2026-05-23 (Conciliaciones - completado)
 - [x] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
 - [x] Implementar "Stock Reconciliation" para ajuste de valuacion (cantidad + valor objetivo).
 
 ## Seguimiento 2026-05-22 (Payment Entry - completado)
-- [ ] Acciones `Crear` en detalle de solicitud de compra (`purchase_request` → cotización de proveedor) — pre-existing gap en `ALLOWED_FLOWS`.
-- [ ] Acción `Crear Entrada de Almacén` desde recepción de compra — pre-existing gap en `ALLOWED_FLOWS`.
+- [x] Acciones `Crear` en detalle de solicitud de compra (`purchase_request` → cotización de proveedor) — pre-existing gap en `ALLOWED_FLOWS`.
+- [x] Acción `Crear Entrada de Almacén` desde recepción de compra — pre-existing gap en `ALLOWED_FLOWS`.
 
 ## Seguimiento 2026-05-21 (Matriz de relaciones operativas)
 - [ ] Ejecutar implementación completa de la matriz definida en `modulos/relaciones.md` (en progreso: núcleo `document_flow` + acciones dinámicas en trazabilidad).
