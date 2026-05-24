@@ -2607,3 +2607,17 @@ class BudgetImportLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     period_id = database.Column(database.String(26), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     description = database.Column(database.String(255), nullable=True)
+
+
+class UserBookAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Acceso granular de usuario a libros contables."""
+
+    __tablename__ = "user_book_access"
+    __table_args__ = (UniqueConstraint("user_id", "book_id", name="uq_user_book_access"),)
+
+    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False, index=True)
+    book_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID), nullable=False, index=True)
+    can_read = database.Column(database.Boolean, default=True, nullable=False)
+    can_write = database.Column(database.Boolean, default=False, nullable=False)
+    can_cancel = database.Column(database.Boolean, default=False, nullable=False)
+    can_approve = database.Column(database.Boolean, default=False, nullable=False)

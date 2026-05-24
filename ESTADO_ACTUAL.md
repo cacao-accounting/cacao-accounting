@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-05-24
 
+- **Control de acceso por libro contable / Merge selectivo (2026-05-24):** Integrada de forma acotada la funcionalidad relevante de la rama remota de limpieza multiledger.
+  - Existe `UserBookAccess` como matriz granular usuario-libro con permisos de lectura, escritura, anulacion y aprobacion.
+  - `Permisos` acepta un libro opcional y cruza RBAC del modulo con `UserBookAccess` solo cuando se evalua un libro contable especifico.
+  - `verifica_acceso` solo valida libros para el modulo `accounting`; Bancos, Compras, Inventario y Ventas no filtran por libro y siguen trabajando sobre todos los libros activos via backend/posting multiledger.
+  - `/accounting/journal/books` filtra los libros disponibles segun el usuario no administrador; los administradores conservan visibilidad completa.
+  - Los reportes financieros contables seleccionan por defecto el primer libro autorizado de la compania cuando el request no trae `ledger`.
+  - Se excluyeron los cambios remotos de reportes operativos y menus para mantener el alcance limitado a autorizacion por libro contable.
+
 - **Dashboard Ejecutivo / Hardening pre-merge (2026-05-24):** El dashboard staged queda endurecido para exponer datos financieros consolidados.
   - `/api/dashboard/data` valida compañía, acceso temporal por compañía y pertenencia del periodo contable a la compañía antes de calcular métricas.
   - La respuesta API queda normalizada en `sections` con visibilidad, KPIs, charts, tablas, acciones y estados vacíos por módulo.
