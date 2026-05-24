@@ -1,4 +1,520 @@
 {% extends "base.html" %}
-{% block contenido %}
 
+{% block contenido %}
+<div class="dashboard-shell" x-data="dashboard()" x-init="init()">
+  <section class="dashboard-toolbar">
+    <div>
+      <h1 class="dashboard-title">{{ _('Dashboard ejecutivo') }}</h1>
+      <p class="dashboard-subtitle">{{ _('Vista consolidada de operación y finanzas') }}</p>
+    </div>
+    <div class="dashboard-filters">
+      <label class="dashboard-field">
+        <span>{{ _('Compañía') }}</span>
+        <select class="form-select" x-model="filters.company" @change="onCompanyChange()">
+          <option value="">{{ _('Seleccione una compañía') }}</option>
+          {% for entidad in entidades %}
+          <option value="{{ entidad.id }}">{{ entidad.name or entidad.company_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="dashboard-field">
+        <span>{{ _('Periodo contable') }}</span>
+        <select class="form-select" x-model="filters.period" @change="fetchData()">
+          <option value="">{{ _('Todos los periodos') }}</option>
+          <template x-for="period in availablePeriods()" :key="period.id">
+            <option :value="period.id" x-text="period.name"></option>
+          </template>
+        </select>
+      </label>
+      <button class="btn btn-primary dashboard-refresh" type="button" @click="fetchData()" :disabled="loading || !filters.company">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        <span>{{ _('Actualizar') }}</span>
+      </button>
+    </div>
+  </section>
+
+  <section x-show="error" x-cloak class="dashboard-alert">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    <span x-text="error"></span>
+  </section>
+
+  <section x-show="!filters.company" class="dashboard-empty">
+    <i class="bi bi-building" aria-hidden="true"></i>
+    <h2>{{ _('Seleccione una compañía') }}</h2>
+    <p>{{ _('El dashboard se carga con la compañía y el periodo elegidos.') }}</p>
+  </section>
+
+  <section x-show="filters.company" x-cloak class="dashboard-grid">
+    <template x-for="sectionKey in sectionOrder" :key="sectionKey">
+      <article class="dashboard-section" x-show="section(sectionKey).visible">
+        <header class="dashboard-section__header">
+          <div>
+            <h2 x-text="section(sectionKey).title"></h2>
+            <p x-text="section(sectionKey).subtitle"></p>
+          </div>
+          <span class="dashboard-section__badge" x-text="section(sectionKey).badge"></span>
+        </header>
+
+        <div class="dashboard-kpi-grid">
+          <template x-for="kpi in kpis(sectionKey)" :key="kpi.label">
+            <div class="dashboard-kpi">
+              <span x-text="kpi.label"></span>
+              <strong x-text="formatKpi(kpi)"></strong>
+            </div>
+          </template>
+        </div>
+
+        <div class="dashboard-widget-grid">
+          <div class="dashboard-widget" x-show="chartFor(sectionKey)">
+            <canvas :id="`${sectionKey}Chart`"></canvas>
+          </div>
+          <div class="dashboard-widget">
+            <div class="dashboard-widget__title" x-text="primaryTableTitle(sectionKey)"></div>
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <template x-for="heading in tableHeadings(sectionKey)" :key="heading">
+                    <th x-text="heading"></th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="row in primaryRows(sectionKey)" :key="rowKey(row)">
+                  <tr>
+                    <template x-for="cell in tableCells(sectionKey, row)" :key="cell.key">
+                      <td :class="cell.className" x-text="cell.value"></td>
+                    </template>
+                  </tr>
+                </template>
+                <tr x-show="primaryRows(sectionKey).length === 0">
+                  <td :colspan="tableHeadings(sectionKey).length" class="dashboard-table__empty" x-text="section(sectionKey).empty_state"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <footer class="dashboard-actions">
+          <template x-for="action in section(sectionKey).actions" :key="action.url">
+            <a class="btn btn-sm btn-outline-primary" :href="action.url">
+              <i class="bi bi-arrow-right-short" aria-hidden="true"></i>
+              <span x-text="action.label"></span>
+            </a>
+          </template>
+        </footer>
+      </article>
+    </template>
+  </section>
+</div>
+
+<script src="{{ url_for('static', filename='node_modules/chart.js/dist/chart.umd.js') }}"></script>
+<script>
+  function dashboard() {
+    return {
+      filters: {
+        company: '{{ entidades[0].id if entidades else "" }}',
+        period: ''
+      },
+      periods: {{ dashboard_periods|tojson|safe }},
+      sectionOrder: ['accounting', 'banks', 'purchases', 'inventory', 'sales'],
+      loading: false,
+      error: '',
+      payload: { sections: {} },
+      charts: {},
+      init() {
+        if (this.filters.company) {
+          this.fetchData();
+        }
+      },
+      onCompanyChange() {
+        this.filters.period = '';
+        this.fetchData();
+      },
+      availablePeriods() {
+        const company = this.selectedCompany();
+        if (!company) {
+          return [];
+        }
+        return this.periods.filter(period => period.entity === company.code);
+      },
+      selectedCompany() {
+        return this.companies().find(company => company.id === this.filters.company);
+      },
+      companies() {
+        return {{ dashboard_entities|tojson|safe }};
+      },
+      fetchData() {
+        if (!this.filters.company) {
+          this.payload = { sections: {} };
+          return;
+        }
+        this.loading = true;
+        this.error = '';
+        const params = new URLSearchParams({ company: this.filters.company });
+        if (this.filters.period) {
+          params.set('period', this.filters.period);
+        }
+        fetch(`/api/dashboard/data?${params.toString()}`)
+          .then(response => response.json().then(data => ({ ok: response.ok, data })))
+          .then(result => {
+            if (!result.ok) {
+              this.error = result.data.error || '{{ _("No se pudo cargar el dashboard.") }}';
+              this.payload = { sections: {} };
+              return;
+            }
+            this.payload = result.data;
+            this.$nextTick(() => this.renderCharts());
+          })
+          .catch(() => {
+            this.error = '{{ _("No se pudo cargar el dashboard.") }}';
+          })
+          .finally(() => {
+            this.loading = false;
+          });
+      },
+      section(key) {
+        return this.payload.sections[key] || { visible: false, kpis: {}, tables: {}, charts: {}, actions: [] };
+      },
+      kpis(key) {
+        return Object.values(this.section(key).kpis || {});
+      },
+      chartFor(key) {
+        return key === 'accounting' || key === 'sales';
+      },
+      primaryTableTitle(key) {
+        return {
+          accounting: '{{ _("Resumen financiero") }}',
+          banks: '{{ _("Saldos bancarios") }}',
+          purchases: '{{ _("Facturas por pagar") }}',
+          inventory: '{{ _("Menor existencia") }}',
+          sales: '{{ _("Mejores clientes") }}'
+        }[key] || '';
+      },
+      primaryRows(key) {
+        const tables = this.section(key).tables || {};
+        return {
+          accounting: tables.summary || [],
+          banks: tables.account_balances || [],
+          purchases: tables.payables || tables.recent_invoices || [],
+          inventory: tables.lowest_stock_items || [],
+          sales: tables.top_customers || []
+        }[key] || [];
+      },
+      tableHeadings(key) {
+        return {
+          accounting: ['{{ _("Concepto") }}', '{{ _("Valor") }}'],
+          banks: ['{{ _("Cuenta") }}', '{{ _("Saldo") }}'],
+          purchases: ['{{ _("Factura") }}', '{{ _("Proveedor") }}', '{{ _("Pendiente") }}'],
+          inventory: ['{{ _("Ítem") }}', '{{ _("Bodega") }}', '{{ _("Existencia") }}'],
+          sales: ['{{ _("Cliente") }}', '{{ _("Total") }}']
+        }[key] || [];
+      },
+      tableCells(key, row) {
+        const money = value => this.formatCurrency(value, row.currency || this.companyCurrency());
+        const cells = {
+          accounting: [
+            { key: 'label', value: row.label },
+            { key: 'amount', value: row.currency ? money(row.amount) : this.formatNumber(row.amount), className: 'text-end' }
+          ],
+          banks: [
+            { key: 'name', value: `${row.name || ''} ${row.account_no || ''}`.trim() },
+            { key: 'balance', value: money(row.balance), className: 'text-end' }
+          ],
+          purchases: [
+            { key: 'document_no', value: row.document_no },
+            { key: 'party', value: row.party },
+            { key: 'outstanding', value: money(row.outstanding), className: 'text-end' }
+          ],
+          inventory: [
+            { key: 'item_name', value: `${row.item_code} · ${row.item_name}` },
+            { key: 'warehouse', value: row.warehouse },
+            { key: 'current_qty', value: this.formatNumber(row.current_qty), className: 'text-end' }
+          ],
+          sales: [
+            { key: 'name', value: row.name },
+            { key: 'total', value: money(row.total), className: 'text-end' }
+          ]
+        };
+        return cells[key] || [];
+      },
+      rowKey(row) {
+        return row.document_no || row.item_code || row.name || row.label || JSON.stringify(row);
+      },
+      renderCharts() {
+        this.renderAccountingChart();
+        this.renderSalesChart();
+      },
+      renderAccountingChart() {
+        const rows = this.section('accounting').charts?.monthly_result || [];
+        this.renderLineChart('accountingChart', rows.map(row => this.monthName(row.month)), [
+          { label: '{{ _("Ingresos") }}', data: rows.map(row => row.income), borderColor: '#2563eb' },
+          { label: '{{ _("Gastos") }}', data: rows.map(row => row.expenses), borderColor: '#dc2626' }
+        ]);
+      },
+      renderSalesChart() {
+        const rows = this.section('sales').charts?.trend || [];
+        this.renderLineChart('salesChart', rows.map(row => this.monthName(row.month)), [
+          { label: '{{ _("Ventas") }}', data: rows.map(row => row.total), borderColor: '#15803d' }
+        ]);
+      },
+      renderLineChart(canvasId, labels, datasets) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') {
+          return;
+        }
+        if (this.charts[canvasId]) {
+          this.charts[canvasId].destroy();
+        }
+        this.charts[canvasId] = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: datasets.map(dataset => ({
+              ...dataset,
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              fill: false,
+              tension: 0.35
+            }))
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: datasets.length > 1 } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      },
+      formatKpi(kpi) {
+        if (kpi.format === 'money') {
+          return this.formatCurrency(kpi.value, kpi.currency || this.companyCurrency());
+        }
+        return this.formatNumber(kpi.value);
+      },
+      formatCurrency(value, currency = 'USD') {
+        return new Intl.NumberFormat('es-NI', {
+          style: 'currency',
+          currency,
+          minimumFractionDigits: 2
+        }).format(Number(value || 0));
+      },
+      formatNumber(value) {
+        return new Intl.NumberFormat('es-NI', { maximumFractionDigits: 2 }).format(Number(value || 0));
+      },
+      companyCurrency() {
+        return this.payload.company?.currency || 'USD';
+      },
+      monthName(month) {
+        return ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][Number(month) - 1] || '';
+      }
+    }
+  }
+</script>
+
+<style>
+  [x-cloak] { display: none !important; }
+  .dashboard-shell {
+    color: #172033;
+    padding: 1.25rem;
+  }
+  .dashboard-toolbar {
+    align-items: end;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .dashboard-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+  }
+  .dashboard-subtitle {
+    color: #64748b;
+    margin: .2rem 0 0;
+  }
+  .dashboard-filters {
+    align-items: end;
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: minmax(13rem, 1fr) minmax(13rem, 1fr) auto;
+    min-width: min(100%, 42rem);
+  }
+  .dashboard-field span {
+    color: #64748b;
+    display: block;
+    font-size: .78rem;
+    font-weight: 700;
+    margin-bottom: .25rem;
+  }
+  .dashboard-refresh {
+    align-items: center;
+    display: inline-flex;
+    gap: .35rem;
+    justify-content: center;
+    min-height: 2.4rem;
+  }
+  .dashboard-alert,
+  .dashboard-empty,
+  .dashboard-section {
+    background: #fff;
+    border: 1px solid #d8dee8;
+    border-radius: 8px;
+  }
+  .dashboard-alert {
+    align-items: center;
+    color: #991b1b;
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .85rem 1rem;
+  }
+  .dashboard-empty {
+    color: #64748b;
+    padding: 4rem 1rem;
+    text-align: center;
+  }
+  .dashboard-empty i {
+    font-size: 3rem;
+  }
+  .dashboard-empty h2 {
+    color: #172033;
+    font-size: 1.2rem;
+    margin: .75rem 0 .25rem;
+  }
+  .dashboard-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  .dashboard-section:nth-child(1),
+  .dashboard-section:nth-child(5) {
+    grid-column: span 2;
+  }
+  .dashboard-section__header {
+    align-items: start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  .dashboard-section__header h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+  .dashboard-section__header p {
+    color: #64748b;
+    font-size: .84rem;
+    margin: .25rem 0 0;
+  }
+  .dashboard-section__badge {
+    background: #e8f2ff;
+    border-radius: 999px;
+    color: #1d4ed8;
+    flex: 0 0 auto;
+    font-size: .72rem;
+    font-weight: 700;
+    padding: .25rem .55rem;
+  }
+  .dashboard-kpi-grid {
+    display: grid;
+    gap: .65rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dashboard-kpi {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    min-height: 4.7rem;
+    padding: .7rem;
+  }
+  .dashboard-kpi span {
+    color: #64748b;
+    display: block;
+    font-size: .75rem;
+    font-weight: 700;
+  }
+  .dashboard-kpi strong {
+    display: block;
+    font-size: 1.05rem;
+    margin-top: .45rem;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-widget-grid {
+    display: grid;
+    gap: .85rem;
+    grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  }
+  .dashboard-widget {
+    min-height: 15rem;
+    overflow: hidden;
+    position: relative;
+  }
+  .dashboard-widget__title {
+    color: #475569;
+    font-size: .78rem;
+    font-weight: 800;
+    margin-bottom: .45rem;
+    text-transform: uppercase;
+  }
+  .dashboard-table {
+    border-collapse: collapse;
+    font-size: .82rem;
+    width: 100%;
+  }
+  .dashboard-table th,
+  .dashboard-table td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: .45rem .3rem;
+    vertical-align: top;
+  }
+  .dashboard-table th {
+    color: #64748b;
+    font-size: .72rem;
+    text-transform: uppercase;
+  }
+  .dashboard-table__empty {
+    color: #64748b;
+    padding: 2rem .5rem !important;
+    text-align: center;
+  }
+  .dashboard-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-top: auto;
+  }
+  @media (max-width: 992px) {
+    .dashboard-toolbar,
+    .dashboard-section__header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .dashboard-filters,
+    .dashboard-grid,
+    .dashboard-widget-grid {
+      grid-template-columns: 1fr;
+    }
+    .dashboard-section:nth-child(1),
+    .dashboard-section:nth-child(5) {
+      grid-column: span 1;
+    }
+    .dashboard-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 560px) {
+    .dashboard-shell {
+      padding: .8rem;
+    }
+    .dashboard-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 {% endblock %}
