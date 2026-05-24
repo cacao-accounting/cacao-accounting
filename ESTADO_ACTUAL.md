@@ -194,3 +194,9 @@
   - Garantiza la integridad vía rollbacks automáticos por documento y bloqueos de concurrencia (`with_for_update`).
   - Validación de períodos contables cerrados y protección contra inyección de fórmulas en archivos.
   - Generación de plantillas en formatos CSV, XLSX y ODS.
+
+- **Audit Trail centralizado (2026-05-24):** Se implementó `AuditTrail` + `audit_trail_service` append-only con timeline reusable por documento. Integración inicial aplicada en Comprobante Contable (crear/editar/contabilizar/anular/revertir/comentar) y render del historial en la vista detalle.
+
+- **Audit Trail P0 (bloqueadores resueltos, 2026-05-24):** Serialización segura por columnas, acciones semánticas (`rejected`, `reversal_draft_created`), timeline con diffs visibles en UI, migración Alembic visible y pruebas unitarias dedicadas para create/update/submit/cancel/render.
+
+- **Integración multi-módulo Audit Trail (2026-05-24):** Se instrumentó captura de eventos en Bancos (Payment Entry), Inventario (Stock Entry), Compras (Purchase Receipt) y Ventas (Delivery Note), además de exponer `audit_timeline` en las vistas de detalle de esos documentos.
