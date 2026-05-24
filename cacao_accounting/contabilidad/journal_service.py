@@ -25,10 +25,13 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     CostCenter,
+    DocumentRelation,
     FiscalYear,
     database,
 )
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_flow import DocumentFlowError, create_document_relation, revert_relations_for_target
+from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 
 JOURNAL_ENTITY_TYPE = "journal_entry"
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
@@ -130,7 +133,8 @@ def submit_journal(journal_id: str) -> list[Any]:
         _assign_identifier_if_needed(journal, journal.naming_series_id)
     try:
         entries = post_comprobante_contable(journal, ledger_code=_selected_books_for_journal(journal))
-    except (PostingError, IdentifierConfigurationError) as exc:
+        sync_journal_document_relations(journal)
+    except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
     journal.status = JOURNAL_STATUS_SUBMITTED
@@ -173,7 +177,8 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
     setattr(journal, "docstatus", 1)
     try:
         entries = cancel_document(journal)
-    except (PostingError, IdentifierConfigurationError) as exc:
+        revert_relations_for_target(JOURNAL_TRANSACTION_TYPE, journal.id, reason="journal_cancelled")
+    except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
     journal.status = JOURNAL_STATUS_CANCELLED
@@ -191,6 +196,44 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
     database.session.add(journal)
     database.session.commit()
     return entries
+
+
+def sync_journal_document_relations(journal: ComprobanteContable) -> int:
+    """Crea relaciones de documentos operativos hacia un comprobante manual."""
+    created = 0
+    for line in list_journal_lines(journal.id):
+        source_type_raw = getattr(line, "internal_reference", None)
+        source_id = getattr(line, "internal_reference_id", None)
+        if not source_type_raw or not source_id:
+            continue
+        source_type = normalize_doctype(str(source_type_raw))
+        if source_type not in DOCUMENT_TYPES:
+            continue
+        existing = database.session.execute(
+            select(DocumentRelation).filter_by(
+                source_type=source_type,
+                source_id=str(source_id),
+                source_item_id=None,
+                target_type=JOURNAL_TRANSACTION_TYPE,
+                target_id=journal.id,
+                target_item_id=line.id,
+                relation_type="accounting",
+            )
+        ).scalar_one_or_none()
+        if existing:
+            continue
+        create_document_relation(
+            source_type=source_type,
+            source_id=str(source_id),
+            source_item_id=None,
+            target_type=JOURNAL_TRANSACTION_TYPE,
+            target_id=journal.id,
+            target_item_id=line.id,
+            qty=Decimal("1"),
+            amount=abs(getattr(line, "value", Decimal("0")) or Decimal("0")),
+        )
+        created += 1
+    return created
 
 
 def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteContable:

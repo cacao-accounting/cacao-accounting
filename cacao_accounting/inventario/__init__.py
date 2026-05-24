@@ -705,6 +705,8 @@ def _source_context(source_type: str | None, source_id: str | None) -> tuple[str
         return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
     if source_type == "delivery_note":
         return f"/api/sales/delivery-note/{source_id}/items", "nota de entrega"
+    if source_type == "stock_entry":
+        return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
     return None, "documento origen"
 
 

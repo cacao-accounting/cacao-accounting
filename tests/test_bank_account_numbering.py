@@ -209,6 +209,9 @@ def test_payment_creation_uses_bank_account_numbering_defaults(app_ctx):
             "posting_date": date(2026, 5, 13).isoformat(),
             "bank_account_id": account.id,
             "paid_amount": "10.00",
+            "party_type": "supplier",
+            "party_id": "SUPP-BANK-NUM",
+            "mode_of_payment": "check",
         }
         with app_ctx.test_request_context("/cash_management/payment/new", method="POST", data=data):
             response = unwrap(bancos_pago_nuevo)()
@@ -252,6 +255,9 @@ def test_payment_creation_explicit_values_override_bank_account_defaults(app_ctx
         "posting_date": date(2026, 5, 13).isoformat(),
         "bank_account_id": account.id,
         "paid_amount": "10.00",
+        "party_type": "supplier",
+        "party_id": "SUPP-BANK-NUM-EXPL",
+        "mode_of_payment": "check",
         "naming_series": explicit_series.id,
         "external_counter_id": explicit_counter.id,
     }

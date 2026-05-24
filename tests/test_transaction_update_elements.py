@@ -35,7 +35,9 @@ def test_supplier_quotation_updates_from_purchase_quotation_doctype():
     routes = _read("cacao_accounting/compras/__init__.py")
     template = _read("cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html")
 
+    assert '{"value": "purchase_request", "label": _("Solicitud de Compra")}' in routes
     assert '{"value": "purchase_quotation", "label": _("Solicitud de Cotización")}' in routes
+    assert "source_type=purchase_request&target_type=supplier_quotation" in template
     assert "source_type=purchase_quotation&target_type=supplier_quotation" in template
     assert "request_for_quotation" not in routes
     assert "request_for_quotation" not in template

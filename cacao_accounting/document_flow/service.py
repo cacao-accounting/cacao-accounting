@@ -566,8 +566,8 @@ def apply_payment_reconciliation(
             rate=allocated,
             amount=allocated,
         )
-        document.outstanding_amount = outstanding_after
-        document.base_outstanding_amount = outstanding_after
+        setattr(document, "outstanding_amount", outstanding_after)
+        setattr(document, "base_outstanding_amount", outstanding_after)
         payment_remaining[payment_id] -= consumed
         database.session.add(
             ReconciliationItem(
@@ -635,16 +635,36 @@ def apply_advance_to_invoice(
         raise DocumentFlowError("El monto excede el remanente del anticipo.")
     if amount > outstanding:
         raise DocumentFlowError("El monto excede el saldo pendiente de la factura.")
+    outstanding_after = outstanding - amount
     reference = PaymentReference(
         payment_id=payment.id,
         reference_type=reference_type,
         reference_id=invoice.id,
+        reference_document_no=getattr(invoice, "document_no", None) or invoice.id,
+        reference_date=getattr(invoice, "posting_date", None),
+        party_type="Customer" if reference_type == "sales_invoice" else "Supplier",
+        party_id=party_id,
+        company=invoice.company,
+        currency=getattr(invoice, "currency", None) or getattr(payment, "currency", None),
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
+        outstanding_amount_after=outstanding_after,
         allocated_amount=amount,
         allocation_date=allocation_date,
     )
     database.session.add(reference)
+    database.session.flush()
+    create_document_relation(
+        source_type=reference_type,
+        source_id=invoice.id,
+        source_item_id=None,
+        target_type="payment_entry",
+        target_id=payment.id,
+        target_item_id=reference.id,
+        qty=Decimal("1"),
+        rate=amount,
+        amount=amount,
+    )
     refresh_outstanding_amount_cache(invoice, as_of_date=allocation_date)
     return reference
 

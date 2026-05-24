@@ -42,7 +42,13 @@
       <div class="col-md-6">
         <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
         <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
-        {% if rfq_origen %}
+        {% if solicitud_origen %}
+        <div class="alert alert-secondary mt-2 mb-0 py-2 px-3 small" role="alert">
+          <i class="bi bi-info-circle me-1"></i>Basado en Solicitud de Compra:
+          {{ solicitud_origen.document_no or solicitud_origen.id }}
+        </div>
+        <input type="hidden" name="from_request" value="{{ from_request_id }}" />
+        {% elif rfq_origen %}
         <div class="alert alert-secondary mt-2 mb-0 py-2 px-3 small" role="alert">
           <i class="bi bi-info-circle me-1"></i>Basado en Solicitud de Cotización:
           {{ rfq_origen.document_no or rfq_origen.id }}
@@ -53,7 +59,11 @@
     </div>
   </div>
 
-  {% if from_rfq_id %}
+  {% if from_request_id %}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id,
+         source_label="Solicitud de Compra") }}
+  {% elif from_rfq_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id,
          source_label="Solicitud de Cotización") }}

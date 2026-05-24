@@ -442,6 +442,24 @@ def test_document_flow_summary_includes_rfq_to_order_action(app_ctx):
     assert "purchase_order" in action_targets
 
 
+def test_document_flow_summary_includes_request_to_supplier_quotation_action(app_ctx):
+    """La solicitud de compra expone accion para crear cotizacion de proveedor."""
+
+    from cacao_accounting.database import PurchaseRequest, database
+    from cacao_accounting.document_flow.tracing import document_flow_summary
+
+    request_doc = PurchaseRequest(id="PREQ-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    database.session.add(request_doc)
+    database.session.flush()
+
+    summary = document_flow_summary("purchase_request", request_doc.id)
+
+    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    assert "purchase_quotation" in action_targets
+    assert "supplier_quotation" in action_targets
+    assert "purchase_order" in action_targets
+
+
 def test_document_flow_summary_includes_sales_request_to_order_action(app_ctx):
     """El pedido de venta expone accion para crear orden de venta."""
 
@@ -501,7 +519,7 @@ def test_document_flow_summary_hides_create_actions_for_non_submitted_documents(
 def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
     """Las acciones de notas/devoluciones exponen URL con query params esperados."""
 
-    from cacao_accounting.database import DeliveryNote, PurchaseInvoice, PurchaseReceipt, SalesInvoice, database
+    from cacao_accounting.database import DeliveryNote, PurchaseInvoice, PurchaseReceipt, SalesInvoice, StockEntry, database
     from cacao_accounting.document_flow.tracing import document_flow_summary
 
     purchase_invoice = PurchaseInvoice(
@@ -520,7 +538,14 @@ def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
         docstatus=1,
     )
     delivery_note = DeliveryNote(id="DN-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
-    database.session.add_all([purchase_invoice, purchase_receipt, sales_invoice, delivery_note])
+    stock_entry = StockEntry(
+        id="STE-ACT-001",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_transfer",
+        docstatus=1,
+    )
+    database.session.add_all([purchase_invoice, purchase_receipt, sales_invoice, delivery_note, stock_entry])
     database.session.flush()
 
     with app_ctx.test_request_context():
@@ -528,6 +553,7 @@ def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
         purchase_receipt_summary = document_flow_summary("purchase_receipt", purchase_receipt.id)
         sales_invoice_summary = document_flow_summary("sales_invoice", sales_invoice.id)
         delivery_note_summary = document_flow_summary("delivery_note", delivery_note.id)
+        stock_entry_summary = document_flow_summary("stock_entry", stock_entry.id)
 
     def _find_action(summary: dict, label: str) -> dict:
         for action in summary["create_actions"]:
@@ -560,6 +586,11 @@ def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
     assert "from_receipt=PREC-ACT-001" in (purchase_receipt_debit["create_url"] or "")
     assert "document_type=purchase_debit_note" in (purchase_receipt_debit["create_url"] or "")
 
+    purchase_receipt_stock = _find_action(purchase_receipt_summary, "Crear Entrada de Almacén")
+    assert purchase_receipt_stock["query_params"]["source_type"] == "purchase_receipt"
+    assert "source_id=PREC-ACT-001" in (purchase_receipt_stock["create_url"] or "")
+    assert "source_type=purchase_receipt" in (purchase_receipt_stock["create_url"] or "")
+
     sales_credit = _find_action(sales_invoice_summary, "Crear Nota de Crédito")
     assert sales_credit["query_params"]["document_type"] == "sales_credit_note"
     assert "from_invoice=SINV-ACT-001" in (sales_credit["create_url"] or "")
@@ -579,6 +610,17 @@ def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
     assert delivery_debit["query_params"]["document_type"] == "sales_debit_note"
     assert "from_note=DN-ACT-001" in (delivery_debit["create_url"] or "")
     assert "document_type=sales_debit_note" in (delivery_debit["create_url"] or "")
+
+    delivery_stock = _find_action(delivery_note_summary, "Crear Movimiento de Inventario")
+    assert delivery_stock["query_params"]["source_type"] == "delivery_note"
+    assert "source_id=DN-ACT-001" in (delivery_stock["create_url"] or "")
+    assert "source_type=delivery_note" in (delivery_stock["create_url"] or "")
+
+    stock_reuse = _find_action(stock_entry_summary, "Crear Reuso Interno")
+    assert stock_reuse["target_type"] == "stock_entry"
+    assert stock_reuse["query_params"]["source_type"] == "stock_entry"
+    assert "source_id=STE-ACT-001" in (stock_reuse["create_url"] or "")
+    assert "source_type=stock_entry" in (stock_reuse["create_url"] or "")
 
 
 def test_document_flow_summary_includes_note_payment_actions(app_ctx):
@@ -679,8 +721,10 @@ def test_allowed_flows_include_order_advances_and_receipt_notes():
 
     assert is_allowed_flow("purchase_order", "payment_entry")
     assert is_allowed_flow("sales_order", "payment_entry")
+    assert is_allowed_flow("purchase_request", "supplier_quotation")
     assert is_allowed_flow("purchase_receipt", "purchase_credit_note")
     assert is_allowed_flow("purchase_receipt", "purchase_debit_note")
+    assert is_allowed_flow("purchase_receipt", "stock_entry")
     assert is_allowed_flow("purchase_credit_note", "payment_entry")
     assert is_allowed_flow("purchase_debit_note", "payment_entry")
     assert is_allowed_flow("sales_credit_note", "payment_entry")

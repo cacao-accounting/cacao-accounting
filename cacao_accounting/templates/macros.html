@@ -64,6 +64,7 @@
 <script src="{{ url_for('static', filename='js/smart-select.js') }}?v=20260506-2" defer></script>
 <script src="{{ url_for('static', filename='node_modules/exceljs/dist/exceljs.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/transaction-form.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/document-flow-tree.js') }}" defer></script>
 <script src="//unpkg.com/alpinejs" defer></script>
 
 {%- endmacro %}
@@ -402,6 +403,119 @@
         </div>
       </template>
     </div>
+  </div>
+</div>
+{% endmacro %}
+
+{# ─────────────────────────────────────────────────────────────── #}
+{# Árbol de flujo documental — componente reutilizable              #}
+{#                                                                   #}
+{# Uso:                                                              #}
+{#   {{ macros.document_flow_tree("sales_invoice", registro) }}     #}
+{#                                                                   #}
+{# El componente Alpine.js `documentFlowTree` se registra en        #}
+{# cacao_accounting/static/js/document-flow-tree.js y se carga      #}
+{# globalmente desde headertags().                                   #}
+{# ─────────────────────────────────────────────────────────────── #}
+{% macro document_flow_tree(document_type, document, docstatus=None, create_actions_json='[]') %}
+{%- set status_value = document.status|default('') -%}
+{%- set inferred_docstatus = 1 if status_value == 'submitted' else (2 if status_value == 'cancelled' else 0) -%}
+{%- set effective_docstatus = docstatus if docstatus is not none else (document.docstatus|default(inferred_docstatus)) -%}
+{%- set api_url = url_for('api.api_document_flow_tree') ~ '?document_type=' ~ document_type ~ '&document_id=' ~ document.id -%}
+<div class="ca-document-flow mt-3"
+     x-data="documentFlowTree({ apiUrl: {{ api_url | tojson }}, docstatus: {{ effective_docstatus | int }}, createActions: {{ create_actions_json | safe }} })">
+  <div class="ca-document-flow__header" @click="toggle()">
+    <div class="d-flex align-items-start gap-2">
+      <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h6 class="ca-document-flow__title mb-0">{{ _('Flujo documental') }}</h6>
+          <span class="ca-flow-badge ca-flow-badge--draft" x-text="documentCountLabel"></span>
+        </div>
+        <p class="ca-document-flow__subtitle mb-0">{{ _('Trazabilidad completa de esta transacción') }}</p>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2" @click.stop>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="expandAll()">{{ _('Expandir todo') }}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapseAll()">{{ _('Contraer todo') }}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="load()">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="open" x-cloak class="ca-document-flow__body">
+    <template x-if="isDraft">
+      <div class="ca-document-flow__empty">
+        <i class="bi bi-info-circle me-1"></i>
+        {{ _('El flujo documental estará disponible cuando el documento sea aprobado.') }}
+      </div>
+    </template>
+
+    <template x-if="!isDraft">
+      <div>
+        <div x-show="loading" class="ca-document-flow__loading">
+          <span class="spinner-border spinner-border-sm me-1"></span>{{ _('Cargando flujo documental…') }}
+        </div>
+
+        <template x-if="!loading && error">
+          <div class="ca-document-flow__error">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            {{ _('No se pudo cargar el flujo documental.') }}
+            <button class="btn btn-link btn-sm p-0 ms-2" @click="load()">{{ _('Reintentar') }}</button>
+          </div>
+        </template>
+
+        <template x-if="!loading && !error && loaded">
+          <div>
+            <div class="ca-document-flow__section">
+              <p class="ca-document-flow__section-title mb-1">{{ _('Documento actual') }}</p>
+              <div x-html="renderCurrentNode()"></div>
+            </div>
+
+            <template x-if="createActions.length > 0">
+              <div class="ca-document-flow__section">
+                <p class="ca-document-flow__section-title mb-1">{{ _('Acciones disponibles') }}</p>
+                <div class="d-flex flex-wrap gap-2">
+                  <template x-for="action in createActions" :key="action.endpoint + '-' + action.target_type">
+                    <a :href="action.create_url" class="btn btn-sm btn-outline-primary" x-show="action.create_url">
+                      <i class="bi bi-plus-lg me-1"></i><span x-text="action.label"></span>
+                    </a>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="upstream.length > 0">
+              <div class="ca-document-flow__section">
+                <p class="ca-document-flow__section-title mb-1">{{ _('Origen / Documentos aplicados') }}</p>
+                <div x-html="renderNodes(upstream)"></div>
+              </div>
+            </template>
+
+            <template x-if="downstream.length > 0">
+              <div class="ca-document-flow__section">
+                <p class="ca-document-flow__section-title mb-1">{{ _('Derivados') }}</p>
+                <div x-html="renderNodes(downstream)"></div>
+              </div>
+            </template>
+
+            <template x-if="upstream.length === 0 && downstream.length === 0">
+              <div class="ca-document-flow__empty">
+                <i class="bi bi-info-circle me-1"></i>{{ _('No hay documentos relacionados.') }}
+              </div>
+            </template>
+
+            <template x-if="meta && meta.node_count >= meta.max_nodes">
+              <div class="text-muted small mt-2">
+                <i class="bi bi-three-dots me-1"></i>
+                {{ _('El flujo contiene más documentos. Use búsqueda o filtros.') }}
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
   </div>
 </div>
 {% endmacro %}

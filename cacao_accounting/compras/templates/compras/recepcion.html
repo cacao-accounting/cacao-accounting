@@ -66,6 +66,6 @@
 ) }}
 
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
-{{ macros.document_flow_trace("purchase_receipt", registro, create_actions_json) }}
+{{ macros.document_flow_tree("purchase_receipt", registro, create_actions_json=create_actions_json) }}
 
 {% endblock %}

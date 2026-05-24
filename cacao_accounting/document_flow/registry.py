@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from cacao_accounting.database import (
+    ComprobanteContable,
+    ComprobanteContableDetalle,
     DeliveryNote,
     DeliveryNoteItem,
     PaymentEntry,
@@ -144,6 +146,12 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 "compras.compras_solicitud_cotizacion_nueva",
                 "from_request",
             ),
+            DocumentAction(
+                "Crear Cotización de Proveedor",
+                "supplier_quotation",
+                "compras.compras_cotizacion_proveedor_nueva",
+                "from_request",
+            ),
             DocumentAction("Crear Orden de Compra", "purchase_order", "compras.compras_orden_compra_nuevo", "from_request"),
         ),
     ),
@@ -234,7 +242,13 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 {"document_type": "purchase_return"},
                 model_target_type="purchase_invoice",
             ),
-            DocumentAction("Crear Entrada de Almacén", "stock_entry", "inventario.inventario_entrada_nuevo", "source_id"),
+            DocumentAction(
+                "Crear Entrada de Almacén",
+                "stock_entry",
+                "inventario.inventario_entrada_nuevo",
+                "source_id",
+                {"source_type": "purchase_receipt"},
+            ),
         ),
     ),
     "purchase_invoice": DocumentType(
@@ -431,7 +445,11 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="sales_invoice",
             ),
             DocumentAction(
-                "Crear Movimiento de Inventario", "stock_entry", "inventario.inventario_entrada_nuevo", "source_id"
+                "Crear Movimiento de Inventario",
+                "stock_entry",
+                "inventario.inventario_entrada_nuevo",
+                "source_id",
+                {"source_type": "delivery_note"},
             ),
         ),
     ),
@@ -573,6 +591,31 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         detail_arg="entry_id",
         total_field="total_amount",
         filter_fields=("document_no", "company", "purpose", "posting_date", "total_amount", "docstatus"),
+        create_actions=(
+            DocumentAction(
+                "Crear Reuso Interno",
+                "stock_entry",
+                "inventario.inventario_entrada_nuevo",
+                "source_id",
+                {"source_type": "stock_entry"},
+            ),
+        ),
+    ),
+    "journal_entry": DocumentType(
+        key="journal_entry",
+        header_model=ComprobanteContable,
+        item_model=ComprobanteContableDetalle,
+        parent_field="transaction_id",
+        label="Comprobante Contable",
+        module="accounting",
+        module_label="Contabilidad",
+        permission_module="accounting",
+        list_endpoint="contabilidad.listar_comprobantes",
+        detail_endpoint="contabilidad.ver_comprobante",
+        detail_arg="identifier",
+        date_field="date",
+        total_field=None,
+        filter_fields=("document_no", "entity", "date", "status", "docstatus"),
     ),
 }
 
@@ -580,6 +623,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
 ALLOWED_FLOWS: dict[tuple[str, str], FlowSpec] = {
     ("purchase_request", "purchase_request"): FlowSpec("purchase_request", "purchase_request", "reuse"),
     ("purchase_request", "purchase_quotation"): FlowSpec("purchase_request", "purchase_quotation", "quotation"),
+    ("purchase_request", "supplier_quotation"): FlowSpec("purchase_request", "supplier_quotation", "quotation"),
     ("purchase_request", "purchase_order"): FlowSpec("purchase_request", "purchase_order", "order"),
     ("purchase_quotation", "purchase_quotation"): FlowSpec("purchase_quotation", "purchase_quotation", "reuse"),
     ("purchase_quotation", "supplier_quotation"): FlowSpec("purchase_quotation", "supplier_quotation", "quotation"),
@@ -626,6 +670,13 @@ ALLOWED_FLOWS: dict[tuple[str, str], FlowSpec] = {
     ("sales_debit_note", "payment_entry"): FlowSpec("sales_debit_note", "payment_entry", "collection"),
     ("stock_entry", "stock_entry"): FlowSpec("stock_entry", "stock_entry", "reuse"),
 }
+
+for _journal_source_type in tuple(DOCUMENT_TYPES):
+    if _journal_source_type != "journal_entry":
+        ALLOWED_FLOWS.setdefault(
+            (_journal_source_type, "journal_entry"),
+            FlowSpec(_journal_source_type, "journal_entry", "accounting"),
+        )
 
 
 def normalize_doctype(value: str) -> str:

@@ -319,7 +319,7 @@ static_rutes = [
         url="/accounting/journal/new",
         text=[
             "Comprobante contable".encode("utf-8"),
-            "Guardar borrador".encode("utf-8"),
+            "Guardar".encode("utf-8"),
         ],
     ),
     Route(

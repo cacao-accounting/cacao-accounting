@@ -26,7 +26,9 @@ def get_document(doctype: str, document_id: str) -> Any | None:
 def get_document_company(doctype: str, document_id: str) -> str | None:
     """Obtiene la compania del documento."""
     document = get_document(doctype, document_id)
-    return getattr(document, "company", None) if document else None
+    if not document:
+        return None
+    return getattr(document, "company", None) or getattr(document, "entity", None)
 
 
 def get_document_items(doctype: str, document_id: str) -> list[Any]:

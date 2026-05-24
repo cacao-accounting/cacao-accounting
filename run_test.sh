@@ -23,4 +23,6 @@ echo
 echo Testing code with npm
 echo
 echo
+cd cacao_accounting/static/
 npm test
+cd ../../

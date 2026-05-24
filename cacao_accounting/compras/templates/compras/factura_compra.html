@@ -68,6 +68,6 @@
 ) }}
 
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
-{{ macros.document_flow_trace(registro.document_type or "purchase_invoice", registro) }}
+{{ macros.document_flow_tree(registro.document_type or "purchase_invoice", registro) }}
 
 {% endblock %}

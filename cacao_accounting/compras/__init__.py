@@ -454,7 +454,9 @@ def compras_cotizacion_proveedor_nueva():
         (str(p[0].id), p[0].name)
         for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
     ]
+    from_request_id = request.args.get("from_request") or request.form.get("from_request")
     from_rfq_id = request.args.get("from_rfq") or request.form.get("from_rfq")
+    solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     rfq_origen = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else None
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -468,7 +470,11 @@ def compras_cotizacion_proveedor_nueva():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
-        "availableSourceTypes": [{"value": "purchase_quotation", "label": _("Solicitud de Cotización")}],
+        "availableSourceTypes": [
+            {"value": "purchase_request", "label": _("Solicitud de Compra")},
+            {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
+        ],
+        "initialSourceType": "purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
     }
     if request.method == "POST":
         try:
@@ -506,6 +512,8 @@ def compras_cotizacion_proveedor_nueva():
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
         titulo=titulo,
+        solicitud_origen=solicitud_origen,
+        from_request_id=from_request_id,
         rfq_origen=rfq_origen,
         from_rfq_id=from_rfq_id,
         items_disponibles=items_disponibles,

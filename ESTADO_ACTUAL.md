@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-05-23
 
+- **Flujo Documental Expandible / Cierre de faltantes (2026-05-24):** El árbol recursivo de flujo documental queda extendido a Contabilidad y anticipos.
+  - `journal_entry` se registra como tipo documental trazable y la vista de comprobante contable muestra la sección colapsable `Flujo documental`.
+  - Las líneas de comprobante con `internal_reference` e `internal_reference_id` generan `DocumentRelation` desde el documento operativo hacia el comprobante contable al contabilizar.
+  - La anulación de comprobantes revierte relaciones documentales hacia `journal_entry` conservando historial.
+  - `apply_advance_to_invoice` completa el snapshot de `PaymentReference` y crea su `DocumentRelation` formal hacia `payment_entry`.
+  - Se removió la implementación inline duplicada del componente Alpine, dejando `static/js/document-flow-tree.js` como única fuente del árbol.
+  - Validación focal: `tests/test_document_flow_tree.py` + `tests/test_05document_flow.py` en verde (`37 passed`).
+
 - **Conciliacion AR/AP masiva y Stock Reconciliation con valuacion (2026-05-23):** Se implementaron los dos pendientes prioritarios de conciliacion.
   - Caja y Bancos expone `/cash_management/payment-reconciliation` para aplicar pagos/cobros aprobados existentes contra facturas abiertas AR/AP sin crear pagos nuevos.
   - El servicio valida compania, tercero, direccion AR/AP, saldos disponibles, documentos aprobados y duplicados; persiste `PaymentReference`, `DocumentRelation` y `ReconciliationItem` manteniendo historial append-only.
