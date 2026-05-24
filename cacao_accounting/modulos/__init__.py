@@ -26,32 +26,38 @@ from cacao_accounting.database import Modules, database
 # <---------------------------------------------------------------------------------------------> #
 # Módulos base del sistema e incluidos en el repositorio principal.
 # Módulos adicionales se deben declarar como paquetes adicionales.
+MODULE_ACCOUNTING = "accounting"
+MODULE_BANKS = "cash"
+MODULE_PURCHASES = "purchases"
+MODULE_INVENTORY = "inventory"
+MODULE_SALES = "sales"
+
 contabilidad = {
-    "modulo": "accounting",
+    "modulo": MODULE_ACCOUNTING,
     "estandar": True,
     "habilitado": True,
 }
 
 bancos = {
-    "modulo": "cash",
+    "modulo": MODULE_BANKS,
     "estandar": True,
     "habilitado": True,
 }
 
 compras = {
-    "modulo": "purchases",
+    "modulo": MODULE_PURCHASES,
     "estandar": True,
     "habilitado": True,
 }
 
 inventario = {
-    "modulo": "inventory",
+    "modulo": MODULE_INVENTORY,
     "estandar": True,
     "habilitado": True,
 }
 
 ventas = {
-    "modulo": "sales",
+    "modulo": MODULE_SALES,
     "estandar": True,
     "habilitado": True,
 }
