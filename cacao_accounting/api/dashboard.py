@@ -169,7 +169,7 @@ def _section_or_hidden(
     section["visible"] = True
     section["title"] = title
     section["subtitle"] = subtitle
-    section["badge"] = "Visible según permisos"
+    section["badge"] = ""
     return section
 
 

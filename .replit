@@ -13,17 +13,8 @@ run = [
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 8080
 externalPort = 80
+exposeLocalhost = true
 
 [rules]
 
@@ -33,3 +24,27 @@ externalPort = 80
 
 [agent]
 expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "CACAO_TEST=True SECRET_KEY=abcABC123 CACAO_DATABASE_URL=sqlite:////tmp/cacao_app.db /tmp/app_venv/bin/flask run --port 5000"
+waitForPort = 5000
