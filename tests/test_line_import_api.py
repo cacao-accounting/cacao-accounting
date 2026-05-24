@@ -107,6 +107,36 @@ def test_get_operational_line_import_schemas(logged_in_client):
         assert response.get_json()["doctype"] == doctype
 
 
+def test_validate_lines_rejects_missing_doctype(logged_in_client):
+    payload = {"context": {"company_id": "cacao"}, "rows": [{"item_code": "ITEM01"}]}
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Doctype no especificado"
+
+
+def test_validate_lines_rejects_unsupported_doctype(logged_in_client):
+    payload = {"doctype": "unknown", "context": {"company_id": "cacao"}, "rows": [{"item_code": "ITEM01"}]}
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Doctype no soportado"
+
+
+def test_validate_lines_rejects_missing_company_context(logged_in_client):
+    payload = {"doctype": "purchase_request", "context": {}, "rows": [{"item_code": "ITEM01"}]}
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data["valid"] is False
+    assert data["errors"][0]["field"] == "company_id"
+
+
+def test_validate_lines_rejects_unknown_company(logged_in_client):
+    payload = {"doctype": "purchase_request", "context": {"company_id": "missing"}, "rows": [{"item_code": "ITEM01"}]}
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 400
+    assert "no existe" in response.get_json()["error"]
+
+
 def test_validate_lines_success(logged_in_client):
     payload = {
         "doctype": "purchase_request",
@@ -180,3 +210,64 @@ def test_validate_numeric_constraints(logged_in_client):
     data = response.get_json()
     assert data["valid"] is False
     assert any("no puede ser negativo" in err["message"] for err in data["errors"])
+
+
+def test_validate_lines_rejects_too_many_rows(logged_in_client):
+    payload = {
+        "doctype": "purchase_request",
+        "context": {"company_id": "cacao"},
+        "rows": [{"item_code": "ITEM01", "quantity": "1", "uom": "UND"}] * 501,
+    }
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert any("500" in err["message"] for err in data["errors"])
+
+
+def test_validate_lines_rejects_invalid_decimal_and_date(logged_in_client):
+    payload = {
+        "doctype": "purchase_request",
+        "context": {"company_id": "cacao"},
+        "rows": [{"item_code": "ITEM01", "quantity": "abc", "uom": "UND", "required_date": "2026/05/24"}],
+    }
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert any("decimal inválido" in err["message"] for err in data["errors"])
+    assert any("fecha inválido" in err["message"] for err in data["errors"])
+
+
+@pytest.mark.parametrize(
+    ("doctype", "row", "field", "message"),
+    [
+        ("purchase_request", {"item_code": "ITEM01", "quantity": "1", "uom": "BAD"}, "uom", "unidad de medida"),
+        ("journal_entry", {"account": "1010", "debit": "100"}, "account", "cuenta contable"),
+        (
+            "purchase_request",
+            {"item_code": "ITEM01", "quantity": "1", "uom": "UND", "cost_center": "BAD"},
+            "cost_center",
+            "centro de costo",
+        ),
+        (
+            "purchase_request",
+            {"item_code": "ITEM01", "quantity": "1", "uom": "UND", "project": "BAD"},
+            "project",
+            "proyecto",
+        ),
+        (
+            "purchase_receipt",
+            {"item_code": "ITEM01", "quantity": "1", "uom": "UND", "warehouse": "BAD"},
+            "warehouse",
+            "bodega",
+        ),
+    ],
+)
+def test_validate_lines_rejects_invalid_master_data(logged_in_client, doctype, row, field, message):
+    payload = {"doctype": doctype, "context": {"company_id": "cacao"}, "rows": [row]}
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert any(err["field"] == field and message in err["message"].lower() for err in data["errors"])

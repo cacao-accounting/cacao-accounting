@@ -1,9 +1,17 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Mantenibilidad importacion/perfil - completado)
+- [x] Refactorizar `validate_lines()` como orquestador y extraer validaciones a helpers privados.
+- [x] Ampliar cobertura de importacion de lineas para doctype, compania, limites, tipos y datos maestros.
+- [x] Refactorizar `profile()` separando render, actualizacion de perfil y cambio de contrasena.
+
 ## Seguimiento 2026-05-24 (Mantenibilidad motores fiscales/pagos - completado)
 - [x] Refactorizar `_build_payment_context` para separar direccion del pago, montos de liquidacion, referencias contables y reglas fiscales.
 - [x] Simplificar `_tax_rules_from_template` usando helpers y `match/case` para decisiones fiscales heredadas.
 - [x] Refactorizar `RuleResolver.resolve` usando helpers y `match/case` para estrategias de merge.
+- [x] Refactorizar `_calculate_share` de Landed Cost usando `match/case` por metodo de prorrateo.
+- [x] Refactorizar `_map_settlement_event` para separar balance, banco, retenciones y ajustes de liquidacion.
+- [x] Renombrar acumuladores `debits`/`credits` en mapper para evitar shadowing.
 
 ## Seguimiento 2026-05-24 (Flujo Documental Expandible - completado)
 - [x] Registrar `journal_entry` dentro del árbol de flujo documental y mostrarlo en la vista de comprobante contable.

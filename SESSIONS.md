@@ -1,11 +1,20 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-24 (Refactor de importacion de lineas y perfil)
+- **Solicitud:** Refactorizar `validate_lines()` en `api/line_import.py` y `profile()` en `auth/__init__.py` para reducir complejidad y facilitar mantenimiento.
+- **Line Import:** `validate_lines()` queda como orquestador: payload, schema, compania/permisos, limite de filas, validacion por fila y respuesta final. Se extrajeron helpers para tipos, restricciones numericas, maestros, journal entry y respuestas JSON.
+- **Cobertura:** `tests/test_line_import_api.py` amplia casos de doctype, compania, limite de 500 filas, decimal/fecha invalida y referencias maestras inexistentes.
+- **Perfil:** `profile()` delega POST a handlers de actualizacion de datos personales y cambio de contrasena; se centraliza el render de perfil y se mantienen flashes/redirects.
+- **Validacion:** `black`, `ruff`, `flake8`, `mypy`, `pydocstyle` focal en verde. Pruebas focales en verde: line import/update elements (`23 passed`) y vistas lentas (`test_01vistas.py --slow=True`, `1 passed`).
+
 ## 2026-05-24 (Refactor de builders fiscales, pagos y resolver)
-- **Solicitud:** Simplificar `document_builders.py` y `fiscal/resolver.py`, reduciendo complejidad en `_build_payment_context`, `_tax_rules_from_template` y `RuleResolver.resolve`, usando `match/case` donde mejora la claridad.
+- **Solicitud:** Simplificar `document_builders.py`, `fiscal/resolver.py`, `landed_cost/engine.py` y `orchestrator/mapper.py`, reduciendo complejidad en `_build_payment_context`, `_tax_rules_from_template`, `RuleResolver.resolve`, `_calculate_share` y `_map_settlement_event`, usando `match/case` donde mejora la claridad.
 - **Implementacion:** `_build_payment_context` queda como ensamblador del `CalculationContext`; se extrajeron metadatos direccionales del pago, montos de liquidacion, referencias contables, item sintetico y reglas fiscales a helpers tipados con dataclasses.
 - **Fiscal legacy:** `_tax_rules_from_template` delega conversion por linea a helpers y usa `match/case` para tipo fiscal, tratamiento contable, base, conceptos incluidos y metodo de calculo.
 - **Resolver fiscal:** `RuleResolver.resolve` separa preparacion de grupos, filtro por contexto, estrategia de merge y filtrado final; `_apply_merge_strategy` usa `match/case` para `replace_group`, `exclude`, `append`, `override` y fallback.
-- **Validacion:** `black`, `ruff`, `flake8`, `mypy` focal y pruebas focales en verde (`tests/engines/test_resolver_conditions.py`, `tests/engines/test_integration.py`, `tests/test_tax_rules.py`: `13 passed`).
+- **Landed Cost:** `_calculate_share` cambia la cadena de `if` por `match/case` por metodo de prorrateo y centraliza divisiones protegidas contra cero en `_ratio`.
+- **Mapper:** `_map_settlement_event` queda como composicion de bloques: balance AR/AP o anticipo, banco/caja, retenciones e importes de ajuste; los lados contables de liquidacion usan helpers con `match/case`. Los acumuladores `debits`/`credits` fueron renombrados a totales explicitos para evitar shadowing.
+- **Validacion:** `black`, `ruff`, `flake8`, `mypy`, `pydocstyle` focal y pruebas focales en verde (`tests/engines/test_resolver_conditions.py`, `tests/engines/test_integration.py`, `tests/test_tax_rules.py`: `13 passed`; landed cost/golden/additional: `11 passed`; mapper/integration: `8 passed`).
 
 ## 2026-05-24 (Flujo Documental Expandible: cierre de faltantes)
 - **Solicitud:** Implementar el plan para superar los faltantes detectados contra `requerimiento.md`: soporte de `journal_entry`, relaciones contables desde líneas de comprobante, garantía `PaymentReference -> DocumentRelation` en anticipos y limpieza de UI duplicada.

@@ -81,61 +81,120 @@ class AccountingMapper:
         settlement: SettlementResult,
     ) -> list[JournalEntryLineProforma]:
         """Map payment and collection events."""
+        lines = [self._build_settlement_balance_line(context, settlement)]
+        lines.extend(self._map_cash_line(context, settlement))
+        lines.extend(self._map_settlement_tax_lines(context, settlement))
+        lines.extend(self._map_settlement_adjustment_lines(context, settlement))
+        return lines
+
+    def _build_settlement_balance_line(
+        self,
+        context: CalculationContext,
+        settlement: SettlementResult,
+    ) -> JournalEntryLineProforma:
+        """Build the AR/AP or advance line settled by the payment."""
         advance_account = context.references.custom_references.get("advance_account_id")
         use_advance_as_party_balance = bool(
             context.references.custom_references.get("use_advance_as_party_balance") and advance_account
         )
-        lines = [
+        account_id = (
+            str(advance_account or "") if use_advance_as_party_balance else context.references.get("party_account", "")
+        )
+        return self._build_line(
+            context,
+            account_id,
+            settlement.gross_settlement_amount,
+            side=self._settlement_balance_side(context),
+            description=f"Settlement - {context.document_type}",
+            exchange_rate=self._document_exchange_rate(context),
+            party_id=None if use_advance_as_party_balance else context.party_id,
+        )
+
+    def _map_cash_line(
+        self,
+        context: CalculationContext,
+        settlement: SettlementResult,
+    ) -> list[JournalEntryLineProforma]:
+        """Map the cash or bank leg of a settlement."""
+        cash_account = self._resolve_cash_account(context)
+        if not cash_account or settlement.cash_amount <= 0:
+            return []
+        return [
             self._build_line(
                 context,
-                str(advance_account or "") if use_advance_as_party_balance else context.references.get("party_account", ""),
-                settlement.gross_settlement_amount,
-                side="debit" if context.transaction_direction == "purchase" else "credit",
-                description=f"Settlement - {context.document_type}",
-                exchange_rate=self._document_exchange_rate(context),
-                party_id=None if use_advance_as_party_balance else context.party_id,
+                cash_account,
+                settlement.cash_amount,
+                side=self._settlement_cash_side(context),
+                description=f"Cash/Bank - {context.document_type}",
+                exchange_rate=self._settlement_exchange_rate(context),
+                exchange_rate_source="settlement",
             )
         ]
-        cash_account = self._resolve_cash_account(context)
-        if cash_account and settlement.cash_amount > 0:
-            side = "credit" if context.transaction_direction == "purchase" else "debit"
-            lines.append(
-                self._build_line(
-                    context,
-                    cash_account,
-                    settlement.cash_amount,
-                    side=side,
-                    description=f"Cash/Bank - {context.document_type}",
-                    exchange_rate=self._settlement_exchange_rate(context),
-                    exchange_rate_source="settlement",
-                )
-            )
+
+    def _map_settlement_tax_lines(
+        self,
+        context: CalculationContext,
+        settlement: SettlementResult,
+    ) -> list[JournalEntryLineProforma]:
+        """Map withholding and settlement tax lines."""
+        lines: list[JournalEntryLineProforma] = []
         for withholding_line in settlement.settlement_lines:
             account_id = self._resolve_tax_account(context, withholding_line.account_id)
             if not account_id or withholding_line.amount <= 0:
                 continue
-            side = "credit" if context.transaction_direction == "purchase" else "debit"
             lines.append(
                 self._build_line(
                     context,
                     account_id,
                     withholding_line.amount,
-                    side=side,
+                    side=self._settlement_tax_side(context),
                     description=f"{withholding_line.concept} - {context.document_type}",
                     exchange_rate=self._settlement_exchange_rate(context),
                     exchange_rate_source="settlement",
                     party_id=context.party_id,
                 )
             )
-        exchange_difference = settlement.exchange_difference
-        if exchange_difference != 0:
-            lines.append(self._build_exchange_difference_line(context, exchange_difference))
+        return lines
+
+    def _map_settlement_adjustment_lines(
+        self,
+        context: CalculationContext,
+        settlement: SettlementResult,
+    ) -> list[JournalEntryLineProforma]:
+        """Map exchange, discount and unrealized revaluation settlement lines."""
+        lines: list[JournalEntryLineProforma] = []
+        if settlement.exchange_difference != 0:
+            lines.append(self._build_exchange_difference_line(context, settlement.exchange_difference))
         if settlement.payment_discount_amount > 0:
             lines.append(self._build_payment_discount_line(context, settlement.payment_discount_amount))
         if settlement.unrealized_exchange_difference != 0:
             lines.append(self._build_unrealized_exchange_difference_line(context, settlement.unrealized_exchange_difference))
             lines.append(self._build_unrealized_party_offset_line(context, settlement.unrealized_exchange_difference))
         return lines
+
+    def _settlement_balance_side(self, context: CalculationContext) -> str:
+        """Return the side used to clear the party or advance balance."""
+        match context.transaction_direction:
+            case "purchase":
+                return "debit"
+            case _:
+                return "credit"
+
+    def _settlement_cash_side(self, context: CalculationContext) -> str:
+        """Return the side used by the cash or bank movement."""
+        match context.transaction_direction:
+            case "purchase":
+                return "credit"
+            case _:
+                return "debit"
+
+    def _settlement_tax_side(self, context: CalculationContext) -> str:
+        """Return the side used by settlement tax or withholding lines."""
+        match context.transaction_direction:
+            case "purchase":
+                return "credit"
+            case _:
+                return "debit"
 
     def _map_fiscal_lines(
         self,
@@ -328,9 +387,9 @@ class AccountingMapper:
         proforma = JournalEntryProforma(lines=lines, memo=f"Pro-forma for {context.document_type}")
         if proforma.is_balanced or not lines:
             return proforma
-        debits = sum((line.debit for line in lines), Decimal("0"))
-        credits = sum((line.credit for line in lines), Decimal("0"))
-        diff = debits - credits
+        total_debit_amount = sum((line.debit for line in lines), Decimal("0"))
+        total_credit_amount = sum((line.credit for line in lines), Decimal("0"))
+        diff = total_debit_amount - total_credit_amount
         advance_account = context.references.custom_references.get("advance_account_id")
         open_payment_amount = Decimal(str(context.references.custom_references.get("open_payment_amount", "0")))
         if advance_account and open_payment_amount > 0 and diff != 0:
@@ -396,12 +455,12 @@ class AccountingMapper:
         lines: list[JournalEntryLineProforma],
     ) -> list[JournalEntryLineProforma]:
         """Balance invoice-like events against the party control account."""
-        debits = sum((line.debit for line in lines), Decimal("0"))
-        credits = sum((line.credit for line in lines), Decimal("0"))
-        if debits == credits:
+        total_debit_amount = sum((line.debit for line in lines), Decimal("0"))
+        total_credit_amount = sum((line.credit for line in lines), Decimal("0"))
+        if total_debit_amount == total_credit_amount:
             return []
-        side = "credit" if debits > credits else "debit"
-        amount = abs(debits - credits)
+        side = "credit" if total_debit_amount > total_credit_amount else "debit"
+        amount = abs(total_debit_amount - total_credit_amount)
         return [
             self._build_party_line(
                 context,
