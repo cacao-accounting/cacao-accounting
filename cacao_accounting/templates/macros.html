@@ -772,3 +772,141 @@
 {% macro lineas_tabla_lectura(items, currency_code='') %}
 {{ dv_macros.detail_lines_table(items, currency_code=currency_code) }}
 {% endmacro %}
+
+{# ─── Audit Timeline (reusable across all document types) ─────── #}
+{% macro audit_timeline(timeline, page_size=20) %}
+{% set field_labels = {
+    'memo':                _('Observaciones'),
+    'exchange_rate':       _('Tipo de cambio'),
+    'fiscal_year_id':      _('Año fiscal'),
+    'fiscal_year':         _('Año fiscal'),
+    'status':              _('Estado'),
+    'date':                _('Fecha'),
+    'posting_date':        _('Fecha de contabilización'),
+    'reference':           _('Referencia'),
+    'entity':              _('Compañía'),
+    'company':             _('Compañía'),
+    'currency':            _('Moneda'),
+    'currency_id':         _('Moneda'),
+    'document_no':         _('Número de documento'),
+    'serie':               _('Serie'),
+    'total_amount':        _('Total'),
+    'grand_total':         _('Total general'),
+    'remarks':             _('Observaciones'),
+    'narration':           _('Descripción'),
+    'account':             _('Cuenta'),
+    'cost_center':         _('Centro de costos'),
+    'third_code':          _('Tercero'),
+    'third_type':          _('Tipo de tercero'),
+    'payment_method':      _('Método de pago'),
+    'bank_account':        _('Cuenta bancaria'),
+    'warehouse':           _('Almacén'),
+    'item_code':           _('Artículo'),
+    'quantity':            _('Cantidad'),
+    'rate':                _('Precio unitario'),
+    'amount':              _('Monto'),
+    'tax':                 _('Impuesto'),
+    'discount':            _('Descuento'),
+    'party_id':            _('Tercero'),
+    'party_type':          _('Tipo de tercero'),
+    'due_date':            _('Fecha de vencimiento'),
+    'payment_terms':       _('Condiciones de pago')
+} %}
+{% set total = timeline | length %}
+{% set older = timeline[: total - page_size] if total > page_size else [] %}
+{% set recent = timeline[total - page_size :] if total > page_size else timeline %}
+{% set collapse_id = 'audit-older-' ~ (timeline | first).event.document_id if timeline else 'audit-older' %}
+<div class="ca-card mt-3">
+    <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0">
+            <i class="bi bi-clock-history me-1"></i>{{ _('Historial del documento') }}
+            {% if total %}<span class="badge bg-light text-dark ms-1 fw-normal">{{ total }}</span>{% endif %}
+        </h6>
+    </div>
+    <div class="p-3">
+        {% if timeline %}
+        {% set action_map = {
+            'created':                _('creó este documento'),
+            'updated':                _('editó este documento'),
+            'submitted':              _('contabilizó este documento'),
+            'approved':               _('aprobó este documento'),
+            'cancelled':              _('anuló este documento'),
+            'rejected':               _('rechazó este documento'),
+            'reversed':               _('revirtió este documento'),
+            'reversal_draft_created': _('creó un borrador de reversión'),
+            'commented':              _('agregó un comentario')
+        } %}
+        {% if older %}
+        <div class="collapse" id="{{ collapse_id }}">
+            <ul class="list-group list-group-flush mb-0">
+                {% for row in older %}
+                {% set event = row.event %}
+                <li class="list-group-item px-0">
+                    <div>
+                        <strong>{{ event.actor_name or event.actor_user_id or _('Sistema') }}</strong>
+                        {{ action_map.get(event.action, event.action) }}
+                        — <small class="text-muted">{{ event.timestamp }}</small>
+                    </div>
+                    {% if row.changes %}
+                    <ul class="mt-2 mb-0 small">
+                        {% for change in row.changes %}
+                        <li>
+                            {{ _('Cambió') }}
+                            <strong>{{ field_labels.get(change.field, change.field) }}</strong>
+                            {{ _('de') }} "{{ change.before }}" {{ _('a') }} "{{ change.after }}"
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if event.comment %}
+                    <small class="text-muted">{{ _('Motivo') }}: {{ event.comment }}</small>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            <hr class="my-2">
+        </div>
+        <button class="btn btn-sm btn-link px-0 text-muted mb-2"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#{{ collapse_id }}"
+                data-label-show="{{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸"
+                data-label-hide="{{ _('Ocultar eventos anteriores') }} ▴"
+                aria-expanded="false"
+                aria-controls="{{ collapse_id }}"
+                onclick="var b=this; b.textContent = b.getAttribute('aria-expanded')==='true' ? b.dataset.labelHide : b.dataset.labelShow;">
+            {{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸
+        </button>
+        {% endif %}
+        <ul class="list-group list-group-flush">
+            {% for row in recent %}
+            {% set event = row.event %}
+            <li class="list-group-item px-0">
+                <div>
+                    <strong>{{ event.actor_name or event.actor_user_id or _('Sistema') }}</strong>
+                    {{ action_map.get(event.action, event.action) }}
+                    — <small class="text-muted">{{ event.timestamp }}</small>
+                </div>
+                {% if row.changes %}
+                <ul class="mt-2 mb-0 small">
+                    {% for change in row.changes %}
+                    <li>
+                        {{ _('Cambió') }}
+                        <strong>{{ field_labels.get(change.field, change.field) }}</strong>
+                        {{ _('de') }} "{{ change.before }}" {{ _('a') }} "{{ change.after }}"
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if event.comment %}
+                <small class="text-muted">{{ _('Motivo') }}: {{ event.comment }}</small>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted mb-0">{{ _('No hay eventos de auditoría registrados.') }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

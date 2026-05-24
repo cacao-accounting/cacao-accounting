@@ -65,6 +65,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.version import APPNAME
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
 
@@ -1306,6 +1307,7 @@ def bancos_pago_nuevo():
                 tax_lines=payload.get("tax_lines"),
                 tax_summary=payload.get("tax_summary"),
             )
+            log_create(payment)
 
             database.session.commit()
             flash(_("Pago registrado correctamente."), "success")
@@ -1439,6 +1441,7 @@ def bancos_pago(payment_id):
         banco=banco,
         banco_destino=banco_destino,
         creador=creador,
+        audit_timeline=format_document_timeline("payment_entry", registro.id),
     )
 
 
@@ -1454,6 +1457,7 @@ def bancos_pago_submit(payment_id: str):
         abort(400)
     try:
         submit_document(registro)
+        log_submit(registro)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
@@ -1486,6 +1490,7 @@ def bancos_pago_cancel(payment_id: str):
         }
         for reference_type, reference_id in affected_docs:
             _refresh_payment_reference_document(reference_type, reference_id)
+        log_cancel(registro)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()

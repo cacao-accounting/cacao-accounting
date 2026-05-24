@@ -2505,6 +2505,36 @@ class AuditLog(database.Model):  # type: ignore[name-defined]
     timestamp = database.Column(database.DateTime, default=database.func.now(), nullable=False)
 
 
+class AuditTrail(database.Model):  # type: ignore[name-defined]
+    """Bitácora centralizada e inmutable de eventos por documento."""
+
+    __tablename__ = "audit_trail"
+    __table_args__ = (
+        database.Index(
+            "ix_audit_trail_document_lookup",
+            "document_type",
+            "document_id",
+            "timestamp",
+        ),
+    )
+    id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
+    document_type = database.Column(database.String(80), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True, index=True)
+    action = database.Column(database.String(32), nullable=False, index=True)
+    actor_user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True, index=True)
+    actor_name = database.Column(database.String(255), nullable=True)
+    timestamp = database.Column(database.DateTime, default=database.func.now(), nullable=False, index=True)
+    before_json = database.Column(database.Text(), nullable=True)
+    after_json = database.Column(database.Text(), nullable=True)
+    changes_json = database.Column(database.Text(), nullable=True)
+    comment = database.Column(database.Text(), nullable=True)
+    source_module = database.Column(database.String(80), nullable=True, index=True)
+    ip_address = database.Column(database.String(64), nullable=True)
+    user_agent = database.Column(database.String(512), nullable=True)
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Snapshots — Vistas materializadas para performance de reportes.
 # Son derivados recalculables — no son fuente de verdad.

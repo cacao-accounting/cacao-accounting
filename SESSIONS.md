@@ -1,5 +1,6 @@
 # SESSIONS - Historical Decisions & Milestones
 
+
 ## 2026-05-24 (Merge selectivo: acceso contable por libro)
 - **Solicitud:** Analizar la rama remota `ia/refactor/multi-ledger-ops-cleanup-15206031425615452964` y hacer un merge limpio solo de los cambios relativos al control de acceso por libros contables, preservando que Bancos, Compras, Inventario y Ventas trabajen por defecto en todos los libros activos.
 - **Alcance integrado:** Se incorporo un modelo `UserBookAccess` para permisos granulares por libro y se extendio `Permisos` para intersectar permisos RBAC con acceso por libro cuando se pasa un libro contable.
@@ -15,6 +16,29 @@
 - **Métricas:** Se ampliaron KPIs y tablas de Contabilidad, Bancos, Compras, Inventario y Ventas; inventario usa `StockBin` y el widget se llama **Menor existencia** porque no existe umbral formal de stock mínimo.
 - **UI:** `/app` carga compañías y periodos reales, filtra periodos por compañía en Alpine y renderiza secciones con clases consistentes `dashboard-section`, `dashboard-kpi-grid`, `dashboard-widget-grid` y `dashboard-actions`, sin duplicar permisos en Jinja.
 - **Validación:** `tests/test_dashboard_api.py` cubre login, company/period inválidos, compañía sin acceso, permisos por módulo, estados vacíos y render de `/app`; focal en verde (`10 passed`), junto con Black, Ruff, Flake8, Mypy y pydocstyle focales.
+
+## 2026-05-24 (Integración Audit Trail en Bancos, Inventario, Compras y Ventas)
+- **Solicitud:** Integrar Audit Trail más allá de Contabilidad hacia módulos operativos prioritarios.
+- **Bancos:** `payment_entry` registra eventos `created`, `submitted`, `cancelled`; detalle de pago recibe `audit_timeline`.
+- **Inventario:** `stock_entry` registra eventos `created`, `updated`, `submitted`, `cancelled`; detalle recibe `audit_timeline`.
+- **Compras:** `purchase_receipt` registra eventos `created`, `submitted`, `cancelled`; detalle recibe `audit_timeline`.
+- **Ventas:** `delivery_note` registra eventos `created`, `submitted`, `cancelled`; detalle recibe `audit_timeline`.
+
+## 2026-05-24 (Ajustes bloqueadores Audit Trail P0)
+- **Solicitud:** Corregir bloqueadores del PR anterior: serialización segura, semántica de acciones, render de cambios, migración visible y pruebas mínimas.
+- **Correcciones:** `audit_trail_service` ahora serializa modelos sólo por columnas (`__table__.columns`) y elimina el uso de `dir(...)`; se añadieron acciones `rejected` y `reversal_draft_created`.
+- **Integración contable:** Rechazo de borrador registra `rejected`; creación de borrador de reversión registra `reversal_draft_created`; anulación registra `cancelled` explícitamente.
+- **UI:** Timeline de `journal.html` ahora muestra frases de negocio por acción y detalla cambios campo a campo (`de -> a`) parseando `changes_json`.
+- **Infraestructura:** Se agregó revisión Alembic `cacao_accounting/migrations/versions/20260524_0001_add_audit_trail.py` para crear tabla `audit_trail`.
+- **Pruebas:** Se añadieron pruebas dedicadas en `tests/test_audit_trail_journal.py` para create/update diff/submit-cancel/timeline render.
+
+
+## 2026-05-24 (P0: Servicio centralizado de Audit Trail reusable)
+- **Solicitud:** Implementar un servicio central de auditoría append-only reutilizable, con timeline visible por documento y evidencia de actor/acción/fecha/cambios para lanzamiento.
+- **Implementación backend:** Se creó `audit_trail_service.py` con API reusable: `log_create`, `log_update`, `log_submit`, `log_approve`, `log_cancel`, `log_reverse`, `log_delete_attempt`, `log_comment` y consulta `get_document_timeline`.
+- **Modelo central:** Se agregó `AuditTrail` con campos de documento, actor, acción, timestamp, snapshots before/after, diff de cambios, comentario y metadata técnica (módulo/ip/user-agent).
+- **Integración inicial (prioridad 1 Contabilidad):** `journal_service.py` registra eventos de creación, edición, contabilización, anulación, reversión y comentario de duplicado. La vista detalle `journal.html` ahora renderiza “Historial del documento” en la parte inferior.
+- **Estado:** Base central lista y reusable; siguientes iteraciones deben conectar Bancos, Compras, Ventas, Inventario e Importaciones con el mismo servicio.
 
 ## 2026-05-24 (Refactor de importacion de lineas y perfil)
 - **Solicitud:** Refactorizar `validate_lines()` en `api/line_import.py` y `profile()` en `auth/__init__.py` para reducir complejidad y facilitar mantenimiento.

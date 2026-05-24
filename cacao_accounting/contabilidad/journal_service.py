@@ -20,6 +20,15 @@ from cacao_accounting.contabilidad.journal_repository import (
     replace_journal_lines,
 )
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_comprobante_contable
+from cacao_accounting.audit_trail_service import (
+    log_cancel,
+    log_comment,
+    log_create,
+    log_reject,
+    log_reversal_draft_created,
+    log_submit,
+    log_update,
+)
 from cacao_accounting.database import (
     Accounts,
     ComprobanteContable,
@@ -118,6 +127,7 @@ def create_journal_draft(payload: dict[str, Any], user_id: str, assign_identifie
     journal = add_journal(journal, lines)
     if assign_identifier:
         _assign_identifier_if_needed(journal, data.naming_series_id)
+    log_create(journal)
     database.session.commit()
     return journal
 
@@ -148,6 +158,7 @@ def submit_journal(journal_id: str) -> list[Any]:
             database.session.add(fiscal_year)
 
     database.session.add(journal)
+    log_submit(journal)
     database.session.commit()
     return entries
 
@@ -163,6 +174,7 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     if user_id:
         journal.modified_by = user_id
     database.session.add(journal)
+    log_reject(journal)
     database.session.commit()
     return journal
 
@@ -194,6 +206,7 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
             database.session.add(fiscal_year)
 
     database.session.add(journal)
+    log_cancel(journal)
     database.session.commit()
     return entries
 
@@ -252,6 +265,7 @@ def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteCont
     duplicated.document_no = None
     duplicated.serie = None
     database.session.add(duplicated)
+    log_comment(duplicated, f"Duplicado desde comprobante {source.document_no or source.id}.")
     database.session.commit()
     return duplicated
 
@@ -274,6 +288,7 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str) -> Compro
     reversed_draft.document_no = None
     reversed_draft.serie = None
     database.session.add(reversed_draft)
+    log_reversal_draft_created(reversed_draft)
     database.session.commit()
     return reversed_draft
 
@@ -286,6 +301,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede editar un comprobante en borrador.")
 
+    before = serialize_journal_for_form(journal)
     data = _normalize_journal_payload(payload)
     _validate_balanced_lines(data.company, data.lines)
     primary_book = data.books[0] if data.books else None
@@ -310,6 +326,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal = replace_journal_lines(journal, lines)
     if not journal.document_no:
         _assign_identifier_if_needed(journal, data.naming_series_id)
+    after = serialize_journal_for_form(journal)
+    log_update(journal, before=before, after=after)
     database.session.commit()
     return journal
 

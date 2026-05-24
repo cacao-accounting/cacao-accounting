@@ -7,6 +7,7 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from collections.abc import Sequence
+import json
 from datetime import date
 
 # ---------------------------------------------------------------------------------------
@@ -52,6 +53,7 @@ from cacao_accounting.setup.service import (
     create_company,
 )
 from cacao_accounting.contabilidad.gl import gl
+from cacao_accounting.audit_trail_service import format_document_timeline
 from cacao_accounting.database import STATUS, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.version import APPNAME
@@ -2219,6 +2221,8 @@ def ver_comprobante(identifier: str):
             }
         )
 
+    audit_timeline = format_document_timeline("journal_entry", journal.id)
+
     return render_template(
         "contabilidad/journal.html",
         registro=journal,
@@ -2226,6 +2230,7 @@ def ver_comprobante(identifier: str):
         selected_books=selected_books,
         currency_label=currency_label,
         creator_nickname=creator_nickname,
+        audit_timeline=audit_timeline,
         titulo="Comprobante Contable - " + APPNAME,
     )
 

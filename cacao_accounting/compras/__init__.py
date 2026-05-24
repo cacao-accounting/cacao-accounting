@@ -71,6 +71,7 @@ from cacao_accounting.party_management import (
     update_party_contact,
 )
 from cacao_accounting.version import APPNAME
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
 # < --------------------------------------------------------------------------------------------- >
 compras = Blueprint("compras", __name__, template_folder="templates")
@@ -2023,6 +2024,7 @@ def compras_recepcion_nuevo():
             _total_qty, total = _save_purchase_receipt_items(recepcion.id)
             recepcion.total = total
             recepcion.grand_total = total
+            log_create(recepcion)
             database.session.commit()
             flash("Recepción de compra creada correctamente.", "success")
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=recepcion.id))
@@ -2064,6 +2066,7 @@ def compras_recepcion(receipt_id):
         items=items,
         titulo=titulo,
         create_actions_json=create_actions_json,
+        audit_timeline=format_document_timeline("purchase_receipt", registro.id),
     )
 
 
@@ -2224,6 +2227,7 @@ def compras_recepcion_submit(receipt_id: str):
         abort(400)
     try:
         submit_document(registro)
+        log_submit(registro)
         database.session.commit()
         flash("Recepción de compra aprobada.", "success")
     except PostingError as exc:
@@ -2246,6 +2250,7 @@ def compras_recepcion_cancel(receipt_id: str):
         cancel_document(registro)
         revert_relations_for_target("purchase_receipt", receipt_id)
         refresh_source_caches_for_target("purchase_receipt", receipt_id)
+        log_cancel(registro)
         database.session.commit()
         flash("Recepción de compra cancelada.", "warning")
     except PostingError as exc:
