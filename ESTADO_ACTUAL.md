@@ -1,10 +1,18 @@
 # Estado Actual del Proyecto - 2026-05-24
 
+- **Mantenibilidad de importacion de lineas y perfil (2026-05-24):** Se simplificaron endpoints de alto uso sin cambiar contratos visibles.
+  - `validate_lines()` en `api/line_import.py` queda como orquestador corto; validacion de schema, contexto, permisos, filas, maestros y journal entry vive en helpers privados con docstrings.
+  - La respuesta JSON y los status codes se conservan; se agrego cobertura directa para doctype, compania, limite de 500 filas, decimal/fecha invalida y referencias maestras inexistentes.
+  - `profile()` en `auth/__init__.py` delega actualizacion de perfil, validacion de correo, cambio de contrasena y render comun a helpers privados.
+  - Validacion focal en verde: line import/update elements (`23 passed`), vistas lentas (`test_01vistas.py --slow=True`, `1 passed`), mas `black`, `ruff`, `flake8`, `mypy` y `pydocstyle` focal.
+
 - **Mantenibilidad de motores fiscales y pagos (2026-05-24):** Se refactorizaron builders y resolver fiscal sin cambiar comportamiento funcional.
   - `_build_payment_context` en `document_builders.py` ahora delega direccion de pago/cobro, calculos de liquidacion, descuentos, referencias contables y reglas fiscales a helpers pequeños con dataclasses.
   - `_tax_rules_from_template` se simplifico a conversion por linea y resolucion explicita mediante `match/case` para las decisiones fiscales heredadas.
   - `RuleResolver.resolve` en `fiscal/resolver.py` separa grupos de prioridad, filtro de condiciones, estrategias de mezcla y resultado final; las estrategias se resuelven con `match/case`.
-  - Validacion focal en verde: `tests/engines/test_resolver_conditions.py`, `tests/engines/test_integration.py` y `tests/test_tax_rules.py` (`13 passed`), ademas de `black`, `ruff`, `flake8` y `mypy` focal.
+  - `_calculate_share` en `landed_cost/engine.py` usa `match/case` por metodo de prorrateo y centraliza divisiones seguras en `_ratio`.
+  - `_map_settlement_event` en `orchestrator/mapper.py` ahora compone helpers para balance AR/AP o anticipo, banco/caja, retenciones y ajustes; los lados contables de liquidacion usan `match/case`, y los acumuladores de debe/haber usan nombres explicitos para evitar shadowing.
+  - Validacion focal en verde: `tests/engines/test_resolver_conditions.py`, `tests/engines/test_integration.py` y `tests/test_tax_rules.py` (`13 passed`), landed cost/golden/additional (`11 passed`), mapper/integration (`8 passed`), ademas de `black`, `ruff`, `flake8`, `mypy` y `pydocstyle` focal.
 
 - **Flujo Documental Expandible / Cierre de faltantes (2026-05-24):** El árbol recursivo de flujo documental queda extendido a Contabilidad y anticipos.
   - `journal_entry` se registra como tipo documental trazable y la vista de comprobante contable muestra la sección colapsable `Flujo documental`.
