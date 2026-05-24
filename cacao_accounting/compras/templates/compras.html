@@ -117,15 +117,19 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('compras.compras_proveedor_lista') }}">Compras por Proveedor</a>
+        <a href="{{ url_for('reportes.ap_aging') }}">Aging de Cuentas por Pagar</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Cuentas por Pagar</a>
+        <a href="{{ url_for('reportes.accounts_payable') }}">Cuentas por Pagar</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_orden_compra_lista') }}">Órdenes Pendientes</a>
+        <a href="{{ url_for('reportes.purchases_by_supplier') }}">Compras por Proveedor</a>
+        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.purchases_by_item') }}">Compras por Artículo</a>
         <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
       </li>
       {% else %}

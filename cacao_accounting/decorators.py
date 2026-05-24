@@ -24,11 +24,12 @@ from cacao_accounting.modulos import validar_modulo_activo
 
 def modulo_activo(modulo):  # pragma: no cover
     """Verifica si el recurso solicitado pertenece a un modulo activo."""
+    modulos = [modulo] if isinstance(modulo, str) else list(modulo)
 
     def decorator_modulo_activo(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if validar_modulo_activo(modulo):
+            if any(validar_modulo_activo(modulo_nombre) for modulo_nombre in modulos):
                 return func(*args, **kwargs)
             else:
                 flash("El modulo que intenta acceder se encuentra inactivo")
