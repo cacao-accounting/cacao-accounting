@@ -611,16 +611,22 @@ def nuevo_libro():
 @verifica_acceso("accounting")
 def journal_books():
     """Lista libros activos disponibles para un comprobante contable."""
+    from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.database import Book
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
     company = request.args.get("company", type=str)
     if not company:
         return jsonify({"results": []})
 
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    allowed_codes = permisos.obtener_libros_autorizados(company=company, return_codes=True)
+
     books = (
         database.session.execute(
             database.select(Book)
             .where(Book.entity == company, or_(Book.status == "activo", Book.status.is_(None)))
+            .where(Book.code.in_(allowed_codes))
             .order_by(Book.is_primary.desc(), Book.code)
         )
         .scalars()

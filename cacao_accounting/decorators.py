@@ -11,7 +11,7 @@ from functools import wraps
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import abort, flash
+from flask import abort, flash, request
 from flask_login import current_user
 
 # ---------------------------------------------------------------------------------------
@@ -46,8 +46,10 @@ def verifica_acceso(modulo):  # pragma: no cover
     def decorator_verifica_acceso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            PERMISOS = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
-            if PERMISOS.autorizado:
+            module_id = obtener_id_modulo_por_nombre(modulo)
+            libros = _libros_contables_solicitados(modulo)
+            permisos = Permisos(modulo=module_id, usuario=current_user.id)
+            if permisos.autorizado and _tiene_acceso_a_libros(module_id, libros):
                 return func(*args, **kwargs)
             else:
                 flash("No se encuentra autorizado a acceder al recurso solicitado.")
@@ -56,3 +58,24 @@ def verifica_acceso(modulo):  # pragma: no cover
         return wrapper
 
     return decorator_verifica_acceso
+
+
+def _libros_contables_solicitados(modulo: str) -> list[str]:
+    """Extrae libros de la peticion solo para rutas del modulo contable."""
+    if modulo != "accounting":
+        return []
+    form_books = request.form.getlist("books") if request.method == "POST" else []
+    candidates = [
+        request.args.get("ledger"),
+        request.form.get("ledger"),
+        request.form.get("ledger_id"),
+        *form_books,
+    ]
+    return [book for book in candidates if book]
+
+
+def _tiene_acceso_a_libros(module_id: str | None, libros: list[str]) -> bool:
+    """Valida acceso de lectura a todos los libros contables solicitados."""
+    if not libros:
+        return True
+    return all(Permisos(modulo=module_id, usuario=current_user.id, libro=libro).autorizado for libro in libros)

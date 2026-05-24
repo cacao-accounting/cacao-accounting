@@ -19,7 +19,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, UserFormPreference, database
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.reportes.services import (
@@ -412,10 +414,12 @@ def _resolve_company(company_code: str) -> str:
 
 
 def _default_ledger_for_company(company_code: str) -> str | None:
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    allowed_codes = permisos.obtener_libros_autorizados(company=company_code, return_codes=True)
     return (
         database.session.execute(
             database.select(Book.code)
-            .where(Book.entity == company_code)
+            .where(Book.entity == company_code, Book.code.in_(allowed_codes))
             .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
         )
         .scalars()

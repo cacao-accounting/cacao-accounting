@@ -10,9 +10,9 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
-from cacao_accounting.database import Modules, Roles, RolesAccess, RolesUser, User, database
+from cacao_accounting.database import Book, Modules, Roles, RolesAccess, RolesUser, User, UserBookAccess, database
 from cacao_accounting.database.helpers import (
     obtener_id_modulo_por_nombre,
     obtener_id_rol_por_monbre,
@@ -95,10 +95,16 @@ class Permisos:
     solicitar: bool
     validar: bool
 
-    def __init__(self, modulo: str | None = None, usuario: str | None = None) -> None:
+    def __init__(
+        self,
+        modulo: str | None = None,
+        usuario: str | None = None,
+        libro: str | None = None,
+    ) -> None:
         """Inicia la clase permisos."""
         self.modulo = modulo
         self.usuario = usuario
+        self.libro = libro
         self.__init_valido: bool = bool(self.valida_modulo(modulo) and usuario)
 
         self.usuario_model: User | None = None
@@ -120,7 +126,11 @@ class Permisos:
                 setattr(self, permiso_nombre, True)
         elif self.__init_valido:
             for permiso_nombre in self.PERMISSION_FIELDS:
-                setattr(self, permiso_nombre, self._tiene_permiso(self.PERMISSION_FIELDS[permiso_nombre]))
+                tiene_permiso = self._tiene_permiso(self.PERMISSION_FIELDS[permiso_nombre])
+                if self.libro and tiene_permiso:
+                    accion = self._accion_granular(permiso_nombre)
+                    tiene_permiso = self.tiene_acceso_libro(self.libro, accion)
+                setattr(self, permiso_nombre, tiene_permiso)
             self.autorizado = self.access
         else:
             self.autorizado = False
@@ -172,6 +182,74 @@ class Permisos:
             if getattr(permiso, permission_field, False) is True:
                 return True
         return False
+
+    def _accion_granular(self, permiso_nombre: str) -> str:
+        """Convierte una accion de modulo en permiso granular por libro."""
+        acciones = {
+            "access": "can_read",
+            "actualizar": "can_write",
+            "anular": "can_cancel",
+            "autorizar": "can_approve",
+            "bi": "can_read",
+            "cerrar": "can_write",
+            "configurar": "can_write",
+            "consultar": "can_read",
+            "corregir": "can_write",
+            "crear": "can_write",
+            "editar": "can_write",
+            "eliminar": "can_write",
+            "importar": "can_write",
+            "reportes": "can_read",
+            "solicitar": "can_write",
+            "validar": "can_approve",
+        }
+        return acciones.get(permiso_nombre, "can_read")
+
+    def tiene_acceso_libro(self, libro: str, accion: str = "can_read") -> bool:
+        """Verifica si el usuario tiene permiso granular sobre un libro contable."""
+        if self.administrador:
+            return True
+        book = self._resolver_libro(libro)
+        if book is None or not self.usuario:
+            return False
+        acceso = UserBookAccess.query.filter_by(user_id=self.usuario, book_id=book.id).first()
+        if acceso is None:
+            return False
+        return bool(getattr(acceso, accion, False))
+
+    def obtener_libros_autorizados(
+        self,
+        accion: str = "can_read",
+        company: str | None = None,
+        *,
+        return_codes: bool = False,
+    ) -> list[str]:
+        """Retorna libros contables autorizados para el usuario actual."""
+        query = database.select(Book)
+        if company:
+            query = query.where(Book.entity == company)
+        if self.administrador:
+            books = database.session.execute(query.order_by(Book.is_primary.desc(), Book.code)).scalars().all()
+            return [book.code if return_codes else book.id for book in books]
+        if not self.usuario:
+            return []
+        rows = (
+            database.session.execute(
+                query.join(UserBookAccess, UserBookAccess.book_id == Book.id)
+                .where(UserBookAccess.user_id == self.usuario)
+                .where(getattr(UserBookAccess, accion).is_(True))
+                .order_by(Book.is_primary.desc(), Book.code)
+            )
+            .scalars()
+            .all()
+        )
+        return [book.code if return_codes else book.id for book in rows]
+
+    def _resolver_libro(self, libro: str) -> Book | None:
+        """Busca un libro contable por id o codigo."""
+        return (
+            database.session.execute(database.select(Book).where(or_(Book.id == libro, Book.code == libro))).scalars().first()
+        )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #

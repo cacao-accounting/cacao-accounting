@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-24 (Merge selectivo: acceso contable por libro)
+- **Solicitud:** Analizar la rama remota `ia/refactor/multi-ledger-ops-cleanup-15206031425615452964` y hacer un merge limpio solo de los cambios relativos al control de acceso por libros contables, preservando que Bancos, Compras, Inventario y Ventas trabajen por defecto en todos los libros activos.
+- **Alcance integrado:** Se incorporo un modelo `UserBookAccess` para permisos granulares por libro y se extendio `Permisos` para intersectar permisos RBAC con acceso por libro cuando se pasa un libro contable.
+- **Aislamiento por modulo:** `verifica_acceso` solo extrae y valida libros (`ledger`, `ledger_id`, `books`) cuando el modulo protegido es `accounting`; los modulos operativos ignoran esos parametros para no romper el posting multiledger administrado por backend.
+- **Contabilidad:** El selector `/accounting/journal/books` devuelve unicamente libros autorizados para usuarios no administradores, y los reportes financieros eligen como ledger por defecto el primer libro autorizado de la compania.
+- **Exclusiones del merge:** No se integraron los cambios remotos de reportes operativos ni enlaces de menus de Bancos/Compras/Inventario/Ventas porque excedian el alcance de acceso por libro y generaban conflictos con trabajo reciente.
+- **Cobertura:** Se agrego `tests/test_accounting_book_access.py` para validar permisos por libro, filtrado del selector contable y que Bancos no se bloquee por parametros `ledger` accidentales.
+
 ## 2026-05-24 (Hardening del Dashboard Ejecutivo)
 - **Solicitud:** Finalizar los cambios staged del dashboard funcional corrigiendo bloqueantes antes de merge: autorización por compañía, periodo por compañía, contrato uniforme de API, métricas ampliadas, UI ejecutiva y cobertura de permisos/estados vacíos.
 - **Seguridad:** `/api/dashboard/data` valida compañía obligatoria, existencia, acceso vía helper temporal `user_can_access_company(current_user, company)` y periodo perteneciente a `AccountingPeriod.entity == Entity.code`; compañías deshabilitadas devuelven `403` y periodos fuera de contexto `404`.
