@@ -379,6 +379,47 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 }
 .ca-card-title i { color: var(--ca-text-secondary); }
 
+.ca-detail-actions-menu {
+  display: none;
+}
+
+.ca-detail-actions-menu .dropdown-toggle::after {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .ca-detail-actions-inline {
+    display: none !important;
+  }
+
+  .ca-detail-actions-menu {
+    display: block;
+  }
+
+  .ca-detail-actions-menu .dropdown-menu {
+    min-width: 13rem;
+    padding: .45rem;
+  }
+
+  .ca-detail-actions-menu .dropdown-menu > a,
+  .ca-detail-actions-menu .dropdown-menu > form,
+  .ca-detail-actions-menu .dropdown-menu > button {
+    display: block;
+    margin-bottom: .35rem;
+    width: 100%;
+  }
+
+  .ca-detail-actions-menu .dropdown-menu > :last-child {
+    margin-bottom: 0;
+  }
+
+  .ca-detail-actions-menu .dropdown-menu .btn {
+    justify-content: flex-start;
+    text-align: left;
+    width: 100%;
+  }
+}
+
 .ca-kv-list {
   display: grid;
   gap: .6rem;

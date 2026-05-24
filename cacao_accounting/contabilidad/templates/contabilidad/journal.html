@@ -74,7 +74,7 @@
             </h5>
             <small class="text-muted">{{ _('Comprobante manual') }}</small>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
+        <div class="ca-detail-actions-inline d-flex gap-2 flex-wrap">
             {% if registro.status == "draft" %}
             <a class="btn btn-sm btn-outline-primary"
                 href="{{ url_for('contabilidad.editar_comprobante', identifier=registro.id) }}">
@@ -121,6 +121,59 @@
             <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
                 <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
             </a>
+        </div>
+        <div class="ca-detail-actions-menu dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ _('Acciones del documento') }}">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end">
+                {% if registro.status == "draft" %}
+                <a class="btn btn-sm btn-outline-primary"
+                    href="{{ url_for('contabilidad.editar_comprobante', identifier=registro.id) }}">
+                    <i class="bi bi-pencil-square me-1"></i>{{ _('Editar borrador') }}
+                </a>
+                <form method="post" action="{{ url_for('contabilidad.rechazar_comprobante', identifier=registro.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">
+                        <i class="bi bi-x-circle me-1"></i>{{ _('Rechazar') }}
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('contabilidad.contabilizar_comprobante', identifier=registro.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-success" type="submit">
+                        <i class="bi bi-check2-circle me-1"></i>{{ _('Contabilizar') }}
+                    </button>
+                </form>
+                {% endif %}
+                {% if registro.status in ["draft", "rejected", "submitted"] %}
+                <form method="post" action="{{ url_for('contabilidad.duplicar_comprobante', identifier=registro.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-dark" type="submit">
+                        <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('contabilidad.revertir_comprobante', identifier=registro.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-warning" type="submit">
+                        <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
+                    </button>
+                </form>
+                {% endif %}
+                {% if registro.status == "submitted" %}
+                <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Anular comprobante') }}
+                    </button>
+                </form>
+                {% endif %}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.listar_comprobantes') }}">
+                    <i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}
+                </a>
+                <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
+                    <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
+                </a>
+            </div>
         </div>
     </div>
 

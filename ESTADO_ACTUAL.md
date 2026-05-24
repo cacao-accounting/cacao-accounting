@@ -215,3 +215,5 @@
 - **Audit Trail P0 (bloqueadores resueltos, 2026-05-24):** Serialización segura por columnas, acciones semánticas (`rejected`, `reversal_draft_created`), timeline con diffs visibles en UI, migración Alembic visible y pruebas unitarias dedicadas para create/update/submit/cancel/render.
 
 - **Integración multi-módulo Audit Trail (2026-05-24):** Se instrumentó captura de eventos en Bancos (Payment Entry), Inventario (Stock Entry), Compras (Purchase Receipt) y Ventas (Delivery Note), además de exponer `audit_timeline` en las vistas de detalle de esos documentos.
+
+- **UI responsive documental (2026-05-24):** Los detalles de documentos en Contabilidad, Bancos, Compras e Inventario/Almacen usan acciones compactas en menu movil. Historial del documento y Colaboracion quedan colapsados por defecto, y Flujo documental comparte la misma estructura visual de tarjeta colapsable.
