@@ -12,7 +12,7 @@ from typing import Any, cast
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, abort, current_app, jsonify, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request
 from flask_login import current_user, login_required
 from jwt import decode
 
@@ -31,6 +31,17 @@ from cacao_accounting.document_flow import (
     payment_reconciliation_candidates,
     payment_reference_candidates,
 )
+from cacao_accounting.collaboration_service import (
+    CollaborationError,
+    abort_for_collaboration_error,
+    add_document_comment,
+    active_users,
+    create_document_task,
+    document_url,
+    list_user_tasks,
+    open_task_count,
+    update_task_status,
+)
 from cacao_accounting.database import StockBin, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
@@ -43,6 +54,7 @@ from cacao_accounting.form_preferences import get_form_preference, reset_form_pr
 from cacao_accounting.search_select import SearchSelectError, search_select
 from cacao_accounting.api.line_import import line_import_bp
 from cacao_accounting.api.dashboard import dashboard_api
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 api = Blueprint("api", __name__, template_folder="templates")
 api.register_blueprint(line_import_bp)
@@ -149,6 +161,102 @@ def api_fiscal_preview():
         current_app.logger.warning("Fiscal preview validation error: %s", str(exc))
         return jsonify({"error": _("No se pudo calcular el preview fiscal."), "message": _("Revise los datos enviados.")}), 400
     return jsonify(result)
+
+
+@api.route("/api/documents/<document_type>/<document_id>/comments", methods=["POST"])
+@login_required
+def api_document_comment(document_type: str, document_id: str):
+    """Add a cloud-only comment to a document timeline."""
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        entry = add_document_comment(
+            document_type,
+            document_id,
+            str(payload.get("comment") or ""),
+            str(current_user.id),
+        )
+    except CollaborationError as exc:
+        abort_for_collaboration_error(exc)
+    if request.form and request.referrer:
+        return redirect(request.referrer)
+    return jsonify({"id": entry.id, "action": entry.action}), 201
+
+
+@api.route("/api/documents/<document_type>/<document_id>/tasks", methods=["POST"])
+@login_required
+def api_document_task(document_type: str, document_id: str):
+    """Create a cloud-only task attached to a document."""
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        task = create_document_task(document_type, document_id, payload, str(current_user.id))
+    except CollaborationError as exc:
+        abort_for_collaboration_error(exc)
+    if request.form and request.referrer:
+        return redirect(request.referrer)
+    return jsonify({"id": task.id, "status": task.status}), 201
+
+
+@api.route("/api/tasks/<task_id>/status", methods=["POST"])
+@login_required
+def api_task_status(task_id: str):
+    """Update a cloud-only document task status."""
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        task = update_task_status(task_id, str(payload.get("status") or ""), str(current_user.id))
+    except CollaborationError as exc:
+        abort_for_collaboration_error(exc)
+    return jsonify({"id": task.id, "status": task.status})
+
+
+@api.route("/tasks/my", methods=["GET", "POST"])
+@login_required
+def my_tasks():
+    """Render the current user's cloud task inbox."""
+    if is_desktop_mode():
+        abort(403)
+    if request.method == "POST":
+        try:
+            update_task_status(
+                str(request.form.get("task_id") or ""),
+                str(request.form.get("status") or ""),
+                str(current_user.id),
+            )
+        except CollaborationError as exc:
+            abort_for_collaboration_error(exc)
+
+    status = request.args.get("status") or None
+    priority = request.args.get("priority") or None
+    company = request.args.get("company") or None
+    due_date_from = _date_filter("due_date_from")
+    due_date_to = _date_filter("due_date_to")
+    tasks = list_user_tasks(
+        str(current_user.id),
+        status=status,
+        priority=priority,
+        due_date_from=due_date_from,
+        due_date_to=due_date_to,
+        company=company,
+    )
+    return render_template(
+        "tasks/my.html",
+        tasks=tasks,
+        document_url=document_url,
+        active_users=active_users(),
+        open_task_count=open_task_count(str(current_user.id)),
+        titulo=_("Mis tareas"),
+    )
+
+
+def _date_filter(name: str):
+    value = request.args.get(name)
+    if not value:
+        return None
+    from datetime import date
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        abort(400)
 
 
 @api.route("/api/buying/purchase-order/<order_id>/items")

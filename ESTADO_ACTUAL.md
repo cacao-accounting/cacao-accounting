@@ -1,5 +1,20 @@
 # Estado Actual del Proyecto - 2026-05-24
 
+- **Modo Desktop/Cloud / Colaboracion sin migraciones (2026-05-24):** El runtime de escritorio/cloud queda centralizado y la colaboracion ligera queda disponible solo en cloud.
+  - `cacao_accounting/runtime_mode.py` es la fuente unica de verdad para deteccion desktop, cloud y single-entity; `config.MODO_ESCRITORIO` se conserva solo como alias compatible.
+  - En escritorio se bloquea la creacion de usuarios adicionales cuando ya existe un usuario y se oculta la accion visual; el usuario inicial se mantiene como administrador.
+  - `force_single_entity()` bloquea una segunda entidad en setup cuando aplica por escritorio o por `CACAO_ACCOUNTING_FORCE_SINGLE_ENTITY=true`.
+  - Se agrego `DocumentTask` al ORM sin migracion Alembic; las pruebas y entornos nuevos usan `database.create_all()`.
+  - Los endpoints cloud permiten comentar documentos, crear tareas, cambiar estados y consultar `Mis tareas`; en desktop devuelven `403`.
+  - Los detalles con `audit_timeline` de comprobante contable, pago, recepcion, entrega y movimiento de inventario muestran panel cloud reusable de comentarios/tareas.
+  - Cada comentario y accion de tarea queda en `AuditTrail`; el timeline reconoce `task_created`, `task_status_changed`, `task_completed` y `task_cancelled`.
+
+- **Dashboard Ejecutivo / Correccion visual de Inventario (2026-05-24):** La tarjeta de Inventario ya no ocupa ancho completo por una regla de posicion.
+  - `/app` elimina el layout basado en `dashboard-section:nth-child`, que era fragil con secciones dinamicas por permisos/visibilidad.
+  - Las tarjetas usan clases semanticas `dashboard-section--{modulo}` para permitir ajustes futuros por modulo sin depender del orden renderizado.
+  - La composicion del dashboard vuelve a una grilla uniforme de dos columnas en escritorio y una columna en pantallas pequenas.
+  - La prueba de render del dashboard cubre que no reaparezca la regla `nth-child`.
+
 - **Control de acceso por libro contable / Merge selectivo (2026-05-24):** Integrada de forma acotada la funcionalidad relevante de la rama remota de limpieza multiledger.
   - Existe `UserBookAccess` como matriz granular usuario-libro con permisos de lectura, escritura, anulacion y aprobacion.
   - `Permisos` acepta un libro opcional y cruza RBAC del modulo con `UserBookAccess` solo cuando se evalua un libro contable especifico.

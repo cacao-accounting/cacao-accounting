@@ -192,6 +192,8 @@ def test_app_renders_dashboard_shell(client):
     assert "dashboard-section__badge" in html
     assert "dashboard-kpi-grid" in html
     assert "dashboard-actions" in html
+    assert "dashboard-section--${sectionKey}" in html
+    assert "dashboard-section:nth-child" not in html
 
 
 def _seed_dashboard_data() -> None:

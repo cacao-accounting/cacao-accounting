@@ -24,7 +24,9 @@
     <p class="mb-0" style="color:#64748b;font-size:.875rem;">
       Administra usuarios del sistema, asigna roles y controla su estado de acceso.
     </p>
+    {% if can_create_user %}
     <a href="{{ url_for('admin.crear_usuario') }}" class="btn btn-sm btn-primary">Nuevo Usuario</a>
+    {% endif %}
   </div>
 </div>
 

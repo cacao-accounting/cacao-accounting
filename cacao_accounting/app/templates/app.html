@@ -46,7 +46,7 @@
 
   <section x-show="filters.company" x-cloak class="dashboard-grid">
     <template x-for="sectionKey in sectionOrder" :key="sectionKey">
-      <article class="dashboard-section" x-show="section(sectionKey).visible">
+      <article class="dashboard-section" :class="`dashboard-section--${sectionKey}`" x-show="section(sectionKey).visible">
         <header class="dashboard-section__header">
           <div>
             <h2 x-text="section(sectionKey).title"></h2>
@@ -394,10 +394,6 @@
     gap: 1rem;
     padding: 1rem;
   }
-  .dashboard-section:nth-child(1),
-  .dashboard-section:nth-child(5) {
-    grid-column: span 2;
-  }
   .dashboard-section__header {
     align-items: start;
     display: flex;
@@ -504,10 +500,6 @@
     .dashboard-grid,
     .dashboard-widget-grid {
       grid-template-columns: 1fr;
-    }
-    .dashboard-section:nth-child(1),
-    .dashboard-section:nth-child(5) {
-      grid-column: span 1;
     }
     .dashboard-kpi-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));

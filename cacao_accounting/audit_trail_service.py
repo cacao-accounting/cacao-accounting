@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from flask import has_request_context, request
 from flask_login import current_user
@@ -28,6 +28,10 @@ ALLOWED_ACTIONS = {
     "closed",
     "commented",
     "delete_attempted",
+    "task_created",
+    "task_completed",
+    "task_cancelled",
+    "task_status_changed",
 }
 
 
@@ -49,15 +53,13 @@ def _snapshot_model(document: Any, exclude_fields: set[str] | None = None) -> di
     if table is None:
         return {}
     return {
-        str(column.name): getattr(document, column.name)
-        for column in table.columns
-        if str(column.name) not in exclude_fields
+        str(column.name): getattr(document, column.name) for column in table.columns if str(column.name) not in exclude_fields
     }
 
 
 def _normalize_document(document: Any, exclude_fields: set[str] | None = None) -> dict[str, Any]:
     if is_dataclass(document):
-        raw = asdict(document)
+        raw = asdict(cast(Any, document))
     elif isinstance(document, Mapping):
         raw = dict(document)
     elif hasattr(document, "__table__"):
@@ -138,48 +140,63 @@ def _log(
 
 
 def log_create(document: Any) -> AuditTrail:
+    """Log that a document was created."""
     return _log("created", document, after=document)
 
 
 def log_update(document: Any, before: Any, after: Any) -> AuditTrail:
+    """Log that a document was updated with before and after snapshots."""
     return _log("updated", document, before=before, after=after)
 
 
 def log_submit(document: Any) -> AuditTrail:
+    """Log that a document was submitted."""
     return _log("submitted", document, after=document)
 
 
 def log_approve(document: Any) -> AuditTrail:
+    """Log that a document was approved."""
     return _log("approved", document, after=document)
 
 
 def log_cancel(document: Any) -> AuditTrail:
+    """Log that a document was cancelled."""
     return _log("cancelled", document, after=document)
 
 
 def log_reverse(document: Any) -> AuditTrail:
+    """Log that a document was reversed."""
     return _log("reversed", document, after=document)
 
 
 def log_reject(document: Any) -> AuditTrail:
+    """Log that a document was rejected."""
     return _log("rejected", document, after=document)
 
 
 def log_reversal_draft_created(document: Any) -> AuditTrail:
+    """Log that a reversal draft was created from a document."""
     return _log("reversal_draft_created", document, after=document)
 
 
 def log_delete_attempt(document: Any) -> AuditTrail:
+    """Log an attempted document deletion."""
     return _log("delete_attempted", document, after=document)
 
 
 def log_comment(document: Any, comment: str) -> AuditTrail:
+    """Log a user comment on a document."""
     return _log("commented", document, after=document, comment=comment)
+
+
+def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
+    """Log a lightweight task event against a document."""
+    return _log(action, document, after=document, comment=comment)
 
 
 def get_document_timeline(document_type: str, document_id: str) -> list[AuditTrail]:
     """Devuelve historial cronológico ascendente de un documento."""
-    return (
+    return list(
         database.session.execute(
             database.select(AuditTrail)
             .where(AuditTrail.document_type == document_type)

@@ -6,9 +6,8 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
-from collections.abc import Sequence
-import json
 from datetime import date
+from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros

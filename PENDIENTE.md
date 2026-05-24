@@ -1,5 +1,22 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Modo Desktop/Cloud sin migraciones - completado)
+- [x] Centralizar deteccion desktop/cloud/single-entity en `runtime_mode.py`.
+- [x] Mantener `config.MODO_ESCRITORIO` como alias compatible sin duplicar checks.
+- [x] Bloquear usuarios adicionales en desktop y ocultar la accion de nuevo usuario.
+- [x] Bloquear segunda entidad en desktop o con `CACAO_ACCOUNTING_FORCE_SINGLE_ENTITY=true`.
+- [x] Agregar `DocumentTask` al ORM sin crear migracion Alembic.
+- [x] Implementar comentarios y tareas cloud con validaciones de documento, permisos, usuario activo, estados y prioridades.
+- [x] Exponer endpoints de comentarios, tareas, cambios de estado y `Mis tareas`.
+- [x] Integrar panel colaborativo reusable en documentos con timeline visible inicial.
+- [x] Registrar comentarios y acciones de tarea en `AuditTrail`.
+- [x] Cubrir runtime, desktop, single-entity y flujo cloud con pruebas focales.
+
+## Seguimiento 2026-05-24 (Dashboard Ejecutivo UI - completado)
+- [x] Corregir la tarjeta de Inventario para que no ocupe ancho completo por una regla CSS basada en posicion.
+- [x] Reemplazar reglas fragiles `nth-child` por clases semanticas de modulo en el dashboard.
+- [x] Cubrir el render para evitar regresion del layout por posicion.
+
 ## Seguimiento 2026-05-24 (Acceso contable por libro - completado)
 - [x] Integrar selectivamente la rama remota de limpieza multiledger sin traer cambios ajenos de reportes operativos.
 - [x] Agregar matriz `UserBookAccess` para permisos granulares por libro contable.

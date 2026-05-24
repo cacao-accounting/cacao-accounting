@@ -36,7 +36,6 @@ from cacao_accounting.compras import compras
 from cacao_accounting.config import (
     DIRECTORIO_ARCHIVOS,
     DIRECTORIO_PLANTILLAS,
-    MODO_ESCRITORIO,
     TESTING_MODE,
 )
 from cacao_accounting.contabilidad import contabilidad
@@ -56,6 +55,7 @@ from cacao_accounting.modulos import (
     validar_modulo_activo,
 )
 from cacao_accounting.reportes import reportes
+from cacao_accounting.runtime_mode import force_single_entity, is_cloud_mode, is_desktop_mode
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.version import PRERELEASE
@@ -144,7 +144,10 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(permisos=Permisos)
             app.jinja_env.globals.update(_=_)
-            app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+            app.jinja_env.globals.update(MODO_ESCRITORIO=is_desktop_mode())
+            app.jinja_env.globals.update(is_desktop_mode=is_desktop_mode)
+            app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
+            app.jinja_env.globals.update(force_single_entity=force_single_entity)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
             # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
@@ -163,6 +166,10 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
+            app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)
+            app.jinja_env.globals.update(document_collaboration_tasks=document_collaboration_tasks)
+            app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
+            app.jinja_env.globals.update(audit_action_label=audit_action_label)
             from cacao_accounting.document_flow.status import calculate_document_status
 
             app.jinja_env.globals.update(document_status_info=calculate_document_status)
@@ -212,6 +219,44 @@ def format_money_with_currency(value: object | None, currency_code: str | None =
 def format_quantity(value: object | None) -> str:
     """Format operational quantities with four decimals."""
     return f"{_decimal_for_display(value):,.4f}"
+
+
+def collaboration_active_users() -> list:
+    """Return active users for collaboration widgets."""
+    if not is_cloud_mode():
+        return []
+    from cacao_accounting.collaboration_service import active_users
+
+    return active_users()
+
+
+def document_collaboration_tasks(document_type: str, document_id: str) -> list:
+    """Return document tasks for collaboration widgets."""
+    if not is_cloud_mode():
+        return []
+    from cacao_accounting.collaboration_service import list_document_tasks
+
+    return list_document_tasks(document_type, document_id)
+
+
+def current_user_open_task_count() -> int:
+    """Return current user's open cloud task count for navigation badges."""
+    if not is_cloud_mode() or not current_user or not current_user.is_authenticated:
+        return 0
+    from cacao_accounting.collaboration_service import open_task_count
+
+    return open_task_count(str(current_user.id))
+
+
+def audit_action_label(action: str) -> str:
+    """Return display text for audit actions not covered by older template maps."""
+    labels = {
+        "task_created": _("asignó una tarea"),
+        "task_status_changed": _("cambió el estado de una tarea"),
+        "task_completed": _("completó una tarea"),
+        "task_cancelled": _("canceló una tarea"),
+    }
+    return labels.get(action, action)
 
 
 def create_app(ajustes: dict | None = None) -> Flask:
