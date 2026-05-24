@@ -1,5 +1,14 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Acceso contable por libro - completado)
+- [x] Integrar selectivamente la rama remota de limpieza multiledger sin traer cambios ajenos de reportes operativos.
+- [x] Agregar matriz `UserBookAccess` para permisos granulares por libro contable.
+- [x] Aplicar el filtro por libro solo al modulo de Contabilidad.
+- [x] Mantener Bancos, Compras, Inventario y Ventas trabajando sobre todos los libros activos por defecto.
+- [x] Filtrar libros disponibles en el selector de comprobantes contables segun permisos del usuario.
+- [x] Asegurar que los reportes financieros contables usen un libro por defecto autorizado.
+- [x] Cubrir con pruebas que un modulo operativo no se bloquee por parametros `ledger`.
+
 ## Seguimiento 2026-05-24 (Dashboard Ejecutivo - completado)
 - [x] Validar acceso temporal usuario-compañía antes de devolver datos del dashboard.
 - [x] Validar que el periodo contable pertenece a la compañía seleccionada.

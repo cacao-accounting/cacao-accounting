@@ -1252,6 +1252,7 @@ def test_all_domain_models_importable():
         Roles,
         RolesAccess,
         RolesUser,
+        UserBookAccess,
         Modules,
         Modulos,
         # Company
