@@ -41,6 +41,7 @@ run_test.sh
 .vscode
 *replit*
 docs.txt
+**/*.md
 
 LICENSE
 README.md
