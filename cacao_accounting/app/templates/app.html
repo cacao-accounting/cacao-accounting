@@ -52,7 +52,7 @@
             <h2 x-text="section(sectionKey).title"></h2>
             <p x-text="section(sectionKey).subtitle"></p>
           </div>
-          <span class="dashboard-section__badge" x-text="section(sectionKey).badge"></span>
+          <span class="dashboard-section__badge" x-show="section(sectionKey).badge" x-text="section(sectionKey).badge"></span>
         </header>
 
         <div class="dashboard-kpi-grid">
@@ -64,10 +64,12 @@
           </template>
         </div>
 
-        <div class="dashboard-widget-grid">
-          <div class="dashboard-widget" x-show="chartFor(sectionKey)">
-            <canvas :id="`${sectionKey}Chart`"></canvas>
-          </div>
+        <div class="dashboard-widget-grid" :class="{'dashboard-widget-grid--full': !chartFor(sectionKey)}">
+          <template x-if="chartFor(sectionKey)">
+            <div class="dashboard-widget">
+              <canvas :id="`${sectionKey}Chart`"></canvas>
+            </div>
+          </template>
           <div class="dashboard-widget">
             <div class="dashboard-widget__title" x-text="primaryTableTitle(sectionKey)"></div>
             <table class="dashboard-table">
@@ -449,6 +451,9 @@
     display: grid;
     gap: .85rem;
     grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  }
+  .dashboard-widget-grid--full {
+    grid-template-columns: 1fr;
   }
   .dashboard-widget {
     min-height: 15rem;
