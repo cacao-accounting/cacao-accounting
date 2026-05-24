@@ -57,8 +57,16 @@
       </h5>
       <small class="text-muted">{{ document_type_label }}</small>
     </div>
-    <div class="d-flex gap-2 flex-wrap justify-content-end">
+    <div class="ca-detail-actions-inline d-flex gap-2 flex-wrap justify-content-end">
       {{ buttons_html | safe }}
+    </div>
+    <div class="ca-detail-actions-menu dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ _('Acciones del documento') }}">
+        <i class="bi bi-list"></i>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end">
+        {{ buttons_html | safe }}
+      </div>
     </div>
   </div>
   <div class="row g-3 p-3">
