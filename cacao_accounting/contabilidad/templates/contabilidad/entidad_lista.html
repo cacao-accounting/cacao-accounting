@@ -22,9 +22,11 @@
 <div class="ca-page-header d-flex justify-content-between align-items-center">
   <h4><i class="bi bi-building me-2" style="color:#78BF30"></i>{{ _('Entidades') }}</h4>
   <div class="d-flex gap-2">
+    {% if not force_single_entity() %}
     <a href="{{ url_for('contabilidad.nueva_entidad') }}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva Entidad') }}
     </a>
+    {% endif %}
   </div>
 </div>
 

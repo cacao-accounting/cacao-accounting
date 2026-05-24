@@ -25,13 +25,14 @@ from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 imports = Blueprint("imports", __name__, template_folder="templates")
 
 
 def check_desktop_mode():
     """Abortar con 403 si el sistema está en modo escritorio."""
-    if current_app.config.get("MODO_ESCRITORIO"):
+    if is_desktop_mode():
         abort(403)
 
 

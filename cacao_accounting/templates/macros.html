@@ -86,6 +86,15 @@
     <button class="ca-nav-btn" id="ca-theme-btn" onclick="caToggleTheme()" title="Cambiar tema" type="button">
       <i class="bi bi-moon-stars-fill" id="ca-theme-icon"></i>
     </button>
+    {% if is_cloud_mode() %}
+    <a class="ca-nav-btn position-relative" href="{{ url_for('api.my_tasks') }}" title="Mis tareas">
+      <i class="bi bi-list-task"></i>
+      {% set task_count = current_user_open_task_count() %}
+      {% if task_count %}
+      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ task_count }}</span>
+      {% endif %}
+    </a>
+    {% endif %}
     <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="Mi perfil">
       <i class="bi bi-person-circle"></i>
     </a>
@@ -169,7 +178,7 @@
     {%- endif %}
     {%- endfor %}
     {%- endif %}
-    {% if not MODO_ESCRITORIO and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado -%}
+    {% if is_cloud_mode() and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado -%}
     <li class="nav-item">
       <a href="{{ url_for('imports.index') }}" class="nav-link {% if request.blueprint == 'imports' %}active{% endif %}">
         <i class="bi bi-file-earmark-arrow-up"></i>
@@ -232,7 +241,7 @@
         class="bi bi-plus-circle-fill" aria-hidden="true"></i> Crear Nueva
       Entidad</a>
   </p>
-  {% if not MODO_ESCRITORIO %}
+  {% if is_cloud_mode() %}
   <p>Los siguientes vínculos pueden ser de su interés:</p>
 
   <div class="d-flex justify-content-center gap-2">
@@ -405,6 +414,101 @@
     </div>
   </div>
 </div>
+{% endmacro %}
+
+{% macro document_collaboration_panel(document_type, document) %}
+{% if is_cloud_mode() %}
+{% set tasks = document_collaboration_tasks(document_type, document.id) %}
+{% set users = collaboration_active_users() %}
+<div class="ca-card mt-3" x-data="{ collaborationSection: 'comment' }">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-cloud-check me-1"></i>{{ _('Colaboracion') }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="btn-group btn-group-sm mb-3" role="group" aria-label="{{ _('Colaboracion') }}">
+      <button
+        class="btn"
+        :class="collaborationSection === 'comment' ? 'btn-primary' : 'btn-outline-primary'"
+        type="button"
+        @click="collaborationSection = collaborationSection === 'comment' ? null : 'comment'"
+      >
+        <i class="bi bi-chat-left-text me-1"></i>{{ _('Comentario') }}
+      </button>
+      <button
+        class="btn"
+        :class="collaborationSection === 'task' ? 'btn-primary' : 'btn-outline-primary'"
+        type="button"
+        @click="collaborationSection = collaborationSection === 'task' ? null : 'task'"
+      >
+        <i class="bi bi-list-task me-1"></i>{{ _('Crear tarea') }}
+      </button>
+    </div>
+
+    <section x-show="collaborationSection === 'comment'" x-cloak class="mb-3">
+      <form method="post" action="{{ url_for('api.api_document_comment', document_type=document_type, document_id=document.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label small fw-semibold" for="document-comment-{{ document.id }}">{{ _('Comentario') }}</label>
+        <div class="d-flex gap-2">
+          <textarea class="form-control form-control-sm" id="document-comment-{{ document.id }}" name="comment" rows="2" maxlength="2000" required></textarea>
+          <button class="btn btn-sm btn-primary align-self-start" type="submit">{{ _('Comentar') }}</button>
+        </div>
+      </form>
+    </section>
+
+    <section x-show="collaborationSection === 'task'" x-cloak class="mb-3">
+      <form method="post" action="{{ url_for('api.api_document_task', document_type=document_type, document_id=document.id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold" for="task-title-{{ document.id }}">{{ _('Nueva tarea') }}</label>
+          <input class="form-control form-control-sm" id="task-title-{{ document.id }}" name="title" maxlength="255" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold" for="task-assigned-{{ document.id }}">{{ _('Asignar a') }}</label>
+          <select class="form-select form-select-sm" id="task-assigned-{{ document.id }}" name="assigned_to" required>
+            <option value=""></option>
+            {% for user_row in users %}
+            <option value="{{ user_row.id }}">{{ user_row.user }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold" for="task-priority-{{ document.id }}">{{ _('Prioridad') }}</label>
+          <select class="form-select form-select-sm" id="task-priority-{{ document.id }}" name="priority">
+            <option value="normal">{{ _('Normal') }}</option>
+            <option value="low">{{ _('Baja') }}</option>
+            <option value="high">{{ _('Alta') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold" for="task-due-{{ document.id }}">{{ _('Vencimiento') }}</label>
+          <input class="form-control form-control-sm" id="task-due-{{ document.id }}" type="date" name="due_date">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-sm btn-outline-primary w-100" type="submit">{{ _('Crear tarea') }}</button>
+        </div>
+        <div class="col-12">
+          <textarea class="form-control form-control-sm" name="description" rows="2" placeholder="{{ _('Descripcion') }}"></textarea>
+        </div>
+      </form>
+    </section>
+    <h6 class="small fw-semibold text-muted text-uppercase">{{ _('Tareas del documento') }}</h6>
+    {% if tasks %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>{{ _('Titulo') }}</th><th>{{ _('Prioridad') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Vencimiento') }}</th></tr></thead>
+        <tbody>
+          {% for task in tasks %}
+          <tr><td>{{ task.title }}</td><td>{{ task.priority }}</td><td>{{ task.status }}</td><td>{{ task.due_date or '-' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">{{ _('No hay tareas para este documento.') }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endmacro %}
 
 {# ─────────────────────────────────────────────────────────────── #}
@@ -844,7 +948,7 @@
                 <li class="list-group-item px-0">
                     <div>
                         <strong>{{ event.actor_name or event.actor_user_id or _('Sistema') }}</strong>
-                        {{ action_map.get(event.action, event.action) }}
+                        {{ action_map.get(event.action, audit_action_label(event.action)) }}
                         — <small class="text-muted">{{ event.timestamp }}</small>
                     </div>
                     {% if row.changes %}
@@ -884,7 +988,7 @@
             <li class="list-group-item px-0">
                 <div>
                     <strong>{{ event.actor_name or event.actor_user_id or _('Sistema') }}</strong>
-                    {{ action_map.get(event.action, event.action) }}
+                    {{ action_map.get(event.action, audit_action_label(event.action)) }}
                     — <small class="text-muted">{{ event.timestamp }}</small>
                 </div>
                 {% if row.changes %}

@@ -1,5 +1,20 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-24 (Modo Desktop/Cloud sin migraciones)
+- **Solicitud:** Implementar el modo desktop/cloud aprobado, sin generar migraciones, centralizando los flags criticos de runtime y agregando colaboracion ligera solo para cloud.
+- **Runtime:** Se creo `cacao_accounting/runtime_mode.py` como fuente unica para `is_truthy`, `detect_desktop_mode`, `is_desktop_mode`, `force_single_entity` e `is_cloud_mode`; `config.MODO_ESCRITORIO` queda como alias de compatibilidad.
+- **Desktop/single entity:** El modo escritorio limita la instalacion a un usuario administrador y una entidad; `CACAO_ACCOUNTING_FORCE_SINGLE_ENTITY=true` bloquea segunda entidad sin bloquear usuarios.
+- **Colaboracion cloud:** Se agrego `DocumentTask` en ORM sin migracion y `collaboration_service.py` para comentarios documentales via `AuditTrail.log_comment` y tareas por documento con estados/prioridades validados.
+- **UI:** El navbar muestra `Mis tareas` solo en cloud; los detalles con timeline visible ahora incluyen panel reusable de comentarios y tareas para journal, pago, recepcion, entrega y movimiento de inventario.
+- **Auditoria:** Se extendieron acciones permitidas con eventos de tarea y el timeline muestra textos de negocio para esas acciones.
+- **Cobertura:** Se agregaron pruebas para runtime flags, bloqueo desktop, single-entity y flujo cloud de comentario/tarea con auditoria.
+
+## 2026-05-24 (Correccion visual de tarjeta de Inventario en dashboard)
+- **Solicitud:** Corregir la presentacion de la tarjeta de Inventario en el dashboard ejecutivo, que aparecia ocupando todo el ancho de forma inconsistente frente a las demas tarjetas.
+- **Implementacion:** Se elimino la regla CSS basada en `nth-child` dentro de `/app`, porque el dashboard renderiza secciones dinamicas y la posicion visual no es un contrato estable.
+- **UI:** Las tarjetas del dashboard mantienen composicion uniforme de dos columnas en escritorio y se identifican con clases semanticas `dashboard-section--{modulo}` para futuros ajustes por modulo sin depender del orden.
+- **Cobertura:** Se amplio la prueba de render del dashboard para validar la presencia de la clase semantica y evitar el regreso de reglas `dashboard-section:nth-child`.
+
 
 ## 2026-05-24 (Merge selectivo: acceso contable por libro)
 - **Solicitud:** Analizar la rama remota `ia/refactor/multi-ledger-ops-cleanup-15206031425615452964` y hacer un merge limpio solo de los cambios relativos al control de acceso por libros contables, preservando que Bancos, Compras, Inventario y Ventas trabajen por defecto en todos los libros activos.

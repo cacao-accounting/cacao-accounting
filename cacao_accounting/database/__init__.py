@@ -2535,6 +2535,31 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     user_agent = database.Column(database.String(512), nullable=True)
 
 
+class DocumentTask(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Lightweight cloud task assigned to a document."""
+
+    __tablename__ = "document_task"
+    document_type = database.Column(database.String(80), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True, index=True)
+    title = database.Column(database.String(255), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
+    assigned_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False, index=True)
+    assigned_to = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False, index=True)
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
+    priority = database.Column(database.String(20), nullable=False, default="normal", index=True)
+    due_date = database.Column(database.Date(), nullable=True, index=True)
+    created_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    updated_at = database.Column(
+        database.DateTime,
+        default=database.func.now(),
+        onupdate=database.func.now(),
+        nullable=False,
+    )
+    completed_at = database.Column(database.DateTime, nullable=True)
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Snapshots — Vistas materializadas para performance de reportes.
 # Son derivados recalculables — no son fuente de verdad.

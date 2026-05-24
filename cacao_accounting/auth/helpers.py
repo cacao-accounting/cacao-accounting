@@ -11,9 +11,9 @@ from argon2.exceptions import VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
 
-from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.database import CacaoConfig as Config, User, database
 from cacao_accounting.logs import log
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 ph = PasswordHasher()
 
@@ -64,7 +64,7 @@ def validar_clave_segura(clave: str) -> bool:
 
 def puede_iniciar_en_escritorio(identidad: User) -> bool:
     """Determina si el usuario puede iniciar sesión en modo escritorio."""
-    if not MODO_ESCRITORIO:
+    if not is_desktop_mode():
         return True
     return identidad.classification == "admin"
 
