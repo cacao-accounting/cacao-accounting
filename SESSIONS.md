@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-24 (Hardening del Dashboard Ejecutivo)
+- **Solicitud:** Finalizar los cambios staged del dashboard funcional corrigiendo bloqueantes antes de merge: autorización por compañía, periodo por compañía, contrato uniforme de API, métricas ampliadas, UI ejecutiva y cobertura de permisos/estados vacíos.
+- **Seguridad:** `/api/dashboard/data` valida compañía obligatoria, existencia, acceso vía helper temporal `user_can_access_company(current_user, company)` y periodo perteneciente a `AccountingPeriod.entity == Entity.code`; compañías deshabilitadas devuelven `403` y periodos fuera de contexto `404`.
+- **Contrato API:** El endpoint ahora responde siempre `company`, `period` y `sections.{accounting,banks,purchases,inventory,sales}` con `visible`, `kpis`, `charts`, `tables`, `actions`, `badge` y `empty_state`. Las secciones sin permisos no exponen datos sensibles.
+- **Métricas:** Se ampliaron KPIs y tablas de Contabilidad, Bancos, Compras, Inventario y Ventas; inventario usa `StockBin` y el widget se llama **Menor existencia** porque no existe umbral formal de stock mínimo.
+- **UI:** `/app` carga compañías y periodos reales, filtra periodos por compañía en Alpine y renderiza secciones con clases consistentes `dashboard-section`, `dashboard-kpi-grid`, `dashboard-widget-grid` y `dashboard-actions`, sin duplicar permisos en Jinja.
+- **Validación:** `tests/test_dashboard_api.py` cubre login, company/period inválidos, compañía sin acceso, permisos por módulo, estados vacíos y render de `/app`; focal en verde (`10 passed`), junto con Black, Ruff, Flake8, Mypy y pydocstyle focales.
+
 ## 2026-05-24 (Refactor de importacion de lineas y perfil)
 - **Solicitud:** Refactorizar `validate_lines()` en `api/line_import.py` y `profile()` en `auth/__init__.py` para reducir complejidad y facilitar mantenimiento.
 - **Line Import:** `validate_lines()` queda como orquestador: payload, schema, compania/permisos, limite de filas, validacion por fila y respuesta final. Se extrajeron helpers para tipos, restricciones numericas, maestros, journal entry y respuestas JSON.

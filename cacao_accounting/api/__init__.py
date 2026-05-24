@@ -42,9 +42,11 @@ from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.search_select import SearchSelectError, search_select
 from cacao_accounting.api.line_import import line_import_bp
+from cacao_accounting.api.dashboard import dashboard_api
 
 api = Blueprint("api", __name__, template_folder="templates")
 api.register_blueprint(line_import_bp)
+api.register_blueprint(dashboard_api)
 
 
 def token_requerido(f):  # pragma: no cover

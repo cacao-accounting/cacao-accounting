@@ -18,6 +18,7 @@ from flask_login import login_required
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.database import AccountingPeriod, Entity, database
 from cacao_accounting.version import VERSION
 
 cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
@@ -30,7 +31,28 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
-    return render_template("app.html")
+    entidades = database.session.query(Entity).order_by(Entity.name).all()
+    periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
+    dashboard_entities = [
+        {"id": entity.id, "code": entity.code, "name": entity.name or entity.company_name} for entity in entidades
+    ]
+    dashboard_periods = [
+        {
+            "id": period.id,
+            "name": period.name,
+            "entity": period.entity,
+            "start": period.start.isoformat(),
+            "end": period.end.isoformat(),
+        }
+        for period in periodos
+    ]
+    return render_template(
+        "app.html",
+        entidades=entidades,
+        periodos=periodos,
+        dashboard_entities=dashboard_entities,
+        dashboard_periods=dashboard_periods,
+    )
 
 
 def bd_actual():  # pragma: no cover

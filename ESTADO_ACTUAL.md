@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-05-24
 
+- **Dashboard Ejecutivo / Hardening pre-merge (2026-05-24):** El dashboard staged queda endurecido para exponer datos financieros consolidados.
+  - `/api/dashboard/data` valida compañía, acceso temporal por compañía y pertenencia del periodo contable a la compañía antes de calcular métricas.
+  - La respuesta API queda normalizada en `sections` con visibilidad, KPIs, charts, tablas, acciones y estados vacíos por módulo.
+  - Las secciones sin permiso (`sales`, `cash`, etc.) conservan forma estable pero no devuelven saldos, facturas, clientes ni movimientos.
+  - Se agregaron métricas ampliadas para Contabilidad, Bancos, Compras, Inventario y Ventas; inventario usa `StockBin` como snapshot de existencia y muestra **Menor existencia** en lugar de “Stock bajo”.
+  - `/app` ahora recibe compañías y periodos reales, filtra periodos por compañía en frontend y renderiza una composición ejecutiva consistente sin duplicar reglas de permisos en Jinja.
+  - Cobertura focal nueva en `tests/test_dashboard_api.py` cubre seguridad, permisos, datos vacíos, métricas y render de la pantalla principal.
+
 - **Mantenibilidad de importacion de lineas y perfil (2026-05-24):** Se simplificaron endpoints de alto uso sin cambiar contratos visibles.
   - `validate_lines()` en `api/line_import.py` queda como orquestador corto; validacion de schema, contexto, permisos, filas, maestros y journal entry vive en helpers privados con docstrings.
   - La respuesta JSON y los status codes se conservan; se agrego cobertura directa para doctype, compania, limite de 500 filas, decimal/fecha invalida y referencias maestras inexistentes.

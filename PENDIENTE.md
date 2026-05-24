@@ -1,5 +1,14 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Dashboard Ejecutivo - completado)
+- [x] Validar acceso temporal usuario-compañía antes de devolver datos del dashboard.
+- [x] Validar que el periodo contable pertenece a la compañía seleccionada.
+- [x] Normalizar la respuesta del API en `sections` con visibilidad uniforme por módulo.
+- [x] Ampliar métricas de Contabilidad, Bancos, Compras, Inventario y Ventas.
+- [x] Renombrar el widget de inventario a **Menor existencia** usando `StockBin` mientras no exista stock mínimo formal.
+- [x] Rediseñar `/app` con secciones ejecutivas, KPIs, widgets, acciones rápidas y estados vacíos.
+- [x] Ampliar pruebas focales de seguridad, permisos, estados vacíos, métricas y render.
+
 ## Seguimiento 2026-05-24 (Mantenibilidad importacion/perfil - completado)
 - [x] Refactorizar `validate_lines()` como orquestador y extraer validaciones a helpers privados.
 - [x] Ampliar cobertura de importacion de lineas para doctype, compania, limites, tipos y datos maestros.
