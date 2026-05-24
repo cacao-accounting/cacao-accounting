@@ -95,6 +95,14 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
         return _status("requires_attention", "Requiere Atención", "red")
 
     docstatus = getattr(document, "docstatus", None)
+    if doctype == "journal_entry" and docstatus is None:
+        status = str(getattr(document, "status", "") or "").lower()
+        if status in {"draft", "rejected"}:
+            return _status("draft", "Borrador", "gray")
+        if status == "submitted":
+            return _status("open", "Contabilizado", "blue")
+        if status == "cancelled":
+            return _status("cancelled", "Cancelado", "gray")
     if docstatus == 0:
         return _status("draft", "Borrador", "gray")
     if docstatus == 2:

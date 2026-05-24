@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-24 (Flujo Documental Expandible: cierre de faltantes)
+- **Solicitud:** Implementar el plan para superar los faltantes detectados contra `requerimiento.md`: soporte de `journal_entry`, relaciones contables desde líneas de comprobante, garantía `PaymentReference -> DocumentRelation` en anticipos y limpieza de UI duplicada.
+- **Implementación:** `journal_entry` queda registrado en `DOCUMENT_TYPES` y como destino contable permitido desde documentos operativos; el árbol resuelve fecha, moneda, total y estado para comprobantes manuales. La vista `journal.html` incluye `macros.document_flow_tree("journal_entry", registro)`.
+- **Relaciones:** `submit_journal` sincroniza `DocumentRelation` desde líneas con `internal_reference`/`internal_reference_id`; `cancel_submitted_journal` revierte relaciones hacia el comprobante. `apply_advance_to_invoice` completa snapshots de `PaymentReference` y crea la relación factura -> pago.
+- **UI y pruebas:** Se eliminó la macro inline `document_flow_tree_script`, dejando el componente estático como única fuente. Se agregaron pruebas para journal en API/UI, relaciones contables y anticipos con relación documental.
+- **Validación:** `tests/test_document_flow_tree.py` + `tests/test_05document_flow.py` en verde (`37 passed`).
+
 ## 2026-05-23 (Compras/Ventas: accesos administrativos de terceros)
 - **Solicitud:** La bitacora indicaba soporte para tipos de clientes/proveedores, contactos y direcciones, pero los accesos no estaban visibles en los menus administrativos de Compras y Ventas.
 - **Implementacion UI:** `compras.html` agrega accesos a **Tipos de Proveedor** y **Contactos y Direcciones de Proveedores** dentro de Configuracion del Modulo; `ventas.html` agrega **Tipos de Cliente** y **Contactos y Direcciones de Clientes**.
