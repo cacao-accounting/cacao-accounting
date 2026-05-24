@@ -18,6 +18,7 @@ from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.version import APPNAME
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
@@ -605,6 +606,7 @@ def inventario_entrada_nuevo():
                 entry.total_amount = _save_stock_reconciliation_items(entry)
             else:
                 entry.total_amount = _save_stock_entry_items(entry)
+            log_create(entry)
             database.session.commit()
             flash("Entrada de almacén creada correctamente.", "success")
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
@@ -722,7 +724,13 @@ def inventario_entrada(entry_id):
         abort(404)
     items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
     titulo = (registro.document_no or entry_id) + " - " + APPNAME
-    return render_template("inventario/entrada.html", registro=registro, items=items, titulo=titulo)
+    return render_template(
+        "inventario/entrada.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=format_document_timeline("stock_entry", registro.id),
+    )
 
 
 @inventario.route("/stock-entry/<entry_id>/edit", methods=["GET", "POST"])
@@ -756,6 +764,12 @@ def inventario_entrada_editar(entry_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        before_state = {
+            "purpose": registro.purpose,
+            "company": registro.company,
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        }
         registro.purpose = request.form.get("purpose") or registro.purpose
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
@@ -765,6 +779,13 @@ def inventario_entrada_editar(entry_id: str):
         for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
             database.session.delete(item)
         registro.total_amount = _save_stock_entry_items(registro)
+        after_state = {
+            "purpose": registro.purpose,
+            "company": registro.company,
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        }
+        log_update(registro, before=before_state, after=after_state)
         database.session.commit()
         flash(_("Movimiento de inventario actualizado correctamente."), "success")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
@@ -872,6 +893,7 @@ def inventario_entrada_submit(entry_id: str):
         abort(400)
     try:
         submit_document(registro)
+        log_submit(registro)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
@@ -894,6 +916,7 @@ def inventario_entrada_cancel(entry_id: str):
     try:
         cancel_document(registro)
         revert_relations_for_target("stock_entry", entry_id)
+        log_cancel(registro)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()

@@ -90,3 +90,9 @@
 - [ ] Mejorar la estabilidad de los tests E2E en entornos de CI/Sandbox con latencia de red.
 - [ ] Continuar la estandarizacion de reportes HTML siguiendo el patron de `financial_report.html`.
 - [ ] Extender el uso de `smart-select` a dimensiones personalizadas si se requiere en el futuro.
+
+- [ ] Integrar `audit_trail_service` en Bancos, Compras, Ventas, Inventario, Importaciones, Revalorización y Conciliaciones con timeline visible en cada detalle.
+
+- [ ] Extender las mismas pruebas/contratos de Audit Trail a Bancos, Compras, Ventas, Inventario e Importaciones (acciones + timeline + append-only).
+
+- [ ] Extender integración Audit Trail a documentos restantes de Compras/Ventas/Bancos/Inventario (órdenes, facturas, cotizaciones, notas) con render homogéneo de timeline en UI.

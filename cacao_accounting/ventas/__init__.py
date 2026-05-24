@@ -54,6 +54,7 @@ from cacao_accounting.party_management import (
     update_party_contact,
 )
 from cacao_accounting.version import APPNAME
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -1535,6 +1536,7 @@ def ventas_entrega_nuevo():
             _total_qty, total = _save_delivery_note_items(entrega.id)
             entrega.total = total
             entrega.grand_total = total
+            log_create(entrega)
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
             return redirect(url_for("ventas.ventas_entrega", note_id=entrega.id))
@@ -1564,7 +1566,13 @@ def ventas_entrega(note_id):
         abort(404)
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note_id)).all()
     titulo = (registro.document_no or note_id) + " - " + APPNAME
-    return render_template("ventas/entrega.html", registro=registro, items=items, titulo=titulo)
+    return render_template(
+        "ventas/entrega.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=format_document_timeline("delivery_note", registro.id),
+    )
 
 
 @ventas.route("/delivery-note/<note_id>/edit", methods=["GET", "POST"])
@@ -1720,6 +1728,7 @@ def ventas_entrega_submit(note_id: str):
         abort(400)
     try:
         submit_document(registro)
+        log_submit(registro)
         database.session.commit()
         flash("Nota de entrega aprobada.", "success")
     except PostingError as exc:
@@ -1742,6 +1751,7 @@ def ventas_entrega_cancel(note_id: str):
         cancel_document(registro)
         revert_relations_for_target("delivery_note", note_id)
         refresh_source_caches_for_target("delivery_note", note_id)
+        log_cancel(registro)
         database.session.commit()
         flash("Nota de entrega cancelada.", "warning")
     except PostingError as exc:
