@@ -935,8 +935,7 @@ def _render_operational_framework(
     columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
     display_headers = {column: _column_label(column, ledger_currency) for column in columns}
     display_rows = [
-        {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns}
-        for row in rows
+        {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in rows
     ]
     totals = {key: _format_cell(key, value, ledger_currency) for key, value in totals_raw.items()}
     return render_template(
