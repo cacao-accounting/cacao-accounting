@@ -1,4 +1,10 @@
-# Estado Actual del Proyecto - 2026-05-23
+# Estado Actual del Proyecto - 2026-05-24
+
+- **Mantenibilidad de motores fiscales y pagos (2026-05-24):** Se refactorizaron builders y resolver fiscal sin cambiar comportamiento funcional.
+  - `_build_payment_context` en `document_builders.py` ahora delega direccion de pago/cobro, calculos de liquidacion, descuentos, referencias contables y reglas fiscales a helpers pequeños con dataclasses.
+  - `_tax_rules_from_template` se simplifico a conversion por linea y resolucion explicita mediante `match/case` para las decisiones fiscales heredadas.
+  - `RuleResolver.resolve` en `fiscal/resolver.py` separa grupos de prioridad, filtro de condiciones, estrategias de mezcla y resultado final; las estrategias se resuelven con `match/case`.
+  - Validacion focal en verde: `tests/engines/test_resolver_conditions.py`, `tests/engines/test_integration.py` y `tests/test_tax_rules.py` (`13 passed`), ademas de `black`, `ruff`, `flake8` y `mypy` focal.
 
 - **Flujo Documental Expandible / Cierre de faltantes (2026-05-24):** El árbol recursivo de flujo documental queda extendido a Contabilidad y anticipos.
   - `journal_entry` se registra como tipo documental trazable y la vista de comprobante contable muestra la sección colapsable `Flujo documental`.
