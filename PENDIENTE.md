@@ -1,5 +1,10 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-24 (Mantenibilidad motores fiscales/pagos - completado)
+- [x] Refactorizar `_build_payment_context` para separar direccion del pago, montos de liquidacion, referencias contables y reglas fiscales.
+- [x] Simplificar `_tax_rules_from_template` usando helpers y `match/case` para decisiones fiscales heredadas.
+- [x] Refactorizar `RuleResolver.resolve` usando helpers y `match/case` para estrategias de merge.
+
 ## Seguimiento 2026-05-24 (Flujo Documental Expandible - completado)
 - [x] Registrar `journal_entry` dentro del árbol de flujo documental y mostrarlo en la vista de comprobante contable.
 - [x] Crear relaciones contables desde líneas de journal con `internal_reference` / `internal_reference_id`.

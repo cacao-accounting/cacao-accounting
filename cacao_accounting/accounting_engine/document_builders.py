@@ -77,6 +77,32 @@ class AccountLineSpec:
     party_id: str | None = None
 
 
+@dataclass(frozen=True)
+class PaymentBuildSpec:
+    """Directional metadata required to build a payment context."""
+
+    payment_type: str
+    direction: str
+    event_type: str
+    amount_field: str
+    base_amount_field: str
+    party_type: str
+
+
+@dataclass(frozen=True)
+class PaymentSettlementAmounts:
+    """Monetary values derived from payment references and cash movement."""
+
+    actual_cash_amount: Decimal
+    settlement_amount: Decimal
+    document_total: Decimal
+    company_open_balance: Decimal
+    document_exchange_rate: Decimal
+    settlement_exchange_rate: Decimal
+    open_payment_amount: Decimal
+    eligible_discount_amount: Decimal
+
+
 def build_calculation_context(document: Any) -> CalculationContext | None:
     """Build a calculation context for a supported transactional document."""
     if isinstance(document, PurchaseReceipt):
@@ -237,112 +263,264 @@ def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
 
 def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
     """Build the context for a payment or collection document."""
-    payment_type = (document.payment_type or "").lower()
-    if payment_type not in {"pay", "receive"}:
+    spec = _payment_build_spec(document)
+    if spec is None:
         return None
     company = _require_company(document.company)
-    direction = "purchase" if payment_type == "pay" else "sales"
-    event_type = "payment_confirmed" if payment_type == "pay" else "collection_confirmed"
-    amount_field = "paid_amount" if payment_type == "pay" else "received_amount"
-    base_amount_field = "base_paid_amount" if payment_type == "pay" else "base_received_amount"
-    actual_cash_amount = _decimal_value(getattr(document, amount_field, None))
-    if actual_cash_amount <= 0:
-        raise CalculationContextBuilderError("El monto del pago debe ser mayor que cero.")
-    references = list(database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all())
+    references = _payment_references(document)
     settlement_references = [reference for reference in references if not _is_order_payment_reference(reference)]
-    allocated_total = sum((_decimal_value(reference.allocated_amount) for reference in settlement_references), Decimal("0"))
-    outstanding_total = sum(
-        (
-            _decimal_value(reference.outstanding_amount or reference.total_amount or reference.allocated_amount)
-            for reference in settlement_references
-        ),
-        Decimal("0"),
-    )
-    settlement_amount = allocated_total if allocated_total > 0 else actual_cash_amount
-    document_total = outstanding_total if outstanding_total > 0 else settlement_amount
-    company_currency = _company_currency(document, company)
-    transaction_currency = _document_currency(document, company)
-    company_open_balance = Decimal("0")
-    if settlement_references:
-        company_open_balance = _estimated_company_open_balance(settlement_references, settlement_amount, document_total)
-    if company_open_balance <= 0:
-        company_open_balance = _decimal_value(getattr(document, base_amount_field, None))
-    open_payment_amount = compute_payment_unallocated_amount(document)
-    document_exchange_rate = (
-        (company_open_balance / document_total).quantize(Decimal("0.000000001"))
-        if references and document_total > 0 and company_open_balance > 0
-        else _document_exchange_rate(document)
-    )
-    settlement_exchange_rate = _settlement_exchange_rate(
+    amounts = _payment_settlement_amounts(
         document=document,
-        company_amount=_decimal_value(getattr(document, base_amount_field, None)),
-        transaction_amount=actual_cash_amount,
+        spec=spec,
+        settlement_references=settlement_references,
+        has_any_reference=bool(references),
+        company=company,
     )
-    manual_discount_total = sum((_decimal_value(ref.discount_amount) for ref in settlement_references), Decimal("0"))
-    if manual_discount_total > 0:
-        eligible_discount_amount = manual_discount_total
-    else:
-        eligible_discount_amount = _eligible_discount_amount(
-            company=company,
-            party_id=document.party_id,
-            payment_date=document.posting_date,
-            references=settlement_references,
-        )
-    tax_rules = build_tax_rule_contexts_from_snapshot(
-        document_type="payment_entry",
-        document_id=document.id,
-        recognition_event=event_type,
+    transaction_currency = _document_currency(document, company)
+    tax_rules = _payment_tax_rules(
+        document=document,
+        spec=spec,
+        company=company,
+        transaction_currency=transaction_currency,
     )
-    if not tax_rules:
-        tax_rules = build_tax_rule_contexts(
-            company=company,
-            applies_to=direction,
-            currency=transaction_currency,
-            at_date=document.posting_date,
-            recognition_event=event_type,
-        )
     return CalculationContext(
         company_id=company,
         document_type="payment_entry",
-        event_type=event_type,
-        transaction_direction=direction,
+        event_type=spec.event_type,
+        transaction_direction=spec.direction,
         transaction_date=document.posting_date,
         posting_date=document.posting_date,
-        party_type="supplier" if direction == "purchase" else "customer",
+        party_type=spec.party_type,
         party_id=str(document.party_id or ""),
         currency=transaction_currency,
-        company_currency=company_currency,
-        exchange_rate=document_exchange_rate,
-        items=[
-            ItemContext(
-                line_id="PAYMENT-REF",
-                item_id="PAYMENT-REF",
-                description=f"Settlement {document.document_no or document.id}",
-                quantity=Decimal("1"),
-                unit_price=document_total,
-                gross_amount=document_total,
-                net_amount=document_total,
-                item_type="service",
-            )
-        ],
+        company_currency=_company_currency(document, company),
+        exchange_rate=amounts.document_exchange_rate,
+        items=[_payment_item_context(document, amounts.document_total)],
         tax_rules=tax_rules,
-        references=_build_references(
-            company=company,
-            party_id=document.party_id,
-            direction=direction,
-            account_lines=[],
-            cash_account=_payment_cash_account(document),
-            open_balance=company_open_balance,
-            custom_references={
-                "settlement_exchange_rate": settlement_exchange_rate,
-                "actual_cash_amount": actual_cash_amount,
-                "eligible_discount_amount": eligible_discount_amount,
-                "use_advance_as_party_balance": not settlement_references,
-                "open_payment_amount": open_payment_amount,
-            },
-        ),
-        settlement_amount=settlement_amount,
+        references=_payment_accounting_references(document, company, spec, settlement_references, amounts),
+        settlement_amount=amounts.settlement_amount,
     )
+
+
+def _payment_build_spec(document: PaymentEntry) -> PaymentBuildSpec | None:
+    """Resolve directional behavior for supported payment types."""
+    payment_type = (document.payment_type or "").lower()
+    if payment_type == "pay":
+        return PaymentBuildSpec(
+            payment_type=payment_type,
+            direction="purchase",
+            event_type="payment_confirmed",
+            amount_field="paid_amount",
+            base_amount_field="base_paid_amount",
+            party_type="supplier",
+        )
+    if payment_type == "receive":
+        return PaymentBuildSpec(
+            payment_type=payment_type,
+            direction="sales",
+            event_type="collection_confirmed",
+            amount_field="received_amount",
+            base_amount_field="base_received_amount",
+            party_type="customer",
+        )
+    return None
+
+
+def _payment_references(document: PaymentEntry) -> list[PaymentReference]:
+    """Load references associated with a payment entry."""
+    return list(database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all())
+
+
+def _payment_settlement_amounts(
+    *,
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    settlement_references: list[PaymentReference],
+    has_any_reference: bool,
+    company: str,
+) -> PaymentSettlementAmounts:
+    """Compute settlement amounts used by the fiscal and accounting engines."""
+    actual_cash_amount = _positive_payment_amount(document, spec)
+    settlement_amount = _payment_settlement_amount(settlement_references, actual_cash_amount)
+    document_total = _payment_document_total(settlement_references, settlement_amount)
+    company_open_balance = _payment_company_open_balance(
+        document=document,
+        spec=spec,
+        references=settlement_references,
+        settlement_amount=settlement_amount,
+        document_total=document_total,
+    )
+    return PaymentSettlementAmounts(
+        actual_cash_amount=actual_cash_amount,
+        settlement_amount=settlement_amount,
+        document_total=document_total,
+        company_open_balance=company_open_balance,
+        document_exchange_rate=_payment_document_exchange_rate(
+            document=document,
+            has_any_reference=has_any_reference,
+            document_total=document_total,
+            company_open_balance=company_open_balance,
+        ),
+        settlement_exchange_rate=_payment_cash_exchange_rate(document, spec, actual_cash_amount),
+        open_payment_amount=compute_payment_unallocated_amount(document),
+        eligible_discount_amount=_payment_eligible_discount(document, company, settlement_references),
+    )
+
+
+def _positive_payment_amount(document: PaymentEntry, spec: PaymentBuildSpec) -> Decimal:
+    """Return the cash amount and reject zero or negative payments."""
+    amount = _decimal_value(getattr(document, spec.amount_field, None))
+    if amount <= 0:
+        raise CalculationContextBuilderError("El monto del pago debe ser mayor que cero.")
+    return amount
+
+
+def _payment_settlement_amount(references: list[PaymentReference], cash_amount: Decimal) -> Decimal:
+    """Resolve how much of the document balance is being settled."""
+    allocated_total = sum((_decimal_value(reference.allocated_amount) for reference in references), Decimal("0"))
+    return allocated_total if allocated_total > 0 else cash_amount
+
+
+def _payment_document_total(references: list[PaymentReference], settlement_amount: Decimal) -> Decimal:
+    """Resolve the referenced document total used as settlement base."""
+    outstanding_total = sum((_payment_reference_balance(reference) for reference in references), Decimal("0"))
+    return outstanding_total if outstanding_total > 0 else settlement_amount
+
+
+def _payment_reference_balance(reference: PaymentReference) -> Decimal:
+    """Return the best available open balance snapshot for a payment reference."""
+    return _decimal_value(reference.outstanding_amount or reference.total_amount or reference.allocated_amount)
+
+
+def _payment_company_open_balance(
+    *,
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    references: list[PaymentReference],
+    settlement_amount: Decimal,
+    document_total: Decimal,
+) -> Decimal:
+    """Resolve the open balance in company currency for settlement calculations."""
+    balance = Decimal("0")
+    if references:
+        balance = _estimated_company_open_balance(references, settlement_amount, document_total)
+    if balance > 0:
+        return balance
+    return _decimal_value(getattr(document, spec.base_amount_field, None))
+
+
+def _payment_document_exchange_rate(
+    *,
+    document: PaymentEntry,
+    has_any_reference: bool,
+    document_total: Decimal,
+    company_open_balance: Decimal,
+) -> Decimal:
+    """Resolve the exchange rate for the referenced balance."""
+    if has_any_reference and document_total > 0 and company_open_balance > 0:
+        return (company_open_balance / document_total).quantize(Decimal("0.000000001"))
+    return _document_exchange_rate(document)
+
+
+def _payment_cash_exchange_rate(
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    actual_cash_amount: Decimal,
+) -> Decimal:
+    """Resolve the exchange rate for the cash leg of the payment."""
+    return _settlement_exchange_rate(
+        document=document,
+        company_amount=_decimal_value(getattr(document, spec.base_amount_field, None)),
+        transaction_amount=actual_cash_amount,
+    )
+
+
+def _payment_eligible_discount(
+    document: PaymentEntry,
+    company: str,
+    references: list[PaymentReference],
+) -> Decimal:
+    """Resolve manual or payment-term discount available to a settlement."""
+    manual_discount_total = sum((_decimal_value(ref.discount_amount) for ref in references), Decimal("0"))
+    if manual_discount_total > 0:
+        return manual_discount_total
+    return _eligible_discount_amount(
+        company=company,
+        party_id=document.party_id,
+        payment_date=document.posting_date,
+        references=references,
+    )
+
+
+def _payment_tax_rules(
+    *,
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    company: str,
+    transaction_currency: str,
+) -> list[TaxRuleContext]:
+    """Load persisted payment tax rules or current rules for the payment event."""
+    tax_rules = build_tax_rule_contexts_from_snapshot(
+        document_type="payment_entry",
+        document_id=document.id,
+        recognition_event=spec.event_type,
+    )
+    if tax_rules:
+        return tax_rules
+    return build_tax_rule_contexts(
+        company=company,
+        applies_to=spec.direction,
+        currency=transaction_currency,
+        at_date=document.posting_date,
+        recognition_event=spec.event_type,
+    )
+
+
+def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
+    """Build the synthetic settlement item consumed by the fiscal engine."""
+    return ItemContext(
+        line_id="PAYMENT-REF",
+        item_id="PAYMENT-REF",
+        description=f"Settlement {document.document_no or document.id}",
+        quantity=Decimal("1"),
+        unit_price=document_total,
+        gross_amount=document_total,
+        net_amount=document_total,
+        item_type="service",
+    )
+
+
+def _payment_accounting_references(
+    document: PaymentEntry,
+    company: str,
+    spec: PaymentBuildSpec,
+    settlement_references: list[PaymentReference],
+    amounts: PaymentSettlementAmounts,
+) -> AccountingReferences:
+    """Build accounting references for the payment mapper."""
+    return _build_references(
+        company=company,
+        party_id=document.party_id,
+        direction=spec.direction,
+        account_lines=[],
+        cash_account=_payment_cash_account(document),
+        open_balance=amounts.company_open_balance,
+        custom_references=_payment_custom_references(settlement_references, amounts),
+    )
+
+
+def _payment_custom_references(
+    settlement_references: list[PaymentReference],
+    amounts: PaymentSettlementAmounts,
+) -> dict[str, Any]:
+    """Build custom reference values used by settlement posting."""
+    return {
+        "settlement_exchange_rate": amounts.settlement_exchange_rate,
+        "actual_cash_amount": amounts.actual_cash_amount,
+        "eligible_discount_amount": amounts.eligible_discount_amount,
+        "use_advance_as_party_balance": not settlement_references,
+        "open_payment_amount": amounts.open_payment_amount,
+    }
 
 
 def _document_tax_rules(
@@ -389,7 +567,6 @@ def _tax_rules_from_template(
     event_type: str,
 ) -> list[TaxRuleContext]:
     """Convert the legacy tax template result into rules consumable by the new engine."""
-    rules: list[TaxRuleContext] = []
     template_items = (
         database.session.execute(
             select(TaxTemplateItem).filter_by(tax_template_id=document.tax_template_id).order_by(TaxTemplateItem.sequence)
@@ -397,35 +574,91 @@ def _tax_rules_from_template(
         .scalars()
         .all()
     )
+    rules: list[TaxRuleContext] = []
     for index, tax_line in enumerate(tax_result.lines, start=1):
         template_item = template_items[index - 1] if index - 1 < len(template_items) else None
-        tax = database.session.get(Tax, tax_line.tax_id)
-        if not tax:
-            continue
-        rule_type = "charge" if tax_line.is_charge else ("withholding" if tax_line.behavior == "deductive" else "tax")
-        accounting_treatment = "capitalizable_inventory_cost" if tax_line.is_capitalizable else "separate_tax_account"
-        base_mode = "accumulated" if template_item and template_item.calculation_base == "previous_total" else "goods"
-        rules.append(
-            TaxRuleContext(
-                rule_id=str(tax_line.tax_id),
-                name=tax_line.name,
-                concept=tax_line.name.lower().replace(" ", "_"),
-                tax_type=rule_type,
-                calculation_method=tax.tax_type if tax.tax_type in {"percentage", "fixed"} else "percentage",
-                rate=_decimal_value(tax.rate),
-                amount=tax_line.amount if tax.tax_type == "fixed" else Decimal("0"),
-                base_mode=base_mode,
-                include_concepts=["goods"] if base_mode == "accumulated" else [],
-                order=index,
-                accounting_treatment=accounting_treatment,
-                recognition_event=event_type,
-                affects_inventory=bool(tax_line.is_capitalizable),
-                affects_document_total=not tax_line.is_inclusive,
-                included_in_price=bool(tax_line.is_inclusive),
-                account_id=tax_line.account_id,
-            )
-        )
+        if rule := _tax_rule_from_template_line(tax_line, template_item, index, event_type):
+            rules.append(rule)
     return rules
+
+
+def _tax_rule_from_template_line(
+    tax_line: Any,
+    template_item: TaxTemplateItem | None,
+    order: int,
+    event_type: str,
+) -> TaxRuleContext | None:
+    """Convert one legacy tax line into a tax rule context."""
+    tax = database.session.get(Tax, tax_line.tax_id)
+    if not tax:
+        return None
+    calculation_method = _template_tax_calculation_method(tax)
+    base_mode = _template_tax_base_mode(template_item)
+    return TaxRuleContext(
+        rule_id=str(tax_line.tax_id),
+        name=tax_line.name,
+        concept=tax_line.name.lower().replace(" ", "_"),
+        tax_type=_template_tax_rule_type(tax_line),
+        calculation_method=calculation_method,
+        rate=_decimal_value(tax.rate),
+        amount=tax_line.amount if calculation_method == "fixed" else Decimal("0"),
+        base_mode=base_mode,
+        include_concepts=_template_tax_include_concepts(base_mode),
+        order=order,
+        accounting_treatment=_template_tax_accounting_treatment(tax_line),
+        recognition_event=event_type,
+        affects_inventory=bool(tax_line.is_capitalizable),
+        affects_document_total=not tax_line.is_inclusive,
+        included_in_price=bool(tax_line.is_inclusive),
+        account_id=tax_line.account_id,
+    )
+
+
+def _template_tax_rule_type(tax_line: Any) -> str:
+    """Resolve the fiscal semantic type for a legacy tax line."""
+    match (bool(tax_line.is_charge), tax_line.behavior):
+        case (True, _):
+            return "charge"
+        case (False, "deductive"):
+            return "withholding"
+        case _:
+            return "tax"
+
+
+def _template_tax_accounting_treatment(tax_line: Any) -> str:
+    """Resolve the accounting treatment for a legacy tax line."""
+    match bool(tax_line.is_capitalizable):
+        case True:
+            return "capitalizable_inventory_cost"
+        case False:
+            return "separate_tax_account"
+
+
+def _template_tax_base_mode(template_item: TaxTemplateItem | None) -> str:
+    """Resolve which fiscal base mode should be used by the engine."""
+    match getattr(template_item, "calculation_base", None):
+        case "previous_total":
+            return "accumulated"
+        case _:
+            return "goods"
+
+
+def _template_tax_include_concepts(base_mode: str) -> list[str]:
+    """Resolve dependent concepts for accumulated legacy taxes."""
+    match base_mode:
+        case "accumulated":
+            return ["goods"]
+        case _:
+            return []
+
+
+def _template_tax_calculation_method(tax: Tax) -> str:
+    """Normalize legacy tax calculation methods to engine-supported values."""
+    match tax.tax_type:
+        case "percentage" | "fixed":
+            return str(tax.tax_type)
+        case _:
+            return "percentage"
 
 
 def _build_references(
