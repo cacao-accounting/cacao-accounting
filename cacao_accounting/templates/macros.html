@@ -423,7 +423,7 @@
 {%- set effective_docstatus = docstatus if docstatus is not none else (document.docstatus|default(inferred_docstatus)) -%}
 {%- set api_url = url_for('api.api_document_flow_tree') ~ '?document_type=' ~ document_type ~ '&document_id=' ~ document.id -%}
 <div class="ca-document-flow mt-3"
-     x-data="documentFlowTree({ apiUrl: {{ api_url | tojson }}, docstatus: {{ effective_docstatus | int }}, createActions: {{ create_actions_json | safe }} })">
+     x-data='documentFlowTree({ apiUrl: {{ api_url | tojson }}, docstatus: {{ effective_docstatus | int }}, createActions: {{ create_actions_json | safe }} })'>
   <div class="ca-document-flow__header" @click="toggle()">
     <div class="d-flex align-items-start gap-2">
       <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
