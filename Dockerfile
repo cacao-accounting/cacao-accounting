@@ -25,11 +25,12 @@ RUN microdnf install -y --nodocs --best --refresh python3.12 python3.12-cryptogr
     && rm -rf /root/.cache/pip && rm -rf /tmp && microdnf remove -y --best python3.12-pip \
     && microdnf clean all
 
-COPY . /app
+COPY ./cacao_accounting /app/cacao_accounting
+COPY docker-entry-point.sh /app/docker-entry-point.sh
 
 WORKDIR /app
 
-RUN chmod +x docker-entry-point.sh
+RUN chmod +x /app/docker-entry-point.sh
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
