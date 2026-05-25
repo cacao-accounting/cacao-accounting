@@ -26,7 +26,8 @@
           </template>
         </select>
       </label>
-      <button class="btn btn-primary dashboard-refresh" type="button" @click="fetchData()" :disabled="loading || !filters.company">
+      <button class="btn btn-primary dashboard-refresh" type="button" @click="fetchData()"
+        :disabled="loading || !filters.company">
         <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
         <span>{{ _('Actualizar') }}</span>
       </button>
@@ -46,13 +47,15 @@
 
   <section x-show="filters.company" x-cloak class="dashboard-grid">
     <template x-for="sectionKey in sectionOrder" :key="sectionKey">
-      <article class="dashboard-section" :class="`dashboard-section--${sectionKey}`" x-show="section(sectionKey).visible">
+      <article class="dashboard-section" :class="`dashboard-section--${sectionKey}`"
+        x-show="section(sectionKey).visible">
         <header class="dashboard-section__header">
           <div>
             <h2 x-text="section(sectionKey).title"></h2>
             <p x-text="section(sectionKey).subtitle"></p>
           </div>
-          <span class="dashboard-section__badge" x-show="section(sectionKey).badge" x-text="section(sectionKey).badge"></span>
+          <span class="dashboard-section__badge" x-show="section(sectionKey).badge"
+            x-text="section(sectionKey).badge"></span>
         </header>
 
         <div class="dashboard-kpi-grid">
@@ -73,6 +76,7 @@
           <div class="dashboard-widget">
             <div class="dashboard-widget__title" x-text="primaryTableTitle(sectionKey)"></div>
             <table class="dashboard-table">
+              <caption class="sr-only">{{ _('Tabla principal de la sección del dashboard') }}</caption>
               <thead>
                 <tr>
                   <template x-for="heading in tableHeadings(sectionKey)" :key="heading">
@@ -89,7 +93,8 @@
                   </tr>
                 </template>
                 <tr x-show="primaryRows(sectionKey).length === 0">
-                  <td :colspan="tableHeadings(sectionKey).length" class="dashboard-table__empty" x-text="section(sectionKey).empty_state"></td>
+                  <td :colspan="tableHeadings(sectionKey).length" class="dashboard-table__empty"
+                    x-text="section(sectionKey).empty_state"></td>
                 </tr>
               </tbody>
             </table>
@@ -117,7 +122,7 @@
         company: '{{ entidades[0].id if entidades else "" }}',
         period: ''
       },
-      periods: {{ dashboard_periods|tojson|safe }},
+      periods: {{ dashboard_periods | tojson | safe }},
       sectionOrder: ['accounting', 'banks', 'purchases', 'inventory', 'sales'],
       loading: false,
       error: '',
@@ -143,7 +148,7 @@
         return this.companies().find(company => company.id === this.filters.company);
       },
       companies() {
-        return {{ dashboard_entities|tojson|safe }};
+        return {{ dashboard_entities | tojson | safe }};
       },
       fetchData() {
         if (!this.filters.company) {
@@ -308,16 +313,20 @@
       monthName(month) {
         return ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][Number(month) - 1] || '';
       }
-    }
+    };
   }
 </script>
 
 <style>
-  [x-cloak] { display: none !important; }
+  [x-cloak] {
+    display: none !important;
+  }
+
   .dashboard-shell {
     color: #172033;
     padding: 1.25rem;
   }
+
   .dashboard-toolbar {
     align-items: end;
     display: flex;
@@ -325,15 +334,18 @@
     justify-content: space-between;
     margin-bottom: 1rem;
   }
+
   .dashboard-title {
     font-size: 1.6rem;
     font-weight: 700;
     margin: 0;
   }
+
   .dashboard-subtitle {
     color: #64748b;
     margin: .2rem 0 0;
   }
+
   .dashboard-filters {
     align-items: end;
     display: grid;
@@ -341,6 +353,7 @@
     grid-template-columns: minmax(13rem, 1fr) minmax(13rem, 1fr) auto;
     min-width: min(100%, 42rem);
   }
+
   .dashboard-field span {
     color: #64748b;
     display: block;
@@ -348,6 +361,7 @@
     font-weight: 700;
     margin-bottom: .25rem;
   }
+
   .dashboard-refresh {
     align-items: center;
     display: inline-flex;
@@ -355,6 +369,7 @@
     justify-content: center;
     min-height: 2.4rem;
   }
+
   .dashboard-alert,
   .dashboard-empty,
   .dashboard-section {
@@ -362,6 +377,7 @@
     border: 1px solid #d8dee8;
     border-radius: 8px;
   }
+
   .dashboard-alert {
     align-items: center;
     color: #991b1b;
@@ -370,46 +386,55 @@
     margin-bottom: 1rem;
     padding: .85rem 1rem;
   }
+
   .dashboard-empty {
     color: #64748b;
     padding: 4rem 1rem;
     text-align: center;
   }
+
   .dashboard-empty i {
     font-size: 3rem;
   }
+
   .dashboard-empty h2 {
     color: #172033;
     font-size: 1.2rem;
     margin: .75rem 0 .25rem;
   }
+
   .dashboard-grid {
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .dashboard-section {
     display: flex;
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
   }
+
   .dashboard-section__header {
     align-items: start;
     display: flex;
     gap: 1rem;
     justify-content: space-between;
   }
+
   .dashboard-section__header h2 {
     font-size: 1rem;
     font-weight: 700;
     margin: 0;
   }
+
   .dashboard-section__header p {
     color: #64748b;
     font-size: .84rem;
     margin: .25rem 0 0;
   }
+
   .dashboard-section__badge {
     background: #e8f2ff;
     border-radius: 999px;
@@ -419,11 +444,13 @@
     font-weight: 700;
     padding: .25rem .55rem;
   }
+
   .dashboard-kpi-grid {
     display: grid;
     gap: .65rem;
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
   .dashboard-kpi {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -431,31 +458,37 @@
     min-height: 4.7rem;
     padding: .7rem;
   }
+
   .dashboard-kpi span {
     color: #64748b;
     display: block;
     font-size: .75rem;
     font-weight: 700;
   }
+
   .dashboard-kpi strong {
     display: block;
     font-size: 1.05rem;
     margin-top: .45rem;
     overflow-wrap: anywhere;
   }
+
   .dashboard-widget-grid {
     display: grid;
     gap: .85rem;
     grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
   }
+
   .dashboard-widget-grid--full {
     grid-template-columns: 1fr;
   }
+
   .dashboard-widget {
     min-height: 15rem;
     overflow: hidden;
     position: relative;
   }
+
   .dashboard-widget__title {
     color: #475569;
     font-size: .78rem;
@@ -463,55 +496,67 @@
     margin-bottom: .45rem;
     text-transform: uppercase;
   }
+
   .dashboard-table {
     border-collapse: collapse;
     font-size: .82rem;
     width: 100%;
   }
+
   .dashboard-table th,
   .dashboard-table td {
     border-bottom: 1px solid #e2e8f0;
     padding: .45rem .3rem;
     vertical-align: top;
   }
+
   .dashboard-table th {
     color: #64748b;
     font-size: .72rem;
     text-transform: uppercase;
   }
+
   .dashboard-table__empty {
     color: #64748b;
     padding: 2rem .5rem !important;
     text-align: center;
   }
+
   .dashboard-actions {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
     margin-top: auto;
   }
+
   @media (max-width: 992px) {
+
     .dashboard-toolbar,
     .dashboard-section__header {
       align-items: stretch;
       flex-direction: column;
     }
+
     .dashboard-filters,
     .dashboard-grid,
     .dashboard-widget-grid {
       grid-template-columns: 1fr;
     }
+
     .dashboard-kpi-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
+
   @media (max-width: 560px) {
     .dashboard-shell {
       padding: .8rem;
     }
+
     .dashboard-kpi-grid {
       grid-template-columns: 1fr;
     }
   }
+
 </style>
 {% endblock %}

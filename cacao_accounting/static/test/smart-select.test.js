@@ -9,20 +9,20 @@ function loadSmartSelect(overrides = {}) {
   const fetchImpl = overrides.fetch || (() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) }));
   let smartSelectFactory = null;
 
-  global.document = {
+  globalThis.document = {
     addEventListener: (event, callback) => {
       listeners[event] = callback;
     },
     querySelector: (selector) => elements[selector] || null,
   };
 
-  global.Alpine = {
+  globalThis.Alpine = {
     data: (name, factory) => {
       if (name === 'smartSelect') smartSelectFactory = factory;
     },
   };
 
-  global.fetch = fetchImpl;
+  globalThis.fetch = fetchImpl;
 
   const modulePath = require.resolve('../js/smart-select.js');
   delete require.cache[modulePath];
@@ -40,9 +40,9 @@ async function flushPromises() {
 
 describe('smart-select', function () {
   afterEach(function () {
-    delete global.document;
-    delete global.Alpine;
-    delete global.fetch;
+    delete globalThis.document;
+    delete globalThis.Alpine;
+    delete globalThis.fetch;
   });
 
   it('does not preload on focus when preloadOnFocus is disabled', async function () {

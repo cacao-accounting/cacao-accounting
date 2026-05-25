@@ -111,7 +111,7 @@
       if (icon) icon.className = (t === 'dark') ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
     syncIcon();
-    window.caToggleTheme = function () {
+    globalThis.caToggleTheme = function () {
       var current = document.documentElement.getAttribute('data-theme') || 'light';
       var next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);

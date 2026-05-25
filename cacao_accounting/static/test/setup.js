@@ -26,7 +26,7 @@ function createEnvironment(domExtras) {
 
   // Mock Alpine.data so the IIFE registers the factory with us
   let capturedFactory = null;
-  window.Alpine = {
+  globalThis.Alpine = {
     data: function (name, factory) {
       if (name === 'smartSelect') {
         capturedFactory = factory;

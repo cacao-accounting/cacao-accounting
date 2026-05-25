@@ -12,6 +12,8 @@ from cacao_accounting.accounting_engine.common.context import (
     FiscalLine,
     LandedCostResult,
     CostAllocation,
+    SettlementLine,
+    SettlementResult,
     AuditStep,
 )
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
@@ -192,6 +194,41 @@ class BusinessEventOrchestrator:
                 capitalizable_charges_total=-Decimal(lc_data["capitalizable_charges_total"]),
                 inventory_value_total=-Decimal(lc_data["inventory_value_total"]),
                 allocations=rev_allocations,
+            )
+
+        if "settlement" in snapshot["results"] and snapshot["results"]["settlement"]:
+            settlement_data = snapshot["results"]["settlement"]
+            rev_settlement_lines = [
+                SettlementLine(
+                    line_id=line_data["line_id"],
+                    concept=line_data["concept"],
+                    type=line_data["type"],
+                    base_amount=-Decimal(line_data["base_amount"]),
+                    rate=Decimal(line_data["rate"]),
+                    amount=-Decimal(line_data["amount"]),
+                )
+                for line_data in settlement_data["settlement_lines"]
+            ]
+            reversal_results["settlement"] = SettlementResult(
+                gross_settlement_amount=-Decimal(settlement_data["gross_settlement_amount"]),
+                cash_amount=-Decimal(settlement_data["cash_amount"]),
+                withholding_amount=-Decimal(settlement_data["withholding_amount"]),
+                payment_discount_amount=-Decimal(settlement_data["payment_discount_amount"]),
+                exchange_difference=-Decimal(settlement_data["exchange_difference"]),
+                unrealized_exchange_difference=-Decimal(settlement_data["unrealized_exchange_difference"]),
+                remaining_balance=-Decimal(settlement_data["remaining_balance"]),
+                settlement_lines=rev_settlement_lines,
+                audit_trail=[
+                    AuditStep(
+                        0,
+                        "REVERSAL",
+                        "Snapshot Reversal",
+                        Decimal(0),
+                        Decimal(0),
+                        Decimal(0),
+                        "Settlement reversal created by negating original values.",
+                    )
+                ],
             )
 
         return reversal_results
