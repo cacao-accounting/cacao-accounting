@@ -105,37 +105,48 @@ class Permisos:
         self.modulo = modulo
         self.usuario = usuario
         self.libro = libro
-        self.__init_valido: bool = bool(self.valida_modulo(modulo) and usuario)
+        self.__init_valido = bool(self.valida_modulo(modulo) and usuario)
+        self.usuario_model = database.session.get(User, usuario) if usuario else None
+        self.roles: list[str] = []
+        self.permisos_usuario: list[RolesAccess] = []
+        self.administrador = False
+        self.autorizado = False
+        self._inicializar_permisos()
 
-        self.usuario_model: User | None = None
-        if usuario:
-            self.usuario_model = database.session.get(User, usuario)
-
+    def _inicializar_permisos(self) -> None:
+        """Inicializa permisos y roles según el estado del constructor."""
         if self.__init_valido:
-            self.administrador: bool = self.valida_usuario_tiene_rol_administrativo()
-            self.roles: list[str] = self.obtener_roles_de_usuario()
-            self.permisos_usuario: list[RolesAccess] = self.obtiene_lista_de_permisos()
-        else:
-            self.administrador = False
-            self.roles = []
-            self.permisos_usuario = []
+            self.administrador = self.valida_usuario_tiene_rol_administrativo()
+            self.roles = self.obtener_roles_de_usuario()
+            self.permisos_usuario = self.obtiene_lista_de_permisos()
 
-        if self.administrador:
-            self.autorizado = True
-            for permiso_nombre in self.PERMISSION_FIELDS:
-                setattr(self, permiso_nombre, True)
-        elif self.__init_valido:
-            for permiso_nombre in self.PERMISSION_FIELDS:
-                tiene_permiso = self._tiene_permiso(self.PERMISSION_FIELDS[permiso_nombre])
-                if self.libro and tiene_permiso:
-                    accion = self._accion_granular(permiso_nombre)
-                    tiene_permiso = self.tiene_acceso_libro(self.libro, accion)
-                setattr(self, permiso_nombre, tiene_permiso)
-            self.autorizado = self.access
-        else:
-            self.autorizado = False
-            for permiso_nombre in self.PERMISSION_FIELDS:
-                setattr(self, permiso_nombre, False)
+        match (self.__init_valido, self.administrador):
+            case (False, _):
+                self._aplicar_todos_los_permisos(False)
+            case (True, True):
+                self._otorgar_todos_los_permisos()
+            case (True, False):
+                self._calcular_permisos_modulo()
+
+    def _aplicar_todos_los_permisos(self, value: bool) -> None:
+        """Marca todos los permisos del usuario con el valor dado."""
+        for permiso_nombre in self.PERMISSION_FIELDS:
+            setattr(self, permiso_nombre, value)
+        self.autorizado = value
+
+    def _otorgar_todos_los_permisos(self) -> None:
+        """Otorga todos los permisos cuando el usuario es administrador."""
+        self._aplicar_todos_los_permisos(True)
+
+    def _calcular_permisos_modulo(self) -> None:
+        """Calcula los permisos de acceso basados en roles y libro."""
+        for permiso_nombre, permission_field in self.PERMISSION_FIELDS.items():
+            tiene_permiso = self._tiene_permiso(permission_field)
+            if self.libro and tiene_permiso:
+                accion = self._accion_granular(permiso_nombre)
+                tiene_permiso = self.tiene_acceso_libro(self.libro, accion)
+            setattr(self, permiso_nombre, tiene_permiso)
+        self.autorizado = self.access
 
     def valida_modulo(self, modulo: str | None) -> bool:
         """Verifica si un modulo se encuentra activo por su id."""

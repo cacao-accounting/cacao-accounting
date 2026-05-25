@@ -5,7 +5,7 @@
   let uidCounter = 0;
 
   function createUid() {
-    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    if (globalThis.crypto && globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
     uidCounter += 1;
     return `transaction-line-${Date.now()}-${uidCounter}`;
   }
@@ -524,14 +524,14 @@
 
         queueTaxPreview() {
           if (!this.supportsFiscalPreview()) return;
-          const hasWindowTimers = typeof window !== 'undefined' &&
-            typeof window.setTimeout === 'function' &&
-            typeof window.clearTimeout === 'function';
+          const hasWindowTimers = typeof globalThis !== 'undefined' &&
+            typeof globalThis.setTimeout === 'function' &&
+            typeof globalThis.clearTimeout === 'function';
           if (!hasWindowTimers) return;
           if (this.taxPreviewDebounceId) {
-            window.clearTimeout(this.taxPreviewDebounceId);
+            globalThis.clearTimeout(this.taxPreviewDebounceId);
           }
-          this.taxPreviewDebounceId = window.setTimeout(() => {
+          this.taxPreviewDebounceId = globalThis.setTimeout(() => {
             this.fetchTaxPreview();
           }, 250);
         },
@@ -988,12 +988,12 @@
             [buffer],
             { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
           );
-          const url = window.URL.createObjectURL(blob);
+          const url = globalThis.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
           link.download = `${this.importModal.doctype}_template.xlsx`;
           link.click();
-          window.URL.revokeObjectURL(url);
+          globalThis.URL.revokeObjectURL(url);
         },
 
         async handleFileUpload(event) {

@@ -264,8 +264,8 @@
   }
 
   // Exposición global para tests y uso sin Alpine.
-  if (typeof window !== 'undefined') {
-    window.documentFlowTree = documentFlowTree;
+  if (typeof globalThis !== 'undefined') {
+    globalThis.documentFlowTree = documentFlowTree;
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { documentFlowTree, renderTree };

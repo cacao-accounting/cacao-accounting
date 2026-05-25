@@ -5,6 +5,15 @@
 
 from typing import Any, Dict
 
+LABEL_ITEM = "Artículo"
+LABEL_DESCRIPTION = "Descripción"
+LABEL_REQUIRED_DATE = "Fecha requerida"
+LABEL_COST_CENTER = "Centro de costo"
+LABEL_DELIVERY_DATE = "Fecha de entrega"
+ALIASES_ITEM_CODE = ["producto", "item", "codigo", "código"]
+ALIASES_DESCRIPTION = ["nombre"]
+ALIASES_REQUIRED_DATE = ["fecha"]
+
 
 class LineImportSchemaRegistry:
     """Registry for document line import schemas."""
@@ -16,12 +25,18 @@ class LineImportSchemaRegistry:
             "columns": [
                 {
                     "key": "item_code",
-                    "label": "Artículo",
+                    "label": LABEL_ITEM,
                     "required": True,
                     "type": "string",
-                    "aliases": ["producto", "item", "codigo", "código"],
+                    "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": "Descripción", "required": False, "type": "string", "aliases": ["nombre"]},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal", "aliases": ["cant", "qty"]},
                 {
                     "key": "uom",
@@ -30,8 +45,14 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ["uom", "unidad de medida"],
                 },
-                {"key": "required_date", "label": "Fecha requerida", "required": False, "type": "date", "aliases": ["fecha"]},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {
+                    "key": "required_date",
+                    "label": LABEL_REQUIRED_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_REQUIRED_DATE,
+                },
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
             ],
         },
@@ -41,12 +62,12 @@ class LineImportSchemaRegistry:
             "columns": [
                 {
                     "key": "item_code",
-                    "label": "Artículo",
+                    "label": LABEL_ITEM,
                     "required": True,
                     "type": "string",
-                    "aliases": ["producto", "item", "codigo", "código"],
+                    "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {
@@ -56,9 +77,9 @@ class LineImportSchemaRegistry:
                     "type": "decimal",
                     "aliases": ["costo", "precio unitario"],
                 },
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
-                {"key": "required_date", "label": "Fecha requerida", "required": False, "type": "date"},
+                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
             ],
         },
         "purchase_quotation": {
@@ -67,17 +88,17 @@ class LineImportSchemaRegistry:
             "columns": [
                 {
                     "key": "item_code",
-                    "label": "Artículo",
+                    "label": LABEL_ITEM,
                     "required": True,
                     "type": "string",
-                    "aliases": ["producto", "item", "codigo", "código"],
+                    "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio estimado", "required": False, "type": "decimal"},
-                {"key": "required_date", "label": "Fecha requerida", "required": False, "type": "date"},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
             ],
         },
@@ -87,17 +108,17 @@ class LineImportSchemaRegistry:
             "columns": [
                 {
                     "key": "item_code",
-                    "label": "Artículo",
+                    "label": LABEL_ITEM,
                     "required": True,
                     "type": "string",
-                    "aliases": ["producto", "item", "codigo", "código"],
+                    "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "required_date", "label": "Fecha requerida", "required": False, "type": "date"},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
             ],
         },
@@ -105,13 +126,13 @@ class LineImportSchemaRegistry:
             "doctype": "purchase_receipt",
             "label": "Recibo de compra",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
                 {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
             ],
         },
@@ -119,13 +140,13 @@ class LineImportSchemaRegistry:
             "doctype": "sales_request",
             "label": "Pedido de venta",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
-                {"key": "delivery_date", "label": "Fecha de entrega", "required": False, "type": "date"},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
             ],
         },
@@ -133,8 +154,8 @@ class LineImportSchemaRegistry:
             "doctype": "sales_quotation",
             "label": "Cotización de venta",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
@@ -145,26 +166,26 @@ class LineImportSchemaRegistry:
             "doctype": "sales_order",
             "label": "Orden de venta",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
                 {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "delivery_date", "label": "Fecha de entrega", "required": False, "type": "date"},
+                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
             ],
         },
         "delivery_note": {
             "doctype": "delivery_note",
             "label": "Nota de entrega",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
                 {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "delivery_date", "label": "Fecha de entrega", "required": False, "type": "date"},
+                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
             ],
         },
         "journal_entry": {
@@ -178,10 +199,10 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ["cuenta contable", "codigo cuenta"],
                 },
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "debit", "label": "Débito", "required": False, "type": "decimal", "aliases": ["debe"]},
                 {"key": "credit", "label": "Crédito", "required": False, "type": "decimal", "aliases": ["haber"]},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
                 {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
                 {"key": "reference", "label": "Referencia", "required": False, "type": "string"},
             ],
@@ -190,20 +211,20 @@ class LineImportSchemaRegistry:
             "doctype": "purchase_invoice",
             "label": "Factura de compra",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "cost_center", "label": "Centro de costo", "required": False, "type": "string"},
+                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
             ],
         },
         "sales_invoice": {
             "doctype": "sales_invoice",
             "label": "Factura de venta",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
@@ -214,7 +235,7 @@ class LineImportSchemaRegistry:
             "label": "Transacción bancaria",
             "columns": [
                 {"key": "date", "label": "Fecha", "required": True, "type": "date"},
-                {"key": "description", "label": "Descripción", "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": True, "type": "string"},
                 {"key": "debit", "label": "Débito", "required": False, "type": "decimal"},
                 {"key": "credit", "label": "Crédito", "required": False, "type": "decimal"},
                 {"key": "reference", "label": "Referencia", "required": False, "type": "string"},
@@ -224,8 +245,8 @@ class LineImportSchemaRegistry:
             "doctype": "stock_entry",
             "label": "Movimiento de inventario",
             "columns": [
-                {"key": "item_code", "label": "Artículo", "required": True, "type": "string"},
-                {"key": "description", "label": "Descripción", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
+                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
                 {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
                 {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
                 {"key": "source_warehouse", "label": "Bodega origen", "required": False, "type": "string"},

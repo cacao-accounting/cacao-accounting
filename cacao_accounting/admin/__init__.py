@@ -75,6 +75,7 @@ CUENTAS_PREDETERMINADAS = "admin.cuentas_predeterminadas"
 USUARIO_NO_ENCONTRADO = "Usuario no encontrado."
 LISTA_USUARIOS = "admin.lista_usuarios"
 LISTA_ROLES = "admin.lista_roles"
+ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
 
 
@@ -297,7 +298,7 @@ def lista_grupos_terceros():
             flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
         else:
             flash(_("Tipo de tercero creado correctamente."), "success")
-            return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
+            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
     query = database.select(PartyGroup)
     if group_type:
         query = query.filter(PartyGroup.group_type == group_type)
@@ -326,7 +327,7 @@ def editar_grupo_tercero(group_id: str):
             flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
         else:
             flash(_("Tipo de tercero actualizado correctamente."), "success")
-            return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
+            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
     groups = (
         database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
     )
@@ -345,7 +346,7 @@ def alternar_grupo_tercero(group_id: str):
     group.is_active = not group.is_active
     database.session.commit()
     flash(_("Estado del tipo de tercero actualizado correctamente."), "success")
-    return redirect(url_for("admin.lista_grupos_terceros", group_type=group.group_type))
+    return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
 
 
 @admin.route("/settings/tax-rules/<rule_id>/edit", methods=["GET", "POST"])
@@ -588,6 +589,44 @@ def _obtener_modulos_disponibles() -> list[Modules]:
     return list(database.session.execute(database.select(Modules).order_by(Modules.module)).scalars().all())
 
 
+def _crear_usuario_desde_form(form: UserCreateForm) -> User:
+    """Construye una instancia de usuario a partir del formulario."""
+    return User(
+        user=form.usuario.data,
+        name=form.name.data or None,
+        name2=form.name2.data or None,
+        last_name=form.last_name.data or None,
+        last_name2=form.last_name2.data or None,
+        e_mail=form.e_mail.data or None,
+        phone=form.phone.data or None,
+        classification=form.classification.data or None,
+        active=bool(form.active.data),
+        password=helpers.proteger_passwd(form.password.data),
+    )
+
+
+def _validar_creacion_usuario(form: UserCreateForm) -> bool:
+    """Valida la creación de un usuario nuevo y registra errores en el formulario."""
+    existen_usuario = database.session.execute(database.select(User).filter_by(user=form.usuario.data)).scalar_one_or_none()
+    existe_email = None
+    if form.e_mail.data:
+        existe_email = database.session.execute(database.select(User).filter_by(e_mail=form.e_mail.data)).scalar_one_or_none()
+
+    valid_password = helpers.validar_clave_segura(form.password.data)
+    match (existen_usuario, existe_email, valid_password):
+        case (usuario, _, _) if usuario is not None:
+            form.usuario.errors.append("El nombre de usuario ya está en uso.")
+        case (_, correo, _) if correo is not None:
+            form.e_mail.errors.append("El correo electrónico ya está en uso.")
+        case (_, _, False):
+            form.password.errors.append(
+                "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
+            )
+        case _:
+            return True
+    return False
+
+
 @admin.route("/settings/users", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -634,41 +673,12 @@ def crear_usuario():
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserCreateForm()
-    if form.validate_on_submit():
-        existen_usuario = database.session.execute(
-            database.select(User).filter_by(user=form.usuario.data)
-        ).scalar_one_or_none()
-        existe_email = None
-        if form.e_mail.data:
-            existe_email = database.session.execute(
-                database.select(User).filter_by(e_mail=form.e_mail.data)
-            ).scalar_one_or_none()
-
-        if existen_usuario is not None:
-            form.usuario.errors.append("El nombre de usuario ya está en uso.")
-        elif existe_email is not None:
-            form.e_mail.errors.append("El correo electrónico ya está en uso.")
-        elif not helpers.validar_clave_segura(form.password.data):
-            form.password.errors.append(
-                "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
-            )
-        else:
-            nuevo_usuario = User(
-                user=form.usuario.data,
-                name=form.name.data or None,
-                name2=form.name2.data or None,
-                last_name=form.last_name.data or None,
-                last_name2=form.last_name2.data or None,
-                e_mail=form.e_mail.data or None,
-                phone=form.phone.data or None,
-                classification=form.classification.data or None,
-                active=bool(form.active.data),
-                password=helpers.proteger_passwd(form.password.data),
-            )
-            database.session.add(nuevo_usuario)
-            database.session.commit()
-            flash("Usuario creado correctamente.", "success")
-            return redirect(url_for(LISTA_USUARIOS))
+    if form.validate_on_submit() and _validar_creacion_usuario(form):
+        nuevo_usuario = _crear_usuario_desde_form(form)
+        database.session.add(nuevo_usuario)
+        database.session.commit()
+        flash("Usuario creado correctamente.", "success")
+        return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",

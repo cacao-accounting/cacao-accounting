@@ -7,13 +7,13 @@ function loadTransactionForm() {
   const listeners = {};
   let transactionFormFactory = null;
 
-  global.window = {
+  globalThis.window = {
     crypto: {
       randomUUID: () => 'uuid-test',
     },
   };
 
-  global.document = {
+  globalThis.document = {
     addEventListener: (event, callback) => {
       listeners[event] = callback;
     },
@@ -21,7 +21,7 @@ function loadTransactionForm() {
     getElementById: () => null,
   };
 
-  global.bootstrap = {
+  globalThis.bootstrap = {
     Modal: {
       getOrCreateInstance: () => ({
         show() {},
@@ -30,7 +30,7 @@ function loadTransactionForm() {
     },
   };
 
-  global.Alpine = {
+  globalThis.Alpine = {
     data: (name, factory) => {
       if (name === 'transactionForm') transactionFormFactory = factory;
     },
@@ -48,11 +48,11 @@ function loadTransactionForm() {
 
 describe('transaction-form', function () {
   afterEach(function () {
-    delete global.window;
-    delete global.document;
-    delete global.bootstrap;
-    delete global.Alpine;
-    delete global.fetch;
+    delete globalThis.window;
+    delete globalThis.document;
+    delete globalThis.bootstrap;
+    delete globalThis.Alpine;
+    delete globalThis.fetch;
   });
 
   it('uses required default columns when preferences are empty', function () {
@@ -314,7 +314,7 @@ describe('transaction-form', function () {
   it('skips fiscal preview calls for document types outside the fiscal matrix', async function () {
     const create = loadTransactionForm();
     let called = false;
-    global.fetch = async () => {
+    globalThis.fetch = async () => {
       called = true;
       throw new Error('unexpected preview call');
     };

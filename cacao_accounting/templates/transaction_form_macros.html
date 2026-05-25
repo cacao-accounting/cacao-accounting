@@ -1,6 +1,6 @@
 {% macro transaction_form_js(config) %}
 <script>
-  window.transactionFormConfig = {{ config | tojson | safe }};
+  globalThis.transactionFormConfig = {{ config | tojson | safe }};
 </script>
 {% endmacro %}
 
