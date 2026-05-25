@@ -601,7 +601,7 @@ def _crear_usuario_desde_form(form: UserCreateForm) -> User:
         phone=form.phone.data or None,
         classification=form.classification.data or None,
         active=bool(form.active.data),
-        password=helpers.proteger_passwd(form.password.data),
+        password=proteger_passwd(form.password.data),
     )
 
 

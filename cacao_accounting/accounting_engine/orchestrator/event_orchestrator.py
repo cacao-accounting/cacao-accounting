@@ -206,6 +206,9 @@ class BusinessEventOrchestrator:
                     base_amount=-Decimal(line_data["base_amount"]),
                     rate=Decimal(line_data["rate"]),
                     amount=-Decimal(line_data["amount"]),
+                    recognition_event=line_data.get("recognition_event", ""),
+                    accounting_treatment=line_data.get("accounting_treatment", ""),
+                    account_id=line_data.get("account_id"),
                 )
                 for line_data in settlement_data["settlement_lines"]
             ]
