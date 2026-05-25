@@ -43,13 +43,13 @@ def test_libros_contables(app):
         # La empresa cacao debe tener 3 libros
         libros = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
         codigos_libros = [libro.code for libro in libros]
-        assert "FISC" in codigos_libros
+        assert "LOCAL" in codigos_libros
         assert "FIN" in codigos_libros
         assert "MGMT" in codigos_libros
 
         # Verificar monedas de los libros
-        libro_fisc = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FISC")).scalar_one()
-        assert libro_fisc.currency == "NIO"
+        libro_local = database.session.execute(database.select(Book).filter_by(entity="cacao", code="LOCAL")).scalar_one()
+        assert libro_local.currency == "NIO"
         libro_fin = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FIN")).scalar_one()
         assert libro_fin.currency == "USD"
         libro_mgmt = database.session.execute(database.select(Book).filter_by(entity="cacao", code="MGMT")).scalar_one()
@@ -145,14 +145,14 @@ def test_seed_bank_accounts_share_payment_series_with_separate_checkbooks(app):
 def test_ledger_multimoneda(app):
     with app.app_context():
         # Obtener IDs de libros
-        fisc_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="FISC")).scalar_one()
+        local_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="LOCAL")).scalar_one()
         fin_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="FIN")).scalar_one()
         mgmt_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="MGMT")).scalar_one()
 
         # Verificar que existen entradas en el ledger para los diferentes libros
-        # Libro FISC (NIO)
+        # Libro LOCAL (NIO)
         entries_fisc = (
-            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=fisc_id)).scalars().all()
+            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=local_id)).scalars().all()
         )
         assert len(entries_fisc) > 0
         for entry in entries_fisc:
@@ -193,21 +193,21 @@ def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(
         }
 
         assert journal.transaction_currency == "NIO"
-        assert set(books) >= {"FISC", "FIN", "MGMT"}
+        assert set(books) >= {"LOCAL", "FIN", "MGMT"}
         assert len(entries) == 6
 
         by_book = {
             code: [entry for entry in entries if entry.ledger_id == book.id]
             for code, book in books.items()
-            if code in {"FISC", "FIN", "MGMT"}
+            if code in {"LOCAL", "FIN", "MGMT"}
         }
         assert {code: len(book_entries) for code, book_entries in by_book.items()} == {
-            "FISC": 2,
+            "LOCAL": 2,
             "FIN": 2,
             "MGMT": 2,
         }
 
-        fisc_debit = next(entry for entry in by_book["FISC"] if entry.debit > 0)
+        fisc_debit = next(entry for entry in by_book["LOCAL"] if entry.debit > 0)
         fin_debit = next(entry for entry in by_book["FIN"] if entry.debit > 0)
         mgmt_debit = next(entry for entry in by_book["MGMT"] if entry.debit > 0)
 
@@ -233,7 +233,7 @@ def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(
 def test_reportes_financieros(app):
     with app.app_context():
         # Filtros base para reportes
-        filters = FinancialReportFilters(company="cacao", ledger="FISC")
+        filters = FinancialReportFilters(company="cacao", ledger="LOCAL")
 
         # 1. Balanza de Comprobación
         trial_balance = get_trial_balance_report(filters)

@@ -58,6 +58,22 @@ def test_encryp_passwd():
     assert p is not None
 
 
+def test_valida_url_postgresql_estandar():
+    from cacao_accounting.config import valida_direccion_base_datos
+
+    assert valida_direccion_base_datos("postgresql://url.tech/database?sslmode=require") is True
+
+
+def test_normaliza_url_postgresql_pg8000_sslmode_y_channel_binding():
+    from cacao_accounting.config import normaliza_direccion_base_datos
+
+    uri, opciones = normaliza_direccion_base_datos("postgresql://url.tech/database?sslmode=require&channel_binding=require")
+
+    assert uri == "postgresql+pg8000://url.tech/database"
+    assert "connect_args" in opciones
+    assert "ssl_context" in opciones["connect_args"]
+
+
 def test_falla_verificar_conn_db(request):
     from cacao_accounting import create_app
 

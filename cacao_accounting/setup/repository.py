@@ -81,13 +81,30 @@ def create_default_book(entity: Entity) -> "Book":
     from cacao_accounting.database import Book
 
     existing_book = database.session.execute(
-        database.select(Book).filter_by(entity=entity.code, code="FISC")
+        database.select(Book).filter_by(entity=entity.code, default=True)
     ).scalar_one_or_none()
     if existing_book is not None:
         return existing_book
 
+    existing_primary_book = database.session.execute(
+        database.select(Book).filter_by(entity=entity.code, is_primary=True)
+    ).scalar_one_or_none()
+    if existing_primary_book is not None:
+        existing_primary_book.default = True
+        return existing_primary_book
+
+    book_code = "LOCAL"
+    if database.session.execute(database.select(Book).filter_by(code=book_code)).scalar_one_or_none() is not None:
+        index = 1
+        while True:
+            candidate = f"LOCAL{index}"
+            if database.session.execute(database.select(Book).filter_by(code=candidate)).scalar_one_or_none() is None:
+                book_code = candidate
+                break
+            index += 1
+
     book = Book(
-        code="FISC",
+        code=book_code,
         name="Local",
         entity=entity.code,
         currency=entity.currency,
