@@ -399,7 +399,7 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __table_args__ = (database.UniqueConstraint("entity", "code", name="libro_unico"),)
-    code = database.Column(database.String(10), index=True)
+    code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)

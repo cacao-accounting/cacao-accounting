@@ -658,7 +658,7 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
     assert response.status_code == 302
 
     entity = database.session.execute(database.select(Entity).filter_by(code="mapco")).scalar_one()
-    book = database.session.execute(database.select(Book).filter_by(entity="mapco", code="FISC")).scalar_one()
+    book = database.session.execute(database.select(Book).filter_by(entity="mapco", default=True)).scalar_one()
     cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="mapco", code="MAIN")).scalar_one()
     period = (
         database.session.execute(database.select(AccountingPeriod).filter_by(entity="mapco").order_by(AccountingPeriod.start))
@@ -672,6 +672,7 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
 
     assert entity.country == "NI"
     assert entity.currency == "NIO"
+    assert book.code == "LOCAL"
     assert book.currency == "NIO"
     assert cost_center.default is True
     assert len(period) == 12
