@@ -431,7 +431,7 @@ def _make_comprobantes_contables() -> list:
         {
             "company": "cacao",
             "posting_date": today.isoformat(),
-            "books": ["FISC"],
+            "books": ["LOCAL"],
             "reference": "INIT-NIO",
             "memo": "Asiento inicial en Córdobas",
             "lines": [
@@ -466,7 +466,7 @@ def _make_comprobantes_contables() -> list:
         {
             "company": "cacao",
             "posting_date": today.isoformat(),
-            "books": ["FISC", "FIN", "MGMT"],
+            "books": ["LOCAL", "FIN", "MGMT"],
             "transaction_currency": "NIO",
             "reference": "MULTI-BOOK-NIO",
             "memo": "Asiento multi-libro con conversión desde Córdobas",
@@ -491,7 +491,7 @@ def _make_recurring_templates() -> list:
                 "start_date": today,
                 "end_date": date(today.year, 12, 31),
                 "frequency": "monthly",
-                "books": ["FISC"],
+                "books": ["LOCAL"],
             },
             "items": [
                 {"account_code": "52.01.001", "debit": 500, "credit": 0, "cost_center": "ADM"},

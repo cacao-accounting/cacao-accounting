@@ -7,6 +7,8 @@
 # --------------------------------------------------------------------------------------
 from os import environ, name
 from pathlib import Path
+import ssl
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -50,6 +52,30 @@ DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or e
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
+def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, ssl.SSLContext]]]:
+    """Normaliza la URI de base de datos para compatibilidad entre proveedores."""
+    direccion = str(uri)
+    opciones_motor: dict[str, dict[str, ssl.SSLContext]] = {}
+
+    if direccion.startswith("postgresql://"):
+        direccion = direccion.replace("postgresql://", "postgresql+pg8000://", 1)
+
+    if direccion.startswith("postgresql+pg8000://"):
+        uri_parseada = urlsplit(direccion)
+        query = dict(parse_qsl(uri_parseada.query, keep_blank_values=True))
+        sslmode = query.pop("sslmode", "").lower()
+        query.pop("channel_binding", None)
+
+        if sslmode in {"require", "verify-ca", "verify-full"}:
+            opciones_motor["connect_args"] = {"ssl_context": ssl.create_default_context()}
+
+        direccion = urlunsplit(
+            (uri_parseada.scheme, uri_parseada.netloc, uri_parseada.path, urlencode(query), uri_parseada.fragment)
+        )
+
+    return direccion, opciones_motor
+
+
 def valida_direccion_base_datos(uri: str) -> bool:
     """Verifica que la URI de la database este en el formato correcto."""
     direccion = str(uri)
@@ -58,6 +84,8 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return True
         case _ if direccion.startswith("mariadb+mariadbconnector"):
             log.warning("El soporte a MariaDB es expimental.")
+            return True
+        case _ if direccion.startswith("postgresql://"):
             return True
         case _ if direccion.startswith("postgresql+pg8000") or direccion.startswith("postgresql+psycopg2"):
             return True
@@ -68,10 +96,14 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, str] = {}
+configuracion: dict[str, str | dict[str, dict[str, ssl.SSLContext]]] = {}
 
-if valida_direccion_base_datos(DATABASE_URL):
-    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
+
+if valida_direccion_base_datos(DATABASE_URL_NORMALIZADA):
+    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL_NORMALIZADA
+    if DATABASE_ENGINE_OPTIONS:
+        configuracion["SQLALCHEMY_ENGINE_OPTIONS"] = DATABASE_ENGINE_OPTIONS
 configuracion["SECRET_KEY"] = SECRET_KEY or ""
 configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
 

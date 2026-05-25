@@ -87,6 +87,11 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_book_table_exists(self):
         self.assertIn("book", self.tables)
 
+    def test_book_code_is_unique(self):
+        from cacao_accounting.database import Book
+
+        self.assertTrue(Book.__table__.c.code.unique)
+
     def test_gl_entry_table_exists(self):
         self.assertIn("gl_entry", self.tables)
 

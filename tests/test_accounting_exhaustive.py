@@ -72,7 +72,7 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
         assert journal.status == "draft"
 
         # 2. Submit (Posting)
-        # Should post to FISC, FIN, MGMT books (as defined in demo data)
+        # Should post to LOCAL, FIN, MGMT books (as defined in demo data)
         resp = client.post(f"/accounting/journal/{journal.id}/submit", follow_redirects=True)
         assert resp.status_code == 200
 
@@ -89,7 +89,7 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
         assert len(gl_entries_rows) == 6
 
         books_posted = {row.code for row in gl_entries_rows}
-        assert "FISC" in books_posted
+        assert "LOCAL" in books_posted
         assert "FIN" in books_posted
         assert "MGMT" in books_posted
 

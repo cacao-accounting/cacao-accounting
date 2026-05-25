@@ -1079,7 +1079,7 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     )
 
     entity = database.session.execute(database.select(Entity).filter_by(code="mapco")).scalar_one()
-    book = database.session.execute(database.select(Book).filter_by(entity="mapco", code="FISC")).scalar_one()
+    book = database.session.execute(database.select(Book).filter_by(entity="mapco", default=True)).scalar_one()
     cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="mapco", code="MAIN")).scalar_one()
     fiscal_year = database.session.execute(
         database.select(FiscalYear).filter_by(entity="mapco", name=str(date.today().year))
@@ -1093,6 +1093,7 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
 
     assert entity is not None
     assert book is not None
+    assert book.code == "LOCAL"
     assert cost_center is not None
     assert fiscal_year is not None
     assert period is not None
@@ -1156,7 +1157,7 @@ def test_example_seed_creates_company_base_records(app_ctx):
 
         for company in ("cacao", "dulce", "cafe"):
             assert database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
-            assert database.session.execute(database.select(Book).filter_by(entity=company, code="FISC")).scalar_one_or_none()
+            assert database.session.execute(database.select(Book).filter_by(entity=company, is_primary=True)).scalar_one_or_none()
             assert database.session.execute(
                 database.select(CostCenter).filter_by(entity=company, code="MAIN")
             ).scalar_one_or_none()
