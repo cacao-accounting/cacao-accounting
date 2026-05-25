@@ -88,6 +88,17 @@ COMPRAS_COMPRAS_ORDEN_COMPRA = "compras.compras_orden_compra"
 COMPRAS_COMPRAS_RECEPCION = "compras.compras_recepcion"
 COMPRAS_COMPRAS_FACTURA_COMPRA = "compras.compras_factura_compra"
 
+FORMKEY_PURCHASE_REQUEST = "purchases.purchase_request"
+FORMKEY_SUPPLIER_QUOTATION = "purchases.supplier_quotation"
+FORMKEY_PURCHASE_ORDER = "purchases.purchase_order"
+FORMKEY_PURCHASE_QUOTATION = "purchases.purchase_quotation"
+ROUTE_COMPRAS_SOLICITUD_COMPRA = "compras.compras_solicitud_compra"
+ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
+ROUTE_COMPRAS_PROVEEDOR = "compras.compras_proveedor"
+LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
+LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
+LABEL_FACTURA_COMPRA_LONG = "Factura de Compra"
+
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
@@ -188,11 +199,11 @@ def compras_solicitud_compra_nueva():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Solicitud de Compra - " + APPNAME
     transaction_config = {
-        "formKey": "purchases.purchase_request",
+        "formKey": FORMKEY_PURCHASE_REQUEST,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_request"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_REQUEST),
         "availableSourceTypes": [],
     }
     if request.method == "POST":
@@ -220,7 +231,7 @@ def compras_solicitud_compra_nueva():
             solicitud.grand_total = total
             database.session.commit()
             flash("Solicitud de compra creada correctamente.", "success")
-            return redirect(url_for("compras.compras_solicitud_compra", request_id=solicitud.id))
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -297,7 +308,7 @@ def compras_solicitud_compra_editar(request_id: str):
             registro.grand_total = total
             database.session.commit()
             flash("Solicitud de compra actualizada correctamente.", "success")
-            return redirect(url_for("compras.compras_solicitud_compra", request_id=registro.id))
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -306,11 +317,11 @@ def compras_solicitud_compra_editar(request_id: str):
         database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
     ).scalars()
     transaction_config = {
-        "formKey": "purchases.purchase_request",
+        "formKey": FORMKEY_PURCHASE_REQUEST,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_request"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_REQUEST),
         "availableSourceTypes": [],
         "initialHeader": {
             "company": registro.company or "",
@@ -385,7 +396,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
     duplicada.grand_total = total
     database.session.commit()
     flash("Solicitud de compra duplicada como nuevo borrador.", "success")
-    return redirect(url_for("compras.compras_solicitud_compra", request_id=duplicada.id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=duplicada.id))
 
 
 @compras.route("/purchase-request/<request_id>/submit", methods=["POST"])
@@ -401,7 +412,7 @@ def compras_solicitud_compra_submit(request_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash("Solicitud de compra aprobada.", "success")
-    return redirect(url_for("compras.compras_solicitud_compra", request_id=request_id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
 @compras.route("/purchase-request/<request_id>/cancel", methods=["POST"])
@@ -417,7 +428,7 @@ def compras_solicitud_compra_cancel(request_id: str):
     registro.docstatus = 2
     database.session.commit()
     flash("Solicitud de compra cancelada.", "warning")
-    return redirect(url_for("compras.compras_solicitud_compra", request_id=request_id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
 @compras.route("/supplier-quotation/list")
@@ -466,14 +477,14 @@ def compras_cotizacion_proveedor_nueva():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
     transaction_config = {
-        "formKey": "purchases.supplier_quotation",
+        "formKey": FORMKEY_SUPPLIER_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_SUPPLIER_QUOTATION),
         "availableSourceTypes": [
-            {"value": "purchase_request", "label": _("Solicitud de Compra")},
-            {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
+            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
+            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
         ],
         "initialSourceType": "purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
     }
@@ -505,7 +516,7 @@ def compras_cotizacion_proveedor_nueva():
             cotizacion.grand_total = total
             database.session.commit()
             flash("Cotización de proveedor creada correctamente.", "success")
-            return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=cotizacion.id))
+            return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -585,18 +596,18 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
-        return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=registro.id))
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=registro.id))
 
     lineas = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
     ).scalars()
     transaction_config = {
-        "formKey": "purchases.supplier_quotation",
+        "formKey": FORMKEY_SUPPLIER_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.supplier_quotation"),
-        "availableSourceTypes": [{"value": "purchase_quotation", "label": _("Solicitud de Cotización")}],
+        "columns": get_column_preferences(current_user.id, FORMKEY_SUPPLIER_QUOTATION),
+        "availableSourceTypes": [{"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -678,7 +689,7 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
     duplicada.grand_total = total
     database.session.commit()
     flash(_("Cotizacion de proveedor duplicada como nuevo borrador."), "success")
-    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=duplicada.id))
+    return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=duplicada.id))
 
 
 @compras.route("/supplier-quotation/<quotation_id>/submit", methods=["POST"])
@@ -694,7 +705,7 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash(_("Cotizacion de proveedor aprobada."), "success")
-    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=quotation_id))
+    return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
 
 @compras.route("/supplier-quotation/<quotation_id>/cancel", methods=["POST"])
@@ -711,7 +722,7 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
     revert_relations_for_target("supplier_quotation", quotation_id)
     database.session.commit()
     flash(_("Cotizacion de proveedor cancelada."), "warning")
-    return redirect(url_for("compras.compras_cotizacion_proveedor", quotation_id=quotation_id))
+    return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
 
 @compras.route("/request-for-quotation/comparison")
@@ -1024,7 +1035,7 @@ def compras_proveedor_editar(supplier_id: str):
                 )
             database.session.commit()
             flash(_("Proveedor actualizado correctamente."), "success")
-            return redirect(url_for("compras.compras_proveedor", supplier_id=proveedor.id))
+            return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=proveedor.id))
         except ValueError as exc:
             database.session.rollback()
             if selected_company:
@@ -1056,7 +1067,7 @@ def compras_proveedor_contacto_crear(supplier_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/contacts/<link_id>/edit", methods=["POST"])
@@ -1072,7 +1083,7 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/contacts/<link_id>/deactivate", methods=["POST"])
@@ -1084,7 +1095,7 @@ def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
     deactivate_party_contact(supplier_id, link_id)
     database.session.commit()
     flash(_("Contacto desactivado correctamente."), "success")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/addresses", methods=["POST"])
@@ -1100,7 +1111,7 @@ def compras_proveedor_direccion_crear(supplier_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/addresses/<link_id>/edit", methods=["POST"])
@@ -1116,7 +1127,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/addresses/<link_id>/deactivate", methods=["POST"])
@@ -1128,7 +1139,7 @@ def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     deactivate_party_address(supplier_id, link_id)
     database.session.commit()
     flash(_("Direccion desactivada correctamente."), "success")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
@@ -1433,14 +1444,14 @@ def compras_orden_compra_nuevo():
             database.session.rollback()
             flash(str(exc), "danger")
     transaction_config = {
-        "formKey": "purchases.purchase_order",
+        "formKey": FORMKEY_PURCHASE_ORDER,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_order"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
         "availableSourceTypes": [
-            {"value": "purchase_request", "label": _("Solicitud de Compra")},
-            {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
+            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
+            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
         ],
         "initialSourceType": (
@@ -1537,13 +1548,13 @@ def compras_orden_compra_editar(order_id: str):
 
     lineas = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "purchases.purchase_order",
+        "formKey": FORMKEY_PURCHASE_ORDER,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_order"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
         "availableSourceTypes": [
-            {"value": "purchase_request", "label": _("Solicitud de Compra")},
+            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
         ],
         "initialHeader": {
@@ -1675,12 +1686,12 @@ def compras_solicitud_cotizacion_nueva():
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     titulo = "Nueva Solicitud de Cotización - " + APPNAME
     transaction_config = {
-        "formKey": "purchases.purchase_quotation",
+        "formKey": FORMKEY_PURCHASE_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_quotation"),
-        "availableSourceTypes": [{"value": "purchase_request", "label": _("Solicitud de Compra")}],
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
+        "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
         "initialSourceType": "purchase_request" if from_request_id else "",
     }
     if solicitud_origen:
@@ -1806,12 +1817,12 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
     ).scalars()
     transaction_config = {
-        "formKey": "purchases.purchase_quotation",
+        "formKey": FORMKEY_PURCHASE_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_quotation"),
-        "availableSourceTypes": [{"value": "purchase_request", "label": _("Solicitud de Compra")}],
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
+        "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -2312,7 +2323,7 @@ def compras_factura_compra_nuevo():
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _("Orden de Compra")},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
-            {"value": "purchase_invoice", "label": _("Factura de Compra")},
+            {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
         ],
     }
     if request.method == "POST":
@@ -2462,7 +2473,7 @@ def compras_factura_compra_editar(invoice_id: str):
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _("Orden de Compra")},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
-            {"value": "purchase_invoice", "label": _("Factura de Compra")},
+            {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
         ],
         "initialHeader": {
             "company": registro.company or "",

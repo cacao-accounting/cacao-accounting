@@ -72,6 +72,10 @@ bancos = Blueprint("bancos", __name__, template_folder="templates")
 BANCOS_TRANSACCION_LISTA_HTML = "bancos/transaccion_lista.html"
 BANCOS_BANCO_CUENTA_NUEVO_HTML = "bancos/banco_cuenta_nuevo.html"
 BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
+COMPRAS_FACTURA_COMPRA_ROUTE = "compras.compras_factura_compra"
+VENTAS_FACTURA_VENTA_ROUTE = "ventas.ventas_factura_venta"
+LABEL_FACTURA_COMPRA = "Factura de Compra"
+LABEL_FACTURA_VENTA = "Factura de Venta"
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -229,7 +233,7 @@ def bancos_conciliacion_facturas_pagos():
             database.session.commit()
             flash(_("Conciliación de facturas y pagos aplicada correctamente."), "success")
             return redirect(url_for("bancos.bancos_conciliacion_facturas_pagos", reconciliation_id=reconciliation.id))
-        except (ValueError, json.JSONDecodeError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
         except Exception as exc:  # noqa: BLE001
@@ -792,9 +796,9 @@ def _payment_source_rows(
             rows.append(
                 {
                     "reference_type": "purchase_invoice",
-                    "label": "Factura de Compra",
+                    "label": LABEL_FACTURA_COMPRA,
                     "document": invoice,
-                    "url": url_for("compras.compras_factura_compra", invoice_id=invoice.id),
+                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
                 }
             )
     for invoice_id in sales_invoice_ids:
@@ -803,9 +807,9 @@ def _payment_source_rows(
             rows.append(
                 {
                     "reference_type": "sales_invoice",
-                    "label": "Factura de Venta",
+                    "label": LABEL_FACTURA_VENTA,
                     "document": invoice,
-                    "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
+                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
                 }
             )
     for order_id in purchase_order_ids:
@@ -839,7 +843,7 @@ def _payment_source_rows(
                     "flow_source_type": "purchase_credit_note",
                     "label": _("Nota de Crédito de Compra"),
                     "document": invoice,
-                    "url": url_for("compras.compras_factura_compra", invoice_id=invoice.id),
+                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
                 }
             )
     for invoice_id in purchase_debit_note_ids:
@@ -851,7 +855,7 @@ def _payment_source_rows(
                     "flow_source_type": "purchase_debit_note",
                     "label": _("Nota de Débito de Compra"),
                     "document": invoice,
-                    "url": url_for("compras.compras_factura_compra", invoice_id=invoice.id),
+                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
                 }
             )
     for invoice_id in sales_credit_note_ids:
@@ -863,7 +867,7 @@ def _payment_source_rows(
                     "flow_source_type": "sales_credit_note",
                     "label": _("Nota de Crédito de Venta"),
                     "document": invoice,
-                    "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
+                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
                 }
             )
     for invoice_id in sales_debit_note_ids:
@@ -875,7 +879,7 @@ def _payment_source_rows(
                     "flow_source_type": "sales_debit_note",
                     "label": _("Nota de Débito de Venta"),
                     "document": invoice,
-                    "url": url_for("ventas.ventas_factura_venta", invoice_id=invoice.id),
+                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
                 }
             )
     return rows
@@ -1312,7 +1316,7 @@ def bancos_pago_nuevo():
             database.session.commit()
             flash(_("Pago registrado correctamente."), "success")
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
-        except (IdentifierConfigurationError, ValueError, ArithmeticError) as exc:
+        except (ValueError, ArithmeticError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
         except Exception as exc:  # noqa: BLE001

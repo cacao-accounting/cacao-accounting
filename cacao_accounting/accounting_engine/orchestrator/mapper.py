@@ -139,6 +139,8 @@ class AccountingMapper:
         """Map withholding and settlement tax lines."""
         lines: list[JournalEntryLineProforma] = []
         for withholding_line in settlement.settlement_lines:
+            if withholding_line.type != "withholding":
+                continue
             account_id = self._resolve_tax_account(context, withholding_line.account_id)
             if not account_id or withholding_line.amount <= 0:
                 continue

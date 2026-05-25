@@ -136,7 +136,7 @@
       });
   }
 
-  window.journalEntryForm = function (config) {
+  globalThis.journalEntryForm = function (config) {
     return {
       formKey: config.formKey,
       viewKey: config.viewKey,
@@ -292,7 +292,7 @@
 
       newLine: function () {
         var uid = String(Date.now() + Math.random());
-        if (window.crypto && window.crypto.randomUUID) uid = window.crypto.randomUUID();
+        if (globalThis.crypto && globalThis.crypto.randomUUID) uid = globalThis.crypto.randomUUID();
         return {
           uid: uid,
           account: '',
@@ -330,7 +330,7 @@
 
       duplicateRow: function (index) {
         var copy = Object.assign({}, this.lines[index]);
-        copy.uid = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now() + Math.random());
+        copy.uid = globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now() + Math.random());
         this.lines.splice(index + 1, 0, copy);
       },
 
@@ -541,7 +541,7 @@
         if (!hasLines) missing.push(this.messages.fieldLines);
         if (missing.length) {
           event.preventDefault();
-          window.alert(this.messages.required + '\n\n• ' + missing.join('\n• '));
+          globalThis.alert(this.messages.required + '\n\n• ' + missing.join('\n• '));
           return;
         }
         var selectedBooks = this.allBooksSelected ? [] : this.selectedBooks.slice();

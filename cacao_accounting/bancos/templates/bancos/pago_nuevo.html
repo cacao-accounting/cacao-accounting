@@ -123,7 +123,7 @@
 </nav>
 
 <script>
-  window.paymentEntryForm = function (config) {
+  globalThis.paymentEntryForm = function (config) {
     return {
       header: {
         payment_type: config.initial.payment_type || 'receive',

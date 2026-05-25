@@ -27,7 +27,7 @@
 </nav>
 
 <script>
-  window.recurringJournalForm = function (config) {
+  globalThis.recurringJournalForm = function (config) {
     return {
       header: {
         code: (config.initialJournal && config.initialJournal.code) || '',
@@ -59,7 +59,7 @@
 
       newLine: function () {
         return {
-          uid: window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now() + Math.random()),
+          uid: globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now() + Math.random()),
           account_code: '',
           account_label: '',
           debit: 0,
@@ -86,7 +86,7 @@
       removeRow: function (index) { if (this.lines.length > 1) this.lines.splice(index, 1); else this.lines[0] = this.newLine(); },
       duplicateRow: function (index) {
         let copy = JSON.parse(JSON.stringify(this.lines[index]));
-        copy.uid = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now() + Math.random());
+        copy.uid = globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now() + Math.random());
         this.lines.splice(index + 1, 0, copy);
       },
 
