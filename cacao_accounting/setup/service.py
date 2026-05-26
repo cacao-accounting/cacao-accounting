@@ -149,6 +149,27 @@ def available_currencies() -> list[tuple[str, str]]:
     return obtener_lista_monedas()
 
 
+def _activate_and_set_default_currency(currency_code: str) -> None:
+    """Activa la moneda seleccionada y la marca como predeterminada unica."""
+    from cacao_accounting.database import Currency, database
+
+    if not currency_code:
+        return
+
+    currencies = list(database.session.execute(database.select(Currency)).scalars().all())
+    selected_currency = next((currency for currency in currencies if currency.code == currency_code), None)
+    if selected_currency is None:
+        selected_currency = Currency(code=currency_code, name=currency_code, decimals=2, active=True, default=True)
+        database.session.add(selected_currency)
+        currencies.append(selected_currency)
+
+    for currency in currencies:
+        is_selected = currency.code == currency_code
+        if is_selected:
+            currency.active = True
+        currency.default = is_selected
+
+
 def finalize_setup(
     company_data: dict,
     catalogo_tipo: str,
@@ -166,6 +187,7 @@ def finalize_setup(
         status="default",
         default=True,
     )
+    _activate_and_set_default_currency(company_data.get("moneda", ""))
     save_company_details(company_data)
     mark_setup_complete()
     database.session.commit()

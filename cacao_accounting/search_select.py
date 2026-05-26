@@ -182,7 +182,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         value_field="code",
         label_builder=_currency_label,
         allowed_filters={"is_active": "active"},
-        default_filters={},
+        default_filters={"active": True},
     ),
     "uom": SearchSelectSpec(
         doctype="uom",
@@ -199,7 +199,12 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="id",
         label_builder=_account_label,
-        allowed_filters={"company": "entity", "account_type": "account_type", "is_active": "active"},
+        allowed_filters={
+            "company": "entity",
+            "account_type": "account_type",
+            "is_active": "active",
+            "is_group": "group",
+        },
         default_filters={"group": False, "active": True, "enabled": True},
     ),
     "account_code": SearchSelectSpec(
@@ -208,7 +213,12 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="code",
         label_builder=_account_label,
-        allowed_filters={"company": "entity", "account_type": "account_type", "is_active": "active"},
+        allowed_filters={
+            "company": "entity",
+            "account_type": "account_type",
+            "is_active": "active",
+            "is_group": "group",
+        },
         default_filters={"active": True, "enabled": True},
     ),
     "book": SearchSelectSpec(
@@ -263,7 +273,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="code",
         label_builder=_cost_center_label,
-        allowed_filters={"company": "entity", "is_active": "active"},
+        allowed_filters={"company": "entity", "is_active": "active", "is_group": "group"},
         default_filters={"group": False, "active": True, "enabled": True},
     ),
     "cost_center_id": SearchSelectSpec(
@@ -272,7 +282,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="id",
         label_builder=_cost_center_label,
-        allowed_filters={"company": "entity", "is_active": "active"},
+        allowed_filters={"company": "entity", "is_active": "active", "is_group": "group"},
         default_filters={"group": False, "active": True, "enabled": True},
     ),
     "unit": SearchSelectSpec(
@@ -509,7 +519,7 @@ def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit
         statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
         statement = statement.where(CompanyParty.is_active.is_(True))
 
-    statement = _apply_default_filters(statement, spec)
+    statement = _apply_default_filters(statement, spec, filters)
     statement = _apply_request_filters(statement, spec, filters)
     statement = _apply_search(statement, spec, normalized_query)
     query_limit = max_results + 1
@@ -575,8 +585,13 @@ def _normalize_limit(limit: int | None, default_limit: int) -> int:
     return min(limit, 50)
 
 
-def _apply_default_filters(statement: Select[tuple[Any]], spec: SearchSelectSpec) -> Select[tuple[Any]]:
+def _apply_default_filters(
+    statement: Select[tuple[Any]], spec: SearchSelectSpec, filters: dict[str, list[str]]
+) -> Select[tuple[Any]]:
+    requested_fields = {spec.allowed_filters[name] for name in filters if name in spec.allowed_filters}
     for field, value in spec.default_filters.items():
+        if field in requested_fields:
+            continue
         column = _column_for(spec.model, field)
         statement = statement.where(_condition_for(column, [str(value)] if isinstance(value, str) else [value]))
     return statement

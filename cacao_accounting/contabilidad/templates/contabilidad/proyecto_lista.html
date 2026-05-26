@@ -51,6 +51,7 @@
           <th scope="col">{{ _('Entidad') }}</th>
           <th scope="col">{{ _('Fecha Inicio') }}</th>
           <th scope="col">{{ _('Fecha Fin') }}</th>
+          <th scope="col">{{ _('Presupuesto') }}</th>
           <th scope="col">{{ _('Estado') }}</th>
           <th scope="col">{{ _('Acciones') }}</th>
         </tr>
@@ -63,6 +64,7 @@
           <td>{{ item.entity }}</td>
           <td>{{ item.start or '-' }}</td>
           <td>{{ item.end or '-' }}</td>
+          <td>{{ item.budget_currency_code or '' }} {{ item.budget or 0 }}</td>
           <td>{{ macros.render_status(status=item.status, lista_status=statusweb) }}</td>
           <td>
             <div class="d-flex gap-2">
@@ -76,7 +78,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="text-center text-muted py-4">{{ _('No se encontraron proyectos.') }}</td></tr>
+        <tr><td colspan="8" class="text-center text-muted py-4">{{ _('No se encontraron proyectos.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

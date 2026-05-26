@@ -501,7 +501,8 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     name = database.Column(database.String(100))
     start = database.Column(database.Date())
     end = database.Column(database.Date())
-    budget = database.Column(database.Float())
+    budget = database.Column(database.Numeric(precision=20, scale=2), nullable=True)
+    budget_currency_code = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #

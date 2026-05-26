@@ -1,5 +1,21 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-26 (Playwright opcional y regresion UI de comprobante)
+- **Solicitud:** Usar Playwright en este equipo para pruebas mas robustas y asegurar que los tests se ignoren cuando Playwright no este disponible.
+- **Playwright:** Se verifico que Playwright y Chromium estan disponibles en `venv`; los tests E2E existentes conservan `skipif(not HAS_PLAYWRIGHT)` y el fixture `browser` salta si no puede lanzar navegador.
+- **Regresion detectada:** La prueba real de navegador encontro que el Smart Select de compania del comprobante podia dejar el hidden `company` como `[object Object]` por un handler redundante `@change="$dispatch('input')"`.
+- **Correccion:** Se elimino el handler redundante en `journal_nuevo.html`; `smart-select.js` queda como responsable de escribir el hidden y emitir `input/change`.
+- **Fixture E2E:** `tests/test_e2e_journalentry.py` ahora siembra la moneda activa `NIO` y asigna moneda a libros activos para representar las validaciones de moneda funcional del backend.
+- **Validacion:** Playwright focal y suites E2E contables en verde: `tests/test_e2e_playwright_accounting.py tests/test_e2e_transactional_ui.py` (`6 passed`) y `tests/test_e2e_journalentry.py` (`15 passed`).
+
+## 2026-05-26 (Cierre QA staged: monedas, Smart Select y maestros contables)
+- **Solicitud:** Implementar el plan derivado de `ISSUES.md` para cerrar los issues del patch staged de monedas, comprobante contable, jerarquias maestras y PPTO de proyectos.
+- **Monedas:** Se agrego `CurrencyGuard` para validar monedas activas y bloquear desactivacion de moneda default, moneda funcional de compania activa o moneda usada por libro activo; setup ahora activa/default la moneda seleccionada sin desactivar automaticamente monedas adicionales.
+- **Comprobante contable:** `journal_service` valida que la compania exista y este activa; `smart-select.js` sincroniza hidden inputs, dispara `input/change` y marca el componente con estado `filled`.
+- **Maestros:** Cuentas y centros de costo aceptan padres via Smart Select remoto, permiten filtro `is_group` en search-select y validan backend contra padres inactivos, ajenos, no agrupadores, self-parent y ciclos.
+- **Proyectos:** `Project` conserva `budget` y agrega `budget_currency_code`; el backend asigna la moneda funcional activa de la compania cuando hay presupuesto y la UI la muestra como campo informativo.
+- **Cobertura:** Se agregaron pruebas de toggle de monedas, tasas de cambio, filtros `is_group`, jerarquias de cuentas/centros, presupuesto de proyectos y Smart Select JS.
+
 ## 2026-05-24 (Modo Desktop/Cloud sin migraciones)
 - **Solicitud:** Implementar el modo desktop/cloud aprobado, sin generar migraciones, centralizando los flags criticos de runtime y agregando colaboracion ligera solo para cloud.
 - **Runtime:** Se creo `cacao_accounting/runtime_mode.py` como fuente unica para `is_truthy`, `detect_desktop_mode`, `is_desktop_mode`, `force_single_entity` e `is_cloud_mode`; `config.MODO_ESCRITORIO` queda como alias de compatibilidad.

@@ -140,3 +140,53 @@ listeners['alpine:init']();
 }});
 """
     _run_node_script(script)
+
+
+def test_smart_select_company_sets_hidden_field_value_and_filled_state() -> None:
+    script = f"""
+const fs = require('fs');
+const source = fs.readFileSync({str(SMART_SELECT_FILE)!r}, 'utf8');
+const listeners = {{}};
+const registry = {{}};
+const events = [];
+const classState = new Set();
+const hiddenInput = {{
+  value: '',
+  dispatchEvent: (event) => {{ events.push(event.type); }}
+}};
+
+global.Event = function(type, options) {{
+  this.type = type;
+  this.bubbles = Boolean(options && options.bubbles);
+}};
+global.window = {{ setTimeout: (fn) => fn() }};
+global.document = {{
+  addEventListener: (name, callback) => {{ listeners[name] = callback; }},
+  querySelector: () => null
+}};
+global.Alpine = {{
+  data: (name, factory) => {{ registry[name] = factory; }}
+}};
+
+eval(source);
+listeners['alpine:init']();
+
+const component = registry.smartSelect({{
+  doctype: 'company',
+  name: 'company',
+  minChars: 1
+}});
+component.$root = {{
+  querySelector: (selector) => selector === 'input[type="hidden"][name="company"]' ? hiddenInput : null,
+  classList: {{
+    toggle: (name, enabled) => enabled ? classState.add(name) : classState.delete(name)
+  }}
+}};
+component.selectOption({{ value: 'cacao', display_name: 'cacao - Cacao SA' }});
+
+if (hiddenInput.value !== 'cacao') throw new Error('Hidden company value was not updated');
+if (!events.includes('input')) throw new Error('Missing input event');
+if (!events.includes('change')) throw new Error('Missing change event');
+if (!classState.has('filled')) throw new Error('Missing filled state');
+"""
+    _run_node_script(script)

@@ -1,5 +1,24 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-26 (Playwright E2E - completado)
+- [x] Verificar Playwright/Chromium disponible en el `venv` local.
+- [x] Mantener los tests Playwright marcados para omitirse si Playwright no esta disponible.
+- [x] Agregar prueba Playwright focal para Smart Select de compania en comprobante contable.
+- [x] Corregir el hidden `company` que podia quedar como `[object Object]` en navegador real.
+- [x] Ajustar fixture E2E de comprobantes para sembrar moneda funcional activa y libros con moneda.
+- [x] Validar suites Playwright y journal E2E en verde.
+
+## Seguimiento 2026-05-26 (QA staged monedas/comprobante/maestros - completado)
+- [x] Centralizar validaciones de monedas activas y bloqueo de desactivacion critica.
+- [x] Corregir setup para activar/default la moneda funcional sin desactivar automaticamente monedas adicionales.
+- [x] Validar compania existente/activa en comprobantes contables.
+- [x] Corregir Smart Select para propagar hidden value, eventos `input/change` y estado `filled`.
+- [x] Completar validaciones de monedas activas en comprobantes, libros y tasas de cambio.
+- [x] Agregar soporte de padre para cuentas contables con filtro `is_group` y validaciones de ciclo/estado/entidad.
+- [x] Agregar soporte de padre para centros de costo con filtro `is_group` y validaciones de ciclo/estado/entidad.
+- [x] Guardar y mostrar moneda explicita del PPTO de proyectos.
+- [x] Agregar pruebas focales de regresion para los issues QA cerrados.
+
 ## Seguimiento 2026-05-24 (UI responsive documental - completado)
 - [x] Mover acciones de detalle a menu compacto en pantallas pequenas para documentos compartidos por Contabilidad, Bancos, Compras e Inventario/Almacen.
 - [x] Convertir Historial del documento en panel colapsable cerrado por defecto.

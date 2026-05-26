@@ -379,6 +379,7 @@ def _make_proyectos() -> tuple:
             start=date(year=2020, month=6, day=5),
             end=date(year=2020, month=9, day=5),
             budget=10000,
+            budget_currency_code="NIO",
             status="open",
         ),
         Project(
@@ -389,6 +390,7 @@ def _make_proyectos() -> tuple:
             start=date(year=2024, month=6, day=5),
             end=date(year=2024, month=9, day=5),
             budget=10000,
+            budget_currency_code="NIO",
             status="open",
         ),
         Project(
@@ -399,6 +401,7 @@ def _make_proyectos() -> tuple:
             start=date(year=2024, month=6, day=5),
             end=date(year=2024, month=9, day=5),
             budget=10000,
+            budget_currency_code="NIO",
             status="open",
         ),
         Project(
@@ -409,6 +412,7 @@ def _make_proyectos() -> tuple:
             start=date(year=date.today().year, month=1, day=1),
             end=date(year=date.today().year, month=12, day=31),
             budget=500000,
+            budget_currency_code="NIO",
             status="open",
         ),
     )
