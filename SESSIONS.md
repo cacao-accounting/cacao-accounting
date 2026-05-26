@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-05-26 (Bandit en verde sin skips nuevos)
+- **Solicitud:** Corregir donde fuera razonable o agregar skips para que Bandit quedara en verde.
+- **Secret key:** El fallback de testing se mantiene deterministico sin literal sensible directo, y el fallback de desarrollo usa `token_urlsafe(32)` en lugar de una clave hardcodeada.
+- **Asserts:** Se reemplazaron `assert` de runtime en `settlement.engine` y `api.line_import` por guardas explicitas que se conservan bajo Python optimizado.
+- **Validacion:** `bandit -r cacao_accounting` quedo sin issues; `black --check`, `ruff`, `flake8` focales en verde; pruebas focales `test_line_import_api.py` y `test_settlement_engine.py` en verde (`25 passed`).
+
 ## 2026-05-26 (Playwright opcional y regresion UI de comprobante)
 - **Solicitud:** Usar Playwright en este equipo para pruebas mas robustas y asegurar que los tests se ignoren cuando Playwright no este disponible.
 - **Playwright:** Se verifico que Playwright y Chromium estan disponibles en `venv`; los tests E2E existentes conservan `skipif(not HAS_PLAYWRIGHT)` y el fixture `browser` salta si no puede lanzar navegador.

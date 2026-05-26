@@ -90,12 +90,14 @@ def validate_lines() -> ResponseReturnValue:
     schema, schema_error = _load_import_schema(payload.doctype)
     if schema_error:
         return schema_error
-    assert schema is not None
+    if schema is None:
+        return _invalid_payload_response("doctype", _("Doctype no soportado."), 400)
 
     company_id, company_error = _validate_company_context(payload.context)
     if company_error:
         return company_error
-    assert company_id is not None
+    if company_id is None:
+        return _invalid_payload_response("company_id", _("Compañía no especificada en el contexto."), 400)
 
     permission_error = _validate_import_permission(str(payload.doctype))
     if permission_error:
