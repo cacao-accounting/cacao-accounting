@@ -119,3 +119,15 @@ def obtener_lista_monedas():
         moneda = (i[0].code, i[0].name)
         monedas.append(moneda)
     return monedas
+
+
+def obtener_lista_monedas_activas():
+    """Devuelve la lista de monedas activas en la base de datos."""
+    from cacao_accounting.database import Currency
+
+    monedas = []
+    consulta = database.session.execute(database.select(Currency).filter(Currency.active.is_(True))).all()
+    for i in consulta:
+        moneda = (i[0].code, i[0].name)
+        monedas.append(moneda)
+    return monedas

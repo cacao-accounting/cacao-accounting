@@ -1,5 +1,21 @@
 # Estado Actual del Proyecto - 2026-05-24
 
+- **Playwright opcional / Regresion Smart Select comprobante (2026-05-26):** La cobertura E2E de navegador queda activa en este equipo y protegida para entornos sin Playwright.
+  - Los tests Playwright mantienen `pytest.mark.skipif(not HAS_PLAYWRIGHT, ...)` y el fixture `browser` hace `pytest.skip(...)` si Chromium no puede lanzarse.
+  - Se agrego cobertura de navegador para seleccionar compania en `/accounting/journal/new`, verificando hidden `company`, `company_filter_value` y estado visual `filled`.
+  - La prueba detecto que el hidden podia quedar como `[object Object]`; se corrigio quitando el handler redundante del hidden de compania en el template.
+  - `tests/test_e2e_journalentry.py` ahora siembra moneda `NIO` activa y libros con moneda para alinearse con las validaciones nuevas de moneda funcional.
+  - Validacion focal en verde: Playwright (`6 passed`) y journal E2E (`15 passed`).
+
+- **QA staged de monedas/comprobante/maestros (2026-05-26):** El patch staged queda endurecido para continuar QA contable.
+  - Existe `CurrencyGuard` para uso operativo de monedas: valida existencia/actividad y bloquea desactivacion de monedas default, monedas funcionales de companias activas y monedas usadas por libros activos.
+  - El setup inicial marca activa/default la moneda funcional seleccionada sin desactivar automaticamente USD/EUR u otras monedas seed.
+  - El comprobante contable valida compania existente y activa en backend; el Smart Select sincroniza el hidden real, emite eventos `input/change` y marca estado `filled`.
+  - Libros, tasas de cambio y comprobantes rechazan monedas inactivas por backend aunque se manipule el request.
+  - Cuentas contables y centros de costo soportan padre por Smart Select remoto con filtro `is_group` y validaciones de entidad, estado, grupo, self-parent y ciclos.
+  - Proyectos muestran y guardan `budget_currency_code` derivado de la moneda funcional activa cuando se informa presupuesto.
+  - Cobertura focal nueva en verde: Smart Select JS, setup, toggle de monedas, tasas de cambio, filtros de padres, jerarquias contables y presupuesto de proyectos.
+
 - **Modo Desktop/Cloud / Colaboracion sin migraciones (2026-05-24):** El runtime de escritorio/cloud queda centralizado y la colaboracion ligera queda disponible solo en cloud.
   - `cacao_accounting/runtime_mode.py` es la fuente unica de verdad para deteccion desktop, cloud y single-entity; `config.MODO_ESCRITORIO` se conserva solo como alias compatible.
   - En escritorio se bloquea la creacion de usuarios adicionales cuando ya existe un usuario y se oculta la accion visual; el usuario inicial se mantiene como administrador.

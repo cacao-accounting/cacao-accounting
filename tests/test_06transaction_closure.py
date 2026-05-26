@@ -542,7 +542,7 @@ def test_create_company_with_custom_fiscal_year_generates_12_periods(app_ctx):
 
 def test_closed_fiscal_year_blocks_all_postings(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal, JournalValidationError
-    from cacao_accounting.database import Accounts, ExchangeRate, FiscalYear, Book, database
+    from cacao_accounting.database import Accounts, Book, Currency, ExchangeRate, FiscalYear, database
 
     debit_account = Accounts(entity="cacao", code="EXP-009", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-009", name="Caja", active=True, enabled=True, group=False)
@@ -555,6 +555,7 @@ def test_closed_fiscal_year_blocks_all_postings(app_ctx):
             FiscalYear(
                 entity="cacao", name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31), is_closed=True
             ),
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
             ExchangeRate(origin="USD", destination="NIO", rate="35.00", date=date(2026, 5, 6)),
         ]
     )

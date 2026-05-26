@@ -1061,6 +1061,8 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     from cacao_accounting.setup.service import finalize_setup
 
     database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+    database.session.add(Currency(code="USD", name="US Dollar", decimals=2, active=True, default=False))
+    database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
     database.session.commit()
 
     finalize_setup(
@@ -1090,6 +1092,9 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     series = database.session.execute(
         database.select(NamingSeries).filter_by(company="mapco", entity_type="journal_entry")
     ).scalar_one_or_none()
+    currency_nio = database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one()
+    currency_usd = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one()
+    currency_eur = database.session.execute(database.select(Currency).filter_by(code="EUR")).scalar_one()
 
     assert entity is not None
     assert book is not None
@@ -1099,6 +1104,12 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     assert period is not None
     assert period.fiscal_year_id == fiscal_year.id
     assert series is not None
+    assert currency_nio.active is True
+    assert currency_nio.default is True
+    assert currency_usd.active is True
+    assert currency_usd.default is False
+    assert currency_eur.active is True
+    assert currency_eur.default is False
 
 
 def test_example_seed_creates_company_default_accounts(app_ctx):
@@ -1157,7 +1168,9 @@ def test_example_seed_creates_company_base_records(app_ctx):
 
         for company in ("cacao", "dulce", "cafe"):
             assert database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
-            assert database.session.execute(database.select(Book).filter_by(entity=company, is_primary=True)).scalar_one_or_none()
+            assert database.session.execute(
+                database.select(Book).filter_by(entity=company, is_primary=True)
+            ).scalar_one_or_none()
             assert database.session.execute(
                 database.select(CostCenter).filter_by(entity=company, code="MAIN")
             ).scalar_one_or_none()
@@ -1258,6 +1271,34 @@ def test_search_select_account_filters_and_validates_registry(app_ctx):
 
     with pytest.raises(SearchSelectError):
         search_select("account", "ban", {"not_allowed": ["x"]}, limit=10)
+
+
+def test_search_select_account_parent_accepts_is_group_filter(app_ctx):
+    from cacao_accounting.database import Accounts, database
+    from cacao_accounting.search_select import search_select
+
+    parent = Accounts(entity="cacao", code="ACT", name="Activo", active=True, enabled=True, group=True)
+    leaf = Accounts(entity="cacao", code="ACT-01", name="Caja", active=True, enabled=True, group=False)
+    database.session.add_all([parent, leaf])
+    database.session.commit()
+
+    payload = search_select("account", "act", {"company": ["cacao"], "is_group": ["1"]}, limit=10)
+
+    assert [item["value"] for item in payload["results"]] == [parent.id]
+
+
+def test_search_select_cost_center_parent_accepts_is_group_filter(app_ctx):
+    from cacao_accounting.database import CostCenter, database
+    from cacao_accounting.search_select import search_select
+
+    parent = CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=True)
+    leaf = CostCenter(entity="cacao", code="ADM01", name="Admin 01", active=True, enabled=True, group=False)
+    database.session.add_all([parent, leaf])
+    database.session.commit()
+
+    payload = search_select("cost_center", "adm", {"company": ["cacao"], "is_group": ["1"]}, limit=10)
+
+    assert [item["value"] for item in payload["results"]] == ["ADM"]
 
 
 def test_search_select_item_requires_registered_company_filter(app_ctx):

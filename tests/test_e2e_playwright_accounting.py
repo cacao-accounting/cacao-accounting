@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 import os
+import re
 
 os.environ["CACAO_ACCOUNTING_DESKTOP"] = "False"
 
@@ -139,6 +140,30 @@ def test_journal_entry_list_visibility(flask_server, browser):
     expect(page.locator("h5:has-text('Listado de Comprobantes Contables')")).to_be_visible()
     # 'Nuevo' button should be visible for manager
     expect(page.get_by_role("link", name="Nuevo")).to_be_visible()
+
+    context.close()
+
+
+@pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
+def test_journal_company_smart_select_updates_hidden_filters_and_state(flask_server, browser):
+    context = browser.new_context()
+    page = context.new_page()
+    base_url = flask_server
+
+    login(page, base_url, "manager_ui", "manager123")
+    page.goto(f"{base_url}/accounting/journal/new")
+
+    company_select = page.locator(".ca-smart-select", has=page.locator('input[name="company"]'))
+    company_input = company_select.locator("input.ca-smart-select-input")
+    company_hidden = company_select.locator('input[type="hidden"][name="company"]')
+
+    company_input.click()
+    company_input.fill("Choco")
+    page.locator(".ca-smart-select-option", has_text="Choco Sonrisas Sociedad Anonima").click()
+
+    expect(company_hidden).to_have_value("cacao")
+    expect(page.locator("#company_filter_value")).to_have_value("cacao")
+    expect(company_select).to_have_class(re.compile(r".*\bfilled\b.*"))
 
     context.close()
 
