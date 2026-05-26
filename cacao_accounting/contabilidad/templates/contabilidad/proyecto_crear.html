@@ -22,7 +22,7 @@
     </div>
   </div>
   <div class="p-4">
-    <form method="post" id="form-proyecto" class="row g-3">
+    <form method="post" id="form-proyecto" class="row g-3" x-data='{ budgetCurrency: {{ (budget_currency_code or "")|tojson }} }'>
       {{ form.csrf_token }}
       <div class="col-md-4">
         <label class="form-label" for="id-proyecto">{{ _('Código') }} <span class="text-danger">*</span></label>
@@ -40,6 +40,7 @@
             minChars: 1,
             preload: true,
             initialValue: "{{ form.entidad.data or "" }}",
+            onSelect: function(option) { budgetCurrency = option.currency || ""; },
             messages: {
               placeholder: {{ _("Buscar entidad")|tojson }},
               loading: {{ _("Cargando...")|tojson }},
@@ -48,7 +49,7 @@
               clear: {{ _("Limpiar")|tojson }}
             }
           })'>
-          <input type="hidden" name="entidad" x-model="selectedValue">
+          <input type="hidden" name="entidad" id="entidad_hidden" x-model="selectedValue">
           <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="option in options" :key="option.value">
@@ -62,6 +63,10 @@
       <div class="col-md-6">
         <label class="form-label" for="presupuesto">{{ _('Presupuesto') }}</label>
         {{ form.presupuesto(class="form-control form-control-sm", id="presupuesto", type="number", step="0.01") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="budget_currency_code">{{ _('Moneda del Presupuesto') }}</label>
+        <input class="form-control form-control-sm" id="budget_currency_code" type="text" :value="budgetCurrency" readonly>
       </div>
       <div class="col-md-6">
         <label class="form-label" for="status">{{ _('Estado') }}</label>

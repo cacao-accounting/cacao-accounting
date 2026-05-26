@@ -34,7 +34,9 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     CostCenter,
+    Currency,
     DocumentRelation,
+    Entity,
     FiscalYear,
     database,
 )
@@ -389,6 +391,7 @@ def parse_journal_form(form_data: Any) -> dict[str, Any]:
 
 def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     company = _required_text(payload.get("company"), "La compañia es obligatoria.")
+    _validate_active_company(company)
     posting_date = _parse_date(payload.get("posting_date"))
     lines_payload = payload.get("lines") or []
     if not isinstance(lines_payload, list):
@@ -401,6 +404,7 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     if books is None and (book := _optional_text(payload.get("book"))):
         books = [book]
     transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
+    _validate_active_transaction_currency(transaction_currency)
     return JournalDraftInput(
         company=company,
         posting_date=posting_date,
@@ -656,6 +660,24 @@ def _normalize_transaction_currency(
 
 def _apply_currency_to_lines(lines: list[JournalLineInput], currency: str) -> list[JournalLineInput]:
     return [replace(line, currency=currency) for line in lines]
+
+
+def _validate_active_transaction_currency(transaction_currency: str | None) -> None:
+    if not transaction_currency:
+        return
+    currency = database.session.execute(database.select(Currency).filter_by(code=transaction_currency)).scalar_one_or_none()
+    if currency is None:
+        raise JournalValidationError("La moneda del comprobante no existe.")
+    if not bool(currency.active):
+        raise JournalValidationError("La moneda del comprobante está inactiva.")
+
+
+def _validate_active_company(company: str) -> None:
+    company_record = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
+    if company_record is None:
+        raise JournalValidationError("La compañia indicada no existe.")
+    if company_record.enabled is False:
+        raise JournalValidationError("La compañia indicada está inactiva.")
 
 
 def _account_record(company: str, account_value: str) -> Accounts | None:

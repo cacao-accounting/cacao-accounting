@@ -6,8 +6,9 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
-from datetime import date
 from collections.abc import Sequence
+from datetime import date
+from decimal import Decimal
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -46,7 +47,9 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_entidades,
     obtener_lista_entidades_por_id_razonsocial,
     obtener_lista_monedas,
+    obtener_lista_monedas_activas,
 )
+from cacao_accounting.contabilidad.currency_guard import CurrencyGuard, CurrencyGuardError
 from cacao_accounting.setup.service import (
     available_catalog_files,
     create_company,
@@ -156,6 +159,33 @@ def moneda(code):
         return redirect(url_for("contabilidad.monedas"))
 
     return render_template("contabilidad/moneda.html", registro=registro)
+
+
+@contabilidad.route("/currency/<code>/toggle-active", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def currency_toggle_active(code):
+    """Habilita o deshabilita una moneda."""
+    from cacao_accounting.database import Currency
+
+    registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La moneda indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.monedas"))
+
+    if registro.active:
+        try:
+            CurrencyGuard().assert_can_deactivate(registro)
+        except CurrencyGuardError as error:
+            flash(str(error), "warning")
+            return redirect(url_for("contabilidad.moneda", code=code))
+        registro.active = False
+    else:
+        registro.active = True
+
+    database.session.commit()
+    return redirect(url_for("contabilidad.monedas"))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -552,13 +582,29 @@ def editar_libro(id_libro):
 
     formulario = FormularioLibro(obj=libro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.moneda.choices = obtener_lista_monedas()
+    formulario.moneda.choices = obtener_lista_monedas_activas()
     formulario.id.data = libro.code
     formulario.moneda.data = libro.currency
     formulario.estado.data = libro.status or "activo"
     TITULO = "Editar Libro de Contabilidad - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            if formulario.estado.data == "activo":
+                CurrencyGuard().validate_active_currency(
+                    formulario.moneda.data,
+                    _("No se puede activar un libro con una moneda inactiva."),
+                )
+            else:
+                CurrencyGuard().get_currency(formulario.moneda.data)
+        except CurrencyGuardError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/book_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+            )
         libro.name = formulario.nombre.data
         libro.entity = formulario.entidad.data
         libro.currency = formulario.moneda.data
@@ -585,9 +631,24 @@ def nuevo_libro():
 
     formulario = FormularioLibro()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.moneda.choices = obtener_lista_monedas()
+    formulario.moneda.choices = obtener_lista_monedas_activas()
     TITULO = "Crear Nuevo Libro de Contabilidad - " + APPNAME
     if formulario.validate_on_submit():
+        try:
+            if formulario.estado.data == "activo":
+                CurrencyGuard().validate_active_currency(
+                    formulario.moneda.data,
+                    _("No se puede crear un libro activo con una moneda inactiva."),
+                )
+            else:
+                CurrencyGuard().get_currency(formulario.moneda.data)
+        except CurrencyGuardError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/book_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
         DATA = Book(
             code=formulario.id.data,
             name=formulario.nombre.data,
@@ -689,6 +750,44 @@ def cuenta(entity, id_cta):
     )
 
 
+def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
+    from cacao_accounting.database import Accounts
+
+    descendants: set[str] = set()
+    pending = [account_code]
+    while pending:
+        current = pending.pop()
+        children = database.session.execute(
+            database.select(Accounts.code).filter(Accounts.entity == entity, Accounts.parent == current)
+        ).scalars()
+        for child_code in children:
+            if child_code not in descendants:
+                descendants.add(child_code)
+                pending.append(child_code)
+    return descendants
+
+
+def _validate_account_parent(entity: str, parent_code: str | None, *, current_code: str | None = None) -> str | None:
+    from cacao_accounting.database import Accounts
+
+    if not parent_code:
+        return None
+    if current_code and parent_code == current_code:
+        raise ValueError(_("Una cuenta no puede ser padre de si misma."))
+    parent = database.session.execute(
+        database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == parent_code)
+    ).scalar_one_or_none()
+    if parent is None:
+        raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
+    if not bool(parent.active) or not bool(parent.enabled):
+        raise ValueError(_("La cuenta padre debe estar activa."))
+    if not bool(parent.group):
+        raise ValueError(_("La cuenta padre debe ser una cuenta de grupo."))
+    if current_code and parent_code in _account_descendant_codes(entity, current_code):
+        raise ValueError(_("La cuenta padre seleccionada genera un ciclo jerarquico."))
+    return parent_code
+
+
 @contabilidad.route("/account/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -701,15 +800,22 @@ def nueva_cuenta():
     formulario = FormularioCuenta()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+    if request.method == "POST" and request.form.get("padre"):
+        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
     TITULO = "Nueva Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario)
         DATA = Accounts(
             entity=formulario.entidad.data,
             code=formulario.code.data,
             name=formulario.name.data,
             group=bool(formulario.grupo.data),
-            parent=formulario.padre.data or None,
+            parent=parent_code,
             currency=None,
             classification=formulario.clasificacion.data or None,
             type_=None,
@@ -749,20 +855,32 @@ def editar_cuenta(entity, id_cta):
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.entidad.data = registro.entity
     formulario.padre.choices = [("", SIN_PADRE)]
+    if request.method == "POST" and request.form.get("padre"):
+        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
     if registro.parent:
         padre_row = database.session.execute(
             database.select(Accounts).filter(Accounts.code == registro.parent, Accounts.entity == entity)
         ).scalar_one_or_none()
         if padre_row:
             formulario.padre.choices.append((padre_row.code, f"{padre_row.code} - {padre_row.name}"))
-        formulario.padre.data = registro.parent
+        if request.method != "POST":
+            formulario.padre.data = registro.parent
 
     TITULO = "Editar Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            parent_code = _validate_account_parent(
+                formulario.entidad.data,
+                formulario.padre.data or None,
+                current_code=registro.code,
+            )
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario, edit=True)
         registro.name = formulario.name.data
         registro.group = bool(formulario.grupo.data)
-        registro.parent = formulario.padre.data or None
+        registro.parent = parent_code
         registro.classification = formulario.clasificacion.data or None
         registro.account_type = formulario.account_type.data or None
         registro.active = bool(formulario.activo.data)
@@ -796,6 +914,49 @@ def ccostos():
     )
 
 
+def _cost_center_descendant_codes(entity: str, center_code: str) -> set[str]:
+    from cacao_accounting.database import CostCenter
+
+    descendants: set[str] = set()
+    pending = [center_code]
+    while pending:
+        current = pending.pop()
+        children = database.session.execute(
+            database.select(CostCenter.code).filter(CostCenter.entity == entity, CostCenter.parent == current)
+        ).scalars()
+        for child_code in children:
+            if child_code not in descendants:
+                descendants.add(child_code)
+                pending.append(child_code)
+    return descendants
+
+
+def _validate_cost_center_parent(
+    entity: str,
+    parent_code: str | None,
+    *,
+    current_code: str | None = None,
+) -> str | None:
+    from cacao_accounting.database import CostCenter
+
+    if not parent_code:
+        return None
+    if current_code and parent_code == current_code:
+        raise ValueError(_("Un centro de costos no puede ser padre de si mismo."))
+    parent = database.session.execute(
+        database.select(CostCenter).filter(CostCenter.entity == entity, CostCenter.code == parent_code)
+    ).scalar_one_or_none()
+    if parent is None:
+        raise ValueError(_("El centro de costos padre indicado no existe para la entidad seleccionada."))
+    if not bool(parent.active) or not bool(parent.enabled):
+        raise ValueError(_("El centro de costos padre debe estar activo."))
+    if not bool(parent.group):
+        raise ValueError(_("El centro de costos padre debe ser un grupo."))
+    if current_code and parent_code in _cost_center_descendant_codes(entity, current_code):
+        raise ValueError(_("El centro de costos padre seleccionado genera un ciclo jerarquico."))
+    return parent_code
+
+
 @contabilidad.route("/costs_center/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -808,18 +969,26 @@ def nuevo_centro_costo():
     formulario = FormularioCentroCosto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+    if request.method == "POST" and request.form.get("padre"):
+        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
     TITULO = "Nuevo Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
+        entity = request.form.get("entidad", formulario.entidad.data)
+        try:
+            parent_code = _validate_cost_center_parent(entity, request.form.get("padre") or None)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario)
         DATA = CostCenter(
-            entity=formulario.entidad.data,
+            entity=entity,
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
             active=bool(formulario.activo.data),
             enabled=bool(formulario.activo.data),
             default=bool(formulario.predeterminado.data),
             group=bool(formulario.grupo.data),
-            parent=request.form.get("padre") or None,
+            parent=parent_code,
             status="activo",
         )
         database.session.add(DATA)
@@ -850,16 +1019,30 @@ def editar_centro_costo(id_cc):
     formulario.id.data = registro.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+    if request.method == "POST" and request.form.get("padre"):
+        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
+    if request.method != "POST":
+        formulario.padre.data = registro.parent
     TITULO = "Editar Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
+        entity = request.form.get("entidad", registro.entity)
+        try:
+            parent_code = _validate_cost_center_parent(
+                entity,
+                request.form.get("padre") or None,
+                current_code=registro.code,
+            )
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario, edit=True)
         registro.name = request.form.get("nombre", registro.name)
-        registro.entity = request.form.get("entidad", registro.entity)
+        registro.entity = entity
         registro.active = bool(formulario.activo.data)
         registro.enabled = bool(formulario.activo.data)
         registro.default = bool(formulario.predeterminado.data)
         registro.group = bool(formulario.grupo.data)
-        registro.parent = request.form.get("padre") or None
+        registro.parent = parent_code
         database.session.commit()
         return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
 
@@ -949,13 +1132,27 @@ def nuevo_proyecto():
     TITULO = "Nuevo Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
+        budget_amount = formulario.presupuesto.data
+        budget_currency = None
+        if budget_amount is not None:
+            try:
+                budget_currency = CurrencyGuard().validate_company_functional_currency(request.form.get("entidad")).code
+            except CurrencyGuardError as error:
+                flash(str(error), "danger")
+                return render_template(
+                    "contabilidad/proyecto_crear.html",
+                    titulo=TITULO,
+                    form=formulario,
+                    budget_currency_code="",
+                )
         DATA = Project(
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
             entity=request.form.get("entidad", None),
             start=formulario.inicio.data,
             end=formulario.fin.data,
-            budget=float(formulario.presupuesto.data or 0),
+            budget=Decimal(str(budget_amount or 0)),
+            budget_currency_code=budget_currency,
             enabled=bool(formulario.habilitado.data),
             status=formulario.status.data or "open",
         )
@@ -967,6 +1164,7 @@ def nuevo_proyecto():
         "contabilidad/proyecto_crear.html",
         titulo=TITULO,
         form=formulario,
+        budget_currency_code="",
     )
 
 
@@ -1002,14 +1200,32 @@ def editar_proyecto(project_id):
     formulario = FormularioProyecto(obj=proyecto)
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.presupuesto.data = proyecto.budget
     TITULO = "Editar Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
+        budget_amount = formulario.presupuesto.data
+        budget_currency = None
+        if budget_amount is not None:
+            try:
+                budget_currency = (
+                    CurrencyGuard().validate_company_functional_currency(request.form.get("entidad", proyecto.entity)).code
+                )
+            except CurrencyGuardError as error:
+                flash(str(error), "danger")
+                return render_template(
+                    "contabilidad/proyecto_crear.html",
+                    titulo=TITULO,
+                    form=formulario,
+                    edit=True,
+                    budget_currency_code=proyecto.budget_currency_code or "",
+                )
         proyecto.name = request.form.get("nombre", proyecto.name)
         proyecto.entity = request.form.get("entidad", proyecto.entity)
         proyecto.start = formulario.inicio.data
         proyecto.end = formulario.fin.data
-        proyecto.budget = float(formulario.presupuesto.data or 0)
+        proyecto.budget = Decimal(str(budget_amount or 0))
+        proyecto.budget_currency_code = budget_currency
         proyecto.enabled = bool(formulario.habilitado.data)
         proyecto.status = formulario.status.data or "open"
         database.session.commit()
@@ -1020,6 +1236,7 @@ def editar_proyecto(project_id):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        budget_currency_code=proyecto.budget_currency_code or "",
     )
 
 
@@ -1323,12 +1540,42 @@ def nueva_tasa_cambio():
     from cacao_accounting.database import ExchangeRate
 
     formulario = FormularioTasaCambio()
-    monedas_choices = obtener_lista_monedas()
+    monedas_choices = obtener_lista_monedas_activas()
     formulario.origin.choices = monedas_choices
     formulario.destination.choices = monedas_choices
     TITULO = "Nueva Tasa de Cambio - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            CurrencyGuard().validate_active_currency(
+                formulario.origin.data,
+                _("La moneda origen debe existir y estar activa."),
+            )
+            CurrencyGuard().validate_active_currency(
+                formulario.destination.data,
+                _("La moneda destino debe existir y estar activa."),
+            )
+        except CurrencyGuardError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/tc_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
+        if formulario.origin.data == formulario.destination.data:
+            flash(_("La moneda origen y destino deben ser diferentes."), "danger")
+            return render_template(
+                "contabilidad/tc_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
+        if formulario.rate.data is None or formulario.rate.data <= 0:
+            flash(_("La tasa debe ser mayor a cero."), "danger")
+            return render_template(
+                "contabilidad/tc_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
         DATA = ExchangeRate(
             origin=formulario.origin.data,
             destination=formulario.destination.data,
@@ -2032,7 +2279,7 @@ def nuevo_comprobante():
         initial_journal=initial_journal,
         submit_url=url_for("contabilidad.nuevo_comprobante"),
         cancel_url=url_for("contabilidad.conta"),
-        currencies=obtener_lista_monedas(),
+        currencies=obtener_lista_monedas_activas(),
     )
 
 

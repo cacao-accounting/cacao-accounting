@@ -65,6 +65,7 @@
             doctype: "cost_center",
             name: "padre",
             minChars: 1,
+            initialValue: "{{ form.padre.data or "" }}",
             filters: {
                 company: { selector: "#entidad_hidden" },
                 is_group: 1

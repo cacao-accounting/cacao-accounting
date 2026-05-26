@@ -37,7 +37,10 @@
       <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Fecha inicio') }}</label><p>{{ registro.start or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Fecha fin') }}</label><p>{{ registro.end or '-' }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Presupuesto') }}</label><p>{{ registro.budget or 0 }}</p></div>
+      <div class="ca-kv-item">
+        <label>{{ _('Presupuesto') }}</label>
+        <p>{{ registro.budget_currency_code or '' }} {{ registro.budget or 0 }}</p>
+      </div>
       <div class="ca-kv-item"><label>{{ _('Habilitado') }}</label><p>{{ _('Sí') if registro.enabled else _('No') }}</p></div>
     </div>
   </div>

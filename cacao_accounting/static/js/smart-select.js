@@ -91,6 +91,7 @@
           this.lastFilterSignature = this.filterSignature();
           this.bindFilterSources();
           this.invalid = false;
+          this.syncFilledState();
           if (!this.selectedValue && config.initialValue) {
             this.selectedValue = normalizeValue(config.initialValue);
           }
@@ -115,6 +116,7 @@
                   this.search = this.selectedLabel || normalized;
                 }
               }
+              this.syncFilledState();
             });
           }
         },
@@ -186,10 +188,19 @@
         notifyValueChange() {
           if (!this.$root) return;
           const input = this.$root.querySelector(`input[type="hidden"][name="${this.name}"]`);
-          if (!input) return;
+          if (!input) {
+            this.syncFilledState();
+            return;
+          }
           input.value = this.selectedValue || '';
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
+          this.syncFilledState();
+        },
+
+        syncFilledState() {
+          if (!this.$root || !this.$root.classList) return;
+          this.$root.classList.toggle('filled', Boolean(this.selectedValue));
         },
 
         async preloadOptions(settings) {

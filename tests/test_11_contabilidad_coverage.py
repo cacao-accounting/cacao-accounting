@@ -890,11 +890,12 @@ def test_journal_service_optional_bool_string(app_ctx):
 
 def test_journal_service_normalize_transaction_currency_matching(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
-    from cacao_accounting.database import Accounts, database
+    from cacao_accounting.database import Accounts, Currency, database
 
     debit = Accounts(entity="cacao", code="EXP-TC1", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-TC1", name="Caja", active=True, enabled=True)
-    database.session.add_all([debit, credit])
+    currency = Currency(code="USD", name="Dollar", decimals=2, active=True, default=False)
+    database.session.add_all([debit, credit, currency])
     database.session.commit()
 
     journal = create_journal_draft(
@@ -1107,6 +1108,74 @@ def test_route_nueva_moneda_post(app_ctx):
         data={"code": "USD", "name": "Dollar", "decimals": "2", "active": "y", "default": ""},
     )
     assert response.status_code in (200, 302)
+
+
+def test_currency_toggle_rejects_default_currency_deactivation(app_ctx):
+    from cacao_accounting.database import Currency, User, database
+
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post("/accounting/currency/NIO/toggle-active", follow_redirects=False)
+    currency = database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one()
+
+    assert response.status_code in (200, 302)
+    assert currency.active is True
+
+
+def test_currency_toggle_rejects_company_currency_deactivation(app_ctx):
+    from cacao_accounting.database import Currency, Entity, User, database
+
+    database.session.add(Currency(code="USD", name="Dollar", decimals=2, active=True, default=False))
+    entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+    entity.currency = "USD"
+    entity.enabled = True
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post("/accounting/currency/USD/toggle-active", follow_redirects=False)
+    currency = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one()
+
+    assert response.status_code in (200, 302)
+    assert currency.active is True
+
+
+def test_currency_toggle_rejects_active_ledger_currency_deactivation(app_ctx):
+    from cacao_accounting.database import Book, Currency, User, database
+
+    database.session.add(Currency(code="USD", name="Dollar", decimals=2, active=True, default=False))
+    database.session.add(Book(code="USDACT", name="USD Activo", entity="cacao", currency="USD", status="activo"))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post("/accounting/currency/USD/toggle-active", follow_redirects=False)
+    currency = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one()
+
+    assert response.status_code in (200, 302)
+    assert currency.active is True
+
+
+def test_currency_toggle_allows_inactive_currency_activation(app_ctx):
+    from cacao_accounting.database import Currency, User, database
+
+    database.session.add(Currency(code="USD", name="Dollar", decimals=2, active=False, default=False))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post("/accounting/currency/USD/toggle-active", follow_redirects=False)
+    currency = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one()
+
+    assert response.status_code in (200, 302)
+    assert currency.active is True
 
 
 def test_route_entidades(app_ctx):
@@ -1412,6 +1481,60 @@ def test_route_nuevo_centro_costo_post(app_ctx):
     assert response.status_code in (200, 302)
 
 
+def test_cost_center_can_be_created_with_valid_parent(app_ctx):
+    from cacao_accounting.database import CostCenter, User, database
+
+    database.session.add(CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=True))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/costs_center/new",
+        data={"id": "ADM01", "nombre": "Admin 01", "entidad": "cacao", "padre": "ADM", "activo": "y"},
+    )
+    child = database.session.execute(database.select(CostCenter).filter_by(entity="cacao", code="ADM01")).scalar_one_or_none()
+
+    assert response.status_code in (200, 302)
+    assert child is not None
+    assert child.parent == "ADM"
+
+
+def test_cost_center_rejects_invalid_inactive_cross_company_or_circular_parent(app_ctx):
+    from cacao_accounting.database import CostCenter, Entity, User, database
+
+    parent = CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=True)
+    inactive = CostCenter(entity="cacao", code="INAC", name="Inactivo", active=False, enabled=True, group=True)
+    extra_entity = Entity(code="oth", name="Other", company_name="Other SA", tax_id="J9987", currency="NIO", enabled=True)
+    foreign_parent = CostCenter(entity="oth", code="FORE", name="Ajeno", active=True, enabled=True, group=True)
+    child = CostCenter(entity="cacao", code="ADM01", name="Admin 01", active=True, enabled=True, group=True, parent="ADM")
+    grandchild = CostCenter(
+        entity="cacao", code="ADM0101", name="Admin 0101", active=True, enabled=True, group=False, parent="ADM01"
+    )
+    database.session.add_all([parent, inactive, extra_entity, foreign_parent, child, grandchild])
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    for invalid_parent in ("INAC", "FORE", "ADM0101"):
+        response = client.post(
+            "/accounting/costs_center/new",
+            data={"id": f"BAD{invalid_parent}", "nombre": "Bad", "entidad": "cacao", "padre": invalid_parent, "activo": "y"},
+        )
+        assert response.status_code == 200
+
+    response = client.post(
+        "/accounting/costs_center/ADM01/edit",
+        data={"id": "ADM01", "nombre": "Admin 01", "entidad": "cacao", "padre": "ADM0101", "activo": "y"},
+    )
+    child_after = database.session.execute(database.select(CostCenter).filter_by(entity="cacao", code="ADM01")).scalar_one()
+
+    assert response.status_code == 200
+    assert child_after.parent == "ADM"
+
+
 def test_route_centro_costo_detail(app_ctx):
     from cacao_accounting.database import CostCenter, User, database
 
@@ -1479,8 +1602,10 @@ def test_route_nuevo_proyecto_get(app_ctx):
 
 
 def test_route_nuevo_proyecto_post(app_ctx):
-    from cacao_accounting.database import User
+    from cacao_accounting.database import Currency, User, database
 
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True))
+    database.session.commit()
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
@@ -1498,6 +1623,86 @@ def test_route_nuevo_proyecto_post(app_ctx):
         },
     )
     assert response.status_code in (200, 302)
+
+
+def test_project_budget_uses_company_functional_currency(app_ctx):
+    from cacao_accounting.database import Currency, Project, User, database
+
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/project/new",
+        data={
+            "id": "PRJBUD",
+            "nombre": "Proyecto con PPTO",
+            "entidad": "cacao",
+            "presupuesto": "1000",
+            "habilitado": "y",
+            "status": "open",
+        },
+    )
+    project = database.session.execute(database.select(Project).filter_by(code="PRJBUD")).scalar_one_or_none()
+
+    assert response.status_code in (200, 302)
+    assert project is not None
+    assert project.budget_currency_code == "NIO"
+
+
+def test_project_budget_rejects_inactive_company_currency(app_ctx):
+    from cacao_accounting.database import Currency, Entity, Project, User, database
+
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=False, default=True))
+    entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+    entity.currency = "NIO"
+    entity.enabled = True
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/project/new",
+        data={
+            "id": "PRJINACT",
+            "nombre": "Proyecto moneda inactiva",
+            "entidad": "cacao",
+            "presupuesto": "1000",
+            "habilitado": "y",
+            "status": "open",
+        },
+    )
+
+    assert response.status_code == 200
+    assert database.session.execute(database.select(Project).filter_by(code="PRJINACT")).scalar_one_or_none() is None
+
+
+def test_project_without_budget_is_allowed(app_ctx):
+    from cacao_accounting.database import Project, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/project/new",
+        data={
+            "id": "PRJNOBUD",
+            "nombre": "Proyecto sin PPTO",
+            "entidad": "cacao",
+            "presupuesto": "",
+            "habilitado": "y",
+            "status": "open",
+        },
+    )
+    project = database.session.execute(database.select(Project).filter_by(code="PRJNOBUD")).scalar_one_or_none()
+
+    assert response.status_code in (200, 302)
+    assert project is not None
+    assert project.budget_currency_code is None
 
 
 def test_route_editar_proyecto_get(app_ctx):
@@ -2080,11 +2285,12 @@ def test_route_ver_comprobante_with_currency_label(app_ctx):
 
 def test_route_ver_comprobante_unknown_currency(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
-    from cacao_accounting.database import Accounts, User, database
+    from cacao_accounting.database import Accounts, Currency, User, database
 
     debit = Accounts(entity="cacao", code="EXP-UC", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-UC", name="Caja", active=True, enabled=True)
-    database.session.add_all([debit, credit])
+    currency = Currency(code="EUR", name="Euro", decimals=2, active=True, default=False)
+    database.session.add_all([debit, credit, currency])
     database.session.commit()
 
     journal = create_journal_draft(
@@ -2780,6 +2986,31 @@ def test_journal_service_mixed_currencies_no_transaction_currency(app_ctx):
         )
 
 
+def test_journal_service_rejects_inactive_transaction_currency(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft
+    from cacao_accounting.database import Accounts, Currency, database
+
+    debit = Accounts(entity="cacao", code="EXP-TI1", name="Gasto", active=True, enabled=True)
+    credit = Accounts(entity="cacao", code="CAJ-TI1", name="Caja", active=True, enabled=True)
+    inactive_currency = Currency(code="USD", name="Dollar", decimals=2, active=False, default=False)
+    database.session.add_all([debit, credit, inactive_currency])
+    database.session.commit()
+
+    with pytest.raises(JournalValidationError, match="inactiva"):
+        create_journal_draft(
+            {
+                "company": "cacao",
+                "posting_date": "2026-05-01",
+                "transaction_currency": "USD",
+                "lines": [
+                    {"account": debit.id, "debit": "10.00", "credit": "0"},
+                    {"account": credit.id, "debit": "0", "credit": "10.00"},
+                ],
+            },
+            user_id="admin",
+        )
+
+
 def test_journal_service_account_code_by_code_not_found(app_ctx):
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft
     from cacao_accounting.database import Accounts, database
@@ -3028,6 +3259,28 @@ def test_route_libro_new_post_success(app_ctx):
     assert response.status_code in (200, 302)
 
 
+def test_route_libro_new_post_rejects_inactive_currency(app_ctx):
+    from cacao_accounting.database import Book, Currency, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=False, default=False),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/book/new",
+        data={"id": "LIBINACT", "nombre": "Libro Inactivo", "entidad": "cacao", "moneda": "USD", "estado": "activo"},
+    )
+    assert response.status_code == 200
+    book = database.session.execute(database.select(Book).filter_by(code="LIBINACT")).scalar_one_or_none()
+    assert book is None
+
+
 def test_route_editar_libro_post_success(app_ctx):
     from cacao_accounting.database import Book, Currency, User, database
 
@@ -3046,6 +3299,113 @@ def test_route_editar_libro_post_success(app_ctx):
         data={"id": "LIBEDIT", "nombre": "Libro Editado", "entidad": "cacao", "moneda": "NIO", "estado": "activo"},
     )
     assert response.status_code in (200, 302)
+
+
+def test_route_nueva_tasa_cambio_rejects_inactive_currency(app_ctx):
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=False, default=False),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "USD", "destination": "NIO", "rate": "36.50", "date": "2026-05-01"},
+    )
+    assert response.status_code == 200
+    rate = database.session.execute(database.select(ExchangeRate)).scalars().first()
+    assert rate is None
+
+
+def test_exchange_rate_rejects_same_source_and_target_currency(app_ctx):
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True))
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "NIO", "destination": "NIO", "rate": "36.50", "date": "2026-05-01"},
+    )
+
+    assert response.status_code == 200
+    assert database.session.execute(database.select(ExchangeRate)).scalars().first() is None
+
+
+def test_exchange_rate_rejects_zero_rate(app_ctx):
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "USD", "destination": "NIO", "rate": "0", "date": "2026-05-01"},
+    )
+
+    assert response.status_code == 200
+    assert database.session.execute(database.select(ExchangeRate)).scalars().first() is None
+
+
+def test_exchange_rate_rejects_negative_rate(app_ctx):
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "USD", "destination": "NIO", "rate": "-1", "date": "2026-05-01"},
+    )
+
+    assert response.status_code == 200
+    assert database.session.execute(database.select(ExchangeRate)).scalars().first() is None
+
+
+def test_exchange_rate_valid_active_currency_pair(app_ctx):
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "USD", "destination": "NIO", "rate": "36.50", "date": "2026-05-01"},
+    )
+
+    assert response.status_code in (200, 302)
+    rate = database.session.execute(database.select(ExchangeRate)).scalars().first()
+    assert rate is not None
+    assert rate.origin == "USD"
 
 
 def test_route_nueva_cuenta_post_success(app_ctx):
@@ -3075,9 +3435,98 @@ def test_route_nueva_cuenta_post_success(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_editar_proyecto_post_success(app_ctx):
-    from cacao_accounting.database import Project, User, database
+def test_account_can_be_created_with_valid_parent(app_ctx):
+    from cacao_accounting.database import Accounts, User, database
 
+    parent = Accounts(
+        entity="cacao",
+        code="1",
+        name="Activo",
+        group=True,
+        active=True,
+        enabled=True,
+        classification="activo",
+    )
+    database.session.add(parent)
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/account/new",
+        data={
+            "entidad": "cacao",
+            "code": "1.01",
+            "name": "Caja",
+            "grupo": "",
+            "padre": "1",
+            "clasificacion": "activo",
+            "account_type": "cash",
+            "activo": "y",
+        },
+    )
+    child = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1.01")).scalar_one_or_none()
+
+    assert response.status_code in (200, 302)
+    assert child is not None
+    assert child.parent == "1"
+
+
+def test_account_rejects_invalid_inactive_cross_company_or_circular_parent(app_ctx):
+    from cacao_accounting.database import Accounts, Entity, User, database
+
+    parent = Accounts(entity="cacao", code="1", name="Activo", group=True, active=True, enabled=True)
+    inactive = Accounts(entity="cacao", code="9", name="Inactivo", group=True, active=False, enabled=True)
+    extra_entity = Entity(code="oth", name="Other", company_name="Other SA", tax_id="J9988", currency="NIO", enabled=True)
+    foreign_parent = Accounts(entity="oth", code="2", name="Ajeno", group=True, active=True, enabled=True)
+    child = Accounts(entity="cacao", code="1.01", name="Caja", group=True, active=True, enabled=True, parent="1")
+    grandchild = Accounts(
+        entity="cacao", code="1.01.01", name="Caja chica", group=False, active=True, enabled=True, parent="1.01"
+    )
+    database.session.add_all([parent, inactive, extra_entity, foreign_parent, child, grandchild])
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    for invalid_parent in ("9", "2", "1.01.01"):
+        response = client.post(
+            "/accounting/account/new",
+            data={
+                "entidad": "cacao",
+                "code": f"BAD-{invalid_parent}",
+                "name": "Bad",
+                "padre": invalid_parent,
+                "clasificacion": "activo",
+                "account_type": "cash",
+                "activo": "y",
+            },
+        )
+        assert response.status_code == 200
+
+    response = client.post(
+        "/accounting/account/cacao/1.01/edit",
+        data={
+            "entidad": "cacao",
+            "code": "1.01",
+            "name": "Caja",
+            "padre": "1.01.01",
+            "clasificacion": "activo",
+            "account_type": "cash",
+            "activo": "y",
+        },
+    )
+    child_after = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1.01")).scalar_one()
+
+    assert response.status_code == 200
+    assert child_after.parent == "1"
+
+
+def test_route_editar_proyecto_post_success(app_ctx):
+    from cacao_accounting.database import Currency, Project, User, database
+
+    database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True))
     database.session.add(Project(code="PRJEDIT", name="Edit Proyecto", entity="cacao", enabled=True, start=date(2026, 1, 1)))
     database.session.commit()
     user = User.query.filter_by(user="admin").first()

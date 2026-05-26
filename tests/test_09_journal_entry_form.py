@@ -439,12 +439,13 @@ def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):
 
 def test_submit_journal_rejects_missing_exchange_rate_for_foreign_currency(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal, JournalValidationError
-    from cacao_accounting.database import Accounts, Book, database
+    from cacao_accounting.database import Accounts, Book, Currency, database
 
     debit_account = Accounts(entity="cacao", code="EXP-007", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-007", name="Caja", active=True, enabled=True, group=False)
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
-    database.session.add_all([debit_account, credit_account, fiscal_book])
+    usd = Currency(code="USD", name="Dollar", decimals=2, active=True, default=False)
+    database.session.add_all([debit_account, credit_account, fiscal_book, usd])
     database.session.commit()
 
     journal = create_journal_draft(
@@ -468,7 +469,7 @@ def test_submit_journal_rejects_missing_exchange_rate_for_foreign_currency(app_c
 def test_submit_journal_converts_foreign_currency_to_book_currency(app_ctx):
     from decimal import Decimal
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
-    from cacao_accounting.database import Accounts, Book, ExchangeRate, GLEntry, database
+    from cacao_accounting.database import Accounts, Book, Currency, ExchangeRate, GLEntry, database
 
     debit_account = Accounts(entity="cacao", code="EXP-008", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-008", name="Caja", active=True, enabled=True, group=False)
@@ -478,6 +479,7 @@ def test_submit_journal_converts_foreign_currency_to_book_currency(app_ctx):
             debit_account,
             credit_account,
             fiscal_book,
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
             ExchangeRate(origin="USD", destination="NIO", rate="36.00", date=date(2026, 5, 6)),
         ]
     )
@@ -858,13 +860,15 @@ def test_reject_journal_draft_changes_status_without_gl_entries(app_ctx):
 
 def test_journal_detail_shows_readable_labels_and_detail_action(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
-    from cacao_accounting.database import Accounts, Book, CostCenter, User, database
+    from cacao_accounting.database import Accounts, Book, CostCenter, Currency, User, database
 
     debit_account = Accounts(entity="cacao", code="11.01.001.001", name="Caja General", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="31.01", name="Capital Social", active=True, enabled=True, group=False)
     center = CostCenter(entity="cacao", code="ADM", name="Administración", active=True, enabled=True, group=False)
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
-    database.session.add_all([debit_account, credit_account, center, fiscal_book])
+    database.session.add_all(
+        [debit_account, credit_account, center, fiscal_book, Currency(code="NIO", name="Cordoba", decimals=2, active=True)]
+    )
     database.session.commit()
 
     journal = create_journal_draft(

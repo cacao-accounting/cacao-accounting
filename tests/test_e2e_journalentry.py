@@ -24,12 +24,13 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, Modules, User, database
+        from cacao_accounting.database import Currency, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
             [
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO", enabled=True),
+                Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=True, enabled=True),
                 User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
             ]
@@ -49,8 +50,8 @@ def _seed_journal_catalog() -> dict[str, str]:
 
     debit_account = Accounts(entity="cacao", code="EXP-E2E", name="Gasto E2E", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-E2E", name="Caja E2E", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", status="activo")
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
+    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", status="activo", currency="NIO")
     database.session.add_all([debit_account, credit_account, fiscal_book, ifrs_book])
     database.session.commit()
     user = User.query.filter_by(user="admin").first()

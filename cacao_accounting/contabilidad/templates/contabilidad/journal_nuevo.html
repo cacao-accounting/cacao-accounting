@@ -637,7 +637,7 @@
               error: {{ _('No se pudo buscar')|tojson }}
             }
           })'>
-          <input type="hidden" id="company" name="company" x-model="selectedValue" @change="$dispatch('input')">
+          <input type="hidden" id="company" name="company" x-model="selectedValue">
           <input type="hidden" id="company_filter_value" value="{{ (journal.company if journal else '')|e }}">
           <div class="ca-smart-select-input-wrap">
             <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
