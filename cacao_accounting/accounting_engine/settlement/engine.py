@@ -167,7 +167,8 @@ class SettlementEngine:
         del document_exchange_rate
         if settlement_exchange_rate in (None, Decimal("0")):
             return Decimal("0"), rounding_manager.round(open_balance * proportion, context_key="accounting")
-        assert settlement_exchange_rate is not None
+        if settlement_exchange_rate is None:
+            return Decimal("0"), rounding_manager.round(open_balance * proportion, context_key="accounting")
         applied_rate: Decimal = settlement_exchange_rate
         carried_balance_company = rounding_manager.round(open_balance * proportion, context_key="accounting")
         settlement_company_amount = rounding_manager.round(
@@ -192,7 +193,8 @@ class SettlementEngine:
         """Calculate revaluation for the unpaid foreign-currency balance after a partial settlement."""
         if settlement_exchange_rate in (None, Decimal("0")) or document_total <= 0:
             return Decimal("0")
-        assert settlement_exchange_rate is not None
+        if settlement_exchange_rate is None:
+            return Decimal("0")
         remaining_transaction_balance = document_total - settlement_amount
         if remaining_transaction_balance <= 0 or remaining_balance <= 0:
             return Decimal("0")

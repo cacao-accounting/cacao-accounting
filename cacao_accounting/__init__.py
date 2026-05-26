@@ -13,6 +13,7 @@ WSGI.
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from os import environ
+from secrets import token_urlsafe
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -274,9 +275,9 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     if not cacao_app.config.get("SECRET_KEY"):
         if cacao_app.config.get("TESTING"):
-            cacao_app.config["SECRET_KEY"] = "test-secret-key"
+            cacao_app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
         else:
-            cacao_app.config["SECRET_KEY"] = "dev-secret-key"
+            cacao_app.config["SECRET_KEY"] = token_urlsafe(32)
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
