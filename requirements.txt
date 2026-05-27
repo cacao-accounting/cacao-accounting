@@ -19,6 +19,7 @@ pyjwt==2.12.1
 PyMySQL==1.1.3
 python-ulid==3.1.0
 redis==7.4.0
+segno==1.6.6
 sqlalchemy==2.0.49
 teritorio==2025.11.11
 openpyxl==3.1.5

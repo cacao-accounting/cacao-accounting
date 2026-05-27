@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 from __future__ import annotations
-import json
 import re
 from decimal import Decimal
 from datetime import date
@@ -13,8 +12,6 @@ from cacao_accounting.database import (
     Entity,
     Book,
     ExchangeRate,
-    User,
-    Modules,
     PurchaseRequest,
     PurchaseRequestItem,
     PurchaseQuotation,
@@ -608,7 +605,7 @@ def test_returns(app_ctx):
     database.session.commit()
 
     # Post it manually to have GL entries to reverse
-    from cacao_accounting.contabilidad.posting import post_document_to_gl, submit_document
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
 
     post_document_to_gl(si)
     database.session.commit()

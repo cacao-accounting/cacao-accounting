@@ -3,7 +3,6 @@
 
 """Tests for Rule Resolver dynamic conditions."""
 
-from decimal import Decimal
 from datetime import date
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext, CalculationContext, AccountingReferences
 from cacao_accounting.accounting_engine.fiscal.resolver import RuleResolver

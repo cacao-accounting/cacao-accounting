@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 from __future__ import annotations
-import json
 import re
 from decimal import Decimal
 from datetime import date
@@ -10,20 +9,12 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
-    Entity,
-    Book,
-    ExchangeRate,
     Item,
     UOM,
     ItemUOMConversion,
     PurchaseReceipt,
-    PurchaseReceiptItem,
-    SalesInvoice,
-    SalesInvoiceItem,
     DeliveryNote,
-    DeliveryNoteItem,
     StockEntry,
-    StockEntryItem,
     StockLedgerEntry,
     Party,
     StockBin,

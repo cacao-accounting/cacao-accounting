@@ -57,6 +57,12 @@ from cacao_accounting.contabilidad.default_accounts import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.modulos import listado_modulos, obtener_modulos_disponibles, sincronizar_modulos
+from cacao_accounting.printing.settings import (
+    DEFAULT_VALIDATION_BASE_URL,
+    external_validation_base_url,
+    external_validation_enabled,
+    save_external_validation_settings,
+)
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
@@ -169,6 +175,28 @@ def lista_modulos():
     return render_template(
         "admin/modulos.html",
         modulos=modulos_por_tipo,
+    )
+
+
+@admin.route("/settings/external-document-validation", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def external_document_validation_settings():
+    """Administra la validacion externa de documentos impresos."""
+    _require_system_admin()
+    if request.method == "POST":
+        save_external_validation_settings(
+            enabled=request.form.get("enabled") == "on",
+            base_url=request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL,
+        )
+        flash(_("Configuracion de validacion externa guardada correctamente."), "success")
+        return redirect(url_for("admin.external_document_validation_settings"))
+
+    return render_template(
+        "admin/external_document_validation.html",
+        enabled=external_validation_enabled(),
+        base_url=external_validation_base_url(),
+        fallback_url=DEFAULT_VALIDATION_BASE_URL,
     )
 
 

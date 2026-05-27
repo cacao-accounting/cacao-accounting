@@ -586,7 +586,7 @@ def test_sin_ciclos_en_cadena_normal(app):
 
 def test_api_document_flow_tree_requiere_parametros(app):
     """El endpoint devuelve 400 sin parámetros."""
-    from cacao_accounting.database import Modules, User, database
+    from cacao_accounting.database import User, database
 
     with app.app_context():
         user = User(id="U1", user="treetest", name="Test", password=b"x", classification="admin", active=True)

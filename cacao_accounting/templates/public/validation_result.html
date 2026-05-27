@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validación de Documento - Cacao Accounting</title>
+    <link rel="stylesheet" href="/static/css/cacaoaccounting.css">
+    <style>
+        body { background-color: #f8f9fa; padding-top: 50px; font-family: sans-serif; }
+        .validation-card { max-width: 600px; margin: 0 auto; border-top: 5px solid #0d6efd; background: white; border-radius: 8px; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); overflow: hidden; }
+        .card-header { padding: 1rem; border-bottom: 1px solid #dee2e6; }
+        .card-body { padding: 1.5rem; }
+        .card-footer { padding: 1rem; background-color: #f8f9fa; border-top: 1px solid #dee2e6; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mb-3 { margin-bottom: 1rem; }
+        .mb-4 { margin-bottom: 1.5rem; }
+        .alert { padding: 0.75rem 1.25rem; border-radius: 0.25rem; margin-bottom: 1rem; }
+        .alert-success { color: #0f5132; background-color: #d1e7dd; border: 1px solid #badbcc; }
+        .alert-warning { color: #664d03; background-color: #fff3cd; border: 1px solid #ffecb5; }
+        .alert-secondary { color: #41464b; background-color: #e2e3e5; border: 1px solid #d3d3d4; }
+        .row { display: flex; flex-wrap: wrap; margin-right: -0.75rem; margin-left: -0.75rem; }
+        .col-sm-4 { flex: 0 0 33.333333%; max-width: 33.333333%; padding: 0 0.75rem; }
+        .col-sm-8 { flex: 0 0 66.666667%; max-width: 66.666667%; padding: 0 0.75rem; }
+        .data-label { color: #6c757d; font-size: 0.9rem; }
+        .data-value { font-weight: bold; }
+        .small { font-size: 0.875rem; }
+        .text-muted { color: #6c757d; }
+        hr { margin: 1rem 0; border: 0; border-top: 1px solid rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="validation-card">
+            <div class="card-header">
+                <h4 class="mb-0 text-center">Validación de Documento</h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    {% if validation.status == 'valid' %}
+                        <div class="alert alert-success"><strong>Documento válido</strong></div>
+                    {% elif validation.status == 'invalid' %}
+                        <div class="alert alert-warning">
+                            <strong>Datos inconsistentes</strong><br>
+                            Los datos actuales del documento no coinciden con el registro validado.
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary">
+                            <strong>Estado: {{ validation.status | replace('_', ' ') | upper }}</strong>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Empresa:</div>
+                    <div class="col-sm-8 data-value">{{ validation.company_name }}</div>
+                </div>
+                {% if validation.company_tax_id %}
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Identificación Fiscal:</div>
+                    <div class="col-sm-8 data-value">{{ validation.company_tax_id }}</div>
+                </div>
+                {% endif %}
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Tipo de Documento:</div>
+                    <div class="col-sm-8 data-value">{{ validation.document_type.replace('_', ' ').title() }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Número:</div>
+                    <div class="col-sm-8 data-value">{{ validation.document_number }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Fecha:</div>
+                    <div class="col-sm-8 data-value">{{ validation.document_date or "-" }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Moneda:</div>
+                    <div class="col-sm-8 data-value">{{ validation.currency or "-" }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Total:</div>
+                    <div class="col-sm-8 data-value">{{ validation.total }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 data-label">Estado actual:</div>
+                    <div class="col-sm-8 data-value">{{ validation.document_status }}</div>
+                </div>
+                <hr>
+                <p class="text-muted small text-center">
+                    Fecha de validación: {{ validation.validation_time.strftime('%Y-%m-%d %H:%M:%S') }}<br><br>
+                    Esta es una página de validación pública de Cacao Accounting.
+                    Verifique que la URL en su navegador sea la oficial de la empresa emisora.
+                </p>
+            </div>
+            <div class="card-footer text-center">
+                <img src="/static/media/cacao_accounting _logo.svg" alt="Cacao Accounting" height="30">
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -96,7 +96,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, str | dict[str, dict[str, ssl.SSLContext]]] = {}
+configuracion: dict[str, bool | str | dict[str, dict[str, ssl.SSLContext]]] = {}
 
 DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
 
@@ -106,6 +106,14 @@ if valida_direccion_base_datos(DATABASE_URL_NORMALIZADA):
         configuracion["SQLALCHEMY_ENGINE_OPTIONS"] = DATABASE_ENGINE_OPTIONS
 configuracion["SECRET_KEY"] = SECRET_KEY or ""
 configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
+
+# Printing and validation settings
+configuracion["EXTERNAL_DOCUMENT_VALIDATION_ENABLED"] = (
+    environ.get("EXTERNAL_DOCUMENT_VALIDATION_ENABLED", "True").lower() == "true"
+)
+configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
+    "EXTERNAL_DOCUMENT_VALIDATION_BASE_URL", "https://cacaocontent.com"
+)
 
 if environ.get("CACAO_TEST"):
     configuracion["DEGUG"] = "True"

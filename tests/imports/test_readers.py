@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-import os
-import csv
 from cacao_accounting.imports.readers.csv_reader import CSVReader
 from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 import openpyxl
+
 
 def test_csv_reader(tmp_path):
     p = tmp_path / "test.csv"
@@ -18,6 +17,7 @@ def test_csv_reader(tmp_path):
     assert table.columns == ["col1", "col2"]
     assert table.rows == [["val1", "val2"], ["val3", "val4"]]
     assert table.source_format == "csv"
+
 
 def test_xlsx_reader(tmp_path):
     p = tmp_path / "test.xlsx"
