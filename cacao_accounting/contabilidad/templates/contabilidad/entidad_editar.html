@@ -64,6 +64,12 @@
           <label class="form-label" for="fax">{{ _('Número Fax') }}</label>
           {{ form.fax(id="fax", class="form-control form-control-sm") }}
         </div>
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.habilitado(class="form-check-input", id="habilitado") }}
+            <label class="form-check-label" for="habilitado">{{ _('Entidad activa') }}</label>
+          </div>
+        </div>
       </div>
     </form>
   </div>

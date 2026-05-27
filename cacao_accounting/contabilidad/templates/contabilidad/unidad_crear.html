@@ -6,13 +6,13 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nueva Unidad de Negocio</li>
+    <li class="breadcrumb-item active" aria-current="page">{% if edit %}Editar{% else %}Nueva{% endif %} Unidad de Negocio</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex justify-content-between align-items-center">
-    <h5 class="ca-card-title mb-0"><i class="bi bi-building-add me-2"></i> {{ _('Nueva Unidad de Negocio') }}</h5>
+    <h5 class="ca-card-title mb-0"><i class="bi bi-building-add me-2"></i> {% if edit %}{{ _('Editar Unidad de Negocio') }}{% else %}{{ _('Nueva Unidad de Negocio') }}{% endif %}</h5>
     <div class="d-flex gap-2">
       <a href="{{ url_for('contabilidad.unidades') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
       <button class="btn btn-primary btn-sm" form="form-unidad" type="submit">
@@ -39,6 +39,7 @@
             minChars: 1,
             preload: true,
             initialValue: "{{ form.entidad.data or "" }}",
+            initialLabel: {{ (entity_initial_label|default(""))|tojson }},
             messages: {
               placeholder: {{ _("Buscar entidad")|tojson }},
               loading: {{ _("Cargando...")|tojson }},

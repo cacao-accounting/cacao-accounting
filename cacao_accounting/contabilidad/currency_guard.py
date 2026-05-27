@@ -46,6 +46,21 @@ class CurrencyGuard:
         if active_book is not None:
             raise CurrencyGuardError("No se puede deshabilitar la moneda porque esta en uso por un libro contable activo.")
 
+    def apply_currency_edit(self, currency: Currency, *, active: bool, default: bool) -> None:
+        """Aplica cambios de una moneda preservando reglas de negocio."""
+        if default and not active:
+            raise CurrencyGuardError("La moneda predeterminada del sistema debe permanecer activa.")
+        if not active:
+            self.assert_can_deactivate(currency)
+        if default:
+            current_defaults = database.session.execute(
+                database.select(Currency).filter(Currency.code != currency.code, Currency.default.is_(True))
+            ).scalars()
+            for current_default in current_defaults:
+                current_default.default = False
+        currency.active = active
+        currency.default = default
+
     def validate_company_functional_currency(self, company_code: str | None) -> Currency:
         """Valida la moneda funcional activa de una compania."""
         if not company_code:

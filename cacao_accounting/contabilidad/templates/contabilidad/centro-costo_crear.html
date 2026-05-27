@@ -40,6 +40,7 @@
             minChars: 1,
             preload: true,
             initialValue: "{{ form.entidad.data or "" }}",
+            initialLabel: {{ (entity_initial_label|default(""))|tojson }},
             messages: {
               placeholder: {{ _("Buscar entidad")|tojson }},
               loading: {{ _("Cargando...")|tojson }},
@@ -66,6 +67,7 @@
             name: "padre",
             minChars: 1,
             initialValue: "{{ form.padre.data or "" }}",
+            initialLabel: {{ (parent_initial_label|default(""))|tojson }},
             filters: {
                 company: { selector: "#entidad_hidden" },
                 is_group: 1

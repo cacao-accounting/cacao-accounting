@@ -16,6 +16,7 @@
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.tasa_cambio') }}"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
       <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nueva_tasa_cambio') }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidad.editar_tasa_cambio', rate_id=registro.id) }}"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
     </div>
   </div>
   <div class="p-3">

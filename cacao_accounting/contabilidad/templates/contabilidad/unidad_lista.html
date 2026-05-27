@@ -55,6 +55,7 @@
           <th scope="col">{{ _('Nombre') }}</th>
           <th scope="col">{{ _('Entidad') }}</th>
           <th scope="col">{{ _('Estado') }}</th>
+          <th scope="col">{{ _('Acciones') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -69,6 +70,10 @@
             {% else %}
             <span class="badge bg-secondary">{{ _('Inhabilitado') }}</span>
             {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('contabilidad.unidad', id_unidad=item.code) }}" class="btn btn-sm btn-outline-secondary">{{ _('Ver') }}</a>
+            <a href="{{ url_for('contabilidad.editar_unidad', id_unidad=item.code) }}" class="btn btn-sm btn-outline-primary">{{ _('Editar') }}</a>
           </td>
         </tr>
         {%- endfor %}

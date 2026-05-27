@@ -57,6 +57,7 @@
           <th scope="col">{{ _('Moneda') }}</th>
           <th scope="col">{{ _('Estado') }}</th>
           <th scope="col" class="text-center">{{ _('Primario') }}</th>
+          <th scope="col">{{ _('Acciones') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -79,6 +80,10 @@
             {% else %}
             -
             {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('contabilidad.libro', id_unidad=item.code) }}" class="btn btn-sm btn-outline-secondary">{{ _('Ver') }}</a>
+            <a href="{{ url_for('contabilidad.editar_libro', id_libro=item.code) }}" class="btn btn-sm btn-outline-primary">{{ _('Editar') }}</a>
           </td>
         </tr>
         {%- endfor %}

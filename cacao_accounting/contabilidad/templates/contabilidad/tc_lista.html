@@ -52,6 +52,7 @@
           <th scope="col">{{ _('Destino') }}</th>
           <th scope="col" class="text-end">{{ _('Tasa') }}</th>
           <th scope="col">{{ _('Fecha') }}</th>
+          <th scope="col">{{ _('Acciones') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -62,9 +63,13 @@
           <td><span class="fw-bold">{{ item.destination }}</span></td>
           <td class="text-end">{{ "%.4f"|format(item.rate | float) }}</td>
           <td>{{ item.date }}</td>
+          <td>
+            <a href="{{ url_for('contabilidad.tipo_cambio', rate_id=item.id) }}" class="btn btn-sm btn-outline-secondary">{{ _('Ver') }}</a>
+            <a href="{{ url_for('contabilidad.editar_tasa_cambio', rate_id=item.id) }}" class="btn btn-sm btn-outline-primary">{{ _('Editar') }}</a>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-center text-muted py-4">{{ _('No se encontraron tasas de cambio.') }}</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No se encontraron tasas de cambio.') }}</td></tr>
         {%- endfor %}
       </tbody>
     </table>
