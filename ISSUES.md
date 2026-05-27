@@ -1,671 +1,229 @@
-Plan de Corrección — Master Data Contable (Pre-R2R Gate)
+Issues identificados
+BUG-001 — Error al asignar cuenta padre al crear cuenta contable
 
-Objetivo
-
-Cerrar las inconsistencias funcionales y UX de los registros maestros de contabilidad antes de iniciar pruebas de registros transaccionales (R2R).
-
-Este plan es accionable, verificable y auditable. Cada issue tiene:
-
-problema
-
-plan de corrección
-
-criterios de aceptación
-
-tests de regresión
-
-definición objetiva de “completo”
-
-
-
----
-
-Fase 1 — Entidades (bloqueante)
-
-QA-MD-001 — Entidad no tiene estado activo/inactivo
+Severidad: Alta
+Módulo: Contabilidad / Catálogo de cuentas
+Pantalla: Nueva Cuenta Contable
 
 Problema
 
-Las entidades no tienen bandera booleana activo/inactivo.
+Al crear una cuenta contable nueva, el formulario muestra una cuenta padre existente:
 
-Consecuencias:
+11.01.002 - Cuentas bancarias
 
-- no puede deshabilitarse una compañía
-- Smart Select no puede filtrar entidades operativas
-- no existe lifecycle administrativo
+Pero al guardar, el sistema rechaza el registro con el mensaje:
 
+La cuenta padre indicada no existe para la entidad seleccionada.
 
----
+Esto indica una inconsistencia entre el dato seleccionado en frontend y la validación del backend.
 
-Plan de corrección
+Causa probable
 
-Modelo
+Una o varias de estas condiciones:
 
-Agregar:
+El campo visible muestra texto, pero el formulario no está enviando el id real de la cuenta padre.
+El Smart Select no está sincronizando correctamente el valor oculto.
+La búsqueda de cuenta padre no está filtrando correctamente por entidad.
+El backend espera parent_id, pero el formulario envía parent_account, parent_code, texto visible, o un valor incompatible.
+Al recargar el formulario después del error, se pierde la entidad seleccionada, lo cual agrava el problema porque el padre ya no puede validarse contra entidad.
+Requerimiento de corrección
 
-is_active: bool = True
+El campo Cuenta Padre debe comportarse como un selector controlado de cuentas contables existentes, no como texto libre.
 
-Migración:
+Debe enviar al backend el identificador único de la cuenta padre, preferiblemente parent_id.
 
-default = true
-backfill de entidades existentes
+El backend debe validar:
 
-
----
-
-Vista lista
-
-Agregar columna:
-
-Estado
-
-Mostrar badge:
-
-Activo
-Inactivo
-
-
----
-
-Vista editar entidad
-
-Agregar control:
-
-☑ Entidad activa
-
-Reglas:
-
-- editable por admin
-- default true
-
-
----
-
-Toggle rápido
-
-Agregar acción:
-
-Activar / Desactivar
-
-en lista y detalle.
-
-
----
-
-Reglas backend
-
-No permitir:
-
-- desactivar entidad usada por sesión actual si rompería acceso
-- desactivar única entidad activa en desktop mode
-
-
----
-
+Que la cuenta padre existe.
+Que pertenece a la misma entidad/compañía seleccionada.
+Que no genera una relación circular.
+Que la cuenta padre puede recibir hijos, si existe una regla de “cuenta de grupo”.
+Que no se pueda asignar como padre una cuenta de otra entidad.
 Criterios de aceptación
+Al seleccionar una cuenta padre existente y guardar, la cuenta nueva se crea correctamente.
+Si no se selecciona cuenta padre, se permite crear una cuenta raíz cuando aplique.
+Si se manipula el request y se envía un parent_id inválido, el backend rechaza la operación.
+Si se envía un parent_id de otra entidad, el backend rechaza la operación.
+Después de un error de validación, el formulario conserva:
+entidad seleccionada,
+código,
+nombre,
+clasificación,
+tipo de cuenta,
+cuenta padre,
+estado activo,
+bandera de cuenta de grupo.
+El campo de cuenta padre debe mostrar resultados filtrados por la entidad seleccionada.
+Si el usuario cambia la entidad, el campo cuenta padre debe limpiarse automáticamente.
+Test obligatorio
 
-[ ] Entidad tiene campo is_active.
-[ ] Entidades existentes quedan activas.
-[ ] Lista muestra estado.
-[ ] Editar entidad permite activar/desactivar.
-[ ] Acción rápida funciona.
-[ ] Smart Select puede filtrar entidades activas.
-[ ] Backend impide estados inconsistentes.
+Agregar test unitario o funcional para bloquear regresión:
 
+Crear entidad A.
+Crear entidad B.
+Crear cuenta padre en entidad A.
+Crear cuenta hija en entidad A usando parent_id válido.
+Confirmar que se guarda correctamente.
+Intentar crear cuenta hija en entidad B usando el parent_id de entidad A.
+Confirmar rechazo con error controlado.
+BUG-002 — No se puede seleccionar centro de costos padre al crear centro de costos
 
----
-
-Tests requeridos
-
-Modelo / servicio
-
-test_entity_can_be_activated
-test_entity_can_be_deactivated
-test_existing_entities_default_to_active
-
-UI/service
-
-test_entity_list_shows_status
-test_entity_edit_form_supports_active_flag
-
-Regresión
-
-test_desktop_mode_requires_single_active_entity
-
-
----
-
-Definición de completo
-
-Completo cuando:
-
-✓ entidad tiene lifecycle activo/inactivo
-✓ visible en UI
-✓ editable
-✓ protegido backend
-✓ testeado
-
-
----
-
-QA-MD-002 — Smart Select debe mostrar solo entidades activas
+Severidad: Alta
+Módulo: Contabilidad / Centros de costos
+Pantalla: Nuevo Centro de Costos
 
 Problema
 
-Los formularios permiten seleccionar entidades inactivas.
+El campo Centro Padre no funciona como un buscador/selector real. En la captura se observa que acepta texto como m, pero no resuelve ni selecciona un centro de costos existente.
 
+Esto impide construir jerarquías de centros de costos.
 
----
+Causa probable
 
-Plan de corrección
+Una o varias de estas condiciones:
 
-Agregar soporte transversal:
+El campo está implementado como input de texto simple.
+Falta endpoint de búsqueda para centros de costos padre.
+El endpoint existe, pero no está conectado al formulario.
+El formulario no envía parent_id.
+El backend espera un ID, pero recibe texto.
+No se filtran centros de costos por entidad.
+Requerimiento de corrección
 
-active_only=True
+El campo Centro Padre debe implementarse con el mismo patrón funcional esperado para Smart Select.
 
-en:
+Debe permitir buscar centros de costos existentes por:
 
-smart_select.search_entities()
+código,
+nombre,
+entidad seleccionada.
 
-Default:
+Debe enviar al backend el parent_id real del centro de costos seleccionado.
 
-True
+El backend debe validar:
 
-Override administrativo:
+Que el centro padre existe.
+Que pertenece a la misma entidad.
+Que no genera relación circular.
+Que el centro padre puede recibir hijos, si aplica la regla de centro de grupo.
+Que no se use como padre un centro de otra entidad.
+Criterios de aceptación
+El usuario puede buscar un centro padre por código o nombre.
+El selector muestra resultados existentes.
+Al seleccionar un centro padre y guardar, el nuevo centro de costos queda relacionado correctamente.
+Si la entidad cambia, el centro padre seleccionado se limpia.
+No se permite usar como padre un centro de costos de otra entidad.
+No se permite crear ciclos jerárquicos.
+Después de un error de validación, el formulario conserva los datos ingresados.
+Test obligatorio
 
-include_inactive=True
+Agregar test unitario o funcional:
 
-solo en pantallas administrativas.
+Crear entidad A.
+Crear centro padre en entidad A.
+Crear centro hijo usando parent_id válido.
+Confirmar que la relación padre-hijo se guarda correctamente.
+Crear entidad B.
+Intentar usar el centro padre de entidad A en entidad B.
+Confirmar rechazo.
+Intentar crear relación circular.
+Confirmar rechazo.
+UX-001 — Formulario de períodos contables es confuso
 
-
----
-
-Afectados
-
-Cuenta contable
-Centro costo
-Libro
-Proyecto
-Período
-Año fiscal
-Comprobante contable
-
-
----
-
-Criterios aceptación
-
-[ ] Smart Select no muestra entidades inactivas.
-[ ] Backend rechaza entidad inactiva enviada manualmente.
-[ ] Admin puede ver todas si explicitly requested.
-
-
----
-
-Tests
-
-test_entity_search_select_returns_only_active_entities
-test_entity_search_select_can_include_inactive_for_admin
-test_backend_rejects_inactive_entity_submission
-
-
----
-
-Completo
-
-✓ selector filtrado
-✓ backend protegido
-✓ tests pasan
-
-
----
-
-Fase 2 — Precarga correcta de formularios edit
-
-(Bloqueante antes de R2R)
-
-
----
-
-QA-MD-003 — Edit account no precarga datos
-
-Route:
-
-/accounting/account/<entity>/<code>/edit
+Severidad: Media
+Módulo: Contabilidad / Períodos contables
+Pantalla: Editar Período Contable
 
 Problema
 
-No llena:
+El formulario actual muestra:
 
-- entidad
-- cuenta padre
+Estado (Etiqueta) con valor textual, por ejemplo open.
+checkbox Habilitado.
+checkbox Cerrado.
 
+Esto genera ambigüedad porque el usuario ve tres formas de representar estado:
 
----
+estado textual,
+habilitado/deshabilitado,
+abierto/cerrado.
 
-Plan corrección
+La pantalla debería expresar claramente dos conceptos independientes:
 
-Garantizar que edit haga:
+si el período está disponible para operación;
+si el período está abierto o cerrado contablemente.
+Requerimiento de corrección
 
-form.entity.data = account.entity_code
-form.parent_account.data = account.parent_account_code
+Centralizar la gestión del período contable en dos dimensiones explícitas:
 
-Smart Select debe cargar:
+1. Estado operativo
 
-label actual + hidden value
+Valores permitidos:
 
+habilitado
+deshabilitado
 
----
+Este estado determina si el período puede ser usado por el sistema.
 
-Criterios aceptación
+2. Estado contable
 
-[ ] Código correcto
-[ ] Nombre correcto
-[ ] Entidad visible
-[ ] Cuenta padre visible
-[ ] Estado correcto
-[ ] Tipo correcto
-[ ] Clasificación correcta
+Valores permitidos:
 
+abierto
+cerrado
 
----
+Este estado determina si se pueden registrar/postear transacciones contables en el período.
 
-Tests
+Cambio recomendado en formulario
 
-test_account_edit_form_prefills_entity
-test_account_edit_form_prefills_parent_account
-test_account_edit_form_prefills_all_fields
+Eliminar o esconder del formulario el campo textual:
 
+Estado (Etiqueta)
 
----
+Reemplazarlo por controles claros:
 
-Completo
+Estado operativo:
+Selector o radio buttons:
 
-✓ form edit refleja DB exactamente
+Habilitado
+Deshabilitado
 
+Estado contable:
+Selector o radio buttons:
 
----
+Abierto
+Cerrado
 
-QA-MD-004 — Edit cost center no precarga
+No usar simultáneamente input textual y checkboxes para representar el mismo concepto.
 
-Misma estrategia.
+Reglas funcionales sugeridas
+Un período deshabilitado no debe estar disponible para nuevas transacciones.
+Un período cerrado no debe aceptar nuevos postings.
+Un período puede estar:
+habilitado y abierto,
+habilitado y cerrado,
+deshabilitado y abierto,
+deshabilitado y cerrado.
+Para efectos prácticos, una transacción solo debería poder registrarse si el período está:
+habilitado,
+abierto.
+Criterios de aceptación
+El formulario ya no muestra Estado (Etiqueta) como campo editable libre.
+El usuario puede definir claramente si el período está habilitado o deshabilitado.
+El usuario puede definir claramente si el período está abierto o cerrado.
+El backend valida que solo se acepten valores válidos.
+El sistema no permite registrar transacciones en períodos cerrados.
+El sistema no permite registrar transacciones en períodos deshabilitados.
+Los listados deben mostrar ambos estados de forma clara:
+Operativo: Habilitado / Deshabilitado.
+Contable: Abierto / Cerrado.
+Test obligatorio
 
-Criterios
+Agregar tests para:
 
-[ ] entidad visible
-[ ] padre visible
-[ ] nombre correcto
-[ ] estado correcto
-
-Tests
-
-test_cost_center_edit_prefills_entity
-test_cost_center_edit_prefills_parent
-test_cost_center_edit_prefills_fields
-
-
----
-
-QA-MD-005 — Edit ledger no precarga
-
-Route:
-
-/accounting/book/edit/<code>
-
-
----
-
-Criterios aceptación
-
-[ ] código
-[ ] nombre
-[ ] entidad
-[ ] moneda
-[ ] estado
-
-
----
-
-Tests
-
-test_ledger_edit_prefills_entity
-test_ledger_edit_prefills_currency
-test_ledger_edit_prefills_state
-
-
----
-
-QA-MD-006 — Edit project no precarga
-
-
----
-
-Criterios
-
-[ ] entidad visible
-[ ] presupuesto correcto
-[ ] moneda presupuesto visible
-[ ] fechas correctas
-[ ] estado correcto
-
-
----
-
-Tests
-
-test_project_edit_prefills_entity
-test_project_edit_prefills_budget
-test_project_edit_prefills_budget_currency
-test_project_edit_prefills_dates
-
-
----
-
-QA-MD-007 — Edit accounting period no precarga
-
-
----
-
-Criterios
-
-[ ] entidad correcta
-[ ] nombre correcto
-[ ] fechas correctas
-[ ] estado correcto
-
-
----
-
-Tests
-
-test_accounting_period_edit_prefills_fields
-
-
----
-
-QA-MD-008 — Edit fiscal year no precarga
-
-
----
-
-Criterios
-
-[ ] entidad
-[ ] fechas
-[ ] estado cerrado
-
-
----
-
-Tests
-
-test_fiscal_year_edit_prefills_fields
-
-
----
-
-Definición transversal de completo (edit forms)
-
-Completo cuando:
-
-✓ el form refleja exactamente el registro persistido
-✓ smart select muestra label correcto
-✓ hidden input tiene value correcto
-✓ save sin cambios no altera datos
-✓ tests pasan
-
-
----
-
-Fase 3 — Navegación administrativa
-
-
----
-
-QA-MD-009 — Unidad de negocio detail sin botón editar
-
-Plan
-
-Agregar botón:
-
-Editar
-
-En:
-
-/accounting/unit/<code>
-
-
----
-
-Criterios
-
-[ ] botón visible
-[ ] navega correctamente
-
-
----
-
-Test
-
-test_unit_detail_shows_edit_action
-
-
----
-
-QA-MD-010 — Currency detail sin editar
-
-Mismo patrón.
-
-Test
-
-test_currency_detail_shows_edit_action
-
-
----
-
-QA-MD-011 — Exchange rate detail sin editar
-
-Test
-
-test_exchange_rate_detail_shows_edit_action
-
-
----
-
-Completo
-
-✓ todos los details tienen CTA Editar visible
-
-
----
-
-Fase 4 — Uniformidad de list views
-
-
----
-
-QA-MD-012 — Look & feel inconsistente
-
-Objetivo
-
-Crear patrón único.
-
-
----
-
-Requerimiento UI
-
-Todas las listas maestras:
-
-Breadcrumb
-Título H1
-Botón crear
-Filtro búsqueda
-Tabla uniforme
-Estado badge
-Columna acciones
-Empty state
-Paginación
-
-
----
-
-Columna acciones mínima
-
-Ver
-Editar
-Activar/Desactivar (si aplica)
-
-
----
-
-Master views
-
-Entidades
-Cuentas
-Centros costo
-Unidad negocio
-Libros
-Proyectos
-Monedas
-Tasas cambio
-Períodos
-Años fiscales
-
-
----
-
-Criterios aceptación
-
-[ ] Todas tienen columna acciones.
-[ ] Todas tienen CTA crear.
-[ ] Todas tienen breadcrumbs.
-[ ] Todas tienen empty state consistente.
-[ ] Todas muestran estado cuando aplica.
-
-
----
-
-Tests
-
-Template tests
-
-test_master_lists_render_actions_column
-test_master_lists_render_primary_create_action
-test_master_lists_render_breadcrumb
-
-Snapshot/UI tests (si existen)
-
-test_master_views_follow_standard_layout
-
-
----
-
-Completo
-
-✓ UX uniforme
-✓ navegación consistente
-
-
----
-
-Fase 5 — HTML titles
-
-
----
-
-QA-MD-013 — Títulos HTML inconsistentes
-
-Problema
-
-Usuarios ERP trabajan con muchas pestañas.
-
-
----
-
-Requerimiento
-
-Todo template debe definir:
-
-<title>
-
-Patrón:
-
-Cacao Accounting | Contabilidad | Entidades
-Cacao Accounting | Contabilidad | Cuenta 11.01.001
-Cacao Accounting | Contabilidad | Proyecto P0001
-
-
----
-
-Convención
-
-Lista:
-
-Modulo | Lista
-
-Detalle:
-
-Modulo | Registro
-
-Editar:
-
-Modulo | Editar Registro
-
-Crear:
-
-Modulo | Nuevo Registro
-
-
----
-
-Criterios aceptación
-
-[ ] Todo template define title.
-[ ] No existen titles vacíos.
-[ ] Convención uniforme.
-
-
----
-
-Tests
-
-test_accounting_templates_define_title
-test_accounting_templates_follow_title_convention
-
-
----
-
-Completo
-
-✓ navegación por tabs usable
-✓ titles consistentes
-
-
----
-
-Gate de cierre antes de R2R
-
-No iniciar pruebas transaccionales hasta cumplir:
-
-[ ] QA-MD-001 cerrado
-[ ] QA-MD-002 cerrado
-[ ] QA-MD-003 cerrado
-[ ] QA-MD-004 cerrado
-[ ] QA-MD-005 cerrado
-[ ] QA-MD-006 cerrado
-[ ] QA-MD-007 cerrado
-[ ] QA-MD-008 cerrado
-[ ] QA-MD-009 cerrado
-[ ] QA-MD-010 cerrado
-[ ] QA-MD-011 cerrado
-[ ] QA-MD-012 cerrado
-[ ] QA-MD-013 cerrado
-[ ] Tests verdes
-
-Estado objetivo
-
-Cuando todo esto esté listo:
-
-QA Status = MASTER DATA READY
-R2R Testing = UNBLOCKED
+Crear período habilitado y abierto.
+Registrar transacción en período habilitado y abierto: debe permitir.
+Intentar registrar transacción en período habilitado y cerrado: debe bloquear.
+Intentar registrar transacción en período deshabilitado y abierto: debe bloquear.
+Intentar registrar transacción en período deshabilitado y cerrado: debe bloquear.
+Editar período y validar persistencia correcta de ambos estados.
