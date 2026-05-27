@@ -108,7 +108,9 @@ def test_golden_import_case():
     assert iva.quantize(Decimal("0.01"), ROUND_HALF_UP) == Decimal("162.23")
 
     landed_cost_engine = LandedCostEngine()
-    capitalizable_lines = [l for l in fiscal_result.tax_lines if l.accounting_treatment == "capitalizable_inventory_cost"]
+    capitalizable_lines = [
+        line for line in fiscal_result.tax_lines if line.accounting_treatment == "capitalizable_inventory_cost"
+    ]
     landed_cost_result = landed_cost_engine.calculate(context.items, capitalizable_lines)
 
     assert landed_cost_result.inventory_value_total.quantize(Decimal("0.01"), ROUND_HALF_UP) == Decimal("1081.50")

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">{% if template %}Editar{% else %}Nuevo{% endif %} formato de impresión</h1>
+    </div>
+
+    <form method="POST">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-header bg-light">Cuerpo de la plantilla (HTML/Jinja2)</div>
+                    <div class="card-body p-0">
+                        <textarea name="template_body" class="form-control border-0" rows="20" style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.85rem;" required>{{ template.template_body if template else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-header bg-light">Estilos (CSS)</div>
+                    <div class="card-body p-0">
+                        <textarea name="stylesheet_body" class="form-control border-0" rows="10" style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.85rem;">{{ template.stylesheet_body if template else '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-header bg-light">Configuración</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Tipo de documento</label>
+                            <select name="document_type" class="form-select form-select-sm" {% if template %}disabled{% endif %}>
+                                {% for code, label in doc_types %}
+                                <option value="{{ code }}" {% if template and template.document_type == code %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Código</label>
+                            <input type="text" name="code" class="form-control form-control-sm" value="{{ template.code if template else '' }}" {% if template %}readonly{% endif %} required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nombre</label>
+                            <input type="text" name="name" class="form-control form-control-sm" value="{{ template.name if template else '' }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Compañía</label>
+                            <select name="company_code" class="form-select form-select-sm" {% if template %}disabled{% endif %}>
+                                <option value="">Global (Todas)</option>
+                                {% for company in companies %}
+                                <option value="{{ company.code }}" {% if template and template.company_code == company.code %}selected{% endif %}>{{ company.company_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Tamaño</label>
+                                    <select name="paper_size" class="form-select form-select-sm">
+                                        <option value="letter" {% if template and template.paper_size == 'letter' %}selected{% endif %}>Carta</option>
+                                        <option value="a4" {% if template and template.paper_size == 'a4' %}selected{% endif %}>A4</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Orientación</label>
+                                    <select name="orientation" class="form-select form-select-sm">
+                                        <option value="portrait" {% if template and template.orientation == 'portrait' %}selected{% endif %}>Vertical</option>
+                                        <option value="landscape" {% if template and template.orientation == 'landscape' %}selected{% endif %}>Horizontal</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        {% if template %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nota de cambio (Versión {{ template.version }})</label>
+                            <input type="text" name="change_note" class="form-control form-control-sm" placeholder="¿Qué cambió?">
+                        </div>
+                        {% endif %}
+                        <hr>
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mb-2">
+                            <i class="bi bi-save me-1"></i>Guardar cambios
+                        </button>
+                        {% if template %}
+                        <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-outline-info btn-sm w-100">
+                            <i class="bi bi-eye me-1"></i>Vista previa
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
