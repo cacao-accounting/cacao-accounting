@@ -1363,26 +1363,31 @@ def editar_centro_costo(id_cc):
     formulario.id.data = registro.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+
+    # Pre-select entity so filter bindings work consistently
+    formulario.entidad.data = registro.entity
+
+    padre_row = None
     if request.method == "POST" and request.form.get("padre"):
+        # Preserve submitted parent value (id) so the form shows it after validation errors
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
+    if registro.parent:
+        padre_row = database.session.execute(
+            database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
+        ).scalar_one_or_none()
+        if padre_row:
+            formulario.padre.choices.append((str(padre_row.id), f"{padre_row.code} - {padre_row.name}"))
+
     if request.method != "POST":
         formulario.nombre.data = registro.name
-        formulario.entidad.data = registro.entity
         formulario.activo.data = bool(registro.active)
         formulario.predeterminado.data = bool(registro.default)
         formulario.grupo.data = bool(registro.group)
-        formulario.padre.data = registro.parent
+        # Set padre field to the stored parent id if available, otherwise to the stored parent code
+        formulario.padre.data = str(padre_row.id) if padre_row else registro.parent
+
     entity_initial_label = _company_label(registro.entity) if registro.entity else ""
-    parent_initial_label = ""
-    if registro.parent:
-        parent_row = database.session.execute(
-            database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
-        ).scalar_one_or_none()
-        if parent_row:
-            formulario.padre.choices.append((str(parent_row.id), f"{parent_row.code} - {parent_row.name}"))
-            parent_initial_label = f"{parent_row.code} - {parent_row.name}"
-            if request.method != "POST":
-                formulario.padre.data = str(parent_row.id)
+    parent_initial_label = f"{padre_row.code} - {padre_row.name}" if padre_row else ""
     TITULO = "Contabilidad | Editar Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
