@@ -228,7 +228,7 @@ def test_account_edit_form_prefills_all_fields(app_ctx):
     assert response.status_code == 200
     assert b'initialValue: "cacao"' in response.data
     assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
-    assert b'initialValue: "1"' in response.data
+    assert b'doctype: "account_id"' in response.data
     assert b'initialLabel: "1 - Activo"' in response.data
 
 
@@ -257,7 +257,203 @@ def test_cost_center_edit_prefills_name_status_parent_entity(app_ctx):
     assert _checkbox_is_checked(html, "activo")
     assert b'initialValue: "cacao"' in response.data
     assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
-    assert b'initialValue: "ADM"' in response.data
+    assert b'doctype: "cost_center_id"' in response.data
+    assert b'initialLabel: "ADM - Admin"' in response.data
+
+
+def test_account_parent_accepts_parent_id_and_rejects_cross_entity(app_ctx):
+    from cacao_accounting.database import Accounts, Entity, User, database
+
+    database.session.add(
+        Entity(code="cafe", name="Cafe", company_name="Cafe SA", tax_id="J3001", currency="NIO", enabled=True, status="activo")
+    )
+    parent = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=True)
+    database.session.add(parent)
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    ok = client.post(
+        "/accounting/account/new",
+        data={
+            "entidad": "cacao",
+            "code": "1.01",
+            "name": "Caja",
+            "padre": str(parent.id),
+            "clasificacion": "activo",
+            "account_type": "asset",
+        },
+        follow_redirects=False,
+    )
+    assert ok.status_code in (302, 303)
+    child = Accounts.query.filter_by(entity="cacao", code="1.01").one_or_none()
+    assert child is not None
+    assert child.parent == "1"
+
+    rejected = client.post(
+        "/accounting/account/new",
+        data={
+            "entidad": "cafe",
+            "code": "1.01",
+            "name": "Caja Cafe",
+            "padre": str(parent.id),
+            "clasificacion": "activo",
+            "account_type": "asset",
+        },
+        follow_redirects=True,
+    )
+    assert rejected.status_code == 200
+    assert b"cuenta padre indicada no existe para la entidad seleccionada" in rejected.data.lower()
+
+
+def test_account_parent_cycle_is_rejected(app_ctx):
+    from cacao_accounting.database import Accounts, User, database
+
+    parent = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=True)
+    child = Accounts(entity="cacao", code="1.01", name="Caja", active=True, enabled=True, group=True, parent="1")
+    database.session.add_all([parent, child])
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    response = client.post(
+        "/accounting/account/cacao/1/edit",
+        data={
+            "entidad": "cacao",
+            "code": "1",
+            "name": "Activo",
+            "padre": str(child.id),
+            "clasificacion": "activo",
+            "account_type": "asset",
+            "grupo": "y",
+            "activo": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"genera un ciclo jerarquico" in response.data.lower()
+
+
+def test_cost_center_parent_accepts_parent_id_and_rejects_cross_entity(app_ctx):
+    from cacao_accounting.database import CostCenter, Entity, User, database
+
+    database.session.add(
+        Entity(code="cafe", name="Cafe", company_name="Cafe SA", tax_id="J3002", currency="NIO", enabled=True, status="activo")
+    )
+    parent = CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=True)
+    database.session.add(parent)
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    ok = client.post(
+        "/accounting/costs_center/new",
+        data={
+            "entidad": "cacao",
+            "id": "ADM01",
+            "nombre": "Admin 01",
+            "padre": str(parent.id),
+        },
+        follow_redirects=False,
+    )
+    assert ok.status_code in (302, 303)
+    child = CostCenter.query.filter_by(entity="cacao", code="ADM01").one_or_none()
+    assert child is not None
+    assert child.parent == "ADM"
+
+    rejected = client.post(
+        "/accounting/costs_center/new",
+        data={
+            "entidad": "cafe",
+            "id": "ADM01",
+            "nombre": "Admin 01 Cafe",
+            "padre": str(parent.id),
+        },
+        follow_redirects=True,
+    )
+    assert rejected.status_code == 200
+    assert b"centro de costos padre indicado no existe para la entidad seleccionada" in rejected.data.lower()
+
+
+def test_cost_center_parent_cycle_is_rejected(app_ctx):
+    from cacao_accounting.database import CostCenter, User, database
+
+    parent = CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=True)
+    child = CostCenter(entity="cacao", code="ADM01", name="Admin 01", active=True, enabled=True, group=True, parent="ADM")
+    database.session.add_all([parent, child])
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    response = client.post(
+        "/accounting/costs_center/ADM/edit",
+        data={
+            "entidad": "cacao",
+            "id": "ADM",
+            "nombre": "Admin",
+            "padre": str(child.id),
+            "grupo": "y",
+            "activo": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"genera un ciclo jerarquico" in response.data.lower()
+
+
+def test_account_create_preserves_entity_and_parent_after_validation_error(app_ctx):
+    from cacao_accounting.database import Accounts, User, database
+
+    parent = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=False)
+    database.session.add(parent)
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+    response = client.post(
+        "/accounting/account/new",
+        data={
+            "entidad": "cacao",
+            "code": "1.02",
+            "name": "Banco",
+            "padre": str(parent.id),
+            "clasificacion": "activo",
+            "account_type": "asset",
+            "activo": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"cuenta padre debe ser una cuenta de grupo" in response.data.lower()
+    assert b'initialValue: "cacao"' in response.data
+    assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
+    assert f'initialValue: "{parent.id}"'.encode() in response.data
+    assert b'initialLabel: "1 - Activo"' in response.data
+
+
+def test_cost_center_create_preserves_entity_and_parent_after_validation_error(app_ctx):
+    from cacao_accounting.database import CostCenter, User, database
+
+    parent = CostCenter(entity="cacao", code="ADM", name="Admin", active=True, enabled=True, group=False)
+    database.session.add(parent)
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+    response = client.post(
+        "/accounting/costs_center/new",
+        data={
+            "entidad": "cacao",
+            "id": "ADM02",
+            "nombre": "Admin 02",
+            "padre": str(parent.id),
+            "activo": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"centro de costos padre debe ser un grupo" in response.data.lower()
+    assert b'initialValue: "cacao"' in response.data
+    assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
+    assert f'initialValue: "{parent.id}"'.encode() in response.data
     assert b'initialLabel: "ADM - Admin"' in response.data
 
 
@@ -333,7 +529,7 @@ def test_accounting_period_edit_prefills_name_dates_status_fiscal_year(app_ctx):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'name="nombre"' in html and 'value="Q1"' in html
-    assert 'name="status"' in html and 'value="Abierto"' in html
+    assert 'name="status"' not in html
     assert 'name="inicio"' in html and 'value="2026-01-01"' in html
     assert 'name="fin"' in html and 'value="2026-03-31"' in html
     assert re.search(rf'<option selected value="{fiscal_year.id}">', html)
@@ -341,6 +537,44 @@ def test_accounting_period_edit_prefills_name_dates_status_fiscal_year(app_ctx):
     assert _checkbox_is_checked(html, "cerrado")
     assert b'initialValue: "cacao"' in response.data
     assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
+
+
+def test_accounting_period_list_shows_operational_and_accounting_state(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name="P-OPEN",
+                status="habilitado_abierto",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 1, 1),
+                end=date(2026, 1, 31),
+            ),
+            AccountingPeriod(
+                entity="cacao",
+                name="P-CLOSED",
+                status="deshabilitado_cerrado",
+                enabled=False,
+                is_closed=True,
+                start=date(2026, 2, 1),
+                end=date(2026, 2, 28),
+            ),
+        ]
+    )
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+    response = client.get("/accounting/accounting_period")
+    assert response.status_code == 200
+    assert b"Estado operativo" in response.data
+    assert b"Estado contable" in response.data
+    assert b"Habilitado" in response.data
+    assert b"Deshabilitado" in response.data
+    assert b"Abierto" in response.data
+    assert b"Cerrado" in response.data
 
 
 def test_fiscal_year_edit_prefills_dates_closed_state(app_ctx):

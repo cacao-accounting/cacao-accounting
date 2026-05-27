@@ -1501,6 +1501,21 @@ def test_cost_center_can_be_created_with_valid_parent(app_ctx):
     assert child.parent == "ADM"
 
 
+def test_resolve_cost_center_parent_prefers_id_before_code(app_ctx):
+    from cacao_accounting.contabilidad import _resolve_cost_center_parent
+    from cacao_accounting.database import CostCenter, database
+
+    by_id = CostCenter(id="1", entity="cacao", code="ADM", name="Administracion", active=True, enabled=True, group=True)
+    by_code = CostCenter(id="2", entity="cacao", code="1", name="Centro Codigo 1", active=True, enabled=True, group=True)
+    database.session.add_all([by_id, by_code])
+    database.session.commit()
+
+    parent_code, parent_label = _resolve_cost_center_parent("cacao", "1")
+
+    assert parent_code == "ADM"
+    assert parent_label == "ADM - Administracion"
+
+
 def test_cost_center_rejects_invalid_inactive_cross_company_or_circular_parent(app_ctx):
     from cacao_accounting.database import CostCenter, Entity, User, database
 
@@ -3471,6 +3486,25 @@ def test_account_can_be_created_with_valid_parent(app_ctx):
     assert response.status_code in (200, 302)
     assert child is not None
     assert child.parent == "1"
+
+
+def test_resolve_account_parent_prefers_id_before_code(app_ctx):
+    from cacao_accounting.contabilidad import _resolve_account_parent
+    from cacao_accounting.database import Accounts, database
+
+    by_id = Accounts(
+        id="1", entity="cacao", code="ACT", name="Activo", group=True, active=True, enabled=True, classification="activo"
+    )
+    by_code = Accounts(
+        id="2", entity="cacao", code="1", name="Codigo 1", group=True, active=True, enabled=True, classification="activo"
+    )
+    database.session.add_all([by_id, by_code])
+    database.session.commit()
+
+    parent_code, parent_label = _resolve_account_parent("cacao", "1")
+
+    assert parent_code == "ACT"
+    assert parent_label == "ACT - Activo"
 
 
 def test_account_rejects_invalid_inactive_cross_company_or_circular_parent(app_ctx):

@@ -71,10 +71,6 @@
         {{ form.fiscal_year(class="form-select form-select-sm", id="fiscal_year", required=True) }}
       </div>
       <div class="col-md-6">
-        <label class="form-label" for="status">{{ _('Estado (Etiqueta)') }} <span class="text-danger">*</span></label>
-        {{ form.status(class="form-control form-control-sm", id="status", required=True) }}
-      </div>
-      <div class="col-md-6">
         <label class="form-label" for="inicio">{{ _('Fecha Inicio') }} <span class="text-danger">*</span></label>
         {{ form.inicio(class="form-control form-control-sm", id="inicio", type="date", required=True) }}
       </div>
@@ -83,14 +79,19 @@
         {{ form.fin(class="form-control form-control-sm", id="fin", type="date", required=True) }}
       </div>
       <div class="col-12 mt-3">
+        <h6 class="mb-2">{{ _('Estado operativo') }}</h6>
         <div class="form-check form-check-inline">
           {{ form.habilitado(class="form-check-input", id="habilitado") }}
           <label class="form-check-label" for="habilitado">{{ _('Habilitado') }}</label>
         </div>
+      </div>
+      <div class="col-12">
+        <h6 class="mb-2">{{ _('Estado contable') }}</h6>
         <div class="form-check form-check-inline">
           {{ form.cerrado(class="form-check-input", id="cerrado") }}
           <label class="form-check-label" for="cerrado">{{ _('Cerrado') }}</label>
         </div>
+        <div class="form-text">{{ _('Un período solo acepta registros si está habilitado y no está cerrado.') }}</div>
       </div>
     </form>
   </div>

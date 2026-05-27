@@ -28,8 +28,8 @@
       <div class="ca-kv-item"><label>{{ _('Año fiscal') }}</label><p>{{ registro.fiscal_year_id or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Inicio') }}</label><p>{{ registro.start }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Fin') }}</label><p>{{ registro.end }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or '-' }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Habilitado') }}</label><p>{{ _('Sí') if registro.enabled else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Estado operativo') }}</label><p>{{ _('Habilitado') if registro.enabled else _('Deshabilitado') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Estado contable') }}</label><p>{{ _('Cerrado') if registro.is_closed else _('Abierto') }}</p></div>
     </div>
   </div>
 </div>

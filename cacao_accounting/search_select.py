@@ -207,6 +207,21 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         },
         default_filters={"group": False, "active": True, "enabled": True},
     ),
+    "account_id": SearchSelectSpec(
+        doctype="account_id",
+        model=Accounts,
+        search_fields=("code", "name"),
+        value_field="id",
+        label_builder=_account_label,
+        allowed_filters={
+            "company": "entity",
+            "account_type": "account_type",
+            "is_active": "active",
+            "is_group": "group",
+            "classification": "classification",
+        },
+        default_filters={"active": True, "enabled": True},
+    ),
     "account_code": SearchSelectSpec(
         doctype="account_code",
         model=Accounts,

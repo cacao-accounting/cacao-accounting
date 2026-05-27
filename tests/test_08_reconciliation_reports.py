@@ -1301,6 +1301,24 @@ def test_search_select_cost_center_parent_accepts_is_group_filter(app_ctx):
     assert [item["value"] for item in payload["results"]] == ["ADM"]
 
 
+def test_search_select_account_id_and_cost_center_id_return_numeric_values(app_ctx):
+    from cacao_accounting.database import Accounts, CostCenter, database
+    from cacao_accounting.search_select import search_select
+
+    account = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=True, classification="activo")
+    cost_center = CostCenter(entity="cacao", code="ADM", name="Administracion", active=True, enabled=True, group=True)
+    database.session.add_all([account, cost_center])
+    database.session.commit()
+
+    account_payload = search_select("account_id", "act", {"company": ["cacao"], "is_group": ["1"]}, limit=10)
+    cost_center_payload = search_select("cost_center_id", "adm", {"company": ["cacao"], "is_group": ["1"]}, limit=10)
+
+    assert account_payload["results"][0]["value"] == str(account.id)
+    assert "1 - Activo" in account_payload["results"][0]["label"]
+    assert cost_center_payload["results"][0]["value"] == str(cost_center.id)
+    assert "ADM - Administracion" in cost_center_payload["results"][0]["label"]
+
+
 def test_search_select_item_requires_registered_company_filter(app_ctx):
     from decimal import Decimal
     from uuid import uuid4
@@ -1376,6 +1394,42 @@ def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx)
 
     response = client.get("/api/search-select?doctype=account&q=BANK&company=cacao&bad_filter=x")
     assert response.status_code == 400
+
+
+def test_search_select_api_supports_account_id_and_cost_center_id(app_ctx):
+    from cacao_accounting.database import Accounts, CostCenter, User, database
+
+    account = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=True, classification="activo")
+    cost_center = CostCenter(entity="cacao", code="ADM", name="Administracion", active=True, enabled=True, group=True)
+    user = User(
+        **{
+            "user": "smart-select-admin",
+            "name": "Smart Select",
+            "password": b"x",
+            "classification": "admin",
+            "active": True,
+        }
+    )
+    database.session.add_all([account, cost_center, user])
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user.id
+        session["_fresh"] = True
+
+    account_response = client.get("/api/search-select?doctype=account_id&company=cacao&is_group=true&q=Activo")
+    assert account_response.status_code == 200
+    account_payload = account_response.get_json()
+    assert account_payload["results"][0]["value"] == str(account.id)
+    assert "1 - Activo" in account_payload["results"][0]["label"]
+
+    cost_center_response = client.get("/api/search-select?doctype=cost_center_id&company=cacao&is_group=true&q=Admin")
+    assert cost_center_response.status_code == 200
+    cost_center_payload = cost_center_response.get_json()
+    assert cost_center_payload["results"][0]["value"] == str(cost_center.id)
+    assert "ADM - Administracion" in cost_center_payload["results"][0]["label"]
 
 
 def test_default_accounts_view_uses_smart_select_without_rendering_full_account_options(app_ctx):

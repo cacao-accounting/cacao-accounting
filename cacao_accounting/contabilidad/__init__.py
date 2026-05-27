@@ -106,6 +106,17 @@ def _validate_active_entity_submission(company_code: str) -> None:
         raise ValueError(_("La entidad indicada está inactiva."))
 
 
+def _accounting_period_status_label(enabled: bool, is_closed: bool) -> str:
+    """Genera etiqueta de estado derivada de habilitado/cerrado."""
+    if enabled and not is_closed:
+        return "habilitado_abierto"
+    if enabled and is_closed:
+        return "habilitado_cerrado"
+    if not enabled and not is_closed:
+        return "deshabilitado_abierto"
+    return "deshabilitado_cerrado"
+
+
 def _validate_entity_can_be_deactivated(company_code: str) -> None:
     """Valida reglas administrativas antes de desactivar una entidad."""
     from cacao_accounting.database import Entity
@@ -972,11 +983,37 @@ def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
     return descendants
 
 
-def _validate_account_parent(entity: str, parent_code: str | None, *, current_code: str | None = None) -> str | None:
+def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
     from cacao_accounting.database import Accounts
 
-    if not parent_code:
+    normalized_ref = str(parent_ref).strip()
+    id_value: str | int | None = normalized_ref
+    try:
+        id_python_type = getattr(Accounts.__table__.c.id.type, "python_type", str)
+    except NotImplementedError:
+        id_python_type = str
+    if id_python_type is int:
+        id_value = int(normalized_ref) if normalized_ref.isdigit() else None
+    parent = None
+    if id_value is not None:
+        parent = database.session.execute(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == id_value)
+        ).scalar_one_or_none()
+    if parent is None:
+        parent = database.session.execute(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == normalized_ref)
+        ).scalar_one_or_none()
+    if parent is None:
+        raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
+    return parent.code, f"{parent.code} - {parent.name}"
+
+
+def _validate_account_parent(entity: str, parent_ref: str | None, *, current_code: str | None = None) -> str | None:
+    from cacao_accounting.database import Accounts
+
+    if not parent_ref:
         return None
+    parent_code, _parent_label = _resolve_account_parent(entity, parent_ref)
     if current_code and parent_code == current_code:
         raise ValueError(_("Una cuenta no puede ser padre de si misma."))
     parent = database.session.execute(
@@ -1005,8 +1042,15 @@ def nueva_cuenta():
     formulario = FormularioCuenta()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+    entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
+    parent_initial_label = ""
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
+        entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
+        try:
+            _parent_code, parent_initial_label = _resolve_account_parent(formulario.entidad.data, request.form["padre"])
+        except ValueError:
+            parent_initial_label = request.form["padre"]
     TITULO = "Contabilidad | Nueva Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -1014,12 +1058,24 @@ def nueva_cuenta():
             _validate_active_entity_submission(formulario.entidad.data)
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario)
+            return render_template(
+                "contabilidad/cuenta_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         try:
             parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario)
+            return render_template(
+                "contabilidad/cuenta_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         DATA = Accounts(
             entity=formulario.entidad.data,
             code=formulario.code.data,
@@ -1041,6 +1097,8 @@ def nueva_cuenta():
         "contabilidad/cuenta_crear.html",
         titulo=TITULO,
         form=formulario,
+        entity_initial_label=entity_initial_label,
+        parent_initial_label=parent_initial_label,
     )
 
 
@@ -1073,9 +1131,9 @@ def editar_cuenta(entity, id_cta):
             database.select(Accounts).filter(Accounts.code == registro.parent, Accounts.entity == entity)
         ).scalar_one_or_none()
         if padre_row:
-            formulario.padre.choices.append((padre_row.code, f"{padre_row.code} - {padre_row.name}"))
+            formulario.padre.choices.append((str(padre_row.id), f"{padre_row.code} - {padre_row.name}"))
         if request.method != "POST":
-            formulario.padre.data = registro.parent
+            formulario.padre.data = str(padre_row.id) if padre_row else registro.parent
     entity_initial_label = _company_label(registro.entity) if registro.entity else ""
     parent_initial_label = f"{padre_row.code} - {padre_row.name}" if registro.parent and padre_row else ""
 
@@ -1165,16 +1223,42 @@ def _cost_center_descendant_codes(entity: str, center_code: str) -> set[str]:
     return descendants
 
 
+def _resolve_cost_center_parent(entity: str, parent_ref: str) -> tuple[str, str]:
+    from cacao_accounting.database import CostCenter
+
+    normalized_ref = str(parent_ref).strip()
+    id_value: str | int | None = normalized_ref
+    try:
+        id_python_type = getattr(CostCenter.__table__.c.id.type, "python_type", str)
+    except NotImplementedError:
+        id_python_type = str
+    if id_python_type is int:
+        id_value = int(normalized_ref) if normalized_ref.isdigit() else None
+    parent = None
+    if id_value is not None:
+        parent = database.session.execute(
+            database.select(CostCenter).filter(CostCenter.entity == entity, CostCenter.id == id_value)
+        ).scalar_one_or_none()
+    if parent is None:
+        parent = database.session.execute(
+            database.select(CostCenter).filter(CostCenter.entity == entity, CostCenter.code == normalized_ref)
+        ).scalar_one_or_none()
+    if parent is None:
+        raise ValueError(_("El centro de costos padre indicado no existe para la entidad seleccionada."))
+    return parent.code, f"{parent.code} - {parent.name}"
+
+
 def _validate_cost_center_parent(
     entity: str,
-    parent_code: str | None,
+    parent_ref: str | None,
     *,
     current_code: str | None = None,
 ) -> str | None:
     from cacao_accounting.database import CostCenter
 
-    if not parent_code:
+    if not parent_ref:
         return None
+    parent_code, _parent_label = _resolve_cost_center_parent(entity, parent_ref)
     if current_code and parent_code == current_code:
         raise ValueError(_("Un centro de costos no puede ser padre de si mismo."))
     parent = database.session.execute(
@@ -1203,8 +1287,15 @@ def nuevo_centro_costo():
     formulario = FormularioCentroCosto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
+    entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
+    parent_initial_label = ""
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
+        entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
+        try:
+            _parent_code, parent_initial_label = _resolve_cost_center_parent(formulario.entidad.data, request.form["padre"])
+        except ValueError:
+            parent_initial_label = request.form["padre"]
     TITULO = "Contabilidad | Nuevo Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -1213,12 +1304,24 @@ def nuevo_centro_costo():
             _validate_active_entity_submission(entity)
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario)
+            return render_template(
+                "contabilidad/centro-costo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         try:
             parent_code = _validate_cost_center_parent(entity, request.form.get("padre") or None)
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario)
+            return render_template(
+                "contabilidad/centro-costo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         DATA = CostCenter(
             entity=entity,
             code=request.form.get("id", None),
@@ -1238,6 +1341,8 @@ def nuevo_centro_costo():
         "contabilidad/centro-costo_crear.html",
         titulo=TITULO,
         form=formulario,
+        entity_initial_label=entity_initial_label,
+        parent_initial_label=parent_initial_label,
     )
 
 
@@ -1274,7 +1379,10 @@ def editar_centro_costo(id_cc):
             database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
         ).scalar_one_or_none()
         if parent_row:
+            formulario.padre.choices.append((str(parent_row.id), f"{parent_row.code} - {parent_row.name}"))
             parent_initial_label = f"{parent_row.code} - {parent_row.name}"
+            if request.method != "POST":
+                formulario.padre.data = str(parent_row.id)
     TITULO = "Contabilidad | Editar Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -1754,7 +1862,7 @@ def accounting_period_new():
             entity=request.form.get("entidad", None),
             fiscal_year_id=request.form.get("fiscal_year", None),
             name=request.form.get("nombre", None),
-            status=request.form.get("status", None),
+            status=_accounting_period_status_label(bool(formulario.habilitado.data), bool(formulario.cerrado.data)),
             enabled=bool(formulario.habilitado.data),
             is_closed=bool(formulario.cerrado.data),
             start=formulario.inicio.data,
@@ -1794,7 +1902,6 @@ def accounting_period_edit(period_id):
         formulario.entidad.data = period.entity
         formulario.fiscal_year.data = str(period.fiscal_year_id) if period.fiscal_year_id is not None else ""
         formulario.nombre.data = period.name
-        formulario.status.data = period.status
         formulario.habilitado.data = bool(period.enabled)
         formulario.cerrado.data = bool(period.is_closed)
         formulario.inicio.data = period.start
@@ -1817,7 +1924,7 @@ def accounting_period_edit(period_id):
         period.entity = request.form.get("entidad", period.entity)
         period.fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
         period.name = request.form.get("nombre", period.name)
-        period.status = request.form.get("status", period.status)
+        period.status = _accounting_period_status_label(bool(formulario.habilitado.data), bool(formulario.cerrado.data))
         period.enabled = bool(formulario.habilitado.data)
         period.is_closed = bool(formulario.cerrado.data)
         period.start = formulario.inicio.data

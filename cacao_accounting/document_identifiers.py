@@ -72,15 +72,19 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     if closed_fiscal_year and not allow_closing:
         raise IdentifierConfigurationError("No puede registrar documentos en un año fiscal cerrado.")
 
-    closed_period = database.session.execute(
+    period = database.session.execute(
         database.select(AccountingPeriod)
-        .filter_by(entity=company, is_closed=True)
+        .filter_by(entity=company)
         .where(AccountingPeriod.start <= posting_date)
         .where(AccountingPeriod.end >= posting_date)
-    ).scalar_one_or_none()
+        .order_by(AccountingPeriod.start.desc())
+    ).scalars().first()
 
-    if closed_period and not allow_closing:
+    if period and bool(period.is_closed) and not allow_closing:
         raise IdentifierConfigurationError("No puede registrar documentos en un periodo contable cerrado.")
+
+    if period and not bool(period.enabled) and not allow_closing:
+        raise IdentifierConfigurationError("No puede registrar documentos en un periodo contable deshabilitado.")
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:
