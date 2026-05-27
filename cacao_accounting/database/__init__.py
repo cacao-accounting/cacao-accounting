@@ -357,8 +357,17 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     phone1 = database.Column(database.String(50))
     phone2 = database.Column(database.String(50))
     fax = database.Column(database.String(50))
-    enabled = database.Column(database.Boolean())
+    enabled = database.Column(database.Boolean(), default=True, nullable=False)
     default = database.Column(database.Boolean())
+
+    @property
+    def is_active(self) -> bool:
+        """Alias de compatibilidad para lifecycle activo/inactivo."""
+        return bool(self.enabled)
+
+    @is_active.setter
+    def is_active(self, value: bool) -> None:
+        self.enabled = bool(value)
 
 
 class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]

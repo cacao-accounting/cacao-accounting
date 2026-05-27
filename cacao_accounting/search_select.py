@@ -291,7 +291,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="code",
         label_builder=_unit_label,
-        allowed_filters={"company": "entity"},
+        allowed_filters={"company": "entity", "is_active": "enabled"},
         default_filters={},
     ),
     "unit_id": SearchSelectSpec(
@@ -300,7 +300,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name"),
         value_field="id",
         label_builder=_unit_label,
-        allowed_filters={"company": "entity"},
+        allowed_filters={"company": "entity", "is_active": "enabled"},
         default_filters={},
     ),
     "project": SearchSelectSpec(
@@ -507,7 +507,13 @@ def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit
     if spec is None:
         raise SearchSelectError("Tipo de seleccion no registrado.", 404)
 
-    rejected_filters = sorted(set(filters) - set(spec.allowed_filters))
+    normalized_filters = dict(filters)
+    include_inactive = _extract_filter_flag(normalized_filters, "include_inactive")
+    active_only = _extract_filter_flag(normalized_filters, "active_only", default=True)
+    if include_inactive:
+        active_only = False
+
+    rejected_filters = sorted(set(normalized_filters) - set(spec.allowed_filters))
     if rejected_filters:
         raise SearchSelectError("Filtros no permitidos: " + ", ".join(rejected_filters))
 
@@ -515,12 +521,17 @@ def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit
     normalized_query = query.strip()
 
     statement = select(spec.model)
-    if spec.model is Party and filters.get("company"):
+    if spec.model is Party and normalized_filters.get("company"):
         statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
         statement = statement.where(CompanyParty.is_active.is_(True))
 
-    statement = _apply_default_filters(statement, spec, filters)
-    statement = _apply_request_filters(statement, spec, filters)
+    statement = _apply_default_filters(statement, spec, normalized_filters, active_only=active_only)
+    if active_only:
+        if spec.model is Book:
+            statement = statement.where(or_(Book.status == "activo", Book.status.is_(None)))
+        if spec.model is Unit:
+            statement = statement.where(or_(Unit.enabled.is_(True), Unit.enabled.is_(None)))
+    statement = _apply_request_filters(statement, spec, normalized_filters)
     statement = _apply_search(statement, spec, normalized_query)
     query_limit = max_results + 1
     if spec.deduplicate_by_value:
@@ -586,15 +597,36 @@ def _normalize_limit(limit: int | None, default_limit: int) -> int:
 
 
 def _apply_default_filters(
-    statement: Select[tuple[Any]], spec: SearchSelectSpec, filters: dict[str, list[str]]
+    statement: Select[tuple[Any]],
+    spec: SearchSelectSpec,
+    filters: dict[str, list[str]],
+    *,
+    active_only: bool = True,
 ) -> Select[tuple[Any]]:
     requested_fields = {spec.allowed_filters[name] for name in filters if name in spec.allowed_filters}
     for field, value in spec.default_filters.items():
         if field in requested_fields:
             continue
+        if not active_only and _is_activity_default(field, value):
+            continue
         column = _column_for(spec.model, field)
         statement = statement.where(_condition_for(column, [str(value)] if isinstance(value, str) else [value]))
     return statement
+
+
+def _is_activity_default(field: str, value: str | bool) -> bool:
+    if field in {"active", "enabled", "is_active"}:
+        return True
+    if field == "status" and isinstance(value, str):
+        return value.strip().lower() in {"activo", "active"}
+    return False
+
+
+def _extract_filter_flag(filters: dict[str, list[str]], key: str, *, default: bool = False) -> bool:
+    values = filters.pop(key, None)
+    if not values:
+        return default
+    return bool(_normalize_filter_value(values[0]))
 
 
 def _apply_request_filters(

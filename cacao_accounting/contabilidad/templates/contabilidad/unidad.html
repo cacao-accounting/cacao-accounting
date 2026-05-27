@@ -50,6 +50,7 @@
     </h5>
     {% if acceso.configurar %}
     <div class="d-flex gap-2">
+      <a href="{{ url_for('contabilidad.editar_unidad', id_unidad=registro.code) }}" class="btn btn-outline-primary btn-sm">{{ _('Editar') }}</a>
       <a href="{{ url_for('contabilidad.unidades') }}" class="btn btn-outline-secondary btn-sm">{{ _('Volver al Listado') }}</a>
       <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_unidad', id_unidad=registro.code) }}">
         <i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}
