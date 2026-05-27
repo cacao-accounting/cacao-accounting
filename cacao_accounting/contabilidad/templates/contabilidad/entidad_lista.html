@@ -61,6 +61,7 @@
           <th scope="col">{{ _('Nombre Comercial') }}</th>
           <th scope="col">{{ _('ID Fiscal') }}</th>
           <th scope="col">{{ _('Estado') }}</th>
+          <th scope="col">{{ _('Acciones') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -73,12 +74,21 @@
           <td>{{ item.name }}</td>
           <td>{{ item.tax_id }}</td>
           <td>
-            {% if item.status == 'activo' %}
+            {% if item.enabled %}
             <span class="badge bg-success">{{ _('Activo') }}</span>
             {% elif item.status == 'predeterminado' %}
             <span class="badge bg-primary">{{ _('Predeterminado') }}</span>
             {% else %}
-            <span class="badge bg-secondary">{{ item.status }}</span>
+            <span class="badge bg-secondary">{{ _('Inactivo') }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('contabilidad.entidad', entidad_id=item.code) }}" class="btn btn-sm btn-outline-secondary">{{ _('Ver') }}</a>
+            <a href="{{ url_for('contabilidad.editar_entidad', id_entidad=item.code) }}" class="btn btn-sm btn-outline-primary">{{ _('Editar') }}</a>
+            {% if item.enabled %}
+            <a href="{{ url_for('contabilidad.inactivar_entidad', id_entidad=item.id) }}" class="btn btn-sm btn-outline-warning">{{ _('Desactivar') }}</a>
+            {% else %}
+            <a href="{{ url_for('contabilidad.activar_entidad', id_entidad=item.id) }}" class="btn btn-sm btn-outline-success">{{ _('Activar') }}</a>
             {% endif %}
           </td>
         </tr>

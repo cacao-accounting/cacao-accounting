@@ -54,6 +54,7 @@ from cacao_accounting.setup.service import (
     available_catalog_files,
     create_company,
 )
+from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.audit_trail_service import format_document_timeline
 from cacao_accounting.database import STATUS, database
@@ -84,6 +85,42 @@ CONTABILIDAD_REVALORIZACION_LIST = "contabilidad.revalorizaciones_cambiarias"
 CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
 
 
+def _company_label(company_code: str) -> str:
+    """Devuelve etiqueta de entidad para Smart Select."""
+    from cacao_accounting.database import Entity
+
+    company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
+    if company is None:
+        return company_code
+    return f"{company.code} - {company.company_name}"
+
+
+def _validate_active_entity_submission(company_code: str) -> None:
+    """Valida que la entidad exista y esté activa para formularios operativos."""
+    from cacao_accounting.database import Entity
+
+    company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
+    if company is None:
+        raise ValueError(_("La entidad indicada no existe."))
+    if not bool(company.enabled):
+        raise ValueError(_("La entidad indicada está inactiva."))
+
+
+def _validate_entity_can_be_deactivated(company_code: str) -> None:
+    """Valida reglas administrativas antes de desactivar una entidad."""
+    from cacao_accounting.database import Entity
+
+    company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
+    if company is None:
+        raise ValueError(_("La entidad indicada no existe."))
+    active_count = (
+        database.session.execute(database.select(database.func.count(Entity.id)).filter(Entity.enabled.is_(True))).scalar()
+        or 0
+    )
+    if force_single_entity() and active_count <= 1:
+        raise ValueError(_("No se puede desactivar la única entidad activa en modo escritorio."))
+
+
 # <------------------------------------------------------------------------------------------------------------------------> #
 # Monedas
 @contabilidad.route("/currency/list")
@@ -106,7 +143,7 @@ def monedas():
         count=True,
     )
 
-    TITULO = "Listado de Monedas - " + " - " + APPNAME
+    TITULO = "Contabilidad | Monedas - " + APPNAME
     return render_template(
         "contabilidad/moneda_lista.html",
         consulta=CONSULTA,
@@ -124,7 +161,7 @@ def nueva_moneda():
     from cacao_accounting.database import Currency
 
     formulario = FormularioMoneda()
-    TITULO = "Nueva Moneda - " + APPNAME
+    TITULO = "Contabilidad | Nueva Moneda - " + APPNAME
 
     if formulario.validate_on_submit():
         DATA = Currency(
@@ -158,7 +195,60 @@ def moneda(code):
         flash(_("La moneda indicada no existe."), "warning")
         return redirect(url_for("contabilidad.monedas"))
 
-    return render_template("contabilidad/moneda.html", registro=registro)
+    return render_template(
+        "contabilidad/moneda.html",
+        registro=registro,
+        titulo=f"Contabilidad | Moneda {registro.code} - {APPNAME}",
+    )
+
+
+@contabilidad.route("/currency/<code>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_moneda(code):
+    """Edita una moneda."""
+    from cacao_accounting.contabilidad.forms import FormularioMoneda
+    from cacao_accounting.database import Currency
+
+    registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La moneda indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.monedas"))
+
+    formulario = FormularioMoneda(obj=registro)
+    formulario.code.data = registro.code
+    if request.method != "POST":
+        formulario.name.data = registro.name
+        formulario.decimals.data = registro.decimals
+        formulario.active.data = bool(registro.active)
+        formulario.default.data = bool(registro.default)
+    if formulario.validate_on_submit():
+        registro.name = formulario.name.data
+        registro.decimals = formulario.decimals.data
+        try:
+            CurrencyGuard().apply_currency_edit(
+                registro,
+                active=bool(formulario.active.data),
+                default=bool(formulario.default.data),
+            )
+        except CurrencyGuardError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/moneda_crear.html",
+                titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
+                form=formulario,
+                edit=True,
+            )
+        database.session.commit()
+        return redirect(url_for("contabilidad.moneda", code=registro.code))
+
+    return render_template(
+        "contabilidad/moneda_crear.html",
+        titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
+        form=formulario,
+        edit=True,
+    )
 
 
 @contabilidad.route("/currency/<code>/toggle-active", methods=["POST"])
@@ -230,7 +320,7 @@ def entidades():
         max_per_page=10,
         count=True,
     )
-    TITULO = "Listado de Entidades - " + APPNAME
+    TITULO = "Contabilidad | Entidades - " + APPNAME
     return render_template(
         "contabilidad/entidad_lista.html",
         titulo=TITULO,
@@ -252,6 +342,7 @@ def entidad(entidad_id):
     return render_template(
         "contabilidad/entidad.html",
         registro=registro[0],
+        titulo=f"Contabilidad | Entidad {registro[0].code} - {APPNAME}",
     )
 
 
@@ -267,7 +358,7 @@ def nueva_entidad():
     formulario.moneda.choices = obtener_lista_monedas()
     formulario.catalogo_origen.choices = [("", "Seleccione un catálogo existente")] + available_catalog_files()
 
-    TITULO = "Crear Nueva Entidad - " + APPNAME
+    TITULO = "Contabilidad | Nueva Entidad - " + APPNAME
     if formulario.validate_on_submit():
         try:
             ENTIDAD = create_company(
@@ -325,6 +416,8 @@ def editar_entidad(id_entidad):
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).first()
     ENTIDAD = ENTIDAD[0]
+    formulario = FormularioEntidad()
+    formulario.moneda.choices = obtener_lista_monedas()
 
     if request.method == "POST":
         ENTIDAD.tax_id = request.form.get("id_fiscal", None)
@@ -335,9 +428,10 @@ def editar_entidad(id_entidad):
         ENTIDAD.e_mail = request.form.get("correo_electronico", None)
         ENTIDAD.fax = request.form.get("fax", None)
         ENTIDAD.web = request.form.get("web", None)
+        ENTIDAD.enabled = bool(request.form.get("habilitado"))
         database.session.add(ENTIDAD)
         database.session.commit()
-        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.entidad))
+        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.code))
     else:
         DATA = {
             "nombre_comercial": ENTIDAD.name,
@@ -348,11 +442,17 @@ def editar_entidad(id_entidad):
             "telefono2": ENTIDAD.phone2,
             "fax": ENTIDAD.fax,
             "web": ENTIDAD.web,
+            "habilitado": bool(ENTIDAD.enabled),
         }
 
         formulario = FormularioEntidad(data=DATA)
         formulario.moneda.choices = obtener_lista_monedas()
-        return render_template("contabilidad/entidad_editar.html", entidad=ENTIDAD, form=formulario)
+        return render_template(
+            "contabilidad/entidad_editar.html",
+            entidad=ENTIDAD,
+            form=formulario,
+            titulo=f"Contabilidad | Editar Entidad {ENTIDAD.code} - {APPNAME}",
+        )
 
 
 @contabilidad.route("/entity/delete/<id_entidad>")
@@ -379,7 +479,15 @@ def inactivar_entidad(id_entidad):
     from cacao_accounting.database import Entity
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
-    ENTIDAD[0].habilitada = False
+    if ENTIDAD is None:
+        return LISTA_ENTIDADES
+    try:
+        _validate_entity_can_be_deactivated(ENTIDAD[0].code)
+    except ValueError as error:
+        flash(str(error), "warning")
+        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD[0].code))
+    ENTIDAD[0].enabled = False
+    ENTIDAD[0].status = "inactivo"
     database.session.commit()
 
     return LISTA_ENTIDADES
@@ -394,7 +502,11 @@ def activar_entidad(id_entidad):
     from cacao_accounting.database import Entity
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
+    if ENTIDAD is None:
+        return LISTA_ENTIDADES
     ENTIDAD[0].enabled = True
+    if ENTIDAD[0].status != "predeterminado":
+        ENTIDAD[0].status = "activo"
     database.session.commit()
 
     return LISTA_ENTIDADES
@@ -444,7 +556,7 @@ def unidades():
         count=True,
     )
 
-    TITULO = "Listado de Unidades de Negocio - " + APPNAME
+    TITULO = "Contabilidad | Unidades de Negocio - " + APPNAME
     return render_template(
         "contabilidad/unidad_lista.html",
         titulo=TITULO,
@@ -462,7 +574,11 @@ def unidad(id_unidad):
     from cacao_accounting.database import Unit
 
     REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
-    return render_template("contabilidad/unidad.html", registro=REGISTRO[0])
+    return render_template(
+        "contabilidad/unidad.html",
+        registro=REGISTRO[0],
+        titulo=f"Contabilidad | Unidad {REGISTRO[0].code} - {APPNAME}",
+    )
 
 
 @contabilidad.route("/unit/delete/<id_unidad>")
@@ -490,8 +606,17 @@ def nueva_unidad():
 
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    TITULO = "Crear Nueva Unidad de Negocio - " + APPNAME
+    TITULO = "Contabilidad | Nueva Unidad de Negocio - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", ""))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/unidad_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
         DATA = Unit(
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
@@ -507,6 +632,55 @@ def nueva_unidad():
         "contabilidad/unidad_crear.html",
         titulo=TITULO,
         form=formulario,
+    )
+
+
+@contabilidad.route("/unit/<id_unidad>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_unidad(id_unidad):
+    """Editar una unidad de negocios."""
+    from cacao_accounting.contabilidad.forms import FormularioUnidad
+    from cacao_accounting.database import Unit
+
+    registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
+    if registro is None:
+        return redirect(url_for("contabilidad.unidades"))
+
+    formulario = FormularioUnidad(obj=registro)
+    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.id.data = registro.code
+    if request.method != "POST":
+        formulario.nombre.data = registro.name
+        formulario.entidad.data = registro.entity
+        formulario.habilitado.data = bool(registro.enabled)
+    entity_initial_label = _company_label(registro.entity) if registro.entity else ""
+
+    if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(formulario.entidad.data)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/unidad_crear.html",
+                titulo="Editar Unidad de Negocio - " + APPNAME,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
+        registro.name = formulario.nombre.data
+        registro.entity = formulario.entidad.data
+        registro.enabled = bool(formulario.habilitado.data)
+        database.session.commit()
+        return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
+
+    return render_template(
+        "contabilidad/unidad_crear.html",
+        titulo="Editar Unidad de Negocio - " + APPNAME,
+        form=formulario,
+        edit=True,
+        entity_initial_label=entity_initial_label,
     )
 
 
@@ -532,7 +706,7 @@ def libros():
         count=True,
     )
 
-    TITULO = "Listado de Libros de Contabilidad - " + APPNAME
+    TITULO = "Contabilidad | Libros de Contabilidad - " + APPNAME
     return render_template(
         "contabilidad/book_lista.html",
         titulo=TITULO,
@@ -550,7 +724,11 @@ def libro(id_unidad):
     from cacao_accounting.database import Book
 
     REGISTRO = database.session.execute(database.select(Book).filter_by(code=id_unidad)).first()
-    return render_template("contabilidad/book.html", registro=REGISTRO[0])
+    return render_template(
+        "contabilidad/book.html",
+        registro=REGISTRO[0],
+        titulo=f"Contabilidad | Libro {REGISTRO[0].code} - {APPNAME}",
+    )
 
 
 @contabilidad.route("/book/delete/<id_unidad>")
@@ -584,11 +762,26 @@ def editar_libro(id_libro):
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.moneda.choices = obtener_lista_monedas_activas()
     formulario.id.data = libro.code
-    formulario.moneda.data = libro.currency
-    formulario.estado.data = libro.status or "activo"
-    TITULO = "Editar Libro de Contabilidad - " + APPNAME
+    if request.method != "POST":
+        formulario.nombre.data = libro.name
+        formulario.entidad.data = libro.entity
+        formulario.moneda.data = libro.currency
+        formulario.estado.data = libro.status or "activo"
+    entity_initial_label = _company_label(libro.entity) if libro.entity else ""
+    TITULO = "Contabilidad | Editar Libro de Contabilidad - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(formulario.entidad.data)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/book_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
         try:
             if formulario.estado.data == "activo":
                 CurrencyGuard().validate_active_currency(
@@ -604,6 +797,7 @@ def editar_libro(id_libro):
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
+                entity_initial_label=entity_initial_label,
             )
         libro.name = formulario.nombre.data
         libro.entity = formulario.entidad.data
@@ -617,6 +811,7 @@ def editar_libro(id_libro):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        entity_initial_label=entity_initial_label,
     )
 
 
@@ -634,6 +829,15 @@ def nuevo_libro():
     formulario.moneda.choices = obtener_lista_monedas_activas()
     TITULO = "Crear Nuevo Libro de Contabilidad - " + APPNAME
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(formulario.entidad.data)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/book_crear.html",
+                titulo=TITULO,
+                form=formulario,
+            )
         try:
             if formulario.estado.data == "activo":
                 CurrencyGuard().validate_active_currency(
@@ -747,6 +951,7 @@ def cuenta(entity, id_cta):
         "contabilidad/cuenta.html",
         registro=registro[0],
         statusweb=STATUS,
+        titulo=f"Contabilidad | Cuenta {registro[0].code} - {APPNAME}",
     )
 
 
@@ -802,9 +1007,14 @@ def nueva_cuenta():
     formulario.padre.choices = [("", SIN_PADRE)]
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
-    TITULO = "Nueva Cuenta Contable - " + APPNAME
+    TITULO = "Contabilidad | Nueva Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(formulario.entidad.data)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario)
         try:
             parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
         except ValueError as error:
@@ -855,6 +1065,7 @@ def editar_cuenta(entity, id_cta):
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.entidad.data = registro.entity
     formulario.padre.choices = [("", SIN_PADRE)]
+    padre_row = None
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
     if registro.parent:
@@ -865,10 +1076,24 @@ def editar_cuenta(entity, id_cta):
             formulario.padre.choices.append((padre_row.code, f"{padre_row.code} - {padre_row.name}"))
         if request.method != "POST":
             formulario.padre.data = registro.parent
+    entity_initial_label = _company_label(registro.entity) if registro.entity else ""
+    parent_initial_label = f"{padre_row.code} - {padre_row.name}" if registro.parent and padre_row else ""
 
-    TITULO = "Editar Cuenta Contable - " + APPNAME
+    TITULO = "Contabilidad | Editar Cuenta Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(formulario.entidad.data)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/cuenta_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         try:
             parent_code = _validate_account_parent(
                 formulario.entidad.data,
@@ -877,7 +1102,14 @@ def editar_cuenta(entity, id_cta):
             )
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/cuenta_crear.html", titulo=TITULO, form=formulario, edit=True)
+            return render_template(
+                "contabilidad/cuenta_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         registro.name = formulario.name.data
         registro.group = bool(formulario.grupo.data)
         registro.parent = parent_code
@@ -893,6 +1125,8 @@ def editar_cuenta(entity, id_cta):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        entity_initial_label=entity_initial_label,
+        parent_initial_label=parent_initial_label,
     )
 
 
@@ -971,10 +1205,15 @@ def nuevo_centro_costo():
     formulario.padre.choices = [("", SIN_PADRE)]
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
-    TITULO = "Nuevo Centro de Costos - " + APPNAME
+    TITULO = "Contabilidad | Nuevo Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
         entity = request.form.get("entidad", formulario.entidad.data)
+        try:
+            _validate_active_entity_submission(entity)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario)
         try:
             parent_code = _validate_cost_center_parent(entity, request.form.get("padre") or None)
         except ValueError as error:
@@ -1022,11 +1261,36 @@ def editar_centro_costo(id_cc):
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
     if request.method != "POST":
+        formulario.nombre.data = registro.name
+        formulario.entidad.data = registro.entity
+        formulario.activo.data = bool(registro.active)
+        formulario.predeterminado.data = bool(registro.default)
+        formulario.grupo.data = bool(registro.group)
         formulario.padre.data = registro.parent
-    TITULO = "Editar Centro de Costos - " + APPNAME
+    entity_initial_label = _company_label(registro.entity) if registro.entity else ""
+    parent_initial_label = ""
+    if registro.parent:
+        parent_row = database.session.execute(
+            database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
+        ).scalar_one_or_none()
+        if parent_row:
+            parent_initial_label = f"{parent_row.code} - {parent_row.name}"
+    TITULO = "Contabilidad | Editar Centro de Costos - " + APPNAME
 
     if formulario.validate_on_submit():
         entity = request.form.get("entidad", registro.entity)
+        try:
+            _validate_active_entity_submission(entity)
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/centro-costo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         try:
             parent_code = _validate_cost_center_parent(
                 entity,
@@ -1035,7 +1299,14 @@ def editar_centro_costo(id_cc):
             )
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template("contabilidad/centro-costo_crear.html", titulo=TITULO, form=formulario, edit=True)
+            return render_template(
+                "contabilidad/centro-costo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
         registro.name = request.form.get("nombre", registro.name)
         registro.entity = entity
         registro.active = bool(formulario.activo.data)
@@ -1051,6 +1322,8 @@ def editar_centro_costo(id_cc):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        entity_initial_label=entity_initial_label,
+        parent_initial_label=parent_initial_label,
     )
 
 
@@ -1070,6 +1343,7 @@ def centro_costo(id_cc: str):
         "contabilidad/centro-costo.html",
         registro=registro,
         statusweb=STATUS,
+        titulo=f"Contabilidad | Centro de Costos {registro.code} - {APPNAME}",
     )
 
 
@@ -1129,9 +1403,19 @@ def nuevo_proyecto():
 
     formulario = FormularioProyecto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    TITULO = "Nuevo Proyecto - " + APPNAME
+    TITULO = "Contabilidad | Nuevo Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", ""))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/proyecto_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                budget_currency_code="",
+            )
         budget_amount = formulario.presupuesto.data
         budget_currency = None
         if budget_amount is not None:
@@ -1181,7 +1465,12 @@ def proyecto(project_id):
         flash(_("El proyecto indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
-    return render_template("contabilidad/proyecto.html", registro=registro, statusweb=STATUS)
+    return render_template(
+        "contabilidad/proyecto.html",
+        registro=registro,
+        statusweb=STATUS,
+        titulo=f"Contabilidad | Proyecto {registro.code} - {APPNAME}",
+    )
 
 
 @contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
@@ -1200,10 +1489,30 @@ def editar_proyecto(project_id):
     formulario = FormularioProyecto(obj=proyecto)
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.presupuesto.data = proyecto.budget
-    TITULO = "Editar Proyecto - " + APPNAME
+    if request.method != "POST":
+        formulario.nombre.data = proyecto.name
+        formulario.entidad.data = proyecto.entity
+        formulario.inicio.data = proyecto.start
+        formulario.fin.data = proyecto.end
+        formulario.presupuesto.data = proyecto.budget
+        formulario.habilitado.data = bool(proyecto.enabled)
+        formulario.status.data = proyecto.status or "open"
+    entity_initial_label = _company_label(proyecto.entity) if proyecto.entity else ""
+    TITULO = "Contabilidad | Editar Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/proyecto_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                budget_currency_code=proyecto.budget_currency_code or "",
+                entity_initial_label=entity_initial_label,
+            )
         budget_amount = formulario.presupuesto.data
         budget_currency = None
         if budget_amount is not None:
@@ -1219,6 +1528,7 @@ def editar_proyecto(project_id):
                     form=formulario,
                     edit=True,
                     budget_currency_code=proyecto.budget_currency_code or "",
+                    entity_initial_label=entity_initial_label,
                 )
         proyecto.name = request.form.get("nombre", proyecto.name)
         proyecto.entity = request.form.get("entidad", proyecto.entity)
@@ -1237,6 +1547,7 @@ def editar_proyecto(project_id):
         form=formulario,
         edit=True,
         budget_currency_code=proyecto.budget_currency_code or "",
+        entity_initial_label=entity_initial_label,
     )
 
 
@@ -1279,7 +1590,7 @@ def fiscal_year_list():
 
     return render_template(
         "contabilidad/fiscal_year_lista.html",
-        titulo="Años Fiscales - " + APPNAME,
+        titulo="Contabilidad | Años Fiscales - " + APPNAME,
         consulta=CONSULTA,
         statusweb=STATUS,
     )
@@ -1296,7 +1607,7 @@ def fiscal_year_new():
 
     formulario = FormularioFiscalYear()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    TITULO = "Nuevo Año Fiscal - " + APPNAME
+    TITULO = "Contabilidad | Nuevo Año Fiscal - " + APPNAME
 
     if formulario.validate_on_submit():
         DATA = FiscalYear(
@@ -1333,9 +1644,26 @@ def fiscal_year_edit(fy_id):
     formulario = FormularioFiscalYear(obj=fiscal_year)
     formulario.id.data = fiscal_year.name
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    TITULO = "Editar Año Fiscal - " + APPNAME
+    if request.method != "POST":
+        formulario.entidad.data = fiscal_year.entity
+        formulario.inicio.data = fiscal_year.year_start_date
+        formulario.fin.data = fiscal_year.year_end_date
+        formulario.cerrado.data = bool(fiscal_year.is_closed)
+    entity_initial_label = _company_label(fiscal_year.entity) if fiscal_year.entity else ""
+    TITULO = "Contabilidad | Editar Año Fiscal - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", fiscal_year.entity))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/fiscal_year_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
         if fiscal_year.financial_closed and not bool(formulario.cerrado.data):
             flash("No se puede abrir un año con cierre contable realizado.", "danger")
             return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
@@ -1353,6 +1681,7 @@ def fiscal_year_edit(fy_id):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        entity_initial_label=entity_initial_label,
     )
 
 
@@ -1369,7 +1698,11 @@ def fiscal_year_detail(fy_id):
         flash(_("El año fiscal indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
-    return render_template("contabilidad/fiscal_year.html", registro=registro)
+    return render_template(
+        "contabilidad/fiscal_year.html",
+        registro=registro,
+        titulo=f"Contabilidad | Año Fiscal {registro.name} - {APPNAME}",
+    )
 
 
 @contabilidad.route("/fiscal_year/<fy_id>/delete")
@@ -1404,9 +1737,19 @@ def accounting_period_new():
     fiscal_years = database.session.execute(database.select(FiscalYear)).scalars().all()
     formulario.fiscal_year.choices += [(fy.id, fy.name) for fy in fiscal_years]
     no_fiscal_years = len(fiscal_years) == 0
-    TITULO = "Nuevo Período Contable - " + APPNAME
+    TITULO = "Contabilidad | Nuevo Período Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", ""))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/periodo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                no_fiscal_years=no_fiscal_years,
+            )
         DATA = AccountingPeriod(
             entity=request.form.get("entidad", None),
             fiscal_year_id=request.form.get("fiscal_year", None),
@@ -1447,9 +1790,30 @@ def accounting_period_edit(period_id):
     fiscal_years = database.session.execute(database.select(FiscalYear)).scalars().all()
     formulario.fiscal_year.choices = [(fy.id, fy.name) for fy in fiscal_years]
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    TITULO = "Editar Período Contable - " + APPNAME
+    if request.method != "POST":
+        formulario.entidad.data = period.entity
+        formulario.fiscal_year.data = str(period.fiscal_year_id) if period.fiscal_year_id is not None else ""
+        formulario.nombre.data = period.name
+        formulario.status.data = period.status
+        formulario.habilitado.data = bool(period.enabled)
+        formulario.cerrado.data = bool(period.is_closed)
+        formulario.inicio.data = period.start
+        formulario.fin.data = period.end
+    entity_initial_label = _company_label(period.entity) if period.entity else ""
+    TITULO = "Contabilidad | Editar Período Contable - " + APPNAME
 
     if formulario.validate_on_submit():
+        try:
+            _validate_active_entity_submission(request.form.get("entidad", period.entity))
+        except ValueError as error:
+            flash(str(error), "danger")
+            return render_template(
+                "contabilidad/periodo_crear.html",
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
         period.entity = request.form.get("entidad", period.entity)
         period.fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
         period.name = request.form.get("nombre", period.name)
@@ -1466,6 +1830,7 @@ def accounting_period_edit(period_id):
         titulo=TITULO,
         form=formulario,
         edit=True,
+        entity_initial_label=entity_initial_label,
     )
 
 
@@ -1497,7 +1862,11 @@ def accounting_period_detail(period_id):
         flash(_("El período contable indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
-    return render_template("contabilidad/periodo.html", registro=registro)
+    return render_template(
+        "contabilidad/periodo.html",
+        registro=registro,
+        titulo=f"Contabilidad | Período {registro.name} - {APPNAME}",
+    )
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -1521,7 +1890,7 @@ def tasa_cambio():
         max_per_page=10,
         count=True,
     )
-    TITULO = "Listado de Tasas de Cambio - " + APPNAME
+    TITULO = "Contabilidad | Tasas de Cambio - " + APPNAME
 
     return render_template(
         "contabilidad/tc_lista.html",
@@ -1543,7 +1912,7 @@ def nueva_tasa_cambio():
     monedas_choices = obtener_lista_monedas_activas()
     formulario.origin.choices = monedas_choices
     formulario.destination.choices = monedas_choices
-    TITULO = "Nueva Tasa de Cambio - " + APPNAME
+    TITULO = "Contabilidad | Nueva Tasa de Cambio - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -1606,7 +1975,50 @@ def tipo_cambio(rate_id):
         flash(_("La tasa de cambio indicada no existe."), "warning")
         return redirect(url_for("contabilidad.tasa_cambio"))
 
-    return render_template("contabilidad/tc.html", registro=registro)
+    return render_template(
+        "contabilidad/tc.html",
+        registro=registro,
+        titulo=f"Contabilidad | Tasa {registro.origin}-{registro.destination} - {APPNAME}",
+    )
+
+
+@contabilidad.route("/exchange/<rate_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_tasa_cambio(rate_id):
+    """Editar una tasa de cambio."""
+    from cacao_accounting.contabilidad.forms import FormularioTasaCambio
+    from cacao_accounting.database import ExchangeRate
+
+    registro = database.session.execute(database.select(ExchangeRate).filter_by(id=rate_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La tasa de cambio indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.tasa_cambio"))
+
+    formulario = FormularioTasaCambio(obj=registro)
+    monedas_choices = obtener_lista_monedas_activas()
+    formulario.origin.choices = monedas_choices
+    formulario.destination.choices = monedas_choices
+    if formulario.validate_on_submit():
+        if formulario.origin.data == formulario.destination.data:
+            flash(_("La moneda origen y destino deben ser diferentes."), "danger")
+        elif formulario.rate.data is None or formulario.rate.data <= 0:
+            flash(_("La tasa debe ser mayor a cero."), "danger")
+        else:
+            registro.origin = formulario.origin.data
+            registro.destination = formulario.destination.data
+            registro.rate = formulario.rate.data
+            registro.date = formulario.date.data
+            database.session.commit()
+            return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
+
+    return render_template(
+        "contabilidad/tc_crear.html",
+        titulo="Editar Tasa de Cambio - " + APPNAME,
+        form=formulario,
+        edit=True,
+    )
 
 
 @contabilidad.route("/accounting_period")
@@ -1629,7 +2041,7 @@ def periodo_contable():
         count=True,
     )
 
-    TITULO = "Listado de Períodos Contables - " + APPNAME
+    TITULO = "Contabilidad | Períodos Contables - " + APPNAME
 
     return render_template(
         "contabilidad/periodo_lista.html",

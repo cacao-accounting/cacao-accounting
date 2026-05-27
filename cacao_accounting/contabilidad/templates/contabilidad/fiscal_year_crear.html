@@ -36,6 +36,7 @@
             minChars: 1,
             preload: true,
             initialValue: "{{ form.entidad.data or "" }}",
+            initialLabel: {{ (entity_initial_label|default(""))|tojson }},
             messages: {
               placeholder: {{ _("Buscar entidad")|tojson }},
               loading: {{ _("Cargando...")|tojson }},
