@@ -3,7 +3,6 @@
 
 """Integration tests for the Orchestrator, Resolver and Snapshots."""
 
-import pytest
 from decimal import Decimal
 from datetime import date
 from cacao_accounting.accounting_engine.common.context import (

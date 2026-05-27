@@ -51,6 +51,9 @@ from cacao_accounting.logs import log
 from cacao_accounting.imports.routes import imports
 from cacao_accounting.imports.utils.recovery import recover_crashed_batches
 from cacao_accounting.inventario import inventario
+from cacao_accounting.printing.routes import printing_public
+from cacao_accounting.printing.admin_routes import printing_admin
+from cacao_accounting.printing import init_printing
 from cacao_accounting.modulos import (
     registrar_modulos_adicionales,
     validar_modulo_activo,
@@ -131,6 +134,9 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(ventas, url_prefix="/sales")
             app.register_blueprint(setup_wizard, url_prefix="/setup")
             app.register_blueprint(imports, url_prefix="/imports")
+            app.register_blueprint(printing_public)
+            app.register_blueprint(printing_admin)
+            init_printing()
 
     else:
         raise RuntimeError(ERROR2)

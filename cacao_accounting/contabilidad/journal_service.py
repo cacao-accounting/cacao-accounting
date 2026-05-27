@@ -161,6 +161,10 @@ def submit_journal(journal_id: str) -> list[Any]:
 
     database.session.add(journal)
     log_submit(journal)
+    # QR Validation support
+    from cacao_accounting.printing.validation import ValidationService
+
+    ValidationService().update_validation_from_document(journal)
     database.session.commit()
     return entries
 
@@ -209,6 +213,11 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
 
     database.session.add(journal)
     log_cancel(journal)
+    # QR Validation support
+    from cacao_accounting.printing.validation import ValidationService
+
+    ValidationService().update_validation_from_document(journal)
+
     database.session.commit()
     return entries
 

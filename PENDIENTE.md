@@ -1,5 +1,19 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-05-27 (Servicio reusable de impresion - completado)
+- [x] Integrar via `merge --squash` la rama remota de impresion reutilizable y validacion QR.
+- [x] Endurecer `PrintService` con registry obligatorio, sandbox Jinja2, `StrictUndefined`, resolucion compania/global y logging de intentos.
+- [x] Normalizar contextos serializables en ingles y raices estables por tipo documental.
+- [x] Agregar endpoints operativos de preview/PDF y endpoint publico de validacion QR.
+- [x] Completar seeds/documentacion minima de formatos de impresion.
+- [x] Validar pruebas focales de impresion/QR y calidad focal con Black, Ruff, Flake8 y Mypy.
+
+## Seguimiento 2026-05-26 (Bandit - completado)
+- [x] Remover literales de fallback de `SECRET_KEY` reportados por B105.
+- [x] Reemplazar `assert` de runtime por validaciones explicitas en settlement y line import.
+- [x] Ejecutar `bandit -r cacao_accounting` en verde sin skips nuevos.
+- [x] Validar formato/lint focal y pruebas focales relacionadas.
+
 ## Seguimiento 2026-05-26 (Playwright E2E - completado)
 - [x] Verificar Playwright/Chromium disponible en el `venv` local.
 - [x] Mantener los tests Playwright marcados para omitirse si Playwright no esta disponible.
@@ -82,6 +96,15 @@
 ## Seguimiento 2026-05-23 (Conciliaciones - completado)
 - [x] Conciliacion masiva de facturas contra pagos (interfaz dedicada).
 - [x] Implementar "Stock Reconciliation" para ajuste de valuacion (cantidad + valor objetivo).
+
+## Seguimiento 2026-05-27 (Servicio reusable de impresion y QR - completado)
+- [x] Integrar por `merge --squash` la rama remota de impresion reusable preservando `PENDIENTE.md`.
+- [x] Consolidar modelos, registry, servicio, rutas, seeds, contextos Jinja, PDF y administracion de plantillas.
+- [x] Implementar configuracion administrable de External Document Validation en `CacaoConfig`.
+- [x] Renombrar semanticamente `company_id` a `company_code` en los modelos nuevos de impresion/validacion.
+- [x] Endurecer QR: drafts no generan ni actualizan token, `segno` es dependencia explicita, estados tecnicos y view publica segura.
+- [x] Ampliar documentos validables y calculo de `line_count` / `grand_total` por tablas reales.
+- [x] Documentar configuracion QR, dependencia, estados y datos publicos permitidos.
 
 ## Seguimiento 2026-05-22 (Payment Entry - completado)
 - [x] Acciones `Crear` en detalle de solicitud de compra (`purchase_request` → cotización de proveedor) — pre-existing gap en `ALLOWED_FLOWS`.

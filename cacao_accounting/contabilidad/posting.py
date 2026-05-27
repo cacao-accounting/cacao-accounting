@@ -2137,7 +2137,12 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     if _has_active_gl_entries(document):
         raise PostingError("Este documento ya tiene entradas GL contabilizadas.")
     document.docstatus = 1
-    return post_document_to_gl(document, ledger_code=ledger_code)
+    entries = post_document_to_gl(document, ledger_code=ledger_code)
+    # QR Validation support
+    from cacao_accounting.printing.validation import ValidationService
+
+    ValidationService().update_validation_from_document(document)
+    return entries
 
 
 def cancel_document(document: Any) -> list[GLEntry]:
@@ -2170,6 +2175,11 @@ def cancel_document(document: Any) -> list[GLEntry]:
         raise PostingError("El documento no tiene entradas GL para reversar.")
 
     document.docstatus = 2
+    # QR Validation support
+    from cacao_accounting.printing.validation import ValidationService
+
+    ValidationService().update_validation_from_document(document)
+
     reversals: list[GLEntry] = []
     for entry in original_entries:
         context = LedgerContext(
