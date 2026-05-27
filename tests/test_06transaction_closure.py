@@ -203,6 +203,101 @@ def test_identifier_rejects_closed_accounting_period(app_ctx):
         )
 
 
+def test_identifier_rejects_disabled_accounting_period(app_ctx):
+    """La fecha de contabilización no puede caer en un periodo deshabilitado."""
+
+    from cacao_accounting.database import AccountingPeriod, PurchaseInvoice, database
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 4))
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name="Mayo 2026",
+                enabled=False,
+                is_closed=False,
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+            ),
+            invoice,
+        ]
+    )
+    database.session.flush()
+
+    with pytest.raises(IdentifierConfigurationError, match="periodo contable deshabilitado"):
+        assign_document_identifier(
+            document=invoice,
+            entity_type="purchase_invoice",
+            posting_date_raw=invoice.posting_date,
+            naming_series_id=None,
+        )
+
+
+def test_identifier_allows_enabled_open_accounting_period(app_ctx):
+    """La fecha de contabilización puede usarse cuando el periodo está habilitado y abierto."""
+
+    from cacao_accounting.database import AccountingPeriod, PurchaseInvoice, database
+    from cacao_accounting.document_identifiers import assign_document_identifier
+
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 4))
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name="Mayo 2026",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+            ),
+            invoice,
+        ]
+    )
+    database.session.flush()
+
+    assign_document_identifier(
+        document=invoice,
+        entity_type="purchase_invoice",
+        posting_date_raw=invoice.posting_date,
+        naming_series_id=None,
+    )
+
+    assert invoice.document_no
+    assert invoice.naming_series_id is not None
+
+
+def test_identifier_rejects_disabled_and_closed_accounting_period(app_ctx):
+    """La fecha de contabilización se bloquea cuando el periodo está deshabilitado y cerrado."""
+
+    from cacao_accounting.database import AccountingPeriod, PurchaseInvoice, database
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 4))
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name="Mayo 2026",
+                enabled=False,
+                is_closed=True,
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+            ),
+            invoice,
+        ]
+    )
+    database.session.flush()
+
+    with pytest.raises(IdentifierConfigurationError, match="(cerrado|deshabilitado)"):
+        assign_document_identifier(
+            document=invoice,
+            entity_type="purchase_invoice",
+            posting_date_raw=invoice.posting_date,
+            naming_series_id=None,
+        )
+
+
 def test_identifier_rejects_incompatible_or_cross_company_series(app_ctx):
     """La serie elegida debe pertenecer al tipo documental y a la compañia."""
 

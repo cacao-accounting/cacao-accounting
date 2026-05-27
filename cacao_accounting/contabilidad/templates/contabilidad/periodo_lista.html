@@ -50,7 +50,8 @@
           <th scope="col">{{ _('Entidad') }}</th>
           <th scope="col">{{ _('Inicio') }}</th>
           <th scope="col">{{ _('Fin') }}</th>
-          <th scope="col" class="text-center">{{ _('Estado') }}</th>
+          <th scope="col" class="text-center">{{ _('Estado operativo') }}</th>
+          <th scope="col" class="text-center">{{ _('Estado contable') }}</th>
           <th scope="col">{{ _('Acciones') }}</th>
         </tr>
       </thead>
@@ -61,6 +62,13 @@
           <td>{{ item.entity }}</td>
           <td>{{ item.start }}</td>
           <td>{{ item.end }}</td>
+          <td class="text-center">
+            {% if item.enabled %}
+            <span class="badge bg-success">{{ _('Habilitado') }}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ _('Deshabilitado') }}</span>
+            {% endif %}
+          </td>
           <td class="text-center">
             {% if item.is_closed %}
             <span class="badge bg-dark">{{ _('Cerrado') }}</span>
@@ -80,7 +88,7 @@
           </td>
         </tr>
         {%- else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No se encontraron períodos contables.') }}</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">{{ _('No se encontraron períodos contables.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
