@@ -280,14 +280,16 @@ def test_cost_center_detail_has_edit_button(app_ctx):
 
 # 6) Titles consistency
 def test_pages_have_expected_titles(app_ctx):
+    from cacao_accounting.database import User
+
     client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
     # accounts list
     r = client.get("/accounting/accounts")
     assert r.status_code == 200
     assert "Catalogo de Cuentas Contables" in r.get_data(as_text=True)
 
     # new cost center page title
-    _login(client, app_ctx.app_context().g.user if hasattr(app_ctx, "g") else "admin")
     r2 = client.get("/accounting/costs_center/new")
     assert r2.status_code == 200
     assert "Nuevo Centro de Costos" in r2.get_data(as_text=True)
