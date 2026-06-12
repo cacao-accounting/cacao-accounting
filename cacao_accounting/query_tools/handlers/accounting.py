@@ -1,3 +1,5 @@
+"""Handlers de consultas contables: períodos, cuentas, balanza y libro mayor."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -48,6 +50,7 @@ def list_accounting_periods(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista los períodos contables de una compañía, con filtro opcional por estado."""
     validate_permission(
         context,
         required_permission="accounting.reports.read",
@@ -132,6 +135,7 @@ def search_accounts(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Busca cuentas contables por código o nombre, con filtro opcional de clasificación."""
     validate_permission(
         context,
         required_permission="accounting.reports.read",
@@ -219,6 +223,7 @@ def get_trial_balance(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene la balanza de comprobación para una compañía, libro y rango de fechas."""
     validate_permission(
         context,
         required_permission="accounting.reports.read",
@@ -308,6 +313,7 @@ def get_general_ledger(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta los movimientos del libro mayor por cuenta y rango de fechas."""
     validate_permission(
         context,
         required_permission="accounting.reports.read",

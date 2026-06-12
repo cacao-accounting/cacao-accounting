@@ -1,3 +1,5 @@
+"""Handlers de consultas bancarias: cuentas y transacciones."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,6 +38,7 @@ def get_banking_accounts(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista las cuentas bancarias de una compañía."""
     validate_permission(
         context,
         required_permission="banking.reports.read",
@@ -115,6 +118,7 @@ def get_banking_transactions(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta movimientos bancarios con filtros opcionales por cuenta y fechas."""
     validate_permission(
         context,
         required_permission="banking.reports.read",

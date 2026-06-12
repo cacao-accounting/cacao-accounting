@@ -1,3 +1,5 @@
+"""Handlers de consultas de cuentas por cobrar."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -44,6 +46,7 @@ def get_receivables_aging(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene la antigüedad de saldos de cuentas por cobrar."""
     validate_permission(
         context,
         required_permission="receivables.reports.read",
@@ -130,6 +133,7 @@ def get_receivables_open_documents(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta documentos de venta abiertos pendientes de pago."""
     validate_permission(
         context,
         required_permission="receivables.reports.read",
