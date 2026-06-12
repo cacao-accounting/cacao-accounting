@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from cacao_accounting.query_tools.decorators import QueryTool, query_tool
+from cacao_accounting.query_tools.decorators import QueryTool
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 from cacao_accounting.query_tools.registry import Registry, registry
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from cacao_accounting.query_tools.context import QueryContext
-
 
 @dataclass(frozen=True)
 class QueryTool:
