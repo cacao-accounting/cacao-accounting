@@ -1,3 +1,5 @@
+"""Handlers de consultas de relaciones documentales."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -39,6 +41,7 @@ def get_document_flow(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene las relaciones documentales de un documento."""
     validate_permission(
         context,
         required_permission="documents.reports.read",

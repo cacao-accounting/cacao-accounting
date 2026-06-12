@@ -1,3 +1,5 @@
+"""Handlers de consultas de compañías."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,6 +31,7 @@ def list_companies(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista las compañías accesibles para el usuario."""
     _page, _page_size = paginate(page, page_size)
 
     query = database.select(Entity)
