@@ -1,3 +1,5 @@
+"""Validación de permisos, acceso a compañías y módulos para herramientas de consulta."""
+
 from __future__ import annotations
 
 from cacao_accounting.auth.permisos import Permisos
@@ -10,6 +12,7 @@ from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 def validate_company_access(
     context: QueryContext, company_id: str
 ) -> None:
+    """Verifica que el contexto tenga acceso a la compañía indicada y que esta exista."""
     if context.company_ids and company_id not in context.company_ids:
         raise QueryToolError(
             code=ErrorCode.COMPANY_ACCESS_DENIED,
@@ -30,6 +33,7 @@ def validate_company_access(
 
 
 def validate_module_active(module_name: str) -> None:
+    """Verifica que el módulo indicado exista y se encuentre habilitado."""
     module_id = obtener_id_modulo_por_nombre(module_name)
     if not module_id:
         raise QueryToolError(
@@ -50,6 +54,7 @@ def validate_permission(
     required_module: str | None = None,
     company_id: str | None = None,
 ) -> None:
+    """Valida permisos, módulo activo y acceso a compañía de forma combinada."""
     if required_permission and required_permission not in context.permissions:
         raise QueryToolError(
             code=ErrorCode.PERMISSION_DENIED,
