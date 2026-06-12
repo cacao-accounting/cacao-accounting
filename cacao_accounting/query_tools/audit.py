@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from cacao_accounting.database import AuditTrail, database
-from cacao_accounting.logs import log
 from cacao_accounting.query_tools.context import QueryContext
 
 ALLOWED_QUERY_ACTIONS = frozenset({

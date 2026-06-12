@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 from sqlalchemy import func, or_
@@ -8,7 +7,6 @@ from sqlalchemy import func, or_
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
-    Book,
     GLEntry,
     database,
 )
@@ -19,7 +17,6 @@ from cacao_accounting.query_tools.pagination import (
     paginate,
 )
 from cacao_accounting.query_tools.permissions import (
-    validate_company_access,
     validate_permission,
 )
 
