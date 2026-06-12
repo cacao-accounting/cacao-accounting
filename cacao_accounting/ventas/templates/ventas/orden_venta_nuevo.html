@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
+
+{%- if TESTING -%}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html">
+</div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_orden_venta_lista') }}" class="link-dark">Órdenes de
+        Venta</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ (registro.document_no or registro.id) if edit else 'Nueva Orden de Venta' }}</li>
+  </ol>
+</nav>
+
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+  {{ form.csrf_token }}
+  {% if from_request_id %}
+  <input type="hidden" name="from_request" value="{{ from_request_id }}">
+  {% endif %}
+  {% if from_quotation_id %}
+  <input type="hidden" name="from_quotation" value="{{ from_quotation_id }}">
+  {% endif %}
+  {{ tf_macros.transaction_form_header("Editar Orden de Venta" if edit else "Orden de Venta", cancel_url=url_for('ventas.ventas_orden_venta_lista')) }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="customer_id">{{ _('Cliente') }} <span class="text-danger">*</span></label>
+        {{ tf_macros.smart_select(
+            doctype="party",
+            name="customer_id",
+            label=_("Cliente"),
+            filters={"party_type": "customer", "company": {"selector": "#company"}},
+        filter_sources=["#company"],
+        required_filters=["company"],
+        x_model="header.party",
+        on_select="function(opt){ header.party_label = opt.display_name; }"
+        ) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
+      </div>
+    </div>
+  </div>
+
+    {% if from_quotation_id %}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         source_api_url="/api/document-flow/pending-lines?source_type=sales_quotation&target_type=sales_order&source_id=" ~ from_quotation_id,
+         source_label="Cotización") }}
+    {% elif from_request_id %}
+    {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+      source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_order&source_id=" ~ from_request_id,
+      source_label="Pedido de Venta") }}
+  {% else %}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {% endif %}
+</form>
+
+{% endblock %}

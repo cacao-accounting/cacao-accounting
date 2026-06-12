@@ -24,7 +24,31 @@ CatalogoCtas = namedtuple("CatalogoCtas", ["file", "pais", "idioma"])
 DIRECTORIO_CTAS = join(DIRECTORIO_APP, "contabilidad", "ctas", "catalogos")
 
 # Inicia deficion de catalogos de cuentas.
-base = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base.csv"), pais=None, idioma="ES")
+base_es = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base_es.csv"), pais=None, idioma="ES")
+base_en = CatalogoCtas(file=join(DIRECTORIO_CTAS, "base_en.csv"), pais=None, idioma="EN")
+base = base_es
+
+HEADER_ALIASES = {
+    "code": ("code", "codigo"),
+    "name": ("name", "nombre"),
+    "parent": ("parent", "padre"),
+    "group": ("group", "grupo"),
+    "classification": ("classification", "rubro"),
+    "type": ("type", "tipo"),
+    "account_type": ("account_type", "tipo_cuenta"),
+}
+
+
+def _value(row: dict[str, str], field: str, default: str = "") -> str:
+    for header in HEADER_ALIASES[field]:
+        value = row.get(header)
+        if value is not None:
+            return value.strip()
+    return default
+
+
+def _is_group(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "si", "sí"}
 
 
 def cargar_catalogos(catalogo, entidad):
@@ -36,23 +60,19 @@ def cargar_catalogos(catalogo, entidad):
     cuentas = DictReader(open(catalogo.file, "r", encoding="utf-8"))
     entity_code = entidad.code if hasattr(entidad, "code") else entidad
     for cuenta in cuentas:
-        if cuenta["grupo"] == "1":
-            cuenta["grupo"] = True
-        else:
-            cuenta["grupo"] = False
-
-        if cuenta["padre"] == "":
-            cuenta["padre"] = None
+        parent = _value(cuenta, "parent") or None
 
         registro = Accounts(
             active=True,
             enabled=True,
             entity=entity_code,
-            code=cuenta["codigo"],
-            name=cuenta["nombre"],
-            group=cuenta["grupo"],
-            parent=cuenta["padre"],
-            clasification=cuenta["rubro"],
+            code=_value(cuenta, "code"),
+            name=_value(cuenta, "name"),
+            group=_is_group(_value(cuenta, "group")),
+            parent=parent,
+            classification=_value(cuenta, "classification"),
+            type_=_value(cuenta, "type") or None,
+            account_type=_value(cuenta, "account_type") or None,
             status="active",
         )
         database.session.add(registro)

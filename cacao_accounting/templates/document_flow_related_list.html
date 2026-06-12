@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/templates/document_flow_related_list.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    {% if spec.list_endpoint %}
+    <li class="breadcrumb-item"><a href="{{ url_for(spec.list_endpoint) }}" class="link-dark">{{ spec.label }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active" aria-current="page">Relacionados con {{ related_label }} {{ related_no }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <div>
+      <h5 class="ca-card-title mb-0">
+        <i class="bi bi-diagram-3 me-1"></i>{{ spec.label }}
+      </h5>
+      <p class="mb-0 small text-muted">
+        <i class="bi bi-funnel me-1"></i>
+        Relacionados con <strong>{{ related_label }}</strong>: <code>{{ related_no }}</code>
+      </p>
+    </div>
+    {% if spec.list_endpoint %}
+    <a href="{{ url_for(spec.list_endpoint) }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-x-circle me-1"></i>Quitar filtro
+    </a>
+    {% endif %}
+  </div>
+
+  {% if documents %}
+  <table class="ca-table">
+    <caption class="visually-hidden">Documentos {{ spec.label }} relacionados con {{ related_label }} {{ related_no }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">N° Documento</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Fecha</th>
+        {% if spec.party_field %}
+        <th scope="col">Tercero</th>
+        {% endif %}
+        {% if spec.total_field %}
+        <th scope="col">Total</th>
+        {% endif %}
+        <th scope="col">Acción</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in documents %}
+      <tr>
+        <td><code>{{ doc.document_no or doc.id }}</code></td>
+        <td>{{ macros.document_status_for(spec.key, doc) }}</td>
+        <td>{{ getattr(doc, spec.date_field, '') or '' }}</td>
+        {% if spec.party_field %}
+        <td>
+          {%- set party_name_field = spec.party_field.replace('_id', '_name') -%}
+          {{ getattr(doc, party_name_field, '') or getattr(doc, spec.party_field, '') or '' }}
+        </td>
+        {% endif %}
+        {% if spec.total_field %}
+        <td>{{ getattr(doc, spec.total_field, '') or '' }}</td>
+        {% endif %}
+        <td>
+          {% if spec.detail_endpoint %}
+          <a href="{{ url_for(spec.detail_endpoint, **{spec.detail_arg: doc.id}) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye me-1"></i>Ver
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="p-4 text-center text-muted">
+    <i class="bi bi-info-circle fs-4 mb-2 d-block"></i>
+    No se encontraron <strong>{{ spec.label }}</strong> relacionados con
+    <strong>{{ related_label }}</strong> <code>{{ related_no }}</code>.
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

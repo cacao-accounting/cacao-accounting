@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% set group = editing_group if editing_group is defined else none %}
+{% block contenido %}
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">{{ _("Tipos de Cliente / Proveedor") }}</h5>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.lista_grupos_terceros') }}">{{ _("Todos") }}</a>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.lista_grupos_terceros', group_type='customer') }}">{{ _("Clientes") }}</a>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.lista_grupos_terceros', group_type='supplier') }}">{{ _("Proveedores") }}</a>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('admin.editar_grupo_tercero', group_id=group.id) if group else url_for('admin.lista_grupos_terceros') }}" class="row g-3 p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3">
+      <label class="form-label" for="group_type">{{ _("Tipo") }}</label>
+      {% set selected_type = group.group_type if group else (group_type or 'customer') %}
+      <select class="form-select" id="group_type" name="group_type">
+        <option value="customer" {% if selected_type == 'customer' %}selected{% endif %}>{{ _("Tipo de Cliente") }}</option>
+        <option value="supplier" {% if selected_type == 'supplier' %}selected{% endif %}>{{ _("Tipo de Proveedor") }}</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="name">{{ _("Nombre") }}</label>
+      <input class="form-control" id="name" name="name" value="{{ group.name if group else '' }}" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="description">{{ _("Descripcion") }}</label>
+      <input class="form-control" id="description" name="description" value="{{ group.description if group else '' }}">
+    </div>
+    <div class="col-md-1 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if not group or group.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">{{ _("Activo") }}</label>
+      </div>
+    </div>
+    <div class="col-md-1 d-flex align-items-end">
+      <button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Catalogo") }}</h6>
+  </div>
+  <div class="p-3">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Tipos globales de clientes y proveedores") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Tipo") }}</th>
+          <th>{{ _("Nombre") }}</th>
+          <th>{{ _("Descripcion") }}</th>
+          <th>{{ _("Activo") }}</th>
+          <th>{{ _("Acciones") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for listed in groups %}
+        <tr>
+          <td>{% if listed.group_type == 'customer' %}{{ _("Cliente") }}{% else %}{{ _("Proveedor") }}{% endif %}</td>
+          <td>{{ listed.name }}</td>
+          <td>{{ listed.description or "" }}</td>
+          <td>{{ _("Si") if listed.is_active else _("No") }}</td>
+          <td class="d-flex gap-2">
+            <a href="{{ url_for('admin.editar_grupo_tercero', group_id=listed.id) }}">{{ _("Editar") }}</a>
+            <form method="post" action="{{ url_for('admin.alternar_grupo_tercero', group_id=listed.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") if listed.is_active else _("Reactivar") }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">{{ _("No hay registros") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -13,6 +13,9 @@
 <div class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title"><i class="bi bi-diagram-3"></i> Catálogo de Cuentas Contables.</h5>
+    {% if entidades_creadas %}
+    <a href="{{ url_for('contabilidad.nueva_cuenta') }}" class="btn btn-sm btn-primary">Nueva Cuenta</a>
+    {% endif %}
   </div>
 
   {% if entidades_creadas %}
@@ -35,92 +38,181 @@
 
   <p class="mb-2" style="font-size:.8rem;color:#64748b;"><strong>Entidad:</strong> {{ entidad[0].company_name }}</p>
 
+  <div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+      @click.prevent="$dispatch('tree-toggle', { open: true })" x-data>
+      <i class="bi bi-arrows-expand"></i> {{ _('Expandir todos') }}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+      @click.prevent="$dispatch('tree-toggle', { open: false })" x-data>
+      <i class="bi bi-arrows-collapse"></i> {{ _('Colapsar todos') }}
+    </button>
+  </div>
+
   <ul class="ca-tree">
     {%- for ctabase in base_cuentas -%}
-    <li>
-      <a href="{{ url_for('contabilidad.cuenta', entity=ctabase[0].entity, id_cta=ctabase[0].code) }}">
-        <i class="bi bi-chevron-down me-1" style="font-size:.7rem;color:#94a3b8;"></i>
-        <strong>{{ ctabase[0].code }}</strong>&nbsp;{{ ctabase[0].name }}
-      </a>
-      <ul>
+    {%- set children01 = cuentas | selectattr('0.parent', 'equalto', ctabase[0].code) | list -%}
+    <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+      <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+        <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+        <a href="{{ url_for('contabilidad.cuenta', entity=ctabase[0].entity, id_cta=ctabase[0].code) }}">
+          <strong>{{ ctabase[0].code }}</strong>&nbsp;{{ ctabase[0].name }}
+        </a>
+      </span>
+      <ul x-show="open">
         {%- for subcuenta01 in cuentas if subcuenta01[0].parent == ctabase[0].code-%}
-        <li>
-          <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta01[0].entity, id_cta=subcuenta01[0].code) }}">
-            {{ subcuenta01[0].code }} — {{ subcuenta01[0].name }}
-          </a>
-          <ul>
+        {%- set children02 = cuentas | selectattr('0.parent', 'equalto', subcuenta01[0].code) | list -%}
+        {% if children02 %}
+        <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+          <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+            <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+            <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta01[0].entity, id_cta=subcuenta01[0].code) }}">
+              {{ subcuenta01[0].code }} — {{ subcuenta01[0].name }}
+            </a>
+          </span>
+          <ul x-show="open">
             {%- for subcuenta02 in cuentas if subcuenta02[0].parent == subcuenta01[0].code-%}
-            <li>
-              <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta02[0].entity, id_cta=subcuenta02[0].code) }}">
-                {{ subcuenta02[0].code }} — {{ subcuenta02[0].name }}
-              </a>
-              <ul>
+            {%- set children03 = cuentas | selectattr('0.parent', 'equalto', subcuenta02[0].code) | list -%}
+            {% if children03 %}
+            <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+              <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta02[0].entity, id_cta=subcuenta02[0].code) }}">
+                  {{ subcuenta02[0].code }} — {{ subcuenta02[0].name }}
+                </a>
+              </span>
+              <ul x-show="open">
                 {%- for subcuenta03 in cuentas if subcuenta03[0].parent == subcuenta02[0].code-%}
-                <li>
-                  <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta03[0].entity, id_cta=subcuenta03[0].code) }}">
-                    {{ subcuenta03[0].code }} — {{ subcuenta03[0].name }}
-                  </a>
-                  <ul>
+                {%- set children04 = cuentas | selectattr('0.parent', 'equalto', subcuenta03[0].code) | list -%}
+                {% if children04 %}
+                <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                  <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                    <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                    <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta03[0].entity, id_cta=subcuenta03[0].code) }}">
+                      {{ subcuenta03[0].code }} — {{ subcuenta03[0].name }}
+                    </a>
+                  </span>
+                  <ul x-show="open">
                     {%- for subcuenta04 in cuentas if subcuenta04[0].parent == subcuenta03[0].code-%}
-                    <li>
-                      <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta04[0].entity, id_cta=subcuenta04[0].code) }}">
-                        {{ subcuenta04[0].code }} — {{ subcuenta04[0].name }}
-                      </a>
-                      <ul>
+                    {%- set children05 = cuentas | selectattr('0.parent', 'equalto', subcuenta04[0].code) | list -%}
+                    {% if children05 %}
+                    <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                      <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                        <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                        <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta04[0].entity, id_cta=subcuenta04[0].code) }}">
+                          {{ subcuenta04[0].code }} — {{ subcuenta04[0].name }}
+                        </a>
+                      </span>
+                      <ul x-show="open">
                         {%- for subcuenta05 in cuentas if subcuenta05[0].parent == subcuenta04[0].code-%}
-                        <li>
-                          <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta05[0].entity, id_cta=subcuenta05[0].code) }}">
-                            {{ subcuenta05[0].code }} — {{ subcuenta05[0].name }}
-                          </a>
-                          <ul>
+                        {%- set children06 = cuentas | selectattr('0.parent', 'equalto', subcuenta05[0].code) | list -%}
+                        {% if children06 %}
+                        <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                          <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                            <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                            <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta05[0].entity, id_cta=subcuenta05[0].code) }}">
+                              {{ subcuenta05[0].code }} — {{ subcuenta05[0].name }}
+                            </a>
+                          </span>
+                          <ul x-show="open">
                             {%- for subcuenta06 in cuentas if subcuenta06[0].parent == subcuenta05[0].code-%}
-                            <li>
-                              <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta06[0].entity, id_cta=subcuenta06[0].code) }}">
-                                {{ subcuenta06[0].code }} — {{ subcuenta06[0].name }}
-                              </a>
-                              <ul>
+                            {%- set children07 = cuentas | selectattr('0.parent', 'equalto', subcuenta06[0].code) | list -%}
+                            {% if children07 %}
+                            <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                              <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                                <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                                <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta06[0].entity, id_cta=subcuenta06[0].code) }}">
+                                  {{ subcuenta06[0].code }} — {{ subcuenta06[0].name }}
+                                </a>
+                              </span>
+                              <ul x-show="open">
                                 {%- for subcuenta07 in cuentas if subcuenta07[0].parent == subcuenta06[0].code-%}
-                                <li>
-                                  <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta07[0].entity, id_cta=subcuenta07[0].code) }}">
-                                    {{ subcuenta07[0].code }} — {{ subcuenta07[0].name }}
-                                  </a>
-                                  <ul>
+                                {%- set children08 = cuentas | selectattr('0.parent', 'equalto', subcuenta07[0].code) | list -%}
+                                {% if children08 %}
+                                <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                                  <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                                    <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                                    <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta07[0].entity, id_cta=subcuenta07[0].code) }}">
+                                      {{ subcuenta07[0].code }} — {{ subcuenta07[0].name }}
+                                    </a>
+                                  </span>
+                                  <ul x-show="open">
                                     {%- for subcuenta08 in cuentas if subcuenta08[0].parent == subcuenta07[0].code-%}
                                     <li>
                                       <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta08[0].entity, id_cta=subcuenta08[0].code) }}">
                                         {{ subcuenta08[0].code }} — {{ subcuenta08[0].name }}
                                       </a>
-                                      <ul>
-                                        {%- for subcuenta09 in cuentas if subcuenta09.parent == subcuenta08[0].code-%}
-                                        <li>
-                                          <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta09.entity, id_cta=subcuenta09.code) }}">
-                                            {{ subcuenta09.code }} — {{ subcuenta09.name }}
-                                          </a>
-                                        </li>
-                                        {% endfor %}
-                                      </ul>
                                     </li>
                                     {% endfor %}
                                   </ul>
                                 </li>
+                                {% else %}
+                                <li>
+                                  <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta07[0].entity, id_cta=subcuenta07[0].code) }}">
+                                    {{ subcuenta07[0].code }} — {{ subcuenta07[0].name }}
+                                  </a>
+                                </li>
+                                {% endif %}
                                 {% endfor %}
                               </ul>
                             </li>
+                            {% else %}
+                            <li>
+                              <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta06[0].entity, id_cta=subcuenta06[0].code) }}">
+                                {{ subcuenta06[0].code }} — {{ subcuenta06[0].name }}
+                              </a>
+                            </li>
+                            {% endif %}
                             {% endfor %}
                           </ul>
                         </li>
+                        {% else %}
+                        <li>
+                          <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta05[0].entity, id_cta=subcuenta05[0].code) }}">
+                            {{ subcuenta05[0].code }} — {{ subcuenta05[0].name }}
+                          </a>
+                        </li>
+                        {% endif %}
                         {% endfor %}
                       </ul>
                     </li>
+                    {% else %}
+                    <li>
+                      <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta04[0].entity, id_cta=subcuenta04[0].code) }}">
+                        {{ subcuenta04[0].code }} — {{ subcuenta04[0].name }}
+                      </a>
+                    </li>
+                    {% endif %}
                     {% endfor %}
                   </ul>
                 </li>
+                {% else %}
+                <li>
+                  <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta03[0].entity, id_cta=subcuenta03[0].code) }}">
+                    {{ subcuenta03[0].code }} — {{ subcuenta03[0].name }}
+                  </a>
+                </li>
+                {% endif %}
                 {% endfor %}
               </ul>
             </li>
+            {% else %}
+            <li>
+              <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta02[0].entity, id_cta=subcuenta02[0].code) }}">
+                {{ subcuenta02[0].code }} — {{ subcuenta02[0].name }}
+              </a>
+            </li>
+            {% endif %}
             {% endfor %}
           </ul>
         </li>
+        {% else %}
+        <li>
+          <a href="{{ url_for('contabilidad.cuenta', entity=subcuenta01[0].entity, id_cta=subcuenta01[0].code) }}">
+            {{ subcuenta01[0].code }} — {{ subcuenta01[0].name }}
+          </a>
+        </li>
+        {% endif %}
         {% endfor %}
       </ul>
     </li>

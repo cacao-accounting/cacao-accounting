@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item active" aria-current="page">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Mi Perfil</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-person-circle me-2"></i>Mi Perfil</h4>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-6">
+    <div class="ca-card p-4">
+      <h5 class="mb-3">Información personal</h5>
+      <p class="text-muted">Actualiza tus datos personales para mantener tu cuenta al día.</p>
+
+      <form method="post">
+        {{ profile_form.hidden_tag() }}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 small">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="mb-3">
+          <label class="form-label">Usuario</label>
+          <input class="form-control form-control-sm" type="text" value="{{ current_user.user }}" readonly>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label" for="name">Nombre</label>
+            {{ profile_form.name(class="form-control form-control-sm{% if profile_form.name.errors %} is-invalid{% endif %}", id="name") }}
+            {% for error in profile_form.name.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="name2">Segundo nombre</label>
+            {{ profile_form.name2(class="form-control form-control-sm{% if profile_form.name2.errors %} is-invalid{% endif %}", id="name2") }}
+            {% for error in profile_form.name2.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="last_name">Apellido</label>
+            {{ profile_form.last_name(class="form-control form-control-sm{% if profile_form.last_name.errors %} is-invalid{% endif %}", id="last_name") }}
+            {% for error in profile_form.last_name.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="last_name2">Segundo apellido</label>
+            {{ profile_form.last_name2(class="form-control form-control-sm{% if profile_form.last_name2.errors %} is-invalid{% endif %}", id="last_name2") }}
+            {% for error in profile_form.last_name2.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="e_mail">Correo electrónico</label>
+            {{ profile_form.e_mail(class="form-control form-control-sm{% if profile_form.e_mail.errors %} is-invalid{% endif %}", id="e_mail") }}
+            {% for error in profile_form.e_mail.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-6">
+            <label class="form-label" for="phone">Teléfono</label>
+            {{ profile_form.phone(class="form-control form-control-sm{% if profile_form.phone.errors %} is-invalid{% endif %}", id="phone") }}
+            {% for error in profile_form.phone.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="mt-4">
+          {{ profile_form.guardar_perfil(class="btn btn-primary btn-sm") }}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="ca-card p-4">
+      <h5 class="mb-3">Cambiar contraseña</h5>
+      <p class="text-muted">Actualiza tu contraseña para mantener la seguridad de tu cuenta.</p>
+
+      <form method="post">
+        {{ password_form.hidden_tag() }}
+
+        <div class="mb-3">
+          <label class="form-label" for="current_password">Contraseña actual</label>
+          {{ password_form.current_password(class="form-control form-control-sm{% if password_form.current_password.errors %} is-invalid{% endif %}", id="current_password") }}
+          {% for error in password_form.current_password.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="new_password">Nueva contraseña</label>
+          {{ password_form.new_password(class="form-control form-control-sm{% if password_form.new_password.errors %} is-invalid{% endif %}", id="new_password") }}
+          {% for error in password_form.new_password.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="confirm_password">Confirmar contraseña</label>
+          {{ password_form.confirm_password(class="form-control form-control-sm{% if password_form.confirm_password.errors %} is-invalid{% endif %}", id="confirm_password") }}
+          {% for error in password_form.confirm_password.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="mt-4">
+          {{ password_form.cambiar_clave(class="btn btn-secondary btn-sm") }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

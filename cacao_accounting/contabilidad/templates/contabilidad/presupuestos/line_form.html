@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.listar') }}" class="link-dark">{{ _("Presupuestos") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.detalle', budget_id=budget.id) }}" class="link-dark">{{ budget.budget_code }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Línea") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-plus-circle me-2"></i>{{ _("Línea de Presupuesto") }}</h4>
+</div>
+
+<div class="ca-card mt-3" style="max-width: 600px;">
+  <form method="post" class="p-4">
+    {{ form.hidden_tag() }}
+
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label">{{ _("Cuenta Contable") }}</label>
+        {{ form.account_id(class="form-select") }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ _("Centro de Costo") }}</label>
+        {{ form.cost_center_id(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Período") }}</label>
+        {{ form.period_id(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Monto") }}</label>
+        {{ form.amount(class="form-control") }}
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Unidad de Negocio") }}</label>
+        {{ form.business_unit_id(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ _("Proyecto") }}</label>
+        {{ form.project_id(class="form-select") }}
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">{{ _("Descripción") }}</label>
+        {{ form.description(class="form-control") }}
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">
+        {{ _("Guardar Línea") }}
+      </button>
+      <a href="{{ url_for('contabilidad.presupuestos.detalle', budget_id=budget.id) }}" class="btn btn-outline-secondary">
+        {{ _("Cancelar") }}
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

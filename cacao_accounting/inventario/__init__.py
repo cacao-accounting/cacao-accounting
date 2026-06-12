@@ -4,14 +4,52 @@
 
 """Modulo de Inventarios."""
 
-from flask import Blueprint, render_template
-from flask_login import login_required
+from datetime import date
+from decimal import Decimal
 
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
+
+from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
+from cacao_accounting.document_flow.status import _
+from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.version import APPNAME
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
 
+def _parse_date(value: str | None) -> date | None:
+    """Parsea una fecha en formato ISO."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
+INVENTARIO_ENTRADA_LISTA_HTML = "inventario/entrada_lista.html"
+INVENTARIO_INVENTARIO_ENTRADA = "inventario.inventario_entrada"
+
+
+def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
+    """Construye las opciones de series activas para un doctype y compania."""
+    if not company:
+        return [("", "")]
+
+    return [("", "")] + [
+        (str(series.id), f"{series.name} ({series.prefix_template})")
+        for series in get_active_naming_series(entity_type=entity_type, company=company)
+    ]
+
+
+@inventario.route("/")
 @inventario.route("/inventario")
 @inventario.route("/inventory")
 @modulo_activo("inventory")
@@ -19,3 +57,870 @@ inventario = Blueprint("inventario", __name__, template_folder="templates")
 def inventario_():
     """Definición de vista principal de inventarios."""
     return render_template("inventario.html")
+
+
+@inventario.route("/item/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_articulo_lista():
+    """Listado de articulos."""
+    consulta = database.paginate(
+        database.select(Item),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Articulos - " + APPNAME
+    return render_template("inventario/articulo_lista.html", consulta=consulta, titulo=titulo)
+
+
+@inventario.route("/uom/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_uom_lista():
+    """Listado de unidades de medida."""
+    consulta = database.paginate(
+        database.select(UOM),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Unidades de Medida - " + APPNAME
+    return render_template("inventario/uom_lista.html", consulta=consulta, titulo=titulo)
+
+
+@inventario.route("/warehouse/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_bodega_lista():
+    """Listado de bodegas."""
+    consulta = database.paginate(
+        database.select(Warehouse),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Bodegas - " + APPNAME
+    return render_template("inventario/bodega_lista.html", consulta=consulta, titulo=titulo)
+
+
+@inventario.route("/stock-entry/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_lista():
+    """Listado de entradas de almacen."""
+    consulta = database.paginate(
+        database.select(StockEntry),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Movimientos de Inventario - " + APPNAME
+    new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO)
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_entrada_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/material-receipt/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_material_receipt_lista():
+    """Listado de recepciones de material."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="material_receipt"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Recepciones de Material - " + APPNAME
+    new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_receipt")
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_material_receipt_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/material-issue/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_material_issue_lista():
+    """Listado de salidas de material."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="material_issue"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Salidas de Material - " + APPNAME
+    new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_issue")
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_material_issue_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/material-transfer/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_material_transfer_lista():
+    """Listado de transferencias de material."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="material_transfer"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Transferencias de Material - " + APPNAME
+    new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_transfer")
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_material_transfer_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/adjustment/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_ajuste_lista():
+    """Listado de ajustes de inventario."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="stock_adjustment"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Ajustes de Inventario - " + APPNAME
+    new_url = url_for("inventario.inventario_ajuste_nuevo")
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_ajuste_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/reconciliation/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_reconciliacion_lista():
+    """Listado de conciliaciones físicas de inventario."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="stock_reconciliation"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Conciliaciones de Inventario - " + APPNAME
+    new_url = url_for("inventario.inventario_reconciliacion_nueva")
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_reconciliacion_lista",
+        new_url=new_url,
+    )
+
+
+@inventario.route("/stock-entry/adjustment-positive/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_ajuste_positivo_lista():
+    """Listado de ajustes positivos de inventario."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="adjustment_positive"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Ajustes Positivos - " + APPNAME
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_ajuste_positivo_lista",
+        new_url=url_for("inventario.inventario_ajuste_positivo_nuevo"),
+    )
+
+
+@inventario.route("/stock-entry/inventory-issue/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_salida_inventario_lista():
+    """Listado de salidas de inventario (incluyendo ajustes negativos)."""
+    consulta = database.paginate(
+        database.select(StockEntry).filter_by(purpose="adjustment_negative"),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Salidas de Inventario - " + APPNAME
+    return render_template(
+        INVENTARIO_ENTRADA_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        vista="inventario.inventario_salida_inventario_lista",
+        new_url=url_for("inventario.inventario_salida_inventario_nuevo"),
+    )
+
+
+@inventario.route("/item/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_articulo_nuevo():
+    """Formulario para crear un nuevo artículo."""
+    from cacao_accounting.inventario.forms import FormularioArticulo
+
+    formulario = FormularioArticulo()
+    formulario.default_uom.choices = [(u[0].code, u[0].name) for u in database.session.execute(database.select(UOM)).all()]
+    titulo = "Nuevo Artículo - " + APPNAME
+    if formulario.validate_on_submit() or request.method == "POST":
+        articulo = Item(
+            code=request.form.get("code"),
+            name=request.form.get("name"),
+            description=request.form.get("description"),
+            item_type=request.form.get("item_type", "goods"),
+            is_stock_item=bool(request.form.get("is_stock_item")),
+            default_uom=request.form.get("default_uom"),
+        )
+        database.session.add(articulo)
+        database.session.commit()
+        return redirect("/inventory/item/list")
+    return render_template("inventario/articulo_nuevo.html", form=formulario, titulo=titulo)
+
+
+@inventario.route("/item/<item_id>")
+@modulo_activo("inventory")
+@login_required
+def inventario_articulo(item_id):
+    """Detalle de artículo."""
+    from flask import abort
+
+    registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
+    if not registro:
+        abort(404)
+    titulo = registro[0].name + " - " + APPNAME
+    return render_template("inventario/articulo.html", registro=registro[0], titulo=titulo)
+
+
+@inventario.route("/uom/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_uom_nuevo():
+    """Formulario para crear una nueva unidad de medida."""
+    from cacao_accounting.inventario.forms import FormularioUOM
+
+    formulario = FormularioUOM()
+    titulo = "Nueva Unidad de Medida - " + APPNAME
+    if formulario.validate_on_submit() or request.method == "POST":
+        uom = UOM(
+            code=request.form.get("code"),
+            name=request.form.get("name"),
+        )
+        database.session.add(uom)
+        database.session.commit()
+        return redirect("/inventory/uom/list")
+    return render_template("inventario/uom_nuevo.html", form=formulario, titulo=titulo)
+
+
+@inventario.route("/uom/<uom_id>")
+@modulo_activo("inventory")
+@login_required
+def inventario_uom(uom_id):
+    """Detalle de unidad de medida."""
+    from flask import abort
+
+    registro = database.session.execute(database.select(UOM).filter_by(code=uom_id)).first()
+    if not registro:
+        abort(404)
+    titulo = registro[0].name + " - " + APPNAME
+    return render_template("inventario/uom.html", registro=registro[0], titulo=titulo)
+
+
+@inventario.route("/warehouse/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_bodega_nuevo():
+    """Formulario para crear una nueva bodega."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.inventario.forms import FormularioBodega
+
+    formulario = FormularioBodega()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    titulo = "Nueva Bodega - " + APPNAME
+    if formulario.validate_on_submit() or request.method == "POST":
+        bodega = Warehouse(
+            code=request.form.get("code"),
+            name=request.form.get("name"),
+            company=request.form.get("company"),
+            inventory_account_id=request.form.get("inventory_account_id") or None,
+        )
+        database.session.add(bodega)
+        database.session.commit()
+        return redirect("/inventory/warehouse/list")
+    return render_template("inventario/bodega_nuevo.html", form=formulario, titulo=titulo)
+
+
+@inventario.route("/warehouse/<warehouse_id>")
+@modulo_activo("inventory")
+@login_required
+def inventario_bodega(warehouse_id):
+    """Detalle de bodega."""
+    from flask import abort
+
+    registro = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_id)).first()
+    if not registro:
+        abort(404)
+    titulo = registro[0].name + " - " + APPNAME
+    return render_template("inventario/bodega.html", registro=registro[0], titulo=titulo)
+
+
+def _form_decimal(field_name: str, default: str = "0") -> Decimal:
+    """Convierte un valor de formulario a Decimal."""
+    value = request.form.get(field_name)
+    return Decimal(str(value if value not in (None, "") else default))
+
+
+def _line_amount(index: int) -> Decimal:
+    """Obtiene o calcula el monto de una linea."""
+    amount = request.form.get(f"amount_{index}")
+    if amount not in (None, ""):
+        return Decimal(str(amount))
+    return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
+
+
+def _create_line_relation(
+    index: int,
+    target_type: str,
+    target_id: str,
+    target_item_id: str,
+    qty: Decimal,
+    uom: str | None,
+    rate: Decimal,
+    amount: Decimal,
+) -> None:
+    """Crea relacion documental para una linea importada desde un origen."""
+    source_type = request.form.get(f"source_type_{index}")
+    source_id = request.form.get(f"source_id_{index}")
+    source_item_id = request.form.get(f"source_item_id_{index}")
+    if not (source_type and source_id and source_item_id):
+        return
+    create_document_relation(
+        source_type=source_type,
+        source_id=source_id,
+        source_item_id=source_item_id,
+        target_type=target_type,
+        target_id=target_id,
+        target_item_id=target_item_id,
+        qty=qty,
+        uom=uom,
+        rate=rate,
+        amount=amount,
+    )
+
+
+def _save_stock_entry_items(entry: StockEntry) -> Decimal:
+    """Guarda lineas de un movimiento de inventario."""
+    i = 0
+    total = Decimal("0")
+    while request.form.get(f"item_code_{i}"):
+        item_code = request.form.get(f"item_code_{i}", "")
+        if item_code.strip():
+            qty = _form_decimal(f"qty_{i}", "1")
+            rate = _form_decimal(f"rate_{i}", "0")
+            amount = _line_amount(i)
+            uom = request.form.get(f"uom_{i}") or None
+            line = StockEntryItem(
+                stock_entry_id=entry.id,
+                item_code=item_code,
+                source_warehouse=entry.from_warehouse,
+                target_warehouse=entry.to_warehouse,
+                qty=qty,
+                uom=uom,
+                basic_rate=rate,
+                amount=amount,
+            )
+            database.session.add(line)
+            database.session.flush()
+            _create_line_relation(i, "stock_entry", entry.id, line.id, qty, uom, rate, amount)
+            total += amount
+        i += 1
+    return total
+
+
+def _stock_bin_snapshot(company: str | None, item_code: str, warehouse: str | None) -> tuple[Decimal, Decimal, Decimal]:
+    """Devuelve cantidad, tasa y valor actual para item/bodega."""
+    if not company or not warehouse:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    bin_row = (
+        database.session.execute(
+            database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+        )
+        .scalars()
+        .first()
+    )
+    if not bin_row:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    return (
+        Decimal(str(bin_row.actual_qty or "0")),
+        Decimal(str(bin_row.valuation_rate or "0")),
+        Decimal(str(bin_row.stock_value or "0")),
+    )
+
+
+def _item_default_uom(item_code: str) -> str | None:
+    """Devuelve la unidad base del item por codigo."""
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
+    return item.default_uom if item else None
+
+
+def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
+    """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
+    i = 0
+    total_difference = Decimal("0")
+    while request.form.get(f"item_code_{i}"):
+        item_code = request.form.get(f"item_code_{i}", "").strip()
+        warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
+        if item_code:
+            current_qty, current_rate, current_value = _stock_bin_snapshot(entry.company, item_code, warehouse)
+            counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
+            target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
+            target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
+            qty_difference = counted_qty - current_qty
+            value_difference = target_value - current_value
+            uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
+            line = StockEntryItem(
+                stock_entry_id=entry.id,
+                item_code=item_code,
+                source_warehouse=warehouse,
+                target_warehouse=warehouse,
+                qty=abs(qty_difference),
+                uom=uom,
+                qty_in_base_uom=abs(qty_difference),
+                basic_rate=target_rate,
+                amount=abs(value_difference),
+                valuation_rate=target_rate,
+                current_qty=current_qty,
+                counted_qty=counted_qty,
+                qty_difference=qty_difference,
+                current_valuation_rate=current_rate,
+                target_valuation_rate=target_rate,
+                current_stock_value=current_value,
+                target_stock_value=target_value,
+                stock_value_difference=value_difference,
+            )
+            database.session.add(line)
+            database.session.flush()
+            total_difference += abs(value_difference)
+        i += 1
+    return total_difference
+
+
+@inventario.route("/stock-entry/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/material-receipt/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/material-issue/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/material-transfer/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/adjustment/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/reconciliation/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/adjustment-positive/new", methods=["GET", "POST"])
+@inventario.route("/stock-entry/inventory-issue/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_nuevo():
+    """Formulario para crear una entrada de almacén."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+    from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+
+    formulario = FormularioEntradaAlmacen()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or (
+        formulario.company.choices[0][0] if formulario.company.choices else None
+    )
+    formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
+    warehouse_choices = [("", "")] + [
+        (w[0].code, w[0].name) for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True)).all()
+    ]
+    formulario.from_warehouse.choices = warehouse_choices
+    formulario.to_warehouse.choices = warehouse_choices
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
+    formulario.purpose.data = purpose or formulario.purpose.data
+    source_api_url, source_label = _source_context(request.args.get("source_type"), request.args.get("source_id"))
+    titulo = _stock_entry_title(_infer_stock_entry_purpose(request.path))
+    transaction_config = {
+        "formKey": "inventory.stock_entry",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "inventory.stock_entry"),
+        "availableSourceTypes": [
+            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+            {"value": "delivery_note", "label": _("Nota de Entrega")},
+        ],
+    }
+    if request.method == "POST":
+        try:
+            posting_date = _parse_date(request.form.get("posting_date"))
+            posted_purpose = request.form.get("purpose") or "material_receipt"
+            entry = StockEntry(
+                purpose=posted_purpose,
+                company=request.form.get("company") or None,
+                posting_date=posting_date,
+                from_warehouse=request.form.get("from_warehouse") or None,
+                to_warehouse=request.form.get("to_warehouse") or None,
+                adjustment_account_id=request.form.get("adjustment_account_id") or None,
+                cost_center_code=request.form.get("cost_center_code") or None,
+                unit_code=request.form.get("unit_code") or None,
+                project_code=request.form.get("project_code") or None,
+                remarks=request.form.get("remarks"),
+                docstatus=0,
+            )
+            database.session.add(entry)
+            database.session.flush()
+            assign_document_identifier(
+                document=entry,
+                entity_type="stock_entry",
+                posting_date_raw=posting_date,
+                naming_series_id=request.form.get("naming_series") or None,
+            )
+            if posted_purpose == "stock_reconciliation":
+                entry.total_amount = _save_stock_reconciliation_items(entry)
+            else:
+                entry.total_amount = _save_stock_entry_items(entry)
+            log_create(entry)
+            database.session.commit()
+            flash("Entrada de almacén creada correctamente.", "success")
+            return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
+        except IdentifierConfigurationError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+    if purpose == "stock_reconciliation":
+        return render_template(
+            "inventario/stock_reconciliation_nuevo.html",
+            form=formulario,
+            titulo=titulo,
+            items_disponibles=items_disponibles,
+            uoms_disponibles=uoms_disponibles,
+            transaction_config=transaction_config,
+        )
+    return render_template(
+        "inventario/entrada_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        source_api_url=source_api_url,
+        source_label=source_label,
+        transaction_config=transaction_config,
+    )
+
+
+def _infer_stock_entry_purpose(path: str) -> str | None:
+    """Infers purpose from the specific stock entry creation path."""
+    if path.endswith("/material-receipt/new"):
+        return "material_receipt"
+    if path.endswith("/material-issue/new"):
+        return "material_issue"
+    if path.endswith("/material-transfer/new"):
+        return "material_transfer"
+    if path.endswith("/adjustment/new"):
+        return "stock_adjustment"
+    if path.endswith("/reconciliation/new"):
+        return "stock_reconciliation"
+    if path.endswith("/adjustment-positive/new"):
+        return "adjustment_positive"
+    if path.endswith("/inventory-issue/new"):
+        return "adjustment_negative"
+    return None
+
+
+def _stock_entry_title(purpose: str | None) -> str:
+    """Build a human friendly title for the stock entry creation page."""
+    labels: dict[str, str] = {
+        "material_receipt": "Nueva Recepción de Material",
+        "material_issue": "Nueva Salida de Material",
+        "material_transfer": "Nueva Transferencia de Material",
+        "stock_adjustment": "Nuevo Ajuste de Inventario",
+        "stock_reconciliation": "Nueva Conciliación de Inventario",
+        "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
+        "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
+    }
+    return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+
+
+@inventario.route("/stock-entry/adjustment/new-shortcut")
+@modulo_activo("inventory")
+@login_required
+def inventario_ajuste_nuevo():
+    """Alias para crear ajuste de inventario."""
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="stock_adjustment"))
+
+
+@inventario.route("/stock-entry/reconciliation/new-shortcut")
+@modulo_activo("inventory")
+@login_required
+def inventario_reconciliacion_nueva():
+    """Alias para crear conciliación física de inventario."""
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="stock_reconciliation"))
+
+
+@inventario.route("/stock-entry/adjustment-positive/new-shortcut")
+@modulo_activo("inventory")
+@login_required
+def inventario_ajuste_positivo_nuevo():
+    """Alias para crear ajuste positivo."""
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="adjustment_positive"))
+
+
+@inventario.route("/stock-entry/inventory-issue/new-shortcut")
+@modulo_activo("inventory")
+@login_required
+def inventario_salida_inventario_nuevo():
+    """Alias para crear salida de inventario."""
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="adjustment_negative"))
+
+
+def _source_context(source_type: str | None, source_id: str | None) -> tuple[str | None, str]:
+    """Build the source document api context for pre-filling inventory lines."""
+    if not source_type or not source_id:
+        return None, "documento origen"
+    if source_type == "purchase_receipt":
+        return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
+    if source_type == "delivery_note":
+        return f"/api/sales/delivery-note/{source_id}/items", "nota de entrega"
+    if source_type == "stock_entry":
+        return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
+    return None, "documento origen"
+
+
+@inventario.route("/stock-entry/<entry_id>")
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada(entry_id):
+    """Detalle de entrada de almacén."""
+    from flask import abort
+
+    registro = database.session.get(StockEntry, entry_id)
+    if not registro:
+        abort(404)
+    items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
+    titulo = (registro.document_no or entry_id) + " - " + APPNAME
+    return render_template(
+        "inventario/entrada.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=format_document_timeline("stock_entry", registro.id),
+    )
+
+
+@inventario.route("/stock-entry/<entry_id>/edit", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_editar(entry_id: str):
+    """Edita un movimiento de inventario en borrador."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.form_preferences import get_column_preferences
+    from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+
+    registro = database.session.get(StockEntry, entry_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+
+    formulario = FormularioEntradaAlmacen(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
+    warehouse_choices = [("", "")] + [
+        (w[0].code, w[0].name) for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True)).all()
+    ]
+    formulario.from_warehouse.choices = warehouse_choices
+    formulario.to_warehouse.choices = warehouse_choices
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    if request.method == "POST":
+        before_state = {
+            "purpose": registro.purpose,
+            "company": registro.company,
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        }
+        registro.purpose = request.form.get("purpose") or registro.purpose
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.from_warehouse = request.form.get("from_warehouse") or None
+        registro.to_warehouse = request.form.get("to_warehouse") or None
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
+            database.session.delete(item)
+        registro.total_amount = _save_stock_entry_items(registro)
+        after_state = {
+            "purpose": registro.purpose,
+            "company": registro.company,
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        }
+        log_update(registro, before=before_state, after=after_state)
+        database.session.commit()
+        flash(_("Movimiento de inventario actualizado correctamente."), "success")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    transaction_config = {
+        "formKey": "inventory.stock_entry",
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, "inventory.stock_entry"),
+        "availableSourceTypes": [
+            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+            {"value": "delivery_note", "label": _("Nota de Entrega")},
+        ],
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "remarks": registro.remarks or "",
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.basic_rate or 0),
+                "amount": str(item.amount or 0),
+            }
+            for item in lineas
+        ],
+    }
+    titulo = _stock_entry_title(registro.purpose)
+    return render_template(
+        "inventario/entrada_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        edit=True,
+        registro=registro,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        source_api_url=None,
+        source_label="documento origen",
+        transaction_config=transaction_config,
+    )
+
+
+@inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_duplicar(entry_id: str):
+    """Duplica un movimiento de inventario como borrador nuevo."""
+    origen = database.session.get(StockEntry, entry_id)
+    if not origen:
+        abort(404)
+    if origen.docstatus == 2:
+        abort(400)
+
+    duplicado = StockEntry(
+        purpose=origen.purpose,
+        company=origen.company,
+        posting_date=origen.posting_date,
+        from_warehouse=origen.from_warehouse,
+        to_warehouse=origen.to_warehouse,
+        remarks=origen.remarks,
+        docstatus=0,
+    )
+    database.session.add(duplicado)
+    database.session.flush()
+    assign_document_identifier(
+        document=duplicado,
+        entity_type="stock_entry",
+        posting_date_raw=duplicado.posting_date,
+        naming_series_id=None,
+    )
+    total = Decimal("0")
+    for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=origen.id)).scalars():
+        linea = StockEntryItem(
+            stock_entry_id=duplicado.id,
+            item_code=item.item_code,
+            source_warehouse=item.source_warehouse,
+            target_warehouse=item.target_warehouse,
+            qty=item.qty,
+            uom=item.uom,
+            basic_rate=item.basic_rate,
+            amount=item.amount,
+        )
+        database.session.add(linea)
+        total += item.amount or Decimal("0")
+    duplicado.total_amount = total
+    database.session.commit()
+    flash(_("Movimiento de inventario duplicado como nuevo borrador."), "success")
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=duplicado.id))
+
+
+@inventario.route("/stock-entry/<entry_id>/submit", methods=["POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_submit(entry_id: str):
+    """Aprueba una entrada de almacen y genera Stock Ledger/GL."""
+    registro = database.session.get(StockEntry, entry_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+    try:
+        submit_document(registro)
+        log_submit(registro)
+        database.session.commit()
+    except PostingError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
+    flash(_("Entrada de almacen aprobada y contabilizada."), "success")
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
+
+
+@inventario.route("/stock-entry/<entry_id>/cancel", methods=["POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_entrada_cancel(entry_id: str):
+    """Cancela una entrada de almacen."""
+    registro = database.session.get(StockEntry, entry_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 1:
+        abort(400)
+    try:
+        cancel_document(registro)
+        revert_relations_for_target("stock_entry", entry_id)
+        log_cancel(registro)
+        database.session.commit()
+    except PostingError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
+    flash(_("Entrada de almacen cancelada con reverso contable."), "warning")
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))

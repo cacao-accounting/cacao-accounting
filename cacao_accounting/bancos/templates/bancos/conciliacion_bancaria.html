@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Conciliación Bancaria") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">{{ _("Conciliación Bancaria") }}</h5>
+  </div>
+  <form method="post" action="{{ url_for('bancos.bancos_conciliacion_bancaria_aplicar') }}" class="p-3">
+    <input type="hidden" name="company" value="{{ company or 'cacao' }}">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Conciliación bancaria") }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ _("Fecha") }}</th>
+          <th scope="col">{{ _("Referencia") }}</th>
+          <th scope="col">{{ _("Descripción") }}</th>
+          <th scope="col">{{ _("Monto") }}</th>
+          <th scope="col">{{ _("Candidato") }}</th>
+          <th scope="col">{{ _("Monto a conciliar") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for transaction in transactions %}
+        {% set amount = transaction.deposit if transaction.deposit is not none else transaction.withdrawal %}
+        <tr>
+          <td>{{ transaction.posting_date }}</td>
+          <td>{{ transaction.reference_number or "" }}</td>
+          <td>{{ transaction.description or "" }}</td>
+          <td>{{ amount }}</td>
+          <td>
+            <input type="hidden" name="bank_transaction_id" value="{{ transaction.id }}">
+            <select name="target_{{ transaction.id }}" class="form-select form-select-sm">
+              <option value="">{{ _("Seleccione...") }}</option>
+              {% for candidate in suggestions.get(transaction.id, []) %}
+              <option value="{{ candidate.reference_type }}:{{ candidate.reference_id }}">
+                {{ candidate.reference_type }} {{ candidate.reference_id }} - {{ candidate.amount }} ({{ candidate.status }})
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input name="amount_{{ transaction.id }}" class="form-control form-control-sm" value="{{ amount }}"></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">{{ _("No hay transacciones pendientes de conciliación.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button class="btn btn-primary mt-3" type="submit">{{ _("Conciliar seleccionados") }}</button>
+  </form>
+</div>
+
+{% endblock %}

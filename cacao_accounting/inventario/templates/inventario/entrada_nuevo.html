@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada_nuevo.html">
+</div>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}"
+        class="link-dark">{{ _('Inventarios') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ (registro.document_no or registro.id) if edit else _('Nuevo Movimiento') }}</li>
+  </ol>
+</nav>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+  {{ form.csrf_token }}
+  {{ tf_macros.transaction_form_header("Editar Movimiento de Inventario" if edit else "Movimiento de Inventario") }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="mb-3">
+          <label class="form-label" for="purpose">{{ _('Propósito') }}</label>
+          {{ form.purpose(class="form-select") }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="mb-3">
+          <label class="form-label" for="from_warehouse">{{ _('Bodega Origen') }}</label>
+          {{ tf_macros.smart_select(
+              doctype="warehouse",
+              name="from_warehouse",
+              label=_("Bodega Origen"),
+              filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          x_model="header.from_warehouse"
+          ) }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="to_warehouse">{{ _('Bodega Destino') }}</label>
+          {{ tf_macros.smart_select(
+              doctype="warehouse",
+              name="to_warehouse",
+              label=_("Bodega Destino"),
+              filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          x_model="header.to_warehouse"
+          ) }}
+        </div>
+      </div>
+    </div>
+  </div>
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
+</form>
+{% endblock %}

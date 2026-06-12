@@ -11,7 +11,9 @@ WSGI.
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from os import environ
+from secrets import token_urlsafe
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -35,7 +37,6 @@ from cacao_accounting.compras import compras
 from cacao_accounting.config import (
     DIRECTORIO_ARCHIVOS,
     DIRECTORIO_PLANTILLAS,
-    MODO_ESCRITORIO,
     TESTING_MODE,
 )
 from cacao_accounting.contabilidad import contabilidad
@@ -44,12 +45,21 @@ from cacao_accounting.database.helpers import (
     entidades_creadas,
     obtener_id_modulo_por_nombre,
 )
+from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
+from cacao_accounting.logs import log
+from cacao_accounting.imports.routes import imports
+from cacao_accounting.imports.utils.recovery import recover_crashed_batches
 from cacao_accounting.inventario import inventario
+from cacao_accounting.printing.routes import printing_public
+from cacao_accounting.printing.admin_routes import printing_admin
+from cacao_accounting.printing import init_printing
 from cacao_accounting.modulos import (
     registrar_modulos_adicionales,
     validar_modulo_activo,
 )
+from cacao_accounting.reportes import reportes
+from cacao_accounting.runtime_mode import force_single_entity, is_cloud_mode, is_desktop_mode
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.version import PRERELEASE
@@ -67,6 +77,10 @@ def command() -> None:  # pragma: no cover
 def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
+        from flask_wtf.csrf import CSRFProtect
+
+        csrf = CSRFProtect()
+        csrf.init_app(app)
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
@@ -116,8 +130,13 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(contabilidad, url_prefix="/accounting")
             app.register_blueprint(compras, url_prefix="/buying")
             app.register_blueprint(inventario, url_prefix="/inventory")
+            app.register_blueprint(reportes)
             app.register_blueprint(ventas, url_prefix="/sales")
             app.register_blueprint(setup_wizard, url_prefix="/setup")
+            app.register_blueprint(imports, url_prefix="/imports")
+            app.register_blueprint(printing_public)
+            app.register_blueprint(printing_admin)
+            init_printing()
 
     else:
         raise RuntimeError(ERROR2)
@@ -131,7 +150,11 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(permisos=Permisos)
-            app.jinja_env.globals.update(MODO_ESCRITORIO=MODO_ESCRITORIO)
+            app.jinja_env.globals.update(_=_)
+            app.jinja_env.globals.update(MODO_ESCRITORIO=is_desktop_mode())
+            app.jinja_env.globals.update(is_desktop_mode=is_desktop_mode)
+            app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
+            app.jinja_env.globals.update(force_single_entity=force_single_entity)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
             # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
@@ -147,6 +170,16 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(id_modulo=obtener_id_modulo_por_nombre)
             app.jinja_env.globals.update(usuario=current_user)
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
+            app.jinja_env.globals.update(document_currency_code=document_currency_code)
+            app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.globals.update(format_quantity=format_quantity)
+            app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)
+            app.jinja_env.globals.update(document_collaboration_tasks=document_collaboration_tasks)
+            app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
+            app.jinja_env.globals.update(audit_action_label=audit_action_label)
+            from cacao_accounting.document_flow.status import calculate_document_status
+
+            app.jinja_env.globals.update(document_status_info=calculate_document_status)
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
             if PRERELEASE:
@@ -155,6 +188,82 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
 
     else:
         raise RuntimeError(ERROR2)
+
+
+def document_currency_code(document: object | None) -> str:
+    """Return the display currency code for a transactional document."""
+    if document is None:
+        return ""
+    for attr in ("transaction_currency", "currency", "base_currency"):
+        value = getattr(document, attr, None)
+        if value:
+            return str(value)
+    company = getattr(document, "company", None) or getattr(document, "entity", None)
+    if not company:
+        return ""
+    from cacao_accounting.database import Entity
+
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
+    return str(getattr(entity, "currency", "") or "")
+
+
+def _decimal_for_display(value: object | None) -> Decimal:
+    """Normalize template values before numeric formatting."""
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def format_money_with_currency(value: object | None, currency_code: str | None = "") -> str:
+    """Format money with thousands separators and optional currency code."""
+    amount = f"{_decimal_for_display(value):,.2f}"
+    return f"{currency_code} {amount}" if currency_code else amount
+
+
+def format_quantity(value: object | None) -> str:
+    """Format operational quantities with four decimals."""
+    return f"{_decimal_for_display(value):,.4f}"
+
+
+def collaboration_active_users() -> list:
+    """Return active users for collaboration widgets."""
+    if not is_cloud_mode():
+        return []
+    from cacao_accounting.collaboration_service import active_users
+
+    return active_users()
+
+
+def document_collaboration_tasks(document_type: str, document_id: str) -> list:
+    """Return document tasks for collaboration widgets."""
+    if not is_cloud_mode():
+        return []
+    from cacao_accounting.collaboration_service import list_document_tasks
+
+    return list_document_tasks(document_type, document_id)
+
+
+def current_user_open_task_count() -> int:
+    """Return current user's open cloud task count for navigation badges."""
+    if not is_cloud_mode() or not current_user or not current_user.is_authenticated:
+        return 0
+    from cacao_accounting.collaboration_service import open_task_count
+
+    return open_task_count(str(current_user.id))
+
+
+def audit_action_label(action: str) -> str:
+    """Return display text for audit actions not covered by older template maps."""
+    labels = {
+        "task_created": _("asignó una tarea"),
+        "task_status_changed": _("cambió el estado de una tarea"),
+        "task_completed": _("completó una tarea"),
+        "task_cancelled": _("canceló una tarea"),
+    }
+    return labels.get(action, action)
 
 
 def create_app(ajustes: dict | None = None) -> Flask:
@@ -169,6 +278,12 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
+
+    if not cacao_app.config.get("SECRET_KEY"):
+        if cacao_app.config.get("TESTING"):
+            cacao_app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
+        else:
+            cacao_app.config["SECRET_KEY"] = token_urlsafe(32)
 
     @cacao_app.cli.command()
     def cleandb():  # pragma: no cover
@@ -214,6 +329,12 @@ def create_app(ajustes: dict | None = None) -> Flask:
     iniciar_extenciones(app=cacao_app)
     registrar_blueprints(app=cacao_app)
     registrar_rutas_predeterminadas(app=cacao_app)
+
+    with cacao_app.app_context():
+        try:
+            recover_crashed_batches()
+        except Exception as e:
+            log.error("Error al recuperar lotes de importación: {}", e)
 
     return cacao_app
 

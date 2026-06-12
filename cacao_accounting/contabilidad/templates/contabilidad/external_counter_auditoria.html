@@ -1,0 +1,68 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Bitacora de Auditoria</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> Bitacora de Auditoria — {{ counter.name }}</h5>
+    <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">Volver</a>
+  </div>
+
+  <div class="mb-3 p-2 bg-light rounded">
+    <strong>Compania:</strong> {{ counter.company }} |
+    <strong>Tipo:</strong> {{ counter.counter_type or '—' }} |
+    <strong>Ultimo usado:</strong> {{ counter.last_used }} |
+    <strong>Siguiente sugerido:</strong> <code>{{ counter.next_suggested_formatted }}</code>
+  </div>
+
+  {% if registros %}
+  <table class="ca-table">
+    <caption style="display: none;">Bitacora de ajustes del contador externo.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Fecha</th>
+        <th scope="col">Valor Anterior</th>
+        <th scope="col">Nuevo Valor</th>
+        <th scope="col">Variacion</th>
+        <th scope="col">Motivo</th>
+        <th scope="col">Usuario</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for reg in registros %}
+      <tr>
+        <td>{{ reg.changed_at.strftime('%Y-%m-%d %H:%M') if reg.changed_at else '—' }}</td>
+        <td>{{ reg.previous_value }}</td>
+        <td><strong>{{ reg.new_value }}</strong></td>
+        <td>
+          {% set diff = reg.new_value - reg.previous_value %}
+          {% if diff > 0 %}
+          <span class="text-success">+{{ diff }}</span>
+          {% elif diff < 0 %}
+          <span class="text-danger">{{ diff }}</span>
+          {% else %}
+          <span class="text-muted">0</span>
+          {% endif %}
+        </td>
+        <td>{{ reg.reason }}</td>
+        <td>{{ reg.changed_by or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted text-center mt-3">No hay ajustes registrados para este contador.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

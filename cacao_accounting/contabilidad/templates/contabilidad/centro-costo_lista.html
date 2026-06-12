@@ -11,8 +11,9 @@
 </nav>
 
 <div class="ca-card">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
     <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> Catálogo de Centros de Costos.</h5>
+    <a href="{{ url_for('contabilidad.nuevo_centro_costo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Nuevo Centro</a>
   </div>
 
   {% if entidades_creadas %}
@@ -35,43 +36,72 @@
 
   <p class="mb-2" style="font-size:.8rem;color:#64748b;"><strong>Entidad:</strong> {{ entidad[0].company_name }}</p>
 
+  <div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+      @click.prevent="$dispatch('tree-toggle', { open: true })" x-data>
+      <i class="bi bi-arrows-expand"></i> {{ _('Expandir todos') }}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+      @click.prevent="$dispatch('tree-toggle', { open: false })" x-data>
+      <i class="bi bi-arrows-collapse"></i> {{ _('Colapsar todos') }}
+    </button>
+  </div>
+
   <ul class="ca-tree">
     {%- for centrocostobase in base_centro_costos -%}
-    <li>
-      <a href="{{ url_for('contabilidad.centro_costo', id_cc=centrocostobase[0].code) }}">
-        <i class="bi bi-chevron-down me-1" style="font-size:.7rem;color:#94a3b8;"></i>
-        <strong>{{ centrocostobase[0].code }}</strong>&nbsp;{{ centrocostobase[0].name }}
-      </a>
+    <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+      <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+        <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+        <a href="{{ url_for('contabilidad.centro_costo', id_cc=centrocostobase[0].code) }}">
+          <strong>{{ centrocostobase[0].code }}</strong>&nbsp;{{ centrocostobase[0].name }}
+        </a>
+      </span>
       {% if centrocostobase[0].group %}
-      <ul>
+      <ul x-show="open">
         {% for ccosto01 in ccostos if ccosto01[0].parent == centrocostobase[0].code %}
-        <li>
-          <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto01[0].code) }}">
-            {{ ccosto01[0].code }} — {{ ccosto01[0].name }}
-          </a>
-          {% if ccosto01[0].group %}
-          <ul>
+        {%- set hijos01 = ccostos | selectattr('0.parent', 'equalto', ccosto01[0].code) | list -%}
+        {% if ccosto01[0].group and hijos01 %}
+        <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+          <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+            <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+            <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto01[0].code) }}">
+              {{ ccosto01[0].code }} — {{ ccosto01[0].name }}
+            </a>
+          </span>
+          <ul x-show="open">
             {% for ccosto02 in ccostos if ccosto02[0].parent == ccosto01[0].code %}
-            <li>
-              <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto02[0].code) }}">
-                {{ ccosto02[0].code }} — {{ ccosto02[0].name }}
-              </a>
-              {% if ccosto02[0].group %}
-              <ul>
+            {%- set hijos02 = ccostos | selectattr('0.parent', 'equalto', ccosto02[0].code) | list -%}
+            {% if ccosto02[0].group and hijos02 %}
+            <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+              <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto02[0].code) }}">
+                  {{ ccosto02[0].code }} — {{ ccosto02[0].name }}
+                </a>
+              </span>
+              <ul x-show="open">
                 {% for ccosto03 in ccostos if ccosto03[0].parent == ccosto02[0].code %}
-                <li>
-                  <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto03[0].code) }}">
-                    {{ ccosto03[0].code }} — {{ ccosto03[0].name }}
-                  </a>
-                  {% if ccosto03[0].group %}
-                  <ul>
+                {%- set hijos03 = ccostos | selectattr('0.parent', 'equalto', ccosto03[0].code) | list -%}
+                {% if ccosto03[0].group and hijos03 %}
+                <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                  <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                    <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                    <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto03[0].code) }}">
+                      {{ ccosto03[0].code }} — {{ ccosto03[0].name }}
+                    </a>
+                  </span>
+                  <ul x-show="open">
                     {% for ccosto04 in ccostos if ccosto04[0].parent == ccosto03[0].code %}
-                    <li>
-                      <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto04[0].code) }}">
-                        {{ ccosto04[0].code }} — {{ ccosto04[0].name }}
-                      </a>
-                      {% if ccosto04[0].group %}
-                      <ul>
+                    {%- set hijos04 = ccostos | selectattr('0.parent', 'equalto', ccosto04[0].code) | list -%}
+                    {% if ccosto04[0].group and hijos04 %}
+                    <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+                      <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+                        <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+                        <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto04[0].code) }}">
+                          {{ ccosto04[0].code }} — {{ ccosto04[0].name }}
+                        </a>
+                      </span>
+                      <ul x-show="open">
                         {% for ccosto05 in ccostos if ccosto05[0].parent == ccosto04[0].code %}
                         <li>
                           <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto05[0].code) }}">
@@ -80,20 +110,44 @@
                         </li>
                         {% endfor %}
                       </ul>
-                      {% endif %}
                     </li>
+                    {% else %}
+                    <li>
+                      <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto04[0].code) }}">
+                        {{ ccosto04[0].code }} — {{ ccosto04[0].name }}
+                      </a>
+                    </li>
+                    {% endif %}
                     {% endfor %}
                   </ul>
-                  {% endif %}
                 </li>
+                {% else %}
+                <li>
+                  <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto03[0].code) }}">
+                    {{ ccosto03[0].code }} — {{ ccosto03[0].name }}
+                  </a>
+                </li>
+                {% endif %}
                 {% endfor %}
               </ul>
-              {% endif %}
             </li>
+            {% else %}
+            <li>
+              <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto02[0].code) }}">
+                {{ ccosto02[0].code }} — {{ ccosto02[0].name }}
+              </a>
+            </li>
+            {% endif %}
             {% endfor %}
           </ul>
-          {% endif %}
         </li>
+        {% else %}
+        <li>
+          <a href="{{ url_for('contabilidad.centro_costo', id_cc=ccosto01[0].code) }}">
+            {{ ccosto01[0].code }} — {{ ccosto01[0].name }}
+          </a>
+        </li>
+        {% endif %}
         {% endfor %}
       </ul>
       {% endif %}

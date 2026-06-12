@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}" class="link-dark">{{ _('Revalorización cambiaria') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nueva') }}</li>
+  </ol>
+</nav>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-currency-exchange"></i> {{ _('Nueva revalorización cambiaria') }}</h5>
+  </div>
+  <form method="post" class="p-3 row g-3 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="company">{{ _('Compañía') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "company",
+          name: "company",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          messages: {
+            placeholder: {{ _('Buscar compañía')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin resultados')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+        <input type="hidden" id="company" name="company" x-model="selectedValue">
+        <div class="ca-smart-select-input-wrap">
+          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+            @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+          <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+            :title="messages.clear">×</button>
+        </div>
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <span x-text="option.display_name"></span>
+            </button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+            x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="fiscal_year_id">{{ _('Año fiscal') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "fiscal_year_id",
+          name: "fiscal_year_id",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          loadOnFilterChange: true,
+          requiredFilters: ["company"],
+          filters: { company: { selector: "#company" }, is_closed: false },
+          filterSources: ["#company"],
+          messages: {
+            placeholder: {{ _('Buscar año fiscal')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin años fiscales abiertos')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+        <input type="hidden" id="fiscal_year_id" name="fiscal_year_id" x-model="selectedValue" required>
+        <div class="ca-smart-select-input-wrap">
+          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+            @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+          <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+            :title="messages.clear">×</button>
+        </div>
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <span x-text="option.display_name"></span>
+            </button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+            x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="period_id">{{ _('Período contable') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+          doctype: "accounting_period_id",
+          name: "period_id",
+          minChars: 1,
+          preload: true,
+          preloadOnFocus: true,
+          loadOnFilterChange: true,
+          requiredFilters: ["company", "fiscal_year_id"],
+          filters: { company: { selector: "#company" }, fiscal_year_id: { selector: "#fiscal_year_id" }, is_closed: false },
+          filterSources: ["#company", "#fiscal_year_id"],
+          messages: {
+            placeholder: {{ _('Buscar período contable')|tojson }},
+            loading: {{ _('Buscando...')|tojson }},
+            noResults: {{ _('Sin periodos abiertos')|tojson }},
+            minChars: {{ _('Escriba para buscar')|tojson }},
+            clear: {{ _('Limpiar')|tojson }},
+            invalid: {{ _('Seleccione una opción válida')|tojson }},
+            error: {{ _('No se pudo buscar')|tojson }}
+          }
+        })'>
+        <input type="hidden" id="period_id" name="period_id" x-model="selectedValue" required>
+        <div class="ca-smart-select-input-wrap">
+          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+            @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+          <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+            :title="messages.clear">×</button>
+        </div>
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <span x-text="option.display_name"></span>
+            </button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+            x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-1">
+      <button class="btn btn-primary w-100" type="submit">{{ _('Ejecutar') }}</button>
+    </div>
+  </form>
+</section>
+
+{% endblock %}

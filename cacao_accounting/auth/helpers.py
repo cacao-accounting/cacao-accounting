@@ -3,6 +3,7 @@
 
 """Utilidades de autenticación."""
 
+import re
 from typing import Optional
 
 from argon2 import PasswordHasher
@@ -10,9 +11,9 @@ from argon2.exceptions import VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
 
-from cacao_accounting.config import MODO_ESCRITORIO
 from cacao_accounting.database import CacaoConfig as Config, User, database
 from cacao_accounting.logs import log
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 ph = PasswordHasher()
 
@@ -42,9 +43,28 @@ def validar_acceso(usuario: str, clave: str) -> bool:
     return autenticar_usuario(usuario, clave) is not None
 
 
+def validar_clave_segura(clave: str) -> bool:
+    """Verifica que la contraseña cumpla con reglas básicas de seguridad."""
+    checks = {
+        "min_len": len(clave) >= 8,
+        "upper": bool(re.search(r"[A-Z]", clave)),
+        "lower": bool(re.search(r"[a-z]", clave)),
+        "digit": bool(re.search(r"\d", clave)),
+        "special": bool(re.search(r"[^A-Za-z0-9]", clave)),
+    }
+    for rule, passed in checks.items():
+        match rule:
+            case "min_len" | "upper" | "lower" | "digit" | "special":
+                if not passed:
+                    return False
+            case _:
+                return False
+    return True
+
+
 def puede_iniciar_en_escritorio(identidad: User) -> bool:
     """Determina si el usuario puede iniciar sesión en modo escritorio."""
-    if not MODO_ESCRITORIO:
+    if not is_desktop_mode():
         return True
     return identidad.classification == "admin"
 

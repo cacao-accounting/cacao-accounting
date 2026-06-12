@@ -2,7 +2,7 @@
 name = "cacao-accounting"
 description = "Accounting solution for the management of Accounts Payable, Accounts Receivable, Inventory, Treasury and General Accounting."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 authors = [
   {name = "William Moreno Reyes", email = "williamjmorenor@gmail.com"},
   {name = "BMO Soluciones", email = "development@bmogroup.solutions"},
@@ -22,6 +22,12 @@ classifiers = [
   'Programming Language :: Python :: Implementation :: CPython'
 ]
 dynamic = ["version", "dependencies"]
+
+[project.optional-dependencies]
+extra-formats = [
+    "xlrd>=2.0.2",
+    "odfpy>=1.4.1",
+]
 
 [project.scripts]
 cacaoctl="cacao_accounting:command"
@@ -67,6 +73,12 @@ exclude = [
 	".ruff_cache",
 ]
 
+[tool.pylint.format]
+max-line-length = 127
+
+[tool.pylint."messages control"]
+disable = ["C0415", "C0103"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
@@ -85,4 +97,10 @@ disable_error_code = [
 [tool.pytest.ini_options]
 markers = [
     "slow: Pruebas unitarias que tardan mucho en ejecurse, normalmente requieren un set de datos real.",
+]
+norecursedirs = [
+    "build",
+    "dist",
+    "*.egg-info",
+    "cacao_accounting-*",
 ]

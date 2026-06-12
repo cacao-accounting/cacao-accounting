@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/factura_compra_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Listado de Facturas de Compra</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> Listado de Facturas de Compra.</h5>
+    <div class="btn-group">
+      <a href="{{ url_for('compras.compras_factura_compra_nuevo', document_type='purchase_invoice') }}" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>Nuevo
+      </a>
+      <a href="{{ url_for('compras.compras_factura_compra_nota_debito_lista') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-down-left me-1"></i>Notas de Débito
+      </a>
+      <a href="{{ url_for('compras.compras_factura_compra_nota_credito_lista') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Notas de Crédito
+      </a>
+      <a href="{{ url_for('compras.compras_factura_compra_devolucion_lista') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-repeat me-1"></i>Devoluciones
+      </a>
+    </div>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">Listado de facturas de compra.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Proveedor</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Fecha</th>
+        <th scope="col">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td>{{ item.supplier_name or "" }}</td>
+        <td>{{ macros.document_status_for("purchase_invoice", item) }}</td>
+        <td>{{ item.posting_date or "" }}</td>
+        <td>{{ item.grand_total or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="compras.compras_factura_compra_lista") }}</div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,47 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.tasa_cambio') }}" class="link-dark">Tasas de Cambio</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nueva Tasa de Cambio</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-arrow-left-right me-2"></i> {{ _('Nueva Tasa de Cambio') }}</h5>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('contabilidad.tasa_cambio') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-tc" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Tasa') }}
+      </button>
+    </div>
+  </div>
+  <div class="p-4">
+    <form method="post" id="form-tc" class="row g-3">
+      {{ form.csrf_token }}
+      <div class="col-md-6">
+        <label class="form-label" for="origin">{{ _('Moneda Origen') }} <span class="text-danger">*</span></label>
+        {{ form.origin(class="form-select form-select-sm", id="origin", required=True) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="destination">{{ _('Moneda Destino') }} <span class="text-danger">*</span></label>
+        {{ form.destination(class="form-select form-select-sm", id="destination", required=True) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="rate">{{ _('Tasa de Cambio') }} <span class="text-danger">*</span></label>
+        {{ form.rate(class="form-control form-control-sm", id="rate", type="number", step="0.000000001", required=True) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="date">{{ _('Fecha') }} <span class="text-danger">*</span></label>
+        {{ form.date(class="form-control form-control-sm", id="date", type="date", required=True) }}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

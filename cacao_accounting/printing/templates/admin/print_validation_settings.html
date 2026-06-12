@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">External Document Validation</h1>
+        <a href="{{ url_for('printing_admin.list_templates') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a formatos
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                <div class="form-check form-switch mb-3">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="external_document_validation_enabled"
+                        name="external_document_validation_enabled"
+                        {% if validation_enabled %}checked{% endif %}
+                    >
+                    <label class="form-check-label" for="external_document_validation_enabled">
+                        Enabled
+                    </label>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="external_document_validation_base_url">Base URL</label>
+                    <input
+                        class="form-control"
+                        type="url"
+                        id="external_document_validation_base_url"
+                        name="external_document_validation_base_url"
+                        value="{{ validation_base_url }}"
+                        placeholder="{{ default_validation_base_url }}"
+                    >
+                    <div class="form-text">
+                        Si queda vacía, se usa el fallback: {{ default_validation_base_url }}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Guardar configuración</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
