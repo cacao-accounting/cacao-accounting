@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de cuentas por pagar."""
+
 PAYABLES_AGING_PARAMS = {
     "type": "object",
     "properties": {

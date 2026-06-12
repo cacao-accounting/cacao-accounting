@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de contabilidad."""
+
 ACCOUNTING_PERIODS_PARAMS = {
     "type": "object",
     "properties": {

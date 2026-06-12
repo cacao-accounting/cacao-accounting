@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de pista de auditoría."""
+
 DOCUMENT_TIMELINE_PARAMS = {
     "type": "object",
     "properties": {

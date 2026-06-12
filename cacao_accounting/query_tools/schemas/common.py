@@ -1,3 +1,5 @@
+"""Esquemas de validación comunes compartidos entre módulos."""
+
 PAGINATION_PARAMS = {
     "page": {
         "type": "integer",
