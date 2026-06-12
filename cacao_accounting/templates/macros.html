@@ -192,6 +192,12 @@
         Administración
       </a>
     </li>
+    <li class="nav-item">
+      <a href="{{ url_for('admin.lista_modulos') }}" class="nav-link {% if request.endpoint == 'admin.lista_modulos' %}active{% endif %}">
+        <i class="bi bi-puzzle"></i>
+        Módulos
+      </a>
+    </li>
     {%- endif %}
     <li class="nav-item d-md-none">
       <a href="{{ url_for('login.cerrar_sesion') }}" class="nav-link">
