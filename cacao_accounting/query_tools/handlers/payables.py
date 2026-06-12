@@ -5,7 +5,6 @@ from typing import Any
 from sqlalchemy import func
 
 from cacao_accounting.database import (
-    Party,
     PurchaseInvoice,
     database,
 )

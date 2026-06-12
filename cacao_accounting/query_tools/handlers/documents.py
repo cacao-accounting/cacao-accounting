@@ -4,10 +4,6 @@ from typing import Any
 
 from sqlalchemy import func
 
-from typing import Any
-
-from sqlalchemy import func
-
 from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool

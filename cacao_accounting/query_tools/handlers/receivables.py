@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
 from cacao_accounting.database import (
-    Party,
-    PaymentEntry,
-    PaymentReference,
     SalesInvoice,
     database,
 )
