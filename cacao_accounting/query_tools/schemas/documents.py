@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de documentos."""
+
 DOCUMENTS_FLOW_PARAMS = {
     "type": "object",
     "properties": {

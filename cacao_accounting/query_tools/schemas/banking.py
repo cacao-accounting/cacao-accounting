@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de banca."""
+
 BANKING_ACCOUNTS_PARAMS = {
     "type": "object",
     "properties": {

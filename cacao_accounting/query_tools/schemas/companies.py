@@ -1,3 +1,5 @@
+"""Esquemas de validación para los endpoints del módulo de compañías."""
+
 COMPANIES_LIST_PARAMS = {
     "type": "object",
     "properties": {
