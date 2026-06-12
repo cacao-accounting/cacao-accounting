@@ -1,3 +1,5 @@
+"""Handlers de consultas de pista de auditoría de documentos."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -37,6 +39,7 @@ def get_document_timeline_handler(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene la línea de tiempo de auditoría de un documento específico."""
     validate_permission(
         context,
         required_permission="audit.reports.read",
