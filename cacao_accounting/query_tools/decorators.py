@@ -1,3 +1,5 @@
+"""Decoradores y definición de herramientas de consulta."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,6 +8,8 @@ from typing import Any, Callable
 
 @dataclass(frozen=True)
 class QueryTool:
+    """Descriptor inmutable de una herramienta de consulta."""
+
     name: str
     description: str
     required_permission: str | None = None
@@ -37,6 +41,7 @@ def query_tool(
     max_date_range_months: int | None = None,
     needs_company: bool = True,
 ) -> Callable[[Callable[..., Any]], QueryTool]:
+    """Decorador que registra una función como herramienta de consulta en el registro global."""
     from cacao_accounting.query_tools.registry import registry
 
     def wrapper(handler: Callable[..., Any]) -> QueryTool:

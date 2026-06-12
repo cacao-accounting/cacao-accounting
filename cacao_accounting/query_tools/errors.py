@@ -1,3 +1,5 @@
+"""Definición de errores y códigos de error para herramientas de consulta."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,6 +8,8 @@ from typing import Any
 
 
 class ErrorCode(str, Enum):
+    """Códigos de error estandarizados para herramientas de consulta."""
+
     PERMISSION_DENIED = "permission_denied"
     COMPANY_ACCESS_DENIED = "company_access_denied"
     MODULE_DISABLED = "module_disabled"
@@ -22,15 +26,19 @@ class ErrorCode(str, Enum):
 
 @dataclass
 class QueryToolError(Exception):
+    """Excepción personalizada para errores de herramientas de consulta."""
+
     code: ErrorCode
     message: str
     request_id: str | None = None
     details: dict[str, Any] | None = None
 
     def __str__(self) -> str:
+        """Devuelve una representación legible del error con el código y el mensaje."""
         return f"[{self.code.value}] {self.message}"
 
     def to_dict(self) -> dict[str, Any]:
+        """Convierte el error en un diccionario serializable para respuestas JSON."""
         result: dict[str, Any] = {
             "code": self.code.value,
             "message": self.message,

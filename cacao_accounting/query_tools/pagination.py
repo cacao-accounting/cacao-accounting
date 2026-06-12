@@ -1,3 +1,5 @@
+"""Utilidades de paginación para resultados de herramientas de consulta."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,6 +14,8 @@ MAX_PAGE_SIZE = 500
 
 @dataclass
 class PaginatedResult:
+    """Resultado paginado que encapsula ítems, metadatos de página y totales."""
+
     page: int
     page_size: int
     total_items: int
@@ -19,13 +23,16 @@ class PaginatedResult:
 
     @property
     def total_pages(self) -> int:
+        """Calcula el número total de páginas redondeando hacia arriba."""
         return max(1, ceil(self.total_items / self.page_size))
 
     @property
     def has_next_page(self) -> bool:
+        """Indica si existe una página siguiente después de la actual."""
         return self.page < self.total_pages
 
     def to_dict(self) -> dict[str, Any]:
+        """Convierte el resultado paginado a un diccionario serializable."""
         return {
             "page": self.page,
             "page_size": self.page_size,
@@ -40,6 +47,7 @@ def paginate(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> tuple[int, int]:
+    """Valida y normaliza los parámetros de paginación, lanzando error si se excede el máximo."""
     if page < 1:
         page = 1
     if page_size < 1:

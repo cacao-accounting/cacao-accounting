@@ -1,3 +1,5 @@
+"""Contexto de ejecución para herramientas de consulta."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -5,6 +7,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class QueryContext:
+    """Contexto con datos del usuario, compañías, permisos y origen de la solicitud."""
+
     user_id: str
     company_ids: list[str] = field(default_factory=list)
     permissions: set[str] = field(default_factory=set)

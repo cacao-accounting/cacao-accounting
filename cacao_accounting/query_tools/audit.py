@@ -1,3 +1,5 @@
+"""Auditoría de eventos ejecutados por herramientas de consulta."""
+
 from __future__ import annotations
 
 import json
@@ -25,12 +27,13 @@ def _serialize_value(value: Any) -> Any:
 
 
 def serialize_parameters(params: dict[str, Any]) -> dict[str, Any]:
+    """Sanitiza parámetros ocultando valores sensibles y serializando tipos especiales."""
     sanitized = {}
     for key, value in params.items():
         if key.lower() in {"api_key", "api_key", "password", "secret", "token", "access_token"}:
             sanitized[key] = "***"
         elif isinstance(value, dict):
-            sanitized[key] = serialize_parameters(value)
+            sanitized[key] = serialize_parameters(value)  # type: ignore[assignment]
         else:
             sanitized[key] = _serialize_value(value)
     return sanitized
@@ -47,6 +50,7 @@ def log_query_tool_event(
     result_count: int | None = None,
     error_code: str | None = None,
 ) -> None:
+    """Registra un evento de auditoría para una herramienta de consulta."""
     if action not in ALLOWED_QUERY_ACTIONS:
         raise ValueError(f"Acción de auditoría no permitida: {action}")
 
