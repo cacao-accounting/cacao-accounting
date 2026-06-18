@@ -110,20 +110,17 @@
 - [x] Acciones `Crear` en detalle de solicitud de compra (`purchase_request` → cotización de proveedor) — pre-existing gap en `ALLOWED_FLOWS`.
 - [x] Acción `Crear Entrada de Almacén` desde recepción de compra — pre-existing gap en `ALLOWED_FLOWS`.
 
-## Seguimiento 2026-05-21 (Matriz de relaciones operativas)
-- [ ] Ejecutar implementación completa de la matriz definida en `modulos/relaciones.md` (en progreso: núcleo `document_flow` + acciones dinámicas en trazabilidad).
-- [ ] Completar expansión de `create_actions` y `ALLOWED_FLOWS` para todos los pares funcionales acordados, priorizando faltantes reales por módulo.
-- [ ] Completar backend de creación/prefill básico para nuevas acciones `Crear` aún no soportadas por rutas actuales.
-- [ ] Añadir cobertura de pruebas para nuevos caminos de devolución y notas débito/crédito en Compras y Ventas.
+## Seguimiento 2026-05-21 (Matriz de relaciones operativas - completado)
+- [x] Ejecutar implementación completa de la matriz definida en `modulos/relaciones.md` mediante `document_flow`, acciones dinámicas en trazabilidad y matriz vigente alineada al registro.
+- [x] Completar expansión de `create_actions` y `ALLOWED_FLOWS` para los pares funcionales acordados y soportados por rutas actuales.
+- [x] Completar backend de creación/prefill básico para acciones `Crear` soportadas, incluyendo notas débito/crédito, devoluciones, anticipos y pagos/reembolsos.
+- [x] Añadir cobertura de pruebas para caminos de devolución y notas débito/crédito en Compras y Ventas.
 
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
 ## AR/AP y Terceros
 - [ ] Buckets configurables por compania en reportes de Aging.
-
-## Inventario y Valoracion
-- [ ] Completar UI/documento dedicado para liquidaciones de importacion complejas cuando el costo aterrizado se confirme en un evento posterior a la recepcion.
 
 ## Administracion y Seguridad
 - [ ] Matriz explicita de autorizacion Usuario-Compania/Libro.
