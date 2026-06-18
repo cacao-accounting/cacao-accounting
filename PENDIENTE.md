@@ -1,5 +1,18 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-06-18 (Refresh visual global - completado)
+- [x] Aplicar mejora visual global sin tocar logica de negocio ni flujos transaccionales.
+- [x] Modernizar navbar, sidebar, cards, grids de modulo, tablas, formularios y botones desde el CSS compartido.
+- [x] Remover la franja superior de color en tarjetas de modulo para una apariencia mas sobria.
+- [x] Mantener compatibilidad con tema claro/oscuro y responsive movil.
+- [x] Validar render focal de vistas principales.
+
+## Seguimiento 2026-06-18 (Actualizacion de contexto - completado)
+- [x] Releer y consolidar el contexto del proyecto a partir de los documentos base de dominio y estado.
+- [x] Sincronizar `SESSIONS.md` como bitacora cronologica de decisiones y hitos.
+- [x] Refrescar `ESTADO_ACTUAL.md` para reflejar el contexto vigente del proyecto.
+- [x] Mantener `PENDIENTE.md` como backlog priorizado sin introducir cambios funcionales.
+
 ## Seguimiento 2026-05-27 (Servicio reusable de impresion - completado)
 - [x] Integrar via `merge --squash` la rama remota de impresion reutilizable y validacion QR.
 - [x] Endurecer `PrintService` con registry obligatorio, sandbox Jinja2, `StrictUndefined`, resolucion compania/global y logging de intentos.
