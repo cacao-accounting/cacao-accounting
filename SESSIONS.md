@@ -1,5 +1,18 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-18 (Refresh visual global)
+- **Solicitud:** Mejorar la parte visual de Cacao Accounting para que se vea mas fresca, profesional, moderna, util y atractiva.
+- **Implementacion:** Se agrego una capa de refresh en `cacao_accounting/static/css/cacaoaccounting.css` sobre el sistema visual existente, ajustando tokens, navbar, sidebar, contenido, tarjetas, cards de modulo, tablas, formularios, botones, alerts, dropdowns y modales.
+- **Ajuste posterior:** Se removio la franja de color superior en las tarjetas de modulo para mantener una estetica mas sobria y evitar competir visualmente con los indicadores de estado.
+- **Criterio UI:** La mejora se mantuvo global y conservadora para impactar pantallas principales sin tocar la logica ni los templates funcionales; se respetaron radios moderados, layout denso y controles conocidos.
+- **Verificacion:** `venv/bin/python -m pytest tests/test_01vistas.py::test_visit_views -q` paso en verde (`1 passed`).
+
+## 2026-06-18 (Actualizacion de contexto del proyecto)
+- **Solicitud:** Actualizar el contexto del proyecto leyendo los documentos base de dominio, estado y pendientes para dejar continuidad operativa entre sesiones.
+- **Lectura de contexto:** Se revisaron `modulos/contexto/core_concepts.md`, `modulos/contabilidad.md`, `modulos/compras.md`, `modulos/ventas.md`, `modulos/inventario.md`, `modulos/setup.md`, `modulos/relaciones.md`, `ESTADO_ACTUAL.md` y `PENDIENTE.md`.
+- **Hallazgo:** El proyecto ya tiene documentada la matriz implementada de flujo documental, los hitos recientes de conciliaciones, bancos, revalorizacion, impresiones reutilizables y controles de calidad.
+- **Resultado:** Se dejo preparada una nueva base de contexto para la siguiente iteracion, con continuidad historica preservada en `SESSIONS.md` y estado/pending sincronizados.
+
 ## 2026-05-24 (Backlog: cierre documental de matriz operativa)
 - **Solicitud:** Revisar `PENDIENTE.md` porque el bloque `Seguimiento 2026-05-21 (Matriz de relaciones operativas)` seguía abierto aunque la implementación parecía estar aplicada.
 - **Verificación:** `SESSIONS.md`, `ESTADO_ACTUAL.md`, `modulos/relaciones.md` y `cacao_accounting/document_flow/registry.py` confirman que la matriz vigente está alineada con `DOCUMENT_TYPES`, `create_actions` y `ALLOWED_FLOWS`.

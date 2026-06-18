@@ -1,4 +1,16 @@
-# Estado Actual del Proyecto - 2026-05-23
+# Estado Actual del Proyecto - 2026-06-18
+
+- **Refresh visual global (2026-06-18):** La aplicacion incorpora una capa moderna sobre el design system existente.
+  - `cacao_accounting/static/css/cacaoaccounting.css` redefine tokens visuales y mejora navbar, sidebar, cards, grids de modulo, tablas, formularios, botones y superficies comunes.
+  - Las pantallas de modulos ganan mas jerarquia visual: hover mas claro, iconos en contenedores suaves, mejor ritmo de lista y tarjetas sobrias sin franja decorativa superior.
+  - El cambio es CSS-only y no modifica flujos, rutas ni templates funcionales.
+  - Verificacion focal de render: `tests/test_01vistas.py::test_visit_views` en verde.
+
+- **Actualización de contexto (2026-06-18):** Se releyeron los documentos base del dominio y se confirmó que la documentación operativa ya cubre el núcleo funcional del proyecto.
+  - `modulos/contexto/core_concepts.md` fija las reglas de contabilidad, inventario, flujo documental y multi-compañía.
+  - `modulos/contabilidad.md`, `modulos/compras.md`, `modulos/ventas.md`, `modulos/inventario.md`, `modulos/setup.md` y `modulos/relaciones.md` describen el alcance vigente.
+  - `SESSIONS.md` queda como bitacora cronologica para continuidad por etapas.
+  - `PENDIENTE.md` sigue siendo la fuente de backlog priorizado.
 
 - **Backlog / Matriz de relaciones operativas (2026-05-24):** Se revisó el bloque pendiente del 2026-05-21 contra la implementación real y se confirmó que ya estaba cerrado.
   - `modulos/relaciones.md` documenta solo la matriz vigente implementada.
