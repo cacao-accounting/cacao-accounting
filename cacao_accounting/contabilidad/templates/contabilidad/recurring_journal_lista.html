@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% import "macros.html" as macros %}
 
 <nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
@@ -28,6 +29,7 @@
   <div class="ca-card-header">
     <h5 class="ca-card-title mb-0">{{ _('Plantillas de Comprobantes Recurrentes') }}</h5>
   </div>
+  {{ macros.list_filters(show_status=False, placeholder=_("Buscar por código, nombre o compañía...")) }}
   <div class="table-responsive">
     <table class="ca-table">
       <caption>{{ _("Lista de plantillas de comprobantes recurrentes") }}</caption>
@@ -79,23 +81,7 @@
       </tbody>
     </table>
   </div>
-  {% if consulta.pages > 1 %}
-  <div class="ca-card-footer">
-    <nav aria-label="Navegación de páginas">
-      <ul class="pagination pagination-sm mb-0 justify-content-center">
-        {% for page in consulta.iter_pages() %}
-        {% if page %}
-        <li class="page-item {{ 'active' if page == consulta.page else '' }}">
-          <a class="page-item" href="{{ url_for('contabilidad.comprobantes_recurrentes', page=page) }}">{{ page }}</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled"><span class="page-link">...</span></li>
-        {% endif %}
-        {% endfor %}
-      </ul>
-    </nav>
-  </div>
-  {% endif %}
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.comprobantes_recurrentes") }}</div>
 </div>
 
 <section class="ca-card mb-3">
