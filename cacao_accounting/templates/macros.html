@@ -177,25 +177,11 @@
     {%- endif %}
     {%- endfor %}
     {%- endif %}
-    {% if is_cloud_mode() and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado -%}
-    <li class="nav-item">
-      <a href="{{ url_for('imports.index') }}" class="nav-link {% if request.blueprint == 'imports' %}active{% endif %}">
-        <i class="bi bi-file-earmark-arrow-up"></i>
-        Importaciones
-      </a>
-    </li>
-    {%- endif %}
     {% if validar_modulo_activo("admin") and permisos(modulo=id_modulo("admin"), usuario=usuario.id).autorizado -%}
     <li class="nav-item">
       <a href="{{ url_for('admin.admin_') }}" class="nav-link {% if request.blueprint == 'admin' %}active{% endif %}">
         <i class="bi bi-gear"></i>
         Administración
-      </a>
-    </li>
-    <li class="nav-item">
-      <a href="{{ url_for('admin.lista_modulos') }}" class="nav-link {% if request.endpoint == 'admin.lista_modulos' %}active{% endif %}">
-        <i class="bi bi-puzzle"></i>
-        Módulos
       </a>
     </li>
     {%- endif %}
@@ -209,15 +195,48 @@
 {%- endmacro %}
 
 
+{% macro list_filters(show_status=False, placeholder=None) %}
+<div class="p-3 border-bottom">
+  <form method="get" action="{{ url_for(request.endpoint) }}" class="row g-2 align-items-end">
+    <div class="{% if show_status %}col-md-5{% else %}col-md-8{% endif %}">
+      <label class="form-label small text-muted mb-1" for="list-search">{{ _('Buscar') }}</label>
+      <input
+        type="text"
+        id="list-search"
+        name="search"
+        class="form-control form-control-sm"
+        placeholder="{{ placeholder or _('Buscar por documento, tercero o referencia...') }}"
+        value="{{ request.args.get('search', '') }}"
+      >
+    </div>
+    {% if show_status %}
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1" for="list-status">{{ _('Estado') }}</label>
+      <select id="list-status" name="status" class="form-select form-select-sm">
+        <option value="">{{ _('Todos') }}</option>
+        <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>{{ _('Borrador') }}</option>
+        <option value="submitted" {% if request.args.get('status') == 'submitted' %}selected{% endif %}>{{ _('Contabilizado') }}</option>
+        <option value="cancelled" {% if request.args.get('status') == 'cancelled' %}selected{% endif %}>{{ _('Cancelado') }}</option>
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-auto">
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Buscar') }}</button>
+      <a href="{{ url_for(request.endpoint) }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
+    </div>
+  </form>
+</div>
+{% endmacro %}
+
 {% macro rendizar_paginacion(consulta=None, vista=None) %}
 <p class="ca-pagination">{{ consulta.total }} items encontrados.
   <br>
   {% if consulta.has_prev %}
-  <a href="{{ url_for(vista, page=consulta.prev_num) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
+  <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', '')) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
   Página {{ consulta.page }} de {{ consulta.pages }}
   {% if consulta.has_next %}
-  <a href="{{ url_for(vista, page=consulta.next_num) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
+  <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', '')) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
 </p>
 {% endmacro %}

@@ -54,6 +54,7 @@ from cacao_accounting.document_flow import (
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
     build_party_company_settings,
     draft_party_company_settings,
@@ -136,6 +137,18 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
     return party
 
 
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+    """Pagina un listado aplicando los filtros GET comunes."""
+    base_query = query if query is not None else database.select(model)
+    filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
+    return database.paginate(
+        filtered_query,
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+
 @compras.route("/")
 @compras.route("/compras")
 @compras.route("/buying")
@@ -151,11 +164,9 @@ def compras_():
 @login_required
 def compras_orden_compra_lista():
     """Listado de ordenes de compra."""
-    consulta = database.paginate(
-        database.select(PurchaseOrder),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        PurchaseOrder,
+        (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.supplier_invoice_no, PurchaseOrder.remarks),
     )
     titulo = "Listado de Ordenes de Compra - " + APPNAME
     return render_template("compras/orden_compra_lista.html", consulta=consulta, titulo=titulo)
@@ -166,11 +177,9 @@ def compras_orden_compra_lista():
 @login_required
 def compras_solicitud_compra_lista():
     """Listado de solicitudes de compra internas."""
-    consulta = database.paginate(
-        database.select(PurchaseRequest),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        PurchaseRequest,
+        (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.department, PurchaseRequest.remarks),
     )
     titulo = "Listado de Solicitudes de Compra - " + APPNAME
     return render_template("compras/solicitud_compra_lista.html", consulta=consulta, titulo=titulo)
@@ -436,11 +445,9 @@ def compras_solicitud_compra_cancel(request_id: str):
 @login_required
 def compras_cotizacion_proveedor_lista():
     """Listado de cotizaciones de proveedor."""
-    consulta = database.paginate(
-        database.select(SupplierQuotation),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        SupplierQuotation,
+        (SupplierQuotation.document_no, SupplierQuotation.supplier_name, SupplierQuotation.remarks),
     )
     titulo = "Listado de Cotizaciones de Proveedor - " + APPNAME
     return render_template("compras/cotizacion_proveedor_lista.html", consulta=consulta, titulo=titulo)
@@ -730,11 +737,9 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
 @login_required
 def compras_comparativo_ofertas_lista():
     """Listado de comparativos de ofertas para solicitudes de cotización."""
-    consulta = database.paginate(
-        database.select(PurchaseQuotation),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        PurchaseQuotation,
+        (PurchaseQuotation.document_no, PurchaseQuotation.supplier_name, PurchaseQuotation.remarks),
     )
     titulo = "Comparativo de Ofertas - " + APPNAME
     return render_template("compras/comparativo_ofertas_lista.html", consulta=consulta, titulo=titulo)
@@ -758,11 +763,9 @@ def compras_comparativo_ofertas(rfq_id: str):
 @login_required
 def compras_recepcion_lista():
     """Listado de recepciones de compra."""
-    consulta = database.paginate(
-        database.select(PurchaseReceipt),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        PurchaseReceipt,
+        (PurchaseReceipt.document_no, PurchaseReceipt.supplier_name, PurchaseReceipt.remarks),
     )
     titulo = "Listado de Recepciones de Compra - " + APPNAME
     return render_template("compras/recepcion_lista.html", consulta=consulta, titulo=titulo)
@@ -773,11 +776,15 @@ def compras_recepcion_lista():
 @login_required
 def compras_factura_compra_lista():
     """Listado de facturas de compra."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PurchaseInvoice,
+        (
+            PurchaseInvoice.document_no,
+            PurchaseInvoice.supplier_name,
+            PurchaseInvoice.supplier_invoice_no,
+            PurchaseInvoice.remarks,
+        ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_INVOICE),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Facturas de Compra - " + APPNAME
     return render_template("compras/factura_compra_lista.html", consulta=consulta, titulo=titulo)
@@ -788,11 +795,15 @@ def compras_factura_compra_lista():
 @login_required
 def compras_factura_compra_nota_debito_lista():
     """Listado de notas de débito de compra."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PurchaseInvoice,
+        (
+            PurchaseInvoice.document_no,
+            PurchaseInvoice.supplier_name,
+            PurchaseInvoice.supplier_invoice_no,
+            PurchaseInvoice.remarks,
+        ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_DEBIT_NOTE),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Débito de Compra - " + APPNAME
     return render_template(
@@ -811,11 +822,15 @@ def compras_factura_compra_nota_debito_lista():
 @login_required
 def compras_factura_compra_nota_credito_lista():
     """Listado de notas de crédito de compra."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PurchaseInvoice,
+        (
+            PurchaseInvoice.document_no,
+            PurchaseInvoice.supplier_name,
+            PurchaseInvoice.supplier_invoice_no,
+            PurchaseInvoice.remarks,
+        ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_CREDIT_NOTE),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Crédito de Compra - " + APPNAME
     return render_template(
@@ -834,11 +849,15 @@ def compras_factura_compra_nota_credito_lista():
 @login_required
 def compras_factura_compra_devolucion_lista():
     """Listado de devoluciones de compra."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PurchaseInvoice,
+        (
+            PurchaseInvoice.document_no,
+            PurchaseInvoice.supplier_name,
+            PurchaseInvoice.supplier_invoice_no,
+            PurchaseInvoice.remarks,
+        ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_RETURN),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Devoluciones de Compra - " + APPNAME
     return render_template(
@@ -881,11 +900,11 @@ def compras_factura_compra_devolucion_nueva():
 @login_required
 def compras_proveedor_lista():
     """Listado de proveedores."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        Party,
+        (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
         database.select(Party).filter(Party.party_type == "supplier"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+        include_status=False,
     )
     titulo = "Listado de Proveedores - " + APPNAME
     return render_template("compras/proveedor_lista.html", consulta=consulta, titulo=titulo)
@@ -1647,11 +1666,9 @@ def compras_orden_compra_duplicar(order_id: str):
 @login_required
 def compras_solicitud_cotizacion_lista():
     """Listado de solicitudes de cotización."""
-    consulta = database.paginate(
-        database.select(PurchaseQuotation),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        PurchaseQuotation,
+        (PurchaseQuotation.document_no, PurchaseQuotation.supplier_name, PurchaseQuotation.remarks),
     )
     titulo = "Listado de Solicitudes de Cotización - " + APPNAME
     return render_template("compras/solicitud_cotizacion_lista.html", consulta=consulta, titulo=titulo)

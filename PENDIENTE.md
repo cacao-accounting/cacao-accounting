@@ -5,6 +5,12 @@
 - [x] Marcar como completada la paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST.
 - [x] Mantener abiertos los puntos que siguen parciales o pendientes: auditoria homogenea, filtros de listados, `LedgerMappingRule`, reportes legacy, drill-down/exportaciones universales y diagrama grafico de trazabilidad.
 
+## Seguimiento 2026-06-27 (Filtros de listados - completado)
+- [x] Agregar filtros GET `search` y `status` en listados transaccionales de Compras, Ventas y Bancos.
+- [x] Agregar busqueda simple en listados maestros principales de terceros, bancos, cuentas bancarias y transacciones bancarias.
+- [x] Conservar filtros al navegar paginacion y exponer controles Buscar/Limpiar en templates.
+- [x] Cubrir busqueda y estado con prueba focal por modulo.
+
 ## Seguimiento 2026-06-18 (Refresh visual global - completado)
 - [x] Aplicar mejora visual global sin tocar logica de negocio ni flujos transaccionales.
 - [x] Modernizar navbar, sidebar, cards, grids de modulo, tablas, formularios y botones desde el CSS compartido.
@@ -147,7 +153,7 @@
 ## UI/UX y Reportes
 - [x] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
-- [ ] Filtros de busqueda en listados de Compras, Ventas y Bancos.
+- [x] Filtros de busqueda en listados de Compras, Ventas y Bancos.
 - [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
 - [ ] Ampliar pruebas de interfaz para nuevos formularios bancarios (`pago_nuevo`, `nota_nueva`, `transferencia_nueva`) incluyendo escenarios multimoneda y contador externo.
 - [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).

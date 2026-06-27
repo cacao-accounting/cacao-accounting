@@ -37,6 +37,7 @@ from cacao_accounting.document_flow import (
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
     build_party_company_settings,
     draft_party_company_settings,
@@ -88,6 +89,18 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
     return party
 
 
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+    """Pagina un listado aplicando los filtros GET comunes."""
+    base_query = query if query is not None else database.select(model)
+    filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
+    return database.paginate(
+        filtered_query,
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+
 @ventas.route("/")
 @ventas.route("/ventas")
 @ventas.route("/sales")
@@ -103,11 +116,9 @@ def ventas_():
 @login_required
 def ventas_orden_venta_lista():
     """Listado de ordenes de venta."""
-    consulta = database.paginate(
-        database.select(SalesOrder),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        SalesOrder,
+        (SalesOrder.document_no, SalesOrder.customer_name, SalesOrder.remarks),
     )
     titulo = "Listado de Ordenes de Venta - " + APPNAME
     return render_template("ventas/orden_venta_lista.html", consulta=consulta, titulo=titulo)
@@ -118,11 +129,9 @@ def ventas_orden_venta_lista():
 @login_required
 def ventas_pedido_venta_lista():
     """Listado de pedidos de venta."""
-    consulta = database.paginate(
-        database.select(SalesRequest),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        SalesRequest,
+        (SalesRequest.document_no, SalesRequest.customer_name, SalesRequest.remarks),
     )
     titulo = "Listado de Pedidos de Venta - " + APPNAME
     return render_template("ventas/solicitud_venta_lista.html", consulta=consulta, titulo=titulo)
@@ -388,11 +397,9 @@ def ventas_pedido_venta_cancel(request_id: str):
 @login_required
 def ventas_entrega_lista():
     """Listado de notas de entrega."""
-    consulta = database.paginate(
-        database.select(DeliveryNote),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        DeliveryNote,
+        (DeliveryNote.document_no, DeliveryNote.customer_name, DeliveryNote.remarks),
     )
     titulo = "Listado de Notas de Entrega - " + APPNAME
     return render_template("ventas/entrega_lista.html", consulta=consulta, titulo=titulo)
@@ -403,11 +410,10 @@ def ventas_entrega_lista():
 @login_required
 def ventas_factura_venta_lista():
     """Listado de facturas de venta."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        SalesInvoice,
+        (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_invoice"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Facturas de Venta - " + APPNAME
     return render_template("ventas/factura_venta_lista.html", consulta=consulta, titulo=titulo)
@@ -418,11 +424,10 @@ def ventas_factura_venta_lista():
 @login_required
 def ventas_factura_venta_nota_debito_lista():
     """Listado de notas de débito de venta."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        SalesInvoice,
+        (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_debit_note"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Débito de Venta - " + APPNAME
     return render_template(
@@ -441,11 +446,10 @@ def ventas_factura_venta_nota_debito_lista():
 @login_required
 def ventas_factura_venta_devolucion_lista():
     """Listado de notas de crédito de venta."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        SalesInvoice,
+        (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_credit_note"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Crédito de Venta - " + APPNAME
     return render_template(
@@ -472,11 +476,11 @@ def ventas_factura_venta_nota_credito_lista():
 @login_required
 def ventas_cliente_lista():
     """Listado de clientes."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        Party,
+        (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
         database.select(Party).filter(Party.party_type == "customer"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+        include_status=False,
     )
     titulo = "Listado de Clientes - " + APPNAME
     return render_template("ventas/cliente_lista.html", consulta=consulta, titulo=titulo)
@@ -1165,11 +1169,9 @@ def ventas_orden_venta_duplicar(order_id: str):
 @login_required
 def ventas_cotizacion_lista():
     """Listado de cotizaciones de venta."""
-    consulta = database.paginate(
-        database.select(SalesQuotation),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        SalesQuotation,
+        (SalesQuotation.document_no, SalesQuotation.customer_name, SalesQuotation.remarks),
     )
     titulo = "Listado de Cotizaciones de Venta - " + APPNAME
     return render_template("ventas/cotizacion_lista.html", consulta=consulta, titulo=titulo)
