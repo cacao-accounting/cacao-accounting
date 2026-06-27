@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
+- **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
+- **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
+- **Resultado:** Se marco ese pendiente como completado y se agrego un bloque de seguimiento en `PENDIENTE.md`. Se dejaron abiertos los puntos parciales o realmente pendientes: `AuditTrail` homogeneo, filtros de listados, `LedgerMappingRule`, reportes legacy, drill-down/exportaciones universales, diagrama grafico de trazabilidad y cobertura adicional bancaria/fiscal.
+- **Alcance:** Solo documentacion de estado/backlog; sin cambios funcionales de codigo.
+
 ## 2026-06-18 (Refresh visual global)
 - **Solicitud:** Mejorar la parte visual de Cacao Accounting para que se vea mas fresca, profesional, moderna, util y atractiva.
 - **Implementacion:** Se agrego una capa de refresh en `cacao_accounting/static/css/cacaoaccounting.css` sobre el sistema visual existente, ajustando tokens, navbar, sidebar, contenido, tarjetas, cards de modulo, tablas, formularios, botones, alerts, dropdowns y modales.
