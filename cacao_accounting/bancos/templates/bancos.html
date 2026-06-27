@@ -1,4 +1,5 @@
 {% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -30,24 +31,24 @@
       {% if acceso.configurar %}
       <li>
         <a href="{{ url_for('bancos.bancos_banco_lista') }}">Bancos</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}">Cuentas Bancarias</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_reglas_matching') }}">{{ _("Reglas de Matching") }}</a>
-        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Bancos</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
         <span>Cuentas Bancarias</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       {% endif %}
 
@@ -62,44 +63,44 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('bancos.bancos_pago_lista') }}">Entradas de Pago</a>
-        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_transferencia_lista') }}">Transferencias Bancarias</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_nota_debito_lista') }}">Notas de Débito Bancarias</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_nota_credito_lista') }}">Notas de Crédito Bancarias</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_transaccion_lista') }}">Transacciones Bancarias</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_extracto_importar') }}">{{ _("Importar Extracto Bancario") }}</a>
-        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='importar')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_conciliacion_bancaria') }}">{{ _("Conciliación Bancaria") }}</a>
-        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.bancos_conciliacion_facturas_pagos') }}">{{ _("Conciliación Facturas/Pagos") }}</a>
-        <span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Entradas de Pago</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">
         <span>Transacciones Bancarias</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       {% endif %}
 
@@ -114,16 +115,16 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('reportes.bank_balance_summary') }}">Resumen de Saldos Bancarios</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.bank_movement') }}">Detalle de Movimiento Bancario</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Reportes</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
       </li>
       {% endif %}
 

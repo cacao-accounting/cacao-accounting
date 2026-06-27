@@ -1,4 +1,5 @@
 {% set acceso = permisos(modulo=id_modulo("inventory"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -30,28 +31,28 @@
       {% if acceso.configurar %}
       <li>
         <a href="{{ url_for('inventario.inventario_articulo_lista') }}">Artículos / Productos</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_bodega_lista') }}">Bodegas / Almacenes</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_uom_lista') }}">Unidades de Medida</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Artículos / Productos</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
         <span>Bodegas / Almacenes</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
         <span>Unidades de Medida</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       {% endif %}
 
@@ -66,32 +67,32 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('inventario.inventario_material_receipt_lista') }}">Recepciones de Material</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">Salidas de Material</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_entrada_lista') }}">Ajustes de Inventario</a>
-        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_reconciliacion_lista') }}">Conciliaciones de Inventario</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('inventario.inventario_material_transfer_lista') }}">Traslados</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Entradas de Almacén</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">
         <span>Ajustes de Inventario</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       {% endif %}
 
@@ -106,32 +107,32 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('reportes.inventory_existence') }}">Existencia de Inventario</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.stock_balance') }}">Balance de Stock</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.inventory_valuation') }}">Valorización de Inventario</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.kardex') }}">Kardex</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.batches') }}">Lotes</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.serials') }}">Seriales</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Reportes</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
       </li>
       {% endif %}
 
