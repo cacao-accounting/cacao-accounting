@@ -1,5 +1,10 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-06-27 (Auditoria de pendientes - completado)
+- [x] Contrastar los pendientes abiertos contra el codigo fuente antes de actualizar el backlog.
+- [x] Marcar como completada la paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST.
+- [x] Mantener abiertos los puntos que siguen parciales o pendientes: auditoria homogenea, filtros de listados, `LedgerMappingRule`, reportes legacy, drill-down/exportaciones universales y diagrama grafico de trazabilidad.
+
 ## Seguimiento 2026-06-18 (Refresh visual global - completado)
 - [x] Aplicar mejora visual global sin tocar logica de negocio ni flujos transaccionales.
 - [x] Modernizar navbar, sidebar, cards, grids de modulo, tablas, formularios y botones desde el CSS compartido.
@@ -132,19 +137,15 @@
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
-## AR/AP y Terceros
-- [ ] Buckets configurables por compania en reportes de Aging.
 
 ## Administracion y Seguridad
-- [ ] Matriz explicita de autorizacion Usuario-Compania/Libro.
-- [ ] Implementar Workflow de aprobacion configurable (estados y transiciones).
 - [ ] Activar `AuditLog` automatico para cambios en documentos operativos.
 
 ## Multi-Ledger y Revalorizacion
 - [ ] Implementar `LedgerMappingRule` para diferencias automaticas entre libros.
 
 ## UI/UX y Reportes
-- [ ] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
+- [x] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
 - [ ] Filtros de busqueda en listados de Compras, Ventas y Bancos.
 - [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
@@ -159,15 +160,10 @@
 ## Pendientes Generales
 - [x] Implementar mas reportes operativos usando el nuevo framework.
 - [ ] Seguir migrando formularios operativos al patron comun sin tocar todavia pagos bancarios ni documentos con origen complejo sin cobertura funcional suficiente.
-- [ ] Ampliar catalogos impositivos para otros paises.
-- [ ] Webhooks para integracion con sistemas externos.
 - [ ] Ampliar cobertura de pruebas Playwright en el nuevo flujo estandarizado.
 - [ ] Mejorar la estabilidad de los tests E2E en entornos de CI/Sandbox con latencia de red.
 - [ ] Continuar la estandarizacion de reportes HTML siguiendo el patron de `financial_report.html`.
 - [ ] Extender el uso de `smart-select` a dimensiones personalizadas si se requiere en el futuro.
-
 - [ ] Integrar `audit_trail_service` en Bancos, Compras, Ventas, Inventario, Importaciones, Revalorización y Conciliaciones con timeline visible en cada detalle.
-
 - [ ] Extender las mismas pruebas/contratos de Audit Trail a Bancos, Compras, Ventas, Inventario e Importaciones (acciones + timeline + append-only).
-
 - [ ] Extender integración Audit Trail a documentos restantes de Compras/Ventas/Bancos/Inventario (órdenes, facturas, cotizaciones, notas) con render homogéneo de timeline en UI.
