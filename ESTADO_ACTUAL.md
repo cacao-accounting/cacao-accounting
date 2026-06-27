@@ -1,4 +1,10 @@
-# Estado Actual del Proyecto - 2026-06-18
+# Estado Actual del Proyecto - 2026-06-27
+
+- **Auditoria de pendientes (2026-06-27):** Se contrastaron los puntos abiertos de `PENDIENTE.md` contra el codigo fuente antes de actualizar el backlog.
+  - La paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST queda marcada como completada.
+  - La verificacion se basa en rutas implementadas en Compras, Ventas e Inventario y cobertura en `tests/test_03webactions.py`.
+  - Se mantienen abiertos los puntos que siguen parciales o no implementados completamente: auditoria homogenea, filtros de listados, `LedgerMappingRule`, reportes legacy fuera del framework, drill-down/exportaciones universales y diagrama grafico de trazabilidad.
+  - No hubo cambios funcionales de codigo en esta iteracion.
 
 - **Refresh visual global (2026-06-18):** La aplicacion incorpora una capa moderna sobre el design system existente.
   - `cacao_accounting/static/css/cacaoaccounting.css` redefine tokens visuales y mejora navbar, sidebar, cards, grids de modulo, tablas, formularios, botones y superficies comunes.
