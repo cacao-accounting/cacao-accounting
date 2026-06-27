@@ -941,7 +941,14 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
         with app.app_context():
             from flask_login import current_user
 
-            from cacao_accounting.database import PaymentEntry, PurchaseOrder, SalesOrder, database
+            from cacao_accounting.database import (
+                ComprobanteContable,
+                PaymentEntry,
+                PurchaseOrder,
+                RecurringJournalTemplate,
+                SalesOrder,
+                database,
+            )
 
             purchase_orders = [
                 PurchaseOrder(
@@ -979,7 +986,27 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 docstatus=1,
                 paid_amount=30,
             )
-            database.session.add_all([*purchase_orders, purchase_order_other, sales_order, payment])
+            journal = ComprobanteContable(
+                document_no="FILTER-JE-01",
+                entity="cacao",
+                date=date(2026, 6, 27),
+                reference="Referencia Filtro",
+                status="draft",
+            )
+            recurring_journal = RecurringJournalTemplate(
+                code="FILTER-REC-01",
+                company="cacao",
+                name="Plantilla Filtro",
+                description="Descripcion Filtro",
+                start_date=date(2026, 6, 27),
+                end_date=date(2026, 12, 31),
+                frequency="monthly",
+                status="draft",
+                docstatus=0,
+            )
+            database.session.add_all(
+                [*purchase_orders, purchase_order_other, sales_order, payment, journal, recurring_journal]
+            )
             database.session.commit()
 
             with app.test_client() as client:
@@ -1005,6 +1032,29 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 assert response.status_code == 200
                 assert "Cliente Filtro" in html
                 assert "receive" in html
+
+                response = client.get("/accounting/journal/list?search=FILTER-JE&status=draft")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Buscar por documento" in html
+                assert "FILTER-JE-01" in html
+                assert "Referencia Filtro" in html
+                assert "value=\"FILTER-JE\"" in html
+                assert 'value="draft" selected' in html
+
+                response = client.get("/accounting/journal/recurring?search=FILTER-REC")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Buscar por código" in html
+                assert "FILTER-REC-01" in html
+                assert "Plantilla Filtro" in html
+                assert "value=\"FILTER-REC\"" in html
+
+                response = client.get("/accounting/exchange-revaluation?search=cacao")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Buscar por número" in html
+                assert "value=\"cacao\"" in html
 
 
 def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(request):

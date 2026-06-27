@@ -438,3 +438,4 @@
 - **Implementación:** Se agregó `module_badge()` como helper Python disponible en Jinja y `module_status_badge` como macro reutilizable. Las tarjetas de Contabilidad, Compras, Ventas, Inventario, Bancos y Administración ahora calculan estado desde permisos y parámetros declarativos.
 - **Decisión de diseño:** Verde indica acceso operativo correcto, gris sin acceso, azul pendientes reales de aprobación, beige solo visualización y rojo atención. Los estados antiguos de warning ya no se usan como sustituto de datos reales.
 - **Validación:** Se agregaron pruebas unitarias de precedencia semántica y una prueba web que verifica que Tasas de Cambio se renderiza como `ok` para administrador.
+- **Ajuste posterior:** Se extendió el buscador reusable de listados a comprobantes contables, comprobantes recurrentes y revalorizaciones cambiarias para cubrir transacciones de Contabilidad igual que Compras, Ventas y Bancos.

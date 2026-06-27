@@ -57,8 +57,9 @@ from cacao_accounting.setup.service import (
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.audit_trail_service import format_document_timeline
-from cacao_accounting.database import STATUS, database
+from cacao_accounting.database import STATUS, ComprobanteContable, ExchangeRevaluation, RecurringJournalTemplate, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -2171,11 +2172,30 @@ def periodo_contable():
 @verifica_acceso("accounting")
 def listar_comprobantes():
     """Lista comprobantes contables manuales."""
-    from cacao_accounting.contabilidad.journal_repository import list_journals
+    query = (
+        database.select(ComprobanteContable)
+        .where(ComprobanteContable.is_fiscal_year_closing.is_(False))
+        .order_by(ComprobanteContable.date.desc(), ComprobanteContable.created.desc())
+    )
+    query = apply_list_filters(
+        query,
+        ComprobanteContable,
+        (
+            ComprobanteContable.document_no,
+            ComprobanteContable.entity,
+            ComprobanteContable.reference,
+            ComprobanteContable.memo,
+        ),
+    )
 
     return render_template(
         "contabilidad/journal_lista.html",
-        consulta=list_journals(),
+        consulta=database.paginate(
+            query,
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        ),
         titulo="Comprobantes Contables - " + APPNAME,
     )
 
@@ -2186,10 +2206,19 @@ def listar_comprobantes():
 @verifica_acceso("accounting")
 def comprobantes_recurrentes():
     """Lista de plantillas de comprobantes recurrentes."""
-    from cacao_accounting.database import RecurringJournalTemplate
-
-    consulta = database.paginate(
+    query = apply_list_filters(
         database.select(RecurringJournalTemplate).order_by(RecurringJournalTemplate.code),
+        RecurringJournalTemplate,
+        (
+            RecurringJournalTemplate.code,
+            RecurringJournalTemplate.name,
+            RecurringJournalTemplate.company,
+            RecurringJournalTemplate.description,
+        ),
+        include_status=False,
+    )
+    consulta = database.paginate(
+        query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -2597,15 +2626,33 @@ def ejecutar_revalorizacion_cierre(identifier: str):
 @verifica_acceso("accounting")
 def revalorizaciones_cambiarias():
     """Listado de revalorizaciones cambiarias."""
-    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
     from cacao_accounting.database import Entity
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
-    runs = ExchangeRevaluationService().list_runs()
+    query = (
+        database.select(ExchangeRevaluation)
+        .order_by(ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc(), ExchangeRevaluation.id.desc())
+    )
+    query = apply_list_filters(
+        query,
+        ExchangeRevaluation,
+        (
+            ExchangeRevaluation.document_no,
+            ExchangeRevaluation.company,
+            ExchangeRevaluation.currency,
+            ExchangeRevaluation.voucher_type,
+            ExchangeRevaluation.voucher_id,
+        ),
+    )
     return render_template(
         "contabilidad/exchange_revaluation_lista.html",
         titulo="Revalorizacion cambiaria - " + APPNAME,
-        runs=runs,
+        consulta=database.paginate(
+            query,
+            page=request.args.get("page", default=1, type=int),
+            max_per_page=10,
+            count=True,
+        ),
         companies=companies,
     )
 

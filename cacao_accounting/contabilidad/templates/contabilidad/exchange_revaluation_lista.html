@@ -1,4 +1,5 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -19,6 +20,7 @@
     </a>
     {% endif %}
   </div>
+  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por número, compañía o moneda...")) }}
   <div class="table-responsive">
     <table class="ca-table">
       <caption>{{ _('Historial de revalorizaciones cambiarias') }}</caption>
@@ -37,7 +39,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for run in runs %}
+        {% for run in consulta.items %}
         <tr>
           <td><a href="{{ url_for('contabilidad.ver_revalorizacion_cambiaria', identifier=run.id) }}">{{ run.document_no or run.id }}</a></td>
           <td>{{ run.company }}</td>
@@ -58,6 +60,7 @@
       </tbody>
     </table>
   </div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.revalorizaciones_cambiarias") }}</div>
 </div>
 
 {% endblock %}
