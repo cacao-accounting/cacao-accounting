@@ -202,3 +202,4 @@
 
 - **Badges Semánticos de Módulos:** Las tarjetas de Contabilidad, Compras, Ventas, Inventario, Bancos y Administración usan `module_badge()` y la macro `module_status_badge` para calcular estados semánticos: verde `ok`, gris `no_access`, azul `pending_approval`, beige `view_only` y rojo `attention`.
 - **Accesibilidad de Badges:** Los badges de módulo exponen `title`, `aria-label`, `data-status` y texto oculto para lectores de pantalla; los colores ya no son la única fuente de significado.
+- **Contabilidad / Buscador de Transacciones:** Los listados de comprobantes contables (`/accounting/journal/list`), comprobantes recurrentes (`/accounting/journal/recurring`) y revalorizaciones cambiarias (`/accounting/exchange-revaluation`) usan el mismo filtro reusable de búsqueda que los listados operativos de Compras, Ventas y Bancos.

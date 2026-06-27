@@ -1,4 +1,5 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -25,6 +26,7 @@
     </a>
     {% endif %}
   </div>
+  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento, compañía o referencia...")) }}
   <div class="table-responsive">
     <table class="ca-table">
       <caption style="display: none;">{{ _('Listado de comprobantes contables.') }}</caption>
@@ -38,7 +40,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for registro in consulta %}
+        {% for registro in consulta.items %}
         <tr>
           <td>
             <a href="{{ url_for('contabilidad.ver_comprobante', identifier=registro.id) }}">
@@ -58,6 +60,7 @@
       </tbody>
     </table>
   </div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.listar_comprobantes") }}</div>
 </div>
 
 {% endblock %}
