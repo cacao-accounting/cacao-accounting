@@ -548,13 +548,15 @@ nav[aria-label="breadcrumb"] {
 [data-theme="dark"] .ca-module-links a:hover { color: var(--ca-p300) !important; }
 
 /* ── Status dot badges ─────────────────────────────────
-   Semantic meanings
+   Semantic meanings for module cards
    ─────────────────────────────────────────────────────
-   ca-status-ok          green   — everything configured / all good
-   ca-status-warning     amber   — pending approval (user can approve)
-   ca-status-error       red     — requires immediate attention
-   ca-status-no-access   gray    — user has no access to this section
-   ca-status-disabled    gray    — feature disabled / not available
+   ca-status-ok                green  — everything configured / all good
+   ca-status-no-access         gray   — user has no access to this section
+   ca-status-pending-approval  blue   — records pending approval
+   ca-status-view-only         amber  — user can only view this section
+   ca-status-attention         red    — requires immediate attention
+   ca-status-warning           amber  — legacy warning state
+   ca-status-disabled          gray   — feature disabled / not available
    ────────────────────────────────────────────────────── */
 .ca-status-dot {
   display: inline-block;
@@ -564,11 +566,14 @@ nav[aria-label="breadcrumb"] {
   flex-shrink: 0;
   margin-left: auto;
 }
-.ca-status-ok        { background: var(--ca-success);  }
-.ca-status-warning   { background: var(--ca-warning);  }
-.ca-status-error     { background: var(--ca-error);    }
-.ca-status-disabled  { background: var(--ca-disabled); }
-.ca-status-no-access { background: var(--ca-g400);     }
+.ca-status-ok               { background: var(--ca-success);  }
+.ca-status-no-access        { background: var(--ca-g400);     }
+.ca-status-pending-approval { background: #2563eb;            }
+.ca-status-view-only        { background: var(--ca-warning);  }
+.ca-status-attention        { background: var(--ca-error);    }
+.ca-status-warning          { background: var(--ca-warning);  }
+.ca-status-error            { background: var(--ca-error);    }
+.ca-status-disabled         { background: var(--ca-disabled); }
 .ca-status-dot[title] { cursor: help; }
 
 /* ═══════════════════════════════════════════════════════
@@ -1403,10 +1408,16 @@ body {
   box-shadow: 0 0 0 3px rgba(22, 163, 74, .10);
 }
 
+.ca-status-pending-approval {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+.ca-status-view-only,
 .ca-status-warning {
   box-shadow: 0 0 0 3px rgba(217, 119, 6, .12);
 }
 
+.ca-status-attention,
 .ca-status-error {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, .10);
 }

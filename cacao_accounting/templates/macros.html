@@ -249,6 +249,18 @@
 </span>
 {% endmacro %}
 
+{% macro module_status_badge(status_info) %}
+<span
+  class="ca-status-dot {{ status_info.css_class }}"
+  title="{{ status_info.title }}"
+  aria-label="{{ status_info.label }}"
+  data-status="{{ status_info.status }}"
+  role="img"
+>
+  <span class="visually-hidden">{{ status_info.label }}</span>
+</span>
+{% endmacro %}
+
 {% macro crear_nueva_entidad() %}
 
 <div style="text-align: center; padding: 2rem 0;">

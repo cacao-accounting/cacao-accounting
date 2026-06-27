@@ -154,6 +154,7 @@
 - [x] Cerrar la fase final de paridad funcional en formularios transaccionales con pruebas adicionales por documento (incluyendo rutas `edit`/`duplicate` y transiciones de estado en POST).
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
 - [x] Filtros de busqueda en listados de Compras, Ventas y Bancos.
+- [x] Reemplazar badges visuales hardcodeados de tarjetas de módulos por infraestructura semántica reusable en Python/Jinja.
 - [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
 - [ ] Ampliar pruebas de interfaz para nuevos formularios bancarios (`pago_nuevo`, `nota_nueva`, `transferencia_nueva`) incluyendo escenarios multimoneda y contador externo.
 - [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).

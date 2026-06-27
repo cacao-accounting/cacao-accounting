@@ -1,4 +1,5 @@
 {% set acceso = permisos(modulo=id_modulo("purchases"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
 
@@ -30,28 +31,28 @@
       {% if acceso.configurar %}
       <li>
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">Proveedores</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('admin.lista_grupos_terceros', group_type='supplier') }}">Tipos de Proveedor</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">Contactos y Direcciones de Proveedores</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Proveedores</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
         <span>Tipos de Proveedor</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
         <span>Contactos y Direcciones de Proveedores</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso a configuración"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       {% endif %}
 
@@ -66,44 +67,44 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('compras.compras_solicitud_compra_lista') }}">Solicitud de Compra</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_solicitud_cotizacion_lista') }}">Solicitud de Cotización</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_cotizacion_proveedor_lista') }}">Cotización de Proveedor</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}">Comparativo de Ofertas</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_orden_compra_lista') }}">Órdenes de Compra</a>
-        <span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Mercancía</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Facturas de Proveedor</a>
-        <span class="ca-status-dot ca-status-ok" title="Acceso disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Órdenes de Compra</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">
         <span>Recepciones de Mercancía</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">
         <span>Facturas de Proveedor</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       {% endif %}
 
@@ -118,24 +119,24 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('reportes.ap_aging') }}">Aging de Cuentas por Pagar</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.accounts_payable') }}">Cuentas por Pagar</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.purchases_by_supplier') }}">Compras por Proveedor</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
         <a href="{{ url_for('reportes.purchases_by_item') }}">Compras por Artículo</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Reportes</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
       </li>
       {% endif %}
 
@@ -150,16 +151,16 @@
       {% if acceso.autorizado %}
       <li>
         <a href="{{ url_for('compras.compras_reconciliation_panel') }}">Panel de Conciliaciones</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
         <a href="{{ url_for('compras.compras_purchase_reconciliation') }}">Conciliaciones Pendientes</a>
-        <span class="ca-status-dot ca-status-ok" title="Disponible"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>Conciliación de Compras</span>
-        <span class="ca-status-dot ca-status-no-access" title="Sin acceso"></span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       {% endif %}
 

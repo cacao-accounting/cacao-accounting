@@ -48,6 +48,7 @@ from cacao_accounting.database.helpers import (
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.logs import log
+from cacao_accounting.module_badges import module_badge
 from cacao_accounting.imports.routes import imports
 from cacao_accounting.imports.utils.recovery import recover_crashed_batches
 from cacao_accounting.inventario import inventario
@@ -173,6 +174,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
+            app.jinja_env.globals.update(module_badge=module_badge)
             app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)
             app.jinja_env.globals.update(document_collaboration_tasks=document_collaboration_tasks)
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
