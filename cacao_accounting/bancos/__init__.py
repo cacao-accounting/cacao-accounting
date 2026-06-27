@@ -64,6 +64,7 @@ from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
@@ -155,6 +156,18 @@ def _payment_numbering_defaults(bank_account_id: str | None) -> tuple[str | None
     return bank_account.default_naming_series_id, bank_account.default_external_counter_id
 
 
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+    """Pagina un listado aplicando los filtros GET comunes."""
+    base_query = query if query is not None else database.select(model)
+    filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
+    return database.paginate(
+        filtered_query,
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+
+
 @bancos.route("/")
 @bancos.route("/caja")
 @bancos.route("/tesoreria")
@@ -172,11 +185,10 @@ def bancos_():
 @login_required
 def bancos_banco_lista():
     """Listado de bancos."""
-    consulta = database.paginate(
-        database.select(Bank),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        Bank,
+        (Bank.name, Bank.swift_code),
+        include_status=False,
     )
     titulo = "Listado de Bancos - " + APPNAME
     return render_template("bancos/banco_lista.html", consulta=consulta, titulo=titulo)
@@ -187,11 +199,10 @@ def bancos_banco_lista():
 @login_required
 def bancos_cuenta_bancaria_lista():
     """Listado de cuentas bancarias."""
-    consulta = database.paginate(
-        database.select(BankAccount),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        BankAccount,
+        (BankAccount.account_name, BankAccount.account_no, BankAccount.iban, BankAccount.company, BankAccount.currency),
+        include_status=False,
     )
     titulo = "Listado de Cuentas Bancarias - " + APPNAME
     return render_template("bancos/banco_cuenta_lista.html", consulta=consulta, titulo=titulo)
@@ -202,11 +213,10 @@ def bancos_cuenta_bancaria_lista():
 @login_required
 def bancos_pago_lista():
     """Listado de entradas de pago."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PaymentEntry,
+        (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter(PaymentEntry.payment_type.in_(("receive", "pay"))),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Pagos - " + APPNAME
     return render_template("bancos/pago_lista.html", consulta=consulta, titulo=titulo)
@@ -257,11 +267,10 @@ def bancos_conciliacion_facturas_pagos():
 @login_required
 def bancos_transferencia_lista():
     """Listado de transferencias internas."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PaymentEntry,
+        (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Transferencias Internas - " + APPNAME
     return render_template("bancos/pago_lista.html", consulta=consulta, titulo=titulo, is_transfer_list=True)
@@ -272,11 +281,10 @@ def bancos_transferencia_lista():
 @login_required
 def bancos_nota_debito_lista():
     """Listado de notas de débito bancario (retiros)."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PaymentEntry,
+        (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="debit_note"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Débito Bancario - " + APPNAME
     return render_template(
@@ -293,11 +301,10 @@ def bancos_nota_debito_lista():
 @login_required
 def bancos_nota_credito_lista():
     """Listado de notas de crédito bancario (depósitos)."""
-    consulta = database.paginate(
+    consulta = _paginate_list(
+        PaymentEntry,
+        (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="credit_note"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
     )
     titulo = "Listado de Notas de Crédito Bancario - " + APPNAME
     return render_template(
@@ -314,11 +321,10 @@ def bancos_nota_credito_lista():
 @login_required
 def bancos_transaccion_lista():
     """Listado de transacciones bancarias."""
-    consulta = database.paginate(
-        database.select(BankTransaction),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        BankTransaction,
+        (BankTransaction.description, BankTransaction.reference_number),
+        include_status=False,
     )
     titulo = "Listado de Transacciones Bancarias - " + APPNAME
     return render_template(BANCOS_TRANSACCION_LISTA_HTML, consulta=consulta, titulo=titulo)

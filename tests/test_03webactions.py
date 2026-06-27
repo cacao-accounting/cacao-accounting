@@ -932,3 +932,101 @@ def test_transaction_forms_render_unified_grid_and_detail_text(request):
                 response = client.get("/sales/request-for-quotation/new")
                 assert response.status_code == 200
                 assert "Nueva Cotización" in response.get_data(as_text=True)
+
+
+def test_buying_sales_and_cash_lists_support_search_filters(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            from cacao_accounting.database import PaymentEntry, PurchaseOrder, SalesOrder, database
+
+            purchase_orders = [
+                PurchaseOrder(
+                    document_no=f"FILTER-PO-{index:02d}",
+                    supplier_name="Proveedor Filtro",
+                    company="cacao",
+                    posting_date=date(2026, 6, 27),
+                    docstatus=0,
+                    grand_total=10,
+                )
+                for index in range(11)
+            ]
+            purchase_order_other = PurchaseOrder(
+                document_no="OTHER-PO",
+                supplier_name="Proveedor No Coincide",
+                company="cacao",
+                posting_date=date(2026, 6, 27),
+                docstatus=1,
+                grand_total=20,
+            )
+            sales_order = SalesOrder(
+                document_no="FILTER-SO-01",
+                customer_name="Cliente Filtro",
+                company="cacao",
+                posting_date=date(2026, 6, 27),
+                docstatus=1,
+                grand_total=30,
+            )
+            payment = PaymentEntry(
+                document_no="FILTER-PAY-01",
+                payment_type="receive",
+                party_name="Cliente Filtro",
+                company="cacao",
+                posting_date=date(2026, 6, 27),
+                docstatus=1,
+                paid_amount=30,
+            )
+            database.session.add_all([*purchase_orders, purchase_order_other, sales_order, payment])
+            database.session.commit()
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/buying/purchase-order/list?search=Proveedor+Filtro&status=draft")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Proveedor Filtro" in html
+                assert "Proveedor No Coincide" not in html
+                assert "search=Proveedor+Filtro" in html
+                assert "status=draft" in html
+
+                response = client.get("/sales/sales-order/list?search=Cliente+Filtro&status=submitted")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Cliente Filtro" in html
+                assert "FILTER-SO-01" not in html
+
+                response = client.get("/cash_management/payment/list?search=Cliente+Filtro&status=submitted")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert "Cliente Filtro" in html
+                assert "receive" in html
+
+
+def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/settings")
+                html = response.get_data(as_text=True)
+                assert response.status_code == 200
+                assert 'href="/settings/modules"' in html
+                assert 'href="/imports/"' in html
+
+                response = client.get("/accounting/")
+                html = response.get_data(as_text=True)
+                sidebar = html.split('<main class="ca-content">', maxsplit=1)[0]
+                assert response.status_code == 200
+                assert 'href="/settings/modules"' not in sidebar
+                assert 'href="/imports/"' not in sidebar

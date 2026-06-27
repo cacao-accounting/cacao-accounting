@@ -6,6 +6,17 @@
 - **Resultado:** Se marco ese pendiente como completado y se agrego un bloque de seguimiento en `PENDIENTE.md`. Se dejaron abiertos los puntos parciales o realmente pendientes: `AuditTrail` homogeneo, filtros de listados, `LedgerMappingRule`, reportes legacy, drill-down/exportaciones universales, diagrama grafico de trazabilidad y cobertura adicional bancaria/fiscal.
 - **Alcance:** Solo documentacion de estado/backlog; sin cambios funcionales de codigo.
 
+## 2026-06-27 (Filtros de busqueda en listados)
+- **Solicitud:** Accionar un pendiente real del backlog: filtros de busqueda en listados de Compras, Ventas y Bancos.
+- **Implementacion:** Se agrego `cacao_accounting/list_filters.py` para aplicar `search` y `status` de forma reusable, se conectaron rutas de listados en Compras, Ventas y Bancos, y se agrego el macro `list_filters` con preservacion de filtros en paginacion.
+- **UI:** Los listados transaccionales muestran busqueda y estado; terceros, bancos, cuentas bancarias y transacciones bancarias muestran busqueda simple con acciones Buscar/Limpiar.
+- **Cobertura:** `tests/test_03webactions.py` valida busqueda y estado en listados de los tres modulos.
+
+## 2026-06-27 (Limpieza de navegacion lateral)
+- **Solicitud:** Evitar que `/settings/modules` e `/imports/` aparezcan como modulos de primer nivel en la barra lateral para reducir sobrecarga visual.
+- **Implementacion:** Se removieron los enlaces directos de Módulos e Importaciones desde `macros.barralateral()` y se dejo `Módulos` dentro de la pantalla de Settings. Importaciones se agrego a Settings con la misma condicion de modo cloud, modulo activo y permisos.
+- **Cobertura:** Se agrego prueba focal para validar que ambos accesos esten en `/settings` y no en el sidebar principal.
+
 ## 2026-06-18 (Refresh visual global)
 - **Solicitud:** Mejorar la parte visual de Cacao Accounting para que se vea mas fresca, profesional, moderna, util y atractiva.
 - **Implementacion:** Se agrego una capa de refresh en `cacao_accounting/static/css/cacaoaccounting.css` sobre el sistema visual existente, ajustando tokens, navbar, sidebar, contenido, tarjetas, cards de modulo, tablas, formularios, botones, alerts, dropdowns y modales.

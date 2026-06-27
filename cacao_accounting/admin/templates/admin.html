@@ -21,6 +21,9 @@
     <h5><i class="bi bi-sliders"></i> Configuración General</h5>
     <ul class="ca-module-links">
       <li><a href="{{ url_for('admin.lista_modulos') }}">Módulos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      {% if is_cloud_mode() and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado %}
+      <li><a href="{{ url_for('imports.index') }}">Importaciones</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+      {% endif %}
       <li><a href="{{ url_for('admin.lista_usuarios') }}">Usuarios</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
       <li><a href="{{ url_for('admin.lista_roles') }}">Roles y Permisos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
       <li><a href="{{ url_for('admin.cuentas_predeterminadas') }}">{{ _("Cuentas por defecto") }}</a><span class="ca-status-dot ca-status-ok" title="{{ _('Disponible') }}"></span></li>

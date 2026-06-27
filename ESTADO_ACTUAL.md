@@ -6,6 +6,17 @@
   - Se mantienen abiertos los puntos que siguen parciales o no implementados completamente: auditoria homogenea, filtros de listados, `LedgerMappingRule`, reportes legacy fuera del framework, drill-down/exportaciones universales y diagrama grafico de trazabilidad.
   - No hubo cambios funcionales de codigo en esta iteracion.
 
+- **Filtros de listados (2026-06-27):** Compras, Ventas y Bancos incorporan busqueda simple en sus listados principales.
+  - Los listados transaccionales aceptan `search` y `status` por GET; `status` mapea borrador, contabilizado y cancelado a `docstatus`.
+  - Los listados maestros principales de terceros, bancos, cuentas bancarias y transacciones bancarias aceptan `search`.
+  - La paginacion conserva `search`/`status`, y los templates muestran controles Buscar/Limpiar con el macro comun `list_filters`.
+  - Cobertura focal agregada en `tests/test_03webactions.py`.
+
+- **Navegacion lateral (2026-06-27):** La barra lateral queda reservada para modulos operativos principales.
+  - `Módulos` ya no aparece como entrada principal del sidebar; se mantiene dentro de Administración/Settings.
+  - `Importaciones` ya no aparece como entrada principal del sidebar; se muestra dentro de Settings cuando el modo cloud y permisos lo permiten.
+  - Se agrego prueba focal para proteger que ambos accesos vivan dentro de Settings y no como elementos primarios.
+
 - **Refresh visual global (2026-06-18):** La aplicacion incorpora una capa moderna sobre el design system existente.
   - `cacao_accounting/static/css/cacaoaccounting.css` redefine tokens visuales y mejora navbar, sidebar, cards, grids de modulo, tablas, formularios, botones y superficies comunes.
   - Las pantallas de modulos ganan mas jerarquia visual: hover mas claro, iconos en contenedores suaves, mejor ritmo de lista y tarjetas sobrias sin franja decorativa superior.
