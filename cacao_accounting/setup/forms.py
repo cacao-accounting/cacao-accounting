@@ -5,7 +5,8 @@
 
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, RadioField, SelectField, StringField
-from wtforms.validators import DataRequired
+from wtforms.fields import DateField
+from wtforms.validators import DataRequired, Optional
 
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
 from cacao_accounting.database import Entity
@@ -60,6 +61,8 @@ class SetupCompanyForm(FlaskForm):
     nombre_comercial = StringField("Nombre comercial")
     id_fiscal = StringField("Identificación fiscal", validators=[DataRequired()])
     tipo_entidad = SelectField("Tipo de entidad", choices=Entity.tipo_entidad_lista, validators=[DataRequired()])
+    inicio_anio_fiscal = DateField("Inicio Año Fiscal", validators=[Optional()])
+    fin_anio_fiscal = DateField("Fin Año Fiscal", validators=[Optional()])
     catalogo = RadioField(
         "Catálogo contable",
         choices=CATALOG_CHOICES,

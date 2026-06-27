@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_solicitud_compra_lista') }}" class="link-dark">Solicitudes de Compra</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if edit %}{{ registro.document_no or registro.id }}{% else %}Nueva Solicitud{% endif %}</li>
+  </ol>
+</nav>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+  {{ form.csrf_token }}
+  {{ tf_macros.transaction_form_header("Editar Solicitud de Compra" if edit else "Solicitud de Compra") }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="mb-3">{{ form.requested_by.label(class="form-label") }}{{ form.requested_by(class="form-control") }}</div>
+        <div class="mb-3">{{ form.department.label(class="form-label") }}{{ form.department(class="form-control") }}</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
+      </div>
+    </div>
+  </div>
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+</form>
+{% endblock %}

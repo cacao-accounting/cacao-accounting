@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Administrar Presupuestos") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-wallet2 me-2"></i>{{ _("Administrar Presupuestos") }}</h4>
+  <a href="{{ url_for('contabilidad.presupuestos.nuevo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg"></i> {{ _("Nuevo Presupuesto") }}
+  </a>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="p-3">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <input type="text" name="search" class="form-control" placeholder="{{ _('Buscar por nombre o código') }}" value="{{ request.args.get('search', '') }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">{{ _("Buscar") }}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th>{{ _("Código") }}</th>
+          <th>{{ _("Nombre") }}</th>
+          <th>{{ _("Compañía") }}</th>
+          <th>{{ _("Año Fiscal") }}</th>
+          <th>{{ _("Estado") }}</th>
+          <th>{{ _("Acciones") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for budget in consulta.items %}
+        <tr>
+          <td><a href="{{ url_for('contabilidad.presupuestos.detalle', budget_id=budget.id) }}">{{ budget.budget_code }}</a></td>
+          <td>{{ budget.name }}</td>
+          <td>{{ budget.company }}</td>
+          <td>{{ budget.fiscal_year_id }}</td>
+          <td>
+            {% set s = budget.status %}
+            <span class="badge bg-{{ 'secondary' if s == 'draft' else 'success' if s == 'approved' else 'info' }}">
+              {{ _("Borrador") if s == "draft" else _("Aprobado") if s == "approved" else _("Cerrado") }}
+            </span>
+          </td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <a href="{{ url_for('contabilidad.presupuestos.detalle', budget_id=budget.id) }}" class="btn btn-outline-primary" title="{{ _('Ver') }}"><i class="bi bi-eye"></i></a>
+              {% if budget.status == 'draft' %}
+              <a href="{{ url_for('contabilidad.presupuestos.editar', budget_id=budget.id) }}" class="btn btn-outline-secondary" title="{{ _('Editar') }}"><i class="bi bi-pencil"></i></a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center">{{ _("No se encontraron presupuestos.") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if consulta.pages > 1 %}
+  <div class="ca-card-footer">
+    <nav aria-label="{{ _('Navegación de páginas') }}">
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% for page in consulta.iter_pages() %}
+        {% if page %}
+        <li class="page-item {{ 'active' if page == consulta.page else '' }}">
+          <a class="page-link" href="{{ url_for('contabilidad.presupuestos.lista', page=page, search=request.args.get('search', '')) }}">{{ page }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

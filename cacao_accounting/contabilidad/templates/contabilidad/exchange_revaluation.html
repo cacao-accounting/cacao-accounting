@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}" class="link-dark">{{ _('Revalorización cambiaria') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ run.document_no or run.id }}</li>
+  </ol>
+</nav>
+
+<section class="ca-card mb-3">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="ca-card-title mb-0">
+        <i class="bi bi-currency-exchange"></i> {{ run.document_no or run.id }}
+        <span class="badge text-bg-secondary ms-2">{{ run.status }}</span>
+      </h5>
+      <small class="text-muted">{{ _('Revalorización cambiaria') }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      {% if run.status == "posted" %}
+      <form method="post" action="{{ url_for('contabilidad.anular_revalorizacion_cambiaria', identifier=run.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-danger" type="submit">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Anular') }}
+        </button>
+      </form>
+      {% endif %}
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}">{{ _('Listado') }}</a>
+    </div>
+  </div>
+  <div class="ca-report-context">
+    <div><strong>{{ _('Compañía') }}:</strong> {{ run.company }}</div>
+    {% if selected_period %}
+    <div><strong>{{ _('Período contable') }}:</strong> {{ selected_period.name }}</div>
+    <div><strong>{{ _('Periodo') }}:</strong> {{ run.month }}/{{ run.year }}</div>
+    {% else %}
+    <div><strong>{{ _('Periodo') }}:</strong> {{ run.month }}/{{ run.year }}</div>
+    {% endif %}
+    <div><strong>{{ _('Fecha') }}:</strong> {{ run.run_date or run.posting_date }}</div>
+    <div><strong>{{ _('Documentos procesados') }}:</strong> {{ run.processed_documents_count or 0 }}</div>
+    <div><strong>{{ _('Documentos afectados') }}:</strong> {{ run.affected_documents_count or 0 }}</div>
+    <div><strong>{{ _('Ganancia') }}:</strong> {{ "{:,.2f}".format(run.total_gain or 0) }}</div>
+    <div><strong>{{ _('Pérdida') }}:</strong> {{ "{:,.2f}".format(run.total_loss or 0) }}</div>
+  </div>
+</section>
+
+<section class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Detalle documental') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption>{{ _('Líneas de revalorización cambiaria') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Documento origen') }}</th>
+          <th>{{ _('Tercero') }}</th>
+          <th>{{ _('Cuenta') }}</th>
+          <th>{{ _('Ledger destino') }}</th>
+          <th>{{ _('Moneda origen') }}</th>
+          <th class="text-end">{{ _('Tasa') }}</th>
+          <th class="text-end">{{ _('Saldo original') }}</th>
+          <th class="text-end">{{ _('Saldo ledger previo') }}</th>
+          <th class="text-end">{{ _('Saldo revaluado') }}</th>
+          <th class="text-end">{{ _('Diferencia') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in lines %}
+        {% set account = accounts.get(line.account_id) %}
+        {% set ledger = ledgers.get(line.ledger_id) %}
+        <tr>
+          <td>{{ line.source_document_no or line.source_document_id }}</td>
+          <td>{{ line.partner_id or '-' }}</td>
+          <td>{{ (account.code ~ ' - ' ~ account.name) if account else line.account_id }}</td>
+          <td>{{ (ledger.code ~ ' - ' ~ ledger.name) if ledger else line.ledger_id }}</td>
+          <td>{{ line.original_currency_id }}</td>
+          <td class="text-end">{{ "{:,.9f}".format(line.closing_rate or 0) }}</td>
+          <td class="text-end">{{ "{:,.2f}".format(line.open_amount_original or 0) }}</td>
+          <td class="text-end">{{ "{:,.2f}".format(line.previous_ledger_balance or 0) }}</td>
+          <td class="text-end">{{ "{:,.2f}".format(line.revalued_balance or 0) }}</td>
+          <td class="text-end">{{ "{:,.2f}".format(line.exchange_difference or 0) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="text-center text-muted py-4">{{ _('No se generaron diferencias cambiarias.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% endblock %}

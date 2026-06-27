@@ -1,0 +1,96 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: contabilidad/external_counter_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Contadores Externos</li>
+  </ol>
+</nav>
+
+{% if entidades_creadas %}
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-123"></i> Contadores Externos</h5>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.external_counter_new') }}">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo Contador
+    </a>
+  </div>
+
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <div class="col-auto">
+      <label class="form-label" for="company">Compania</label>
+      <select class="form-select form-select-sm" id="company" name="company" style="min-width:180px;">
+        <option value="">— Todas —</option>
+        {% for e in entidades %}
+        <option value="{{ e.code }}" {% if company_filter == e.code %}selected{% endif %}>{{ e.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+    </div>
+  </form>
+
+  <table class="ca-table">
+    <caption style="display: none;">Listado de contadores externos.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Compania</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Tipo</th>
+        <th scope="col">Prefijo</th>
+        <th scope="col">Ultimo Usado</th>
+        <th scope="col">Siguiente Sugerido</th>
+        <th scope="col">Activo</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items %}
+      <tr>
+        <td>{{ item.company }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.counter_type or '—' }}</td>
+        <td><code>{{ item.prefix or '—' }}</code></td>
+        <td>{{ item.last_used }}</td>
+        <td><strong>{{ item.next_suggested_formatted }}</strong></td>
+        <td>
+          {% if item.is_active %}
+          <span class="badge text-bg-success">Activo</span>
+          {% else %}
+          <span class="badge text-bg-secondary">Inactivo</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{{ url_for('contabilidad.external_counter_adjust', counter_id=item.id) }}"
+               class="btn btn-xs btn-outline-primary" title="Ajustar ultimo numero usado">
+              <i class="bi bi-pencil-square"></i>
+            </a>
+            <a href="{{ url_for('contabilidad.external_counter_audit_log', counter_id=item.id) }}"
+               class="btn btn-xs btn-outline-secondary" title="Ver bitacora de auditoria">
+              <i class="bi bi-clock-history"></i>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-muted text-center">No hay contadores externos registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.external_counter_list") }}</div>
+</div>
+{% else %}
+{{ macros.crear_nueva_entidad() }}
+{% endif %}
+
+{% endblock %}

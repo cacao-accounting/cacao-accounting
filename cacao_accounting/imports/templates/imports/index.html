@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% set acceso = permisos(modulo=id_modulo("imports"), usuario=usuario.id) %}
+<div class="container mt-4">
+    {%- if TESTING -%}
+    <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/imports/templates/imports/index.html"></div>
+    {%- endif -%}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ _("Lotes de Importación") }}</h2>
+        {% if acceso.crear %}
+        <a href="{{ url_for('imports.new') }}" class="btn btn-primary">{{ _("Nueva Importación") }}</a>
+        {% endif %}
+    </div>
+
+    {% if batches %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>{{ _("Tipo") }}</th>
+                <th>{{ _("Estado") }}</th>
+                <th>{{ _("Fecha") }}</th>
+                <th>{{ _("Progreso") }}</th>
+                <th>{{ _("Acciones") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for batch in batches %}
+            <tr>
+                <td>{{ batch.id }}</td>
+                <td>
+                    {{ batch.record_type }}<br>
+                    <small class="text-muted">{{ batch.company.company_name }}</small>
+                </td>
+                <td>
+                    {% if batch.import_status == 0 %} <span class="badge bg-secondary">{{ _("No iniciado") }}</span>
+                    {% elif batch.import_status == 1 %} <span class="badge bg-info">{{ _("Archivo cargado") }}</span>
+                    {% elif batch.import_status == 2 %} <span class="badge bg-warning">{{ _("Validado con errores") }}</span>
+                    {% elif batch.import_status == 3 %} <span class="badge bg-primary">{{ _("Listo para importar") }}</span>
+                    {% elif batch.import_status == 4 %} <span class="badge bg-warning text-dark">{{ _("Procesando") }}</span>
+                    {% elif batch.import_status == 5 %} <span class="badge bg-success">{{ _("Completado") }}</span>
+                    {% elif batch.import_status == 6 %} <span class="badge bg-warning">{{ _("Completado con errores") }}</span>
+                    {% elif batch.import_status == 7 %} <span class="badge bg-danger">{{ _("Fallido") }}</span>
+                    {% elif batch.import_status == 8 %} <span class="badge bg-dark">{{ _("Cancelado") }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ batch.created.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    {% if batch.import_status == 4 %}
+                    {% set progress = ((batch.processed_rows or 0) * 100 / batch.total_rows) if batch.total_rows else 0 %}
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ '%.0f'|format(progress) }}%;"></div>
+                    </div>
+                    <small class="text-muted">{{ batch.processed_rows }} / {{ batch.total_rows }}</small>
+                    {% else %}
+                    {{ batch.success_rows }} / {{ batch.total_rows }}
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('imports.detail', batch_id=batch.id) }}" class="btn btn-sm btn-outline-primary">{{ _("Ver") }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <caption>{{ _("Listado de lotes de importación") }}</caption>
+    </table>
+    {% else %}
+    <div class="ca-card">
+        <div class="ca-card-body text-center py-5">
+            <i class="bi bi-file-earmark-arrow-up display-6 text-muted"></i>
+            <h5 class="mt-3">{{ _("No hay lotes de importación") }}</h5>
+            <p class="text-muted mb-4">{{ _("Cree un lote para cargar plantillas CSV, XLSX, XLS u ODS.") }}</p>
+            {% if acceso.crear %}
+            <a href="{{ url_for('imports.new') }}" class="btn btn-primary">{{ _("Nueva Importación") }}</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

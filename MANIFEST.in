@@ -1,9 +1,11 @@
+recursive-exclude * *.md
 include Licencias_de_Terceros.md
 include README.md
 include LICENSE
 include wsgi.py
 include pyproject.toml
-recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.py *.csv *.json
+include cacao_accounting/
+recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.j2 *.py *.csv *.json
 recursive-include docs *.py *.rst
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Mis tareas') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-list-task me-2" style="color:#78BF30"></i>{{ _('Mis tareas') }}</h4>
+  <span class="badge bg-light text-dark">{{ open_task_count }}</span>
+</div>
+
+<div class="ca-card mb-3">
+  <div class="p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="status">{{ _('Estado') }}</label>
+        <select class="form-select form-select-sm" id="status" name="status">
+          <option value="">{{ _('Todos') }}</option>
+          {% for value in ['open', 'in_progress', 'completed', 'cancelled'] %}
+          <option value="{{ value }}" {% if request.args.get('status') == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="priority">{{ _('Prioridad') }}</label>
+        <select class="form-select form-select-sm" id="priority" name="priority">
+          <option value="">{{ _('Todas') }}</option>
+          {% for value in ['low', 'normal', 'high'] %}
+          <option value="{{ value }}" {% if request.args.get('priority') == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="company">{{ _('Compania') }}</label>
+        <input class="form-control form-control-sm" id="company" name="company" value="{{ request.args.get('company', '') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="due_date_from">{{ _('Desde') }}</label>
+        <input class="form-control form-control-sm" id="due_date_from" name="due_date_from" type="date" value="{{ request.args.get('due_date_from', '') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="due_date_to">{{ _('Hasta') }}</label>
+        <input class="form-control form-control-sm" id="due_date_to" name="due_date_to" type="date" value="{{ request.args.get('due_date_to', '') }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-sm btn-primary w-100" type="submit">{{ _('Filtrar') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ca-card">
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption>{{ _('Mis tareas') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Fecha') }}</th>
+          <th>{{ _('Prioridad') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Documento') }}</th>
+          <th>{{ _('Titulo') }}</th>
+          <th>{{ _('Asignado por') }}</th>
+          <th>{{ _('Vencimiento') }}</th>
+          <th class="text-end">{{ _('Accion') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          <td>{{ task.created_at.date() if task.created_at else '-' }}</td>
+          <td>{{ task.priority }}</td>
+          <td>{{ task.status }}</td>
+          <td>
+            {% set doc_url = document_url(task) %}
+            {% if doc_url %}
+            <a href="{{ doc_url }}">{{ task.document_no or task.document_id }}</a>
+            {% else %}
+            {{ task.document_no or task.document_id }}
+            {% endif %}
+          </td>
+          <td>{{ task.title }}</td>
+          <td>{{ task.assigned_by }}</td>
+          <td>{{ task.due_date or '-' }}</td>
+          <td class="text-end">
+            {% for next_status, label in [('in_progress', _('Marcar en proceso')), ('completed', _('Marcar completada')), ('cancelled', _('Cancelar'))] %}
+            {% if task.status != next_status %}
+            <form method="post" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="task_id" value="{{ task.id }}">
+              <input type="hidden" name="status" value="{{ next_status }}">
+              <button class="btn btn-sm btn-outline-primary" type="submit">{{ label }}</button>
+            </form>
+            {% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">{{ _('No hay tareas.') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

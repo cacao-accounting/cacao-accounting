@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ report_title }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">{{ report_title }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-2">
+        <input name="company" value="{{ request.args.get('company', 'cacao') }}" class="form-control" placeholder="{{ _('Compañía') }}">
+      </div>
+      <div class="col-md-2">
+        <input name="party_type" value="{{ request.args.get('party_type', '') }}" class="form-control" placeholder="{{ _('Tipo tercero') }}">
+      </div>
+      <div class="col-md-2">
+        <input name="party_id" value="{{ request.args.get('party_id', '') }}" class="form-control" placeholder="{{ _('Tercero') }}">
+      </div>
+      <div class="col-md-2">
+        <input name="item_code" value="{{ request.args.get('item_code', '') }}" class="form-control" placeholder="{{ _('Item') }}">
+      </div>
+      <div class="col-md-2">
+        <input name="warehouse" value="{{ request.args.get('warehouse', '') }}" class="form-control" placeholder="{{ _('Bodega') }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100" type="submit">{{ _("Filtrar") }}</button>
+      </div>
+    </form>
+
+    <table class="ca-table">
+      <caption style="display:none;">{{ report_title }}</caption>
+      <thead>
+        <tr>
+          {% if rows %}
+            {% for key in rows[0].values.keys() %}
+            <th scope="col">{{ key }}</th>
+            {% endfor %}
+          {% else %}
+            <th scope="col">{{ _("Sin datos") }}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for value in row.values.values() %}
+          <td>{{ value }}</td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr><td>{{ _("No hay registros para los filtros seleccionados.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="mt-3">
+      {% for key, value in totals.items() %}
+      <span class="badge bg-secondary me-2">{{ key }}: {{ value }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

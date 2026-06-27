@@ -1,6 +1,11 @@
-{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -18,37 +23,163 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('contabilidad.entidades') }}">Entidades</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.cuentas') }}">Catálogo de Cuentas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.ccostos') }}">Centros de Costos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.unidades') }}">Unidades de Negocio</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.libros') }}">Libros de Contabilidad</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.proyectos') }}">Proyectos</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.monedas') }}">Monedas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.tasa_cambio') }}">Tasas de Cambio</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="{{ url_for('contabilidad.periodo_contable') }}">Períodos Contables</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="{{ url_for('contabilidad.series') }}">Series e Identificadores</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('contabilidad.entidades') }}">Entidades</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.cuentas') }}">Catálogo de Cuentas</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.ccostos') }}">Centros de Costos</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.unidades') }}">Unidades de Negocio</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.libros') }}">Libros de Contabilidad</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.proyectos') }}">Proyectos</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.monedas') }}">Monedas</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.tasa_cambio') }}">Tasas de Cambio</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.periodo_contable') }}">Períodos Contables</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.fiscal_year_list') }}">Años Fiscales</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Entidades</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Catálogo de Cuentas</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Monedas</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Comprobantes Contables</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('contabilidad.listar_comprobantes') }}">Comprobantes Contables</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.nuevo_comprobante', isclosing='true') }}">Comprobantes Contables de Cierre</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.comprobantes_recurrentes') }}">Comprobante Recurrente</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.asistente_cierre_mensual') }}">Asistente de Cierre Mensual</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}">Revalorización cambiaria</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Comprobantes Contables</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Presupuesto ───────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-wallet2"></i> Presupuesto</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Diario</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Mayor</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Balanza de Comprobación</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Balance General</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="{{ url_for('contabilidad.gl.gl_list') }}">Ganancias y Pérdidas</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('contabilidad.presupuestos.listar') }}">Administrar Presupuestos</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.presupuestos.reporte') }}">Real versus Presupuesto</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Presupuesto</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+
+  {# ── Columna 4: Reportes ──────────────────────────── #}
+  <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
+    <ul class="ca-module-links">
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('reportes.account_movement') }}">Detalle de Movimiento Contable</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.account_summary') }}">Resumen de Movimiento por Cuenta</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.trial_balance') }}">Balanza de Comprobación</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.balance_sheet') }}">Balance General</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.income_statement') }}">Estado de Resultado</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

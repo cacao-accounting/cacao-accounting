@@ -1,0 +1,100 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.periodo_contable') }}" class="link-dark">Períodos Contables</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if edit %}Editar{% else %}Nuevo{% endif %} Período Contable</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-calendar-check me-2"></i> {% if edit %}{{ _('Editar Período Contable') }}{% else %}{{ _('Nuevo Período Contable') }}{% endif %}</h5>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('contabilidad.periodo_contable') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-periodo" type="submit">
+        <i class="bi bi-save me-1"></i>{{ _('Guardar Período') }}
+      </button>
+    </div>
+  </div>
+  <div class="p-4">
+    {% if no_fiscal_years %}
+    <div class="alert alert-warning mb-4" role="alert">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      {{ _('No existen años fiscales registrados.') }} <a href="{{ url_for('contabilidad.fiscal_year_new') }}" class="alert-link">{{ _('Crear año fiscal') }}</a> {{ _('antes de registrar períodos contables.') }}
+    </div>
+    {% endif %}
+    <form method="post" id="form-periodo" class="row g-3">
+      {{ form.csrf_token }}
+      <div class="col-md-4">
+        <label class="form-label" for="id-periodo">{{ _('Código') }} <span class="text-danger">*</span></label>
+        {{ form.id(class="form-control form-control-sm", id="id-periodo", required=True) }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="nombre">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre", required=True) }}
+      </div>
+      <div class="col-md-12">
+        <label class="form-label" for="entidad">{{ _('Entidad') }} <span class="text-danger">*</span></label>
+        <div class="ca-smart-select" x-data='smartSelect({
+            doctype: "company",
+            name: "entidad",
+            minChars: 1,
+            preload: true,
+            initialValue: "{{ form.entidad.data or "" }}",
+            initialLabel: {{ (entity_initial_label|default(""))|tojson }},
+            messages: {
+              placeholder: {{ _("Buscar entidad")|tojson }},
+              loading: {{ _("Cargando...")|tojson }},
+              noResults: {{ _("Sin resultados")|tojson }},
+              minChars: {{ _("Escriba para buscar")|tojson }},
+              clear: {{ _("Limpiar")|tojson }}
+            }
+          })'>
+          <input type="hidden" name="entidad" x-model="selectedValue">
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+          <div class="ca-smart-select-menu" x-show="open" x-cloak>
+            <template x-for="option in options" :key="option.value">
+              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                <span x-text="option.display_name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="fiscal_year">{{ _('Año Fiscal') }} <span class="text-danger">*</span></label>
+        {{ form.fiscal_year(class="form-select form-select-sm", id="fiscal_year", required=True) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="inicio">{{ _('Fecha Inicio') }} <span class="text-danger">*</span></label>
+        {{ form.inicio(class="form-control form-control-sm", id="inicio", type="date", required=True) }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="fin">{{ _('Fecha Fin') }} <span class="text-danger">*</span></label>
+        {{ form.fin(class="form-control form-control-sm", id="fin", type="date", required=True) }}
+      </div>
+      <div class="col-12 mt-3">
+        <h6 class="mb-2">{{ _('Estado operativo') }}</h6>
+        <div class="form-check form-check-inline">
+          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          <label class="form-check-label" for="habilitado">{{ _('Habilitado') }}</label>
+        </div>
+      </div>
+      <div class="col-12">
+        <h6 class="mb-2">{{ _('Estado contable') }}</h6>
+        <div class="form-check form-check-inline">
+          {{ form.cerrado(class="form-check-input", id="cerrado") }}
+          <label class="form-check-label" for="cerrado">{{ _('Cerrado') }}</label>
+        </div>
+        <div class="form-text">{{ _('Un período solo acepta registros si está habilitado y no está cerrado.') }}</div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

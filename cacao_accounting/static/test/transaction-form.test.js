@@ -1,0 +1,368 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 - 2026 William Jose MORENO Reyes
+
+const assert = require('assert');
+
+function loadTransactionForm() {
+  const listeners = {};
+  let transactionFormFactory = null;
+
+  globalThis.window = {
+    crypto: {
+      randomUUID: () => 'uuid-test',
+    },
+  };
+
+  globalThis.document = {
+    addEventListener: (event, callback) => {
+      listeners[event] = callback;
+    },
+    querySelector: () => null,
+    getElementById: () => null,
+  };
+
+  globalThis.bootstrap = {
+    Modal: {
+      getOrCreateInstance: () => ({
+        show() {},
+        hide() {},
+      }),
+    },
+  };
+
+  globalThis.Alpine = {
+    data: (name, factory) => {
+      if (name === 'transactionForm') transactionFormFactory = factory;
+    },
+  };
+
+  const modulePath = require.resolve('../js/transaction-form.js');
+  delete require.cache[modulePath];
+  require(modulePath);
+  listeners['alpine:init']();
+
+  return function create(config) {
+    return transactionFormFactory(config);
+  };
+}
+
+describe('transaction-form', function () {
+  afterEach(function () {
+    delete globalThis.window;
+    delete globalThis.document;
+    delete globalThis.bootstrap;
+    delete globalThis.Alpine;
+    delete globalThis.fetch;
+  });
+
+  it('uses required default columns when preferences are empty', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [],
+      uoms: [],
+      columns: [],
+      defaultRows: 1,
+    });
+
+    component.init();
+
+    assert.deepStrictEqual(
+      component.visibleColumns.map((column) => column.field),
+      ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount']
+    );
+    assert.strictEqual(component.lines.length, 1);
+  });
+
+  it('keeps required columns visible even when legacy preferences hide them', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [],
+      uoms: [],
+      columns: [
+        { field: 'item_code', label: 'Código', visible: false, width: 2 },
+        { field: 'item_name', label: 'Descripción', visible: true, width: 2 },
+      ],
+      defaultRows: 1,
+    });
+
+    component.init();
+
+    assert.strictEqual(component.preferences.columns.find((column) => column.field === 'item_code').visible, true);
+    assert.strictEqual(component.preferences.columns.find((column) => column.field === 'item_code').required, true);
+  });
+
+  it('filters unit options based on the selected item and keeps the selected unit valid', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [
+        { code: 'ITEM-001', name: 'Caja de cacao', uom: 'UND', allowed_uoms: ['UND', 'CAJA'] },
+        { code: 'ITEM-002', name: 'Servicio logístico', uom: 'SERV' },
+      ],
+      uoms: [
+        { code: 'UND', name: 'Unidad' },
+        { code: 'CAJA', name: 'Caja' },
+        { code: 'SERV', name: 'Servicio' },
+      ],
+      defaultRows: 1,
+    });
+
+    component.init();
+    const line = component.lines[0];
+    line.item_code = 'ITEM-001';
+
+    component.onItemChange(line);
+
+    assert.strictEqual(line.item_name, 'Caja de cacao');
+    assert.strictEqual(line.uom, 'UND');
+    assert.deepStrictEqual(component.getLineUoms(line).map((uom) => uom.code), ['UND', 'CAJA']);
+
+    line.uom = 'CAJA';
+    line.item_code = 'ITEM-002';
+    component.onItemChange(line);
+
+    assert.strictEqual(line.item_name, 'Servicio logístico');
+    assert.strictEqual(line.uom, 'SERV');
+    assert.deepStrictEqual(component.getLineUoms(line).map((uom) => uom.code), ['SERV']);
+  });
+
+  it('preserves edited source quantities when importing lines', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [{ code: 'ITEM-001', name: 'Caja de cacao', uom: 'UND' }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.sourceItems = [
+      {
+        selected: true,
+        item_code: 'ITEM-001',
+        item_name: 'Caja de cacao',
+        qty: 2.5,
+        pending_qty: 10,
+        uom: 'UND',
+        rate: 4,
+        source_type: 'purchase_order',
+        source_id: 'PO-001',
+        source_item_id: 'PO-ROW-001',
+      },
+    ];
+
+    component.applySource();
+
+    assert.strictEqual(component.lines.length, 1);
+    assert.strictEqual(component.lines[0].qty, 2.5);
+    assert.strictEqual(component.lines[0].amount, 10);
+  });
+
+  it('matches required template headers and aliases when parsing pasted imports', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.importModal.schema = {
+      columns: [
+        { key: 'item_code', label: 'Artículo', aliases: ['item'] },
+        { key: 'quantity', label: 'Cantidad', aliases: ['qty'] },
+      ],
+    };
+    component.importModal.pastedText = 'Artículo *\tqty\nITEM-001\t2\n\t\n';
+
+    component.parsePastedText();
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [
+      { item_code: 'ITEM-001', quantity: '2' },
+    ]);
+  });
+
+  it('keeps existing rows intact when appending imported lines', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [{ code: 'ITEM-001', name: 'Caja de cacao', uom: 'UND' }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 0,
+      initialLines: [{ item_code: 'MANUAL-001', item_name: 'Manual', qty: 3, rate: 5, amount: 15 }],
+    });
+
+    component.init();
+    component.importModal.doctype = 'purchase_request';
+    component.importModal.isValidated = true;
+    component.importModal.parsedRows = [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', quantity: 2, uom: 'UND' }];
+
+    component.insertImportedLines();
+
+    assert.strictEqual(component.lines.length, 2);
+    assert.strictEqual(component.lines[0].item_code, 'MANUAL-001');
+    assert.strictEqual(component.lines[0].item_name, 'Manual');
+    assert.strictEqual(component.lines[0].qty, 3);
+    assert.strictEqual(component.lines[0].rate, 5);
+    assert.strictEqual(component.lines[0].amount, 15);
+    assert.strictEqual(component.lines[1].item_code, 'ITEM-001');
+    assert.strictEqual(component.lines[1].qty, 2);
+  });
+
+  it('enables line import for operational doctypes', function () {
+    const create = loadTransactionForm();
+    [
+      'purchases.purchase_request',
+      'purchases.purchase_quotation',
+      'purchases.supplier_quotation',
+      'purchases.purchase_order',
+      'purchases.purchase_receipt',
+      'purchases.purchase_invoice',
+      'sales.sales_request',
+      'sales.sales_quotation',
+      'sales.sales_order',
+      'sales.delivery_note',
+      'sales.sales_invoice',
+      'inventory.stock_entry',
+    ].forEach((formKey) => {
+      const supported = create({
+        formKey,
+        items: [],
+        uoms: [],
+        defaultRows: 1,
+      });
+      supported.init();
+      assert.strictEqual(supported.supportsLineImport(), true, formKey);
+    });
+
+    const unsupported = create({
+      formKey: 'sales.customer',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    unsupported.init();
+    assert.strictEqual(unsupported.supportsLineImport(), false);
+  });
+
+  it('adds same-document update sources to operational doctypes', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_order',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      availableSourceTypes: [
+        { value: 'purchase_request', label: 'Solicitud de Compra' },
+      ],
+    });
+    component.init();
+
+    assert.deepStrictEqual(
+      component.availableSourceTypes.map((sourceType) => sourceType.value),
+      ['purchase_order', 'purchase_request']
+    );
+
+    const firstDocument = create({
+      formKey: 'sales.sales_request',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    firstDocument.init();
+    assert.deepStrictEqual(
+      firstDocument.availableSourceTypes.map((sourceType) => sourceType.value),
+      ['sales_request']
+    );
+  });
+
+  it('opens line detail with existing analytical values and saves edits back to the row', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialLines: [
+        {
+          item_code: 'ITEM-001',
+          item_name: 'Caja de cacao',
+          qty: 1,
+          rate: 10,
+          account: 'expense-cacao',
+          cost_center: 'main-cc',
+          unit: 'north',
+          project: 'launch',
+          remarks: 'Original',
+        },
+      ],
+    });
+
+    component.init();
+    component.openDetails(0);
+
+    assert.strictEqual(component.modalLine.account, 'expense-cacao');
+    assert.strictEqual(component.modalLine.cost_center, 'main-cc');
+    assert.strictEqual(component.modalLine.unit, 'north');
+    assert.strictEqual(component.modalLine.project, 'launch');
+
+    component.modalLine.account = 'inventory-cacao';
+    component.modalLine.remarks = 'Updated';
+    component.saveModalLine();
+
+    assert.strictEqual(component.lines[0].account, 'inventory-cacao');
+    assert.strictEqual(component.lines[0].remarks, 'Updated');
+    assert.strictEqual(component.lines[0].amount, 10);
+  });
+
+  it('skips fiscal preview calls for document types outside the fiscal matrix', async function () {
+    const create = loadTransactionForm();
+    let called = false;
+    globalThis.fetch = async () => {
+      called = true;
+      throw new Error('unexpected preview call');
+    };
+    const component = create({
+      formKey: 'sales.sales_quotation',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao' },
+    });
+
+    component.init();
+    await component.fetchTaxPreview();
+
+    assert.strictEqual(component.supportsFiscalPreview(), false);
+    assert.strictEqual(called, false);
+    assert.strictEqual(component.taxCharges.error, '');
+  });
+
+  it('adds manual tax or charge lines and updates fiscal totals', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', qty: 2, rate: 50 }],
+    });
+
+    component.init();
+    component.addTaxLine();
+    component.taxCharges.modalLine.concept = 'Flete';
+    component.taxCharges.modalLine.type = 'charge';
+    component.taxCharges.modalLine.amount = 12.5;
+    component.taxCharges.modalLine.accounting_treatment = 'capitalizable_inventory_cost';
+    component.taxCharges.modalLine.affects_inventory = true;
+    component.saveTaxLineModal();
+
+    assert.strictEqual(component.taxCharges.lines.length, 1);
+    assert.strictEqual(component.taxCharges.lines[0].manual, true);
+    assert.strictEqual(component.taxCharges.lines[0].concept, 'Flete');
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '12.5');
+    assert.strictEqual(component.taxCharges.summary.capitalizable_tax_total, '12.5');
+    assert.strictEqual(component.grandTotal, 112.5);
+
+    const payload = component.buildFiscalPayload();
+    assert.strictEqual(payload.tax_lines[0].manual, true);
+    assert.strictEqual(payload.tax_lines[0].allocation_method, 'by_value');
+  });
+});
