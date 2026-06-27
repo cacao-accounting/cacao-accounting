@@ -1030,3 +1030,22 @@ def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(reques
                 assert response.status_code == 200
                 assert 'href="/settings/modules"' not in sidebar
                 assert 'href="/imports/"' not in sidebar
+
+
+def test_accounting_module_badges_are_semantic_for_admin(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/accounting/")
+                html = response.get_data(as_text=True)
+                exchange_rates_row = html.split("Tasas de Cambio", maxsplit=1)[1].split("</li>", maxsplit=1)[0]
+                assert response.status_code == 200
+                assert 'data-status="ok"' in exchange_rates_row
+                assert "ca-status-warning" not in exchange_rates_row

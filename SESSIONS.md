@@ -432,3 +432,9 @@
 - **Inventario:** `stock_reconciliation` ahora guarda snapshots de cantidad/tasa/valor actual y objetivo por linea, genera SLE/SVL y actualiza `StockBin` por diferencia de cantidad y/o valor.
 - **Contabilidad:** La diferencia de valuacion se contabiliza balanceada contra la cuenta de inventario asignada a la bodega y una cuenta global de diferencia del documento, aplicando centro de costos, unidad de negocio y proyecto globales a todo el comprobante.
 - **Validacion:** Pruebas focales nuevas cubren conciliacion AR/AP, render de pantallas, ajuste de valor de inventario, cuenta de bodega, dimensiones globales y cancelacion con reversos.
+
+## 2026-06-27 (Badges semánticos de tarjetas de módulos)
+- **Solicitud:** Confirmar y corregir la semántica de los badges de tarjetas de módulos, incluyendo Administración como módulo, para evitar colores hardcodeados como el badge beige/ámbar en Tasas de Cambio para usuarios administradores.
+- **Implementación:** Se agregó `module_badge()` como helper Python disponible en Jinja y `module_status_badge` como macro reutilizable. Las tarjetas de Contabilidad, Compras, Ventas, Inventario, Bancos y Administración ahora calculan estado desde permisos y parámetros declarativos.
+- **Decisión de diseño:** Verde indica acceso operativo correcto, gris sin acceso, azul pendientes reales de aprobación, beige solo visualización y rojo atención. Los estados antiguos de warning ya no se usan como sustituto de datos reales.
+- **Validación:** Se agregaron pruebas unitarias de precedencia semántica y una prueba web que verifica que Tasas de Cambio se renderiza como `ok` para administrador.

@@ -199,3 +199,6 @@
   - Garantiza la integridad vía rollbacks automáticos por documento y bloqueos de concurrencia (`with_for_update`).
   - Validación de períodos contables cerrados y protección contra inyección de fórmulas en archivos.
   - Generación de plantillas en formatos CSV, XLSX y ODS.
+
+- **Badges Semánticos de Módulos:** Las tarjetas de Contabilidad, Compras, Ventas, Inventario, Bancos y Administración usan `module_badge()` y la macro `module_status_badge` para calcular estados semánticos: verde `ok`, gris `no_access`, azul `pending_approval`, beige `view_only` y rojo `attention`.
+- **Accesibilidad de Badges:** Los badges de módulo exponen `title`, `aria-label`, `data-status` y texto oculto para lectores de pantalla; los colores ya no son la única fuente de significado.
