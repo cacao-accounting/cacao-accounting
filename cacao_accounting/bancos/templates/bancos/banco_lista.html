@@ -21,6 +21,7 @@
       <i class="bi bi-plus-circle me-1"></i>Nuevo
     </a>
   </div>
+  {{ macros.list_filters(show_status=False, placeholder=_("Buscar por nombre o referencia...")) }}
   <table class="ca-table">
     <caption style="display: none;">Listado de bancos.</caption>
     <thead>
