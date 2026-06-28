@@ -220,6 +220,49 @@ _NOISE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def _timeline_skip_fields(exclude_fields: set[str] | None = None) -> frozenset[str]:
+    """Return the set of fields that should be hidden from the timeline diff."""
+    return _NOISE_FIELDS | frozenset(exclude_fields or set())
+
+
+def _parse_timeline_changes(changes_json: str | None) -> dict[str, dict[str, Any]]:
+    """Parse a timeline diff payload, falling back to an empty mapping."""
+    if not changes_json:
+        return {}
+    try:
+        parsed = json.loads(changes_json)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _format_timeline_value(value: Any) -> str:
+    """Format a timeline value for display."""
+    return "-" if value in (None, "") else str(value)
+
+
+def _format_timeline_changes(
+    changes_map: dict[str, dict[str, Any]],
+    skip_fields: frozenset[str],
+) -> list[dict[str, str]]:
+    """Build the rendered change rows for one audit trail event."""
+    return [
+        {
+            "field": field,
+            "before": _format_timeline_value(change.get("before")),
+            "after": _format_timeline_value(change.get("after")),
+        }
+        for field, change in changes_map.items()
+        if field not in skip_fields
+    ]
+
+
+def _format_timeline_event(event: AuditTrail, skip_fields: frozenset[str]) -> dict[str, Any]:
+    """Format one audit trail entry for template rendering."""
+    changes_map = _parse_timeline_changes(event.changes_json)
+    return {"event": event, "changes": _format_timeline_changes(changes_map, skip_fields)}
+
+
 def format_document_timeline(
     document_type: str,
     document_id: str,
@@ -230,26 +273,5 @@ def format_document_timeline(
     Los campos en ``_NOISE_FIELDS`` se omiten siempre del diff.
     Campos adicionales se pueden excluir vía ``exclude_fields``.
     """
-    skip = _NOISE_FIELDS | (exclude_fields or set())
-    entries = get_document_timeline(document_type, document_id)
-    result = []
-    for event in entries:
-        changes: list[dict] = []
-        try:
-            changes_map = json.loads(event.changes_json) if event.changes_json else {}
-        except (TypeError, json.JSONDecodeError):
-            changes_map = {}
-        for field, change in changes_map.items():
-            if field in skip:
-                continue
-            before_value = change.get("before")
-            after_value = change.get("after")
-            changes.append(
-                {
-                    "field": field,
-                    "before": "-" if before_value in (None, "") else str(before_value),
-                    "after": "-" if after_value in (None, "") else str(after_value),
-                }
-            )
-        result.append({"event": event, "changes": changes})
-    return result
+    skip = _timeline_skip_fields(exclude_fields)
+    return [_format_timeline_event(event, skip) for event in get_document_timeline(document_type, document_id)]
