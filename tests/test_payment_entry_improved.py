@@ -1103,6 +1103,111 @@ def test_payment_from_purchase_order_prefills_reference_line(app_ctx):
     assert b"payment-reference-candidates" in response.data
 
 
+def test_payment_source_rows_preserve_order_and_skip_missing(app_ctx):
+    """Las filas de origen conservan el orden y omiten documentos faltantes."""
+    from cacao_accounting.bancos import _payment_source_rows
+    from cacao_accounting.database import Party, PurchaseInvoice, SalesOrder, database
+
+    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    purchase_invoice = PurchaseInvoice(
+        company="cacao",
+        supplier_id=supplier.id,
+        posting_date=date.today(),
+        document_type="purchase_invoice",
+        docstatus=1,
+        grand_total=100,
+        document_no="PI-SRC-001",
+    )
+    sales_order = SalesOrder(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        docstatus=1,
+        grand_total=200,
+        document_no="SO-SRC-001",
+    )
+    database.session.add_all([purchase_invoice, sales_order])
+    database.session.commit()
+
+    with app_ctx.test_request_context("/cash_management/payment/new"):
+        rows = _payment_source_rows(
+            [purchase_invoice.id, "missing-invoice"],
+            [],
+            [],
+            [sales_order.id],
+            [],
+            [],
+            [],
+            [],
+        )
+
+    assert [row["reference_type"] for row in rows] == ["purchase_invoice", "sales_order"]
+    assert [row["document"].id for row in rows] == [purchase_invoice.id, sales_order.id]
+
+
+def test_payment_source_rows_filters_note_document_types(app_ctx):
+    """Las notas solo entran si su tipo documental coincide con el esperado."""
+    from cacao_accounting.bancos import _payment_source_rows
+    from cacao_accounting.database import Party, PurchaseInvoice, SalesInvoice, database
+
+    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    purchase_credit_note = PurchaseInvoice(
+        company="cacao",
+        supplier_id=supplier.id,
+        posting_date=date.today(),
+        document_type="purchase_credit_note",
+        docstatus=1,
+        grand_total=100,
+        document_no="PCN-SRC-001",
+    )
+    purchase_invoice = PurchaseInvoice(
+        company="cacao",
+        supplier_id=supplier.id,
+        posting_date=date.today(),
+        document_type="purchase_invoice",
+        docstatus=1,
+        grand_total=50,
+        document_no="PI-SRC-002",
+    )
+    sales_credit_note = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_credit_note",
+        docstatus=1,
+        grand_total=80,
+        document_no="SCN-SRC-001",
+    )
+    wrong_sales_note = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=40,
+        document_no="SI-SRC-IGNORED",
+    )
+    database.session.add_all([purchase_credit_note, purchase_invoice, sales_credit_note, wrong_sales_note])
+    database.session.commit()
+
+    with app_ctx.test_request_context("/cash_management/payment/new"):
+        rows = _payment_source_rows(
+            [],
+            [],
+            [],
+            [],
+            [purchase_credit_note.id, purchase_invoice.id],
+            [],
+            [sales_credit_note.id, wrong_sales_note.id],
+            [],
+        )
+
+    assert [row["reference_type"] for row in rows] == ["purchase_invoice", "sales_invoice"]
+    assert [row["flow_source_type"] for row in rows] == ["purchase_credit_note", "sales_credit_note"]
+
+
 def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_ctx):
     """El endpoint de candidatos devuelve documentos pendientes del mismo tercero."""
     client = app_ctx.test_client()
