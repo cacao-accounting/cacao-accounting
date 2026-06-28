@@ -439,3 +439,8 @@
 - **Decisión de diseño:** Verde indica acceso operativo correcto, gris sin acceso, azul pendientes reales de aprobación, beige solo visualización y rojo atención. Los estados antiguos de warning ya no se usan como sustituto de datos reales.
 - **Validación:** Se agregaron pruebas unitarias de precedencia semántica y una prueba web que verifica que Tasas de Cambio se renderiza como `ok` para administrador.
 - **Ajuste posterior:** Se extendió el buscador reusable de listados a comprobantes contables, comprobantes recurrentes y revalorizaciones cambiarias para cubrir transacciones de Contabilidad igual que Compras, Ventas y Bancos.
+
+## 2026-06-28 (Refactor de persistencia de referencias de pago)
+- **Solicitud:** Reducir la complejidad cognitiva de `_save_payment_references` en `cacao_accounting/bancos/__init__.py` y conservar la cobertura con pruebas unitarias.
+- **Implementación:** Se extrajo la lectura de líneas desde el formulario, la resolución del documento referenciado, la validación de negocio por documento y la construcción de `PaymentReference` en helpers dedicados. La función principal quedó como orquestador lineal.
+- **Validación:** Se ejecutó la suite focal de referencias de pago y cancelación, con `5 passed` en `tests/test_06transaction_closure.py`; también se corrió `ruff check` sobre el módulo modificado.
