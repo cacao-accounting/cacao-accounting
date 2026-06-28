@@ -81,6 +81,131 @@ def _make_checkbook(company: str = "cacao", counter_type: str = "checkbook"):
     return counter
 
 
+def test_validate_bank_account_numbering_defaults_returns_same_ids(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+
+    series = _make_payment_series()
+    counter = _make_checkbook()
+
+    naming_series_id, external_counter_id = _validate_bank_account_numbering_defaults(
+        company="cacao",
+        naming_series_id=series.id,
+        external_counter_id=counter.id,
+    )
+
+    assert naming_series_id == series.id
+    assert external_counter_id == counter.id
+
+
+def test_validate_bank_account_numbering_defaults_allows_global_payment_series(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+
+    series = _make_payment_series(company=None)
+    counter = _make_checkbook()
+
+    naming_series_id, external_counter_id = _validate_bank_account_numbering_defaults(
+        company="cacao",
+        naming_series_id=series.id,
+        external_counter_id=counter.id,
+    )
+
+    assert naming_series_id == series.id
+    assert external_counter_id == counter.id
+
+
+def test_validate_bank_account_numbering_defaults_rejects_missing_or_inactive_payment_series(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.database import database
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    inactive_series = _make_payment_series()
+    inactive_series.is_active = False
+    database.session.commit()
+
+    missing_id = "missing-series"
+    for series_id in (missing_id, inactive_series.id):
+        with pytest.raises(IdentifierConfigurationError, match="serie interna seleccionada no existe o está inactiva"):
+            _validate_bank_account_numbering_defaults(
+                company="cacao",
+                naming_series_id=series_id,
+                external_counter_id=None,
+            )
+
+
+def test_validate_bank_account_numbering_defaults_rejects_wrong_payment_series_type(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    series = _make_payment_series(entity_type="sales_invoice")
+
+    with pytest.raises(IdentifierConfigurationError, match="serie interna debe ser para pagos"):
+        _validate_bank_account_numbering_defaults(
+            company="cacao",
+            naming_series_id=series.id,
+            external_counter_id=None,
+        )
+
+
+def test_validate_bank_account_numbering_defaults_rejects_cross_company_payment_series(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    series = _make_payment_series(company="other")
+
+    with pytest.raises(IdentifierConfigurationError, match="serie interna no pertenece a la compañía indicada"):
+        _validate_bank_account_numbering_defaults(
+            company="cacao",
+            naming_series_id=series.id,
+            external_counter_id=None,
+        )
+
+
+def test_validate_bank_account_numbering_defaults_rejects_missing_or_inactive_checkbook(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.database import database
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    inactive_counter = _make_checkbook()
+    inactive_counter.is_active = False
+    database.session.commit()
+
+    for counter_id in ("missing-counter", inactive_counter.id):
+        with pytest.raises(IdentifierConfigurationError, match="chequera seleccionada no existe o está inactiva"):
+            _validate_bank_account_numbering_defaults(
+                company="cacao",
+                naming_series_id=None,
+                external_counter_id=counter_id,
+            )
+
+
+def test_validate_bank_account_numbering_defaults_rejects_wrong_checkbook_type(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    counter = _make_checkbook(counter_type="fiscal")
+
+    with pytest.raises(IdentifierConfigurationError, match="debe ser una chequera"):
+        _validate_bank_account_numbering_defaults(
+            company="cacao",
+            naming_series_id=None,
+            external_counter_id=counter.id,
+        )
+
+
+def test_validate_bank_account_numbering_defaults_rejects_cross_company_checkbook(app_ctx):
+    from cacao_accounting.bancos import _validate_bank_account_numbering_defaults
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    counter = _make_checkbook(company="other")
+
+    with pytest.raises(IdentifierConfigurationError, match="chequera no pertenece a la compañía indicada"):
+        _validate_bank_account_numbering_defaults(
+            company="cacao",
+            naming_series_id=None,
+            external_counter_id=counter.id,
+        )
+
+
 def _make_bank_account(series, counter, currency: str = "NIO"):
     from cacao_accounting.database import Bank, BankAccount, database
 
