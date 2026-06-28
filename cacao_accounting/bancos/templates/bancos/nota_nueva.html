@@ -37,11 +37,10 @@
       payload: '',
 
       init: function () {
-        var self = this;
-        document.addEventListener('bank-account-selected', function (event) {
-            self.header.bank_account_id = event.detail.value;
+        document.addEventListener('bank-account-selected', (event) => {
+            this.header.bank_account_id = event.detail.value;
             if (event.detail.extra && event.detail.extra.currency) {
-                self.header.currency = event.detail.extra.currency;
+                this.header.currency = event.detail.extra.currency;
             }
         });
       },
