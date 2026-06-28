@@ -822,6 +822,150 @@ def _invoice_outstanding(invoice) -> Decimal:
     return min([computed, *cached_values])
 
 
+def _payment_reference_lines_from_form() -> list[dict]:
+    """Construye las líneas de referencia desde el formulario HTTP."""
+    lines: list[dict] = []
+    index = 0
+    while request.form.get(f"reference_id_{index}"):
+        lines.append(
+            {
+                "reference_type": request.form.get(f"reference_type_{index}", ""),
+                "reference_id": request.form.get(f"reference_id_{index}", ""),
+                "allocated_amount": _form_decimal(f"allocated_amount_{index}", "0"),
+            }
+        )
+        index += 1
+    return lines
+
+
+def _payment_reference_model(reference_type: str) -> type[Any]:
+    """Resuelve el modelo real para una referencia de pago."""
+    if reference_type in ("purchase_invoice", "purchase_order", "purchase_credit_note", "purchase_debit_note"):
+        return PurchaseInvoice if "invoice" in reference_type or "note" in reference_type else PurchaseOrder
+    if reference_type in ("sales_invoice", "sales_order", "sales_credit_note", "sales_debit_note"):
+        return SalesInvoice if "invoice" in reference_type or "note" in reference_type else SalesOrder
+    raise ValueError(_("Tipo de referencia inválido: {0}").format(reference_type))
+
+
+def _payment_reference_expected_payment_type(flow_source_type: str) -> str | None:
+    """Devuelve el tipo de pago esperado para un tipo documental origen."""
+    return {
+        "purchase_credit_note": "receive",
+        "purchase_debit_note": "pay",
+        "sales_credit_note": "pay",
+        "sales_debit_note": "receive",
+    }.get(flow_source_type)
+
+
+def _load_payment_reference_document(reference_type: str, reference_id: str, flow_source_type: str) -> Any:
+    """Obtiene el documento real referenciado para el pago."""
+    model = _payment_reference_model(reference_type)
+    document = database.session.get(model, reference_id)
+    if not document:
+        raise ValueError(_("Documento referenciado no existe."))
+    return document
+
+
+def _validate_payment_reference_document(
+    *,
+    payment: PaymentEntry,
+    document: Any,
+    flow_source_type: str,
+) -> None:
+    """Valida compañía, tercero y estado del documento referenciado."""
+    if getattr(document, "docstatus", 0) != 1:
+        raise ValueError(_("El documento referenciado debe estar aprobado."))
+    if payment.company and document.company and payment.company != document.company:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(_("El documento referenciado no pertenece a la misma compañía."))
+    expected_party_type, expected_party_id = _reference_party_info(document)
+    if payment.party_type and payment.party_type != expected_party_type:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(_("El tercero del pago no es compatible con el documento referenciado."))
+    if payment.party_id and expected_party_id and payment.party_id != expected_party_id:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(_("El tercero del pago no coincide con el documento referenciado."))
+    expected_payment_type = _payment_reference_expected_payment_type(flow_source_type)
+    if expected_payment_type and payment.payment_type != expected_payment_type:
+        raise ValueError(_("El tipo de pago no corresponde con el tipo de nota referenciada."))
+
+
+def _build_payment_reference(
+    *,
+    payment: PaymentEntry,
+    line: dict,
+    document: Any,
+    reference_id: str,
+    reference_type: str,
+    flow_source_type: str,
+    allocated: Decimal,
+    outstanding: Decimal,
+) -> PaymentReference:
+    """Construye la referencia persistible para una línea validada."""
+    discount_amount = Decimal(str(line.get("discount_amount") or "0"))
+    gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
+    difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
+    reference_date = _payment_reference_date(document)
+    outstanding_after = outstanding - allocated
+    physical_reference_type = _physical_reference_type(reference_type, flow_source_type)
+    return PaymentReference(
+        payment_id=payment.id,
+        reference_type=physical_reference_type,
+        flow_source_type=flow_source_type,
+        reference_id=reference_id,
+        reference_document_no=getattr(document, "document_no", None) or reference_id,
+        reference_date=reference_date,
+        party_type=_reference_party_info(document)[0],
+        party_id=_reference_party_info(document)[1],
+        company=getattr(document, "company", None),
+        currency=getattr(document, "currency", None) or getattr(payment, "currency", None),
+        total_amount=document.grand_total,
+        outstanding_amount=outstanding,
+        outstanding_amount_after=outstanding_after,
+        allocated_amount=allocated,
+        exchange_rate=Decimal(str(line.get("exchange_rate") or getattr(document, "exchange_rate", None) or 1)),
+        difference_amount=difference_amount,
+        allocation_date=payment.posting_date,
+        discount_amount=discount_amount,
+        gain_loss_amount=gain_loss_amount,
+        notes=line.get("notes"),
+    )
+
+
+def _validate_payment_reference_line(
+    *,
+    payment: PaymentEntry,
+    line: dict,
+    allow_order_references: bool,
+) -> tuple[str, str, str, Decimal, Decimal]:
+    """Valida una línea de referencia y devuelve sus valores normalizados."""
+    reference_type = line.get("reference_type", "")
+    reference_id = line.get("reference_id", "")
+    allocated = Decimal(str(line.get("allocated_amount", "0")))
+    requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
+    reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
+    if reference_key in _validate_payment_reference_line.processed_keys:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
+    _validate_payment_reference_line.processed_keys.add(reference_key)
+    if allocated <= 0:
+        if allocated < 0:
+            from werkzeug.exceptions import Conflict
+
+            raise Conflict(_("El monto asignado no puede ser negativo."))
+        return reference_type, reference_id, requested_flow_source_type, allocated, Decimal("0")
+    if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
+        raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
+    return reference_type, reference_id, requested_flow_source_type, allocated, allocated
+
+
+_validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
+
+
 def _append_payment_source_row(
     rows: list[dict],
     *,
@@ -1069,119 +1213,48 @@ def _save_payment_references(
 ) -> dict[str, Decimal]:
     """Guarda referencias de pago y actualiza saldos vivos de facturas."""
     if lines is None:
-        lines = []
-        i = 0
-        while request.form.get(f"reference_id_{i}"):
-            lines.append(
-                {
-                    "reference_type": request.form.get(f"reference_type_{i}", ""),
-                    "reference_id": request.form.get(f"reference_id_{i}", ""),
-                    "allocated_amount": _form_decimal(f"allocated_amount_{i}", "0"),
-                }
-            )
-            i += 1
+        lines = _payment_reference_lines_from_form()
 
     totals = {
         "allocated": Decimal("0"),
         "discount": Decimal("0"),
         "gain_loss": Decimal("0"),
     }
-    processed_reference_keys: set[tuple[str, str]] = set()
+    _validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
     for line in lines:
-        reference_type = line.get("reference_type", "")
-        reference_id = line.get("reference_id", "")
-        allocated = Decimal(str(line.get("allocated_amount", "0")))
-        requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
-        reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
-        if reference_key in processed_reference_keys:
-            from werkzeug.exceptions import Conflict
-
-            raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
-        processed_reference_keys.add(reference_key)
-        if allocated <= 0:
-            if allocated < 0:
-                from werkzeug.exceptions import Conflict
-
-                raise Conflict(_("El monto asignado no puede ser negativo."))
+        reference_type, reference_id, requested_flow_source_type, allocated, applied_amount = _validate_payment_reference_line(
+            payment=payment,
+            line=line,
+            allow_order_references=allow_order_references,
+        )
+        if applied_amount <= 0:
             continue
-        if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
-            raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
-        if reference_type in ("purchase_invoice", "purchase_order", "purchase_credit_note", "purchase_debit_note"):
-            model = PurchaseInvoice if "invoice" in reference_type or "note" in reference_type else PurchaseOrder
-            invoice = database.session.get(model, reference_id)
-        elif reference_type in ("sales_invoice", "sales_order", "sales_credit_note", "sales_debit_note"):
-            model = SalesInvoice if "invoice" in reference_type or "note" in reference_type else SalesOrder
-            invoice = database.session.get(model, reference_id)
-        else:
-            raise ValueError(_("Tipo de referencia inválido: {0}").format(reference_type))
-        if not invoice:
-            raise ValueError(_("Documento referenciado no existe."))
-        invoice = cast(PurchaseInvoice | SalesInvoice, invoice)
-        if getattr(invoice, "docstatus", 0) != 1:
-            raise ValueError(_("El documento referenciado debe estar aprobado."))
-        if payment.company and invoice.company and payment.company != invoice.company:
-            from werkzeug.exceptions import Conflict
-
-            raise Conflict(_("El documento referenciado no pertenece a la misma compañía."))
-        expected_party_type, expected_party_id = _reference_party_info(invoice)
-        if payment.party_type and payment.party_type != expected_party_type:
-            from werkzeug.exceptions import Conflict
-
-            raise Conflict(_("El tercero del pago no es compatible con el documento referenciado."))
-        if payment.party_id and expected_party_id and payment.party_id != expected_party_id:
-            from werkzeug.exceptions import Conflict
-
-            raise Conflict(_("El tercero del pago no coincide con el documento referenciado."))
-        flow_source_type = _flow_source_type(reference_type, invoice, line)
-        expected_payment_type_by_note = {
-            "purchase_credit_note": "receive",
-            "purchase_debit_note": "pay",
-            "sales_credit_note": "pay",
-            "sales_debit_note": "receive",
-        }
-        expected_payment_type = expected_payment_type_by_note.get(flow_source_type)
-        if expected_payment_type and payment.payment_type != expected_payment_type:
-            raise ValueError(_("El tipo de pago no corresponde con el tipo de nota referenciada."))
-        physical_reference_type = _physical_reference_type(reference_type, flow_source_type)
-        outstanding = _reference_outstanding(invoice, flow_source_type)
+        document = _load_payment_reference_document(reference_type, reference_id, requested_flow_source_type)
+        document = cast(PurchaseInvoice | SalesInvoice | PurchaseOrder | SalesOrder, document)
+        flow_source_type = _flow_source_type(reference_type, document, line)
+        _validate_payment_reference_document(payment=payment, document=document, flow_source_type=flow_source_type)
+        outstanding = _reference_outstanding(document, flow_source_type)
         if outstanding <= 0:
             raise ValueError(
                 _("El documento {0} no tiene saldo pendiente (Saldo: {1}).").format(
-                    getattr(invoice, "document_no", reference_id), outstanding
+                    getattr(document, "document_no", reference_id), outstanding
                 )
             )
         if allocated > outstanding + Decimal("0.01"):
             raise ValueError(
                 _("El monto aplicado ({0}) no puede ser mayor al saldo pendiente ({1}) del documento {2}.").format(
-                    allocated, outstanding, getattr(invoice, "document_no", reference_id)
+                    allocated, outstanding, getattr(document, "document_no", reference_id)
                 )
             )
-        discount_amount = Decimal(str(line.get("discount_amount") or "0"))
-        gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
-        difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
-        reference_date = _payment_reference_date(invoice)
-        outstanding_after = outstanding - allocated
-        reference = PaymentReference(
-            payment_id=payment.id,
-            reference_type=physical_reference_type,
-            flow_source_type=flow_source_type,
+        reference = _build_payment_reference(
+            payment=payment,
+            line=line,
+            document=document,
             reference_id=reference_id,
-            reference_document_no=getattr(invoice, "document_no", None) or reference_id,
-            reference_date=reference_date,
-            party_type=expected_party_type,
-            party_id=expected_party_id,
-            company=getattr(invoice, "company", None),
-            currency=getattr(invoice, "currency", None) or getattr(payment, "currency", None),
-            total_amount=invoice.grand_total,
-            outstanding_amount=outstanding,
-            outstanding_amount_after=outstanding_after,
-            allocated_amount=allocated,
-            exchange_rate=Decimal(str(line.get("exchange_rate") or getattr(invoice, "exchange_rate", None) or 1)),
-            difference_amount=difference_amount,
-            allocation_date=payment.posting_date,
-            discount_amount=discount_amount,
-            gain_loss_amount=gain_loss_amount,
-            notes=line.get("notes"),
+            reference_type=reference_type,
+            flow_source_type=flow_source_type,
+            allocated=allocated,
+            outstanding=outstanding,
         )
         database.session.add(reference)
         database.session.flush()
@@ -1198,11 +1271,11 @@ def _save_payment_references(
             amount=allocated,
         )
         if flow_source_type not in {"purchase_order", "sales_order"}:
-            invoice.outstanding_amount = outstanding_after
-            invoice.base_outstanding_amount = invoice.outstanding_amount
+            document.outstanding_amount = reference.outstanding_amount_after
+            document.base_outstanding_amount = document.outstanding_amount
         totals["allocated"] += allocated
-        totals["discount"] += discount_amount
-        totals["gain_loss"] += gain_loss_amount
+        totals["discount"] += reference.discount_amount
+        totals["gain_loss"] += reference.gain_loss_amount
     return totals
 
 
