@@ -90,6 +90,38 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
     ]
 
 
+def _validate_payment_series_default(
+    *,
+    company: str | None,
+    naming_series_id: str,
+) -> str:
+    """Valida la serie interna predeterminada para pagos."""
+    series = database.session.get(NamingSeries, naming_series_id)
+    if not series or not series.is_active:
+        raise IdentifierConfigurationError("La serie interna seleccionada no existe o está inactiva.")
+    if series.entity_type != "payment_entry":
+        raise IdentifierConfigurationError("La serie interna debe ser para pagos.")
+    if series.company not in (None, company):
+        raise IdentifierConfigurationError("La serie interna no pertenece a la compañía indicada.")
+    return naming_series_id
+
+
+def _validate_checkbook_default(
+    *,
+    company: str | None,
+    external_counter_id: str,
+) -> str:
+    """Valida la chequera predeterminada para pagos."""
+    counter = database.session.get(ExternalCounter, external_counter_id)
+    if not counter or not counter.is_active:
+        raise IdentifierConfigurationError("La chequera seleccionada no existe o está inactiva.")
+    if counter.counter_type != "checkbook":
+        raise IdentifierConfigurationError("El contador externo seleccionado debe ser una chequera.")
+    if counter.company != company:
+        raise IdentifierConfigurationError("La chequera no pertenece a la compañía indicada.")
+    return external_counter_id
+
+
 def _validate_bank_account_numbering_defaults(
     *,
     company: str | None,
@@ -98,22 +130,10 @@ def _validate_bank_account_numbering_defaults(
 ) -> tuple[str | None, str | None]:
     """Valida la serie de pagos y chequera predeterminadas de una cuenta bancaria."""
     if naming_series_id:
-        series = database.session.get(NamingSeries, naming_series_id)
-        if not series or not series.is_active:
-            raise IdentifierConfigurationError("La serie interna seleccionada no existe o está inactiva.")
-        if series.entity_type != "payment_entry":
-            raise IdentifierConfigurationError("La serie interna debe ser para pagos.")
-        if series.company not in (None, company):
-            raise IdentifierConfigurationError("La serie interna no pertenece a la compañía indicada.")
+        naming_series_id = _validate_payment_series_default(company=company, naming_series_id=naming_series_id)
 
     if external_counter_id:
-        counter = database.session.get(ExternalCounter, external_counter_id)
-        if not counter or not counter.is_active:
-            raise IdentifierConfigurationError("La chequera seleccionada no existe o está inactiva.")
-        if counter.counter_type != "checkbook":
-            raise IdentifierConfigurationError("El contador externo seleccionado debe ser una chequera.")
-        if counter.company != company:
-            raise IdentifierConfigurationError("La chequera no pertenece a la compañía indicada.")
+        external_counter_id = _validate_checkbook_default(company=company, external_counter_id=external_counter_id)
 
     return naming_series_id, external_counter_id
 
