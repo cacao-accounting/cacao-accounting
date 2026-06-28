@@ -179,9 +179,8 @@
       },
 
       init: function () {
-        var self = this;
-        document.addEventListener('bank-account-selected', function (event) {
-          self.applyBankAccount(event.detail || {});
+        document.addEventListener('bank-account-selected', (event) => {
+          this.applyBankAccount(event.detail || {});
         });
         this.$watch('header.mode_of_payment', (val) => {
           if (val !== 'check') {
