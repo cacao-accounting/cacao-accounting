@@ -222,7 +222,7 @@ _NOISE_FIELDS: frozenset[str] = frozenset(
 
 def _timeline_skip_fields(exclude_fields: set[str] | None = None) -> frozenset[str]:
     """Return the set of fields that should be hidden from the timeline diff."""
-    return _NOISE_FIELDS | frozenset(exclude_fields or set())
+    return _NOISE_FIELDS.union(exclude_fields or ())
 
 
 def _parse_timeline_changes(changes_json: str | None) -> dict[str, dict[str, Any]]:
