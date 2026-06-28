@@ -119,6 +119,52 @@ def test_audit_trail_submit_and_cancel_events(app_ctx):
     assert "cancelled" in actions
 
 
+def test_format_document_timeline_hides_noise_fields_and_formats_values(app_ctx):
+    from cacao_accounting.audit_trail_service import format_document_timeline
+    from cacao_accounting.database import AuditTrail, database
+
+    database.session.add(
+        AuditTrail(
+            document_type="journal_entry",
+            document_id="JRN-001",
+            action="updated",
+            changes_json=json.dumps(
+                {
+                    "memo": {"before": "", "after": "Memo final"},
+                    "updated_at": {"before": "2026-05-06", "after": "2026-05-07"},
+                    "status": {"before": None, "after": 1},
+                }
+            ),
+        )
+    )
+    database.session.commit()
+
+    timeline = format_document_timeline("journal_entry", "JRN-001", exclude_fields={"status"})
+
+    assert len(timeline) == 1
+    assert timeline[0]["changes"] == [{"field": "memo", "before": "-", "after": "Memo final"}]
+
+
+def test_format_document_timeline_handles_invalid_json(app_ctx):
+    from cacao_accounting.audit_trail_service import format_document_timeline
+    from cacao_accounting.database import AuditTrail, database
+
+    database.session.add(
+        AuditTrail(
+            document_type="journal_entry",
+            document_id="JRN-002",
+            action="updated",
+            changes_json="{not-valid-json}",
+        )
+    )
+    database.session.commit()
+
+    timeline = format_document_timeline("journal_entry", "JRN-002")
+
+    assert len(timeline) == 1
+    assert timeline[0]["changes"] == []
+
+
 def test_journal_detail_renders_changes_timeline(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, update_journal_draft
     from cacao_accounting.database import User, database
