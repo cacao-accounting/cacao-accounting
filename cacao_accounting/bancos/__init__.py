@@ -90,20 +90,38 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
     ]
 
 
+def _validate_naming_series_default(
+    *,
+    company: str | None,
+    naming_series_id: str,
+    entity_type: str,
+    error_prefix: str,
+    entity_type_error: str,
+) -> str:
+    """Valida una serie predeterminada reutilizando el mismo patrón de negocio."""
+    series = database.session.get(NamingSeries, naming_series_id)
+    if not series or not series.is_active:
+        raise IdentifierConfigurationError(f"{error_prefix} seleccionada no existe o está inactiva.")
+    if series.entity_type != entity_type:
+        raise IdentifierConfigurationError(entity_type_error)
+    if series.company not in (None, company):
+        raise IdentifierConfigurationError(f"{error_prefix} no pertenece a la compañía indicada.")
+    return naming_series_id
+
+
 def _validate_payment_series_default(
     *,
     company: str | None,
     naming_series_id: str,
 ) -> str:
     """Valida la serie interna predeterminada para pagos."""
-    series = database.session.get(NamingSeries, naming_series_id)
-    if not series or not series.is_active:
-        raise IdentifierConfigurationError("La serie interna seleccionada no existe o está inactiva.")
-    if series.entity_type != "payment_entry":
-        raise IdentifierConfigurationError("La serie interna debe ser para pagos.")
-    if series.company not in (None, company):
-        raise IdentifierConfigurationError("La serie interna no pertenece a la compañía indicada.")
-    return naming_series_id
+    return _validate_naming_series_default(
+        company=company,
+        naming_series_id=naming_series_id,
+        entity_type="payment_entry",
+        error_prefix="La serie interna",
+        entity_type_error="La serie interna debe ser para pagos.",
+    )
 
 
 def _validate_checkbook_default(
