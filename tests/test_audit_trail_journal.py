@@ -119,6 +119,32 @@ def test_audit_trail_submit_and_cancel_events(app_ctx):
     assert "cancelled" in actions
 
 
+def test_timeline_skip_fields_handles_none_and_empty_sets(app_ctx):
+    from cacao_accounting.audit_trail_service import _timeline_skip_fields
+
+    assert _timeline_skip_fields(None) == frozenset(
+        {
+            "updated_at",
+            "modified_at",
+            "last_seen",
+            "last_modified",
+            "last_updated",
+            "modification_date",
+        }
+    )
+    assert _timeline_skip_fields(set()) == _timeline_skip_fields(None)
+
+
+def test_timeline_skip_fields_merges_exclusions(app_ctx):
+    from cacao_accounting.audit_trail_service import _timeline_skip_fields
+
+    skip_fields = _timeline_skip_fields({"status", "memo"})
+
+    assert "status" in skip_fields
+    assert "memo" in skip_fields
+    assert "updated_at" in skip_fields
+
+
 def test_format_document_timeline_hides_noise_fields_and_formats_values(app_ctx):
     from cacao_accounting.audit_trail_service import format_document_timeline
     from cacao_accounting.database import AuditTrail, database
