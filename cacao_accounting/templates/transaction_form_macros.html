@@ -206,6 +206,7 @@
   </div>
 
   <div class="ca-journal-grid">
+    <p class="text-muted small mb-2">{{ _('Detalle editable de las líneas del documento, con artículo, cantidad, unidad, precio y monto.') }}</p>
     <table class="table table-sm table-bordered ca-journal-table">
       <caption>{{ _(title) }}</caption>
       <thead>
@@ -477,6 +478,7 @@
           </div>
 
           <div x-show="!loadingSource">
+            <p class="text-muted small mb-2">{{ _('Elementos disponibles en el documento de origen para traerlos al detalle actual.') }}</p>
             <table class="table table-sm ca-table">
               <caption>{{ _("Documentos origen disponibles") }}</caption>
               <thead>
@@ -839,6 +841,7 @@
         <div class="mt-4" x-show="importModal.parsedRows.length > 0">
           <h6>{{ _('Vista previa de datos') }} (<span x-text="importModal.parsedRows.length"></span> {{ _('líneas') }})</h6>
           <div class="table-responsive" style="max-height: 300px;">
+            <p class="text-muted small mb-2">{{ _('Vista previa de las filas importadas antes de agregarlas al detalle.') }}</p>
             <table class="table table-sm table-bordered">
               <thead>
                 <tr>

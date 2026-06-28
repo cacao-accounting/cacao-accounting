@@ -69,9 +69,16 @@
 
     <div class="ca-card mt-3 p-3">
       <h6>{{ _("Totales por Período") }}</h6>
+      <p class="text-muted small mb-2">{{ _("Esta vista detalla el monto asignado a cada período del presupuesto para facilitar el seguimiento de su ejecución.") }}</p>
       <hr class="my-2">
       <div class="table-responsive">
         <table class="table table-sm">
+          <thead>
+            <tr>
+              <th scope="col">{{ _("Período") }}</th>
+              <th scope="col" class="text-end">{{ _("Monto") }}</th>
+            </tr>
+          </thead>
           <tbody>
             {% for p in periods %}
             <tr>
