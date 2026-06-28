@@ -822,6 +822,33 @@ def _invoice_outstanding(invoice) -> Decimal:
     return min([computed, *cached_values])
 
 
+def _append_payment_source_row(
+    rows: list[dict],
+    *,
+    document: Any | None,
+    reference_type: str,
+    label: str,
+    url_route: str,
+    url_param_name: str,
+    flow_source_type: str | None = None,
+    document_type: str | None = None,
+) -> None:
+    """Agrega una fila de origen cuando el documento existe y cumple el filtro."""
+    if not document:
+        return
+    if document_type and getattr(document, "document_type", None) != document_type:
+        return
+    row = {
+        "reference_type": reference_type,
+        "label": label,
+        "document": document,
+        "url": url_for(url_route, **{url_param_name: document.id}),
+    }
+    if flow_source_type:
+        row["flow_source_type"] = flow_source_type
+    rows.append(row)
+
+
 def _payment_source_rows(
     purchase_invoice_ids: list[str],
     sales_invoice_ids: list[str],
@@ -835,97 +862,85 @@ def _payment_source_rows(
     """Construye las filas origen para el formulario de pago."""
     rows = []
     for invoice_id in purchase_invoice_ids:
-        invoice = database.session.get(PurchaseInvoice, invoice_id)
-        if invoice:
-            rows.append(
-                {
-                    "reference_type": "purchase_invoice",
-                    "label": LABEL_FACTURA_COMPRA,
-                    "document": invoice,
-                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(PurchaseInvoice, invoice_id),
+            reference_type="purchase_invoice",
+            label=LABEL_FACTURA_COMPRA,
+            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
+            url_param_name="invoice_id",
+        )
     for invoice_id in sales_invoice_ids:
-        invoice = database.session.get(SalesInvoice, invoice_id)
-        if invoice:
-            rows.append(
-                {
-                    "reference_type": "sales_invoice",
-                    "label": LABEL_FACTURA_VENTA,
-                    "document": invoice,
-                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(SalesInvoice, invoice_id),
+            reference_type="sales_invoice",
+            label=LABEL_FACTURA_VENTA,
+            url_route=VENTAS_FACTURA_VENTA_ROUTE,
+            url_param_name="invoice_id",
+        )
     for order_id in purchase_order_ids:
-        order = database.session.get(PurchaseOrder, order_id)
-        if order:
-            rows.append(
-                {
-                    "reference_type": "purchase_order",
-                    "label": _("Orden de Compra"),
-                    "document": order,
-                    "url": url_for("compras.compras_orden_compra", order_id=order.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(PurchaseOrder, order_id),
+            reference_type="purchase_order",
+            label=_("Orden de Compra"),
+            url_route="compras.compras_orden_compra",
+            url_param_name="order_id",
+        )
     for order_id in sales_order_ids:
-        order = database.session.get(SalesOrder, order_id)
-        if order:
-            rows.append(
-                {
-                    "reference_type": "sales_order",
-                    "label": _("Orden de Venta"),
-                    "document": order,
-                    "url": url_for("ventas.ventas_orden_venta", order_id=order.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(SalesOrder, order_id),
+            reference_type="sales_order",
+            label=_("Orden de Venta"),
+            url_route="ventas.ventas_orden_venta",
+            url_param_name="order_id",
+        )
     for invoice_id in purchase_credit_note_ids:
-        invoice = database.session.get(PurchaseInvoice, invoice_id)
-        if invoice and invoice.document_type == "purchase_credit_note":
-            rows.append(
-                {
-                    "reference_type": "purchase_invoice",
-                    "flow_source_type": "purchase_credit_note",
-                    "label": _("Nota de Crédito de Compra"),
-                    "document": invoice,
-                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(PurchaseInvoice, invoice_id),
+            reference_type="purchase_invoice",
+            label=_("Nota de Crédito de Compra"),
+            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
+            url_param_name="invoice_id",
+            flow_source_type="purchase_credit_note",
+            document_type="purchase_credit_note",
+        )
     for invoice_id in purchase_debit_note_ids:
-        invoice = database.session.get(PurchaseInvoice, invoice_id)
-        if invoice and invoice.document_type == "purchase_debit_note":
-            rows.append(
-                {
-                    "reference_type": "purchase_invoice",
-                    "flow_source_type": "purchase_debit_note",
-                    "label": _("Nota de Débito de Compra"),
-                    "document": invoice,
-                    "url": url_for(COMPRAS_FACTURA_COMPRA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(PurchaseInvoice, invoice_id),
+            reference_type="purchase_invoice",
+            label=_("Nota de Débito de Compra"),
+            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
+            url_param_name="invoice_id",
+            flow_source_type="purchase_debit_note",
+            document_type="purchase_debit_note",
+        )
     for invoice_id in sales_credit_note_ids:
-        invoice = database.session.get(SalesInvoice, invoice_id)
-        if invoice and invoice.document_type == "sales_credit_note":
-            rows.append(
-                {
-                    "reference_type": "sales_invoice",
-                    "flow_source_type": "sales_credit_note",
-                    "label": _("Nota de Crédito de Venta"),
-                    "document": invoice,
-                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(SalesInvoice, invoice_id),
+            reference_type="sales_invoice",
+            label=_("Nota de Crédito de Venta"),
+            url_route=VENTAS_FACTURA_VENTA_ROUTE,
+            url_param_name="invoice_id",
+            flow_source_type="sales_credit_note",
+            document_type="sales_credit_note",
+        )
     for invoice_id in sales_debit_note_ids:
-        invoice = database.session.get(SalesInvoice, invoice_id)
-        if invoice and invoice.document_type == "sales_debit_note":
-            rows.append(
-                {
-                    "reference_type": "sales_invoice",
-                    "flow_source_type": "sales_debit_note",
-                    "label": _("Nota de Débito de Venta"),
-                    "document": invoice,
-                    "url": url_for(VENTAS_FACTURA_VENTA_ROUTE, invoice_id=invoice.id),
-                }
-            )
+        _append_payment_source_row(
+            rows,
+            document=database.session.get(SalesInvoice, invoice_id),
+            reference_type="sales_invoice",
+            label=_("Nota de Débito de Venta"),
+            url_route=VENTAS_FACTURA_VENTA_ROUTE,
+            url_param_name="invoice_id",
+            flow_source_type="sales_debit_note",
+            document_type="sales_debit_note",
+        )
     return rows
 
 
