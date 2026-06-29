@@ -822,7 +822,9 @@
         },
 
         processSelectedSourceItems() {
-          this.sourceItems.filter((item) => item.selected).forEach((item) => this.addSourceItemAsLine(item));
+          for (const item of this.sourceItems.filter((item) => item.selected)) {
+            this.addSourceItemAsLine(item);
+          }
         },
 
         addSourceItemAsLine(item) {
@@ -1029,7 +1031,9 @@
           }
 
           // Append-only behavior: push to existing lines
-          this.importModal.parsedRows.forEach((row) => this._processImportedRow(row));
+          for (const row of this.importModal.parsedRows) {
+            this._processImportedRow(row);
+          }
 
           if (!this.lines.length) this.addRow();
 
@@ -1040,7 +1044,9 @@
 
         _processImportedRow(row) {
           const line = this.newLine();
-          Object.keys(row).forEach((key) => this._assignRowKeyToLine(line, row, key));
+          for (const key of Object.keys(row)) {
+            this._assignRowKeyToLine(line, row, key);
+          }
 
           // Handle specific mappings
           if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
@@ -1083,9 +1089,7 @@
 
         async downloadTemplate() {
           if (!this.importModal.schema) return;
-          const headers = this.importModal.schema.columns.map((c) => {
-            return c.required ? `${c.label} *` : c.label;
-          });
+          const headers = this.importModal.schema.columns.map((c) => c.required ? `${c.label} *` : c.label);
           const workbook = new ExcelJS.Workbook();
           const worksheet = workbook.addWorksheet("Plantilla");
           worksheet.addRow(headers);
