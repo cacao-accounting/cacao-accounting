@@ -223,6 +223,37 @@ def test_purchase_debit_note_list_route(request):
                 assert "Listado de Notas de Débito de Compra" in response.get_data(as_text=True)
 
 
+def test_purchase_invoice_document_type_helper_prefers_sources_and_explicit_override(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.compras import (
+            PURCHASE_CREDIT_NOTE,
+            PURCHASE_INVOICE,
+            PURCHASE_RETURN,
+            _purchase_invoice_document_type,
+        )
+
+        source_ids = {"from_receipt_id": "REC-1", "from_invoice_id": None}
+        with app.test_request_context("/buying/purchase-invoice/new"):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_RETURN
+
+        source_ids = {"from_receipt_id": None, "from_invoice_id": "PINV-1"}
+        with app.test_request_context("/buying/purchase-invoice/new"):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE
+
+        source_ids = {"from_receipt_id": None, "from_invoice_id": None}
+        with app.test_request_context("/buying/purchase-invoice/new"):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
+
+        with app.test_request_context(
+            "/buying/purchase-invoice/new",
+            method="POST",
+            data={"document_type": PURCHASE_CREDIT_NOTE},
+        ):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE
+
+
 def test_sales_credit_note_list_route(request):
 
     if request.config.getoption("--slow") == "True":
@@ -1039,7 +1070,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 assert "Buscar por documento" in html
                 assert "FILTER-JE-01" in html
                 assert "Referencia Filtro" in html
-                assert "value=\"FILTER-JE\"" in html
+                assert 'value="FILTER-JE"' in html
                 assert 'value="draft" selected' in html
 
                 response = client.get("/accounting/journal/recurring?search=FILTER-REC")
@@ -1048,13 +1079,13 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 assert "Buscar por código" in html
                 assert "FILTER-REC-01" in html
                 assert "Plantilla Filtro" in html
-                assert "value=\"FILTER-REC\"" in html
+                assert 'value="FILTER-REC"' in html
 
                 response = client.get("/accounting/exchange-revaluation?search=cacao")
                 html = response.get_data(as_text=True)
                 assert response.status_code == 200
                 assert "Buscar por número" in html
-                assert "value=\"cacao\"" in html
+                assert 'value="cacao"' in html
 
 
 def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(request):
