@@ -22,6 +22,11 @@
 - **Implementacion:** Se agrego el helper `cloneModalLine()` para clonar lineas de referencia y fiscales sin usar el patron `{ ...(source || {}) }` que Sonar marcaba como ruido.
 - **Verificacion:** `tests/test_fiscal_preview.py::test_forms_render_tax_charges_block` quedo en verde. `ruff` no aplica a templates Jinja/HTML.
 
+## 2026-06-29 (SonarCloud: limpieza de import de comprobante manual)
+- **Solicitud:** Cerrar issues menores de SonarCloud en `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`.
+- **Implementacion:** `findJournalImportColumnIndex()` ahora usa `Set.has()` en lugar de `includes()` sobre una lista temporal, y `normalizeLine()` delega el merge de la linea a `mergeJournalLine()` para eliminar el fallback con objeto vacio.
+- **Verificacion:** `tests/test_01vistas.py::test_visit_views` y `tests/test_09_journal_entry_form.py` quedaron en verde.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
