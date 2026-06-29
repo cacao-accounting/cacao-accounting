@@ -508,9 +508,7 @@
             this.bookOptions = payload.results || [];
             if (!this.initialBooksSelectionApplied) {
               if (this.selectedBooks.length) {
-                this.selectedBooks = this.selectedBooks.filter((code) => {
-                  return this.bookOptions.some((book) => book.value === code);
-                });
+                this.selectedBooks = this.selectedBooks.filter((code) => this._isBookSelected(code));
               } else {
                 this.selectedBooks = this.bookOptions.map((book) => book.value);
               }
@@ -520,6 +518,10 @@
 
             this.selectedBooks = this.bookOptions.map((book) => book.value);
           });
+      },
+
+      _isBookSelected: function(code) {
+        return this.bookOptions.some((book) => book.value === code);
       },
 
       toggleBook: function (bookCode) {
