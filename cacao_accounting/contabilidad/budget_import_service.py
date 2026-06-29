@@ -205,93 +205,17 @@ class BudgetImportService:
         budget = database.session.get(Budget, budget_id)
         if not budget:
             raise BudgetError("Presupuesto no encontrado.")
-
         if budget.status != "draft":
             raise BudgetError("Solo se pueden importar líneas a presupuestos en borrador.")
 
-        import_batch = BudgetImport(
-            budget_id=budget_id,
-            filename=filename,
-            status="failed",
-            rows_read=len(rows),
-            created_by=user_id,
+        import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
+        caches = self._build_caches(budget)
+        self._validate_headers(rows, caches.period_names)
+
+        existing_lines = self._get_existing_line_combos(budget_id)
+        errors, validated_lines_count = self._process_import_rows(
+            rows, import_batch.id, caches, existing_lines
         )
-        database.session.add(import_batch)
-        database.session.flush()
-
-        errors = []
-        validated_lines_count = 0
-
-        # Cachés
-        accounts_map = {
-            a.code: a.id for a in database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
-        }
-        cc_map = {c.code: c.id for c in database.session.query(CostCenter).filter_by(entity=budget.company).all()}
-        unit_map = {u.code: u.id for u in database.session.query(Unit).filter_by(entity=budget.company).all()}
-        project_map = {p.code: p.id for p in database.session.query(Project).filter_by(entity=budget.company).all()}
-        periods = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=budget.fiscal_year_id).all()
-        period_map = {p.name: p.id for p in periods}
-        period_names = set(period_map.keys())
-
-        # Validar columnas desconocidas
-        allowed_headers = {
-            "Cuenta",
-            _LABEL_CENTRO_COSTO,
-            _LABEL_UNIDAD_NEGOCIO,
-            "Proyecto",
-            _LABEL_DESCRIPCION,
-            "Total",
-        } | period_names
-        if rows:
-            first_row_headers = set(rows[0].keys())
-            for header in first_row_headers:
-                if header and header not in allowed_headers:
-                    raise BudgetError(f"Columna desconocida detectada: '{header}'.")
-
-        existing_lines = set()
-        for bl in database.session.query(BudgetLine).filter_by(budget_id=budget_id).all():
-            existing_lines.add((bl.account_id, bl.cost_center_id, bl.period_id, bl.business_unit_id or "", bl.project_id or ""))
-
-        for i, row in enumerate(rows, start=2):
-            row_errors = []
-            account_id = accounts_map.get(row.get("Cuenta"))
-            if not account_id:
-                row_errors.append(f"Cuenta '{row.get('Cuenta')}' no válida.")
-
-            cc_id = cc_map.get(row.get(_LABEL_CENTRO_COSTO))
-            if not cc_id:
-                row_errors.append(f"Centro de Costo '{row.get('Centro de Costo')}' no válido.")
-
-            unit_id = unit_map.get(row.get(_LABEL_UNIDAD_NEGOCIO)) if row.get(_LABEL_UNIDAD_NEGOCIO) else None
-            if row.get(_LABEL_UNIDAD_NEGOCIO) and not unit_id:
-                row_errors.append(f"Unidad de Negocio '{row.get('Unidad de Negocio')}' no válida.")
-
-            project_id = project_map.get(row.get("Proyecto")) if row.get("Proyecto") else None
-            if row.get("Proyecto") and not project_id:
-                row_errors.append(f"Proyecto '{row.get('Proyecto')}' no válido.")
-
-            row_combs_to_add: List[Any] = []
-            row_lines_to_add, row_total, period_errors = self._validate_row_periods(
-                row, i, account_id, cc_id, unit_id, project_id, period_map, period_names, existing_lines, row_combs_to_add,
-            )
-            row_errors.extend(period_errors)
-
-            total_val = row.get("Total", "").strip()
-            if total_val:
-                try:
-                    if abs(Decimal(total_val) - row_total) > Decimal("0.01"):
-                        row_errors.append(f"Total {total_val} no coincide con suma {row_total}.")
-                except InvalidOperation:
-                    row_errors.append(f"Total '{total_val}' no numérico.")
-
-            if row_errors:
-                errors.append(f"Fila {i}: " + " | ".join(row_errors))
-            else:
-                for comb in row_combs_to_add:
-                    existing_lines.add(comb)
-                for line_data in row_lines_to_add:
-                    database.session.add(BudgetImportLine(import_id=import_batch.id, **line_data))
-                    validated_lines_count += 1
 
         if errors:
             import_batch.status = "failed"
@@ -303,6 +227,128 @@ class BudgetImportService:
         import_batch.rows_inserted = validated_lines_count
         database.session.commit()
         return import_batch
+
+    def _create_import_batch(self, budget_id: str, filename: str, rows_count: int, user_id: str) -> BudgetImport:
+        """Create and flush the import batch record."""
+        batch = BudgetImport(
+            budget_id=budget_id,
+            filename=filename,
+            status="failed",
+            rows_read=rows_count,
+            created_by=user_id,
+        )
+        database.session.add(batch)
+        database.session.flush()
+        return batch
+
+    def _build_caches(self, budget: Budget) -> Any:
+        """Build lookup maps for accounts, cost centers, units, projects, and periods."""
+        accounts_map = {
+            a.code: a.id for a in
+            database.session.query(Accounts).filter_by(entity=budget.company, group=False).all()
+        }
+        cc_map = {
+            c.code: c.id for c in
+            database.session.query(CostCenter).filter_by(entity=budget.company).all()
+        }
+        unit_map = {
+            u.code: u.id for u in
+            database.session.query(Unit).filter_by(entity=budget.company).all()
+        }
+        project_map = {
+            p.code: p.id for p in
+            database.session.query(Project).filter_by(entity=budget.company).all()
+        }
+        periods = database.session.query(AccountingPeriod).filter_by(
+            fiscal_year_id=budget.fiscal_year_id
+        ).all()
+        period_map = {p.name: p.id for p in periods}
+        period_names = set(period_map.keys())
+
+        class Caches:
+            pass
+        c = Caches()
+        c.accounts_map = accounts_map
+        c.cc_map = cc_map
+        c.unit_map = unit_map
+        c.project_map = project_map
+        c.period_map = period_map
+        c.period_names = period_names
+        return c
+
+    def _validate_headers(self, rows: List[Dict[str, Any]], period_names: set) -> None:
+        """Validate that all column headers are recognized."""
+        if not rows:
+            return
+        allowed_headers = {
+            "Cuenta", _LABEL_CENTRO_COSTO, _LABEL_UNIDAD_NEGOCIO,
+            "Proyecto", _LABEL_DESCRIPCION, "Total",
+        } | period_names
+        first_row_headers = set(rows[0].keys())
+        for header in first_row_headers:
+            if header and header not in allowed_headers:
+                raise BudgetError(f"Columna desconocida detectada: '{header}'.")
+
+    def _get_existing_line_combos(self, budget_id: str) -> set:
+        """Get existing budget line combinations to detect duplicates."""
+        return {
+            (bl.account_id, bl.cost_center_id, bl.period_id, bl.business_unit_id or "", bl.project_id or "")
+            for bl in database.session.query(BudgetLine).filter_by(budget_id=budget_id).all()
+        }
+
+    def _process_import_rows(
+        self, rows: List[Dict[str, Any]], import_id: str, caches: Any, existing_lines: set
+    ) -> tuple[List[str], int]:
+        """Process all import rows and return errors and validated count."""
+        errors = []
+        validated_lines_count = 0
+        for i, row in enumerate(rows, start=2):
+            row_errors, row_combs_to_add, row_lines_to_add = self._validate_single_row(
+                i, row, caches, existing_lines
+            )
+            if row_errors:
+                errors.append(f"Fila {i}: " + " | ".join(row_errors))
+            else:
+                existing_lines.update(row_combs_to_add)
+                for line_data in row_lines_to_add:
+                    database.session.add(BudgetImportLine(import_id=import_id, **line_data))
+                    validated_lines_count += 1
+        return errors, validated_lines_count
+
+    def _validate_single_row(
+        self, row_idx: int, row: Dict[str, Any], caches: Any, existing_lines: set
+    ) -> tuple[List[str], list, list]:
+        """Validate a single import row and return errors, combinations, and lines."""
+        row_errors = []
+        account_id = caches.accounts_map.get(row.get("Cuenta"))
+        if not account_id:
+            row_errors.append(f"Cuenta '{row.get('Cuenta')}' no válida.")
+        cc_id = caches.cc_map.get(row.get(_LABEL_CENTRO_COSTO))
+        if not cc_id:
+            row_errors.append(f"Centro de Costo '{row.get('Centro de Costo')}' no válido.")
+        unit_id = caches.unit_map.get(row.get(_LABEL_UNIDAD_NEGOCIO)) if row.get(_LABEL_UNIDAD_NEGOCIO) else None
+        if row.get(_LABEL_UNIDAD_NEGOCIO) and not unit_id:
+            row_errors.append(f"Unidad de Negocio '{row.get('Unidad de Negocio')}' no válida.")
+        project_id = caches.project_map.get(row.get("Proyecto")) if row.get("Proyecto") else None
+        if row.get("Proyecto") and not project_id:
+            row_errors.append(f"Proyecto '{row.get('Proyecto')}' no válido.")
+
+        row_combs_to_add: List[Any] = []
+        row_lines_to_add, row_total, period_errors = self._validate_row_periods(
+            row, row_idx, account_id, cc_id, unit_id, project_id,
+            caches.period_map, caches.period_names, existing_lines, row_combs_to_add,
+        )
+        row_errors.extend(period_errors)
+
+        total_val = row.get("Total", "").strip()
+        if total_val:
+            try:
+                if abs(Decimal(total_val) - row_total) > Decimal("0.01"):
+                    row_errors.append(f"Total {total_val} no coincide con suma {row_total}.")
+            except InvalidOperation:
+                row_errors.append(f"Total '{total_val}' no numérico.")
+
+        return row_errors, row_combs_to_add, row_lines_to_add
 
     def get_staged_lines(self, import_id: str, limit: int = 100) -> list[BudgetImportLine]:
         """Obtiene líneas en staging para previsualización de importación."""
