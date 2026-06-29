@@ -373,14 +373,8 @@ def _crear_nota_bancaria(note_kind: str):
     company = request.form.get("company") or request.args.get("company") or None
     if request.method == "POST":
         amount = _form_decimal("amount")
-        if amount <= 0:
-            abort(409)
         bank_account_id = request.form.get("bank_account_id", "")
-        bank_account = database.session.get(BankAccount, bank_account_id)
-        if not bank_account:
-            abort(400)
-        if company and bank_account.company != company:
-            abort(409)
+        _bank_account_for_note(bank_account_id, company, amount)
         transaction = BankTransaction(
             bank_account_id=bank_account_id,
             posting_date=request.form.get("posting_date") or None,
@@ -415,6 +409,19 @@ def _crear_nota_bancaria(note_kind: str):
         cuentas=cuentas,
         company=company,
     )
+
+
+def _bank_account_for_note(bank_account_id: str, company: str | None, amount: Decimal) -> BankAccount:
+    """Obtiene la cuenta bancaria de una nota y valida su pertenencia."""
+    if amount <= 0:
+        abort(409)
+
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account:
+        abort(400)
+    if company and bank_account.company != company:
+        abort(409)
+    return bank_account
 
 
 @bancos.route("/bank-transaction/reconcile", methods=["POST"])
@@ -947,11 +954,11 @@ def _validate_payment_reference_line(
     allocated = Decimal(str(line.get("allocated_amount", "0")))
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
     reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
-    if reference_key in _validate_payment_reference_line.processed_keys:
+    if reference_key in _validate_payment_reference_line.processed_keys:  # type: ignore[attr-defined]
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
-    _validate_payment_reference_line.processed_keys.add(reference_key)
+    _validate_payment_reference_line.processed_keys.add(reference_key)  # type: ignore[attr-defined]
     if allocated <= 0:
         if allocated < 0:
             from werkzeug.exceptions import Conflict
@@ -1004,103 +1011,136 @@ def _payment_source_rows(
     sales_debit_note_ids: list[str],
 ) -> list[dict]:
     """Construye las filas origen para el formulario de pago."""
-    rows = []
-    for invoice_id in purchase_invoice_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(PurchaseInvoice, invoice_id),
-            reference_type="purchase_invoice",
-            label=LABEL_FACTURA_COMPRA,
-            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
-            url_param_name="invoice_id",
-        )
-    for invoice_id in sales_invoice_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(SalesInvoice, invoice_id),
-            reference_type="sales_invoice",
-            label=LABEL_FACTURA_VENTA,
-            url_route=VENTAS_FACTURA_VENTA_ROUTE,
-            url_param_name="invoice_id",
-        )
-    for order_id in purchase_order_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(PurchaseOrder, order_id),
-            reference_type="purchase_order",
-            label=_("Orden de Compra"),
-            url_route="compras.compras_orden_compra",
-            url_param_name="order_id",
-        )
-    for order_id in sales_order_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(SalesOrder, order_id),
-            reference_type="sales_order",
-            label=_("Orden de Venta"),
-            url_route="ventas.ventas_orden_venta",
-            url_param_name="order_id",
-        )
-    for invoice_id in purchase_credit_note_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(PurchaseInvoice, invoice_id),
-            reference_type="purchase_invoice",
-            label=_("Nota de Crédito de Compra"),
-            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
-            url_param_name="invoice_id",
-            flow_source_type="purchase_credit_note",
-            document_type="purchase_credit_note",
-        )
-    for invoice_id in purchase_debit_note_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(PurchaseInvoice, invoice_id),
-            reference_type="purchase_invoice",
-            label=_("Nota de Débito de Compra"),
-            url_route=COMPRAS_FACTURA_COMPRA_ROUTE,
-            url_param_name="invoice_id",
-            flow_source_type="purchase_debit_note",
-            document_type="purchase_debit_note",
-        )
-    for invoice_id in sales_credit_note_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(SalesInvoice, invoice_id),
-            reference_type="sales_invoice",
-            label=_("Nota de Crédito de Venta"),
-            url_route=VENTAS_FACTURA_VENTA_ROUTE,
-            url_param_name="invoice_id",
-            flow_source_type="sales_credit_note",
-            document_type="sales_credit_note",
-        )
-    for invoice_id in sales_debit_note_ids:
-        _append_payment_source_row(
-            rows,
-            document=database.session.get(SalesInvoice, invoice_id),
-            reference_type="sales_invoice",
-            label=_("Nota de Débito de Venta"),
-            url_route=VENTAS_FACTURA_VENTA_ROUTE,
-            url_param_name="invoice_id",
-            flow_source_type="sales_debit_note",
-            document_type="sales_debit_note",
-        )
+    rows: list[dict[str, Any]] = []
+    for reference_type, reference_id in _payment_source_pairs(
+        purchase_invoice_ids,
+        sales_invoice_ids,
+        purchase_order_ids,
+        sales_order_ids,
+        purchase_credit_note_ids,
+        purchase_debit_note_ids,
+        sales_credit_note_ids,
+        sales_debit_note_ids,
+    ):
+        _append_payment_source_row(rows, **_payment_source_descriptor(reference_type, reference_id))
     return rows
+
+
+def _payment_source_pairs(
+    purchase_invoice_ids: list[str],
+    sales_invoice_ids: list[str],
+    purchase_order_ids: list[str],
+    sales_order_ids: list[str],
+    purchase_credit_note_ids: list[str],
+    purchase_debit_note_ids: list[str],
+    sales_credit_note_ids: list[str],
+    sales_debit_note_ids: list[str],
+) -> list[tuple[str, str]]:
+    """Aplana los orígenes de pago preservando el orden de entrada."""
+    pairs: list[tuple[str, str]] = []
+    pairs.extend(("purchase_invoice", invoice_id) for invoice_id in purchase_invoice_ids)
+    pairs.extend(("sales_invoice", invoice_id) for invoice_id in sales_invoice_ids)
+    pairs.extend(("purchase_order", order_id) for order_id in purchase_order_ids)
+    pairs.extend(("sales_order", order_id) for order_id in sales_order_ids)
+    pairs.extend(("purchase_credit_note", invoice_id) for invoice_id in purchase_credit_note_ids)
+    pairs.extend(("purchase_debit_note", invoice_id) for invoice_id in purchase_debit_note_ids)
+    pairs.extend(("sales_credit_note", invoice_id) for invoice_id in sales_credit_note_ids)
+    pairs.extend(("sales_debit_note", invoice_id) for invoice_id in sales_debit_note_ids)
+    return pairs
+
+
+def _payment_source_descriptor(reference_type: str, reference_id: str) -> dict[str, Any]:
+    """Devuelve el descriptor completo para una fila de origen de pago."""
+    match reference_type:
+        case "purchase_invoice":
+            return {
+                "document": database.session.get(PurchaseInvoice, reference_id),
+                "reference_type": "purchase_invoice",
+                "label": LABEL_FACTURA_COMPRA,
+                "url_route": COMPRAS_FACTURA_COMPRA_ROUTE,
+                "url_param_name": "invoice_id",
+            }
+        case "sales_invoice":
+            return {
+                "document": database.session.get(SalesInvoice, reference_id),
+                "reference_type": "sales_invoice",
+                "label": LABEL_FACTURA_VENTA,
+                "url_route": VENTAS_FACTURA_VENTA_ROUTE,
+                "url_param_name": "invoice_id",
+            }
+        case "purchase_order":
+            return {
+                "document": database.session.get(PurchaseOrder, reference_id),
+                "reference_type": "purchase_order",
+                "label": _("Orden de Compra"),
+                "url_route": "compras.compras_orden_compra",
+                "url_param_name": "order_id",
+            }
+        case "sales_order":
+            return {
+                "document": database.session.get(SalesOrder, reference_id),
+                "reference_type": "sales_order",
+                "label": _("Orden de Venta"),
+                "url_route": "ventas.ventas_orden_venta",
+                "url_param_name": "order_id",
+            }
+        case "purchase_credit_note":
+            return {
+                "document": database.session.get(PurchaseInvoice, reference_id),
+                "reference_type": "purchase_invoice",
+                "label": _("Nota de Crédito de Compra"),
+                "url_route": COMPRAS_FACTURA_COMPRA_ROUTE,
+                "url_param_name": "invoice_id",
+                "flow_source_type": "purchase_credit_note",
+                "document_type": "purchase_credit_note",
+            }
+        case "purchase_debit_note":
+            return {
+                "document": database.session.get(PurchaseInvoice, reference_id),
+                "reference_type": "purchase_invoice",
+                "label": _("Nota de Débito de Compra"),
+                "url_route": COMPRAS_FACTURA_COMPRA_ROUTE,
+                "url_param_name": "invoice_id",
+                "flow_source_type": "purchase_debit_note",
+                "document_type": "purchase_debit_note",
+            }
+        case "sales_credit_note":
+            return {
+                "document": database.session.get(SalesInvoice, reference_id),
+                "reference_type": "sales_invoice",
+                "label": _("Nota de Crédito de Venta"),
+                "url_route": VENTAS_FACTURA_VENTA_ROUTE,
+                "url_param_name": "invoice_id",
+                "flow_source_type": "sales_credit_note",
+                "document_type": "sales_credit_note",
+            }
+        case "sales_debit_note":
+            return {
+                "document": database.session.get(SalesInvoice, reference_id),
+                "reference_type": "sales_invoice",
+                "label": _("Nota de Débito de Venta"),
+                "url_route": VENTAS_FACTURA_VENTA_ROUTE,
+                "url_param_name": "invoice_id",
+                "flow_source_type": "sales_debit_note",
+                "document_type": "sales_debit_note",
+            }
+        case _:
+            raise ValueError(_("Tipo de referencia de pago no soportado."))
 
 
 def _payment_profile_from_source_type(flow_source_type: str) -> tuple[str, str]:
     """Resuelve party_type/payment_type según el tipo documental origen."""
-    mapping = {
-        "purchase_invoice": ("supplier", "pay"),
-        "sales_invoice": ("customer", "receive"),
-        "purchase_order": ("supplier", "pay"),
-        "sales_order": ("customer", "receive"),
-        "purchase_credit_note": ("supplier", "receive"),
-        "purchase_debit_note": ("supplier", "pay"),
-        "sales_credit_note": ("customer", "pay"),
-        "sales_debit_note": ("customer", "receive"),
-    }
-    return mapping.get(flow_source_type, ("customer", "receive"))
+    match flow_source_type:
+        case "purchase_invoice" | "purchase_order" | "purchase_debit_note":
+            return "supplier", "pay"
+        case "purchase_credit_note":
+            return "supplier", "receive"
+        case "sales_invoice" | "sales_order" | "sales_debit_note":
+            return "customer", "receive"
+        case "sales_credit_note":
+            return "customer", "pay"
+        case _:
+            return "customer", "receive"
 
 
 def _reference_party_info(document: Any) -> tuple[str, str | None]:
@@ -1199,8 +1239,12 @@ def _validate_payment_header(
         if target_bank_account.company != company:
             raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
 
-    if payment_type in ("pay", "receive") and (not party_type or not party_id):
-        raise ValueError(_("El tercero es obligatorio para pagos y cobros."))
+    match payment_type:
+        case "pay" | "receive":
+            if not party_type or not party_id:
+                raise ValueError(_("El tercero es obligatorio para pagos y cobros."))
+        case _:
+            pass
     if party_id and party_type not in ("supplier", "customer"):
         raise ValueError(_("El tipo de tercero del pago no es válido."))
 
@@ -1229,71 +1273,92 @@ def _save_payment_references(
         )
         if applied_amount <= 0:
             continue
-        document = _load_payment_reference_document(reference_type, reference_id, requested_flow_source_type)
-        document = cast(PurchaseInvoice | SalesInvoice | PurchaseOrder | SalesOrder, document)
-        flow_source_type = _flow_source_type(reference_type, document, line)
-        _validate_payment_reference_document(payment=payment, document=document, flow_source_type=flow_source_type)
-        outstanding = _reference_outstanding(document, flow_source_type)
-        if outstanding <= 0:
-            raise ValueError(
-                _("El documento {0} no tiene saldo pendiente (Saldo: {1}).").format(
-                    getattr(document, "document_no", reference_id), outstanding
-                )
-            )
-        if allocated > outstanding + Decimal("0.01"):
-            raise ValueError(
-                _("El monto aplicado ({0}) no puede ser mayor al saldo pendiente ({1}) del documento {2}.").format(
-                    allocated, outstanding, getattr(document, "document_no", reference_id)
-                )
-            )
-        reference = _build_payment_reference(
+        totals = _apply_payment_reference_line(
             payment=payment,
             line=line,
-            document=document,
-            reference_id=reference_id,
             reference_type=reference_type,
-            flow_source_type=flow_source_type,
+            reference_id=reference_id,
+            requested_flow_source_type=requested_flow_source_type,
             allocated=allocated,
-            outstanding=outstanding,
+            totals=totals,
         )
-        database.session.add(reference)
-        database.session.flush()
-        create_document_relation(
-            source_type=flow_source_type,
-            source_id=reference_id,
-            source_item_id=None,
-            target_type="payment_entry",
-            target_id=payment.id,
-            target_item_id=reference.id,
-            qty=Decimal("1"),
-            uom=None,
-            rate=allocated,
-            amount=allocated,
+    return totals
+
+
+def _apply_payment_reference_line(
+    *,
+    payment: PaymentEntry,
+    line: dict,
+    reference_type: str,
+    reference_id: str,
+    requested_flow_source_type: str,
+    allocated: Decimal,
+    totals: dict[str, Decimal],
+) -> dict[str, Decimal]:
+    """Aplica una linea de referencia de pago y acumula totales."""
+    document = _load_payment_reference_document(reference_type, reference_id, requested_flow_source_type)
+    document = cast(PurchaseInvoice | SalesInvoice | PurchaseOrder | SalesOrder, document)
+    flow_source_type = _flow_source_type(reference_type, document, line)
+    _validate_payment_reference_document(payment=payment, document=document, flow_source_type=flow_source_type)
+    outstanding = _reference_outstanding(document, flow_source_type)
+    if outstanding <= 0:
+        raise ValueError(
+            _("El documento {0} no tiene saldo pendiente (Saldo: {1}).").format(
+                getattr(document, "document_no", reference_id), outstanding
+            )
         )
-        if flow_source_type not in {"purchase_order", "sales_order"}:
-            document.outstanding_amount = reference.outstanding_amount_after
-            document.base_outstanding_amount = document.outstanding_amount
-        totals["allocated"] += allocated
-        totals["discount"] += reference.discount_amount
-        totals["gain_loss"] += reference.gain_loss_amount
+    if allocated > outstanding + Decimal("0.01"):
+        raise ValueError(
+            _("El monto aplicado ({0}) no puede ser mayor al saldo pendiente ({1}) del documento {2}.").format(
+                allocated, outstanding, getattr(document, "document_no", reference_id)
+            )
+        )
+    reference = _build_payment_reference(
+        payment=payment,
+        line=line,
+        document=document,
+        reference_id=reference_id,
+        reference_type=reference_type,
+        flow_source_type=flow_source_type,
+        allocated=allocated,
+        outstanding=outstanding,
+    )
+    database.session.add(reference)
+    database.session.flush()
+    create_document_relation(
+        source_type=flow_source_type,
+        source_id=reference_id,
+        source_item_id=None,
+        target_type="payment_entry",
+        target_id=payment.id,
+        target_item_id=reference.id,
+        qty=Decimal("1"),
+        uom=None,
+        rate=allocated,
+        amount=allocated,
+    )
+    if flow_source_type not in {"purchase_order", "sales_order"}:
+        document.outstanding_amount = reference.outstanding_amount_after
+        document.base_outstanding_amount = document.outstanding_amount
+    totals["allocated"] += allocated
+    totals["discount"] += reference.discount_amount
+    totals["gain_loss"] += reference.gain_loss_amount
     return totals
 
 
 def _refresh_payment_reference_document(reference_type: str, reference_id: str) -> None:
     """Actualiza el cache de saldo pendiente para documentos referenciados."""
-    model_map = {
-        "purchase_invoice": PurchaseInvoice,
-        "sales_invoice": SalesInvoice,
-        "purchase_order": PurchaseOrder,
-        "sales_order": SalesOrder,
-        "purchase_credit_note": PurchaseInvoice,
-        "purchase_debit_note": PurchaseInvoice,
-        "sales_credit_note": SalesInvoice,
-        "sales_debit_note": SalesInvoice,
-    }
-    model = model_map.get(reference_type)
-    if not model:
-        return
+    match reference_type:
+        case "purchase_invoice" | "purchase_credit_note" | "purchase_debit_note":
+            model = PurchaseInvoice
+        case "sales_invoice" | "sales_credit_note" | "sales_debit_note":
+            model = SalesInvoice
+        case "purchase_order":
+            model = PurchaseOrder
+        case "sales_order":
+            model = SalesOrder
+        case _:
+            return
     document = database.session.get(model, reference_id)
     if document:
         refresh_outstanding_amount_cache(document)

@@ -111,37 +111,29 @@ def import_bank_statement(file: Any, mapping: dict[str, str], bank_account_id: s
     imported = 0
     duplicate_count = 0
     for source in reader:
-        posting_date = _parse_date(source[mapping["date"]])
-        reference_number = source.get(mapping.get("reference", ""), "") or None
-        description = source.get(mapping.get("description", ""), "") or None
-        deposit_value = _decimal_value(source.get(mapping.get("deposit", ""), ""))
-        withdrawal_value = _decimal_value(source.get(mapping.get("withdrawal", ""), ""))
-        deposit = deposit_value if deposit_value > 0 else None
-        withdrawal = withdrawal_value if withdrawal_value > 0 else None
-        if not deposit and not withdrawal:
-            raise BankStatementError("Cada fila debe tener deposito o retiro.")
+        row = _parse_bank_statement_row(source, mapping)
         duplicate = _is_duplicate(
             bank_account_id=bank_account_id,
-            posting_date=posting_date,
-            reference_number=reference_number,
-            deposit=deposit,
-            withdrawal=withdrawal,
+            posting_date=row.posting_date,
+            reference_number=row.reference_number,
+            deposit=row.deposit,
+            withdrawal=row.withdrawal,
         )
         if duplicate:
             duplicate_count += 1
         elif not preview:
-            database.session.add(
-                BankTransaction(
-                    bank_account_id=bank_account_id,
-                    posting_date=posting_date,
-                    reference_number=reference_number,
-                    description=description,
-                    deposit=deposit,
-                    withdrawal=withdrawal,
-                )
-            )
+            _persist_bank_transaction(bank_account_id=bank_account_id, row=row)
             imported += 1
-        rows.append(BankImportRow(posting_date, reference_number, description, deposit, withdrawal, duplicate))
+        rows.append(
+            BankImportRow(
+                posting_date=row.posting_date,
+                reference_number=row.reference_number,
+                description=row.description,
+                deposit=row.deposit,
+                withdrawal=row.withdrawal,
+                duplicate=duplicate,
+            )
+        )
     return BankImportResult(rows=rows, imported_count=imported, duplicate_count=duplicate_count)
 
 
@@ -167,6 +159,34 @@ def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tup
     for transaction in database.session.execute(query).scalars().all():
         result[transaction.id] = find_bank_reconciliation_candidates(transaction.id)
     return BankMatchingRun(rule_id=rule_id, candidates_by_transaction=result)
+
+
+def _parse_bank_statement_row(source: dict[str, str], mapping: dict[str, str]) -> BankImportRow:
+    """Normaliza una fila de extracto y valida sus importes mínimos."""
+    posting_date = _parse_date(source[mapping["date"]])
+    reference_number = source.get(mapping.get("reference", ""), "") or None
+    description = source.get(mapping.get("description", ""), "") or None
+    deposit_value = _decimal_value(source.get(mapping.get("deposit", ""), ""))
+    withdrawal_value = _decimal_value(source.get(mapping.get("withdrawal", ""), ""))
+    deposit = deposit_value if deposit_value > 0 else None
+    withdrawal = withdrawal_value if withdrawal_value > 0 else None
+    if not deposit and not withdrawal:
+        raise BankStatementError("Cada fila debe tener deposito o retiro.")
+    return BankImportRow(posting_date, reference_number, description, deposit, withdrawal, False)
+
+
+def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> None:
+    """Persiste una fila de extracto como transacción bancaria."""
+    database.session.add(
+        BankTransaction(
+            bank_account_id=bank_account_id,
+            posting_date=row.posting_date,
+            reference_number=row.reference_number,
+            description=row.description,
+            deposit=row.deposit,
+            withdrawal=row.withdrawal,
+        )
+    )
 
 
 def create_bank_difference_journal(

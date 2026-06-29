@@ -112,31 +112,35 @@ def _allocated_for_target(target_type: str, target_id: str) -> Decimal:
 
 
 def _target_amount(target_type: str, target_id: str) -> Decimal:
-    if target_type == "payment_entry":
-        payment = database.session.get(PaymentEntry, target_id)
-        if not payment:
-            raise BankReconciliationError("La entrada de pago a conciliar no existe.")
-        return _payment_amount(payment)
-    if target_type == "gl_entry":
-        entry = database.session.get(GLEntry, target_id)
-        if not entry:
-            raise BankReconciliationError("La entrada GL a conciliar no existe.")
-        return _gl_amount(entry)
-    raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+    match target_type:
+        case "payment_entry":
+            payment = database.session.get(PaymentEntry, target_id)
+            if not payment:
+                raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+            return _payment_amount(payment)
+        case "gl_entry":
+            entry = database.session.get(GLEntry, target_id)
+            if not entry:
+                raise BankReconciliationError("La entrada GL a conciliar no existe.")
+            return _gl_amount(entry)
+        case _:
+            raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
 
 
 def _target_company(target_type: str, target_id: str) -> str:
-    if target_type == "payment_entry":
-        payment = database.session.get(PaymentEntry, target_id)
-        if not payment:
-            raise BankReconciliationError("La entrada de pago a conciliar no existe.")
-        return str(payment.company)
-    if target_type == "gl_entry":
-        entry = database.session.get(GLEntry, target_id)
-        if not entry:
-            raise BankReconciliationError("La entrada GL a conciliar no existe.")
-        return str(entry.company)
-    raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+    match target_type:
+        case "payment_entry":
+            payment = database.session.get(PaymentEntry, target_id)
+            if not payment:
+                raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+            return str(payment.company)
+        case "gl_entry":
+            entry = database.session.get(GLEntry, target_id)
+            if not entry:
+                raise BankReconciliationError("La entrada GL a conciliar no existe.")
+            return str(entry.company)
+        case _:
+            raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
 
 
 def _candidate_score(
@@ -154,6 +158,36 @@ def _candidate_score(
     if reference_no and bank_transaction.reference_number and reference_no == bank_transaction.reference_number:
         score += 15
     return score
+
+
+def _append_candidate(
+    candidates: list[BankCandidate],
+    *,
+    reference_type: str,
+    reference_id: str,
+    amount: Decimal,
+    posting_date: date,
+    reference_no: str | None,
+    bank_transaction: BankTransaction,
+    pending: Decimal,
+) -> None:
+    """Agrega un candidato con el score y estado derivados."""
+    candidates.append(
+        BankCandidate(
+            reference_type=reference_type,
+            reference_id=reference_id,
+            amount=min(amount, pending),
+            posting_date=posting_date,
+            reference_no=reference_no,
+            score=_candidate_score(
+                bank_transaction=bank_transaction,
+                amount=amount,
+                posting_date=posting_date,
+                reference_no=reference_no,
+            ),
+            status="exact" if pending == amount else "partial",
+        )
+    )
 
 
 def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCandidate]:
@@ -186,21 +220,15 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
         pending = payment_amount - _allocated_for_target("payment_entry", payment.id)
         if pending <= 0:
             continue
-        candidates.append(
-            BankCandidate(
-                reference_type="payment_entry",
-                reference_id=payment.id,
-                amount=min(amount, pending),
-                posting_date=payment.posting_date,
-                reference_no=payment.reference_no,
-                score=_candidate_score(
-                    bank_transaction=transaction,
-                    amount=payment_amount,
-                    posting_date=payment.posting_date,
-                    reference_no=payment.reference_no,
-                ),
-                status="exact" if pending == amount else "partial",
-            )
+        _append_candidate(
+            candidates,
+            reference_type="payment_entry",
+            reference_id=payment.id,
+            amount=payment_amount,
+            posting_date=payment.posting_date,
+            reference_no=payment.reference_no,
+            bank_transaction=transaction,
+            pending=pending,
         )
 
     bank_gl_account_id = _bank_gl_account_id(transaction)
@@ -221,21 +249,15 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
             pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
             if pending <= 0:
                 continue
-            candidates.append(
-                BankCandidate(
-                    reference_type="gl_entry",
-                    reference_id=entry.id,
-                    amount=min(amount, pending),
-                    posting_date=entry.posting_date,
-                    reference_no=entry.document_no,
-                    score=_candidate_score(
-                        bank_transaction=transaction,
-                        amount=entry_amount,
-                        posting_date=entry.posting_date,
-                        reference_no=entry.document_no,
-                    ),
-                    status="exact" if pending == amount else "partial",
-                )
+            _append_candidate(
+                candidates,
+                reference_type="gl_entry",
+                reference_id=entry.id,
+                amount=entry_amount,
+                posting_date=entry.posting_date,
+                reference_no=entry.document_no,
+                bank_transaction=transaction,
+                pending=pending,
             )
 
     return sorted(candidates, key=lambda candidate: candidate.score, reverse=True)
@@ -259,28 +281,16 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     existing_source_allocations: dict[str, Decimal] = {}
     existing_target_allocations: dict[tuple[str, str], Decimal] = {}
     for match in request.matches:
-        if match.allocated_amount <= 0:
-            raise BankReconciliationError("El monto conciliado debe ser mayor que cero.")
-        transaction = database.session.get(BankTransaction, match.bank_transaction_id)
-        if not transaction:
-            raise BankReconciliationError("La transaccion bancaria no existe.")
-        if _bank_company(transaction) != request.company:
-            raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
-        if _target_company(match.target_type, match.target_id) != request.company:
-            raise BankReconciliationError("El documento destino pertenece a otra compania.")
-
+        transaction = _validate_reconciliation_match(match=match, company=request.company)
         target_key = (match.target_type, match.target_id)
-        existing_source_allocations.setdefault(transaction.id, _allocated_for_source(transaction.id))
-        existing_target_allocations.setdefault(target_key, _allocated_for_target(match.target_type, match.target_id))
-        source_pending = (
-            _bank_amount(transaction)
-            - existing_source_allocations[transaction.id]
-            - source_totals.get(transaction.id, Decimal("0"))
-        )
-        target_pending = (
-            _target_amount(match.target_type, match.target_id)
-            - existing_target_allocations[target_key]
-            - target_totals.get(target_key, Decimal("0"))
+        source_pending, target_pending = _reconciliation_pending_amounts(
+            transaction=transaction,
+            target_type=match.target_type,
+            target_id=match.target_id,
+            source_totals=source_totals,
+            target_totals=target_totals,
+            existing_source_allocations=existing_source_allocations,
+            existing_target_allocations=existing_target_allocations,
         )
         if match.allocated_amount > source_pending:
             raise BankReconciliationError("El monto excede el saldo bancario pendiente de conciliar.")
@@ -308,8 +318,49 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
 
     database.session.flush()
     for bank_transaction_id in source_totals:
-        transaction = database.session.get(BankTransaction, bank_transaction_id)
-        if transaction and _allocated_for_source(bank_transaction_id) >= _bank_amount(transaction):
-            transaction.is_reconciled = True
+        bank_transaction = database.session.get(BankTransaction, bank_transaction_id)
+        if bank_transaction is not None and _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
+            bank_transaction.is_reconciled = True
 
     return reconciliation
+
+
+def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: str) -> BankTransaction:
+    """Valida una linea de conciliacion y devuelve la transaccion bancaria."""
+    if match.allocated_amount <= 0:
+        raise BankReconciliationError("El monto conciliado debe ser mayor que cero.")
+    transaction = database.session.get(BankTransaction, match.bank_transaction_id)
+    if not transaction:
+        raise BankReconciliationError("La transaccion bancaria no existe.")
+    if _bank_company(transaction) != company:
+        raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
+    if _target_company(match.target_type, match.target_id) != company:
+        raise BankReconciliationError("El documento destino pertenece a otra compania.")
+    return transaction
+
+
+def _reconciliation_pending_amounts(
+    *,
+    transaction: BankTransaction,
+    target_type: str,
+    target_id: str,
+    source_totals: dict[str, Decimal],
+    target_totals: dict[tuple[str, str], Decimal],
+    existing_source_allocations: dict[str, Decimal],
+    existing_target_allocations: dict[tuple[str, str], Decimal],
+) -> tuple[Decimal, Decimal]:
+    """Calcula saldos pendientes source/target considerando asignaciones previas."""
+    target_key = (target_type, target_id)
+    existing_source_allocations.setdefault(transaction.id, _allocated_for_source(transaction.id))
+    existing_target_allocations.setdefault(target_key, _allocated_for_target(target_type, target_id))
+    source_pending = (
+        _bank_amount(transaction)
+        - existing_source_allocations[transaction.id]
+        - source_totals.get(transaction.id, Decimal("0"))
+    )
+    target_pending = (
+        _target_amount(target_type, target_id)
+        - existing_target_allocations[target_key]
+        - target_totals.get(target_key, Decimal("0"))
+    )
+    return source_pending, target_pending
