@@ -276,6 +276,20 @@ def test_document_status_uses_single_operational_badge(app_ctx):
     assert completed_status.badge_class == "text-bg-success"
 
 
+def test_document_status_maps_journal_entry_state_without_docstatus(app_ctx):
+    from types import SimpleNamespace
+
+    from cacao_accounting.document_flow.status import calculate_document_status
+
+    submitted_status = calculate_document_status("journal_entry", SimpleNamespace(docstatus=None, status="submitted"))
+    assert submitted_status.label == "Contabilizado"
+    assert submitted_status.badge_class == "text-bg-primary"
+
+    rejected_status = calculate_document_status("journal_entry", SimpleNamespace(docstatus=None, status="rejected"))
+    assert rejected_status.label == "Borrador"
+    assert rejected_status.badge_class == "text-bg-secondary"
+
+
 def test_document_flow_summary_returns_grouped_relations(app_ctx):
     """document_flow_summary agrupa upstream/downstream por tipo documental."""
 
