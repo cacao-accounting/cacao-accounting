@@ -23,6 +23,8 @@ from cacao_accounting.printing.settings import (
 
 printing_admin = Blueprint("printing_admin", __name__, template_folder="templates")
 
+_ENDPOINT_LIST_TEMPLATES = "printing_admin.list_templates"
+
 
 @printing_admin.route("/admin/print-templates")
 @login_required
@@ -91,7 +93,7 @@ def edit_template(template_id: int):
     template = _get_template(template_id)
     if template.is_system:
         flash("Las plantillas de sistema no pueden editarse directamente.", "warning")
-        return redirect(url_for("printing_admin.list_templates"))
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     if request.method == "POST":
         _update_template_from_form(template)
     return _render_form(template)
@@ -144,7 +146,7 @@ def publish_template(template_id: int):
     except (TemplateValidationError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al publicar: {exc}", "danger")
-    return redirect(url_for("printing_admin.list_templates"))
+    return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
 @printing_admin.route("/admin/print-templates/<int:template_id>/archive", methods=["POST"])
@@ -161,7 +163,7 @@ def archive_template(template_id: int):
         template.updated_by = _current_user_id()
         database.session.commit()
         flash("Plantilla archivada.", "success")
-    return redirect(url_for("printing_admin.list_templates"))
+    return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
 @printing_admin.route("/admin/print-templates/<int:template_id>/set-default", methods=["POST"])
@@ -172,13 +174,13 @@ def set_default_template(template_id: int):
     template = _get_template(template_id)
     if template.status != "published":
         flash("Solo las plantillas publicadas pueden ser predeterminadas.", "warning")
-        return redirect(url_for("printing_admin.list_templates"))
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     _clear_default(template)
     template.is_default = True
     template.updated_by = _current_user_id()
     database.session.commit()
     flash("Plantilla marcada como predeterminada.", "success")
-    return redirect(url_for("printing_admin.list_templates"))
+    return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
 @printing_admin.route("/admin/print-templates/<int:template_id>/preview")
