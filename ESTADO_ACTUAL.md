@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Smart Select nesting (2026-06-29):** Se cerro un issue `javascript:S2004` en `cacao_accounting/static/js/smart-select.js`.
+  - La busqueda de opciones por valor normalizado ahora pasa por `findOptionByNormalizedValue()`, evitando anidar `find()` dentro del callback del componente Alpine.
+  - Se agrego una prueba JS focal para validar que el valor seleccionado recupera la etiqueta correcta desde `options`.
+  - `npm test -- --grep smart-select`, `black --check tests/test_10_smart_select_js.py`, `ruff`, `mypy` y `tests/test_10_smart_select_js.py` quedaron en verde.
+
 - **SonarCloud / Importaciones captions (2026-06-29):** Se cerraron dos issues `Web:TableWithoutCaptionCheck` en templates de importacion.
   - Las tablas de `cacao_accounting/imports/templates/imports/index.html` y `detail.html` ahora declaran `<caption>` antes de `<thead>`, que es la estructura esperada por accesibilidad y por el analizador.
   - Se agrego una prueba focal en `tests/imports/test_routes.py` para evitar regresiones en el orden del marcado.

@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: helper de busqueda en smart select)
+- **Solicitud:** Cerrar el issue `javascript:S2004` en `cacao_accounting/static/js/smart-select.js` y confirmar que no fuera un falso positivo de Alpine.
+- **Implementacion:** Se extrajo `findOptionByNormalizedValue()` para sacar la busqueda con `find()` fuera del callback anidado de `Alpine.data`, reduciendo la profundidad de funciones sin cambiar la semantica de `updateLabelFromOptions()`. Ademas se agrego una prueba JS para verificar que al cambiar `selectedValue` se actualiza la etiqueta visible desde las opciones precargadas.
+- **Verificacion:** `npm test -- --grep smart-select`, `black --check`, `ruff`, `mypy` focal y `tests/test_10_smart_select_js.py` quedaron en verde.
+
 ## 2026-06-29 (SonarCloud: captions accesibles en importaciones)
 - **Solicitud:** Cerrar los issues `Web:TableWithoutCaptionCheck` en los templates de importaciones.
 - **Implementacion:** Se movio `<caption>` para que sea el primer hijo de las tablas en `cacao_accounting/imports/templates/imports/index.html` y `detail.html`, alineando la estructura HTML con el chequeo de accesibilidad de Sonar. Ademas se agrego una prueba en `tests/imports/test_routes.py` para proteger el orden `caption` antes de `thead`.
