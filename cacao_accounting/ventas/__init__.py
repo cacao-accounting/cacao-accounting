@@ -958,6 +958,7 @@ def ventas_orden_venta_nuevo():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Orden de Venta - " + APPNAME
+    initial_source_type = "sales_request" if from_request_id else "sales_quotation" if from_quotation_id else ""
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
         "viewKey": "draft",
@@ -968,7 +969,7 @@ def ventas_orden_venta_nuevo():
             {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
-        "initialSourceType": "sales_request" if from_request_id else "sales_quotation" if from_quotation_id else "",
+        "initialSourceType": initial_source_type,
     }
     source_origen = solicitud_origen or cotizacion_origen
     if source_origen:
