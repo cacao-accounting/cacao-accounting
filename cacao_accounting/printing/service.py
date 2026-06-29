@@ -153,7 +153,7 @@ class PrintService:
                 HTML(string=self.build_print_html(rendered, stylesheet_body), base_url=self._base_url()).write_pdf()
         except RuntimeError as exc:
             raise TemplateValidationError(str(exc)) from exc
-        except (TemplateSyntaxError, UndefinedError, TemplateError) as exc:
+        except TemplateError as exc:
             raise TemplateValidationError(f"Error de renderizado Jinja2: {exc}") from exc
 
         return True
