@@ -568,7 +568,10 @@ nav[aria-label="breadcrumb"] {
 }
 .ca-status-ok               { background: var(--ca-success);  }
 .ca-status-no-access        { background: var(--ca-g400);     }
-.ca-status-pending-approval { background: #2563eb;            }
+.ca-status-pending-approval {
+  background: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
 .ca-status-view-only        { background: var(--ca-warning);  }
 .ca-status-attention        { background: var(--ca-error);    }
 .ca-status-warning          { background: var(--ca-warning);  }
@@ -1406,10 +1409,6 @@ body {
   width: 8px;
   height: 8px;
   box-shadow: 0 0 0 3px rgba(22, 163, 74, .10);
-}
-
-.ca-status-pending-approval {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
 }
 
 .ca-status-view-only,
