@@ -1217,7 +1217,7 @@ def _validate_payment_header(
     party_id: str | None,
     target_bank_account_id: str | None = None,
 ) -> None:
-    """Valida los campos obligatorios del encabezado de Payment Entry."""
+    """Validate the required Payment Entry header fields."""
     if not company:
         raise ValueError(_("La compañía es obligatoria."))
     if not bank_account_id:
@@ -1227,19 +1227,33 @@ def _validate_payment_header(
     if amount <= 0:
         raise ValueError(_("El monto del pago debe ser mayor que cero."))
 
+    _validate_payment_bank_account(company=company, bank_account_id=bank_account_id)
+    _validate_payment_target_bank_account(company=company, target_bank_account_id=target_bank_account_id)
+    _validate_payment_party(payment_type=payment_type, party_type=party_type, party_id=party_id)
+
+
+def _validate_payment_bank_account(*, company: str, bank_account_id: str) -> None:
+    """Validate that the payment bank account exists and belongs to the company."""
     bank_account = database.session.get(BankAccount, bank_account_id)
     if not bank_account:
         raise ValueError(_("La cuenta bancaria seleccionada no existe."))
     if bank_account.company != company:
         raise ValueError(_("La cuenta bancaria no pertenece a la misma compañía del pago."))
 
-    if target_bank_account_id:
-        target_bank_account = database.session.get(BankAccount, target_bank_account_id)
-        if not target_bank_account:
-            raise ValueError(_("La cuenta bancaria destino no existe."))
-        if target_bank_account.company != company:
-            raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
 
+def _validate_payment_target_bank_account(*, company: str, target_bank_account_id: str | None) -> None:
+    """Validate that the target bank account exists and belongs to the company."""
+    if not target_bank_account_id:
+        return
+    target_bank_account = database.session.get(BankAccount, target_bank_account_id)
+    if not target_bank_account:
+        raise ValueError(_("La cuenta bancaria destino no existe."))
+    if target_bank_account.company != company:
+        raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
+
+
+def _validate_payment_party(*, payment_type: str, party_type: str | None, party_id: str | None) -> None:
+    """Validate the relationship between payment type and party."""
     match payment_type:
         case "pay" | "receive":
             if not party_type or not party_id:
