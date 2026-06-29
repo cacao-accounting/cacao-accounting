@@ -330,9 +330,7 @@ def _build_candidate_query(
     if model is None:
         return None
     query = database.select(model).filter_by(company=company, docstatus=1)
-    if source_type in {"purchase_credit_note", "purchase_debit_note", "sales_credit_note", "sales_debit_note"}:
-        query = query.filter_by(document_type=source_type)
-    elif hasattr(model, "document_type"):
+    if hasattr(model, "document_type"):
         query = query.filter_by(document_type=source_type)
     if party_type == "supplier":
         query = query.filter_by(supplier_id=party_id)

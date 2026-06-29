@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Document Flow candidatos (2026-06-29):** Se cerro un issue menor en `cacao_accounting/document_flow/service.py`.
+  - `_build_candidate_query()` elimino un branch duplicado y mantiene un unico filtro por `document_type` cuando el modelo lo soporta.
+  - La prueba focal del endpoint de candidatos de referencia quedo en verde junto con Black, Ruff y Mypy focal.
+
 - **SonarCloud / Versionado (2026-06-29):** Se cerro un issue menor en `cacao_accounting/version/__init__.py`.
   - La composicion de `VERSION` ahora usa `build_version()` en lugar de una condicion constante sobre `PRERELEASE`.
   - Se agregaron pruebas unitarias para prerelease, postrelease y version simple en `tests/test_00basicos.py`.
