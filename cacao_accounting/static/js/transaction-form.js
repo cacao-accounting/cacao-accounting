@@ -52,7 +52,7 @@
         return {
           field: String(column.field),
           label: column.label || String(column.field),
-          width: Math.min(Math.max(parseInt(column.width || 1, 10), 1), 4),
+          width: Math.min(Math.max(Number.parseInt(column.width || 1, 10), 1), 4),
           visible: column.visible !== false,
           required: Boolean(column.required),
         };
