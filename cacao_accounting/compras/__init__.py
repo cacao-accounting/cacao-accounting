@@ -580,24 +580,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
-        supplier_id = request.form.get("supplier_id") or None
-        supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        registro.supplier_id = supplier_id
-        registro.supplier_name = supplier.name if supplier else None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _qty, total = _save_supplier_quotation_items(registro.id)
-        registro.total = total
-        registro.base_total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
-        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=registro.id))
+        return _handle_supplier_quotation_update(registro, request.form, quotation_id)
 
     lineas = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
@@ -721,6 +704,28 @@ def _supplier_quotation_sources(
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     rfq_origen = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else None
     return solicitud_origen, rfq_origen
+
+
+def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, quotation_id: str):
+    """Maneja la actualizacion de una cotizacion de proveedor desde el formulario POST."""
+    supplier_id = form.get("supplier_id") or None
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
+    registro.company = form.get("company") or None
+    registro.posting_date = _parse_date(form.get("posting_date"))
+    registro.remarks = form.get("remarks")
+    for item in database.session.execute(
+        database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _qty, total = _save_supplier_quotation_items(registro.id)
+    registro.total = total
+    registro.base_total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
+    return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
 
 @compras.route("/supplier-quotation/<quotation_id>/duplicate", methods=["POST"])
