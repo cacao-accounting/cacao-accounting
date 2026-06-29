@@ -514,17 +514,8 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
 
 def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase receipt vs invoice validating received quantities."""
-    if not invoice.purchase_receipt_id:
-        raise PurchaseReconciliationError("Matching 3-way requiere que la factura referencie una recepcion de compra.")
-    receipt = database.session.get(PurchaseReceipt, invoice.purchase_receipt_id)
-    if not receipt:
-        raise PurchaseReconciliationError("La recepcion de compra referenciada no existe.")
-    if receipt.company != invoice.company:
-        raise PurchaseReconciliationError("La factura y la recepcion deben pertenecer a la misma compania.")
-    if getattr(receipt, "docstatus", 0) != 1:
-        raise PurchaseReconciliationError("La recepcion de compra debe estar aprobada.")
-
-    receipt_items = _receipt_items(receipt.id)
+    receipt = _load_purchase_receipt_for_invoice(invoice)
+    receipt_items = _purchase_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
         raise PurchaseReconciliationError("La conciliacion 3-way requiere lineas de recepcion y factura.")
@@ -589,53 +580,14 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
             receipt_item = _first_available_line(receipt_groups[_line_key(invoice_item)].lines, order_mode=False)
-            invoice_qty = _line_qty(invoice_item)
-            receipt_qty = _line_qty(receipt_item)
-            receipt_rate = _line_rate(receipt_item)
-            invoice_rate = _line_rate(invoice_item)
-            matched_amount = invoice_qty * receipt_rate
-            invoiced_amount = invoice_qty * invoice_rate
-            price_difference = invoice_rate - receipt_rate
-            database.session.add(
-                PurchaseReconciliationItem(
-                    purchase_reconciliation_id=reconciliation.id,
-                    purchase_order_item_id=None,
-                    purchase_receipt_item_id=receipt_item.id,
-                    purchase_invoice_item_id=invoice_item.id,
-                    item_code=invoice_item.item_code,
-                    warehouse=receipt_item.warehouse,
-                    uom=invoice_item.uom,
-                    received_qty=receipt_qty,
-                    invoiced_qty=invoice_qty,
-                    matched_qty=invoice_qty,
-                    received_amount=invoice_qty * receipt_rate,
-                    invoiced_amount=invoiced_amount,
-                    matched_amount=matched_amount,
-                    price_difference=price_difference,
-                    status="reconciled",
-                )
-            )
+            database.session.add(_three_way_reconciliation_item(reconciliation.id, receipt_item, invoice_item))
     return result
 
 
 def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase order vs invoice without requiring a receipt."""
-    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem
-
-    purchase_order_id = getattr(invoice, "purchase_order_id", None)
-    if not purchase_order_id:
-        raise PurchaseReconciliationError("Matching 2-way requiere que la factura referencie una orden de compra.")
-    order = database.session.get(PurchaseOrder, purchase_order_id)
-    if not order:
-        raise PurchaseReconciliationError("La orden de compra referenciada no existe.")
-    if getattr(order, "company", None) != invoice.company:
-        raise PurchaseReconciliationError("La factura y la orden de compra deben pertenecer a la misma compania.")
-    if getattr(order, "docstatus", 0) != 1:
-        raise PurchaseReconciliationError("La orden de compra debe estar aprobada para el matching 2-way.")
-
-    order_items = list(
-        database.session.execute(select(PurchaseOrderItem).filter_by(purchase_order_id=purchase_order_id)).scalars().all()
-    )
+    purchase_order_id, order = _load_purchase_order_for_invoice(invoice)
+    order_items = _purchase_order_items(purchase_order_id)
     invoice_items = _invoice_items(invoice.id)
     if not order_items or not invoice_items:
         raise PurchaseReconciliationError("La conciliacion 2-way requiere lineas de OC y factura.")
@@ -701,33 +653,114 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
             order_item = _first_available_line(order_groups[_line_key(invoice_item)].lines, order_mode=True)
-            invoice_qty = _line_qty(invoice_item)
-            ordered_qty = _line_qty(order_item)
-            order_rate = _line_rate(order_item)
-            invoice_rate = _line_rate(invoice_item)
-            matched_amount = invoice_qty * order_rate
-            invoiced_amount = invoice_qty * invoice_rate
-            price_difference = invoice_rate - order_rate
-            database.session.add(
-                PurchaseReconciliationItem(
-                    purchase_reconciliation_id=reconciliation.id,
-                    purchase_order_item_id=order_item.id,
-                    purchase_receipt_item_id=None,
-                    purchase_invoice_item_id=invoice_item.id,
-                    item_code=invoice_item.item_code,
-                    warehouse=None,
-                    uom=invoice_item.uom,
-                    received_qty=ordered_qty,  # "received" = ordered in 2-way context
-                    invoiced_qty=invoice_qty,
-                    matched_qty=invoice_qty,
-                    received_amount=invoice_qty * order_rate,
-                    invoiced_amount=invoiced_amount,
-                    matched_amount=matched_amount,
-                    price_difference=price_difference,
-                    status="reconciled",
-                )
-            )
+            database.session.add(_two_way_reconciliation_item(reconciliation.id, order_item, invoice_item))
     return result
+
+
+def _load_purchase_order_for_invoice(invoice: PurchaseInvoice) -> tuple[str, Any]:
+    """Carga y valida la orden de compra asociada a una factura 2-way."""
+    from cacao_accounting.database import PurchaseOrder
+
+    purchase_order_id = getattr(invoice, "purchase_order_id", None)
+    if not purchase_order_id:
+        raise PurchaseReconciliationError("Matching 2-way requiere que la factura referencie una orden de compra.")
+    order = database.session.get(PurchaseOrder, purchase_order_id)
+    if not order:
+        raise PurchaseReconciliationError("La orden de compra referenciada no existe.")
+    if getattr(order, "company", None) != invoice.company:
+        raise PurchaseReconciliationError("La factura y la orden de compra deben pertenecer a la misma compania.")
+    if getattr(order, "docstatus", 0) != 1:
+        raise PurchaseReconciliationError("La orden de compra debe estar aprobada para el matching 2-way.")
+    return purchase_order_id, order
+
+
+def _load_purchase_receipt_for_invoice(invoice: PurchaseInvoice) -> PurchaseReceipt:
+    """Carga y valida la recepcion asociada a una factura 3-way."""
+    purchase_receipt_id = getattr(invoice, "purchase_receipt_id", None)
+    if not purchase_receipt_id:
+        raise PurchaseReconciliationError("Matching 3-way requiere que la factura referencie una recepcion de compra.")
+    receipt = database.session.get(PurchaseReceipt, purchase_receipt_id)
+    if not receipt:
+        raise PurchaseReconciliationError("La recepcion de compra referenciada no existe.")
+    if receipt.company != invoice.company:
+        raise PurchaseReconciliationError("La factura y la recepcion deben pertenecer a la misma compania.")
+    if getattr(receipt, "docstatus", 0) != 1:
+        raise PurchaseReconciliationError("La recepcion de compra debe estar aprobada.")
+    return receipt
+
+
+def _purchase_receipt_items(purchase_receipt_id: str) -> list[Any]:
+    """Obtiene las lineas de la recepcion para matching 3-way."""
+    return _receipt_items(purchase_receipt_id)
+
+
+def _purchase_order_items(purchase_order_id: str) -> list[Any]:
+    """Obtiene las lineas de la orden de compra para matching 2-way."""
+    from cacao_accounting.database import PurchaseOrderItem
+
+    return list(
+        database.session.execute(select(PurchaseOrderItem).filter_by(purchase_order_id=purchase_order_id)).scalars().all()
+    )
+
+
+def _two_way_reconciliation_item(
+    reconciliation_id: str, order_item: Any, invoice_item: PurchaseInvoiceItem
+) -> PurchaseReconciliationItem:
+    """Construye el detalle de conciliacion para una linea 2-way."""
+    invoice_qty = _line_qty(invoice_item)
+    ordered_qty = _line_qty(order_item)
+    order_rate = _line_rate(order_item)
+    invoice_rate = _line_rate(invoice_item)
+    matched_amount = invoice_qty * order_rate
+    invoiced_amount = invoice_qty * invoice_rate
+    price_difference = invoice_rate - order_rate
+    return PurchaseReconciliationItem(
+        purchase_reconciliation_id=reconciliation_id,
+        purchase_order_item_id=order_item.id,
+        purchase_receipt_item_id=None,
+        purchase_invoice_item_id=invoice_item.id,
+        item_code=invoice_item.item_code,
+        warehouse=None,
+        uom=invoice_item.uom,
+        received_qty=ordered_qty,  # "received" = ordered in 2-way context
+        invoiced_qty=invoice_qty,
+        matched_qty=invoice_qty,
+        received_amount=invoice_qty * order_rate,
+        invoiced_amount=invoiced_amount,
+        matched_amount=matched_amount,
+        price_difference=price_difference,
+        status="reconciled",
+    )
+
+
+def _three_way_reconciliation_item(
+    reconciliation_id: str, receipt_item: PurchaseReceiptItem, invoice_item: PurchaseInvoiceItem
+) -> PurchaseReconciliationItem:
+    """Construye el detalle de conciliacion para una linea 3-way."""
+    invoice_qty = _line_qty(invoice_item)
+    receipt_qty = _line_qty(receipt_item)
+    receipt_rate = _line_rate(receipt_item)
+    invoice_rate = _line_rate(invoice_item)
+    matched_amount = invoice_qty * receipt_rate
+    invoiced_amount = invoice_qty * invoice_rate
+    price_difference = invoice_rate - receipt_rate
+    return PurchaseReconciliationItem(
+        purchase_reconciliation_id=reconciliation_id,
+        purchase_order_item_id=None,
+        purchase_receipt_item_id=receipt_item.id,
+        purchase_invoice_item_id=invoice_item.id,
+        item_code=invoice_item.item_code,
+        warehouse=receipt_item.warehouse,
+        uom=invoice_item.uom,
+        received_qty=receipt_qty,
+        invoiced_qty=invoice_qty,
+        matched_qty=invoice_qty,
+        received_amount=invoice_qty * receipt_rate,
+        invoiced_amount=invoiced_amount,
+        matched_amount=matched_amount,
+        price_difference=price_difference,
+        status="reconciled",
+    )
 
 
 def _finalize_reconciliation(

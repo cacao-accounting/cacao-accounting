@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Conciliación de compras (2026-06-29):** Se redujo la complejidad de `cacao_accounting/compras/purchase_reconciliation_service.py` separando la carga de documentos y la construcción de items en helpers pequeños.
+  - `_reconcile_two_way()` y `_reconcile_three_way()` ahora delegan en helpers para cargar y validar la orden/recepción, leer líneas y construir los items de conciliación.
+  - La semántica de matching 2-way y 3-way se mantiene; la suite focal de conciliaciones sigue en verde.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_08_reconciliation_reports.py` quedaron en verde; `ruff --select C901` ya no reporta complejidad en este archivo.
+
 - **SonarCloud / Factory de aplicación (2026-06-29):** Se redujo la complejidad de `cacao_accounting/__init__.py` separando la configuración de secret key, comandos CLI y hooks de request en helpers pequeños.
   - `create_app()` mantiene el flujo de arranque, registro de blueprints, extensiones y recuperación de lotes, pero sin mezclar toda la lógica condicional en una sola función.
   - Se agregó prueba focal para `SECRET_KEY` fija en testing y generación de secret key cuando falta la configuración.
