@@ -50,6 +50,8 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
+_ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."
+_ERROR_YA_TIENE_ENTRADAS_GL = "Este documento ya tiene entradas GL contabilizadas."
 
 
 class PostingError(ValueError):
@@ -1374,7 +1376,7 @@ def _create_stock_movement(
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
     if not warehouse:
-        raise PostingError("La linea de inventario requiere almacen.")
+        raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
     try:
         validate_batch_serial(line, outgoing=qty_change < 0)
     except InventoryServiceError as exc:
@@ -1615,7 +1617,7 @@ def _create_stock_ledger_for_document(
     _stock_item_for(line)
     if qty_change < 0:
         if not warehouse:
-            raise PostingError("La linea de inventario requiere almacen.")
+            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         try:
             validate_batch_serial(line, outgoing=True)
         except InventoryServiceError as exc:
@@ -1631,7 +1633,7 @@ def _create_stock_ledger_for_document(
         line._inventory_cost_amount = cost_amount
     else:
         if not warehouse:
-            raise PostingError("La linea de inventario requiere almacen.")
+            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         try:
             validate_batch_serial(line, outgoing=False)
         except InventoryServiceError as exc:
@@ -1718,7 +1720,7 @@ def _create_stock_ledger_for_document_type(
         value_change = _signed_amount(document, sign * amount)
         warehouse = getattr(line, "warehouse", None)
         if not warehouse:
-            raise PostingError("La linea de inventario requiere almacen.")
+            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         movements.append(
             _create_stock_ledger_for_document(
                 document=document,
@@ -2010,7 +2012,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una entrada de stock aprobada.")
     if _has_active_gl_entries(document):
-        raise PostingError("Este documento ya tiene entradas GL contabilizadas.")
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
 
     movements = _create_stock_ledger(document)
     purpose = getattr(document, "purpose", "").lower()
@@ -2110,7 +2112,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
 def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera entradas contables para un documento ya aprobado."""
     if not isinstance(document, StockEntry) and _has_active_gl_entries(document):
-        raise PostingError("Este documento ya tiene entradas GL contabilizadas.")
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if isinstance(document, SalesInvoice):
         return post_sales_invoice(document, ledger_code=ledger_code)
     if isinstance(document, PurchaseInvoice):
@@ -2135,7 +2137,7 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     if getattr(document, "docstatus", 0) != 0:
         raise PostingError("Solo se puede aprobar un documento en borrador.")
     if _has_active_gl_entries(document):
-        raise PostingError("Este documento ya tiene entradas GL contabilizadas.")
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     document.docstatus = 1
     entries = post_document_to_gl(document, ledger_code=ledger_code)
     # QR Validation support

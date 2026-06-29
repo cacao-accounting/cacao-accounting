@@ -22,6 +22,10 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.contabilidad.budget_service import BudgetError
 
+_LABEL_CENTRO_COSTO = "Centro de Costo"
+_LABEL_UNIDAD_NEGOCIO = "Unidad de Negocio"
+_LABEL_DESCRIPCION = "Descripción"
+
 
 class BudgetImportService:
     """Servicio para manejar la importación de líneas de presupuesto."""
@@ -34,10 +38,10 @@ class BudgetImportService:
 
         columns = [
             {"name": "Cuenta", "required": True, "type": "string"},
-            {"name": "Centro de Costo", "required": True, "type": "string"},
-            {"name": "Unidad de Negocio", "required": False, "type": "string"},
+            {"name": _LABEL_CENTRO_COSTO, "required": True, "type": "string"},
+            {"name": _LABEL_UNIDAD_NEGOCIO, "required": False, "type": "string"},
             {"name": "Proyecto", "required": False, "type": "string"},
-            {"name": "Descripción", "required": False, "type": "string"},
+            {"name": _LABEL_DESCRIPCION, "required": False, "type": "string"},
         ]
 
         # Agregar una columna por cada período del año fiscal
@@ -179,7 +183,14 @@ class BudgetImportService:
         period_names = set(period_map.keys())
 
         # Validar columnas desconocidas
-        allowed_headers = {"Cuenta", "Centro de Costo", "Unidad de Negocio", "Proyecto", "Descripción", "Total"} | period_names
+        allowed_headers = {
+            "Cuenta",
+            _LABEL_CENTRO_COSTO,
+            _LABEL_UNIDAD_NEGOCIO,
+            "Proyecto",
+            _LABEL_DESCRIPCION,
+            "Total",
+        } | period_names
         if rows:
             first_row_headers = set(rows[0].keys())
             for header in first_row_headers:
@@ -202,12 +213,12 @@ class BudgetImportService:
             if not account_id:
                 row_errors.append(f"Cuenta '{row.get('Cuenta')}' no válida.")
 
-            cc_id = cc_map.get(row.get("Centro de Costo"))
+            cc_id = cc_map.get(row.get(_LABEL_CENTRO_COSTO))
             if not cc_id:
                 row_errors.append(f"Centro de Costo '{row.get('Centro de Costo')}' no válido.")
 
-            unit_id = unit_map.get(row.get("Unidad de Negocio")) if row.get("Unidad de Negocio") else None
-            if row.get("Unidad de Negocio") and not unit_id:
+            unit_id = unit_map.get(row.get(_LABEL_UNIDAD_NEGOCIO)) if row.get(_LABEL_UNIDAD_NEGOCIO) else None
+            if row.get(_LABEL_UNIDAD_NEGOCIO) and not unit_id:
                 row_errors.append(f"Unidad de Negocio '{row.get('Unidad de Negocio')}' no válida.")
 
             project_id = project_map.get(row.get("Proyecto")) if row.get("Proyecto") else None
@@ -237,7 +248,7 @@ class BudgetImportService:
                                         "business_unit_id": unit_id,
                                         "project_id": project_id,
                                         "amount": amount,
-                                        "description": row.get("Descripción"),
+                                        "description": row.get(_LABEL_DESCRIPCION),
                                     }
                                 )
                                 row_combs_to_add.append(comb)

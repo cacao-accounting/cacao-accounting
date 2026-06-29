@@ -31,6 +31,9 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
 )
 
+_ENDPOINT_LISTAR = "contabilidad.presupuestos.listar"
+_ENDPOINT_DETALLE = "contabilidad.presupuestos.detalle"
+
 presupuestos = Blueprint("presupuestos", __name__)
 
 
@@ -67,7 +70,7 @@ def nuevo():
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.crear:
         flash("No tiene permisos para crear presupuestos.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     form = FormularioBudget()
     form.company.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -77,7 +80,7 @@ def nuevo():
         try:
             budget = BudgetService().create_budget(form.data, str(current_user.id))
             flash("Presupuesto creado exitosamente.", "success")
-            return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget.id))
+            return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
         except BudgetError as e:
             flash(str(e), "danger")
 
@@ -97,7 +100,7 @@ def detalle(budget_id):
     budget = database.session.get(Budget, budget_id)
     if not budget:
         flash("Presupuesto no encontrado.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     lines = (
         database.session.query(BudgetLine, Accounts, CostCenter, AccountingPeriod, Unit, Project)
@@ -141,12 +144,12 @@ def editar(budget_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.editar:
         flash("No tiene permisos para editar presupuestos.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     budget = database.session.get(Budget, budget_id)
     if not budget:
         flash("Presupuesto no encontrado.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     form = FormularioBudget(obj=budget)
     form.company.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -156,7 +159,7 @@ def editar(budget_id):
         try:
             BudgetService().update_budget(budget_id, form.data, str(current_user.id))
             flash("Presupuesto actualizado.", "success")
-            return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+            return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except BudgetError as e:
             flash(str(e), "danger")
 
@@ -177,12 +180,12 @@ def nueva_linea(budget_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.crear:
         flash("No tiene permisos para agregar líneas.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     budget = database.session.get(Budget, budget_id)
     if not budget or budget.status != "draft":
         flash("No se pueden agregar líneas a este presupuesto.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     form = FormularioBudgetLine()
     # Cargar choices dinámicamente según la compañía del presupuesto
@@ -212,7 +215,7 @@ def nueva_linea(budget_id):
                 data["project_id"] = None
             BudgetService().add_budget_line(budget_id, data, str(current_user.id))
             flash("Línea agregada.", "success")
-            return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+            return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except BudgetError as e:
             flash(str(e), "danger")
 
@@ -233,17 +236,17 @@ def editar_linea(line_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.editar:
         flash("No tiene permisos para editar líneas.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     line = database.session.get(BudgetLine, line_id)
     if not line:
         flash("Línea no encontrada.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     budget = database.session.get(Budget, line.budget_id)
     if budget.status != "draft":
         flash("Solo se pueden editar líneas en presupuestos en borrador.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget.id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
 
     form = FormularioBudgetLine(obj=line)
     form.account_id.choices = [
@@ -272,7 +275,7 @@ def editar_linea(line_id):
                 data["project_id"] = None
             BudgetService().update_budget_line(line_id, data, str(current_user.id))
             flash("Línea actualizada.", "success")
-            return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget.id))
+            return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
         except BudgetError as e:
             flash(str(e), "danger")
 
@@ -294,11 +297,11 @@ def eliminar_linea(line_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.eliminar:
         flash("No tiene permisos para eliminar líneas.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     line = database.session.get(BudgetLine, line_id)
     if not line:
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     budget_id = line.budget_id
     try:
@@ -307,7 +310,7 @@ def eliminar_linea(line_id):
     except BudgetError as e:
         flash(str(e), "danger")
 
-    return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+    return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
 
 @presupuestos.route("/<budget_id>/approve", methods=["POST"])
@@ -319,14 +322,14 @@ def aprobar(budget_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.autorizar:
         flash("No tiene permisos para aprobar presupuestos.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     try:
         BudgetService().approve_budget(budget_id, str(current_user.id))
         flash("Presupuesto aprobado.", "success")
     except BudgetError as e:
         flash(str(e), "danger")
-    return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+    return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
 
 @presupuestos.route("/<budget_id>/close", methods=["POST"])
@@ -338,14 +341,14 @@ def cerrar(budget_id):
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.cerrar:
         flash("No tiene permisos para cerrar presupuestos.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     try:
         BudgetService().close_budget(budget_id, str(current_user.id))
         flash("Presupuesto cerrado.", "info")
     except BudgetError as e:
         flash(str(e), "danger")
-    return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+    return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
 
 @presupuestos.route("/<budget_id>/import", methods=["GET", "POST"])
@@ -357,12 +360,12 @@ def importar(budget_id):
     budget = database.session.get(Budget, budget_id)
     if not budget or budget.status != "draft":
         flash("No se puede importar a este presupuesto.", "warning")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.importar:
         flash("No tiene permisos para realizar importaciones.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+        return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     if request.method == "POST":
         import_id = request.form.get("import_id")
@@ -371,7 +374,7 @@ def importar(budget_id):
             try:
                 BudgetImportService().insert_lines(import_id, str(current_user.id))
                 flash("Importación completada exitosamente.", "success")
-                return redirect(url_for("contabilidad.presupuestos.detalle", budget_id=budget_id))
+                return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
             except Exception as e:
                 flash(f"Error al procesar la importación: {str(e)}", "danger")
         else:
@@ -412,7 +415,7 @@ def reporte():
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.reportes:
         flash("No tiene permisos para ver reportes.", "danger")
-        return redirect(url_for("contabilidad.presupuestos.listar"))
+        return redirect(url_for(_ENDPOINT_LISTAR))
 
     companies = obtener_lista_entidades_por_id_razonsocial()
     report_data = None
