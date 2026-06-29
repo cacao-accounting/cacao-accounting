@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: constante compartida para plantilla de cliente)
+- **Solicitud:** Cerrar el issue `python:S1192` reportado en `cacao_accounting/ventas/__init__.py` por la duplicacion del template `ventas/cliente_nuevo.html`.
+- **Implementacion:** Se introdujo `VENTAS_CLIENTE_NUEVO_TEMPLATE` y se reemplazaron las cuatro referencias directas al literal en el alta y edicion de clientes.
+- **Verificacion:** `black --check cacao_accounting/ventas/__init__.py`, `ruff check cacao_accounting/ventas/__init__.py`, `mypy cacao_accounting/ventas/__init__.py` y `tests/test_party_management.py` quedaron en verde; `flake8` sigue reportando `CCR001` preexistente en otras funciones del mismo archivo, fuera del alcance de este cambio.
+
 ## 2026-06-29 (SonarCloud: constante compartida para plantilla de proveedor)
 - **Solicitud:** Cerrar el issue `python:S1192` reportado en `cacao_accounting/compras/__init__.py` por la duplicacion del template `compras/proveedor_nuevo.html`.
 - **Implementacion:** Se introdujo `COMPRAS_PROVEEDOR_NUEVO_TEMPLATE` y se reemplazaron las cuatro referencias directas al literal en el alta y edicion de proveedores.
