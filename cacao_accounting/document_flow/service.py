@@ -554,6 +554,14 @@ def _process_reconciliation_line(
     document = _get_reference_document(flow_source_type, reference_id, company, party_type, party_id)
     _check_duplicate_application(payment.id, flow_source_type, reference_id)
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
+    allocation_ctx = PaymentAllocationContext(
+        allocation_date=allocation_date,
+        allocated=allocated,
+        discount=discount,
+        gain_loss=gain_loss,
+        difference=difference,
+        outstanding=outstanding,
+    )
 
     _create_payment_reference_and_relation(
         raw_line,
@@ -562,15 +570,7 @@ def _process_reconciliation_line(
         flow_source_type,
         reference_type,
         reference_id,
-        party_type,
-        party_id,
-        company,
-        allocation_date,
-        allocated,
-        discount,
-        gain_loss,
-        difference,
-        outstanding,
+        allocation_ctx,
     )
     _update_document_outstanding(document, outstanding, allocated)
     _create_reconciliation_item(
@@ -639,15 +639,10 @@ def _create_payment_reference_and_relation(
     flow_source_type: str,
     reference_type: str,
     reference_id: str,
-    allocation_date: date,
-    allocated: Decimal,
-    discount: Decimal,
-    gain_loss: Decimal,
-    difference: Decimal,
-    outstanding: Decimal,
+    allocation_ctx: PaymentAllocationContext,
 ) -> None:
     physical_type = _payment_candidate_physical_type(flow_source_type)
-    outstanding_after = outstanding - allocated
+    outstanding_after = allocation_ctx.outstanding - allocation_ctx.allocated
     reference = PaymentReference(
         payment_id=payment.id,
         reference_type=physical_type or reference_type,
@@ -660,16 +655,16 @@ def _create_payment_reference_and_relation(
         company=payment.company,
         currency=getattr(document, "currency", None) or getattr(payment, "currency", None),
         total_amount=getattr(document, "grand_total", None),
-        outstanding_amount=outstanding,
+        outstanding_amount=allocation_ctx.outstanding,
         outstanding_amount_after=outstanding_after,
-        allocated_amount=allocated,
+        allocated_amount=allocation_ctx.allocated,
         exchange_rate=decimal_or_zero(raw_line.get("exchange_rate"))
         or decimal_or_zero(getattr(document, "exchange_rate", None))
         or Decimal("1"),
-        difference_amount=difference,
-        allocation_date=allocation_date,
-        discount_amount=discount,
-        gain_loss_amount=gain_loss,
+        difference_amount=allocation_ctx.difference,
+        allocation_date=allocation_ctx.allocation_date,
+        discount_amount=allocation_ctx.discount,
+        gain_loss_amount=allocation_ctx.gain_loss,
         notes=raw_line.get("notes"),
     )
     database.session.add(reference)
@@ -682,8 +677,8 @@ def _create_payment_reference_and_relation(
         target_id=payment.id,
         target_item_id=reference.id,
         qty=Decimal("1"),
-        rate=allocated,
-        amount=allocated,
+        rate=allocation_ctx.allocated,
+        amount=allocation_ctx.allocated,
     )
 
 
