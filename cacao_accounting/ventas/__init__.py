@@ -59,6 +59,21 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
+# Constantes para rutas y endpoints (S1192 - evitar duplicación de cadenas)
+_ENDPOINT_CLIENTE = "ventas.ventas_cliente"
+_ENDPOINT_PEDIDO_VENTA = "ventas.ventas_pedido_venta"
+_ENDPOINT_COTIZACION = "ventas.ventas_cotizacion"
+_ENDPOINT_ORDEN_VENTA = "ventas.ventas_orden_venta"
+_ENDPOINT_ENTREGA = "ventas.ventas_entrega"
+_ENDPOINT_FACTURA_VENTA = "ventas.ventas_factura_venta"
+_FORMKEY_SALES_REQUEST = "sales.sales_request"
+_FORMKEY_SALES_ORDER = "sales.sales_order"
+_FORMKEY_SALES_QUOTATION = "sales.sales_quotation"
+_FORMKEY_SALES_INVOICE = "sales.sales_invoice"
+_FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
+_LABEL_PEDIDO_VENTA = "Pedido de Venta"
+_LABEL_ORDEN_VENTA = "Orden de Venta"
+
 
 def _parse_date(value: str | None) -> date | None:
     """Parsea una fecha en formato ISO."""
@@ -163,11 +178,11 @@ def ventas_pedido_venta_nuevo():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nuevo Pedido de Venta - " + APPNAME
     transaction_config = {
-        "formKey": "sales.sales_request",
+        "formKey": _FORMKEY_SALES_REQUEST,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_request"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_REQUEST),
         "availableSourceTypes": [],
     }
     if request.method == "POST":
@@ -197,7 +212,7 @@ def ventas_pedido_venta_nuevo():
             pedido.grand_total = total
             database.session.commit()
             flash("Pedido de venta creado correctamente.", "success")
-            return redirect(url_for("ventas.ventas_pedido_venta", request_id=pedido.id))
+            return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -271,15 +286,15 @@ def ventas_pedido_venta_editar(request_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Pedido de venta actualizado correctamente."), "success")
-        return redirect(url_for("ventas.ventas_pedido_venta", request_id=registro.id))
+        return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=registro.id))
 
     lineas = database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "sales.sales_request",
+        "formKey": _FORMKEY_SALES_REQUEST,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_request"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_REQUEST),
         "availableSourceTypes": [],
         "initialHeader": {
             "company": registro.company or "",
@@ -357,7 +372,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
     duplicado.grand_total = total
     database.session.commit()
     flash(_("Pedido de venta duplicado como nuevo borrador."), "success")
-    return redirect(url_for("ventas.ventas_pedido_venta", request_id=duplicado.id))
+    return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=duplicado.id))
 
 
 @ventas.route("/sales-request/<request_id>/submit", methods=["POST"])
@@ -373,7 +388,7 @@ def ventas_pedido_venta_submit(request_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash("Pedido de venta aprobado.", "success")
-    return redirect(url_for("ventas.ventas_pedido_venta", request_id=request_id))
+    return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
 
 @ventas.route("/sales-request/<request_id>/cancel", methods=["POST"])
@@ -389,7 +404,7 @@ def ventas_pedido_venta_cancel(request_id: str):
     registro.docstatus = 2
     database.session.commit()
     flash("Pedido de venta cancelado.", "warning")
-    return redirect(url_for("ventas.ventas_pedido_venta", request_id=request_id))
+    return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
 
 @ventas.route("/delivery-note/list")
@@ -598,7 +613,7 @@ def ventas_cliente_editar(customer_id: str):
                 )
             database.session.commit()
             flash(_("Cliente actualizado correctamente."), "success")
-            return redirect(url_for("ventas.ventas_cliente", customer_id=cliente.id))
+            return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=cliente.id))
         except ValueError as exc:
             database.session.rollback()
             if selected_company:
@@ -630,7 +645,7 @@ def ventas_cliente_contacto_crear(customer_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 @ventas.route("/customer/<customer_id>/contacts/<link_id>/edit", methods=["POST"])
@@ -646,7 +661,7 @@ def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 @ventas.route("/customer/<customer_id>/contacts/<link_id>/deactivate", methods=["POST"])
@@ -658,7 +673,7 @@ def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
     deactivate_party_contact(customer_id, link_id)
     database.session.commit()
     flash(_("Contacto desactivado correctamente."), "success")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 @ventas.route("/customer/<customer_id>/addresses", methods=["POST"])
@@ -674,7 +689,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 @ventas.route("/customer/<customer_id>/addresses/<link_id>/edit", methods=["POST"])
@@ -690,7 +705,7 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 @ventas.route("/customer/<customer_id>/addresses/<link_id>/deactivate", methods=["POST"])
@@ -702,7 +717,7 @@ def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     deactivate_party_address(customer_id, link_id)
     database.session.commit()
     flash(_("Direccion desactivada correctamente."), "success")
-    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id))
+    return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
@@ -944,13 +959,13 @@ def ventas_orden_venta_nuevo():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Orden de Venta - " + APPNAME
     transaction_config = {
-        "formKey": "sales.sales_order",
+        "formKey": _FORMKEY_SALES_ORDER,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_order"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
-            {"value": "sales_request", "label": _("Pedido de Venta")},
+            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
         "initialSourceType": "sales_request" if from_request_id else "sales_quotation" if from_quotation_id else "",
@@ -989,7 +1004,7 @@ def ventas_orden_venta_nuevo():
             orden.grand_total = total
             database.session.commit()
             flash("Orden de venta creada correctamente.", "success")
-            return redirect(url_for("ventas.ventas_orden_venta", order_id=orden.id))
+            return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -1067,17 +1082,17 @@ def ventas_orden_venta_editar(order_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Orden de venta actualizada correctamente."), "success")
-        return redirect(url_for("ventas.ventas_orden_venta", order_id=registro.id))
+        return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=registro.id))
 
     lineas = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "sales.sales_order",
+        "formKey": _FORMKEY_SALES_ORDER,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_order"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
-            {"value": "sales_request", "label": _("Pedido de Venta")},
+            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
         "initialHeader": {
@@ -1160,7 +1175,7 @@ def ventas_orden_venta_duplicar(order_id: str):
     duplicado.grand_total = total
     database.session.commit()
     flash(_("Orden de venta duplicada como nuevo borrador."), "success")
-    return redirect(url_for("ventas.ventas_orden_venta", order_id=duplicado.id))
+    return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=duplicado.id))
 
 
 @ventas.route("/quotation/list")
@@ -1206,12 +1221,12 @@ def ventas_cotizacion_nueva():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Cotización - " + APPNAME
     transaction_config = {
-        "formKey": "sales.sales_quotation",
+        "formKey": _FORMKEY_SALES_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_quotation"),
-        "availableSourceTypes": [{"value": "sales_request", "label": _("Pedido de Venta")}],
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_QUOTATION),
+        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
     }
     if request.method == "POST":
         try:
@@ -1241,7 +1256,7 @@ def ventas_cotizacion_nueva():
             cotizacion.grand_total = total
             database.session.commit()
             flash("Cotización creada correctamente.", "success")
-            return redirect(url_for("ventas.ventas_cotizacion", quotation_id=cotizacion.id))
+            return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=cotizacion.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -1317,16 +1332,16 @@ def ventas_cotizacion_editar(quotation_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Cotización de venta actualizada correctamente."), "success")
-        return redirect(url_for("ventas.ventas_cotizacion", quotation_id=registro.id))
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
 
     lineas = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "sales.sales_quotation",
+        "formKey": _FORMKEY_SALES_QUOTATION,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_quotation"),
-        "availableSourceTypes": [{"value": "sales_request", "label": _("Pedido de Venta")}],
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_QUOTATION),
+        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -1407,7 +1422,7 @@ def ventas_cotizacion_duplicar(quotation_id: str):
     duplicado.grand_total = total
     database.session.commit()
     flash(_("Cotización de venta duplicada como nuevo borrador."), "success")
-    return redirect(url_for("ventas.ventas_cotizacion", quotation_id=duplicado.id))
+    return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=duplicado.id))
 
 
 @ventas.route("/sales-quotation/<quotation_id>/submit", methods=["POST"])
@@ -1423,7 +1438,7 @@ def ventas_cotizacion_submit(quotation_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash("Cotización de venta aprobada.", "success")
-    return redirect(url_for("ventas.ventas_cotizacion", quotation_id=quotation_id))
+    return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
 
 @ventas.route("/sales-quotation/<quotation_id>/cancel", methods=["POST"])
@@ -1440,7 +1455,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
     revert_relations_for_target("sales_quotation", quotation_id)
     database.session.commit()
     flash("Cotización de venta cancelada.", "warning")
-    return redirect(url_for("ventas.ventas_cotizacion", quotation_id=quotation_id))
+    return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
 
 @ventas.route("/sales-order/<order_id>/submit", methods=["POST"])
@@ -1456,7 +1471,7 @@ def ventas_orden_venta_submit(order_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash("Orden de venta aprobada.", "success")
-    return redirect(url_for("ventas.ventas_orden_venta", order_id=order_id))
+    return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
 @ventas.route("/sales-order/<order_id>/cancel", methods=["POST"])
@@ -1473,7 +1488,7 @@ def ventas_orden_venta_cancel(order_id: str):
     revert_relations_for_target("sales_order", order_id)
     database.session.commit()
     flash("Orden de venta cancelada.", "warning")
-    return redirect(url_for("ventas.ventas_orden_venta", order_id=order_id))
+    return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
 @ventas.route("/delivery-note/new", methods=["GET", "POST"])
@@ -1508,13 +1523,13 @@ def ventas_entrega_nuevo():
     ]
     titulo = "Nueva Nota de Entrega - " + APPNAME
     transaction_config = {
-        "formKey": "sales.delivery_note",
+        "formKey": _FORMKEY_DELIVERY_NOTE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.delivery_note"),
-        "availableSourceTypes": [{"value": "sales_order", "label": _("Orden de Venta")}],
+        "columns": get_column_preferences(current_user.id, _FORMKEY_DELIVERY_NOTE),
+        "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
     }
     if request.method == "POST":
         try:
@@ -1541,7 +1556,7 @@ def ventas_entrega_nuevo():
             log_create(entrega)
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
-            return redirect(url_for("ventas.ventas_entrega", note_id=entrega.id))
+            return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
         except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -1624,17 +1639,17 @@ def ventas_entrega_editar(note_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Nota de entrega actualizada correctamente."), "success")
-        return redirect(url_for("ventas.ventas_entrega", note_id=registro.id))
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
 
     lineas = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "sales.delivery_note",
+        "formKey": _FORMKEY_DELIVERY_NOTE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.delivery_note"),
-        "availableSourceTypes": [{"value": "sales_order", "label": _("Orden de Venta")}],
+        "columns": get_column_preferences(current_user.id, _FORMKEY_DELIVERY_NOTE),
+        "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -1715,7 +1730,7 @@ def ventas_entrega_duplicar(note_id: str):
     duplicado.grand_total = total
     database.session.commit()
     flash(_("Nota de entrega duplicada como nuevo borrador."), "success")
-    return redirect(url_for("ventas.ventas_entrega", note_id=duplicado.id))
+    return redirect(url_for(_ENDPOINT_ENTREGA, note_id=duplicado.id))
 
 
 @ventas.route("/delivery-note/<note_id>/submit", methods=["POST"])
@@ -1736,7 +1751,7 @@ def ventas_entrega_submit(note_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_entrega", note_id=note_id))
+    return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
 @ventas.route("/delivery-note/<note_id>/cancel", methods=["POST"])
@@ -1759,7 +1774,7 @@ def ventas_entrega_cancel(note_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
-    return redirect(url_for("ventas.ventas_entrega", note_id=note_id))
+    return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
 @ventas.route("/sales-invoice/new", methods=["GET", "POST"])
@@ -1802,13 +1817,13 @@ def ventas_factura_venta_nuevo():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Factura de Venta - " + APPNAME
     transaction_config = {
-        "formKey": "sales.sales_invoice",
+        "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_invoice"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_INVOICE),
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _("Orden de Venta")},
+            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
@@ -1851,7 +1866,7 @@ def ventas_factura_venta_nuevo():
             _persist_sales_invoice_fiscal_snapshot(factura)
             database.session.commit()
             flash("Factura de venta creada correctamente.", "success")
-            return redirect(url_for("ventas.ventas_factura_venta", invoice_id=factura.id))
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
         except ValueError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -1935,20 +1950,20 @@ def ventas_factura_venta_editar(invoice_id: str):
             _persist_sales_invoice_fiscal_snapshot(registro)
             database.session.commit()
             flash(_("Factura de venta actualizada correctamente."), "success")
-            return redirect(url_for("ventas.ventas_factura_venta", invoice_id=registro.id))
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
         except ValueError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
 
     lineas = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "sales.sales_invoice",
+        "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "sales.sales_invoice"),
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_INVOICE),
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _("Orden de Venta")},
+            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
@@ -2043,7 +2058,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     duplicado.base_outstanding_amount = total
     database.session.commit()
     flash(_("Factura de venta duplicada como nuevo borrador."), "success")
-    return redirect(url_for("ventas.ventas_factura_venta", invoice_id=duplicado.id))
+    return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=duplicado.id))
 
 
 @ventas.route("/sales-invoice/<invoice_id>/submit", methods=["POST"])
@@ -2062,9 +2077,9 @@ def ventas_factura_venta_submit(invoice_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("ventas.ventas_factura_venta", invoice_id=invoice_id))
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     flash(_("Factura de venta aprobada y contabilizada."), "success")
-    return redirect(url_for("ventas.ventas_factura_venta", invoice_id=invoice_id))
+    return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
 
 @ventas.route("/sales-invoice/<invoice_id>/cancel", methods=["POST"])
@@ -2085,6 +2100,6 @@ def ventas_factura_venta_cancel(invoice_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("ventas.ventas_factura_venta", invoice_id=invoice_id))
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     flash(_("Factura de venta cancelada con reverso contable."), "warning")
-    return redirect(url_for("ventas.ventas_factura_venta", invoice_id=invoice_id))
+    return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
