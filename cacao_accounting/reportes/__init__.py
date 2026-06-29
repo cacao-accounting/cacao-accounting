@@ -304,27 +304,24 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
     payload = preference.get("filters", {})
     if not isinstance(payload, dict):
         return filters
-    try:
-        page_size = max(int(payload.get("page_size") or filters.page_size), 1)
-    except (TypeError, ValueError):
-        page_size = max(filters.page_size, 1)
+    page_size = _safe_page_size(payload.get("page_size"), filters.page_size)
     return cast(
         FinancialReportFilters,
         replace(
             filters,
             company=str(payload.get("company") or filters.company),
-            ledger=str(payload.get("ledger") or "") or None,
-            accounting_period=str(payload.get("accounting_period") or "") or None,
-            voucher_number=str(payload.get("voucher_number") or "") or None,
-            account_code=str(payload.get("account_code") or "") or None,
-            account_from=str(payload.get("account_from") or "") or None,
-            account_to=str(payload.get("account_to") or "") or None,
-            cost_center_code=str(payload.get("cost_center_code") or "") or None,
-            unit_code=str(payload.get("unit_code") or "") or None,
-            project_code=str(payload.get("project_code") or "") or None,
-            party_type=str(payload.get("party_type") or "") or None,
-            party_id=str(payload.get("party_id") or "") or None,
-            voucher_type=str(payload.get("voucher_type") or "") or None,
+            ledger=_str_or_none(payload.get("ledger")),
+            accounting_period=_str_or_none(payload.get("accounting_period")),
+            voucher_number=_str_or_none(payload.get("voucher_number")),
+            account_code=_str_or_none(payload.get("account_code")),
+            account_from=_str_or_none(payload.get("account_from")),
+            account_to=_str_or_none(payload.get("account_to")),
+            cost_center_code=_str_or_none(payload.get("cost_center_code")),
+            unit_code=_str_or_none(payload.get("unit_code")),
+            project_code=_str_or_none(payload.get("project_code")),
+            party_type=_str_or_none(payload.get("party_type")),
+            party_id=_str_or_none(payload.get("party_id")),
+            voucher_type=_str_or_none(payload.get("voucher_type")),
             status=str(payload.get("status") or filters.status or "submitted"),
             include_running_balance=str(payload.get("include_running_balance") or "").lower() in {"1", "true", "yes", "on"},
             page_size=page_size,
@@ -333,6 +330,17 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
             page=1,
         ),
     )
+
+
+def _safe_page_size(raw: object, default: int) -> int:
+    try:
+        return max(int(raw or default), 1)
+    except (TypeError, ValueError):
+        return max(default, 1)
+
+
+def _str_or_none(value: object) -> str | None:
+    return str(value or "") or None
 
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
@@ -481,6 +489,14 @@ def _build_hierarchical_financial_rows(
 ) -> list[dict[str, object]]:
     if report_code not in {"trial-balance", "income-statement", "balance-sheet"}:
         return source_rows
+    sections_order, section_nodes, section_non_account_rows = _collect_section_nodes(source_rows)
+    _enrich_section_nodes(section_nodes, company)
+    return _flatten_hierarchical_rows(sections_order, section_nodes, section_non_account_rows)
+
+
+def _collect_section_nodes(
+    source_rows: list[dict[str, object]],
+) -> tuple[list[str], dict[str, dict[str, dict[str, object]]], dict[str, list[dict[str, object]]]]:
     sections_order: list[str] = []
     section_nodes: dict[str, dict[str, dict[str, object]]] = {}
     section_non_account_rows: dict[str, list[dict[str, object]]] = {}
@@ -510,7 +526,10 @@ def _build_hierarchical_financial_rows(
             )
             if row.get("section") and not parent_node.get("section"):
                 parent_node["section"] = row.get("section")
+    return sections_order, section_nodes, section_non_account_rows
 
+
+def _enrich_section_nodes(section_nodes: dict[str, dict[str, dict[str, object]]], company: str) -> None:
     for section, nodes in section_nodes.items():
         if not nodes:
             continue
@@ -532,19 +551,31 @@ def _build_hierarchical_financial_rows(
             parent = ".".join(code.split(".")[:-1])
             if parent:
                 children_map.setdefault(parent, []).append(code)
-        for code in sorted(nodes.keys(), key=lambda value: value.count("."), reverse=True):
-            parent = ".".join(code.split(".")[:-1])
-            if not parent or parent not in nodes:
-                continue
-            for field in numeric_fields:
-                parent_amount = _to_decimal_or_zero(nodes[parent].get(field))
-                child_amount = _to_decimal_or_zero(nodes[code].get(field))
-                nodes[parent][field] = parent_amount + child_amount
+        _propagate_child_amounts_to_parents(nodes, numeric_fields)
         for node_code, node in nodes.items():
             node["account_name"] = node.get("account_name") or account_names.get(node_code) or node_code
             node["level"] = node_code.count(".") + 1
             node["is_group"] = bool(children_map.get(node_code))
 
+
+def _propagate_child_amounts_to_parents(
+    nodes: dict[str, dict[str, object]], numeric_fields: set[str]
+) -> None:
+    for code in sorted(nodes.keys(), key=lambda value: value.count("."), reverse=True):
+        parent = ".".join(code.split(".")[:-1])
+        if not parent or parent not in nodes:
+            continue
+        for field in numeric_fields:
+            parent_amount = _to_decimal_or_zero(nodes[parent].get(field))
+            child_amount = _to_decimal_or_zero(nodes[code].get(field))
+            nodes[parent][field] = parent_amount + child_amount
+
+
+def _flatten_hierarchical_rows(
+    sections_order: list[str],
+    section_nodes: dict[str, dict[str, dict[str, object]]],
+    section_non_account_rows: dict[str, list[dict[str, object]]],
+) -> list[dict[str, object]]:
     flattened_rows: list[dict[str, object]] = []
     for section in sections_order:
         flattened_rows.extend(section_non_account_rows.get(section, []))
@@ -560,15 +591,25 @@ def _build_hierarchical_financial_rows(
             [code for code in nodes if ".".join(code.split(".")[:-1]) not in nodes],
             key=str,
         )
-
-        def append_node(code: str) -> None:
-            flattened_rows.append(dict(nodes[code]))
-            for child_code in sorted(ordered_children_map.get(code, []), key=str):
-                append_node(child_code)
-
-        for root_code in root_codes:
-            append_node(root_code)
+        flattened_rows.extend(_flatten_nodes_by_root(nodes, ordered_children_map, root_codes))
     return flattened_rows
+
+
+def _flatten_nodes_by_root(
+    nodes: dict[str, dict[str, object]],
+    ordered_children_map: dict[str, list[str]],
+    root_codes: list[str],
+) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+
+    def append_node(code: str) -> None:
+        result.append(dict(nodes[code]))
+        for child_code in sorted(ordered_children_map.get(code, []), key=str):
+            append_node(child_code)
+
+    for root_code in root_codes:
+        append_node(root_code)
+    return result
 
 
 def _resolve_row_level(row: dict[str, object], account_code: str) -> int:
@@ -779,17 +820,7 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
     )
 
 
-def _render_financial_report(
-    report_code: str,
-    report_title: str,
-    report,
-    report_filters: FinancialReportFilters,
-    saved_view: str,
-    saved_views: list[str],
-):
-    export_response = _export_financial_report(report, report_code, report_title, report_filters)
-    if export_response is not None:
-        return export_response
+def _compute_display_columns(report, report_code: str, saved_view: str) -> list[str]:
     selected_columns = request.args.getlist("visible_columns")
     if not selected_columns:
         selected_columns = _preferred_columns_from_view(report_code, saved_view)
@@ -803,18 +834,21 @@ def _render_financial_report(
         for column in columns
         if any((row.values.get(column) not in (None, "", "—") for row in report.rows)) or column in _ALWAYS_VISIBLE_COLUMNS
     ]
-    if not display_columns:
-        display_columns = columns
+    return display_columns if display_columns else columns
+
+
+def _compute_all_columns(report, report_code: str) -> list[str]:
     extra_columns = ["reference_type", "is_reversal", "reversal_of"]
     all_columns = list(dict.fromkeys([*(report.columns or []), *extra_columns]))
     if report_code == "trial-balance":
         all_columns = [column for column in all_columns if column != "level"]
-    allow_column_selection = report_code in {"account-movement", "account-summary"}
-    display_headers = {column: _column_label(column, report.ledger_currency) for column in display_columns}
-    all_column_headers = {column: _column_label(column, report.ledger_currency) for column in all_columns}
-    source_rows = [dict(row.values) for row in report.rows]
-    source_rows = _build_hierarchical_financial_rows(report_code, source_rows, report_filters.company)
-    row_metadata = []
+    return all_columns
+
+
+def _build_row_metadata(
+    source_rows: list[dict[str, object]],
+    report_filters: FinancialReportFilters,
+) -> list[dict[str, object]]:
     child_counts: dict[str, int] = {}
     for row in source_rows:
         account_code = str(row.get("account_code") or "")
@@ -823,6 +857,7 @@ def _render_financial_report(
         parent_code = ".".join(account_code.split(".")[:-1])
         if parent_code:
             child_counts[parent_code] = child_counts.get(parent_code, 0) + 1
+    row_metadata = []
     for row in source_rows:
         account_code = str(row.get("account_code") or "")
         parent_code = ".".join(account_code.split(".")[:-1]) if account_code else ""
@@ -839,60 +874,105 @@ def _render_financial_report(
                 "is_group": bool(row.get("is_group")),
             }
         )
+    return row_metadata
+
+
+def _build_display_rows(
+    source_rows: list[dict[str, object]],
+    row_metadata: list[dict[str, object]],
+    display_columns: list[str],
+    ledger_currency: str | None,
+) -> list[dict[str, object]]:
     display_rows: list[dict[str, object]] = []
     for index, row in enumerate(source_rows):
         formatted_row: dict[str, object] = {
-            column: _format_cell(column, row.get(column), report.ledger_currency) for column in display_columns
+            column: _format_cell(column, row.get(column), ledger_currency) for column in display_columns
         }
         formatted_row["__meta"] = row_metadata[index]
         display_rows.append(formatted_row)
+    return display_rows
+
+
+def _apply_grouping(
+    display_rows: list[dict[str, object]],
+    source_rows: list[dict[str, object]],
+    report,
+    report_code: str,
+    saved_view: str,
+) -> list[dict[str, object]]:
     group_by = request.args.get("group_by") or _preferred_group_by_from_view(report_code, saved_view)
+    if not (report_code == "account-movement" and group_by and group_by in (report.columns or [])):
+        return display_rows
+    return _group_rows_by_field(display_rows, source_rows, group_by, report.ledger_currency)
+
+
+def _group_rows_by_field(
+    display_rows: list[dict[str, object]],
+    source_rows: list[dict[str, object]],
+    group_by: str,
+    ledger_currency: str | None,
+) -> list[dict[str, object]]:
     grouped_rows: list[dict[str, object]] = []
-    if report_code == "account-movement" and group_by and group_by in (report.columns or []):
-        current_group = None
-        group_debit = Decimal("0")
-        group_credit = Decimal("0")
-        for index, row in enumerate(display_rows):
-            raw_group_value = source_rows[index].get(group_by)
-            group_value = _format_cell(group_by, raw_group_value, report.ledger_currency)
-            if group_value != current_group:
-                if current_group is not None:
-                    grouped_rows.append(
-                        {
-                            "__row_type": "group_subtotal",
-                            "__group_title": _("Subtotal"),
-                            "debit": _format_cell("debit", group_debit, report.ledger_currency),
-                            "credit": _format_cell("credit", group_credit, report.ledger_currency),
-                        }
-                    )
-                group_row: dict[str, object] = {
-                    "__row_type": "group",
-                    "__group_title": f"{_(group_by.replace('_', ' ').title())}: {group_value}",
-                }
-                grouped_rows.append(group_row)
-                current_group = group_value
-                group_debit = Decimal("0")
-                group_credit = Decimal("0")
-            try:
-                group_debit += Decimal(str(row.get("debit", "0")).replace(",", "").replace("(", "-").replace(")", ""))
-            except DecimalException:
-                pass
-            try:
-                group_credit += Decimal(str(row.get("credit", "0")).replace(",", "").replace("(", "-").replace(")", ""))
-            except DecimalException:
-                pass
-            grouped_rows.append(row)
-        if current_group is not None:
-            grouped_rows.append(
-                {
-                    "__row_type": "group_subtotal",
-                    "__group_title": _("Subtotal"),
-                    "debit": _format_cell("debit", group_debit, report.ledger_currency),
-                    "credit": _format_cell("credit", group_credit, report.ledger_currency),
-                }
-            )
-    else:
-        grouped_rows = display_rows
+    current_group: str | None = None
+    group_debit = Decimal("0")
+    group_credit = Decimal("0")
+    for index, row in enumerate(display_rows):
+        raw_group_value = source_rows[index].get(group_by)
+        group_value = _format_cell(group_by, raw_group_value, ledger_currency)
+        if group_value != current_group:
+            if current_group is not None:
+                grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
+            group_title = _(group_by.replace("_", " ").title())
+            grouped_rows.append({"__row_type": "group", "__group_title": f"{group_title}: {group_value}"})
+            current_group = group_value
+            group_debit = Decimal("0")
+            group_credit = Decimal("0")
+        group_debit = _add_to_decimal_or_zero(group_debit, row.get("debit"))
+        group_credit = _add_to_decimal_or_zero(group_credit, row.get("credit"))
+        grouped_rows.append(row)
+    if current_group is not None:
+        grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
+    return grouped_rows
+
+
+def _build_group_subtotal_row(debit: Decimal, credit: Decimal, ledger_currency: str | None) -> dict[str, object]:
+    return {
+        "__row_type": "group_subtotal",
+        "__group_title": _("Subtotal"),
+        "debit": _format_cell("debit", debit, ledger_currency),
+        "credit": _format_cell("credit", credit, ledger_currency),
+    }
+
+
+def _add_to_decimal_or_zero(current: Decimal, value: object) -> Decimal:
+    try:
+        return current + Decimal(str(value or "0").replace(",", "").replace("(", "-").replace(")", ""))
+    except DecimalException:
+        return current
+
+
+def _render_financial_report(
+    report_code: str,
+    report_title: str,
+    report,
+    report_filters: FinancialReportFilters,
+    saved_view: str,
+    saved_views: list[str],
+):
+    export_response = _export_financial_report(report, report_code, report_title, report_filters)
+    if export_response is not None:
+        return export_response
+    display_columns = _compute_display_columns(report, report_code, saved_view)
+    all_columns = _compute_all_columns(report, report_code)
+    allow_column_selection = report_code in {"account-movement", "account-summary"}
+    group_by = request.args.get("group_by") or _preferred_group_by_from_view(report_code, saved_view)
+    display_headers = {column: _column_label(column, report.ledger_currency) for column in display_columns}
+    all_column_headers = {column: _column_label(column, report.ledger_currency) for column in all_columns}
+    source_rows = [dict(row.values) for row in report.rows]
+    source_rows = _build_hierarchical_financial_rows(report_code, source_rows, report_filters.company)
+    row_metadata = _build_row_metadata(source_rows, report_filters)
+    display_rows = _build_display_rows(source_rows, row_metadata, display_columns, report.ledger_currency)
+    grouped_rows = _apply_grouping(display_rows, source_rows, report, report_code, saved_view)
     display_totals = {key: _format_cell(key, value, report.ledger_currency) for key, value in report.totals.items()}
     return render_template(
         "reportes/financial_report.html",

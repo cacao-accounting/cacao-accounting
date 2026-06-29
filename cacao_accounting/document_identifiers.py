@@ -318,13 +318,23 @@ def _resolve_external_counter(
         ExternalCounter seleccionado o None si no aplica contador externo.
     """
     if explicit_counter_id:
-        counter = database.session.get(ExternalCounter, explicit_counter_id)
-        if not counter:
-            raise IdentifierConfigurationError("El contador externo indicado no existe.")
-        if not counter.is_active:
-            raise IdentifierConfigurationError("El contador externo indicado esta inactivo.")
-        return counter
+        return _get_explicit_counter(explicit_counter_id)
 
+    return _resolve_counter_from_mappings(naming_series_id, context)
+
+
+def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
+    """Obtiene un contador externo explícitamente seleccionado."""
+    counter = database.session.get(ExternalCounter, explicit_counter_id)
+    if not counter:
+        raise IdentifierConfigurationError("El contador externo indicado no existe.")
+    if not counter.is_active:
+        raise IdentifierConfigurationError("El contador externo indicado esta inactivo.")
+    return counter
+
+
+def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) -> ExternalCounter | None:
+    """Resuelve contador externo desde mapeos de serie."""
     ctx = context or {}
 
     mappings = (
@@ -340,7 +350,22 @@ def _resolve_external_counter(
     if not mappings:
         return None
 
-    # Separar candidatos con condicion y sin condicion
+    matched_with_condition, fallback = _collect_matching_counters(mappings, ctx)
+
+    if matched_with_condition:
+        best = sorted(matched_with_condition, key=lambda x: -x[1])[0][0]
+        return database.session.get(ExternalCounter, best.external_counter_id)
+
+    if fallback:
+        return database.session.get(ExternalCounter, fallback.external_counter_id)
+
+    return None
+
+
+def _collect_matching_counters(
+    mappings: list, ctx: dict
+) -> tuple[list[tuple[SeriesExternalCounterMap, int]], SeriesExternalCounterMap | None]:
+    """Clasifica mapeos en candidatos con condición y fallback sin condición."""
     matched_with_condition: list[tuple[SeriesExternalCounterMap, int]] = []
     fallback: SeriesExternalCounterMap | None = None
 
@@ -352,21 +377,18 @@ def _resolve_external_counter(
             if fallback is None:
                 fallback = mapping
         elif _condition_matches(mapping.condition_json, ctx):
-            try:
-                num_conditions = len(json.loads(mapping.condition_json))
-            except ValueError:
-                num_conditions = 0
+            num_conditions = _count_conditions(mapping.condition_json)
             matched_with_condition.append((mapping, num_conditions))
 
-    # Priorizar el candidato con mas condiciones coincidentes (mas especifico)
-    if matched_with_condition:
-        best = sorted(matched_with_condition, key=lambda x: -x[1])[0][0]
-        return database.session.get(ExternalCounter, best.external_counter_id)
+    return matched_with_condition, fallback
 
-    if fallback:
-        return database.session.get(ExternalCounter, fallback.external_counter_id)
 
-    return None
+def _count_conditions(condition_json: str) -> int:
+    """Cuenta el número de condiciones en un JSON."""
+    try:
+        return len(json.loads(condition_json))
+    except ValueError:
+        return 0
 
 
 # -------------------------------------------------------------------------------------

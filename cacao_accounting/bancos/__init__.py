@@ -404,39 +404,48 @@ def _crear_nota_bancaria(note_kind: str):
     """Crea una transacción bancaria manual como nota de débito/crédito."""
     company = request.form.get("company") or request.args.get("company") or None
     if request.method == "POST":
-        amount = _form_decimal("amount")
-        bank_account_id = request.form.get("bank_account_id", "")
-        _bank_account_for_note(bank_account_id, company, amount)
-        transaction = BankTransaction(
-            bank_account_id=bank_account_id,
-            posting_date=request.form.get("posting_date") or None,
-            description=request.form.get("description") or None,
-            reference_number=request.form.get("reference_number") or None,
-            deposit=amount if note_kind == "credit" else None,
-            withdrawal=amount if note_kind == "debit" else None,
-        )
-        database.session.add(transaction)
-        database.session.flush()
-        try:
-            post_bank_transaction(transaction)
-            database.session.commit()
-            flash(_("Nota bancaria registrada correctamente y registrada en el libro mayor."), "success")
-        except PostingError as exc:
-            database.session.rollback()
-            flash(_(str(exc)), "danger")
-            if note_kind == "credit":
-                return redirect(url_for("bancos.bancos_nota_credito_nueva"))
-            return redirect(url_for("bancos.bancos_nota_debito_nueva"))
-        list_view = "bancos.bancos_nota_credito_lista" if note_kind == "credit" else "bancos.bancos_nota_debito_lista"
-        return redirect(url_for(list_view))
+        return _handle_nota_bancaria_post(note_kind, company)
+    return _render_nota_bancaria_form(note_kind, company)
+
+
+def _handle_nota_bancaria_post(note_kind: str, company: str | None):
+    """Procesa el POST para crear nota bancaria."""
+    amount = _form_decimal("amount")
+    bank_account_id = request.form.get("bank_account_id", "")
+    _bank_account_for_note(bank_account_id, company, amount)
+    transaction = BankTransaction(
+        bank_account_id=bank_account_id,
+        posting_date=request.form.get("posting_date") or None,
+        description=request.form.get("description") or None,
+        reference_number=request.form.get("reference_number") or None,
+        deposit=amount if note_kind == "credit" else None,
+        withdrawal=amount if note_kind == "debit" else None,
+    )
+    database.session.add(transaction)
+    database.session.flush()
+    try:
+        post_bank_transaction(transaction)
+        database.session.commit()
+        flash(_("Nota bancaria registrada correctamente y registrada en el libro mayor."), "success")
+    except PostingError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+        redirect_url = "bancos.bancos_nota_credito_nueva" if note_kind == "credit" else "bancos.bancos_nota_debito_nueva"
+        return redirect(url_for(redirect_url))
+    list_view = "bancos.bancos_nota_credito_lista" if note_kind == "credit" else "bancos.bancos_nota_debito_lista"
+    return redirect(url_for(list_view))
+
+
+def _render_nota_bancaria_form(note_kind: str, company: str | None):
+    """Renderiza el formulario de nota bancaria."""
     cuentas_query = database.select(BankAccount).filter_by(is_active=True)
     if company:
         cuentas_query = cuentas_query.filter_by(company=company)
     cuentas = database.session.execute(cuentas_query).scalars().all()
+    titulo = ("Nueva Nota de Crédito Bancario - " if note_kind == "credit" else "Nueva Nota de Débito Bancario - ") + APPNAME
     return render_template(
         "bancos/transaccion_nueva.html",
-        titulo=("Nueva Nota de Crédito Bancario - " if note_kind == "credit" else "Nueva Nota de Débito Bancario - ")
-        + APPNAME,
+        titulo=titulo,
         note_kind=note_kind,
         cuentas=cuentas,
         company=company,
@@ -1609,6 +1618,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     bank_account_id = cast(str | None, payload.get("bank_account_id"))
     amount = Decimal(str(payload.get("paid_amount") or "0"))
     target_bank_account_id = cast(str | None, payload.get("target_bank_account_id"))
+
     _validate_payment_header(
         payment_type=payment_type,
         company=company,
@@ -1619,8 +1629,43 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         party_id=payload.get("party_id"),
         target_bank_account_id=target_bank_account_id,
     )
+
+    paid_from_account_id, paid_to_account_id = _resolve_gl_accounts(
+        payload, payment_type, bank_account_id, target_bank_account_id
+    )
+    reference_date = _parse_reference_date(payload.get("reference_date"))
+    payment_currency = _get_payment_currency(bank_account_id)
+    mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
+
+    payment = _create_payment_entry(
+        payload=payload,
+        payment_type=payment_type,
+        company=company,
+        bank_account_id=bank_account_id,
+        target_bank_account_id=target_bank_account_id,
+        amount=amount,
+        payment_currency=payment_currency,
+        reference_date=reference_date,
+        mode_of_payment=mode_of_payment,
+        paid_from_account_id=paid_from_account_id,
+        paid_to_account_id=paid_to_account_id,
+    )
+    _update_payment_amounts(payment, payment_type, amount)
+    database.session.add(payment)
+    database.session.flush()
+    return payment, amount, mode_of_payment
+
+
+def _resolve_gl_accounts(
+    payload: PaymentPayload,
+    payment_type: str,
+    bank_account_id: str | None,
+    target_bank_account_id: str | None,
+) -> tuple[str | None, str | None]:
+    """Resolve GL account IDs from bank accounts for internal transfers."""
     paid_from_account_id = payload.get("paid_from_account_id")
     paid_to_account_id = payload.get("paid_to_account_id")
+
     if payment_type == "internal_transfer":
         source_bank = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
         target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
@@ -1628,14 +1673,41 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
             paid_from_account_id = source_bank.gl_account_id
         if target_bank and not paid_to_account_id:
             paid_to_account_id = target_bank.gl_account_id
-    reference_date_raw = cast(str | None, payload.get("reference_date"))
-    reference_date = date.fromisoformat(reference_date_raw) if reference_date_raw else None
+
+    return paid_from_account_id, paid_to_account_id
+
+
+def _parse_reference_date(reference_date_raw: str | None) -> date | None:
+    """Parse reference date from ISO string."""
+    if reference_date_raw:
+        return date.fromisoformat(reference_date_raw)
+    return None
+
+
+def _get_payment_currency(bank_account_id: str | None) -> str:
+    """Get payment currency from bank account."""
     bank_account = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
     payment_currency = bank_account.currency if bank_account else None
     if not payment_currency:
         raise ValueError(_("La cuenta bancaria seleccionada no tiene moneda configurada."))
-    mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
-    payment = PaymentEntry(
+    return payment_currency
+
+
+def _create_payment_entry(
+    payload: PaymentPayload,
+    payment_type: str,
+    company: str | None,
+    bank_account_id: str | None,
+    target_bank_account_id: str | None,
+    amount: Decimal,
+    payment_currency: str,
+    reference_date: date | None,
+    mode_of_payment: str,
+    paid_from_account_id: str | None,
+    paid_to_account_id: str | None,
+) -> PaymentEntry:
+    """Create a PaymentEntry object from payload data."""
+    return PaymentEntry(
         payment_type=payment_type,
         company=company,
         bank_account_id=bank_account_id,
@@ -1659,15 +1731,16 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         remarks=cast(str | None, payload.get("remarks")),
         docstatus=0,
     )
+
+
+def _update_payment_amounts(payment: PaymentEntry, payment_type: str, amount: Decimal) -> None:
+    """Update payment amounts based on payment type."""
     if payment_type in ("pay", "debit_note", "internal_transfer"):
         payment.paid_amount = amount
         payment.base_paid_amount = amount
     if payment_type in ("receive", "credit_note", "internal_transfer"):
         payment.received_amount = amount
         payment.base_received_amount = amount
-    database.session.add(payment)
-    database.session.flush()
-    return payment, amount, mode_of_payment
 
 
 def _payment_identifier_inputs(

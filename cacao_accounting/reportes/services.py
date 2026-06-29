@@ -663,12 +663,25 @@ def _period_bounds(company: str, period_name: str | None) -> tuple[date | None, 
 
 
 def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start: date | None, period_end: date | None) -> Any:
+    query = _apply_base_filters(query, filters)
+    query = _apply_account_filters(query, filters)
+    query = _apply_party_filters(query, filters)
+    query = _apply_status_filter(query, filters)
+    query = _apply_period_filter(query, period_start, period_end)
+    return query
+
+
+def _apply_base_filters(query: Any, filters: FinancialReportFilters) -> Any:
     query = query.where(GLEntry.company == filters.company)
     if not filters.include_closing:
         query = query.where(GLEntry.is_fiscal_year_closing.is_(False))
     if filters.voucher_number:
         like_value = f"%{filters.voucher_number.strip()}%"
         query = query.where(GLEntry.document_no.ilike(like_value))
+    return query
+
+
+def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.account_code:
         query = query.where(GLEntry.account_code == filters.account_code)
     if filters.account_from:
@@ -681,16 +694,28 @@ def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start:
         query = query.where(GLEntry.unit_code == filters.unit_code)
     if filters.project_code:
         query = query.where(GLEntry.project_code == filters.project_code)
+    return query
+
+
+def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.party_type:
         query = query.where(GLEntry.party_type == filters.party_type)
     if filters.party_id:
         query = query.where(GLEntry.party_id == filters.party_id)
     if filters.voucher_type:
         query = query.where(GLEntry.voucher_type == filters.voucher_type)
+    return query
+
+
+def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.status == "cancelled":
         query = query.where(GLEntry.is_cancelled.is_(True))
     elif filters.status in {"submitted", "posted"}:
         query = query.where(GLEntry.is_cancelled.is_(False))
+    return query
+
+
+def _apply_period_filter(query: Any, period_start: date | None, period_end: date | None) -> Any:
     if period_start:
         query = query.where(GLEntry.posting_date >= period_start)
     if period_end:
