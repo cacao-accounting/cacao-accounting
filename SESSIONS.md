@@ -38,6 +38,12 @@
 - **Pruebas:** Se agrego `test_purchase_invoice_document_type_helper_prefers_sources_and_explicit_override` en `tests/test_03webactions.py` para cubrir devolucion, nota de credito, factura normal y override manual.
 - **Verificacion:** `ruff`, `mypy` focal y la prueba nueva quedaron en verde. `black --check` reporto ambos archivos sin cambios antes de ser interrumpido por `timeout`.
 
+## 2026-06-29 (SonarCloud: limpieza de ternario en orden de venta)
+- **Solicitud:** Cerrar el issue `python:S3358` en `cacao_accounting/ventas/__init__.py`.
+- **Implementacion:** Se extrajo `_sales_order_initial_source_type()` para resolver de forma explicita la precedencia entre `sales_request` y `sales_quotation`, eliminando el ternario anidado de la ruta nueva de orden de venta.
+- **Pruebas:** Se agrego `test_sales_order_initial_source_type_helper_prefers_request_then_quotation` en `tests/test_03webactions.py`.
+- **Verificacion:** `ruff`, `mypy` focal y la prueba nueva quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
