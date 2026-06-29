@@ -308,11 +308,23 @@
         },
 
         _filterVisibleColumns(columns) {
-          return columns.filter((column) => column.visible !== false);
+          const result = [];
+          for (const column of columns) {
+            if (column.visible !== false) result.push(column);
+          }
+          return result;
         },
 
         get totalAmount() {
-          return this.lines.reduce((total, line) => total + toNumber(line.amount), 0);
+          return this._sumLineAmounts(this.lines);
+        },
+
+        _sumLineAmounts(lines) {
+          let total = 0;
+          for (const line of lines) {
+            total += toNumber(line.amount);
+          }
+          return total;
         },
 
         get documentTaxTotal() {
@@ -508,7 +520,11 @@
         },
 
         mapLinesToPayload() {
-          return this.lines.map((line) => this._serializeLine(line));
+          const result = [];
+          for (const line of this.lines) {
+            result.push(this._serializeLine(line));
+          }
+          return result;
         },
 
         _serializeLine(line) {
@@ -524,7 +540,11 @@
         },
 
         mapTaxLinesToPayload() {
-          return this.taxCharges.lines.map((line) => this._serializeTaxLine(line));
+          const result = [];
+          for (const line of this.taxCharges.lines) {
+            result.push(this._serializeTaxLine(line));
+          }
+          return result;
         },
 
         _serializeTaxLine(line) {
@@ -711,7 +731,25 @@
         },
 
         calcDocumentTaxTotal(lines) {
-          return lines.reduce((total, line) => total + this._taxAmountIfAffects(line), 0);
+          return this._sumLinesByTaxType(lines, 'affects');
+        },
+
+        _sumLinesByTaxType(lines, taxType) {
+          let total = 0;
+          for (const line of lines) {
+            let amount = 0;
+            if (taxType === 'affects') {
+              amount = this._taxAmountIfAffects(line);
+            } else if (taxType === 'capitalizable') {
+              amount = this._taxAmountIfCapitalizable(line);
+            } else if (taxType === 'separate') {
+              amount = this._taxAmountIfSeparate(line);
+            } else if (taxType === 'withholding') {
+              amount = this._taxAmountIfWithholding(line);
+            }
+            total += amount;
+          }
+          return total;
         },
 
         _taxAmountIfAffects(line) {
@@ -723,7 +761,7 @@
         },
 
         calcCapitalizableTaxTotal(lines) {
-          return lines.reduce((total, line) => total + this._taxAmountIfCapitalizable(line), 0);
+          return this._sumLinesByTaxType(lines, 'capitalizable');
         },
 
         _taxAmountIfCapitalizable(line) {
@@ -733,7 +771,7 @@
         },
 
         calcSeparateTaxTotal(lines) {
-          return lines.reduce((total, line) => total + this._taxAmountIfSeparate(line), 0);
+          return this._sumLinesByTaxType(lines, 'separate');
         },
 
         _taxAmountIfSeparate(line) {
@@ -743,7 +781,7 @@
         },
 
         calcWithholdingTotal(lines) {
-          return lines.reduce((total, line) => total + this._taxAmountIfWithholding(line), 0);
+          return this._sumLinesByTaxType(lines, 'withholding');
         },
 
         _taxAmountIfWithholding(line) {
