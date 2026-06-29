@@ -1537,6 +1537,15 @@ def compras_orden_compra_nuevo():
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
+    if from_request_id:
+        initial_source_type = "purchase_request"
+    elif from_rfq_id:
+        initial_source_type = "purchase_quotation"
+    elif from_supplier_quotation_id:
+        initial_source_type = "supplier_quotation"
+    else:
+        initial_source_type = ""
+
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_ORDER,
         "viewKey": "draft",
@@ -1548,11 +1557,7 @@ def compras_orden_compra_nuevo():
             {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
         ],
-        "initialSourceType": (
-            "purchase_request"
-            if from_request_id
-            else "purchase_quotation" if from_rfq_id else "supplier_quotation" if from_supplier_quotation_id else ""
-        ),
+        "initialSourceType": initial_source_type,
     }
     source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
     if source_origen:
