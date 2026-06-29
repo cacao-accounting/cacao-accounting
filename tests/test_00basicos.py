@@ -74,6 +74,24 @@ def test_normaliza_url_postgresql_pg8000_sslmode_y_channel_binding():
     assert "ssl_context" in opciones["connect_args"]
 
 
+def test_build_version_prefers_prerelease_over_postrelease():
+    from cacao_accounting.version import build_version
+
+    assert build_version("1", "2", "3", "dev20250629", "post20250629") == "1.2.3.dev20250629"
+
+
+def test_build_version_uses_postrelease_when_no_prerelease():
+    from cacao_accounting.version import build_version
+
+    assert build_version("1", "2", "3", None, "post20250629") == "1.2.3.post20250629"
+
+
+def test_build_version_returns_plain_semver_without_release_suffixes():
+    from cacao_accounting.version import build_version
+
+    assert build_version("1", "2", "3") == "1.2.3"
+
+
 def test_falla_verificar_conn_db(request):
     from cacao_accounting import create_app
 
