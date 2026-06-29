@@ -471,6 +471,10 @@ def compras_cotizacion_proveedor_nueva():
     selected_company = _supplier_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
     formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
+    if request.method == "POST":
+        response = _create_supplier_quotation_from_request()
+        if response is not None:
+            return response
     from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
@@ -481,10 +485,6 @@ def compras_cotizacion_proveedor_nueva():
         uoms=uoms_disponibles,
         initial_source_type=_supplier_quotation_initial_source_type(from_request_id, from_rfq_id),
     )
-    if request.method == "POST":
-        response = _create_supplier_quotation_from_request(from_rfq_id)
-        if response is not None:
-            return response
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
@@ -506,9 +506,10 @@ def _supplier_quotation_origin_ids() -> tuple[str | None, str | None]:
     return from_request_id, from_rfq_id
 
 
-def _create_supplier_quotation_from_request(from_rfq_id: str | None):
+def _create_supplier_quotation_from_request():
     """Crea una cotizacion de proveedor a partir del formulario enviado."""
     try:
+        _, from_rfq_id = _supplier_quotation_origin_ids()
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
