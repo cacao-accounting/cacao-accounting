@@ -50,6 +50,11 @@
 - **Pruebas:** Se agregaron pruebas unitarias en `tests/test_00basicos.py` para prerelease, postrelease y version semantica simple.
 - **Verificacion:** `ruff`, `mypy` focal y `tests/test_00basicos.py` quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
 
+## 2026-06-29 (SonarCloud: limpieza de branch duplicado en document flow)
+- **Solicitud:** Cerrar el issue `python:S1871` en `cacao_accounting/document_flow/service.py`.
+- **Implementacion:** `_build_candidate_query()` elimino un branch duplicado y ahora aplica `filter_by(document_type=source_type)` una sola vez cuando el modelo tiene ese atributo.
+- **Verificacion:** `black --check`, `ruff`, `mypy` focal y `tests/test_payment_entry_improved.py::test_payment_reference_candidates_endpoint_filters_by_party_and_company` quedaron en verde.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
