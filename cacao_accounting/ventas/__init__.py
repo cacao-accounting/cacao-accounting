@@ -61,6 +61,7 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
 # Constantes para rutas y endpoints (S1192 - evitar duplicación de cadenas)
+VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
 _ENDPOINT_CLIENTE = "ventas.ventas_cliente"
 _ENDPOINT_PEDIDO_VENTA = "ventas.ventas_pedido_venta"
 _ENDPOINT_COTIZACION = "ventas.ventas_cotizacion"
@@ -519,7 +520,7 @@ def ventas_cliente_nuevo():
     if request.method == "POST":
         return _handle_cliente_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
-        "ventas/cliente_nuevo.html",
+        VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
@@ -559,7 +560,7 @@ def _handle_cliente_create(
             company_settings = draft_party_company_settings("customer", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
-        "ventas/cliente_nuevo.html",
+        VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
@@ -607,7 +608,7 @@ def ventas_cliente_editar(customer_id: str):
             cliente, request.form, selected_company, company_choices, company_settings, formulario, titulo
         )
     return render_template(
-        "ventas/cliente_nuevo.html",
+        VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         edit=True,
@@ -645,7 +646,7 @@ def _handle_cliente_update(
             company_settings = draft_party_company_settings("customer", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
-        "ventas/cliente_nuevo.html",
+        VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         edit=True,
@@ -682,9 +683,7 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     registro.company = form.get("company") or None
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
-    for item in database.session.execute(
-        database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)
-    ).scalars():
+    for item in database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_sales_request_items(registro.id)
     registro.total = total
@@ -704,9 +703,7 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     registro.company = form.get("company") or None
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
-    for item in database.session.execute(
-        database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)
-    ).scalars():
+    for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_sales_order_items(registro.id)
     registro.total = total

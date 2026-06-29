@@ -4,6 +4,7 @@
 - [x] Consultar la API publica de SonarCloud para enumerar issues abiertos del proyecto.
 - [x] Confirmar el volumen de hallazgos activos antes de tocar hotspots de negocio.
 - [x] Aplicar una primera limpieza de bajo riesgo en `journal_nuevo.html` y `cacaoaccounting.css`.
+- [x] Cerrar el issue `python:S1192` de `ventas/cliente_nuevo.html` en `ventas/__init__.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `compras/proveedor_nuevo.html` en `compras/__init__.py` con una constante compartida.
 - [x] Cerrar un issue menor adicional en `imports/services/import_service.py`.
 - [x] Cerrar un issue menor adicional en `bancos/templates/bancos/pago_nuevo.html`.
