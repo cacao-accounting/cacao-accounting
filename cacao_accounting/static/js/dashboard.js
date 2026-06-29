@@ -35,22 +35,10 @@
     return {
       ...buildFallbackConfig(),
       ...config,
-      messages: {
-        ...buildFallbackConfig().messages,
-        ...(config.messages || {}),
-      },
-      titles: {
-        ...buildFallbackConfig().titles,
-        ...(config.titles || {}),
-      },
-      headings: {
-        ...buildFallbackConfig().headings,
-        ...(config.headings || {}),
-      },
-      chartLabels: {
-        ...buildFallbackConfig().chartLabels,
-        ...(config.chartLabels || {}),
-      },
+      messages: Object.assign({}, buildFallbackConfig().messages, config.messages),
+      titles: Object.assign({}, buildFallbackConfig().titles, config.titles),
+      headings: Object.assign({}, buildFallbackConfig().headings, config.headings),
+      chartLabels: Object.assign({}, buildFallbackConfig().chartLabels, config.chartLabels),
       monthNames: config.monthNames || buildFallbackConfig().monthNames,
       periods: config.periods || [],
       companies: config.companies || [],
