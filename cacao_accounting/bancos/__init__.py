@@ -72,6 +72,7 @@ bancos = Blueprint("bancos", __name__, template_folder="templates")
 
 BANCOS_TRANSACCION_LISTA_HTML = "bancos/transaccion_lista.html"
 BANCOS_BANCO_CUENTA_NUEVO_HTML = "bancos/banco_cuenta_nuevo.html"
+BANCOS_PAGO_LISTA_HTML = "bancos/pago_lista.html"
 BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
 COMPRAS_FACTURA_COMPRA_ROUTE = "compras.compras_factura_compra"
 VENTAS_FACTURA_VENTA_ROUTE = "ventas.ventas_factura_venta"
@@ -257,7 +258,7 @@ def bancos_pago_lista():
         database.select(PaymentEntry).filter(PaymentEntry.payment_type.in_(("receive", "pay"))),
     )
     titulo = "Listado de Pagos - " + APPNAME
-    return render_template("bancos/pago_lista.html", consulta=consulta, titulo=titulo)
+    return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo)
 
 
 @bancos.route("/payment-reconciliation", methods=["GET", "POST"])
@@ -311,7 +312,7 @@ def bancos_transferencia_lista():
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
     )
     titulo = "Listado de Transferencias Internas - " + APPNAME
-    return render_template("bancos/pago_lista.html", consulta=consulta, titulo=titulo, is_transfer_list=True)
+    return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo, is_transfer_list=True)
 
 
 @bancos.route("/payment/debit-note/list")
@@ -326,7 +327,7 @@ def bancos_nota_debito_lista():
     )
     titulo = "Listado de Notas de Débito Bancario - " + APPNAME
     return render_template(
-        "bancos/pago_lista.html",
+        BANCOS_PAGO_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         page_heading=_("Listado de Notas de Débito Bancario"),
@@ -346,7 +347,7 @@ def bancos_nota_credito_lista():
     )
     titulo = "Listado de Notas de Crédito Bancario - " + APPNAME
     return render_template(
-        "bancos/pago_lista.html",
+        BANCOS_PAGO_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         page_heading=_("Listado de Notas de Crédito Bancario"),
