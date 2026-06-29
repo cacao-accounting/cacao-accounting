@@ -8,6 +8,7 @@ from cacao_accounting import create_app
 from cacao_accounting.contabilidad.budget_service import BudgetService, BudgetError
 from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
 from cacao_accounting.database import (
+    GLEntry,
     BudgetLine,
     database,
     User,
@@ -17,6 +18,8 @@ from cacao_accounting.database import (
     Accounts,
     CostCenter,
     AccountingPeriod,
+    Unit,
+    Project,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 
@@ -433,3 +436,85 @@ def test_budget_report_filters_with_dimension_ids(app_ctx):
     )
     assert len(report.rows) >= 1
     assert report.totals["budget"] == Decimal("250")
+
+
+def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    unit = Unit(entity="cacao", code="BU-TEST", name="Unidad Test")
+    project = Project(entity="cacao", code="PRJ-TEST", name="Proyecto Test", enabled=True, start=per.start)
+    database.session.add_all([unit, project])
+    database.session.flush()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "REPORT-MAP-TEST",
+            "name": "Reporte Real vs Presupuesto",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "business_unit_id": unit.id,
+            "project_id": project.id,
+            "period_id": per.id,
+            "amount": 250,
+        },
+        str(admin_user.id),
+    )
+
+    gl_entry = GLEntry(
+        company="cacao",
+        ledger_id=book.id,
+        account_id=acc.id,
+        account_code=acc.code,
+        cost_center_code=cc.code,
+        unit_code=unit.code,
+        project_code=project.code,
+        accounting_period_id=per.id,
+        posting_date=per.start,
+        debit=Decimal("300"),
+        credit=Decimal("0"),
+        is_cancelled=False,
+        is_fiscal_year_closing=False,
+        voucher_type="journal_entry",
+        voucher_id="JRN-TEST",
+        document_no="cacao-JOU-TEST",
+    )
+    database.session.add(gl_entry)
+    database.session.commit()
+
+    report = BudgetReportService().get_real_vs_budget_report(
+        {
+            "company": "cacao",
+            "budget_id": budget.id,
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "granularity": "month",
+            "cost_center_id": cc.id,
+            "business_unit_id": unit.id,
+            "project_id": project.id,
+        }
+    )
+
+    assert len(report.rows) == 1
+    row = report.rows[0].values
+    assert row["budget"] == Decimal("250")
+    assert row["actual"] == Decimal("300")
+    assert row["variance"] == Decimal("50")
+    assert report.totals["budget"] == Decimal("250")
+    assert report.totals["actual"] == Decimal("300")

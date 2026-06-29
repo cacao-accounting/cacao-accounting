@@ -253,37 +253,120 @@ class BudgetReportService:
         """Populate the data map with budget and actual amounts."""
         data_map: Dict[tuple, Dict[str, Decimal]] = {}
         for bl in budget_lines:
-            bl_group = period_to_group.get(bl.period_id)
-            if not bl_group:
-                continue
-            key = (bl.account_id, bl.cost_center_id, bl.business_unit_id, bl.project_id, bl_group)
-            if key not in data_map:
-                data_map[key] = {"budget": Decimal("0"), "actual": Decimal("0")}
-            data_map[key]["budget"] += bl.amount
+            self._add_budget_amount(data_map, bl, period_to_group)
 
         for ae in actual_entries:
-            ae_group = period_to_group.get(ae.accounting_period_id)
-            if not ae_group:
-                continue
-            c_id = cc_map.get(ae.cost_center_code)
-            if cost_center_id and c_id != cost_center_id:
-                continue
-            bu_id = u_map.get(ae.unit_code)
-            if business_unit_id and bu_id != business_unit_id:
-                continue
-            pr_id = p_map.get(ae.project_code)
-            if project_id and pr_id != project_id:
-                continue
-            key = (ae.account_id, c_id, bu_id, pr_id, ae_group)
-            if key not in data_map:
-                data_map[key] = {"budget": Decimal("0"), "actual": Decimal("0")}
-            classif = ae.classification.lower() if ae.classification else ""
-            if classif in ("gastos", "activo", "expense", "asset"):
-                amount = ae.debit - ae.credit
-            else:
-                amount = ae.credit - ae.debit
-            data_map[key]["actual"] += amount
+            self._add_actual_amount(
+                data_map,
+                ae,
+                period_to_group,
+                cost_center_id,
+                business_unit_id,
+                project_id,
+                cc_map,
+                u_map,
+                p_map,
+            )
         return data_map
+
+    def _ensure_bucket(self, data_map: Dict[tuple, Dict[str, Decimal]], key: tuple) -> None:
+        """Create a budget/actual bucket when it does not exist yet."""
+        if key not in data_map:
+            data_map[key] = {"budget": Decimal("0"), "actual": Decimal("0")}
+
+    def _add_budget_amount(
+        self, data_map: Dict[tuple, Dict[str, Decimal]], budget_line: Any, period_to_group: Dict[str, str]
+    ) -> None:
+        """Accumulate the budget amount for a grouped budget line."""
+        budget_group = period_to_group.get(budget_line.period_id)
+        if not budget_group:
+            return
+        key = (
+            budget_line.account_id,
+            budget_line.cost_center_id,
+            budget_line.business_unit_id,
+            budget_line.project_id,
+            budget_group,
+        )
+        self._ensure_bucket(data_map, key)
+        data_map[key]["budget"] += budget_line.amount
+
+    def _actual_amount(self, classification: Any, debit: Any, credit: Any) -> Decimal:
+        """Return the signed amount for a GL entry based on account classification."""
+        classif = classification.lower() if classification else ""
+        if classif in ("gastos", "activo", "expense", "asset"):
+            return debit - credit
+        return credit - debit
+
+    def _actual_dimensions(
+        self,
+        actual_entry: Any,
+        cc_map: Dict[str, str],
+        u_map: Dict[str, str],
+        p_map: Dict[str, str],
+    ) -> tuple[str | None, str | None, str | None]:
+        """Translate actual entry dimension codes to IDs."""
+        return (
+            cc_map.get(actual_entry.cost_center_code),
+            u_map.get(actual_entry.unit_code),
+            p_map.get(actual_entry.project_code),
+        )
+
+    def _actual_matches_filters(
+        self,
+        cost_center_id: Optional[str],
+        business_unit_id: Optional[str],
+        project_id: Optional[str],
+        actual_cost_center_id: str | None,
+        actual_business_unit_id: str | None,
+        actual_project_id: str | None,
+    ) -> bool:
+        """Check whether an actual entry matches the requested dimension filters."""
+        if cost_center_id and actual_cost_center_id != cost_center_id:
+            return False
+        if business_unit_id and actual_business_unit_id != business_unit_id:
+            return False
+        if project_id and actual_project_id != project_id:
+            return False
+        return True
+
+    def _add_actual_amount(
+        self,
+        data_map: Dict[tuple, Dict[str, Decimal]],
+        actual_entry: Any,
+        period_to_group: Dict[str, str],
+        cost_center_id: Optional[str],
+        business_unit_id: Optional[str],
+        project_id: Optional[str],
+        cc_map: Dict[str, str],
+        u_map: Dict[str, str],
+        p_map: Dict[str, str],
+    ) -> None:
+        """Accumulate the actual amount for a GL entry."""
+        actual_group = period_to_group.get(actual_entry.accounting_period_id)
+        if not actual_group:
+            return
+        actual_cost_center_id, actual_business_unit_id, actual_project_id = self._actual_dimensions(
+            actual_entry, cc_map, u_map, p_map
+        )
+        if not self._actual_matches_filters(
+            cost_center_id,
+            business_unit_id,
+            project_id,
+            actual_cost_center_id,
+            actual_business_unit_id,
+            actual_project_id,
+        ):
+            return
+        key = (
+            actual_entry.account_id,
+            actual_cost_center_id,
+            actual_business_unit_id,
+            actual_project_id,
+            actual_group,
+        )
+        self._ensure_bucket(data_map, key)
+        data_map[key]["actual"] += self._actual_amount(actual_entry.classification, actual_entry.debit, actual_entry.credit)
 
     def _build_report_rows(
         self,
