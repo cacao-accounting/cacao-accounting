@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Importaciones captions (2026-06-29):** Se cerraron dos issues `Web:TableWithoutCaptionCheck` en templates de importacion.
+  - Las tablas de `cacao_accounting/imports/templates/imports/index.html` y `detail.html` ahora declaran `<caption>` antes de `<thead>`, que es la estructura esperada por accesibilidad y por el analizador.
+  - Se agrego una prueba focal en `tests/imports/test_routes.py` para evitar regresiones en el orden del marcado.
+  - `black --check`, `ruff`, `mypy` focal y `tests/imports/test_routes.py` quedaron en verde.
+
 - **SonarCloud / Transaction Form errores (2026-06-29):** Se cerraron issues menores en `cacao_accounting/static/js/transaction-form.js`.
   - Los errores de preview fiscal y validacion de importacion ahora pasan por helpers explicitos con `console.warn` y estado UI consistente.
   - La suite JS del formulario transaccional quedo en verde (`13 passing`), incluyendo pruebas nuevas para ambos caminos de error.
