@@ -493,42 +493,51 @@ def _process_payment_entry(
     bank_accounts: dict[str, BankAccount],
     party_names: dict[str, str],
 ) -> tuple[list[ReportRow], Decimal, Decimal]:
+    """Procesa un PaymentEntry para el reporte de movimientos bancarios."""
     rows: list[ReportRow] = []
     total_incoming = Decimal("0")
     total_outgoing = Decimal("0")
 
+    # 1. Movimiento en la cuenta principal (bank_account_id)
     bank_account_id = payment.bank_account_id
-    if filters.bank_account_id and bank_account_id != filters.bank_account_id:
-        return rows, total_incoming, total_outgoing
+    if bank_account_id and (not filters.bank_account_id or bank_account_id == filters.bank_account_id):
+        incoming = Decimal("0")
+        outgoing = Decimal("0")
 
-    incoming = Decimal("0")
-    outgoing = Decimal("0")
-    if payment.payment_type == "receive":
-        incoming = _decimal_value(payment.received_amount or payment.paid_amount)
-    elif payment.payment_type == "pay":
-        outgoing = _decimal_value(payment.paid_amount or payment.received_amount)
-    elif payment.payment_type == "internal_transfer":
-        outgoing = _decimal_value(payment.paid_amount)
-        incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+        if payment.payment_type == "receive":
+            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+        elif payment.payment_type == "pay":
+            outgoing = _decimal_value(payment.paid_amount or payment.received_amount)
+        elif payment.payment_type == "internal_transfer":
+            outgoing = _decimal_value(payment.paid_amount)
 
-    if incoming > 0:
-        values = _build_payment_row_values(payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names)
-        rows.append(ReportRow(values=values))
-        total_incoming += incoming
+        if incoming > 0:
+            rows.append(
+                ReportRow(
+                    values=_build_payment_row_values(payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names)
+                )
+            )
+            total_incoming += incoming
+        if outgoing > 0:
+            rows.append(
+                ReportRow(
+                    values=_build_payment_row_values(payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names)
+                )
+            )
+            total_outgoing += outgoing
 
-    if outgoing > 0:
-        values = _build_payment_row_values(payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names)
-        rows.append(ReportRow(values=values))
-        total_outgoing += outgoing
-
+    # 2. Movimiento en la cuenta destino (solo para transferencias internas)
     if payment.payment_type == "internal_transfer" and payment.target_bank_account_id:
         target_bank_id = payment.target_bank_account_id
         if not filters.bank_account_id or target_bank_id == filters.bank_account_id:
-            target_values = _build_payment_row_values(
-                payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names
-            )
-            rows.append(ReportRow(values=target_values))
-            total_incoming += incoming
+            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+            if incoming > 0:
+                rows.append(
+                    ReportRow(
+                        values=_build_payment_row_values(payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names)
+                    )
+                )
+                total_incoming += incoming
 
     return rows, total_incoming, total_outgoing
 
@@ -597,7 +606,7 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     }
     party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
-    payment_rows, total_incoming, total_outgoing = _process_payment_entries(filters, bank_accounts, party_names)
+    payment_rows, _, _ = _process_payment_entries(filters, bank_accounts, party_names)
     transaction_rows = _process_bank_transactions(filters, bank_accounts)
 
     rows = payment_rows + transaction_rows
@@ -609,6 +618,9 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
         )
     )
     running_balance = _compute_running_balance(rows)
+
+    total_incoming = sum((_decimal_value(row.values.get("incoming_amount")) for row in rows), Decimal("0"))
+    total_outgoing = sum((_decimal_value(row.values.get("outgoing_amount")) for row in rows), Decimal("0"))
 
     return PaginatedReport(
         rows=rows,

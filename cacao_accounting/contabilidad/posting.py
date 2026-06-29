@@ -1449,7 +1449,7 @@ def _persist_landed_cost_allocations(
 
 def _landed_cost_result_is_invalid(landed_cost_result: Any) -> bool:
     """Check if landed cost result is None or has errors."""
-    return landed_cost_result is None or getattr(landed_cost_result, "errors", None) is not None
+    return landed_cost_result is None or bool(getattr(landed_cost_result, "errors", None))
 
 
 def _persist_single_allocation(
