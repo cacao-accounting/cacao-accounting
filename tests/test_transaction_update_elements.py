@@ -50,8 +50,8 @@ def test_update_elements_sources_are_configured_for_derived_documents():
 
     assert '"value": "purchase_request"' in purchases
     assert '"value": "purchase_quotation"' in purchases
-    assert '{"value": "sales_request", "label": _("Pedido de Venta")}' in sales
-    assert '{"value": "sales_order", "label": _("Orden de Venta")}' in sales
+    assert '{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}' in sales
+    assert '{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}' in sales
 
 
 def test_line_import_is_enabled_for_operational_flows():
