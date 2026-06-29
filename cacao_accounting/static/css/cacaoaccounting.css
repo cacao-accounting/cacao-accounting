@@ -85,6 +85,12 @@
   --ca-module-link-hover-color: var(--ca-p800);
   --ca-module-link-hover-border-color: rgba(47,143,70,.16);
   --ca-module-link-font-weight: 500;
+  --ca-status-dot-size: 7px;
+  --ca-status-dot-shadow-size: 3px;
+  --ca-status-dot-shadow-color: rgba(22, 163, 74, .10);
+  --ca-status-warning-shadow-color: rgba(217, 119, 6, .12);
+  --ca-status-error-shadow-color: rgba(220, 38, 38, .10);
+  --ca-status-disabled-shadow-color: rgba(139, 152, 145, .12);
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -584,8 +590,8 @@ nav[aria-label="breadcrumb"] {
    ────────────────────────────────────────────────────── */
 .ca-status-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: var(--ca-status-dot-size);
+  height: var(--ca-status-dot-size);
   border-radius: 50%;
   flex-shrink: 0;
   margin-left: auto;
@@ -594,7 +600,7 @@ nav[aria-label="breadcrumb"] {
 .ca-status-no-access        { background: var(--ca-g400);     }
 .ca-status-pending-approval {
   background: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) rgba(37, 99, 235, .12);
 }
 .ca-status-view-only        { background: var(--ca-warning);  }
 .ca-status-attention        { background: var(--ca-error);    }
@@ -1266,24 +1272,22 @@ nav[aria-label="breadcrumb"] {
 }
 
 .ca-status-dot {
-  width: 8px;
-  height: 8px;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, .10);
+  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-dot-shadow-color);
 }
 
 .ca-status-view-only,
 .ca-status-warning {
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, .12);
+  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-warning-shadow-color);
 }
 
 .ca-status-attention,
 .ca-status-error {
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, .10);
+  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-error-shadow-color);
 }
 
 .ca-status-disabled,
 .ca-status-no-access {
-  box-shadow: 0 0 0 3px rgba(139, 152, 145, .12);
+  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-disabled-shadow-color);
 }
 
 .ca-table {
