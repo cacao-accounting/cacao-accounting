@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: wizard de setup simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/setup/__init__.py` sin alterar el flujo del asistente de configuración inicial.
+- **Implementacion:** Se separaron la gestión de pasos POST, el armado del payload de compañía y la selección del formulario activo en helpers pequeños. `setup()` quedó como punto de orquestación del wizard.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_03webactions.py` quedaron en verde. `ruff --select C901` ya no reporta complejidad en este archivo.
+
 ## 2026-06-29 (SonarCloud: conciliacion de compras simplificada)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/compras/purchase_reconciliation_service.py` sin alterar el matching 2-way y 3-way de facturas de compra.
 - **Implementacion:** Se separaron la carga y validacion de orden/recepcion, la lectura de lineas y la construccion de items de conciliacion en helpers pequeños. `_reconcile_two_way()` y `_reconcile_three_way()` ahora orquestan esos helpers en vez de mezclar validaciones y armado de detalle.
