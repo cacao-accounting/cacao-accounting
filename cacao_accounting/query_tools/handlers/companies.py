@@ -39,16 +39,10 @@ def list_companies(
     if context.company_ids:
         query = query.where(Entity.code.in_(context.company_ids))
 
-    total = database.session.execute(
-        database.select(database.func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
-        database.session.execute(
-            query.order_by(Entity.company_name)
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
-        )
+        database.session.execute(query.order_by(Entity.company_name).offset((_page - 1) * _page_size).limit(_page_size))
         .scalars()
         .all()
     )

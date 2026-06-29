@@ -60,17 +60,13 @@ def get_receivables_aging(
         database.select(SalesInvoice)
         .where(SalesInvoice.company == company_id)
         .where(SalesInvoice.docstatus == 1)
-        .where(
-            SalesInvoice.posting_date <= as_of_date
-        )
+        .where(SalesInvoice.posting_date <= as_of_date)
     )
 
     if party_id:
         query = query.where(SalesInvoice.customer_id == party_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
@@ -153,15 +149,11 @@ def get_receivables_open_documents(
     if party_id:
         query = query.where(SalesInvoice.customer_id == party_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(SalesInvoice.posting_date.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(SalesInvoice.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()

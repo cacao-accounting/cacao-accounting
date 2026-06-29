@@ -62,25 +62,18 @@ def list_accounting_periods(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(AccountingPeriod)
-        .where(AccountingPeriod.entity == company_id)
-    )
+    query = database.select(AccountingPeriod).where(AccountingPeriod.entity == company_id)
 
     if status == "open":
         query = query.where(AccountingPeriod.is_closed == False)  # noqa: E712
     elif status == "closed":
         query = query.where(AccountingPeriod.is_closed == True)  # noqa: E712
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(AccountingPeriod.start.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(AccountingPeriod.start.desc()).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()
@@ -151,24 +144,14 @@ def search_accounts(
 
     if query:
         like = f"%{query}%"
-        q = q.where(
-            or_(Accounts.code.ilike(like), Accounts.name.ilike(like))
-        )
+        q = q.where(or_(Accounts.code.ilike(like), Accounts.name.ilike(like)))
     if classification:
         q = q.where(Accounts.classification == classification)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(q.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(q.subquery())).scalar() or 0
 
     rows = (
-        database.session.execute(
-            q.order_by(Accounts.code)
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
-        )
-        .scalars()
-        .all()
+        database.session.execute(q.order_by(Accounts.code).offset((_page - 1) * _page_size).limit(_page_size)).scalars().all()
     )
 
     items = [
@@ -251,15 +234,9 @@ def get_trial_balance(
         .group_by(GLEntry.account_id, Accounts.code, Accounts.name)
     )
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
-    rows = database.session.execute(
-        query.order_by(Accounts.code)
-        .offset((_page - 1) * _page_size)
-        .limit(_page_size)
-    ).all()
+    rows = database.session.execute(query.order_by(Accounts.code).offset((_page - 1) * _page_size).limit(_page_size)).all()
 
     items = [
         {
@@ -268,9 +245,7 @@ def get_trial_balance(
             "account_name": r.name,
             "total_debit": str(r.total_debit),
             "total_credit": str(r.total_credit),
-            "balance": str(
-                abs(float(r.total_debit) - float(r.total_credit))
-            ),
+            "balance": str(abs(float(r.total_debit) - float(r.total_credit))),
         }
         for r in rows
     ]
@@ -336,15 +311,11 @@ def get_general_ledger(
     if account_id:
         query = query.where(GLEntry.account_id == account_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(GLEntry.posting_date, GLEntry.created)
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(GLEntry.posting_date, GLEntry.created).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()

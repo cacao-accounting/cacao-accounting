@@ -72,13 +72,17 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     if closed_fiscal_year and not allow_closing:
         raise IdentifierConfigurationError("No puede registrar documentos en un año fiscal cerrado.")
 
-    period = database.session.execute(
-        database.select(AccountingPeriod)
-        .filter_by(entity=company)
-        .where(AccountingPeriod.start <= posting_date)
-        .where(AccountingPeriod.end >= posting_date)
-        .order_by(AccountingPeriod.start.desc())
-    ).scalars().first()
+    period = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc())
+        )
+        .scalars()
+        .first()
+    )
 
     if period and bool(period.is_closed) and not allow_closing:
         raise IdentifierConfigurationError("No puede registrar documentos en un periodo contable cerrado.")

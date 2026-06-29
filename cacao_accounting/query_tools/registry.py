@@ -18,14 +18,10 @@ class Registry:
     def register(self, tool: QueryTool) -> None:
         """Registra una herramienta validando que sea única y de solo lectura."""
         if tool.name in self._tools:
-            raise ValueError(
-                f"Tool '{tool.name}' is already registered. "
-                "Tool names must be unique."
-            )
+            raise ValueError(f"Tool '{tool.name}' is already registered. " "Tool names must be unique.")
         if not tool.read_only:
             raise ValueError(
-                f"Tool '{tool.name}' must declare read_only=True. "
-                "Write operations are not allowed in query_tools."
+                f"Tool '{tool.name}' must declare read_only=True. " "Write operations are not allowed in query_tools."
             )
         self._tools[tool.name] = tool
 
@@ -43,9 +39,7 @@ class Registry:
         """Devuelve una copia del diccionario con todas las herramientas registradas."""
         return dict(self._tools)
 
-    def get_tools_for_permissions(
-        self, permissions: set[str]
-    ) -> list[dict[str, Any]]:
+    def get_tools_for_permissions(self, permissions: set[str]) -> list[dict[str, Any]]:
         """Filtra y devuelve las herramientas que el conjunto de permisos puede ejecutar."""
         result: list[dict[str, Any]] = []
         for tool in self._tools.values():

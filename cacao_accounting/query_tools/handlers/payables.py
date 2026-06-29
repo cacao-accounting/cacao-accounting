@@ -66,9 +66,7 @@ def get_payables_aging(
     if party_id:
         query = query.where(PurchaseInvoice.supplier_id == party_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
@@ -151,15 +149,11 @@ def get_payables_open_documents(
     if party_id:
         query = query.where(PurchaseInvoice.supplier_id == party_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(PurchaseInvoice.posting_date.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(PurchaseInvoice.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()

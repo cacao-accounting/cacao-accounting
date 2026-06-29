@@ -9,7 +9,7 @@ from typing import Any
 
 from flask import current_app, has_request_context, request
 from flask_weasyprint import HTML
-from jinja2 import BaseLoader, StrictUndefined, TemplateError, TemplateSyntaxError, UndefinedError
+from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import select
 

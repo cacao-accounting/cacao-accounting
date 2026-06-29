@@ -10,12 +10,14 @@ from typing import Any
 from cacao_accounting.database import AuditTrail, database
 from cacao_accounting.query_tools.context import QueryContext
 
-ALLOWED_QUERY_ACTIONS = frozenset({
-    "query_tool.executed",
-    "query_tool.denied",
-    "query_tool.failed",
-    "query_tool.rate_limited",
-})
+ALLOWED_QUERY_ACTIONS = frozenset(
+    {
+        "query_tool.executed",
+        "query_tool.denied",
+        "query_tool.failed",
+        "query_tool.rate_limited",
+    }
+)
 
 
 def _serialize_value(value: Any) -> Any:
