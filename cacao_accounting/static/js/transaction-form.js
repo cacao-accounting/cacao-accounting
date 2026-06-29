@@ -691,37 +691,45 @@
         },
 
         calcDocumentTaxTotal(lines) {
-          return lines.reduce((total, line) => {
-            const isWithholding = line.type === 'withholding';
-            const isIncludedInPrice = line.included_in_price;
-            const notAffectsTotal = line.affects_document_total === false;
-            if (isWithholding || isIncludedInPrice || notAffectsTotal) return total;
-            return total + toNumber(line.amount);
-          }, 0);
+          return lines.reduce((total, line) => total + this._taxAmountIfAffects(line), 0);
+        },
+
+        _taxAmountIfAffects(line) {
+          const isWithholding = line.type === 'withholding';
+          const isIncludedInPrice = line.included_in_price;
+          const notAffectsTotal = line.affects_document_total === false;
+          if (isWithholding || isIncludedInPrice || notAffectsTotal) return 0;
+          return toNumber(line.amount);
         },
 
         calcCapitalizableTaxTotal(lines) {
-          return lines.reduce((total, line) => {
-            const isCapitalizable = line.accounting_treatment === 'capitalizable_inventory_cost';
-            if (!isCapitalizable) return total;
-            return total + toNumber(line.amount);
-          }, 0);
+          return lines.reduce((total, line) => total + this._taxAmountIfCapitalizable(line), 0);
+        },
+
+        _taxAmountIfCapitalizable(line) {
+          const isCapitalizable = line.accounting_treatment === 'capitalizable_inventory_cost';
+          if (!isCapitalizable) return 0;
+          return toNumber(line.amount);
         },
 
         calcSeparateTaxTotal(lines) {
-          return lines.reduce((total, line) => {
-            const isSeparate = line.accounting_treatment === 'separate_tax_account';
-            if (!isSeparate) return total;
-            return total + toNumber(line.amount);
-          }, 0);
+          return lines.reduce((total, line) => total + this._taxAmountIfSeparate(line), 0);
+        },
+
+        _taxAmountIfSeparate(line) {
+          const isSeparate = line.accounting_treatment === 'separate_tax_account';
+          if (!isSeparate) return 0;
+          return toNumber(line.amount);
         },
 
         calcWithholdingTotal(lines) {
-          return lines.reduce((total, line) => {
-            const isWithholding = line.type === 'withholding';
-            if (!isWithholding) return total;
-            return total + toNumber(line.amount);
-          }, 0);
+          return lines.reduce((total, line) => total + this._taxAmountIfWithholding(line), 0);
+        },
+
+        _taxAmountIfWithholding(line) {
+          const isWithholding = line.type === 'withholding';
+          if (!isWithholding) return 0;
+          return toNumber(line.amount);
         },
 
 	        async fetchSource(apiUrl) {
