@@ -59,13 +59,12 @@ class BudgetService:
 
         # No permitir cambiar compañía, libro o año fiscal si ya tiene líneas
         has_lines = database.session.query(BudgetLine).filter_by(budget_id=budget_id).first() is not None
-        if has_lines:
-            if (
-                data.get("company") != budget.company
-                or data.get("ledger_id") != budget.ledger_id
-                or data.get("fiscal_year_id") != budget.fiscal_year_id
-            ):
-                raise BudgetError("No se puede cambiar la compañía, libro o año fiscal si el presupuesto ya tiene líneas.")
+        if has_lines and (
+            data.get("company") != budget.company
+            or data.get("ledger_id") != budget.ledger_id
+            or data.get("fiscal_year_id") != budget.fiscal_year_id
+        ):
+            raise BudgetError("No se puede cambiar la compañía, libro o año fiscal si el presupuesto ya tiene líneas.")
 
         self._validate_header_data(data, exclude_id=budget_id)
 
