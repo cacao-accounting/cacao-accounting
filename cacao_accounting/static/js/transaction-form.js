@@ -164,7 +164,7 @@
   }
 
   function normalizeImportHeader(value) {
-    var header = String(value || '').trim().toLowerCase();
+    let header = String(value || '').trim().toLowerCase();
     while (header.endsWith('*')) {
       header = header.slice(0, -1).trimEnd();
     }
