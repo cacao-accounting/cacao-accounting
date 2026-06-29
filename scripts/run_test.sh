@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ -f "./venv/Scripts/activate" ]; then
+if [[ -f "./venv/Scripts/activate" ]]; then
 	source "./venv/Scripts/activate"
-elif [ -f "./.venv/Scripts/activate" ]; then
+elif [[ -f "./.venv/Scripts/activate" ]]; then
 	source "./.venv/Scripts/activate"
 else
 	echo "No se encontró un entorno virtual en ./venv o ./.venv"
