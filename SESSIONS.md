@@ -27,6 +27,11 @@
 - **Implementacion:** `findJournalImportColumnIndex()` ahora usa `Set.has()` en lugar de `includes()` sobre una lista temporal, y `normalizeLine()` delega el merge de la linea a `mergeJournalLine()` para eliminar el fallback con objeto vacio.
 - **Verificacion:** `tests/test_01vistas.py::test_visit_views` y `tests/test_09_journal_entry_form.py` quedaron en verde.
 
+## 2026-06-29 (SonarCloud: simplificacion de validacion de tercero en pagos)
+- **Solicitud:** Cerrar el issue `python:S1066` en `cacao_accounting/bancos/__init__.py`.
+- **Implementacion:** `_validate_payment_party()` fusiona la condicion de `payment_type` con la validacion de `party_type`/`party_id`, eliminando el `if` anidado sin cambiar comportamiento.
+- **Verificacion:** `venv/bin/python -m black cacao_accounting/bancos/__init__.py`, `ruff`, `mypy` focal y `tests/test_06transaction_closure.py::test_validate_payment_header_rejects_missing_party_for_payment_and_invalid_type` quedaron en verde.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
