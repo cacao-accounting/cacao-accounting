@@ -43,17 +43,20 @@
   function appendParam(params, key, value) {
     const normalized = normalizeValue(value);
     if (Array.isArray(normalized)) {
-      normalized.forEach((v) => {
+      for (const v of normalized) {
         const s = normalizeValue(v);
         if (!Array.isArray(s) && s !== '') params.append(key, s);
-      });
+      }
     } else if (normalized !== '') {
       params.append(key, normalized);
     }
   }
 
   function findOptionByNormalizedValue(options, normalized) {
-    return options.find((option) => normalizeValue(option.value ?? option.id) === normalized);
+    for (const option of options) {
+      if (normalizeValue(option.value ?? option.id) === normalized) return option;
+    }
+    return undefined;
   }
 
   document.addEventListener('alpine:init', () => {
