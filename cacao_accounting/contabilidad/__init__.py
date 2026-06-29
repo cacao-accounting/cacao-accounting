@@ -13,7 +13,7 @@ from decimal import Decimal
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_
@@ -2680,69 +2680,91 @@ def revalorizaciones_cambiarias():
     )
 
 
+def _resolve_period_from_date(company: str, year: str, month: str) -> tuple[str, str]:
+    """Resuelve periodo contable a partir de año y mes."""
+    from cacao_accounting.database import AccountingPeriod
+
+    try:
+        period_date = date(int(year), int(month), 1)
+    except ValueError:
+        return "", ""
+    period = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company, enabled=True)
+            .where(AccountingPeriod.start <= period_date)
+            .where(AccountingPeriod.end >= period_date)
+        )
+        .scalars()
+        .first()
+    )
+    if period:
+        return period.fiscal_year_id or "", period.id
+    return "", ""
+
+
+def _handle_exchange_revaluation_post() -> Response | None:
+    """Procesa el formulario POST de revalorizacion cambiaria. Retorna redirect o None."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import (
+        ExchangeRevaluationError,
+        ExchangeRevaluationService,
+    )
+
+    company = request.form.get("company") or ""
+    fiscal_year_id = request.form.get("fiscal_year_id") or ""
+    period_id = request.form.get("period_id") or ""
+    year = request.form.get("year")
+    month = request.form.get("month")
+
+    if not company:
+        flash("La compañía es requerida.", "danger")
+        return None
+
+    if not fiscal_year_id and year and month:
+        resolved_fiscal_year_id, resolved_period_id = _resolve_period_from_date(company, year, month)
+        if resolved_period_id:
+            period_id = resolved_period_id
+            fiscal_year_id = resolved_fiscal_year_id or fiscal_year_id
+
+    if not period_id:
+        flash("El periodo contable es requerido.", "danger")
+        return None
+
+    from cacao_accounting.database import AccountingPeriod
+
+    period = database.session.get(AccountingPeriod, period_id)
+    if not period or period.entity != company:
+        flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
+        return None
+    if fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
+        flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
+        return None
+
+    try:
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=str(current_user.id))
+    except ExchangeRevaluationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return None
+
+    flash("La revalorizacion fue ejecutada correctamente.", "success")
+    if run.status == "completed_no_changes":
+        flash("No se generaron diferencias cambiarias.", "info")
+    return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
+
+
 @contabilidad.route("/exchange-revaluation/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
-    from cacao_accounting.contabilidad.exchange_revaluation_service import (
-        ExchangeRevaluationError,
-        ExchangeRevaluationService,
-    )
-    from cacao_accounting.database import AccountingPeriod, Entity
+    from cacao_accounting.database import Entity
 
     if request.method == "POST":
-        company = request.form.get("company") or ""
-        fiscal_year_id = request.form.get("fiscal_year_id") or ""
-        period_id = request.form.get("period_id") or ""
-        year = request.form.get("year")
-        month = request.form.get("month")
-
-        if not company:
-            flash("La compañía es requerida.", "danger")
-        else:
-            if not fiscal_year_id and year and month:
-                try:
-                    period_date = date(int(year), int(month), 1)
-                except ValueError:
-                    period_date = None
-                if period_date:
-                    period = (
-                        database.session.execute(
-                            database.select(AccountingPeriod)
-                            .filter_by(entity=company, enabled=True)
-                            .where(AccountingPeriod.start <= period_date)
-                            .where(AccountingPeriod.end >= period_date)
-                        )
-                        .scalars()
-                        .first()
-                    )
-                    if period:
-                        period_id = period.id
-                        fiscal_year_id = period.fiscal_year_id or fiscal_year_id
-
-            if not period_id:
-                flash("El periodo contable es requerido.", "danger")
-            else:
-                period = database.session.get(AccountingPeriod, period_id)
-                if not period or period.entity != company:
-                    flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
-                elif fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
-                    flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
-                else:
-                    try:
-                        run = ExchangeRevaluationService().run(
-                            company=company, period_id=period_id, user_id=str(current_user.id)
-                        )
-                    except ExchangeRevaluationError as exc:
-                        database.session.rollback()
-                        flash(str(exc), "danger")
-                    else:
-                        flash("La revalorizacion fue ejecutada correctamente.", "success")
-                        if run.status == "completed_no_changes":
-                            flash("No se generaron diferencias cambiarias.", "info")
-                        return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
+        result = _handle_exchange_revaluation_post()
+        if result:
+            return result
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(
