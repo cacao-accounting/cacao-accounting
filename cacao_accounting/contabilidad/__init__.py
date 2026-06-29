@@ -86,6 +86,7 @@ CONTABILIDAD_REVALORIZACION_LIST = "contabilidad.revalorizaciones_cambiarias"
 CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
 CONTABILIDAD_MONEDAS = "contabilidad.monedas"
 CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
+CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
 
 
 def _company_label(company_code: str) -> str:
@@ -206,7 +207,7 @@ def moneda(code):
 
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
-        flash(_("La moneda indicada no existe."), "warning")
+        flash(_(CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE), "warning")
         return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
@@ -227,7 +228,7 @@ def editar_moneda(code):
 
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
-        flash(_("La moneda indicada no existe."), "warning")
+        flash(_(CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE), "warning")
         return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     formulario = FormularioMoneda(obj=registro)
@@ -275,7 +276,7 @@ def currency_toggle_active(code):
 
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
-        flash(_("La moneda indicada no existe."), "warning")
+        flash(_(CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE), "warning")
         return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     if registro.active:
