@@ -9,7 +9,7 @@
 from datetime import date
 from decimal import Decimal
 import json
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -78,6 +78,37 @@ COMPRAS_FACTURA_COMPRA_ROUTE = "compras.compras_factura_compra"
 VENTAS_FACTURA_VENTA_ROUTE = "ventas.ventas_factura_venta"
 LABEL_FACTURA_COMPRA = "Factura de Compra"
 LABEL_FACTURA_VENTA = "Factura de Venta"
+
+
+class PaymentPayload(TypedDict, total=False):
+    """Normalized payload for the payment form."""
+
+    payment_type: str | None
+    company: str | None
+    bank_account_id: str | None
+    posting_date: str | None
+    paid_amount: object | None
+    received_amount: object | None
+    party_id: str | None
+    party_type: str | None
+    naming_series_id: str | None
+    external_counter_id: str | None
+    external_number: str | None
+    target_bank_account_id: str | None
+    mode_of_payment: str | None
+    cost_center_code: str | None
+    unit_code: str | None
+    project_code: str | None
+    paid_from_account_id: str | None
+    paid_to_account_id: str | None
+    reference_date: str | None
+    party_name: str | None
+    reference_no: str | None
+    remarks: str | None
+    lines: list[dict[str, object]] | None
+    advance_mode: bool | None
+    tax_lines: object | None
+    tax_summary: object | None
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -1231,8 +1262,10 @@ def _validate_payment_header(
         posting_date_raw=posting_date_raw,
         amount=amount,
     )
-    _validate_payment_bank_account(company=company, bank_account_id=bank_account_id)
-    _validate_payment_target_bank_account(company=company, target_bank_account_id=target_bank_account_id)
+    validated_company = cast(str, company)
+    validated_bank_account_id = cast(str, bank_account_id)
+    _validate_payment_bank_account(company=validated_company, bank_account_id=validated_bank_account_id)
+    _validate_payment_target_bank_account(company=validated_company, target_bank_account_id=target_bank_account_id)
     _validate_payment_party(payment_type=payment_type, party_type=party_type, party_id=party_id)
 
 
@@ -1548,11 +1581,11 @@ def _create_payment_from_request():
     return None
 
 
-def _payment_payload_from_request() -> dict[str, object | None]:
+def _payment_payload_from_request() -> PaymentPayload:
     """Return the payment payload from the request body or form fields."""
     payload_raw = request.form.get("payment_payload")
     if payload_raw:
-        return json.loads(payload_raw)
+        return cast(PaymentPayload, json.loads(payload_raw))
     return {
         "payment_type": request.form.get("payment_type"),
         "company": request.form.get("company"),
@@ -1572,13 +1605,13 @@ def _payment_payload_from_request() -> dict[str, object | None]:
     }
 
 
-def _build_payment_from_payload(payload: dict[str, object | None]) -> tuple[PaymentEntry, Decimal, str]:
+def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, Decimal, str]:
     """Build a PaymentEntry from the normalized payload."""
     payment_type = str(payload.get("payment_type") or "receive")
-    company = payload.get("company")
-    bank_account_id = payload.get("bank_account_id")
+    company = cast(str | None, payload.get("company"))
+    bank_account_id = cast(str | None, payload.get("bank_account_id"))
     amount = Decimal(str(payload.get("paid_amount") or "0"))
-    target_bank_account_id = payload.get("target_bank_account_id")
+    target_bank_account_id = cast(str | None, payload.get("target_bank_account_id"))
     _validate_payment_header(
         payment_type=payment_type,
         company=company,
@@ -1598,7 +1631,7 @@ def _build_payment_from_payload(payload: dict[str, object | None]) -> tuple[Paym
             paid_from_account_id = source_bank.gl_account_id
         if target_bank and not paid_to_account_id:
             paid_to_account_id = target_bank.gl_account_id
-    reference_date_raw = payload.get("reference_date")
+    reference_date_raw = cast(str | None, payload.get("reference_date"))
     reference_date = date.fromisoformat(reference_date_raw) if reference_date_raw else None
     bank_account = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
     payment_currency = bank_account.currency if bank_account else None
@@ -1615,18 +1648,18 @@ def _build_payment_from_payload(payload: dict[str, object | None]) -> tuple[Paym
         exchange_rate=None,
         paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
         received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
-        party_type=payload.get("party_type"),
-        party_id=payload.get("party_id"),
-        party_name=payload.get("party_name"),
+        party_type=cast(str | None, payload.get("party_type")),
+        party_id=cast(str | None, payload.get("party_id")),
+        party_name=cast(str | None, payload.get("party_name")),
         paid_from_account_id=paid_from_account_id,
         paid_to_account_id=paid_to_account_id,
-        cost_center_code=payload.get("cost_center_code"),
-        unit_code=payload.get("unit_code"),
-        project_code=payload.get("project_code"),
-        reference_no=payload.get("reference_no"),
+        cost_center_code=cast(str | None, payload.get("cost_center_code")),
+        unit_code=cast(str | None, payload.get("unit_code")),
+        project_code=cast(str | None, payload.get("project_code")),
+        reference_no=cast(str | None, payload.get("reference_no")),
         reference_date=reference_date,
         mode_of_payment=mode_of_payment,
-        remarks=payload.get("remarks"),
+        remarks=cast(str | None, payload.get("remarks")),
         docstatus=0,
     )
     if payment_type in ("pay", "debit_note", "internal_transfer"):
@@ -1648,10 +1681,10 @@ def _payment_identifier_inputs(
     default_counter_id: str | None,
 ) -> tuple[str | None, str | None]:
     """Resolve numbering inputs for the payment identifier."""
-    naming_series_id = payload.get("naming_series_id") or default_series_id
+    naming_series_id = cast(str | None, payload.get("naming_series_id") or default_series_id)
     external_counter_id = None
     if mode_of_payment == "check":
-        external_counter_id = payload.get("external_counter_id") or default_counter_id
+        external_counter_id = cast(str | None, payload.get("external_counter_id") or default_counter_id)
     return naming_series_id, external_counter_id
 
 

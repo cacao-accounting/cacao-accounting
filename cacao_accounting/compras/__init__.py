@@ -1866,7 +1866,7 @@ def _purchase_quotation_transaction_config(
     columns: list[dict[str, str | bool | int]] | None = None,
 ) -> dict[str, Any]:
     """Construye la configuración transaccional para solicitudes de cotización."""
-    transaction_config = {
+    transaction_config: dict[str, Any] = {
         "formKey": FORMKEY_PURCHASE_QUOTATION,
         "viewKey": "draft",
         "items": items,
