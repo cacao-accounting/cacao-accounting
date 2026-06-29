@@ -334,7 +334,11 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
 
 def _safe_page_size(raw: object, default: int) -> int:
     try:
-        return max(int(raw or default), 1)
+        if raw is None or isinstance(raw, str):
+            value = default
+        else:
+            value = int(raw)  # type: ignore[call-overload]
+        return max(value, 1)
     except (TypeError, ValueError):
         return max(default, 1)
 

@@ -14,7 +14,7 @@ from decimal import Decimal
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_
@@ -2629,7 +2629,7 @@ def aplicar_recurrentes_cierre(identifier: str):
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def ejecutar_revalorizacion_cierre(identifier: str):
+def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
     """Ejecuta revalorizacion cambiaria desde el asistente de cierre mensual."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
         ExchangeRevaluationError,
@@ -2743,7 +2743,7 @@ def _resolve_period_from_date(company: str, year: str, month: str) -> tuple[str,
     return "", ""
 
 
-def _handle_exchange_revaluation_post() -> Response | None:
+def _handle_exchange_revaluation_post() -> "Any":
     """Procesa el formulario POST de revalorizacion cambiaria. Retorna redirect o None."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
         ExchangeRevaluationError,
