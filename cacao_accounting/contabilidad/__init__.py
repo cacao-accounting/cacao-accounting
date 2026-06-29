@@ -90,6 +90,7 @@ CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
 CONTABILIDAD_UNIDADES = "contabilidad.unidades"
 CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
+CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
 
 
 def _company_label(company_code: str) -> str:
@@ -2404,7 +2405,7 @@ def nuevo_cierre_mensual():
     period_id = request.form.get("period_id")
     period = database.session.get(AccountingPeriod, period_id)
     if not period:
-        flash("Periodo no encontrado.", "danger")
+        flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     existing = database.session.execute(
@@ -2508,7 +2509,7 @@ def aplicar_recurrentes_cierre(identifier: str):
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
-        flash("Periodo no encontrado.", "danger")
+        flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     template_ids = request.form.getlist("template_ids")
@@ -2586,7 +2587,7 @@ def ejecutar_revalorizacion_cierre(identifier: str):
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
-        flash("Periodo no encontrado.", "danger")
+        flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     try:
