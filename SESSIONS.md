@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: cierre fiscal simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/fiscal_year_closing.py` sin alterar el comportamiento del voucher de cierre fiscal.
+- **Implementacion:** Se separaron el cálculo de débitos/créditos, la construcción de líneas de cierre y la contrapartida a utilidades acumuladas en helpers pequeños. `create_fiscal_year_closing_voucher()` quedó como orquestador de validaciones y armado de payload.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_fiscal_year_closing.py` quedaron en verde.
+
 ## 2026-06-29 (SonarCloud: validacion de linea de presupuesto simplificada)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_service.py` sin alterar las reglas de validación de líneas de presupuesto.
 - **Implementacion:** `_validate_line_data()` se dividio en helpers pequenos para cuenta, centro de costo, periodo, unidad de negocio, proyecto y unicidad de combinación. La lógica pública de creación y actualización de líneas quedó intacta.
