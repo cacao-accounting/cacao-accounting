@@ -85,6 +85,7 @@ CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST = "contabilidad.fiscal_year_closing_list"
 CONTABILIDAD_REVALORIZACION_LIST = "contabilidad.revalorizaciones_cambiarias"
 CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
 CONTABILIDAD_MONEDAS = "contabilidad.monedas"
+CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
 
 
 def _company_label(company_code: str) -> str:
@@ -189,7 +190,7 @@ def nueva_moneda():
         return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
-        "contabilidad/moneda_crear.html",
+        CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
         titulo=TITULO,
         form=formulario,
     )
@@ -248,7 +249,7 @@ def editar_moneda(code):
         except CurrencyGuardError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/moneda_crear.html",
+                CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
                 titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
                 form=formulario,
                 edit=True,
@@ -257,7 +258,7 @@ def editar_moneda(code):
         return redirect(url_for("contabilidad.moneda", code=registro.code))
 
     return render_template(
-        "contabilidad/moneda_crear.html",
+        CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
         titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
         form=formulario,
         edit=True,
