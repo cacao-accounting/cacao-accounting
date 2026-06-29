@@ -728,6 +728,58 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
 
+def _handle_supplier_create(
+    form: dict,
+    selected_company: str | None,
+    company_choices: list,
+    company_settings: Any,
+    formulario: Any,
+    titulo: str,
+):
+    """Maneja la creacion de un nuevo proveedor desde el formulario POST."""
+    proveedor = Party(
+        party_type="supplier",
+        name=form.get("name") or "",
+        comercial_name=form.get("comercial_name"),
+        tax_id=form.get("tax_id"),
+        classification=form.get("classification"),
+        is_active=form.get("is_active", "on") is not None,
+    )
+    try:
+        database.session.add(proveedor)
+        apply_party_group(proveedor, form.get("party_group_id") or None)
+        database.session.flush()
+        company = form.get("company") or None
+        if company:
+            upsert_party_company_settings(
+                proveedor.id,
+                "supplier",
+                company,
+                is_active=form.get("company_is_active") is not None,
+                receivable_account_id=None,
+                payable_account_id=form.get("payable_account_id") or None,
+                tax_template_id=form.get("tax_template_id") or None,
+                allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
+                allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
+            )
+        database.session.commit()
+        return redirect("/buying/supplier/list")
+    except ValueError as exc:
+        database.session.rollback()
+        if selected_company:
+            company_settings = draft_party_company_settings("supplier", selected_company, form)
+        flash(str(exc), "danger")
+    return render_template(
+        "compras/proveedor_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+        group_label=party_group_label(form.get("party_group_id") or None),
+    )
+
+
 @compras.route("/supplier-quotation/<quotation_id>/duplicate", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1032,40 +1084,7 @@ def compras_proveedor_nuevo():
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings = build_party_company_settings("supplier", selected_company) if selected_company else None
     if request.method == "POST":
-        proveedor = Party(
-            party_type="supplier",
-            name=request.form.get("name") or "",
-            comercial_name=request.form.get("comercial_name"),
-            tax_id=request.form.get("tax_id"),
-            classification=request.form.get("classification"),
-            is_active=request.form.get("is_active", "on") is not None,
-        )
-        try:
-            database.session.add(proveedor)
-            apply_party_group(proveedor, request.form.get("party_group_id") or None)
-            database.session.flush()
-            company = request.form.get("company") or None
-            if company:
-                upsert_party_company_settings(
-                    proveedor.id,
-                    "supplier",
-                    company,
-                    is_active=request.form.get("company_is_active") is not None,
-                    receivable_account_id=None,
-                    payable_account_id=request.form.get("payable_account_id") or None,
-                    tax_template_id=request.form.get("tax_template_id") or None,
-                    allow_purchase_invoice_without_order=request.form.get("allow_purchase_invoice_without_order") is not None,
-                    allow_purchase_invoice_without_receipt=(
-                        request.form.get("allow_purchase_invoice_without_receipt") is not None
-                    ),
-                )
-            database.session.commit()
-            return redirect("/buying/supplier/list")
-        except ValueError as exc:
-            database.session.rollback()
-            if selected_company:
-                company_settings = draft_party_company_settings("supplier", selected_company, request.form)
-            flash(str(exc), "danger")
+        return _handle_supplier_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
         "compras/proveedor_nuevo.html",
         form=formulario,
