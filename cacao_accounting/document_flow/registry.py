@@ -41,6 +41,16 @@ COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
 CREAR_FACTURA = "Crear Factura"
 VENTAS_VENTAS_FACTURA_VENTA_NUEVO = "ventas.ventas_factura_venta_nuevo"
 
+_ACTION_CREAR_PAGO = "Crear Pago"
+_ACTION_CREAR_NOTA_CREDITO = "Crear Nota de Crédito"
+_ACTION_CREAR_NOTA_DEBITO = "Crear Nota de Débito"
+_ACTION_CREAR_ORDEN_COMPRA = "Crear Orden de Compra"
+_ENDPOINT_PAGO_NUEVO = "bancos.bancos_pago_nuevo"
+_ENDPOINT_ORDEN_COMPRA_NUEVO = "compras.compras_orden_compra_nuevo"
+_ENDPOINT_FACTURA_COMPRA = "compras.compras_factura_compra"
+_ENDPOINT_FACTURA_VENTA = "ventas.ventas_factura_venta"
+_ENDPOINT_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
+
 
 @dataclass(frozen=True)
 class DocumentAction:
@@ -106,9 +116,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         create_actions=(
             DocumentAction("Crear Recepción", "purchase_receipt", "compras.compras_recepcion_nuevo", "from_order"),
             DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_order"),
-            DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_purchase_order"),
+            DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_order"),
             DocumentAction(
-                "Crear Nota de Crédito",
+                _ACTION_CREAR_NOTA_CREDITO,
                 "purchase_credit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_order",
@@ -116,7 +126,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="purchase_invoice",
             ),
             DocumentAction(
-                "Crear Nota de Débito",
+                _ACTION_CREAR_NOTA_DEBITO,
                 "purchase_debit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_order",
@@ -152,7 +162,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 "compras.compras_cotizacion_proveedor_nueva",
                 "from_request",
             ),
-            DocumentAction("Crear Orden de Compra", "purchase_order", "compras.compras_orden_compra_nuevo", "from_request"),
+            DocumentAction(_ACTION_CREAR_ORDEN_COMPRA, "purchase_order", _ENDPOINT_ORDEN_COMPRA_NUEVO, "from_request"),
         ),
     ),
     "purchase_quotation": DocumentType(
@@ -177,7 +187,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 "compras.compras_cotizacion_proveedor_nueva",
                 "from_rfq",
             ),
-            DocumentAction("Crear Orden de Compra", "purchase_order", "compras.compras_orden_compra_nuevo", "from_rfq"),
+            DocumentAction(_ACTION_CREAR_ORDEN_COMPRA, "purchase_order", _ENDPOINT_ORDEN_COMPRA_NUEVO, "from_rfq"),
         ),
     ),
     "supplier_quotation": DocumentType(
@@ -197,7 +207,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction(
-                "Crear Orden de Compra", "purchase_order", "compras.compras_orden_compra_nuevo", "from_supplier_quotation"
+                _ACTION_CREAR_ORDEN_COMPRA, "purchase_order", _ENDPOINT_ORDEN_COMPRA_NUEVO, "from_supplier_quotation"
             ),
         ),
     ),
@@ -219,7 +229,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         create_actions=(
             DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_receipt"),
             DocumentAction(
-                "Crear Nota de Crédito",
+                _ACTION_CREAR_NOTA_CREDITO,
                 "purchase_credit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_receipt",
@@ -227,7 +237,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="purchase_invoice",
             ),
             DocumentAction(
-                "Crear Nota de Débito",
+                _ACTION_CREAR_NOTA_DEBITO,
                 "purchase_debit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_receipt",
@@ -245,7 +255,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(
                 "Crear Entrada de Almacén",
                 "stock_entry",
-                "inventario.inventario_entrada_nuevo",
+                _ENDPOINT_ENTRADA_NUEVO,
                 "source_id",
                 {"source_type": "purchase_receipt"},
             ),
@@ -262,7 +272,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Compras",
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_lista",
-        detail_endpoint="compras.compras_factura_compra",
+        detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -276,9 +286,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_purchase_invoice"),
+            DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_invoice"),
             DocumentAction(
-                "Crear Nota de Crédito",
+                _ACTION_CREAR_NOTA_CREDITO,
                 "purchase_credit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_invoice",
@@ -286,7 +296,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="purchase_invoice",
             ),
             DocumentAction(
-                "Crear Nota de Débito",
+                _ACTION_CREAR_NOTA_DEBITO,
                 "purchase_debit_note",
                 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
                 "from_invoice",
@@ -306,7 +316,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Compras",
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_nota_credito_lista",
-        detail_endpoint="compras.compras_factura_compra",
+        detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -320,7 +330,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Reembolso", "payment_entry", "bancos.bancos_pago_nuevo", "from_purchase_credit_note"),
+            DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_credit_note"),
         ),
     ),
     "purchase_debit_note": DocumentType(
@@ -334,7 +344,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Compras",
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_nota_debito_lista",
-        detail_endpoint="compras.compras_factura_compra",
+        detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -348,7 +358,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_purchase_debit_note"),
+            DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_debit_note"),
         ),
     ),
     "sales_order": DocumentType(
@@ -369,7 +379,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         create_actions=(
             DocumentAction("Crear Nota de Entrega", "delivery_note", "ventas.ventas_entrega_nuevo", "from_order"),
             DocumentAction(CREAR_FACTURA, "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_order"),
-            DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_sales_order"),
+            DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_order"),
         ),
     ),
     "sales_request": DocumentType(
@@ -429,7 +439,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         create_actions=(
             DocumentAction(CREAR_FACTURA, "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_note"),
             DocumentAction(
-                "Crear Nota de Crédito",
+                _ACTION_CREAR_NOTA_CREDITO,
                 "sales_credit_note",
                 VENTAS_VENTAS_FACTURA_VENTA_NUEVO,
                 "from_note",
@@ -437,7 +447,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="sales_invoice",
             ),
             DocumentAction(
-                "Crear Nota de Débito",
+                _ACTION_CREAR_NOTA_DEBITO,
                 "sales_debit_note",
                 VENTAS_VENTAS_FACTURA_VENTA_NUEVO,
                 "from_note",
@@ -447,7 +457,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(
                 "Crear Movimiento de Inventario",
                 "stock_entry",
-                "inventario.inventario_entrada_nuevo",
+                _ENDPOINT_ENTRADA_NUEVO,
                 "source_id",
                 {"source_type": "delivery_note"},
             ),
@@ -464,7 +474,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Ventas",
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_lista",
-        detail_endpoint="ventas.ventas_factura_venta",
+        detail_endpoint=_ENDPOINT_FACTURA_VENTA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -478,9 +488,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Pago", "payment_entry", "bancos.bancos_pago_nuevo", "from_sales_invoice"),
+            DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_invoice"),
             DocumentAction(
-                "Crear Nota de Crédito",
+                _ACTION_CREAR_NOTA_CREDITO,
                 "sales_credit_note",
                 VENTAS_VENTAS_FACTURA_VENTA_NUEVO,
                 "from_invoice",
@@ -488,7 +498,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="sales_invoice",
             ),
             DocumentAction(
-                "Crear Nota de Débito",
+                _ACTION_CREAR_NOTA_DEBITO,
                 "sales_debit_note",
                 VENTAS_VENTAS_FACTURA_VENTA_NUEVO,
                 "from_invoice",
@@ -508,7 +518,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Ventas",
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_nota_credito_lista",
-        detail_endpoint="ventas.ventas_factura_venta",
+        detail_endpoint=_ENDPOINT_FACTURA_VENTA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -522,7 +532,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Reembolso", "payment_entry", "bancos.bancos_pago_nuevo", "from_sales_credit_note"),
+            DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_credit_note"),
         ),
     ),
     "sales_debit_note": DocumentType(
@@ -536,7 +546,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         module_label="Ventas",
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_nota_debito_lista",
-        detail_endpoint="ventas.ventas_factura_venta",
+        detail_endpoint=_ENDPOINT_FACTURA_VENTA,
         detail_arg="invoice_id",
         total_field="grand_total",
         filter_fields=(
@@ -549,7 +559,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "outstanding_amount",
             "docstatus",
         ),
-        create_actions=(DocumentAction("Crear Cobro", "payment_entry", "bancos.bancos_pago_nuevo", "from_sales_debit_note"),),
+        create_actions=(DocumentAction("Crear Cobro", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_debit_note"),),
     ),
     "payment_entry": DocumentType(
         key="payment_entry",
@@ -595,7 +605,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(
                 "Crear Reuso Interno",
                 "stock_entry",
-                "inventario.inventario_entrada_nuevo",
+                _ENDPOINT_ENTRADA_NUEVO,
                 "source_id",
                 {"source_type": "stock_entry"},
             ),
