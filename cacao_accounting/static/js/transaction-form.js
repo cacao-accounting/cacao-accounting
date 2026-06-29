@@ -777,7 +777,11 @@
 
         mapSourceItems(rawItems) {
           const items = rawItems || [];
-          return items.map((item) => ({ ...item, selected: true }));
+          const result = [];
+          for (const item of items) {
+            result.push({ ...item, selected: true });
+          }
+          return result;
         },
 
         async fetchSourceDocuments() {
@@ -801,10 +805,14 @@
 
         processSourceDocuments(rawDocs) {
           const docs = rawDocs || [];
+          const result = [];
           const sourceType = this.searchCriteria.source_type;
-          return docs
-            .filter((doc) => !sourceType || doc.source_type === sourceType)
-            .map((doc) => ({ ...doc, selected: false }));
+          for (const doc of docs) {
+            if (!sourceType || doc.source_type === sourceType) {
+              result.push({ ...doc, selected: false });
+            }
+          }
+          return result;
         },
 
         async fetchSourceItems() {
@@ -830,7 +838,9 @@
           params.append('source_type', this.searchCriteria.source_type);
           params.append('target_type', this.formKey.split('.')[1]);
           params.append('company', this.header.company);
-          selectedIds.forEach((id) => params.append('source_id', id));
+          for (const id of selectedIds) {
+            params.append('source_id', id);
+          }
           return params;
         },
 
@@ -842,8 +852,8 @@
         },
 
         processSelectedSourceItems() {
-          for (const item of this.sourceItems.filter((item) => item.selected)) {
-            this.addSourceItemAsLine(item);
+          for (const item of this.sourceItems) {
+            if (item.selected) this.addSourceItemAsLine(item);
           }
         },
 
@@ -854,11 +864,18 @@
         },
 
         lineAlreadyExists(item) {
-          return this.lines.some((line) =>
-            line.source_type === item.source_type &&
-            line.source_id === item.source_id &&
-            line.source_item_id === item.source_item_id
-          );
+          return this._hasMatchingSourceLine(this.lines, item);
+        },
+
+        _hasMatchingSourceLine(lines, item) {
+          for (const line of lines) {
+            if (
+              line.source_type === item.source_type &&
+              line.source_id === item.source_id &&
+              line.source_item_id === item.source_item_id
+            ) return true;
+          }
+          return false;
         },
 
         createLineFromSourceItem(item) {
@@ -884,9 +901,13 @@
         },
 
         cleanupEmptyLines() {
-          this.lines = this.lines.filter((line) =>
-            line.item_code || line.item_name || line.source_id
-          );
+          const filtered = [];
+          for (const line of this.lines) {
+            if (line.item_code || line.item_name || line.source_id) {
+              filtered.push(line);
+            }
+          }
+          this.lines = filtered;
         },
 
         moveColumn(index, direction) {
