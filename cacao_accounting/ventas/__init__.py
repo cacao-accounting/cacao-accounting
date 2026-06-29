@@ -1852,7 +1852,7 @@ def ventas_factura_venta_nuevo():
             database.session.commit()
             flash("Factura de venta creada correctamente.", "success")
             return redirect(url_for("ventas.ventas_factura_venta", invoice_id=factura.id))
-        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
     return render_template(
