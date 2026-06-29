@@ -545,6 +545,68 @@ def test_validate_payment_header_rejects_cross_company_bank_account(app_ctx):
         )
 
 
+def test_validate_payment_header_rejects_invalid_target_bank_account(app_ctx):
+    """El encabezado del pago exige una cuenta bancaria destino válida."""
+
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco origen válido")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta origen válida")
+    database.session.add(bank_account)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="destino no existe"):
+        _validate_payment_header(
+            payment_type="internal_transfer",
+            company="cacao",
+            bank_account_id=bank_account.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type=None,
+            party_id=None,
+            target_bank_account_id="BANK-DESTINO",
+        )
+
+
+def test_validate_payment_header_rejects_missing_party_for_payment_and_invalid_type(app_ctx):
+    """El encabezado del pago exige tercero para pagos/cobros y tipo de tercero válido."""
+
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco validación tercero")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta validación")
+    database.session.add(bank_account)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="tercero es obligatorio"):
+        _validate_payment_header(
+            payment_type="receive",
+            company="cacao",
+            bank_account_id=bank_account.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type=None,
+            party_id=None,
+        )
+
+    with pytest.raises(ValueError, match="tipo de tercero"):
+        _validate_payment_header(
+            payment_type="other",
+            company="cacao",
+            bank_account_id=bank_account.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type="warehouse",
+            party_id="WH-1",
+        )
+
+
 def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
     """Cancelar un pago libera las referencias y restaura el saldo pendiente."""
 
