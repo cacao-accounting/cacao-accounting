@@ -135,3 +135,12 @@ def test_index_template_has_empty_state():
 
     assert "No hay lotes de importación" in content
     assert "Nueva Importación" in content
+
+
+def test_import_tables_define_caption_before_table_head():
+    """Las tablas de importaciones deben declarar caption como primer hijo para accesibilidad."""
+    index_content = (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
+    detail_content = (TEMPLATES_DIR / "detail.html").read_text(encoding="utf-8")
+
+    assert index_content.index("<caption>") < index_content.index("<thead>")
+    assert detail_content.index("<caption>") < detail_content.index("<thead>")

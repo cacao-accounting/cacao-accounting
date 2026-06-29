@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: captions accesibles en importaciones)
+- **Solicitud:** Cerrar los issues `Web:TableWithoutCaptionCheck` en los templates de importaciones.
+- **Implementacion:** Se movio `<caption>` para que sea el primer hijo de las tablas en `cacao_accounting/imports/templates/imports/index.html` y `detail.html`, alineando la estructura HTML con el chequeo de accesibilidad de Sonar. Ademas se agrego una prueba en `tests/imports/test_routes.py` para proteger el orden `caption` antes de `thead`.
+- **Verificacion:** `black --check`, `ruff`, `mypy` focal y `tests/imports/test_routes.py` quedaron en verde.
+
 ## 2026-06-29 (Fix pydocstyle en statement_service)
 - **Solicitud:** Corregir el fallo de CI reportado por `flake8`/`pydocstyle` en `_persist_bank_transaction`.
 - **Implementacion:** Se actualizo el docstring de `_persist_bank_transaction` en `cacao_accounting/bancos/statement_service.py` para usar modo imperativo en ingles y cumplir `D401`.
