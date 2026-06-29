@@ -66,7 +66,7 @@
     if (label.includes('aprob') || label.includes('pagad')) return 'ca-flow-badge--approved';
     if (label.includes('pend') || label.includes('parcial')) return 'ca-flow-badge--partial';
     if (label.includes('borrador') || label.includes('draft')) return 'ca-flow-badge--draft';
-    return 'ca-flow-badge--draft';
+    return '';
   }
 
   function renderMeta(node) {
