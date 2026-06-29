@@ -7,6 +7,7 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from collections.abc import Sequence
+from typing import Any
 from datetime import date
 from decimal import Decimal
 
