@@ -6,6 +6,8 @@ const assert = require('assert');
 function loadTransactionForm() {
   const listeners = {};
   let transactionFormFactory = null;
+  const scheduledTimeouts = new Map();
+  let nextTimeoutId = 1;
 
   globalThis.window = {
     crypto: {
@@ -36,6 +38,17 @@ function loadTransactionForm() {
     },
   };
 
+  globalThis.setTimeout = (callback) => {
+    const timeoutId = nextTimeoutId;
+    nextTimeoutId += 1;
+    scheduledTimeouts.set(timeoutId, callback);
+    return timeoutId;
+  };
+
+  globalThis.clearTimeout = (timeoutId) => {
+    scheduledTimeouts.delete(timeoutId);
+  };
+
   const modulePath = require.resolve('../js/transaction-form.js');
   delete require.cache[modulePath];
   require(modulePath);
@@ -53,6 +66,8 @@ describe('transaction-form', function () {
     delete globalThis.bootstrap;
     delete globalThis.Alpine;
     delete globalThis.fetch;
+    delete globalThis.setTimeout;
+    delete globalThis.clearTimeout;
   });
 
   it('uses required default columns when preferences are empty', function () {
@@ -334,6 +349,32 @@ describe('transaction-form', function () {
     assert.strictEqual(component.taxCharges.error, '');
   });
 
+  it('reports fiscal preview fetch failures through the shared error handler', async function () {
+    const create = loadTransactionForm();
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args);
+    globalThis.fetch = async () => {
+      throw new Error('preview down');
+    };
+
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao' },
+    });
+
+    component.init();
+    await component.fetchTaxPreview();
+
+    console.warn = originalWarn;
+    assert.strictEqual(component.taxCharges.error, 'No se pudo calcular.');
+    assert.strictEqual(component.taxCharges.loading, false);
+    assert.strictEqual(warnings.length, 1);
+  });
+
   it('adds manual tax or charge lines and updates fiscal totals', function () {
     const create = loadTransactionForm();
     const component = create({
@@ -364,5 +405,34 @@ describe('transaction-form', function () {
     const payload = component.buildFiscalPayload();
     assert.strictEqual(payload.tax_lines[0].manual, true);
     assert.strictEqual(payload.tax_lines[0].allocation_method, 'by_value');
+  });
+
+  it('reports import validation fetch failures through the shared error handler', async function () {
+    const create = loadTransactionForm();
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args);
+    globalThis.fetch = async () => {
+      throw new Error('validation down');
+    };
+
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.importModal.doctype = 'purchase_invoice';
+    component.importModal.schema = { columns: [] };
+    component.importModal.parsedRows = [{ item_code: 'ITEM-001' }];
+
+    await component.validateImport();
+
+    console.warn = originalWarn;
+    assert.strictEqual(component.importModal.validating, false);
+    assert.deepStrictEqual(component.importModal.errors, [{ message: 'Error de conexión al validar.' }]);
+    assert.strictEqual(warnings.length, 1);
   });
 });

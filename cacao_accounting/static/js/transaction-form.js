@@ -568,9 +568,14 @@
             }
             this.applyTaxPreviewData(data);
           } catch (err) {
-            this.taxCharges.error = 'No se pudo calcular.';
-            this.taxCharges.loading = false;
+            this.handleTaxPreviewError(err);
           }
+        },
+
+        handleTaxPreviewError(err) {
+          console.warn('transactionForm tax preview failed', err);
+          this.taxCharges.error = 'No se pudo calcular.';
+          this.taxCharges.loading = false;
         },
 
         async requestTaxPreview() {
@@ -990,12 +995,17 @@
               this.importModal.isValidated = false;
             }
           } catch (err) {
-            this.importModal.errors = [
-              { message: "Error de conexión al validar." },
-            ];
+            this.handleImportValidationError(err);
           } finally {
             this.importModal.validating = false;
           }
+        },
+
+        handleImportValidationError(err) {
+          console.warn('transactionForm import validation failed', err);
+          this.importModal.errors = [
+            { message: "Error de conexión al validar." },
+          ];
         },
 
         insertImportedLines() {
