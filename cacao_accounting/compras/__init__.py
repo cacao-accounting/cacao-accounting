@@ -1983,7 +1983,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
             database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
         ).scalars():
             database.session.delete(item)
-        total_qty, total = _save_purchase_quotation_items(registro.id)
+        _, total = _save_purchase_quotation_items(registro.id)
         registro.total = total
         registro.base_total = total
         registro.grand_total = total
