@@ -843,6 +843,7 @@
           <div class="table-responsive" style="max-height: 300px;">
             <p class="text-muted small mb-2">{{ _('Vista previa de las filas importadas antes de agregarlas al detalle.') }}</p>
             <table class="table table-sm table-bordered">
+              <caption class="visually-hidden">{{ _('Vista previa de datos importados') }}</caption>
               <thead>
                 <tr>
                   <template x-for="col in importModal.schema.columns" :key="col.key">
