@@ -444,3 +444,9 @@
 - **Solicitud:** Reducir la complejidad cognitiva de `_save_payment_references` en `cacao_accounting/bancos/__init__.py` y conservar la cobertura con pruebas unitarias.
 - **Implementación:** Se extrajo la lectura de líneas desde el formulario, la resolución del documento referenciado, la validación de negocio por documento y la construcción de `PaymentReference` en helpers dedicados. La función principal quedó como orquestador lineal.
 - **Validación:** Se ejecutó la suite focal de referencias de pago y cancelación, con `5 passed` en `tests/test_06transaction_closure.py`; también se corrió `ruff check` sobre el módulo modificado.
+
+## 2026-06-29 (Refactor de hotspots Bancos y Compras)
+- **Solicitud:** Refactorizar los métodos listados en `issues.txt` para bajar complejidad cognitiva, usar `match/case` donde aplique, mover lógica a helpers, preservar contratos, y validar con pruebas unitarias y herramientas de calidad.
+- **Alcance acordado:** Se priorizaron solo los hotspots reales; `_save_payment_references` se trató como falso positivo histórico porque ya figuraba refactorizado en la bitácora.
+- **Implementación:** Se simplificaron los handlers y servicios de Bancos con helpers de dispatch, validación y persistencia; `find_bank_reconciliation_candidates`, `reconcile_bank_items`, `import_bank_statement`, `bancos_pago_nuevo`, `_crear_nota_bancaria`, `_payment_source_rows` y `_validate_payment_header` quedaron menos anidados. En Compras, `compras_cotizacion_proveedor_nueva` y `compras_cotizacion_proveedor_editar` comparten ahora helpers de contexto y catálogos.
+- **Validación:** Se ejecutaron `ruff`, `mypy` y pruebas focales de Bancos, Conciliación, Importación y Compras; el bloque relevante quedó en verde con `116 passed`.
