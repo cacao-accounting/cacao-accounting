@@ -26,6 +26,7 @@ DIRECTORIO_APP = Path(__file__).parent
 DIRECTORIO_PRINCIPAL = DIRECTORIO_APP.parent
 DIRECTORIO_PLANTILLAS = str(DIRECTORIO_APP / "templates")
 DIRECTORIO_ARCHIVOS = str(DIRECTORIO_APP / "static")
+POSTGRESQL_URI_PREFIX = "postgresql://"
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
@@ -57,8 +58,8 @@ def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, s
     direccion = str(uri)
     opciones_motor: dict[str, dict[str, ssl.SSLContext]] = {}
 
-    if direccion.startswith("postgresql://"):
-        direccion = direccion.replace("postgresql://", "postgresql+pg8000://", 1)
+    if direccion.startswith(POSTGRESQL_URI_PREFIX):
+        direccion = direccion.replace(POSTGRESQL_URI_PREFIX, "postgresql+pg8000://", 1)
 
     if direccion.startswith("postgresql+pg8000://"):
         uri_parseada = urlsplit(direccion)
@@ -85,7 +86,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
         case _ if direccion.startswith("mariadb+mariadbconnector"):
             log.warning("El soporte a MariaDB es expimental.")
             return True
-        case _ if direccion.startswith("postgresql://"):
+        case _ if direccion.startswith(POSTGRESQL_URI_PREFIX):
             return True
         case _ if direccion.startswith("postgresql+pg8000") or direccion.startswith("postgresql+psycopg2"):
             return True
