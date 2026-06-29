@@ -4,6 +4,7 @@
 - [x] Consultar la API publica de SonarCloud para enumerar issues abiertos del proyecto.
 - [x] Confirmar el volumen de hallazgos activos antes de tocar hotspots de negocio.
 - [x] Aplicar una primera limpieza de bajo riesgo en `journal_nuevo.html` y `cacaoaccounting.css`.
+- [x] Cerrar un issue menor adicional en `imports/services/import_service.py`.
 - [ ] Seguir cerrando issues SonarCloud por prioridad, empezando por los de menor riesgo semantico y luego los de mayor complejidad tecnica.
 
 ## Seguimiento 2026-06-27 (Auditoria de pendientes - completado)

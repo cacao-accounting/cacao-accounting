@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Importaciones (2026-06-29):** Se cerro un issue menor de SonarCloud en `cacao_accounting/imports/services/import_service.py`.
+  - Se eliminaron reasignaciones de `batch` en helpers internos y se uso `current_batch` para hacer explicito el acceso al estado persistido.
+  - El cambio es funcionalmente neutro y reduce ruido de analisis estatica.
+  - La suite focal `tests/imports/test_service.py` paso en verde junto con Black, Ruff y Mypy focal.
+
 - **Consulta SonarCloud (2026-06-29):** Se uso la API publica de SonarCloud para listar issues abiertos del proyecto y se confirmaron 113 hallazgos activos.
   - Se priorizaron avisos de bajo riesgo semantico para una primera limpieza: `journal_nuevo.html` y `cacaoaccounting.css`.
   - `journal_nuevo.html` dejo de usar el patron `this -> self` en la inicializacion del selector de compania y ahora delega en helpers de sincronizacion.
