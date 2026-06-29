@@ -2530,11 +2530,11 @@ def _purchase_invoice_source_ids() -> dict[str, str | None]:
 
 def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
     """Resolve the document type for the purchase invoice."""
-    doc_type = (
-        PURCHASE_RETURN
-        if source_ids["from_receipt_id"]
-        else PURCHASE_CREDIT_NOTE if source_ids["from_invoice_id"] else PURCHASE_INVOICE
-    )
+    doc_type = PURCHASE_INVOICE
+    if source_ids["from_receipt_id"]:
+        doc_type = PURCHASE_RETURN
+    elif source_ids["from_invoice_id"]:
+        doc_type = PURCHASE_CREDIT_NOTE
     return request.args.get("document_type") or request.form.get("document_type") or doc_type
 
 
