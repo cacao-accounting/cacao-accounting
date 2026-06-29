@@ -194,31 +194,47 @@ class BudgetService:
 
     def _validate_line_data(self, budget: Budget, data: Dict[str, Any], exclude_line_id: Optional[str] = None):
         """Valida datos de una línea de presupuesto."""
+        self._validate_line_account(budget, data)
+        self._validate_line_cost_center(budget, data)
+        self._validate_line_period(budget, data)
+        self._validate_line_business_unit(budget, data)
+        self._validate_line_project(budget, data)
+        self._validate_line_uniqueness(budget, data, exclude_line_id)
+
+    def _validate_line_account(self, budget: Budget, data: Dict[str, Any]) -> None:
         account = database.session.get(Accounts, data["account_id"])
         if not account or account.entity != budget.company:
             raise BudgetError("Cuenta contable no válida.")
         if account.group:
             raise BudgetError("No se puede presupuestar en una cuenta agrupadora.")
 
+    def _validate_line_cost_center(self, budget: Budget, data: Dict[str, Any]) -> None:
         cc = database.session.get(CostCenter, data["cost_center_id"])
         if not cc or cc.entity != budget.company:
             raise BudgetError("Centro de costo no válido.")
 
+    def _validate_line_period(self, budget: Budget, data: Dict[str, Any]) -> None:
         period = database.session.get(AccountingPeriod, data["period_id"])
         if not period or period.fiscal_year_id != budget.fiscal_year_id:
             raise BudgetError("El período no pertenece al año fiscal del presupuesto.")
 
-        if data.get("business_unit_id"):
-            unit = database.session.get(Unit, data["business_unit_id"])
-            if not unit or unit.entity != budget.company:
-                raise BudgetError("Unidad de negocio no válida.")
+    def _validate_line_business_unit(self, budget: Budget, data: Dict[str, Any]) -> None:
+        unit_id = data.get("business_unit_id")
+        if not unit_id:
+            return
+        unit = database.session.get(Unit, unit_id)
+        if not unit or unit.entity != budget.company:
+            raise BudgetError("Unidad de negocio no válida.")
 
-        if data.get("project_id"):
-            project = database.session.get(Project, data["project_id"])
-            if not project or project.entity != budget.company:
-                raise BudgetError("Proyecto no válido.")
+    def _validate_line_project(self, budget: Budget, data: Dict[str, Any]) -> None:
+        project_id = data.get("project_id")
+        if not project_id:
+            return
+        project = database.session.get(Project, project_id)
+        if not project or project.entity != budget.company:
+            raise BudgetError("Proyecto no válido.")
 
-        # Validar duplicados (NULL-safe)
+    def _validate_line_uniqueness(self, budget: Budget, data: Dict[str, Any], exclude_line_id: Optional[str] = None) -> None:
         business_unit_id = data.get("business_unit_id")
         project_id = data.get("project_id")
 
