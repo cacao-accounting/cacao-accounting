@@ -66,6 +66,8 @@
   --ca-sidebar-active-bg:   rgba(183,221,52,.18);
   --ca-sidebar-active-text: #FFFFFF;
   --ca-sidebar-active-border: #B7DD34;              /* lime accent stripe     */
+  --ca-content-margin-left: var(--ca-sidebar-width);
+  --ca-content-padding: 1.25rem 1.5rem;
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -333,18 +335,18 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
    7. MAIN CONTENT  (Layer 1 — warm gray, NOT white)
    ═══════════════════════════════════════════════════════ */
 .ca-content {
-  margin-left: var(--ca-sidebar-width) !important;
+  margin-left: var(--ca-content-margin-left) !important;
   margin-top: var(--ca-navbar-height) !important;
-  padding: 1.25rem 1.5rem !important;
+  padding: var(--ca-content-padding) !important;
   min-height: calc(100vh - var(--ca-navbar-height));
   background-color: var(--ca-bg) !important;
   transition: margin-left .3s ease;
 }
 
 @media (max-width: 640px) {
-  .ca-content {
-    margin-left: 0 !important;
-    padding: 1rem !important;
+  html {
+    --ca-content-margin-left: 0;
+    --ca-content-padding: 1rem;
   }
 }
 
@@ -1363,10 +1365,6 @@ nav[aria-label="breadcrumb"] {
 }
 
 @media (max-width: 640px) {
-  .ca-content {
-    padding: 1rem !important;
-  }
-
   .ca-module-grid {
     grid-template-columns: 1fr;
   }
