@@ -386,6 +386,7 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 .ca-card {
   background: var(--ca-surface) !important;
   border: 1px solid var(--ca-border) !important;
+  border-color: rgba(82, 97, 89, .18) !important;
   border-radius: var(--ca-radius) !important;
   box-shadow: var(--ca-shadow-sm) !important;
   padding: var(--ca-card-padding);
@@ -1243,10 +1244,6 @@ nav[aria-label="breadcrumb"] {
   border-radius: var(--ca-radius);
   color: var(--ca-p800) !important;
   background: var(--ca-p100);
-}
-
-.ca-card {
-  border-color: rgba(82, 97, 89, .18) !important;
 }
 
 .table-responsive {
