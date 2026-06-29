@@ -2629,7 +2629,7 @@ def _create_purchase_invoice_from_request():
         database.session.commit()
         flash("Factura de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
-    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return None
