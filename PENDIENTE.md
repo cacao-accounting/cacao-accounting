@@ -1,5 +1,11 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-06-29 (SonarCloud API - en curso)
+- [x] Consultar la API publica de SonarCloud para enumerar issues abiertos del proyecto.
+- [x] Confirmar el volumen de hallazgos activos antes de tocar hotspots de negocio.
+- [x] Aplicar una primera limpieza de bajo riesgo en `journal_nuevo.html` y `cacaoaccounting.css`.
+- [ ] Seguir cerrando issues SonarCloud por prioridad, empezando por los de menor riesgo semantico y luego los de mayor complejidad tecnica.
+
 ## Seguimiento 2026-06-27 (Auditoria de pendientes - completado)
 - [x] Contrastar los pendientes abiertos contra el codigo fuente antes de actualizar el backlog.
 - [x] Marcar como completada la paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST.
