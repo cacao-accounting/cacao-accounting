@@ -440,14 +440,108 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
     )
 
 
-def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
-    """Devuelve detalle de movimiento bancario desde pagos y extractos."""
-    bank_accounts = {
-        account.id: account
-        for account in database.session.execute(select(BankAccount).where(BankAccount.company == filters.company)).scalars()
+def _build_payment_row_values(
+    payment: PaymentEntry,
+    bank_account_id: str | None,
+    incoming: Decimal,
+    outgoing: Decimal,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> dict[str, object]:
+    bank_account = bank_accounts.get(bank_account_id) if bank_account_id else None
+    return {
+        "posting_date": payment.posting_date,
+        "document_no": payment.document_no or payment.id,
+        "voucher_type": "payment_entry",
+        "bank_account": bank_account.account_name if bank_account else bank_account_id,
+        "party_name": payment.party_name or party_names.get(payment.party_id, payment.party_id),
+        "payment_type": payment.payment_type,
+        "reference_no": payment.reference_no,
+        "incoming_amount": incoming,
+        "outgoing_amount": outgoing,
+        "currency": payment.currency,
+        "status": "cancelled" if payment.docstatus == 2 else "submitted",
+        "remarks": payment.remarks,
     }
-    party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
+
+def _build_transaction_row_values(
+    transaction: BankTransaction,
+    bank_account: BankAccount | None,
+) -> dict[str, object]:
+    incoming = _decimal_value(transaction.deposit)
+    outgoing = _decimal_value(transaction.withdrawal)
+    return {
+        "posting_date": transaction.posting_date,
+        "document_no": transaction.reference_number or transaction.id,
+        "voucher_type": "bank_transaction",
+        "bank_account": bank_account.account_name if bank_account else transaction.bank_account_id,
+        "party_name": None,
+        "payment_type": "statement",
+        "reference_no": transaction.reference_number,
+        "incoming_amount": incoming,
+        "outgoing_amount": outgoing,
+        "currency": bank_account.currency if bank_account else None,
+        "status": "reconciled" if transaction.is_reconciled else "pending",
+        "remarks": transaction.description,
+    }
+
+
+def _process_payment_entry(
+    payment: PaymentEntry,
+    filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> tuple[list[ReportRow], Decimal, Decimal]:
+    rows: list[ReportRow] = []
+    total_incoming = Decimal("0")
+    total_outgoing = Decimal("0")
+
+    bank_account_id = payment.bank_account_id
+    if filters.bank_account_id and bank_account_id != filters.bank_account_id:
+        return rows, total_incoming, total_outgoing
+
+    incoming = Decimal("0")
+    outgoing = Decimal("0")
+    if payment.payment_type == "receive":
+        incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+    elif payment.payment_type == "pay":
+        outgoing = _decimal_value(payment.paid_amount or payment.received_amount)
+    elif payment.payment_type == "internal_transfer":
+        outgoing = _decimal_value(payment.paid_amount)
+        incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+
+    if incoming > 0:
+        values = _build_payment_row_values(
+            payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names
+        )
+        rows.append(ReportRow(values=values))
+        total_incoming += incoming
+
+    if outgoing > 0:
+        values = _build_payment_row_values(
+            payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names
+        )
+        rows.append(ReportRow(values=values))
+        total_outgoing += outgoing
+
+    if payment.payment_type == "internal_transfer" and payment.target_bank_account_id:
+        target_bank_id = payment.target_bank_account_id
+        if not filters.bank_account_id or target_bank_id == filters.bank_account_id:
+            target_values = _build_payment_row_values(
+                payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names
+            )
+            rows.append(ReportRow(values=target_values))
+            total_incoming += incoming
+
+    return rows, total_incoming, total_outgoing
+
+
+def _process_payment_entries(
+    filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> tuple[list[ReportRow], Decimal, Decimal]:
     rows: list[ReportRow] = []
     total_incoming = Decimal("0")
     total_outgoing = Decimal("0")
@@ -458,51 +552,24 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     if filters.date_to is not None:
         payments = payments.where(PaymentEntry.posting_date <= filters.date_to)
 
-    def append_payment_row(payment: PaymentEntry, bank_account_id: str | None, incoming: Decimal, outgoing: Decimal) -> bool:
-        if not bank_account_id:
-            return False
-        if filters.bank_account_id and bank_account_id != filters.bank_account_id:
-            return False
-        bank_account = bank_accounts.get(bank_account_id)
-        rows.append(
-            ReportRow(
-                values={
-                    "posting_date": payment.posting_date,
-                    "document_no": payment.document_no or payment.id,
-                    "voucher_type": "payment_entry",
-                    "bank_account": bank_account.account_name if bank_account else bank_account_id,
-                    "party_name": payment.party_name or party_names.get(payment.party_id, payment.party_id),
-                    "payment_type": payment.payment_type,
-                    "reference_no": payment.reference_no,
-                    "incoming_amount": incoming,
-                    "outgoing_amount": outgoing,
-                    "currency": payment.currency,
-                    "status": "cancelled" if payment.docstatus == 2 else "submitted",
-                    "remarks": payment.remarks,
-                }
-            )
-        )
-        return True
-
     for payment in database.session.execute(
         payments.order_by(PaymentEntry.posting_date.asc(), PaymentEntry.created.asc())
     ).scalars():
-        if payment.payment_type == "receive":
-            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
-            if append_payment_row(payment, payment.bank_account_id, incoming, Decimal("0")):
-                total_incoming += incoming
-        elif payment.payment_type == "pay":
-            outgoing = _decimal_value(payment.paid_amount or payment.received_amount)
-            if append_payment_row(payment, payment.bank_account_id, Decimal("0"), outgoing):
-                total_outgoing += outgoing
-        elif payment.payment_type == "internal_transfer":
-            outgoing = _decimal_value(payment.paid_amount)
-            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
-            if append_payment_row(payment, payment.bank_account_id, Decimal("0"), outgoing):
-                total_outgoing += outgoing
-            if append_payment_row(payment, payment.target_bank_account_id, incoming, Decimal("0")):
-                total_incoming += incoming
+        entry_rows, entry_incoming, entry_outgoing = _process_payment_entry(
+            payment, filters, bank_accounts, party_names
+        )
+        rows.extend(entry_rows)
+        total_incoming += entry_incoming
+        total_outgoing += entry_outgoing
 
+    return rows, total_incoming, total_outgoing
+
+
+def _process_bank_transactions(
+    filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+) -> list[ReportRow]:
+    rows: list[ReportRow] = []
     transactions = select(BankTransaction).join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
     transactions = transactions.where(BankAccount.company == filters.company, BankTransaction.payment_entry_id.is_(None))
     if filters.bank_account_id:
@@ -511,33 +578,35 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
         transactions = transactions.where(BankTransaction.posting_date >= filters.date_from)
     if filters.date_to is not None:
         transactions = transactions.where(BankTransaction.posting_date <= filters.date_to)
+
     for transaction in database.session.execute(
         transactions.order_by(BankTransaction.posting_date.asc(), BankTransaction.created.asc())
     ).scalars():
-        incoming = _decimal_value(transaction.deposit)
-        outgoing = _decimal_value(transaction.withdrawal)
-        total_incoming += incoming
-        total_outgoing += outgoing
         bank_account = bank_accounts.get(transaction.bank_account_id)
-        rows.append(
-            ReportRow(
-                values={
-                    "posting_date": transaction.posting_date,
-                    "document_no": transaction.reference_number or transaction.id,
-                    "voucher_type": "bank_transaction",
-                    "bank_account": bank_account.account_name if bank_account else transaction.bank_account_id,
-                    "party_name": None,
-                    "payment_type": "statement",
-                    "reference_no": transaction.reference_number,
-                    "incoming_amount": incoming,
-                    "outgoing_amount": outgoing,
-                    "currency": bank_account.currency if bank_account else None,
-                    "status": "reconciled" if transaction.is_reconciled else "pending",
-                    "remarks": transaction.description,
-                }
-            )
-        )
+        rows.append(ReportRow(values=_build_transaction_row_values(transaction, bank_account)))
+    return rows
 
+
+def _compute_running_balance(rows: list[ReportRow]) -> Decimal:
+    running_balance = Decimal("0")
+    for row in rows:
+        running_balance += _decimal_value(row.values["incoming_amount"]) - _decimal_value(row.values["outgoing_amount"])
+        row.values["running_balance"] = running_balance
+    return running_balance
+
+
+def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
+    """Devuelve detalle de movimiento bancario desde pagos y extractos."""
+    bank_accounts = {
+        account.id: account
+        for account in database.session.execute(select(BankAccount).where(BankAccount.company == filters.company)).scalars()
+    }
+    party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
+
+    payment_rows, total_incoming, total_outgoing = _process_payment_entries(filters, bank_accounts, party_names)
+    transaction_rows = _process_bank_transactions(filters, bank_accounts)
+
+    rows = payment_rows + transaction_rows
     rows.sort(
         key=lambda row: (
             row.values.get("posting_date") or date.min,
@@ -545,10 +614,7 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
             str(row.values.get("bank_account") or ""),
         )
     )
-    running_balance = Decimal("0")
-    for row in rows:
-        running_balance += _decimal_value(row.values["incoming_amount"]) - _decimal_value(row.values["outgoing_amount"])
-        row.values["running_balance"] = running_balance
+    running_balance = _compute_running_balance(rows)
 
     return PaginatedReport(
         rows=rows,
@@ -575,6 +641,44 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     )
 
 
+def _compute_account_receipts_and_payments(
+    bank_account_id: str,
+    company: str,
+    as_of_date: date | None,
+) -> tuple[Decimal, Decimal]:
+    movements_query = select(PaymentEntry).where(PaymentEntry.company == company)
+    movements_query = movements_query.where(
+        (PaymentEntry.bank_account_id == bank_account_id) | (PaymentEntry.target_bank_account_id == bank_account_id)
+    )
+    if as_of_date is not None:
+        movements_query = movements_query.where(PaymentEntry.posting_date <= as_of_date)
+
+    receipts = Decimal("0")
+    payments = Decimal("0")
+    for payment in database.session.execute(movements_query).scalars():
+        if payment.payment_type == "receive" and payment.bank_account_id == bank_account_id:
+            receipts += _decimal_value(payment.received_amount or payment.paid_amount)
+        elif payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
+            payments += _decimal_value(payment.paid_amount or payment.received_amount)
+        elif payment.payment_type == "internal_transfer":
+            if payment.target_bank_account_id == bank_account_id:
+                receipts += _decimal_value(payment.received_amount or payment.paid_amount)
+            if payment.bank_account_id == bank_account_id:
+                payments += _decimal_value(payment.paid_amount)
+    return receipts, payments
+
+
+def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
+    gl_balance_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+        GLEntry.company == company,
+        GLEntry.bank_account_id == bank_account_id,
+        GLEntry.is_cancelled.is_(False),
+    )
+    if as_of_date is not None:
+        gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= as_of_date)
+    return _decimal_value(database.session.execute(gl_balance_query).scalar_one())
+
+
 def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     """Devuelve resumen de saldos bancarios por cuenta."""
     bank_accounts_query = select(BankAccount).where(BankAccount.company == filters.company)
@@ -585,33 +689,10 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     rows: list[ReportRow] = []
     total_balance = Decimal("0")
     for bank_account in bank_accounts:
-        gl_balance_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
-            GLEntry.company == filters.company,
-            GLEntry.bank_account_id == bank_account.id,
-            GLEntry.is_cancelled.is_(False),
+        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date)
+        receipts, payments = _compute_account_receipts_and_payments(
+            bank_account.id, filters.company, filters.as_of_date
         )
-        if filters.as_of_date is not None:
-            gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= filters.as_of_date)
-        balance = _decimal_value(database.session.execute(gl_balance_query).scalar_one())
-
-        movements_query = select(PaymentEntry).where(PaymentEntry.company == filters.company)
-        movements_query = movements_query.where(
-            (PaymentEntry.bank_account_id == bank_account.id) | (PaymentEntry.target_bank_account_id == bank_account.id)
-        )
-        if filters.as_of_date is not None:
-            movements_query = movements_query.where(PaymentEntry.posting_date <= filters.as_of_date)
-        receipts = Decimal("0")
-        payments = Decimal("0")
-        for payment in database.session.execute(movements_query).scalars():
-            if payment.payment_type == "receive" and payment.bank_account_id == bank_account.id:
-                receipts += _decimal_value(payment.received_amount or payment.paid_amount)
-            elif payment.payment_type == "pay" and payment.bank_account_id == bank_account.id:
-                payments += _decimal_value(payment.paid_amount or payment.received_amount)
-            elif payment.payment_type == "internal_transfer":
-                if payment.target_bank_account_id == bank_account.id:
-                    receipts += _decimal_value(payment.received_amount or payment.paid_amount)
-                if payment.bank_account_id == bank_account.id:
-                    payments += _decimal_value(payment.paid_amount)
 
         total_balance += balance
         rows.append(
