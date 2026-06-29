@@ -106,11 +106,11 @@
 
   function findJournalImportColumnIndex(headers, column) {
     var aliases = Array.isArray(column.aliases) ? column.aliases : [];
-    var candidates = [column.key, column.label].concat(aliases)
+    var candidates = new Set([column.key, column.label].concat(aliases)
       .map(normalizeJournalImportHeader)
-      .filter(Boolean);
+      .filter(Boolean));
     return headers.findIndex(function (header) {
-      return candidates.includes(header);
+      return candidates.has(header);
     });
   }
 
@@ -147,6 +147,11 @@
       selectedCompany = event.detail.value || event.detail.id || '';
     }
     syncJournalBooksFromCompany(context, selectedCompany);
+  }
+
+  function mergeJournalLine(base, line) {
+    if (!line) return { ...base };
+    return { ...base, ...line };
   }
 
   globalThis.journalEntryForm = function (config) {
@@ -187,7 +192,7 @@
 
       normalizeLine: function (line) {
         var base = this.newLine();
-        var normalized = { ...base, ...(line || {}) };
+        var normalized = mergeJournalLine(base, line);
         normalized.uid = normalized.uid || base.uid;
         normalized.account = normalized.account || normalized.account_label || '';
         normalized.account_label = normalized.account_label || normalized.account || '';

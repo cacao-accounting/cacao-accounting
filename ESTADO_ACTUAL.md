@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Comprobante manual (2026-06-29):** Se cerraron issues menores en `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`.
+  - La deteccion de columnas importadas usa `Set.has()` en lugar de `includes()` sobre una lista derivada.
+  - La normalizacion de lineas ahora usa `mergeJournalLine()` y elimina el fallback con objeto vacio en el spread.
+  - `tests/test_01vistas.py::test_visit_views` y `tests/test_09_journal_entry_form.py` pasaron en verde.
+
 - **SonarCloud / Bancos (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
   - La clonacion de lineas para modales de referencias e impuestos ahora usa `cloneModalLine()` en lugar del patron con objeto vacio que Sonar marcaba.
   - El cambio no altera logica funcional del formulario de pagos.
