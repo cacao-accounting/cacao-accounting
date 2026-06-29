@@ -298,23 +298,17 @@
             if (this.formKey.startsWith('sales.')) this.header.party_type = 'customer';
             if (this.formKey.startsWith('purchases.')) this.header.party_type = 'supplier';
           }
-          this.lines = (config.initialLines || []).map((line) => {
-            return this.normalizeLine(line);
-          });
+          this.lines = (config.initialLines || []).map((line) => this.normalizeLine(line));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           this.queueTaxPreview();
         },
 
         get visibleColumns() {
-          return (this.preferences.columns || []).filter((column) => {
-            return column.visible !== false;
-          });
+          return (this.preferences.columns || []).filter((column) => column.visible !== false);
         },
 
         get totalAmount() {
-          return this.lines.reduce((total, line) => {
-            return total + toNumber(line.amount);
-          }, 0);
+          return this.lines.reduce((total, line) => total + toNumber(line.amount), 0);
         },
 
         get documentTaxTotal() {
@@ -359,9 +353,7 @@
         },
 
         findItem(itemCode) {
-          return this.availableItems.find((item) => {
-            return item.code === itemCode;
-          }) || null;
+          return this.availableItems.find((item) => item.code === itemCode) || null;
         },
 
         getLineUoms(line) {
@@ -393,6 +385,10 @@
           if (!keepCustomName || !line.item_name) {
             line.item_name = item.name || line.item_name;
           }
+          this._applyItemUom(line, item);
+        },
+
+        _applyItemUom(line, item) {
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
           const allowedUomSet = new Set(line.allowed_uoms);
           if (line.allowed_uoms.length && !allowedUomSet.has(line.uom)) {
@@ -558,6 +554,10 @@
           if (!this.header.company) return;
           this.taxCharges.loading = true;
           this.taxCharges.error = '';
+          await this._executeTaxPreviewRequest();
+        },
+
+        async _executeTaxPreviewRequest() {
           try {
             const response = await this.requestTaxPreview();
             const data = await response.json();
@@ -802,7 +802,7 @@
           params.append('source_type', this.searchCriteria.source_type);
           params.append('target_type', this.formKey.split('.')[1]);
           params.append('company', this.header.company);
-          selectedIds.forEach((id) => { params.append('source_id', id); });
+          selectedIds.forEach((id) => params.append('source_id', id));
           return params;
         },
 
@@ -814,9 +814,7 @@
         },
 
         processSelectedSourceItems() {
-          this.sourceItems.filter((item) => item.selected).forEach((item) => {
-            this.addSourceItemAsLine(item);
-          });
+          this.sourceItems.filter((item) => item.selected).forEach((item) => this.addSourceItemAsLine(item));
         },
 
         addSourceItemAsLine(item) {
@@ -1023,48 +1021,56 @@
           }
 
           // Append-only behavior: push to existing lines
-          this.importModal.parsedRows.forEach((row) => {
-            const line = this.newLine();
-            Object.keys(row).forEach((key) => {
-              if (key in line || key === "item_id") {
-                line[key] = row[key];
-              }
-            });
-
-            // Handle specific mappings
-            if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
-            if (row.rate !== undefined) line.rate = toNumber(row.rate);
-            if (row.account !== undefined) line.account = row.account;
-
-            // Journal Entry specific mapping for debit/credit into value/rate
-            if (this.importModal.doctype === "journal_entry") {
-              const dr = toNumber(row.debit);
-              const cr = toNumber(row.credit);
-              if (dr > 0) {
-                line.rate = dr;
-                line.qty = 1;
-                line.debit = dr;
-                line.credit = 0;
-              } else if (cr > 0) {
-                line.rate = -cr;
-                line.qty = 1;
-                line.debit = 0;
-                line.credit = cr;
-              }
-            }
-
-            if (line.item_code) {
-              this.syncLineFromItem(line, true);
-            }
-            this.calcAmount(line);
-            this.lines.push(line);
-          });
+          this.importModal.parsedRows.forEach((row) => this._processImportedRow(row));
 
           if (!this.lines.length) this.addRow();
 
           const modalEl = document.getElementById("modalImportLines");
           if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
           this.queueTaxPreview();
+        },
+
+        _processImportedRow(row) {
+          const line = this.newLine();
+          Object.keys(row).forEach((key) => this._assignRowKeyToLine(line, row, key));
+
+          // Handle specific mappings
+          if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
+          if (row.rate !== undefined) line.rate = toNumber(row.rate);
+          if (row.account !== undefined) line.account = row.account;
+
+          // Journal Entry specific mapping for debit/credit into value/rate
+          if (this.importModal.doctype === "journal_entry") {
+            this._applyJournalEntryDebitCredit(line, row);
+          }
+
+          if (line.item_code) {
+            this.syncLineFromItem(line, true);
+          }
+          this.calcAmount(line);
+          this.lines.push(line);
+        },
+
+        _assignRowKeyToLine(line, row, key) {
+          if (key in line || key === "item_id") {
+            line[key] = row[key];
+          }
+        },
+
+        _applyJournalEntryDebitCredit(line, row) {
+          const dr = toNumber(row.debit);
+          const cr = toNumber(row.credit);
+          if (dr > 0) {
+            line.rate = dr;
+            line.qty = 1;
+            line.debit = dr;
+            line.credit = 0;
+          } else if (cr > 0) {
+            line.rate = -cr;
+            line.qty = 1;
+            line.debit = 0;
+            line.credit = cr;
+          }
         },
 
         async downloadTemplate() {
