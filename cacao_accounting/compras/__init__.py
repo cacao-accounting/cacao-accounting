@@ -479,7 +479,7 @@ def compras_cotizacion_proveedor_nueva():
         form_key=FORMKEY_SUPPLIER_QUOTATION,
         items=items_disponibles,
         uoms=uoms_disponibles,
-        initial_source_type="purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
+        initial_source_type=_supplier_quotation_initial_source_type(from_request_id, from_rfq_id),
     )
     if request.method == "POST":
         response = _create_supplier_quotation_from_request(from_rfq_id)
@@ -701,6 +701,15 @@ def _supplier_quotation_transaction_config(
     if initial_lines:
         transaction_config["initialLines"] = initial_lines
     return transaction_config
+
+
+def _supplier_quotation_initial_source_type(from_request_id: str | None, from_rfq_id: str | None) -> str:
+    """Resolve the initial source type for supplier quotations."""
+    if from_request_id:
+        return "purchase_request"
+    if from_rfq_id:
+        return "purchase_quotation"
+    return ""
 
 
 def _supplier_quotation_sources(
