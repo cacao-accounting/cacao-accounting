@@ -87,6 +87,7 @@ CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
 CONTABILIDAD_MONEDAS = "contabilidad.monedas"
 CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
 CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
+CONTABILIDAD_UNIDADES = "contabilidad.unidades"
 
 
 def _company_label(company_code: str) -> str:
@@ -607,7 +608,7 @@ def eliminar_unidad(id_unidad):
     if unidad:
         database.session.delete(unidad)
         database.session.commit()
-    return redirect(url_for("contabilidad.unidades"))
+    return redirect(url_for(CONTABILIDAD_UNIDADES))
 
 
 @contabilidad.route("/unit/new", methods=["GET", "POST"])
@@ -642,7 +643,7 @@ def nueva_unidad():
         database.session.add(DATA)
         database.session.commit()
 
-        return redirect(url_for("contabilidad.unidades"))
+        return redirect(url_for(CONTABILIDAD_UNIDADES))
     return render_template(
         "contabilidad/unidad_crear.html",
         titulo=TITULO,
@@ -661,7 +662,7 @@ def editar_unidad(id_unidad):
 
     registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if registro is None:
-        return redirect(url_for("contabilidad.unidades"))
+        return redirect(url_for(CONTABILIDAD_UNIDADES))
 
     formulario = FormularioUnidad(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
