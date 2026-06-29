@@ -36,6 +36,8 @@ def _parse_date(value: str | None) -> date | None:
 INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
 INVENTARIO_ENTRADA_LISTA_HTML = "inventario/entrada_lista.html"
 INVENTARIO_INVENTARIO_ENTRADA = "inventario.inventario_entrada"
+_INVENTORY_STOCK_ENTRY = "inventory.stock_entry"
+_LABEL_DOCUMENTO_ORIGEN = "documento origen"
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -567,11 +569,11 @@ def inventario_entrada_nuevo():
     source_api_url, source_label = _source_context(request.args.get("source_type"), request.args.get("source_id"))
     titulo = _stock_entry_title(_infer_stock_entry_purpose(request.path))
     transaction_config = {
-        "formKey": "inventory.stock_entry",
+        "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "inventory.stock_entry"),
+        "columns": get_column_preferences(current_user.id, _INVENTORY_STOCK_ENTRY),
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -702,14 +704,14 @@ def inventario_salida_inventario_nuevo():
 def _source_context(source_type: str | None, source_id: str | None) -> tuple[str | None, str]:
     """Build the source document api context for pre-filling inventory lines."""
     if not source_type or not source_id:
-        return None, "documento origen"
+        return None, _LABEL_DOCUMENTO_ORIGEN
     if source_type == "purchase_receipt":
         return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
     if source_type == "delivery_note":
         return f"/api/sales/delivery-note/{source_id}/items", "nota de entrega"
     if source_type == "stock_entry":
         return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
-    return None, "documento origen"
+    return None, _LABEL_DOCUMENTO_ORIGEN
 
 
 @inventario.route("/stock-entry/<entry_id>")
@@ -792,11 +794,11 @@ def inventario_entrada_editar(entry_id: str):
 
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
     transaction_config = {
-        "formKey": "inventory.stock_entry",
+        "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "inventory.stock_entry"),
+        "columns": get_column_preferences(current_user.id, _INVENTORY_STOCK_ENTRY),
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -828,7 +830,7 @@ def inventario_entrada_editar(entry_id: str):
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         source_api_url=None,
-        source_label="documento origen",
+        source_label=_LABEL_DOCUMENTO_ORIGEN,
         transaction_config=transaction_config,
     )
 

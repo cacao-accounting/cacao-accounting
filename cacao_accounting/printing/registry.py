@@ -50,6 +50,10 @@ class PrintableDocumentDefinition(TypedDict):
     snippets: list[dict[str, str]]
 
 
+_PERM_SALES_VIEW = "sales.view"
+_PERM_PURCHASES_VIEW = "purchases.view"
+_PERM_CASH_VIEW = "cash.view"
+
 PRINTABLE_DOCUMENTS: dict[str, PrintableDocumentDefinition] = {}
 
 
@@ -88,7 +92,7 @@ def init_printing_registry() -> None:
         "Factura de venta",
         "sales",
         "invoice",
-        "sales.view",
+        _PERM_SALES_VIEW,
         build_sales_invoice_print_context,
         build_sales_invoice_sample_context,
         SALES_INVOICE_PRINT_SCHEMA,
@@ -99,7 +103,7 @@ def init_printing_registry() -> None:
         "Nota de credito de venta",
         "sales",
         "invoice",
-        "sales.view",
+        _PERM_SALES_VIEW,
         build_sales_invoice_print_context,
         build_sales_invoice_sample_context,
         SALES_INVOICE_PRINT_SCHEMA,
@@ -110,7 +114,7 @@ def init_printing_registry() -> None:
         "Nota de debito de venta",
         "sales",
         "invoice",
-        "sales.view",
+        _PERM_SALES_VIEW,
         build_sales_invoice_print_context,
         build_sales_invoice_sample_context,
         SALES_INVOICE_PRINT_SCHEMA,
@@ -121,7 +125,7 @@ def init_printing_registry() -> None:
         "Factura de compra",
         "purchases",
         "invoice",
-        "purchases.view",
+        _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
         build_sales_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
@@ -132,7 +136,7 @@ def init_printing_registry() -> None:
         "Nota de credito de compra",
         "purchases",
         "invoice",
-        "purchases.view",
+        _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
         build_sales_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
@@ -143,7 +147,7 @@ def init_printing_registry() -> None:
         "Nota de debito de compra",
         "purchases",
         "invoice",
-        "purchases.view",
+        _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
         build_sales_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
@@ -154,7 +158,7 @@ def init_printing_registry() -> None:
         "Orden de compra",
         "purchases",
         "purchase_order",
-        "purchases.view",
+        _PERM_PURCHASES_VIEW,
         build_purchase_order_print_context,
         build_purchase_order_sample_context,
         PURCHASE_ORDER_PRINT_SCHEMA,
@@ -165,7 +169,7 @@ def init_printing_registry() -> None:
         "Nota de entrega",
         "sales",
         "receipt",
-        "sales.view",
+        _PERM_SALES_VIEW,
         build_delivery_note_print_context,
         build_stock_entry_sample_context,
         DELIVERY_NOTE_PRINT_SCHEMA,
@@ -187,7 +191,7 @@ def init_printing_registry() -> None:
         "Comprobante de pago",
         "cash",
         "payment",
-        "cash.view",
+        _PERM_CASH_VIEW,
         build_payment_entry_print_context,
         build_payment_entry_sample_context,
         PAYMENT_ENTRY_PRINT_SCHEMA,
@@ -198,7 +202,7 @@ def init_printing_registry() -> None:
         "Transferencia bancaria",
         "cash",
         "payment",
-        "cash.view",
+        _PERM_CASH_VIEW,
         build_payment_entry_print_context,
         build_payment_entry_sample_context,
         PAYMENT_ENTRY_PRINT_SCHEMA,
@@ -209,7 +213,7 @@ def init_printing_registry() -> None:
         "Recibo de caja",
         "cash",
         "payment",
-        "cash.view",
+        _PERM_CASH_VIEW,
         build_payment_entry_print_context,
         build_payment_entry_sample_context,
         PAYMENT_ENTRY_PRINT_SCHEMA,
@@ -220,7 +224,7 @@ def init_printing_registry() -> None:
         "Cotizacion de venta",
         "sales",
         "quote",
-        "sales.view",
+        _PERM_SALES_VIEW,
         build_quotation_print_context,
         build_quotation_sample_context,
         QUOTATION_PRINT_SCHEMA,

@@ -545,6 +545,9 @@ def _sample_line() -> dict[str, Any]:
     }
 
 
+_LABEL_CURRENCY_CODE = "Currency code"
+_ITEMS_KEY = "items[]"
+
 COMMON_SCHEMA = {
     "company": {
         "code": "Company code",
@@ -591,9 +594,9 @@ INVOICE_SCHEMA = {
         "date": "Invoice date",
         "due_date": "Due date",
         "status": "Invoice status",
-        "currency": "Currency code",
+        "currency": _LABEL_CURRENCY_CODE,
         "customer": "Customer or supplier data",
-        "items[]": LINE_SCHEMA,
+        _ITEMS_KEY: LINE_SCHEMA,
         "subtotal": "Subtotal before taxes and charges",
         "discount": "Discount amount",
         "taxes": "Tax total",
@@ -609,9 +612,9 @@ JOURNAL_ENTRY_PRINT_SCHEMA = {
         "number": "Journal entry number",
         "date": "Posting date",
         "status": "Document status",
-        "currency": "Currency code",
+        "currency": _LABEL_CURRENCY_CODE,
         "memo": "Public memo",
-        "items[]": {
+        _ITEMS_KEY: {
             "line_number": "Line number",
             "account_code": "Account code",
             "account_name": "Account name",
@@ -626,10 +629,10 @@ JOURNAL_ENTRY_PRINT_SCHEMA = {
 
 SALES_INVOICE_PRINT_SCHEMA = INVOICE_SCHEMA
 PURCHASE_INVOICE_PRINT_SCHEMA = INVOICE_SCHEMA
-PURCHASE_ORDER_PRINT_SCHEMA = {**COMMON_SCHEMA, "purchase_order": {"items[]": LINE_SCHEMA}}
-DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {"items[]": LINE_SCHEMA}}
-STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {"items[]": LINE_SCHEMA}}
-QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {"items[]": LINE_SCHEMA}}
+PURCHASE_ORDER_PRINT_SCHEMA = {**COMMON_SCHEMA, "purchase_order": {_ITEMS_KEY: LINE_SCHEMA}}
+DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {_ITEMS_KEY: LINE_SCHEMA}}
+STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {_ITEMS_KEY: LINE_SCHEMA}}
+QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {_ITEMS_KEY: LINE_SCHEMA}}
 PAYMENT_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "payment": {"references[]": {"allocated_amount": "Allocated amount"}}}
 EXCHANGE_REVALUATION_PRINT_SCHEMA = {
     **COMMON_SCHEMA,
@@ -637,8 +640,8 @@ EXCHANGE_REVALUATION_PRINT_SCHEMA = {
         "number": "Revaluation number",
         "date": "Run date",
         "status": "Document status",
-        "currency": "Currency code",
-        "items[]": {
+        "currency": _LABEL_CURRENCY_CODE,
+        _ITEMS_KEY: {
             "reference_type": "Source document type",
             "reference_id": "Source document id",
             "old_rate": "Previous exchange rate",

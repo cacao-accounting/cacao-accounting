@@ -29,6 +29,8 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 imports = Blueprint("imports", __name__, template_folder="templates")
 
+_ENDPOINT_IMPORTS_DETAIL = "imports.detail"
+
 
 def check_desktop_mode():
     """Abortar con 403 si el sistema está en modo escritorio."""
@@ -88,7 +90,7 @@ def new():
         )
         database.session.add(batch)
         database.session.commit()
-        return redirect(url_for("imports.detail", batch_id=batch.id))
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch.id))
 
     record_type_groups = [
         {
@@ -156,7 +158,7 @@ def upload(batch_id):
         extension = filename.rsplit(".", 1)[1].lower() if "." in filename else ""
         if extension not in ["csv", "xls", "xlsx", "ods"]:
             flash("Formato de archivo no soportado", "danger")
-            return redirect(url_for("imports.detail", batch_id=batch_id))
+            return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
         safe_batch_id = secure_filename(str(batch.id))
         import_dir = os.path.join(current_app.instance_path, "imports", safe_batch_id)
@@ -171,7 +173,7 @@ def upload(batch_id):
         database.session.commit()
 
         flash("Archivo cargado correctamente", "success")
-    return redirect(url_for("imports.detail", batch_id=batch_id))
+    return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
 @imports.route("/<batch_id>/validate", methods=["POST"])
@@ -182,7 +184,7 @@ def validate(batch_id):
     check_permission("validar")
     service = ImportService()
     service.validate(batch_id)
-    return redirect(url_for("imports.detail", batch_id=batch_id))
+    return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
 @imports.route("/<batch_id>/execute", methods=["POST"])
@@ -194,7 +196,7 @@ def execute(batch_id):
     service = ImportService()
     service.execute(batch_id)
     flash("Importación iniciada", "info")
-    return redirect(url_for("imports.detail", batch_id=batch_id))
+    return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
 @imports.route("/<batch_id>/cancel", methods=["POST"])
@@ -206,7 +208,7 @@ def cancel(batch_id):
     service = ImportService()
     service.cancel(batch_id)
     flash("Cancelación solicitada", "warning")
-    return redirect(url_for("imports.detail", batch_id=batch_id))
+    return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
 @imports.route("/template/<record_type>")
