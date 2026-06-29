@@ -1414,176 +1414,11 @@ def bancos_pago_nuevo():
     from cacao_accounting.form_preferences import get_column_preferences
 
     if request.method == "POST":
-        try:
-            payload_raw = request.form.get("payment_payload")
-            if payload_raw:
-                payload = json.loads(payload_raw)
-            else:
-                # Fallback para pruebas unitarias que no envían payment_payload
-                payload = {
-                    "payment_type": request.form.get("payment_type"),
-                    "company": request.form.get("company"),
-                    "bank_account_id": request.form.get("bank_account_id"),
-                    "posting_date": request.form.get("posting_date"),
-                    "paid_amount": request.form.get("paid_amount") or request.form.get("received_amount"),
-                    "party_id": request.form.get("party_id"),
-                    "party_type": request.form.get("party_type"),
-                    "naming_series_id": request.form.get("naming_series"),
-                    "external_counter_id": request.form.get("external_counter_id"),
-                    "external_number": request.form.get("external_number"),
-                    "target_bank_account_id": request.form.get("target_bank_account_id"),
-                    "mode_of_payment": request.form.get("mode_of_payment"),
-                    "cost_center_code": request.form.get("cost_center_code"),
-                    "unit_code": request.form.get("unit_code"),
-                    "project_code": request.form.get("project_code"),
-                }
-            payment_type = payload.get("payment_type") or "receive"
-            company = payload.get("company")
-            bank_account_id = payload.get("bank_account_id")
-            amount = Decimal(str(payload.get("paid_amount") or "0"))
-            target_bank_account_id = payload.get("target_bank_account_id")
-            _validate_payment_header(
-                payment_type=payment_type,
-                company=company,
-                bank_account_id=bank_account_id,
-                posting_date_raw=payload.get("posting_date"),
-                amount=amount,
-                party_type=payload.get("party_type"),
-                party_id=payload.get("party_id"),
-                target_bank_account_id=target_bank_account_id,
-            )
+        response = _create_payment_from_request()
+        if response is not None:
+            return response
 
-            paid_from_account_id = payload.get("paid_from_account_id")
-            paid_to_account_id = payload.get("paid_to_account_id")
-            if payment_type == "internal_transfer":
-                source_bank = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
-                target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
-                if source_bank and not paid_from_account_id:
-                    paid_from_account_id = source_bank.gl_account_id
-                if target_bank and not paid_to_account_id:
-                    paid_to_account_id = target_bank.gl_account_id
-
-            reference_date_raw = payload.get("reference_date")
-            reference_date = date.fromisoformat(reference_date_raw) if reference_date_raw else None
-            bank_account = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
-            payment_currency = bank_account.currency if bank_account else None
-            if not payment_currency:
-                raise ValueError(_("La cuenta bancaria seleccionada no tiene moneda configurada."))
-            mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
-
-            payment = PaymentEntry(
-                payment_type=payment_type,
-                company=company,
-                bank_account_id=bank_account_id,
-                target_bank_account_id=target_bank_account_id,
-                currency=payment_currency,
-                transaction_currency=payment_currency,
-                exchange_rate=None,
-                paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
-                received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
-                party_type=payload.get("party_type"),
-                party_id=payload.get("party_id"),
-                party_name=payload.get("party_name"),
-                paid_from_account_id=paid_from_account_id,
-                paid_to_account_id=paid_to_account_id,
-                cost_center_code=payload.get("cost_center_code"),
-                unit_code=payload.get("unit_code"),
-                project_code=payload.get("project_code"),
-                reference_no=payload.get("reference_no"),
-                reference_date=reference_date,
-                mode_of_payment=mode_of_payment,
-                remarks=payload.get("remarks"),
-                docstatus=0,
-            )
-
-            if payment_type in ("pay", "debit_note", "internal_transfer"):
-                payment.paid_amount = amount
-                payment.base_paid_amount = amount
-            if payment_type in ("receive", "credit_note", "internal_transfer"):
-                payment.received_amount = amount
-                payment.base_received_amount = amount
-
-            database.session.add(payment)
-            database.session.flush()
-
-            default_series_id, default_counter_id = _payment_numbering_defaults(payment.bank_account_id)
-            naming_series_id = payload.get("naming_series_id") or default_series_id
-            external_counter_id = None
-            external_number = None
-            if mode_of_payment == "check":
-                external_counter_id = payload.get("external_counter_id") or default_counter_id
-
-            ext_context = {
-                "payment_type": payment_type,
-                "mode_of_payment": mode_of_payment,
-            }
-            if mode_of_payment == "check":
-                ext_context["bank_account_id"] = payment.bank_account_id
-            assign_document_identifier(
-                document=payment,
-                entity_type="payment_entry",
-                posting_date_raw=payload.get("posting_date"),
-                naming_series_id=naming_series_id,
-                external_counter_id=external_counter_id,
-                external_number=external_number,
-                external_context=ext_context,
-            )
-
-            lines = payload.get("lines") or []
-            ref_totals = _save_payment_references(
-                payment,
-                lines,
-                allow_order_references=bool(payload.get("advance_mode")),
-            )
-            allocated = ref_totals["allocated"]
-            discount = ref_totals["discount"]
-            gain_loss = ref_totals["gain_loss"]
-
-            if (allocated - discount - gain_loss) > amount + Decimal("0.01"):
-                raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
-            persist_document_fiscal_snapshot(
-                company=str(payment.company or ""),
-                document_type="payment_entry",
-                document_id=payment.id,
-                currency=payment.currency,
-                tax_lines=payload.get("tax_lines"),
-                tax_summary=payload.get("tax_summary"),
-            )
-            log_create(payment)
-
-            database.session.commit()
-            flash(_("Pago registrado correctamente."), "success")
-            return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
-        except (ValueError, ArithmeticError) as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
-        except Exception as exc:  # noqa: BLE001
-            from werkzeug.exceptions import HTTPException
-
-            database.session.rollback()
-            if isinstance(exc, HTTPException):
-                flash(exc.description or str(exc), "danger")
-            else:
-                raise
-
-    from_purchase_invoice_ids = request.values.getlist("from_purchase_invoice")
-    from_sales_invoice_ids = request.values.getlist("from_sales_invoice")
-    from_purchase_order_ids = request.values.getlist("from_purchase_order")
-    from_sales_order_ids = request.values.getlist("from_sales_order")
-    from_purchase_credit_note_ids = request.values.getlist("from_purchase_credit_note")
-    from_purchase_debit_note_ids = request.values.getlist("from_purchase_debit_note")
-    from_sales_credit_note_ids = request.values.getlist("from_sales_credit_note")
-    from_sales_debit_note_ids = request.values.getlist("from_sales_debit_note")
-    source_rows = _payment_source_rows(
-        from_purchase_invoice_ids,
-        from_sales_invoice_ids,
-        from_purchase_order_ids,
-        from_sales_order_ids,
-        from_purchase_credit_note_ids,
-        from_purchase_debit_note_ids,
-        from_sales_credit_note_ids,
-        from_sales_debit_note_ids,
-    )
+    source_rows = _payment_source_rows_from_request()
 
     initial_payment = {}
     if source_rows:
@@ -1635,6 +1470,200 @@ def bancos_pago_nuevo():
         initial_payment=initial_payment,
         transaction_config=transaction_config,
         companies=obtener_lista_entidades_por_id_razonsocial(),
+    )
+
+
+def _create_payment_from_request():
+    """Create a payment from the submitted request payload."""
+    try:
+        payload = _payment_payload_from_request()
+        payment, amount, mode_of_payment = _build_payment_from_payload(payload)
+        default_series_id, default_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+        naming_series_id, external_counter_id = _payment_identifier_inputs(
+            payload=payload,
+            mode_of_payment=mode_of_payment,
+            default_series_id=default_series_id,
+            default_counter_id=default_counter_id,
+        )
+        assign_document_identifier(
+            document=payment,
+            entity_type="payment_entry",
+            posting_date_raw=payload.get("posting_date"),
+            naming_series_id=naming_series_id,
+            external_counter_id=external_counter_id,
+            external_number=None,
+            external_context=_payment_identifier_context(payment, mode_of_payment),
+        )
+        ref_totals = _save_payment_references(
+            payment,
+            payload.get("lines") or [],
+            allow_order_references=bool(payload.get("advance_mode")),
+        )
+        _validate_payment_reference_totals(amount, ref_totals)
+        persist_document_fiscal_snapshot(
+            company=str(payment.company or ""),
+            document_type="payment_entry",
+            document_id=payment.id,
+            currency=payment.currency,
+            tax_lines=payload.get("tax_lines"),
+            tax_summary=payload.get("tax_summary"),
+        )
+        log_create(payment)
+        database.session.commit()
+        flash(_("Pago registrado correctamente."), "success")
+        return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
+    except (ValueError, ArithmeticError) as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    except Exception as exc:  # noqa: BLE001
+        from werkzeug.exceptions import HTTPException
+
+        database.session.rollback()
+        if isinstance(exc, HTTPException):
+            flash(exc.description or str(exc), "danger")
+        else:
+            raise
+    return None
+
+
+def _payment_payload_from_request() -> dict[str, object | None]:
+    """Return the payment payload from the request body or form fields."""
+    payload_raw = request.form.get("payment_payload")
+    if payload_raw:
+        return json.loads(payload_raw)
+    return {
+        "payment_type": request.form.get("payment_type"),
+        "company": request.form.get("company"),
+        "bank_account_id": request.form.get("bank_account_id"),
+        "posting_date": request.form.get("posting_date"),
+        "paid_amount": request.form.get("paid_amount") or request.form.get("received_amount"),
+        "party_id": request.form.get("party_id"),
+        "party_type": request.form.get("party_type"),
+        "naming_series_id": request.form.get("naming_series"),
+        "external_counter_id": request.form.get("external_counter_id"),
+        "external_number": request.form.get("external_number"),
+        "target_bank_account_id": request.form.get("target_bank_account_id"),
+        "mode_of_payment": request.form.get("mode_of_payment"),
+        "cost_center_code": request.form.get("cost_center_code"),
+        "unit_code": request.form.get("unit_code"),
+        "project_code": request.form.get("project_code"),
+    }
+
+
+def _build_payment_from_payload(payload: dict[str, object | None]) -> tuple[PaymentEntry, Decimal, str]:
+    """Build a PaymentEntry from the normalized payload."""
+    payment_type = str(payload.get("payment_type") or "receive")
+    company = payload.get("company")
+    bank_account_id = payload.get("bank_account_id")
+    amount = Decimal(str(payload.get("paid_amount") or "0"))
+    target_bank_account_id = payload.get("target_bank_account_id")
+    _validate_payment_header(
+        payment_type=payment_type,
+        company=company,
+        bank_account_id=bank_account_id,
+        posting_date_raw=payload.get("posting_date"),
+        amount=amount,
+        party_type=payload.get("party_type"),
+        party_id=payload.get("party_id"),
+        target_bank_account_id=target_bank_account_id,
+    )
+    paid_from_account_id = payload.get("paid_from_account_id")
+    paid_to_account_id = payload.get("paid_to_account_id")
+    if payment_type == "internal_transfer":
+        source_bank = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
+        target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
+        if source_bank and not paid_from_account_id:
+            paid_from_account_id = source_bank.gl_account_id
+        if target_bank and not paid_to_account_id:
+            paid_to_account_id = target_bank.gl_account_id
+    reference_date_raw = payload.get("reference_date")
+    reference_date = date.fromisoformat(reference_date_raw) if reference_date_raw else None
+    bank_account = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
+    payment_currency = bank_account.currency if bank_account else None
+    if not payment_currency:
+        raise ValueError(_("La cuenta bancaria seleccionada no tiene moneda configurada."))
+    mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
+    payment = PaymentEntry(
+        payment_type=payment_type,
+        company=company,
+        bank_account_id=bank_account_id,
+        target_bank_account_id=target_bank_account_id,
+        currency=payment_currency,
+        transaction_currency=payment_currency,
+        exchange_rate=None,
+        paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
+        received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
+        party_type=payload.get("party_type"),
+        party_id=payload.get("party_id"),
+        party_name=payload.get("party_name"),
+        paid_from_account_id=paid_from_account_id,
+        paid_to_account_id=paid_to_account_id,
+        cost_center_code=payload.get("cost_center_code"),
+        unit_code=payload.get("unit_code"),
+        project_code=payload.get("project_code"),
+        reference_no=payload.get("reference_no"),
+        reference_date=reference_date,
+        mode_of_payment=mode_of_payment,
+        remarks=payload.get("remarks"),
+        docstatus=0,
+    )
+    if payment_type in ("pay", "debit_note", "internal_transfer"):
+        payment.paid_amount = amount
+        payment.base_paid_amount = amount
+    if payment_type in ("receive", "credit_note", "internal_transfer"):
+        payment.received_amount = amount
+        payment.base_received_amount = amount
+    database.session.add(payment)
+    database.session.flush()
+    return payment, amount, mode_of_payment
+
+
+def _payment_identifier_inputs(
+    *,
+    payload: dict[str, object | None],
+    mode_of_payment: str,
+    default_series_id: str | None,
+    default_counter_id: str | None,
+) -> tuple[str | None, str | None]:
+    """Resolve numbering inputs for the payment identifier."""
+    naming_series_id = payload.get("naming_series_id") or default_series_id
+    external_counter_id = None
+    if mode_of_payment == "check":
+        external_counter_id = payload.get("external_counter_id") or default_counter_id
+    return naming_series_id, external_counter_id
+
+
+def _payment_identifier_context(payment: PaymentEntry, mode_of_payment: str) -> dict[str, str]:
+    """Build the external context for payment numbering."""
+    context = {
+        "payment_type": payment.payment_type,
+        "mode_of_payment": mode_of_payment,
+    }
+    if mode_of_payment == "check":
+        context["bank_account_id"] = str(payment.bank_account_id or "")
+    return context
+
+
+def _validate_payment_reference_totals(amount: Decimal, ref_totals: dict[str, Decimal]) -> None:
+    """Validate the totals assigned to payment references."""
+    allocated = ref_totals["allocated"]
+    discount = ref_totals["discount"]
+    gain_loss = ref_totals["gain_loss"]
+    if (allocated - discount - gain_loss) > amount + Decimal("0.01"):
+        raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
+
+
+def _payment_source_rows_from_request() -> list[dict[str, object]]:
+    """Load payment source rows from the current request."""
+    return _payment_source_rows(
+        request.values.getlist("from_purchase_invoice"),
+        request.values.getlist("from_sales_invoice"),
+        request.values.getlist("from_purchase_order"),
+        request.values.getlist("from_sales_order"),
+        request.values.getlist("from_purchase_credit_note"),
+        request.values.getlist("from_purchase_debit_note"),
+        request.values.getlist("from_sales_credit_note"),
+        request.values.getlist("from_sales_debit_note"),
     )
 
 
