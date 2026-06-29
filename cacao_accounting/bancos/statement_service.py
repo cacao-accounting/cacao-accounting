@@ -176,7 +176,7 @@ def _parse_bank_statement_row(source: dict[str, str], mapping: dict[str, str]) -
 
 
 def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> None:
-    """Persiste una fila de extracto como transacción bancaria."""
+    """Persist a statement row as a bank transaction."""
     database.session.add(
         BankTransaction(
             bank_account_id=bank_account_id,

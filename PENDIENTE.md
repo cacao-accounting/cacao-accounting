@@ -143,6 +143,10 @@
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
+## Seguimiento 2026-06-29 (Calidad documental)
+- [x] Corregir el docstring de `_persist_bank_transaction` para cumplir `pydocstyle`/`D401`.
+- [x] Validar `flake8` en la venv luego del ajuste.
+
 
 ## Administracion y Seguridad
 - [ ] Activar `AuditLog` automatico para cambios en documentos operativos.
