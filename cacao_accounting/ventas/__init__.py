@@ -288,24 +288,7 @@ def ventas_pedido_venta_editar(request_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        customer_id = request.form.get("customer_id") or None
-        customer = database.session.get(Party, customer_id) if customer_id else None
-        registro.customer_id = customer_id
-        registro.customer_name = customer.name if customer else None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _total_qty, total = _save_sales_request_items(registro.id)
-        registro.total = total
-        registro.base_total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Pedido de venta actualizado correctamente."), "success")
-        return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=registro.id))
+        return _handle_sales_request_update(registro, request.form, _ENDPOINT_PEDIDO_VENTA, request_id)
 
     lineas = database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars()
     transaction_config = {
@@ -688,6 +671,28 @@ def ventas_cliente_contacto_crear(customer_id: str):
         database.session.rollback()
         flash(str(exc), "danger")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
+
+
+def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: str, request_id: str):
+    """Maneja la actualizacion de un pedido de venta desde el formulario POST."""
+    customer_id = form.get("customer_id") or None
+    customer = database.session.get(Party, customer_id) if customer_id else None
+    registro.customer_id = customer_id
+    registro.customer_name = customer.name if customer else None
+    registro.company = form.get("company") or None
+    registro.posting_date = _parse_date(form.get("posting_date"))
+    registro.remarks = form.get("remarks")
+    for item in database.session.execute(
+        database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _total_qty, total = _save_sales_request_items(registro.id)
+    registro.total = total
+    registro.base_total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Pedido de venta actualizado correctamente."), "success")
+    return redirect(url_for(endpoint, request_id=request_id))
 
 
 @ventas.route("/customer/<customer_id>/contacts/<link_id>/edit", methods=["POST"])
