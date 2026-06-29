@@ -104,6 +104,9 @@
   --ca-module-grid-columns: repeat(3, 1fr);
   --ca-module-grid-gap: 1.1rem;
   --ca-module-grid-margin-top: .75rem;
+  --ca-module-card-padding: 1rem 1.25rem;
+  --ca-module-card-border-top-width: 3px;
+  --ca-module-card-hover-transform: translateY(-2px);
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -513,10 +516,10 @@ nav[aria-label="breadcrumb"] {
 .ca-module-card {
   background: var(--ca-surface) !important;
   border: 1px solid var(--ca-border) !important;
-  border-top: 3px solid var(--ca-border) !important;
+  border-top: var(--ca-module-card-border-top-width) solid var(--ca-border) !important;
   border-radius: var(--ca-radius) !important;
   box-shadow: var(--ca-shadow-sm) !important;
-  padding: 1rem 1.25rem;
+  padding: var(--ca-module-card-padding);
   transition: box-shadow .2s, transform .15s, border-top-color .2s;
   display: flex;
   flex-direction: column;
@@ -542,7 +545,7 @@ nav[aria-label="breadcrumb"] {
 .ca-module-card:hover {
   box-shadow: var(--ca-shadow) !important;
   border-top-color: var(--ca-border) !important;
-  transform: translateY(-2px);
+  transform: var(--ca-module-card-hover-transform);
 }
 
 .ca-module-card h5 {
@@ -1256,8 +1259,8 @@ nav[aria-label="breadcrumb"] {
 
 .ca-module-card {
   min-height: 0;
-  padding: 1.15rem 1.25rem;
-  border-top: 0 !important;
+  padding: var(--ca-module-card-padding);
+  border-top-width: 0 !important;
   overflow: hidden;
   position: relative;
 }
@@ -1266,34 +1269,6 @@ nav[aria-label="breadcrumb"] {
   border-color: rgba(47,143,70,.34) !important;
   box-shadow: var(--ca-shadow) !important;
   transform: translateY(-3px);
-}
-
-.ca-module-links li:hover {
-  background: var(--ca-surface-hover);
-  border-color: var(--ca-module-link-hover-border-color);
-}
-
-[data-theme="dark"] .ca-module-links a {
-  color: var(--ca-text-secondary) !important;
-}
-
-.ca-status-dot {
-  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-dot-shadow-color);
-}
-
-.ca-status-view-only,
-.ca-status-warning {
-  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-warning-shadow-color);
-}
-
-.ca-status-attention,
-.ca-status-error {
-  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-error-shadow-color);
-}
-
-.ca-status-disabled,
-.ca-status-no-access {
-  box-shadow: 0 0 0 var(--ca-status-dot-shadow-size) var(--ca-status-disabled-shadow-color);
 }
 
 .ca-table {
