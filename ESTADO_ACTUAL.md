@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Compras proveedor (2026-06-29):** Se cerro el issue `python:S1192` en `cacao_accounting/compras/__init__.py` al consolidar `compras/proveedor_nuevo.html` en la constante `COMPRAS_PROVEEDOR_NUEVO_TEMPLATE`.
+  - Las rutas de alta y edicion de proveedores reutilizan ahora el mismo identificador de plantilla sin duplicar el literal.
+  - `black --check`, `ruff check`, `mypy` focal y `tests/test_party_management.py` quedaron en verde; `flake8` mantiene avisos `CCR001` preexistentes en otras funciones del mismo archivo.
+
 - **SonarCloud / Smart Select nesting (2026-06-29):** Se cerro un issue `javascript:S2004` en `cacao_accounting/static/js/smart-select.js`.
   - La busqueda de opciones por valor normalizado ahora pasa por `findOptionByNormalizedValue()`, evitando anidar `find()` dentro del callback del componente Alpine.
   - Se agrego una prueba JS focal para validar que el valor seleccionado recupera la etiqueta correcta desde `options`.
