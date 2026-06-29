@@ -1205,7 +1205,7 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey("batch.id"), nullable=True)
+    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
 
@@ -1393,7 +1393,7 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey("batch.id"), nullable=True)
+    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
 
 
@@ -1440,7 +1440,7 @@ class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey("batch.id"), nullable=True)
+    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
 
 
