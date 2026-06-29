@@ -927,6 +927,15 @@ def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
     )
 
 
+def _sales_order_initial_source_type(from_request_id: str | None, from_quotation_id: str | None) -> str:
+    """Resolve the initial source type for a sales order form."""
+    if from_request_id:
+        return "sales_request"
+    if from_quotation_id:
+        return "sales_quotation"
+    return ""
+
+
 @ventas.route("/sales-order/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
@@ -958,7 +967,7 @@ def ventas_orden_venta_nuevo():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Orden de Venta - " + APPNAME
-    initial_source_type = "sales_request" if from_request_id else "sales_quotation" if from_quotation_id else ""
+    initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
         "viewKey": "draft",

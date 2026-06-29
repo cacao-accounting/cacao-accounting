@@ -274,6 +274,18 @@ def test_sales_credit_note_list_route(request):
                 assert "Listado de Notas de Débito de Venta" in response.get_data(as_text=True)
 
 
+def test_sales_order_initial_source_type_helper_prefers_request_then_quotation(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.ventas import _sales_order_initial_source_type
+
+        assert _sales_order_initial_source_type("SR-1", None) == "sales_request"
+        assert _sales_order_initial_source_type(None, "SQ-1") == "sales_quotation"
+        assert _sales_order_initial_source_type(None, None) == ""
+        assert _sales_order_initial_source_type("SR-1", "SQ-1") == "sales_request"
+
+
 def test_sales_request_routes(request):
 
     if request.config.getoption("--slow") == "True":
