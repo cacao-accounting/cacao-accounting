@@ -152,7 +152,7 @@
 // Rota el ícono chevron al colapsar/expandir
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) {
-    var target = document.querySelector(toggle.getAttribute('data-bs-target'));
+    var target = document.querySelector(toggle.dataset.bsTarget);
     if (!target) return;
     target.addEventListener('hide.bs.collapse', function () {
       toggle.querySelector('i[class*="collapse-icon"]').classList.replace('bi-chevron-down', 'bi-chevron-right');

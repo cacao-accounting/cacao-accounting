@@ -85,7 +85,7 @@
       addMultipleRows: function (n) { for (let i = 0; i < n; i++) this.addRow(); },
       removeRow: function (index) { if (this.lines.length > 1) this.lines.splice(index, 1); else this.lines[0] = this.newLine(); },
       duplicateRow: function (index) {
-        let copy = JSON.parse(JSON.stringify(this.lines[index]));
+        let copy = structuredClone(this.lines[index]);
         copy.uid = globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now() + Math.random());
         this.lines.splice(index + 1, 0, copy);
       },
@@ -124,12 +124,12 @@
 
       openDetails: function (index) {
         this.activeIndex = index;
-        this.modalLine = JSON.parse(JSON.stringify(this.lines[index]));
+        this.modalLine = structuredClone(this.lines[index]);
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).show();
       },
 
       saveModalLine: function () {
-        this.lines[this.activeIndex] = JSON.parse(JSON.stringify(this.modalLine));
+        this.lines[this.activeIndex] = structuredClone(this.modalLine);
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).hide();
       },
 

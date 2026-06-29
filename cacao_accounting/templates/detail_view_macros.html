@@ -212,13 +212,13 @@
 </div>
 
 <script>
+  function readValue(value) {
+    return value && value.trim() ? value : '-';
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var rows = Array.prototype.slice.call(document.querySelectorAll('.journal-line-row'));
     if (!rows.length) return;
-
-    function readValue(value) {
-      return value && value.trim() ? value : '-';
-    }
 
     function applyDetails(row) {
       var data = row.dataset;
