@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (Fix pydocstyle en statement_service)
+- **Solicitud:** Corregir el fallo de CI reportado por `flake8`/`pydocstyle` en `_persist_bank_transaction`.
+- **Implementacion:** Se actualizo el docstring de `_persist_bank_transaction` en `cacao_accounting/bancos/statement_service.py` para usar modo imperativo en ingles y cumplir `D401`.
+- **Verificacion:** `venv/bin/python -m flake8 cacao_accounting/` quedo en verde tras el cambio.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.

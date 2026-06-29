@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **Ajuste de calidad (2026-06-29):** Se corrigio el docstring de `_persist_bank_transaction` para cumplir `pydocstyle`/`D401`.
+  - El cambio fue solo documental y no modifica logica de negocio.
+  - `venv/bin/python -m flake8 cacao_accounting/` valida el arreglo en verde.
+
 - **Auditoria de pendientes (2026-06-27):** Se contrastaron los puntos abiertos de `PENDIENTE.md` contra el codigo fuente antes de actualizar el backlog.
   - La paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST queda marcada como completada.
   - La verificacion se basa en rutas implementadas en Compras, Ventas e Inventario y cobertura en `tests/test_03webactions.py`.
