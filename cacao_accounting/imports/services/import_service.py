@@ -254,6 +254,37 @@ class ImportService:
             batch.cancel_requested = True
             database.session.commit()
 
+    def _process_document(
+        self,
+        adapter: Any,
+        ref: str,
+        rows: list,
+        context: dict,
+        batch: Any,
+        batch_id: str,
+    ) -> tuple[int, int]:
+        """Procesa un documento individual dentro de la importación."""
+        doc_obj = adapter.build_document(rows, context)
+
+        doc_date = None
+        if isinstance(doc_obj, dict):
+            doc_date = doc_obj.get("posting_date")
+        elif hasattr(doc_obj, "posting_date"):
+            doc_date = doc_obj.posting_date
+
+        if doc_date:
+            if isinstance(doc_date, str):
+                try:
+                    doc_date = datetime.strptime(doc_date, "%Y-%m-%d").date()
+                except ValueError:
+                    doc_date = None
+            if doc_date and not is_period_open(batch.company_id, doc_date):
+                raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
+
+        adapter.persist_document(doc_obj)
+        database.session.commit()
+        return 1, 0
+
     def _execute_task(self, app, batch_id: str):
         """Tarea de fondo para procesar la importación."""
         with app.app_context():
@@ -284,50 +315,28 @@ class ImportService:
                 error_count = 0
 
                 for ref, rows in docs.items():
-                    # Refresh batch to check for cancellation
                     database.session.expire(batch)
                     batch = database.session.get(ImportBatch, batch_id)
                     if not batch:
                         return
                     if batch.cancel_requested:
-                        batch.import_status = 8  # Cancelado
+                        batch.import_status = 8
                         database.session.commit()
                         return
 
                     try:
-                        # Transactional per document
-                        doc_obj = adapter.build_document(rows, context)
-
-                        # Validate period if the adapter provides a date
-                        doc_date = None
-                        if isinstance(doc_obj, dict):
-                            doc_date = doc_obj.get("posting_date")
-                        elif hasattr(doc_obj, "posting_date"):
-                            doc_date = doc_obj.posting_date
-
-                        if doc_date:
-                            if isinstance(doc_date, str):
-                                try:
-                                    doc_date = datetime.strptime(doc_date, "%Y-%m-%d").date()
-                                except ValueError:
-                                    doc_date = None
-
-                            if doc_date and not is_period_open(batch.company_id, doc_date):
-                                raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
-
-                        adapter.persist_document(doc_obj)
-                        database.session.commit()
-                        success_count += 1
-                    except Exception as e:
+                        s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                        success_count += s
+                        error_count += e
+                    except Exception as exc:
                         database.session.rollback()
                         error_count += 1
                         err_record = ImportBatchError(
-                            batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(e)
+                            batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc)
                         )
                         database.session.add(err_record)
                         database.session.commit()
 
-                    # Estimation of progress
                     batch = database.session.get(ImportBatch, batch_id)
                     if batch:
                         batch.processed_rows = min(success_count + error_count, batch.total_rows or 0)
@@ -335,7 +344,7 @@ class ImportService:
 
                 batch = database.session.get(ImportBatch, batch_id)
                 if batch:
-                    batch.success_rows = success_count  # Actually successful documents
+                    batch.success_rows = success_count
                     batch.error_rows = error_count
                     batch.completed_at = datetime.now()
                     batch.import_status = 5 if error_count == 0 else 6

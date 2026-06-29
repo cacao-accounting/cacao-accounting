@@ -78,6 +78,28 @@ class LedgerContext:
 
 
 @dataclass(frozen=True)
+class GLEntryParams:
+    """Parametros de una linea contable."""
+
+    account_id: str
+    debit: Decimal
+    credit: Decimal
+    debit_in_account_currency: Decimal | None = None
+    credit_in_account_currency: Decimal | None = None
+    party_type: str | None = None
+    party_id: str | None = None
+    bank_account_id: str | None = None
+    is_advance: bool = False
+    cost_center_code: str | None = None
+    unit_code: str | None = None
+    project_code: str | None = None
+    entry_remarks: str | None = None
+    is_reversal: bool = False
+    reversal_of: str | None = None
+    is_fiscal_year_closing: bool = False
+
+
+@dataclass(frozen=True)
 class EnginePostingResult:
     """Resultado combinado de los motores de calculo y sus entradas GL."""
 
@@ -353,58 +375,43 @@ def _has_stock_ledger_entries(document: Any) -> bool:
 def _create_gl_entry(
     *,
     context: LedgerContext,
-    account_id: str,
-    debit: Decimal,
-    credit: Decimal,
-    debit_in_account_currency: Decimal | None = None,
-    credit_in_account_currency: Decimal | None = None,
-    party_type: str | None = None,
-    party_id: str | None = None,
-    bank_account_id: str | None = None,
-    is_advance: bool = False,
-    cost_center_code: str | None = None,
-    unit_code: str | None = None,
-    project_code: str | None = None,
-    entry_remarks: str | None = None,
-    is_reversal: bool = False,
-    reversal_of: str | None = None,
-    is_fiscal_year_closing: bool = False,
+    params: GLEntryParams,
 ) -> GLEntry:
-    _validate_single_sided_amount(debit, credit)
+    _validate_single_sided_amount(params.debit, params.credit)
     return GLEntry(
         posting_date=context.posting_date,
         company=context.company,
         ledger_id=context.ledger_id,
-        account_id=_require_account(account_id, "Toda entrada GL requiere cuenta contable."),
-        account_code=_account_code_for(account_id),
-        debit=debit,
-        credit=credit,
+        account_id=_require_account(params.account_id, "Toda entrada GL requiere cuenta contable."),
+        account_code=_account_code_for(params.account_id),
+        debit=params.debit,
+        credit=params.credit,
         debit_in_account_currency=_resolve_currency_amount(
-            debit_in_account_currency, debit, bool(context.transaction_currency)
+            params.debit_in_account_currency, params.debit, bool(context.transaction_currency)
         ),
         credit_in_account_currency=_resolve_currency_amount(
-            credit_in_account_currency, credit, bool(context.transaction_currency)
+            params.credit_in_account_currency, params.credit, bool(context.transaction_currency)
         ),
         account_currency=context.transaction_currency,
         company_currency=context.company_currency,
         exchange_rate=context.exchange_rate,
-        party_type=party_type,
-        party_id=party_id,
-        bank_account_id=bank_account_id,
-        is_advance=is_advance,
-        is_fiscal_year_closing=is_fiscal_year_closing,
+        party_type=params.party_type,
+        party_id=params.party_id,
+        bank_account_id=params.bank_account_id,
+        is_advance=params.is_advance,
+        is_fiscal_year_closing=params.is_fiscal_year_closing,
         voucher_type=context.voucher_type,
         voucher_id=context.voucher_id,
         document_no=context.document_no,
         naming_series_id=context.naming_series_id,
         fiscal_year_id=context.fiscal_year_id,
         accounting_period_id=context.accounting_period_id,
-        cost_center_code=cost_center_code,
-        unit_code=unit_code,
-        project_code=project_code,
-        remarks=entry_remarks if entry_remarks is not None else context.document_remarks,
-        is_reversal=is_reversal,
-        reversal_of=reversal_of,
+        cost_center_code=params.cost_center_code,
+        unit_code=params.unit_code,
+        project_code=params.project_code,
+        remarks=params.entry_remarks if params.entry_remarks is not None else context.document_remarks,
+        is_reversal=params.is_reversal,
+        reversal_of=params.reversal_of,
     )
 
 
@@ -513,25 +520,29 @@ def _normal_entries_for_amount(
         return [
             _create_gl_entry(
                 context=context,
-                account_id=debit_account_id,
-                debit=amount,
-                credit=Decimal("0"),
-                party_type=party_type,
-                party_id=party_id,
-                cost_center_code=cost_center_code,
-                unit_code=unit_code,
-                project_code=project_code,
-                entry_remarks=debit_remarks,
+                params=GLEntryParams(
+                    account_id=debit_account_id,
+                    debit=amount,
+                    credit=Decimal("0"),
+                    party_type=party_type,
+                    party_id=party_id,
+                    cost_center_code=cost_center_code,
+                    unit_code=unit_code,
+                    project_code=project_code,
+                    entry_remarks=debit_remarks,
+                ),
             ),
             _create_gl_entry(
                 context=context,
-                account_id=credit_account_id,
-                debit=Decimal("0"),
-                credit=amount,
-                cost_center_code=cost_center_code,
-                unit_code=unit_code,
-                project_code=project_code,
-                entry_remarks=credit_remarks,
+                params=GLEntryParams(
+                    account_id=credit_account_id,
+                    debit=Decimal("0"),
+                    credit=amount,
+                    cost_center_code=cost_center_code,
+                    unit_code=unit_code,
+                    project_code=project_code,
+                    entry_remarks=credit_remarks,
+                ),
             ),
         ]
     if amount < 0:
@@ -539,25 +550,29 @@ def _normal_entries_for_amount(
         return [
             _create_gl_entry(
                 context=context,
-                account_id=credit_account_id,
-                debit=reversed_amount,
-                credit=Decimal("0"),
-                cost_center_code=cost_center_code,
-                unit_code=unit_code,
-                project_code=project_code,
-                entry_remarks=credit_remarks,
+                params=GLEntryParams(
+                    account_id=credit_account_id,
+                    debit=reversed_amount,
+                    credit=Decimal("0"),
+                    cost_center_code=cost_center_code,
+                    unit_code=unit_code,
+                    project_code=project_code,
+                    entry_remarks=credit_remarks,
+                ),
             ),
             _create_gl_entry(
                 context=context,
-                account_id=debit_account_id,
-                debit=Decimal("0"),
-                credit=reversed_amount,
-                party_type=party_type,
-                party_id=party_id,
-                cost_center_code=cost_center_code,
-                unit_code=unit_code,
-                project_code=project_code,
-                entry_remarks=debit_remarks,
+                params=GLEntryParams(
+                    account_id=debit_account_id,
+                    debit=Decimal("0"),
+                    credit=reversed_amount,
+                    party_type=party_type,
+                    party_id=party_id,
+                    cost_center_code=cost_center_code,
+                    unit_code=unit_code,
+                    project_code=project_code,
+                    entry_remarks=debit_remarks,
+                ),
             ),
         ]
     return []
@@ -613,20 +628,24 @@ def _append_sales_tax_entries(
             entries.append(
                 _create_gl_entry(
                     context=context,
-                    account_id=account_id,
-                    debit=abs(amount) if amount > 0 else Decimal("0"),
-                    credit=abs(amount) if amount < 0 else Decimal("0"),
-                    entry_remarks=tax_line.name,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=abs(amount) if amount > 0 else Decimal("0"),
+                        credit=abs(amount) if amount < 0 else Decimal("0"),
+                        entry_remarks=tax_line.name,
+                    ),
                 )
             )
         else:
             entries.append(
                 _create_gl_entry(
                     context=context,
-                    account_id=account_id,
-                    debit=abs(amount) if amount < 0 else Decimal("0"),
-                    credit=abs(amount) if amount > 0 else Decimal("0"),
-                    entry_remarks=tax_line.name,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=abs(amount) if amount < 0 else Decimal("0"),
+                        credit=abs(amount) if amount > 0 else Decimal("0"),
+                        entry_remarks=tax_line.name,
+                    ),
                 )
             )
 
@@ -653,20 +672,24 @@ def _append_purchase_tax_entries(
             entries.append(
                 _create_gl_entry(
                     context=context,
-                    account_id=account_id,
-                    debit=abs(amount) if amount < 0 else Decimal("0"),
-                    credit=abs(amount) if amount > 0 else Decimal("0"),
-                    entry_remarks=tax_line.name,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=abs(amount) if amount < 0 else Decimal("0"),
+                        credit=abs(amount) if amount > 0 else Decimal("0"),
+                        entry_remarks=tax_line.name,
+                    ),
                 )
             )
         else:
             entries.append(
                 _create_gl_entry(
                     context=context,
-                    account_id=account_id,
-                    debit=abs(amount) if amount > 0 else Decimal("0"),
-                    credit=abs(amount) if amount < 0 else Decimal("0"),
-                    entry_remarks=tax_line.name,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=abs(amount) if amount > 0 else Decimal("0"),
+                        credit=abs(amount) if amount < 0 else Decimal("0"),
+                        entry_remarks=tax_line.name,
+                    ),
                 )
             )
 
@@ -695,24 +718,28 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=receivable_account_id,
-                        debit=amount_total,
-                        credit=Decimal("0"),
-                        party_type="customer",
-                        party_id=document.customer_id,
-                        entry_remarks="Cuentas por cobrar",
+                        params=GLEntryParams(
+                            account_id=receivable_account_id,
+                            debit=amount_total,
+                            credit=Decimal("0"),
+                            party_type="customer",
+                            party_id=document.customer_id,
+                            entry_remarks="Cuentas por cobrar",
+                        ),
                     )
                 )
             else:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=receivable_account_id,
-                        debit=Decimal("0"),
-                        credit=abs(amount_total),
-                        party_type="customer",
-                        party_id=document.customer_id,
-                        entry_remarks="Cuentas por cobrar",
+                        params=GLEntryParams(
+                            account_id=receivable_account_id,
+                            debit=Decimal("0"),
+                            credit=abs(amount_total),
+                            party_type="customer",
+                            party_id=document.customer_id,
+                            entry_remarks="Cuentas por cobrar",
+                        ),
                     )
                 )
 
@@ -728,20 +755,24 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
                     entries.append(
                         _create_gl_entry(
                             context=context,
-                            account_id=income_account_id,
-                            debit=Decimal("0"),
-                            credit=amount,
-                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            params=GLEntryParams(
+                                account_id=income_account_id,
+                                debit=Decimal("0"),
+                                credit=amount,
+                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            ),
                         )
                     )
                 else:
                     entries.append(
                         _create_gl_entry(
                             context=context,
-                            account_id=income_account_id,
-                            debit=abs(amount),
-                            credit=Decimal("0"),
-                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            params=GLEntryParams(
+                                account_id=income_account_id,
+                                debit=abs(amount),
+                                credit=Decimal("0"),
+                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            ),
                         )
                     )
 
@@ -804,20 +835,24 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
                     entries.append(
                         _create_gl_entry(
                             context=context,
-                            account_id=debit_account_id,
-                            debit=amount,
-                            credit=Decimal("0"),
-                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            params=GLEntryParams(
+                                account_id=debit_account_id,
+                                debit=amount,
+                                credit=Decimal("0"),
+                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            ),
                         )
                     )
                 else:
                     entries.append(
                         _create_gl_entry(
                             context=context,
-                            account_id=debit_account_id,
-                            debit=Decimal("0"),
-                            credit=abs(amount),
-                            entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            params=GLEntryParams(
+                                account_id=debit_account_id,
+                                debit=Decimal("0"),
+                                credit=abs(amount),
+                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
+                            ),
                         )
                     )
 
@@ -827,24 +862,28 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=payable_account_id,
-                        debit=Decimal("0"),
-                        credit=amount_total,
-                        party_type="supplier",
-                        party_id=document.supplier_id,
-                        entry_remarks="Cuentas por pagar",
+                        params=GLEntryParams(
+                            account_id=payable_account_id,
+                            debit=Decimal("0"),
+                            credit=amount_total,
+                            party_type="supplier",
+                            party_id=document.supplier_id,
+                            entry_remarks="Cuentas por pagar",
+                        ),
                     )
                 )
             else:
                 entries.append(
                     _create_gl_entry(
                         context=context,
-                        account_id=payable_account_id,
-                        debit=abs(amount_total),
-                        credit=Decimal("0"),
-                        party_type="supplier",
-                        party_id=document.supplier_id,
-                        entry_remarks="Cuentas por pagar",
+                        params=GLEntryParams(
+                            account_id=payable_account_id,
+                            debit=abs(amount_total),
+                            credit=Decimal("0"),
+                            party_type="supplier",
+                            party_id=document.supplier_id,
+                            entry_remarks="Cuentas por pagar",
+                        ),
                     )
                 )
 
@@ -933,19 +972,23 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
                 [
                     _create_gl_entry(
                         context=context,
-                        account_id=bank_account_id,
-                        debit=amount,
-                        credit=Decimal("0"),
-                        entry_remarks="Cuenta bancaria receptora",
+                        params=GLEntryParams(
+                            account_id=bank_account_id,
+                            debit=amount,
+                            credit=Decimal("0"),
+                            entry_remarks="Cuenta bancaria receptora",
+                        ),
                     ),
                     _create_gl_entry(
                         context=context,
-                        account_id=receivable_account_id,
-                        debit=Decimal("0"),
-                        credit=amount,
-                        party_type="customer",
-                        party_id=document.party_id,
-                        entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
+                        params=GLEntryParams(
+                            account_id=receivable_account_id,
+                            debit=Decimal("0"),
+                            credit=amount,
+                            party_type="customer",
+                            party_id=document.party_id,
+                            entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
+                        ),
                     ),
                 ]
             )
@@ -1985,20 +2028,22 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
             entries.append(
                 _create_gl_entry(
                     context=context,
-                    account_id=account_id,
-                    debit=debit,
-                    credit=credit,
-                    debit_in_account_currency=debit_in_account_currency,
-                    credit_in_account_currency=credit_in_account_currency,
-                    party_type=getattr(line, "third_type", None),
-                    party_id=getattr(line, "third_code", None),
-                    bank_account_id=getattr(line, "bank_account_id", None),
-                    is_advance=bool(getattr(line, "is_advance", False)),
-                    cost_center_code=getattr(line, "cost_center", None),
-                    unit_code=getattr(line, "unit", None),
-                    project_code=getattr(line, "project", None),
-                    entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
-                    is_fiscal_year_closing=is_fy_closing,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=debit,
+                        credit=credit,
+                        debit_in_account_currency=debit_in_account_currency,
+                        credit_in_account_currency=credit_in_account_currency,
+                        party_type=getattr(line, "third_type", None),
+                        party_id=getattr(line, "third_code", None),
+                        bank_account_id=getattr(line, "bank_account_id", None),
+                        is_advance=bool(getattr(line, "is_advance", False)),
+                        cost_center_code=getattr(line, "cost_center", None),
+                        unit_code=getattr(line, "unit", None),
+                        project_code=getattr(line, "project", None),
+                        entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+                        is_fiscal_year_closing=is_fy_closing,
+                    ),
                 )
             )
 
@@ -2204,18 +2249,20 @@ def cancel_document(document: Any) -> list[GLEntry]:
         reversals.append(
             _create_gl_entry(
                 context=context,
-                account_id=entry.account_id,
-                debit=_decimal_value(entry.credit),
-                credit=_decimal_value(entry.debit),
-                party_type=entry.party_type,
-                party_id=entry.party_id,
-                cost_center_code=entry.cost_center_code,
-                unit_code=entry.unit_code,
-                project_code=entry.project_code,
-                entry_remarks="Reversion " + (entry.remarks or ""),
-                is_reversal=True,
-                reversal_of=entry.id,
-                is_fiscal_year_closing=entry.is_fiscal_year_closing,
+                params=GLEntryParams(
+                    account_id=entry.account_id,
+                    debit=_decimal_value(entry.credit),
+                    credit=_decimal_value(entry.debit),
+                    party_type=entry.party_type,
+                    party_id=entry.party_id,
+                    cost_center_code=entry.cost_center_code,
+                    unit_code=entry.unit_code,
+                    project_code=entry.project_code,
+                    entry_remarks="Reversion " + (entry.remarks or ""),
+                    is_reversal=True,
+                    reversal_of=entry.id,
+                    is_fiscal_year_closing=entry.is_fiscal_year_closing,
+                ),
             )
         )
         entry.is_cancelled = True

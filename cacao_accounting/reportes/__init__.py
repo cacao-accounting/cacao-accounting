@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from decimal import DecimalException
 from io import BytesIO, StringIO
-from typing import Any
+from typing import Any, cast
 
 from flask import Blueprint, flash, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
@@ -308,27 +308,30 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
         page_size = max(int(payload.get("page_size") or filters.page_size), 1)
     except (TypeError, ValueError):
         page_size = max(filters.page_size, 1)
-    return replace(
-        filters,
-        company=str(payload.get("company") or filters.company),
-        ledger=str(payload.get("ledger") or "") or None,
-        accounting_period=str(payload.get("accounting_period") or "") or None,
-        voucher_number=str(payload.get("voucher_number") or "") or None,
-        account_code=str(payload.get("account_code") or "") or None,
-        account_from=str(payload.get("account_from") or "") or None,
-        account_to=str(payload.get("account_to") or "") or None,
-        cost_center_code=str(payload.get("cost_center_code") or "") or None,
-        unit_code=str(payload.get("unit_code") or "") or None,
-        project_code=str(payload.get("project_code") or "") or None,
-        party_type=str(payload.get("party_type") or "") or None,
-        party_id=str(payload.get("party_id") or "") or None,
-        voucher_type=str(payload.get("voucher_type") or "") or None,
-        status=str(payload.get("status") or filters.status or "submitted"),
-        include_running_balance=str(payload.get("include_running_balance") or "").lower() in {"1", "true", "yes", "on"},
-        page_size=page_size,
-        sort_by=str(payload.get("sort_by") or filters.sort_by),
-        sort_dir=str(payload.get("sort_dir") or filters.sort_dir),
-        page=1,
+    return cast(
+        FinancialReportFilters,
+        replace(
+            filters,
+            company=str(payload.get("company") or filters.company),
+            ledger=str(payload.get("ledger") or "") or None,
+            accounting_period=str(payload.get("accounting_period") or "") or None,
+            voucher_number=str(payload.get("voucher_number") or "") or None,
+            account_code=str(payload.get("account_code") or "") or None,
+            account_from=str(payload.get("account_from") or "") or None,
+            account_to=str(payload.get("account_to") or "") or None,
+            cost_center_code=str(payload.get("cost_center_code") or "") or None,
+            unit_code=str(payload.get("unit_code") or "") or None,
+            project_code=str(payload.get("project_code") or "") or None,
+            party_type=str(payload.get("party_type") or "") or None,
+            party_id=str(payload.get("party_id") or "") or None,
+            voucher_type=str(payload.get("voucher_type") or "") or None,
+            status=str(payload.get("status") or filters.status or "submitted"),
+            include_running_balance=str(payload.get("include_running_balance") or "").lower() in {"1", "true", "yes", "on"},
+            page_size=page_size,
+            sort_by=str(payload.get("sort_by") or filters.sort_by),
+            sort_dir=str(payload.get("sort_dir") or filters.sort_dir),
+            page=1,
+        ),
     )
 
 
@@ -987,7 +990,7 @@ def account_movement():
     filters, selected_view, saved_views = _resolve_view_context("account-movement", _financial_filters())
     report = get_account_movement_detail(filters) if _should_run_financial_report() else _empty_financial_report()
     if request.args.get("export") in {"csv", "xlsx"}:
-        export_report = get_account_movement_detail(replace(filters, export_all=True, page=1))
+        export_report = get_account_movement_detail(cast(FinancialReportFilters, replace(filters, export_all=True, page=1)))
         return _render_financial_report(
             "account-movement",
             _("Detalle de Movimiento Contable"),
