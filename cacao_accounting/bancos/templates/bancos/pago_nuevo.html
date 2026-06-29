@@ -187,12 +187,12 @@
           this.applyBankAccount(event.detail || {});
         });
         this.$watch('header.mode_of_payment', (val) => {
-          if (val !== 'check') {
-            this.header.external_counter_id = '';
-            this.header.external_number = '';
-          } else {
+          if (val === 'check') {
             this.header.external_counter_id = this.header.bank_default_external_counter_id || this.header.external_counter_id;
             this.header.external_number = this.header.bank_default_external_number || this.header.external_number;
+          } else {
+            this.header.external_counter_id = '';
+            this.header.external_number = '';
           }
         });
         this.$watch('header.party_id', (val) => {
