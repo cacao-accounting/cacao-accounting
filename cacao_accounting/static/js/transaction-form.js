@@ -188,7 +188,7 @@
         const obj = {};
         schema.columns.forEach((col) => {
           const foundIndex = findImportColumnIndex(headers, col);
-          if (foundIndex !== -1) {
+          if (foundIndex >= 0) {
             obj[col.key] = row[foundIndex] !== undefined ? String(row[foundIndex]).trim() : '';
           }
         });
