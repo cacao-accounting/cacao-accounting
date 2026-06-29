@@ -1309,12 +1309,9 @@ def _validate_payment_target_bank_account(*, company: str, target_bank_account_i
 
 def _validate_payment_party(*, payment_type: str, party_type: str | None, party_id: str | None) -> None:
     """Validate the relationship between payment type and party."""
-    match payment_type:
-        case "pay" | "receive":
-            if not party_type or not party_id:
-                raise ValueError(_("El tercero es obligatorio para pagos y cobros."))
-        case _:
-            pass
+    if payment_type in ("pay", "receive"):
+        if not party_type or not party_id:
+            raise ValueError(_("El tercero es obligatorio para pagos y cobros."))
     if party_id and party_type not in ("supplier", "customer"):
         raise ValueError(_("El tipo de tercero del pago no es válido."))
 
