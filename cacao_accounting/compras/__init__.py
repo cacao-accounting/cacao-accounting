@@ -467,12 +467,10 @@ def compras_cotizacion_proveedor_nueva():
 
     formulario = FormularioCotizacionProveedor()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-
     selected_company = _supplier_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
     formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
-    from_request_id = request.args.get("from_request") or request.form.get("from_request")
-    from_rfq_id = request.args.get("from_rfq") or request.form.get("from_rfq")
+    from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
@@ -483,37 +481,9 @@ def compras_cotizacion_proveedor_nueva():
         initial_source_type="purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
     )
     if request.method == "POST":
-        try:
-            supplier_id = request.form.get("supplier_id") or None
-            supplier = database.session.get(Party, supplier_id) if supplier_id else None
-            posting_date = _parse_date(request.form.get("posting_date"))
-            cotizacion = SupplierQuotation(
-                supplier_id=supplier_id,
-                supplier_name=supplier.name if supplier else None,
-                purchase_quotation_id=from_rfq_id or None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(cotizacion)
-            database.session.flush()
-            assign_document_identifier(
-                document=cotizacion,
-                entity_type="supplier_quotation",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            total_qty, total = _save_supplier_quotation_items(cotizacion.id)
-            cotizacion.total = total
-            cotizacion.base_total = total
-            cotizacion.grand_total = total
-            database.session.commit()
-            flash("Cotización de proveedor creada correctamente.", "success")
-            return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-        except IdentifierConfigurationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        response = _create_supplier_quotation_from_request(from_rfq_id)
+        if response is not None:
+            return response
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
@@ -526,6 +496,49 @@ def compras_cotizacion_proveedor_nueva():
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _supplier_quotation_origin_ids() -> tuple[str | None, str | None]:
+    """Obtiene los identificadores de origen para la cotizacion de proveedor."""
+    from_request_id = request.args.get("from_request") or request.form.get("from_request")
+    from_rfq_id = request.args.get("from_rfq") or request.form.get("from_rfq")
+    return from_request_id, from_rfq_id
+
+
+def _create_supplier_quotation_from_request(from_rfq_id: str | None):
+    """Crea una cotizacion de proveedor a partir del formulario enviado."""
+    try:
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        posting_date = _parse_date(request.form.get("posting_date"))
+        cotizacion = SupplierQuotation(
+            supplier_id=supplier_id,
+            supplier_name=supplier.name if supplier else None,
+            purchase_quotation_id=from_rfq_id or None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(cotizacion)
+        database.session.flush()
+        assign_document_identifier(
+            document=cotizacion,
+            entity_type="supplier_quotation",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        total_qty, total = _save_supplier_quotation_items(cotizacion.id)
+        cotizacion.total = total
+        cotizacion.base_total = total
+        cotizacion.grand_total = total
+        database.session.commit()
+        flash("Cotización de proveedor creada correctamente.", "success")
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
+    except IdentifierConfigurationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return None
 
 
 @compras.route("/supplier-quotation/<quotation_id>")
