@@ -471,7 +471,7 @@ def bancos_transaccion_reconciliar():
                         bank_transaction_id=transaction.id,
                         target_type="gl_entry",
                         target_id=str(request.form.get(f"target_id_{transaction.id}") or ""),
-                        allocated_amount=transaction.deposit if transaction.deposit is not None else transaction.withdrawal,
+                        allocated_amount=_bank_reconciliation_allocated_amount(transaction),
                     )
                     for transaction in transactions
                     if request.form.get(f"target_id_{transaction.id}")
@@ -486,6 +486,13 @@ def bancos_transaccion_reconciliar():
     database.session.commit()
     flash(_("Transacciones bancarias conciliadas correctamente."), "success")
     return redirect(url_for("bancos.bancos_transaccion_lista"))
+
+
+def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decimal | None:
+    """Get the amount allocated for a bank reconciliation match."""
+    if transaction.deposit is not None:
+        return transaction.deposit
+    return transaction.withdrawal
 
 
 @bancos.route("/bank-reconciliation")
