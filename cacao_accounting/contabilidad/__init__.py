@@ -89,6 +89,7 @@ CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
 CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
 CONTABILIDAD_UNIDADES = "contabilidad.unidades"
 CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
+CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 
 
 def _company_label(company_code: str) -> str:
@@ -2071,7 +2072,7 @@ def nueva_tasa_cambio():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.tasa_cambio"))
+        return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     return render_template(
         "contabilidad/tc_crear.html",
@@ -2091,7 +2092,7 @@ def tipo_cambio(rate_id):
     registro = database.session.execute(database.select(ExchangeRate).filter_by(id=rate_id)).scalar_one_or_none()
     if registro is None:
         flash(_("La tasa de cambio indicada no existe."), "warning")
-        return redirect(url_for("contabilidad.tasa_cambio"))
+        return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     return render_template(
         "contabilidad/tc.html",
@@ -2112,7 +2113,7 @@ def editar_tasa_cambio(rate_id):
     registro = database.session.execute(database.select(ExchangeRate).filter_by(id=rate_id)).scalar_one_or_none()
     if registro is None:
         flash(_("La tasa de cambio indicada no existe."), "warning")
-        return redirect(url_for("contabilidad.tasa_cambio"))
+        return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     formulario = FormularioTasaCambio(obj=registro)
     monedas_choices = obtener_lista_monedas_activas()
