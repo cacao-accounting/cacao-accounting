@@ -1090,6 +1090,52 @@ def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport
     )
 
 
+def _classify_income_account(
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+    account_code: str,
+    account_name: str,
+) -> tuple[str, Decimal] | None:
+    """Clasifica cuenta para estado de resultado y devuelve seccion y monto."""
+    if classification in {"ingreso", "income"}:
+        return "income", credit - debit
+    if classification in {"costo", "cost"}:
+        return "cost", debit - credit
+    if classification in {"gasto", "expense"}:
+        return "expense", debit - credit
+    return None
+
+
+def _accumulate_income_entry(
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+    account_code: str,
+    account_name: str,
+    account_summary: dict[str, dict[str, Any]],
+    summary: dict[str, Decimal],
+) -> None:
+    """Acumula una entrada en el resumen del estado de resultado."""
+    result = _classify_income_account(classification, debit, credit, account_code, account_name)
+    if result is None:
+        return
+    section, amount = result
+    summary[section] += amount
+    bucket = account_summary.setdefault(
+        account_code,
+        {
+            "account_code": account_code,
+            "account_name": account_name,
+            "section": None,
+            "amount": Decimal("0"),
+            "level": account_code.count(".") + 1 if account_code else 1,
+        },
+    )
+    bucket["section"] = section
+    bucket["amount"] += amount
+
+
 def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Estado de resultado acumulado por clasificación contable."""
     _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
@@ -1098,7 +1144,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         return PaginatedReport(rows=[], totals={}, columns=[])
     base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
     base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
-    summary = {
+    summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),
         "expense": Decimal("0"),
@@ -1112,31 +1158,15 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         credit = _decimal_value(entry.credit)
         account_code = account.code or (entry.account_code or "")
         account_name = account.name
-        account_bucket = account_summary.setdefault(
+        _accumulate_income_entry(
+            classification,
+            debit,
+            credit,
             account_code,
-            {
-                "account_code": account_code,
-                "account_name": account_name,
-                "section": None,
-                "amount": Decimal("0"),
-                "level": account_code.count(".") + 1 if account_code else 1,
-            },
+            account_name,
+            account_summary,
+            summary,
         )
-        if classification in {"ingreso", "income"}:
-            amount = credit - debit
-            summary["income"] += amount
-            account_bucket["section"] = "income"
-            account_bucket["amount"] += amount
-        elif classification in {"costo", "cost"}:
-            amount = debit - credit
-            summary["cost"] += amount
-            account_bucket["section"] = "cost"
-            account_bucket["amount"] += amount
-        elif classification in {"gasto", "expense"}:
-            amount = debit - credit
-            summary["expense"] += amount
-            account_bucket["section"] = "expense"
-            account_bucket["amount"] += amount
     gross_profit = summary["income"] - summary["cost"]
     operating_profit = gross_profit - summary["expense"]
     rows: list[ReportRow] = []
@@ -1189,6 +1219,58 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     )
 
 
+def _classify_balance_sheet_account(
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+) -> tuple[str, Decimal] | None:
+    """Clasifica cuenta para balance general y devuelve seccion y monto."""
+    if classification in {"activo", "asset"}:
+        return "assets", debit - credit
+    if classification in {"pasivo", "liability"}:
+        return "liabilities", credit - debit
+    if classification in {"patrimonio", "equity"}:
+        return "equity", credit - debit
+    return None
+
+
+def _accumulate_balance_sheet_entry(
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+    account_code: str,
+    account_name: str,
+    by_account: dict[str, dict[str, Any]],
+    totals: dict[str, Decimal],
+) -> bool:
+    """Acumula una entrada en el balance general. Retorna True si se procesó."""
+    result = _classify_balance_sheet_account(classification, debit, credit)
+    if result is not None:
+        section, amount = result
+        record = by_account.setdefault(
+            account_code,
+            {
+                "section": section,
+                "account_code": account_code,
+                "account_name": account_name,
+                "amount": Decimal("0"),
+            },
+        )
+        record["amount"] += amount
+        totals[section] += amount
+        return True
+    if classification in {"ingreso", "income"}:
+        totals["income"] += credit - debit
+        return True
+    if classification in {"costo", "cost"}:
+        totals["cost"] += debit - credit
+        return True
+    if classification in {"gasto", "expense"}:
+        totals["expense"] += debit - credit
+        return True
+    return False
+
+
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
     _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
@@ -1199,7 +1281,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
     base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
 
     by_account: dict[str, dict[str, Any]] = {}
-    totals = {
+    totals: dict[str, Decimal] = {
         "assets": Decimal("0"),
         "liabilities": Decimal("0"),
         "equity": Decimal("0"),
@@ -1213,38 +1295,17 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         classification = _normalize_account_classification(account)
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
-        if classification in {"activo", "asset"}:
-            amount = debit - credit
-            section = "assets"
-        elif classification in {"pasivo", "liability"}:
-            amount = credit - debit
-            section = "liabilities"
-        elif classification in {"patrimonio", "equity"}:
-            amount = credit - debit
-            section = "equity"
-        elif classification in {"ingreso", "income"}:
-            totals["income"] += credit - debit
-            continue
-        elif classification in {"costo", "cost"}:
-            totals["cost"] += debit - credit
-            continue
-        elif classification in {"gasto", "expense"}:
-            totals["expense"] += debit - credit
-            continue
-        else:
-            continue
         account_code = account.code or (entry.account_code or "")
-        record = by_account.setdefault(
+        account_name = account.name
+        _accumulate_balance_sheet_entry(
+            classification,
+            debit,
+            credit,
             account_code,
-            {
-                "section": section,
-                "account_code": account_code,
-                "account_name": account.name,
-                "amount": Decimal("0"),
-            },
+            account_name,
+            by_account,
+            totals,
         )
-        record["amount"] += amount
-        totals[section] += amount
 
     period_profit = totals["income"] - totals["cost"] - totals["expense"]
     totals["equity"] += period_profit

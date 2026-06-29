@@ -1105,6 +1105,38 @@ def _state_payload(state: Any) -> dict[str, Any]:
     }
 
 
+def _build_source_query(spec: Any, company: str | None, party_id: str | None, party_type: str | None) -> Any:
+    """Construye la consulta base para documentos fuente."""
+    query = database.select(spec.header_model).filter_by(docstatus=1)
+    if company and hasattr(spec.header_model, "company"):
+        query = query.filter_by(company=company)
+    if party_id:
+        if hasattr(spec.header_model, "customer_id") and party_type == "customer":
+            query = query.filter_by(customer_id=party_id)
+        elif hasattr(spec.header_model, "supplier_id") and party_type == "supplier":
+            query = query.filter_by(supplier_id=party_id)
+    return query
+
+
+def _collect_source_document_row(
+    source_key: str,
+    document: Any,
+    target_key: str,
+) -> dict[str, Any] | None:
+    """Recolecta informacion de un documento fuente si tiene lineas pendientes."""
+    items = get_source_items(source_key, document.id, target_key)
+    if not items:
+        return None
+    return {
+        "source_type": source_key,
+        "source_id": document.id,
+        "document_no": getattr(document, "document_no", None) or document.id,
+        "company": getattr(document, "company", None),
+        "posting_date": str(getattr(document, "posting_date", "") or ""),
+        "pending_lines": len(items),
+    }
+
+
 def list_source_documents(
     target_type: str,
     company: str | None = None,
@@ -1113,31 +1145,15 @@ def list_source_documents(
 ) -> list[dict[str, Any]]:
     """Lista documentos fuente aprobados con saldo para un destino."""
     target_key = normalize_doctype(target_type)
-    sources = sorted(source for source, target in ALLOWED_FLOWS if target == target_key)
+    sources = sorted(source for source, _target in ALLOWED_FLOWS if _target == target_key)
     rows: list[dict[str, Any]] = []
     for source_key in sources:
         spec = get_document_type(source_key)
-        query = database.select(spec.header_model).filter_by(docstatus=1)
-        if company and hasattr(spec.header_model, "company"):
-            query = query.filter_by(company=company)
-        if party_id:
-            if hasattr(spec.header_model, "customer_id") and party_type == "customer":
-                query = query.filter_by(customer_id=party_id)
-            elif hasattr(spec.header_model, "supplier_id") and party_type == "supplier":
-                query = query.filter_by(supplier_id=party_id)
+        query = _build_source_query(spec, company, party_id, party_type)
         for document in database.session.execute(query).scalars().all():
-            items = get_source_items(source_key, document.id, target_key)
-            if items:
-                rows.append(
-                    {
-                        "source_type": source_key,
-                        "source_id": document.id,
-                        "document_no": getattr(document, "document_no", None) or document.id,
-                        "company": getattr(document, "company", None),
-                        "posting_date": str(getattr(document, "posting_date", "") or ""),
-                        "pending_lines": len(items),
-                    }
-                )
+            row = _collect_source_document_row(source_key, document, target_key)
+            if row:
+                rows.append(row)
     return rows
 
 
@@ -1162,18 +1178,14 @@ def get_pending_lines(
     return lines
 
 
-def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
-    """Crea un documento destino generico a partir de lineas fuente."""
-    target_type = normalize_doctype(str(payload.get("target_document_type", "")))
-    company = payload.get("company") or payload.get("company_id")
-    posting_date = payload.get("posting_date")
-    lines = payload.get("lines") or []
-    if not target_type or not company or not posting_date or not lines:
-        raise DocumentFlowError("Debe indicar destino, compania, fecha y lineas.", 400)
-    if target_type == "payment_entry":
-        return _create_payment_target(payload)
-
-    target_spec = get_document_type(target_type)
+def _create_target_header(
+    target_spec: Any,
+    target_type: str,
+    company: str,
+    posting_date: Any,
+    payload: dict[str, Any],
+) -> Any:
+    """Crea y persiste el header del documento destino."""
     header_values = {
         "company": company,
         "posting_date": posting_date,
@@ -1202,46 +1214,73 @@ def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
         external_counter_id=payload.get("external_counter_id"),
         external_number=payload.get("external_number"),
     )
+    return target
+
+
+def _process_target_line(
+    index: int,
+    selected: dict[str, Any],
+    target: Any,
+    target_spec: Any,
+    target_type: str,
+) -> dict[str, str]:
+    """Procesa una linea individual del documento destino."""
+    source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
+    source_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
+    source_item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
+    source_item = get_document_item(source_type, source_item_id)
+    if not source_item:
+        raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
+    qty = decimal_or_zero(selected.get("qty"))
+    rate = decimal_or_zero(getattr(source_item, "rate", 0))
+    amount = qty * rate
+    item_values = {
+        target_spec.parent_field: target.id,
+        "item_code": getattr(source_item, "item_code", ""),
+        "item_name": getattr(source_item, "item_name", None),
+        "description": getattr(source_item, "description", None),
+        "qty": qty,
+        "uom": getattr(source_item, "uom", None),
+        "rate": rate,
+        "amount": amount,
+    }
+    item = target_spec.item_model(
+        **{field: value for field, value in item_values.items() if hasattr(target_spec.item_model, field)}
+    )
+    database.session.add(item)
+    database.session.flush()
+    create_document_relation(
+        source_type=source_type,
+        source_id=source_id,
+        source_item_id=source_item_id,
+        target_type=target_type,
+        target_id=target.id,
+        target_item_id=item.id,
+        qty=qty,
+        uom=getattr(item, "uom", None),
+        rate=rate,
+        amount=amount,
+    )
+    return {"index": index, "target_item_id": item.id}
+
+
+def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
+    """Crea un documento destino generico a partir de lineas fuente."""
+    target_type = normalize_doctype(str(payload.get("target_document_type", "")))
+    company = payload.get("company") or payload.get("company_id")
+    posting_date = payload.get("posting_date")
+    lines = payload.get("lines") or []
+    if not target_type or not company or not posting_date or not lines:
+        raise DocumentFlowError("Debe indicar destino, compania, fecha y lineas.", 400)
+    if target_type == "payment_entry":
+        return _create_payment_target(payload)
+
+    target_spec = get_document_type(target_type)
+    target = _create_target_header(target_spec, target_type, company, posting_date, payload)
 
     created_lines = []
     for index, selected in enumerate(lines):
-        source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
-        source_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
-        source_item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
-        source_item = get_document_item(source_type, source_item_id)
-        if not source_item:
-            raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
-        qty = decimal_or_zero(selected.get("qty"))
-        rate = decimal_or_zero(getattr(source_item, "rate", 0))
-        amount = qty * rate
-        item_values = {
-            target_spec.parent_field: target.id,
-            "item_code": getattr(source_item, "item_code", ""),
-            "item_name": getattr(source_item, "item_name", None),
-            "description": getattr(source_item, "description", None),
-            "qty": qty,
-            "uom": getattr(source_item, "uom", None),
-            "rate": rate,
-            "amount": amount,
-        }
-        item = target_spec.item_model(
-            **{field: value for field, value in item_values.items() if hasattr(target_spec.item_model, field)}
-        )
-        database.session.add(item)
-        database.session.flush()
-        create_document_relation(
-            source_type=source_type,
-            source_id=source_id,
-            source_item_id=source_item_id,
-            target_type=target_type,
-            target_id=target.id,
-            target_item_id=item.id,
-            qty=qty,
-            uom=getattr(item, "uom", None),
-            rate=rate,
-            amount=amount,
-        )
-        created_lines.append({"index": index, "target_item_id": item.id})
+        created_lines.append(_process_target_line(index, selected, target, target_spec, target_type))
     database.session.commit()
     return {
         "target_type": target_type,

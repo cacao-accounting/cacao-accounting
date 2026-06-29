@@ -373,9 +373,15 @@
           if (!allowed.length) {
             return [...this.availableUoms];
           }
-          return allowed.map((code) => {
-            return this.availableUoms.find((uom) => uom.code === code) || { code: code, name: code };
-          });
+          return this.mapAllowedUomCodes(allowed);
+        },
+
+        mapAllowedUomCodes(allowed) {
+          return allowed.map((code) => this.findUomByCode(code) || { code, name: code });
+        },
+
+        findUomByCode(code) {
+          return this.availableUoms.find((uom) => uom.code === code);
         },
 
         syncLineFromItem(line, keepCustomName) {
@@ -487,39 +493,43 @@
             party_id: this.header.party || '',
             purpose: this.header.purpose || '',
             payment_type: this.header.payment_type || '',
-            lines: this.lines.map((line) => {
-              return {
-                uid: line.uid || '',
-                item_code: line.item_code || '',
-                item_name: line.item_name || '',
-                qty: toNumber(line.qty),
-                uom: line.uom || '',
-                rate: toNumber(line.rate),
-                amount: toNumber(line.amount),
-              };
-            }),
-            tax_lines: this.taxCharges.lines.map((line) => {
-	              return {
-	                source_rule_id: line.source_rule_id || '',
-	                manual: Boolean(line.manual),
-	                concept: line.concept || '',
-	                type: line.type || 'tax',
-	                calculation_method: line.calculation_method || 'percentage',
-	                base_mode: line.base_mode || 'goods',
-	                include_concepts: line.include_concepts || [],
-	                exclude_concepts: line.exclude_concepts || [],
-	                rate: toNumber(line.rate),
-	                amount: toNumber(line.amount),
-	                accounting_treatment: line.accounting_treatment || 'separate_tax_account',
-	                allocation_method: line.allocation_method || '',
-	                affects_inventory: Boolean(line.affects_inventory),
-	                affects_document_total: Boolean(line.affects_document_total),
-	                included_in_price: Boolean(line.included_in_price),
-                account_id: line.account_id || '',
-                notes: line.notes || '',
-              };
-            }),
+            lines: this.mapLinesToPayload(),
+            tax_lines: this.mapTaxLinesToPayload(),
           };
+        },
+
+        mapLinesToPayload() {
+          return this.lines.map((line) => ({
+            uid: line.uid || '',
+            item_code: line.item_code || '',
+            item_name: line.item_name || '',
+            qty: toNumber(line.qty),
+            uom: line.uom || '',
+            rate: toNumber(line.rate),
+            amount: toNumber(line.amount),
+          }));
+        },
+
+        mapTaxLinesToPayload() {
+          return this.taxCharges.lines.map((line) => ({
+            source_rule_id: line.source_rule_id || '',
+            manual: Boolean(line.manual),
+            concept: line.concept || '',
+            type: line.type || 'tax',
+            calculation_method: line.calculation_method || 'percentage',
+            base_mode: line.base_mode || 'goods',
+            include_concepts: line.include_concepts || [],
+            exclude_concepts: line.exclude_concepts || [],
+            rate: toNumber(line.rate),
+            amount: toNumber(line.amount),
+            accounting_treatment: line.accounting_treatment || 'separate_tax_account',
+            allocation_method: line.allocation_method || '',
+            affects_inventory: Boolean(line.affects_inventory),
+            affects_document_total: Boolean(line.affects_document_total),
+            included_in_price: Boolean(line.included_in_price),
+            account_id: line.account_id || '',
+            notes: line.notes || '',
+          }));
         },
 
         queueTaxPreview() {
@@ -531,9 +541,11 @@
           if (this.taxPreviewDebounceId) {
             globalThis.clearTimeout(this.taxPreviewDebounceId);
           }
-          this.taxPreviewDebounceId = globalThis.setTimeout(() => {
-            this.fetchTaxPreview();
-          }, 250);
+          this.taxPreviewDebounceId = globalThis.setTimeout(this.executeTaxPreview.bind(this), 250);
+        },
+
+        executeTaxPreview() {
+          this.fetchTaxPreview();
         },
 
         async fetchTaxPreview() {
@@ -545,29 +557,37 @@
           if (!this.header.company) return;
           this.taxCharges.loading = true;
           this.taxCharges.error = '';
-          const csrfInput = document.querySelector('input[name="csrf_token"]');
-          const csrfToken = csrfInput ? csrfInput.value : '';
           try {
-            const response = await fetch('/api/fiscal/preview', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-              credentials: 'same-origin',
-              body: JSON.stringify(this.buildFiscalPayload()),
-            });
+            const response = await this.requestTaxPreview();
             const data = await response.json();
             if (!response.ok) {
               this.taxCharges.error = data?.message || 'No se pudo calcular.';
               this.taxCharges.loading = false;
               return;
-	            }
-	            this.taxCharges.profile = data.profile || null;
-	            this.taxCharges.summary = data.summary || this.taxCharges.summary;
-	            this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];
-	            this.taxCharges.loading = false;
-	          } catch (err) {
-	            this.taxCharges.error = 'No se pudo calcular.';
+            }
+            this.applyTaxPreviewData(data);
+          } catch (err) {
+            this.taxCharges.error = 'No se pudo calcular.';
             this.taxCharges.loading = false;
           }
+        },
+
+        async requestTaxPreview() {
+          const csrfInput = document.querySelector('input[name="csrf_token"]');
+          const csrfToken = csrfInput ? csrfInput.value : '';
+          return fetch('/api/fiscal/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            credentials: 'same-origin',
+            body: JSON.stringify(this.buildFiscalPayload()),
+          });
+        },
+
+        applyTaxPreviewData(data) {
+          this.taxCharges.profile = data.profile || null;
+          this.taxCharges.summary = data.summary || this.taxCharges.summary;
+          this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];
+          this.taxCharges.loading = false;
         },
 
 	        openTaxLineDetails(index) {
@@ -635,63 +655,95 @@
 	          this.recalculateTaxSummary();
 	        },
 
-	        calcTaxLine(line) {
-	          line.base_amount = toNumber(line.base_amount || this.totalAmount);
-	          line.rate = toNumber(line.rate);
-	          if (line.calculation_method === 'percentage') {
-	            line.amount = line.base_amount * line.rate / 100;
-	          } else {
-	            line.amount = toNumber(line.amount);
-	          }
-	        },
+        calcTaxLine(line) {
+          line.base_amount = toNumber(line.base_amount || this.totalAmount);
+          line.rate = toNumber(line.rate);
+          line.amount = this.calculateTaxAmount(line);
+        },
 
-	        recalculateTaxSummary() {
-	          const summary = defaultTaxSummary();
-	          const lines = this.taxCharges.lines || [];
-	          const documentTaxTotal = lines.reduce((total, line) => {
-	            if (line.type === 'withholding' || line.included_in_price || line.affects_document_total === false) return total;
-	            return total + toNumber(line.amount);
-	          }, 0);
-	          const capitalizableTaxTotal = lines.reduce((total, line) => {
-	            if (line.accounting_treatment !== 'capitalizable_inventory_cost') return total;
-	            return total + toNumber(line.amount);
-	          }, 0);
-	          const separateTaxTotal = lines.reduce((total, line) => {
-	            if (line.accounting_treatment !== 'separate_tax_account') return total;
-	            return total + toNumber(line.amount);
-	          }, 0);
-	          const withholdingTotal = lines.reduce((total, line) => {
-	            if (line.type !== 'withholding') return total;
-	            return total + toNumber(line.amount);
-	          }, 0);
-	          summary.subtotal = String(this.totalAmount);
-	          summary.document_tax_total = String(documentTaxTotal);
-	          summary.capitalizable_tax_total = String(capitalizableTaxTotal);
-	          summary.separate_tax_total = String(separateTaxTotal);
-	          summary.withholding_total = String(withholdingTotal);
-	          summary.grand_total = String(this.totalAmount + documentTaxTotal);
-	          this.taxCharges.summary = summary;
-	        },
+        calculateTaxAmount(line) {
+          if (line.calculation_method === 'percentage') {
+            return line.base_amount * line.rate / 100;
+          }
+          return toNumber(line.amount);
+        },
+
+        recalculateTaxSummary() {
+          const summary = defaultTaxSummary();
+          const lines = this.taxCharges.lines || [];
+          const documentTaxTotal = this.calcDocumentTaxTotal(lines);
+          const capitalizableTaxTotal = this.calcCapitalizableTaxTotal(lines);
+          const separateTaxTotal = this.calcSeparateTaxTotal(lines);
+          const withholdingTotal = this.calcWithholdingTotal(lines);
+          summary.subtotal = String(this.totalAmount);
+          summary.document_tax_total = String(documentTaxTotal);
+          summary.capitalizable_tax_total = String(capitalizableTaxTotal);
+          summary.separate_tax_total = String(separateTaxTotal);
+          summary.withholding_total = String(withholdingTotal);
+          summary.grand_total = String(this.totalAmount + documentTaxTotal);
+          this.taxCharges.summary = summary;
+        },
+
+        calcDocumentTaxTotal(lines) {
+          return lines.reduce((total, line) => {
+            const isWithholding = line.type === 'withholding';
+            const isIncludedInPrice = line.included_in_price;
+            const notAffectsTotal = line.affects_document_total === false;
+            if (isWithholding || isIncludedInPrice || notAffectsTotal) return total;
+            return total + toNumber(line.amount);
+          }, 0);
+        },
+
+        calcCapitalizableTaxTotal(lines) {
+          return lines.reduce((total, line) => {
+            const isCapitalizable = line.accounting_treatment === 'capitalizable_inventory_cost';
+            if (!isCapitalizable) return total;
+            return total + toNumber(line.amount);
+          }, 0);
+        },
+
+        calcSeparateTaxTotal(lines) {
+          return lines.reduce((total, line) => {
+            const isSeparate = line.accounting_treatment === 'separate_tax_account';
+            if (!isSeparate) return total;
+            return total + toNumber(line.amount);
+          }, 0);
+        },
+
+        calcWithholdingTotal(lines) {
+          return lines.reduce((total, line) => {
+            const isWithholding = line.type === 'withholding';
+            if (!isWithholding) return total;
+            return total + toNumber(line.amount);
+          }, 0);
+        },
 
 	        async fetchSource(apiUrl) {
           if (apiUrl) {
-            this.loadingSource = true;
-            this.autofillStep = 2;
-            try {
-              const response = await fetch(apiUrl, { credentials: 'same-origin' });
-              const data = await response.json();
-              this.sourceItems = (data.items || []).map((item) => {
-                return { ...item, selected: true };
-              });
-              this.loadingSource = false;
-            } catch (err) {
-              console.warn('Error al obtener source lines:', err);
-              this.loadingSource = false;
-            }
+            await this.loadSourceFromUrl(apiUrl);
           } else {
             this.autofillStep = 1;
             this.fetchSourceDocuments();
           }
+        },
+
+        async loadSourceFromUrl(apiUrl) {
+          this.loadingSource = true;
+          this.autofillStep = 2;
+          try {
+            const response = await fetch(apiUrl, { credentials: 'same-origin' });
+            const data = await response.json();
+            this.sourceItems = this.mapSourceItems(data.items);
+            this.loadingSource = false;
+          } catch (err) {
+            console.warn('Error al obtener source lines:', err);
+            this.loadingSource = false;
+          }
+        },
+
+        mapSourceItems(rawItems) {
+          const items = rawItems || [];
+          return items.map((item) => ({ ...item, selected: true }));
         },
 
         async fetchSourceDocuments() {
@@ -705,10 +757,7 @@
           try {
             const response = await fetch(`/api/document-flow/source-documents?${params.toString()}`, { credentials: 'same-origin' });
             const data = await response.json();
-            const sourceType = this.searchCriteria.source_type;
-            this.sourceDocuments = (data.source_documents || [])
-              .filter((doc) => !sourceType || doc.source_type === sourceType)
-              .map((doc) => { return { ...doc, selected: false }; });
+            this.sourceDocuments = this.processSourceDocuments(data.source_documents);
             this.loadingSource = false;
           } catch (err) {
             console.warn('Error al obtener source documents:', err);
@@ -716,24 +765,25 @@
           }
         },
 
+        processSourceDocuments(rawDocs) {
+          const docs = rawDocs || [];
+          const sourceType = this.searchCriteria.source_type;
+          return docs
+            .filter((doc) => !sourceType || doc.source_type === sourceType)
+            .map((doc) => ({ ...doc, selected: false }));
+        },
+
         async fetchSourceItems() {
           const selectedIds = this.sourceDocuments.filter((d) => d.selected).map((d) => d.source_id);
           if (!selectedIds.length) return;
 
-          const params = new URLSearchParams();
-          params.append('source_type', this.searchCriteria.source_type);
-          params.append('target_type', this.formKey.split('.')[1]);
-          params.append('company', this.header.company);
-          selectedIds.forEach((id) => { params.append('source_id', id); });
-
+          const params = this.buildSourceItemsParams(selectedIds);
           this.loadingSource = true;
           this.autofillStep = 2;
           try {
             const response = await fetch(`/api/document-flow/pending-lines?${params.toString()}`, { credentials: 'same-origin' });
             const data = await response.json();
-            this.sourceItems = (data.items || []).map((item) => {
-              return { ...item, selected: true };
-            });
+            this.sourceItems = this.mapSourceItems(data.items);
             this.loadingSource = false;
           } catch (err) {
             console.warn('Error al obtener source items:', err);
@@ -741,40 +791,68 @@
           }
         },
 
-        applySource() {
-          this.sourceItems.filter((item) => {
-            return item.selected;
-          }).forEach((item) => {
-            const exists = this.lines.some((line) => {
-              return line.source_type === item.source_type &&
-                line.source_id === item.source_id &&
-                line.source_item_id === item.source_item_id;
-            });
-            if (exists) return;
-            let selectedQty = item.qty;
-            if (selectedQty === null || selectedQty === undefined || selectedQty === '') {
-              selectedQty = item.pending_qty || 0;
-            }
-            const line = this.newLine();
-            line.item_code = item.item_code || '';
-            line.item_name = item.item_name || '';
-            line.qty = toNumber(selectedQty);
-            line.uom = item.uom || '';
-            line.rate = toNumber(item.rate || 0);
-            line.source_type = item.source_type || '';
-            line.source_id = item.source_id || '';
-            line.source_document_no = item.source_document_no || '';
-            line.source_item_id = item.source_item_id || '';
-            this.syncLineFromItem(line, false);
-            this.calcAmount(line);
-            this.lines.push(line);
-          });
+        buildSourceItemsParams(selectedIds) {
+          const params = new URLSearchParams();
+          params.append('source_type', this.searchCriteria.source_type);
+          params.append('target_type', this.formKey.split('.')[1]);
+          params.append('company', this.header.company);
+          selectedIds.forEach((id) => { params.append('source_id', id); });
+          return params;
+        },
 
-          this.lines = this.lines.filter((line) => {
-            return line.item_code || line.item_name || line.source_id;
-          });
+        applySource() {
+          this.processSelectedSourceItems();
+          this.cleanupEmptyLines();
           if (!this.lines.length) this.addRow();
           this.queueTaxPreview();
+        },
+
+        processSelectedSourceItems() {
+          this.sourceItems.filter((item) => item.selected).forEach((item) => {
+            this.addSourceItemAsLine(item);
+          });
+        },
+
+        addSourceItemAsLine(item) {
+          if (this.lineAlreadyExists(item)) return;
+          const line = this.createLineFromSourceItem(item);
+          this.lines.push(line);
+        },
+
+        lineAlreadyExists(item) {
+          return this.lines.some((line) =>
+            line.source_type === item.source_type &&
+            line.source_id === item.source_id &&
+            line.source_item_id === item.source_item_id
+          );
+        },
+
+        createLineFromSourceItem(item) {
+          const line = this.newLine();
+          line.item_code = item.item_code || '';
+          line.item_name = item.item_name || '';
+          line.qty = this.normalizeSourceQty(item);
+          line.uom = item.uom || '';
+          line.rate = toNumber(item.rate || 0);
+          line.source_type = item.source_type || '';
+          line.source_id = item.source_id || '';
+          line.source_document_no = item.source_document_no || '';
+          line.source_item_id = item.source_item_id || '';
+          this.syncLineFromItem(line, false);
+          this.calcAmount(line);
+          return line;
+        },
+
+        normalizeSourceQty(item) {
+          const qty = item.qty;
+          if (qty !== null && qty !== undefined && qty !== '') return toNumber(qty);
+          return toNumber(item.pending_qty || 0);
+        },
+
+        cleanupEmptyLines() {
+          this.lines = this.lines.filter((line) =>
+            line.item_code || line.item_name || line.source_id
+          );
         },
 
         moveColumn(index, direction) {

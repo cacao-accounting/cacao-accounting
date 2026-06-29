@@ -494,6 +494,27 @@ def _build_hierarchical_financial_rows(
     return _flatten_hierarchical_rows(sections_order, section_nodes, section_non_account_rows)
 
 
+def _ensure_parent_nodes_exist(
+    nodes: dict[str, dict[str, object]],
+    account_code: str,
+    row_section: object,
+) -> None:
+    """Garantiza que todos los nodos padre existan en la coleccion."""
+    code_parts = account_code.split(".")
+    for index in range(1, len(code_parts)):
+        parent_code = ".".join(code_parts[:index])
+        parent_node = nodes.setdefault(
+            parent_code,
+            {
+                "section": row_section,
+                "account_code": parent_code,
+                "account_name": None,
+            },
+        )
+        if row_section and not parent_node.get("section"):
+            parent_node["section"] = row_section
+
+
 def _collect_section_nodes(
     source_rows: list[dict[str, object]],
 ) -> tuple[list[str], dict[str, dict[str, dict[str, object]]], dict[str, list[dict[str, object]]]]:
@@ -513,20 +534,50 @@ def _collect_section_nodes(
         node = {**existing_node, **dict(row)}
         node["account_code"] = account_code
         nodes[account_code] = node
-        code_parts = account_code.split(".")
-        for index in range(1, len(code_parts)):
-            parent_code = ".".join(code_parts[:index])
-            parent_node = nodes.setdefault(
-                parent_code,
-                {
-                    "section": row.get("section"),
-                    "account_code": parent_code,
-                    "account_name": None,
-                },
-            )
-            if row.get("section") and not parent_node.get("section"):
-                parent_node["section"] = row.get("section")
+        _ensure_parent_nodes_exist(nodes, account_code, row.get("section"))
     return sections_order, section_nodes, section_non_account_rows
+
+
+def _build_children_map(codes: set[str]) -> dict[str, list[str]]:
+    """Construye mapa de relaciones padre-hijo para códigos de cuenta."""
+    children_map: dict[str, list[str]] = {}
+    for code in codes:
+        parent = ".".join(code.split(".")[:-1])
+        if parent:
+            children_map.setdefault(parent, []).append(code)
+    return children_map
+
+
+def _compute_numeric_fields(nodes: dict[str, dict[str, object]]) -> set[str]:
+    """Calcula los campos numéricos presentes en los nodos."""
+    return {
+        field
+        for row in nodes.values()
+        for field, value in row.items()
+        if field in _MONEY_COLUMNS and isinstance(value, (int, float, Decimal, str))
+    }
+
+
+def _get_account_names(account_codes: list[str], company: str) -> dict[str, str]:
+    """Obtiene nombres de cuentas desde la base de datos."""
+    return {
+        account.code: account.name
+        for account in database.session.execute(
+            database.select(Accounts).where(Accounts.entity == company, Accounts.code.in_(account_codes))
+        ).scalars()
+    }
+
+
+def _enrich_node_metadata(
+    node: dict[str, object],
+    node_code: str,
+    account_name: str | None,
+    children_map: dict[str, list[str]],
+) -> None:
+    """Enriquece un nodo individual con metadatos calculados."""
+    node["account_name"] = node.get("account_name") or account_name or node_code
+    node["level"] = node_code.count(".") + 1
+    node["is_group"] = bool(children_map.get(node_code))
 
 
 def _enrich_section_nodes(section_nodes: dict[str, dict[str, dict[str, object]]], company: str) -> None:
@@ -534,28 +585,12 @@ def _enrich_section_nodes(section_nodes: dict[str, dict[str, dict[str, object]]]
         if not nodes:
             continue
         account_codes = list(nodes)
-        account_names = {
-            account.code: account.name
-            for account in database.session.execute(
-                database.select(Accounts).where(Accounts.entity == company, Accounts.code.in_(account_codes))
-            ).scalars()
-        }
-        numeric_fields = {
-            field
-            for row in nodes.values()
-            for field, value in row.items()
-            if field in _MONEY_COLUMNS and isinstance(value, (int, float, Decimal, str))
-        }
-        children_map: dict[str, list[str]] = {}
-        for code in nodes:
-            parent = ".".join(code.split(".")[:-1])
-            if parent:
-                children_map.setdefault(parent, []).append(code)
+        account_names = _get_account_names(account_codes, company)
+        numeric_fields = _compute_numeric_fields(nodes)
+        children_map = _build_children_map(set(nodes.keys()))
         _propagate_child_amounts_to_parents(nodes, numeric_fields)
         for node_code, node in nodes.items():
-            node["account_name"] = node.get("account_name") or account_names.get(node_code) or node_code
-            node["level"] = node_code.count(".") + 1
-            node["is_group"] = bool(children_map.get(node_code))
+            _enrich_node_metadata(node, node_code, account_names.get(node_code), children_map)
 
 
 def _propagate_child_amounts_to_parents(nodes: dict[str, dict[str, object]], numeric_fields: set[str]) -> None:
@@ -569,6 +604,29 @@ def _propagate_child_amounts_to_parents(nodes: dict[str, dict[str, object]], num
             nodes[parent][field] = parent_amount + child_amount
 
 
+def _find_root_codes(nodes: dict[str, dict[str, object]]) -> list[str]:
+    """Encuentra los códigos raíz que no tienen padre en el mismo conjunto."""
+    return sorted(
+        [code for code in nodes if ".".join(code.split(".")[:-1]) not in nodes],
+        key=str,
+    )
+
+
+def _flatten_section(
+    section: str,
+    nodes: dict[str, dict[str, object]],
+    non_account_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Flattenea una seccion individual."""
+    result = list(non_account_rows)
+    if not nodes:
+        return result
+    ordered_children_map = _build_children_map(set(nodes.keys()))
+    root_codes = _find_root_codes(nodes)
+    result.extend(_flatten_nodes_by_root(nodes, ordered_children_map, root_codes))
+    return result
+
+
 def _flatten_hierarchical_rows(
     sections_order: list[str],
     section_nodes: dict[str, dict[str, dict[str, object]]],
@@ -576,20 +634,9 @@ def _flatten_hierarchical_rows(
 ) -> list[dict[str, object]]:
     flattened_rows: list[dict[str, object]] = []
     for section in sections_order:
-        flattened_rows.extend(section_non_account_rows.get(section, []))
         nodes = section_nodes.get(section, {})
-        if not nodes:
-            continue
-        ordered_children_map: dict[str, list[str]] = {}
-        for code in nodes:
-            parent = ".".join(code.split(".")[:-1])
-            if parent:
-                ordered_children_map.setdefault(parent, []).append(code)
-        root_codes = sorted(
-            [code for code in nodes if ".".join(code.split(".")[:-1]) not in nodes],
-            key=str,
-        )
-        flattened_rows.extend(_flatten_nodes_by_root(nodes, ordered_children_map, root_codes))
+        non_account = section_non_account_rows.get(section, [])
+        flattened_rows.extend(_flatten_section(section, nodes, non_account))
     return flattened_rows
 
 
