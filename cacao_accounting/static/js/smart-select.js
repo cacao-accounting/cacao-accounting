@@ -14,28 +14,30 @@
   function normalizeValue(value) {
     if (value === null || value === undefined) return '';
     if (typeof value === 'function') return normalizeValue(value());
-    // Preserve arrays so appendParam can send each element as a separate param
     if (Array.isArray(value)) return value;
 
     if (typeof value === 'object') {
-      if (value.selector) {
-        const el = document.querySelector(value.selector);
-        if (el) {
-          // If it's a div (like our smart-select container), look for the hidden input
-          if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT') {
-            const hidden = el.querySelector ? el.querySelector('input[type="hidden"]') : null;
-            if (hidden) return hidden.value;
-          }
-          const rawValue = el.value;
-          if (rawValue === undefined || rawValue === null || rawValue === '') return '';
-          if (typeof rawValue === 'object') return normalizeObjectValue(rawValue);
-          return String(rawValue);
-        }
-        return '';
-      }
-      return normalizeObjectValue(value);
+      return normalizeObjectValueFromSelector(value);
     }
     return String(value);
+  }
+
+  function normalizeObjectValueFromSelector(value) {
+    if (!value.selector) return normalizeObjectValue(value);
+    const el = document.querySelector(value.selector);
+    if (!el) return '';
+    return extractValueFromElement(el);
+  }
+
+  function extractValueFromElement(el) {
+    if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT') {
+      const hidden = el.querySelector ? el.querySelector('input[type="hidden"]') : null;
+      if (hidden) return hidden.value;
+    }
+    const rawValue = el.value;
+    if (rawValue === undefined || rawValue === null || rawValue === '') return '';
+    if (typeof rawValue === 'object') return normalizeObjectValue(rawValue);
+    return String(rawValue);
   }
 
   function appendParam(params, key, value) {
@@ -98,25 +100,29 @@
             this.preloadOptions();
           }
 
-          // Watch selectedValue to update search label when changed from outside
           if (typeof this.$watch === 'function') {
-            this.$watch('selectedValue', (value) => {
-              const normalized = normalizeValue(value);
-              if (!normalized) {
-                this.search = '';
-                this.selectedLabel = '';
-              } else {
-                const opt = this.options.find((o) => normalizeValue(o.value ?? o.id) === normalized);
-                if (opt) {
-                  this.selectedLabel = opt.display_name || opt.label || '';
-                  this.search = this.selectedLabel;
-                } else if (normalized !== normalizeValue(this.selectedLabel)) {
-                  // Keep label if we have it, otherwise fallback to value
-                  this.search = this.selectedLabel || normalized;
-                }
-              }
-              this.syncFilledState();
-            });
+            this.$watch('selectedValue', this.handleSelectedValueChange.bind(this));
+          }
+        },
+
+        handleSelectedValueChange(value) {
+          const normalized = normalizeValue(value);
+          if (!normalized) {
+            this.search = '';
+            this.selectedLabel = '';
+          } else {
+            this.updateLabelFromOptions(normalized);
+          }
+          this.syncFilledState();
+        },
+
+        updateLabelFromOptions(normalized) {
+          const opt = this.options.find((o) => normalizeValue(o.value ?? o.id) === normalized);
+          if (opt) {
+            this.selectedLabel = opt.display_name || opt.label || '';
+            this.search = this.selectedLabel;
+          } else if (normalized !== normalizeValue(this.selectedLabel)) {
+            this.search = this.selectedLabel || normalized;
           }
         },
 
@@ -166,17 +172,25 @@
 
         onFocus() {
           if (this.preloadOnFocus) {
-            if (this.loading) {
-              this.open = true;
-            } else if (!this.open) {
-              if (this.options.length > 0) {
-                this.open = true;
-              } else if (this.requiredFiltersPresent()) {
-                this.preloadOptions({ openMenu: true });
-              }
-            }
+            this.handlePreloadOnFocus();
           } else if (this.options.length > 0) {
             this.open = true;
+          }
+        },
+
+        handlePreloadOnFocus() {
+          if (this.loading) {
+            this.open = true;
+          } else if (!this.open) {
+            this.openWhenNotOpen();
+          }
+        },
+
+        openWhenNotOpen() {
+          if (this.options.length > 0) {
+            this.open = true;
+          } else if (this.requiredFiltersPresent()) {
+            this.preloadOptions({ openMenu: true });
           }
         },
 
@@ -205,32 +219,14 @@
         async preloadOptions(settings) {
           const loadSettings = settings || {};
           this.error = '';
-          const params = new URLSearchParams();
-          params.append('doctype', this.doctype);
-          params.append('q', '');
-          params.append('limit', this.limit);
-
-          const currentFilters = this.resolvedFilters();
-          Object.keys(currentFilters).forEach((key) => {
-            appendParam(params, key, currentFilters[key]);
-          });
-
+          const params = this.buildSearchParams('');
           this.loading = true;
           if (loadSettings.openMenu) {
             this.open = true;
           }
           try {
-            const response = await fetch(`${this.endpoint}?${params.toString()}`, { credentials: 'same-origin' });
-            if (!response.ok) throw new Error(response.statusText);
-            const data = await response.json();
-            this.options = data.results || [];
-            this.loading = false;
-            if (!this.selectedValue && this.autoSelectDefault) {
-              const defaultOption = this.options.find((opt) => opt.is_default);
-              if (defaultOption) {
-                this.selectOption(defaultOption);
-              }
-            }
+            const response = await this.fetchOptionsResponse(params);
+            this.handlePreloadResponse(response);
           } catch (err) {
             this.options = [];
             this.loading = false;
@@ -238,26 +234,72 @@
           }
         },
 
+        async fetchOptionsResponse(params) {
+          const response = await fetch(`${this.endpoint}?${params.toString()}`, { credentials: 'same-origin' });
+          if (!response.ok) throw new Error(response.statusText);
+          return response.json();
+        },
+
+        handlePreloadResponse(data) {
+          this.options = data.results || [];
+          this.loading = false;
+          if (!this.selectedValue && this.autoSelectDefault) {
+            this.autoSelectDefaultOption();
+          }
+        },
+
+        autoSelectDefaultOption() {
+          const defaultOption = this.options.find((opt) => opt.is_default);
+          if (defaultOption) {
+            this.selectOption(defaultOption);
+          }
+        },
+
         async fetchOptions() {
           const query = this.search.trim();
           this.error = '';
-          if (this.requiredFilters.length && !this.requiredFiltersPresent()) {
+          if (!this.hasValidFilters()) {
             this.options = [];
             this.open = false;
             this.loading = false;
             return;
           }
           if (query.length < this.minChars) {
-            if (this.hasPreloadedOptions()) {
-              this.open = true;
-              return;
-            }
-            this.options = [];
-            this.open = false;
-            this.loading = false;
+            this.handleShortQuery();
             return;
           }
 
+          const params = this.buildSearchParams(query);
+          this.loading = true;
+          this.open = true;
+          try {
+            const data = await this.fetchOptionsResponse(params);
+            this.options = data.results || [];
+            this.loading = false;
+            this.open = true;
+          } catch (err) {
+            this.options = [];
+            this.loading = false;
+            this.error = this.messages.error;
+            this.open = true;
+          }
+        },
+
+        hasValidFilters() {
+          return !this.requiredFilters.length || this.requiredFiltersPresent();
+        },
+
+        handleShortQuery() {
+          if (this.hasPreloadedOptions()) {
+            this.open = true;
+            return;
+          }
+          this.options = [];
+          this.open = false;
+          this.loading = false;
+        },
+
+        buildSearchParams(query) {
           const params = new URLSearchParams();
           params.append('doctype', this.doctype);
           params.append('q', query);
@@ -267,22 +309,7 @@
           Object.keys(currentFilters).forEach((key) => {
             appendParam(params, key, currentFilters[key]);
           });
-
-          this.loading = true;
-          this.open = true;
-          try {
-            const response = await fetch(`${this.endpoint}?${params.toString()}`, { credentials: 'same-origin' });
-            if (!response.ok) throw new Error(response.statusText);
-            const data = await response.json();
-            this.options = data.results || [];
-            this.loading = false;
-            this.open = true;
-          } catch (err) {
-            this.options = [];
-            this.loading = false;
-            this.error = this.messages.error;
-            this.open = true;
-          }
+          return params;
         },
 
         selectOptionValue(value, label) {
