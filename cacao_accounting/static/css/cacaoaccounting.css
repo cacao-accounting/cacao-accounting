@@ -446,10 +446,11 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 
 .ca-module-grid {
   display: grid;
-  grid-template-columns: var(--ca-module-grid-columns);
-  gap: var(--ca-module-grid-gap);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
   margin-top: var(--ca-module-grid-margin-top);
   width: 100%;
+  align-items: start;
 }
 
 nav[aria-label="breadcrumb"] {
