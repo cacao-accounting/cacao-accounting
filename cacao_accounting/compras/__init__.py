@@ -1553,38 +1553,9 @@ def compras_orden_compra_nuevo():
     )
     titulo = "Nueva Orden de Compra - " + APPNAME
     if request.method == "POST":
-        try:
-            supplier_id = request.form.get("supplier_id") or None
-            supplier = database.session.get(Party, supplier_id) if supplier_id else None
-            posting_date = _parse_date(request.form.get("posting_date"))
-            orden = PurchaseOrder(
-                supplier_id=supplier_id,
-                supplier_name=supplier.name if supplier else None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(orden)
-            database.session.flush()
-            assign_document_identifier(
-                document=orden,
-                entity_type="purchase_order",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            total_qty, total = _save_purchase_order_items(orden.id)
-            orden.total_qty = total_qty
-            orden.total = total
-            orden.net_total = total
-            orden.grand_total = total
-            orden.base_total = total
-            database.session.commit()
-            flash("Orden de compra creada correctamente.", "success")
-            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
-        except IdentifierConfigurationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        response = _create_purchase_order_from_request(request.form)
+        if response is not None:
+            return response
     if from_request_id:
         initial_source_type = "purchase_request"
     elif from_rfq_id:
@@ -1750,6 +1721,43 @@ def _purchase_order_transaction_config(
             for item in lineas
         ],
     }
+
+
+def _create_purchase_order_from_request(form: dict):
+    """Crea una orden de compra desde el formulario enviado."""
+    supplier_id = form.get("supplier_id") or None
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    posting_date = _parse_date(form.get("posting_date"))
+    orden = PurchaseOrder(
+        supplier_id=supplier_id,
+        supplier_name=supplier.name if supplier else None,
+        company=form.get("company") or None,
+        posting_date=posting_date,
+        remarks=form.get("remarks"),
+        docstatus=0,
+    )
+    try:
+        database.session.add(orden)
+        database.session.flush()
+        assign_document_identifier(
+            document=orden,
+            entity_type="purchase_order",
+            posting_date_raw=posting_date,
+            naming_series_id=form.get("naming_series") or None,
+        )
+        total_qty, total = _save_purchase_order_items(orden.id)
+        orden.total_qty = total_qty
+        orden.total = total
+        orden.net_total = total
+        orden.grand_total = total
+        orden.base_total = total
+        database.session.commit()
+        flash("Orden de compra creada correctamente.", "success")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
+    except IdentifierConfigurationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return None
 
 
 def _update_purchase_order_from_request(registro: PurchaseOrder):
