@@ -457,25 +457,30 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     )
 
 
+def _validate_journal_line(company: str, line: JournalLineInput, account_cache: dict[str, Accounts | None]) -> None:
+    """Valida una linea individual del comprobante."""
+    if not line.account:
+        raise JournalValidationError("Cada linea debe tener una cuenta contable.")
+    if line.debit < 0 or line.credit < 0:
+        raise JournalValidationError("Los importes de debe y haber no pueden ser negativos.")
+    if line.debit > 0 and line.credit > 0:
+        raise JournalValidationError("Una linea no puede tener debe y haber positivos al mismo tiempo.")
+    if line.debit == 0 and line.credit == 0:
+        raise JournalValidationError("Cada linea debe tener un importe en debe o en haber.")
+    account = account_cache.get(line.account)
+    if line.account not in account_cache:
+        account = _account_record(company, line.account)
+        account_cache[line.account] = account
+    if account is not None and account.account_type == "expense" and not line.cost_center:
+        raise JournalValidationError("Las cuentas de gasto requieren centro de costo.")
+
+
 def _validate_balanced_lines(company: str, lines: list[JournalLineInput]) -> None:
     account_cache: dict[str, Accounts | None] = {}
     total_debit = Decimal("0")
     total_credit = Decimal("0")
     for line in lines:
-        if not line.account:
-            raise JournalValidationError("Cada linea debe tener una cuenta contable.")
-        if line.debit < 0 or line.credit < 0:
-            raise JournalValidationError("Los importes de debe y haber no pueden ser negativos.")
-        if line.debit > 0 and line.credit > 0:
-            raise JournalValidationError("Una linea no puede tener debe y haber positivos al mismo tiempo.")
-        if line.debit == 0 and line.credit == 0:
-            raise JournalValidationError("Cada linea debe tener un importe en debe o en haber.")
-        account = account_cache.get(line.account)
-        if line.account not in account_cache:
-            account = _account_record(company, line.account)
-            account_cache[line.account] = account
-        if account is not None and account.account_type == "expense" and not line.cost_center:
-            raise JournalValidationError("Las cuentas de gasto requieren centro de costo.")
+        _validate_journal_line(company, line, account_cache)
         total_debit += line.debit
         total_credit += line.credit
     if total_debit != total_credit:
