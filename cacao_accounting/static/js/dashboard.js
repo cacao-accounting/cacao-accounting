@@ -99,21 +99,23 @@
             const data = await response.json();
             return { ok: response.ok, data };
           })
-          .then((result) => {
-            if (!result.ok) {
-              this.error = result.data.error || config.messages.dashboardLoadError;
-              this.payload = { sections: {} };
-              return;
-            }
-            this.payload = result.data;
-            this.$nextTick(() => this.renderCharts());
-          })
+          .then((result) => this._handleDashboardSuccess(result))
           .catch(() => {
             this.error = config.messages.dashboardLoadError;
           })
           .finally(() => {
             this.loading = false;
           });
+      },
+
+      _handleDashboardSuccess(result) {
+        if (!result.ok) {
+          this.error = result.data.error || config.messages.dashboardLoadError;
+          this.payload = { sections: {} };
+          return;
+        }
+        this.payload = result.data;
+        this.$nextTick(this.renderCharts.bind(this));
       },
       section(key) {
         return this.payload.sections[key] || { visible: false, kpis: {}, tables: {}, charts: {}, actions: [] };
