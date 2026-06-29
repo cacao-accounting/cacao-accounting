@@ -136,6 +136,19 @@
       });
   }
 
+  function syncJournalBooksFromCompany(context, companyValue) {
+    var selectedCompany = context.syncCompanyFilterValue(companyValue);
+    context.loadBookOptions(selectedCompany);
+  }
+
+  function handleJournalCompanySelected(context, event) {
+    var selectedCompany = '';
+    if (event && event.detail) {
+      selectedCompany = event.detail.value || event.detail.id || '';
+    }
+    syncJournalBooksFromCompany(context, selectedCompany);
+  }
+
   globalThis.journalEntryForm = function (config) {
     return {
       formKey: config.formKey,
@@ -184,24 +197,11 @@
       init: function () {
         this.lines = (this.lines || []).map(this.normalizeLine.bind(this));
         if (!this.lines.length) this.addMultipleRows(2);
-        const self = this;
         var companyInput = document.getElementById('company');
         if (companyInput) {
-          var loadBooks = this.loadBookOptions.bind(this);
-          var syncAndLoadBooks = function () {
-            var selectedCompany = self.syncCompanyFilterValue();
-            loadBooks(selectedCompany);
-          };
-          companyInput.addEventListener('change', syncAndLoadBooks);
-          companyInput.addEventListener('input', syncAndLoadBooks);
-          document.addEventListener('company-selected', function (event) {
-            var selectedCompany = '';
-            if (event && event.detail) {
-              selectedCompany = event.detail.value || event.detail.id || '';
-            }
-            selectedCompany = self.syncCompanyFilterValue(selectedCompany);
-            loadBooks(selectedCompany);
-          });
+          companyInput.addEventListener('change', () => syncJournalBooksFromCompany(this));
+          companyInput.addEventListener('input', () => syncJournalBooksFromCompany(this));
+          document.addEventListener('company-selected', (event) => handleJournalCompanySelected(this, event));
         }
         this.syncCompanyFilterValue(this.header.company);
         if (this.header.company) this.loadBookOptions(this.header.company);

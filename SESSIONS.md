@@ -5,6 +5,13 @@
 - **Implementacion:** Se actualizo el docstring de `_persist_bank_transaction` en `cacao_accounting/bancos/statement_service.py` para usar modo imperativo en ingles y cumplir `D401`.
 - **Verificacion:** `venv/bin/python -m flake8 cacao_accounting/` quedo en verde tras el cambio.
 
+## 2026-06-29 (Consulta SonarCloud API y limpieza de bajo riesgo)
+- **Solicitud:** Usar la API de SonarCloud para enumerar issues abiertos del proyecto y arrancar con refactors puntuales, evitando tocar hotspots de negocio sin validar primero.
+- **Consulta API:** Se consulto `https://sonarcloud.io/api/issues/search?componentKeys=cacao-accounting_cacao-accounting&resolved=false` y se confirmaron 113 issues abiertos.
+- **Hallazgos iniciales:** Predominan `javascript:S2004`, `python:S3776`, `javascript:S2486`, `javascript:S7735`, `javascript:S7740` y algunos avisos menores de CSS/HTML. Se priorizaron los de menor riesgo semantico.
+- **Implementacion:** Se refactorizo `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html` para extraer helpers de sincronizacion de libros por compania y eliminar el patron `this -> self`; ademas se limpio `cacao_accounting/static/css/cacaoaccounting.css` retirando una propiedad de borde redundante.
+- **Verificacion:** `tests/test_01vistas.py::test_visit_views` paso en verde tras el cambio.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
