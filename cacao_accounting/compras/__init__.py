@@ -530,7 +530,7 @@ def _create_supplier_quotation_from_request():
             posting_date_raw=posting_date,
             naming_series_id=request.form.get("naming_series") or None,
         )
-        total_qty, total = _save_supplier_quotation_items(cotizacion.id)
+        _, total = _save_supplier_quotation_items(cotizacion.id)
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
