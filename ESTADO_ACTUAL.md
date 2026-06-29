@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Ventas orden de venta (2026-06-29):** Se cerro un issue menor en `cacao_accounting/ventas/__init__.py`.
+  - La resolucion del `initialSourceType` ahora vive en `_sales_order_initial_source_type()` con flujo explicito.
+  - Se agrego una prueba focal en `tests/test_03webactions.py` para cubrir solicitud, cotizacion, vacio y precedencia.
+  - `ruff`, `mypy` y la prueba focal quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
+
 - **SonarCloud / Compras factura de compra (2026-06-29):** Se cerro un issue menor en `cacao_accounting/compras/__init__.py`.
   - `_purchase_invoice_document_type()` ahora usa flujo explicito en lugar de ternario anidado para resolver `purchase_return`, `purchase_credit_note` o `purchase_invoice`.
   - Se agrego una prueba focal en `tests/test_03webactions.py` para cubrir la precedencia de origenes y el override explicito de `document_type`.
