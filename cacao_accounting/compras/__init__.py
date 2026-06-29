@@ -1815,12 +1815,14 @@ def compras_solicitud_cotizacion_nueva():
         items=items_disponibles,
         uoms=uoms_disponibles,
         initial_source_type="purchase_request" if from_request_id else "",
-        initial_header={
-            "company": solicitud_origen.company or "",
-            "posting_date": str(date.today()),
-        }
-        if solicitud_origen
-        else None,
+        initial_header=(
+            {
+                "company": solicitud_origen.company or "",
+                "posting_date": str(date.today()),
+            }
+            if solicitud_origen
+            else None
+        ),
         columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
     )
     if request.method == "POST":
@@ -2528,17 +2530,12 @@ def _purchase_invoice_source_ids() -> dict[str, str | None]:
 
 def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
     """Resolve the document type for the purchase invoice."""
-    return (
-        request.args.get("document_type")
-        or request.form.get("document_type")
-        or (
-            PURCHASE_RETURN
-            if source_ids["from_receipt_id"]
-            else PURCHASE_CREDIT_NOTE
-            if source_ids["from_invoice_id"]
-            else PURCHASE_INVOICE
-        )
+    doc_type = (
+        PURCHASE_RETURN
+        if source_ids["from_receipt_id"]
+        else PURCHASE_CREDIT_NOTE if source_ids["from_invoice_id"] else PURCHASE_INVOICE
     )
+    return request.args.get("document_type") or request.form.get("document_type") or doc_type
 
 
 def _purchase_invoice_sources(
@@ -2547,9 +2544,7 @@ def _purchase_invoice_sources(
     """Load the source documents for the purchase invoice."""
     orden_origen = database.session.get(PurchaseOrder, source_ids["from_order_id"]) if source_ids["from_order_id"] else None
     recepcion_origen = (
-        database.session.get(PurchaseReceipt, source_ids["from_receipt_id"])
-        if source_ids["from_receipt_id"]
-        else None
+        database.session.get(PurchaseReceipt, source_ids["from_receipt_id"]) if source_ids["from_receipt_id"] else None
     )
     factura_origen = (
         database.session.get(PurchaseInvoice, source_ids["from_invoice_id"]) if source_ids["from_invoice_id"] else None
