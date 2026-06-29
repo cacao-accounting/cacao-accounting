@@ -354,11 +354,11 @@ class ImportService:
     def _check_batch_cancellation(self, batch: Any, batch_id: str) -> bool:
         """Verifica si el batch fue cancelado."""
         database.session.expire(batch)
-        batch = database.session.get(ImportBatch, batch_id)
-        if not batch:
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if not current_batch:
             return True
-        if batch.cancel_requested:
-            batch.import_status = 8
+        if current_batch.cancel_requested:
+            current_batch.import_status = 8
             database.session.commit()
             return True
         return False
@@ -374,26 +374,26 @@ class ImportService:
 
     def _update_batch_progress(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
         """Actualiza el progreso del batch durante ejecución."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if batch:
-            batch.processed_rows = min(success_count + error_count, batch.total_rows or 0)
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if current_batch:
+            current_batch.processed_rows = min(success_count + error_count, current_batch.total_rows or 0)
             database.session.commit()
 
     def _finalize_execution(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
         """Finaliza la ejecución actualizando estados y contadores."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if batch:
-            batch.success_rows = success_count
-            batch.error_rows = error_count
-            batch.completed_at = datetime.now()
-            batch.import_status = 5 if error_count == 0 else 6
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if current_batch:
+            current_batch.success_rows = success_count
+            current_batch.error_rows = error_count
+            current_batch.completed_at = datetime.now()
+            current_batch.import_status = 5 if error_count == 0 else 6
             database.session.commit()
 
     def _handle_execution_error(self, batch: Any, batch_id: str, e: Exception) -> None:
         """Maneja errores fatales durante la ejecución."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if batch:
-            batch.import_status = 7
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if current_batch:
+            current_batch.import_status = 7
             err_record = ImportBatchError(batch_id=batch_id, error_type="FATAL_ERROR", message=str(e))
             database.session.add(err_record)
             database.session.commit()

@@ -12,6 +12,11 @@
 - **Implementacion:** Se refactorizo `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html` para extraer helpers de sincronizacion de libros por compania y eliminar el patron `this -> self`; ademas se limpio `cacao_accounting/static/css/cacaoaccounting.css` retirando una propiedad de borde redundante.
 - **Verificacion:** `tests/test_01vistas.py::test_visit_views` paso en verde tras el cambio.
 
+## 2026-06-29 (SonarCloud: limpieza de acumulador temporal en importaciones)
+- **Solicitud:** Cerrar un issue menor de SonarCloud en `imports/services/import_service.py` sin tocar la logica funcional.
+- **Implementacion:** Se reemplazaron reasignaciones de `batch` por `current_batch` en `_check_batch_cancellation`, `_update_batch_progress`, `_finalize_execution` y `_handle_execution_error` para eliminar ruido de analisis estatico.
+- **Verificacion:** `venv/bin/python -m black cacao_accounting/imports/services/import_service.py`, `ruff`, `mypy` focal y `tests/imports/test_service.py` quedaron en verde.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
