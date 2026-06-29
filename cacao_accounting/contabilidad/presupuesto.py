@@ -368,24 +368,38 @@ def importar(budget_id):
         return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
     if request.method == "POST":
-        import_id = request.form.get("import_id")
-        if import_id:
-            # Paso 2: Confirmar importación desde estiba
-            try:
-                BudgetImportService().insert_lines(import_id, str(current_user.id))
-                flash("Importación completada exitosamente.", "success")
-                return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
-            except Exception as e:
-                flash(f"Error al procesar la importación: {str(e)}", "danger")
+        return _handle_budget_import_post(budget, budget_id)
+
+    return render_template(
+        "contabilidad/presupuestos/import.html",
+        budget=budget,
+        columns=BudgetImportService().get_template_columns(budget_id),
+        titulo="Importar Presupuesto - " + APPNAME,
+    )
+
+
+def _handle_budget_import_post(budget: Budget, budget_id: str):
+    """Maneja el POST de importacion de presupuesto (paso 1 o 2)."""
+    import_id = request.form.get("import_id")
+    if import_id:
+        try:
+            BudgetImportService().insert_lines(import_id, str(current_user.id))
+            flash("Importación completada exitosamente.", "success")
+            return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
+        except Exception as e:
+            flash(f"Error al procesar la importación: {str(e)}", "danger")
+    else:
+        file = request.files.get("file")
+        if not file:
+            flash("Por favor suba un archivo válido.", "danger")
         else:
-            # Paso 1: Subir y validar (estiba)
-            file = request.files.get("file")
-            if not file:
-                flash("Por favor suba un archivo válido.", "danger")
+            filename = file.filename
+            if not filename:
+                flash("El archivo no tiene nombre válido.", "danger")
             else:
                 try:
                     import_service = BudgetImportService()
-                    import_obj = import_service.validate_import(budget_id, file.filename, file.read(), str(current_user.id))
+                    import_obj = import_service.validate_import(budget_id, filename, file.read(), str(current_user.id))
                     staged_lines = import_service.get_staged_lines(import_obj.id, limit=100)
 
                     return render_template(
@@ -397,7 +411,6 @@ def importar(budget_id):
                     )
                 except Exception as e:
                     flash(f"Error al procesar el archivo: {str(e)}", "danger")
-
     return render_template(
         "contabilidad/presupuestos/import.html",
         budget=budget,
