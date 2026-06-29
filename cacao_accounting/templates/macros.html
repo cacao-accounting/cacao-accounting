@@ -535,6 +535,7 @@
     <div class="table-responsive">
       <p class="text-muted small mb-2">{{ _('Detalle de tareas vinculadas al documento, con prioridad, estado y vencimiento.') }}</p>
       <table class="table table-sm align-middle mb-0">
+        <caption class="visually-hidden">{{ _('Tareas del documento') }}</caption>
         <thead><tr><th>{{ _('Titulo') }}</th><th>{{ _('Prioridad') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Vencimiento') }}</th></tr></thead>
         <tbody>
           {% for task in tasks %}
