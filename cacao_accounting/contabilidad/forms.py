@@ -25,6 +25,7 @@ PADDING_DIGITOS = "Padding (digitos)"
 CODIGO = "Código"
 FECHA_INICIO = "Fecha Inicio"
 FECHA_FIN = "Fecha Fin"
+_LABEL_DESCRIPCION = "Descripción"
 
 ACCOUNT_TYPE_CHOICES = [
     ("", "— Seleccione —"),
@@ -325,11 +326,11 @@ class FormularioAjusteContadorExterno(FlaskForm):
 class FormularioRecurringJournalTemplate(FlaskForm):
     """Formulario para plantillas de comprobantes recurrentes."""
 
-    code = StringField("Código", validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[DataRequired()])
     company = SelectField("Entidad", validators=[DataRequired()])
     ledger_id = SelectField("Libro", validators=[DataRequired()], validate_choice=False)
     name = StringField("Nombre de la Plantilla", validators=[DataRequired()])
-    description = TextAreaField("Descripción", validators=[Optional()])
+    description = TextAreaField(_LABEL_DESCRIPCION, validators=[Optional()])
     start_date = DateField(FECHA_INICIO, validators=[DataRequired()])
     end_date = DateField(FECHA_FIN, validators=[DataRequired()])
     frequency = SelectField(
@@ -347,9 +348,9 @@ class FormularioBudget(FlaskForm):
     company = SelectField("Compañía", validators=[DataRequired()])
     ledger_id = SelectField("Libro Contable", validators=[DataRequired()], validate_choice=False)
     fiscal_year_id = SelectField("Año Fiscal", validators=[DataRequired()], validate_choice=False)
-    budget_code = StringField("Código", validators=[DataRequired(), Length(max=50)])
+    budget_code = StringField(CODIGO, validators=[DataRequired(), Length(max=50)])
     name = StringField("Nombre", validators=[DataRequired(), Length(max=100)])
-    description = TextAreaField("Descripción", validators=[Optional()])
+    description = TextAreaField(_LABEL_DESCRIPCION, validators=[Optional()])
     currency_id = SelectField("Moneda", validators=[DataRequired()])
 
 
@@ -362,4 +363,4 @@ class FormularioBudgetLine(FlaskForm):
     project_id = SelectField("Proyecto", validators=[Optional()], validate_choice=False)
     period_id = SelectField("Período Contable", validators=[DataRequired()], validate_choice=False)
     amount = DecimalField("Monto", places=4, validators=[InputRequired(), NumberRange(min=0)])
-    description = StringField("Descripción", validators=[Optional(), Length(max=200)])
+    description = StringField(_LABEL_DESCRIPCION, validators=[Optional(), Length(max=200)])
