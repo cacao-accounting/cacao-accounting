@@ -688,24 +688,8 @@ def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
     return columns, data_rows
 
 
-def _export_operational_report(report, report_code: str, title: str, filter_payload: dict[str, object]):
-    export_format = request.args.get("export")
-    if export_format not in {"csv", "xlsx"}:
-        return None
-
+def _write_operational_report_xlsx(report, report_code: str, title: str, filter_payload: dict[str, object]) -> bytes:
     columns, rows = _report_to_matrix(report)
-    if export_format == "csv":
-        buffer = StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow(columns)
-        writer.writerows(rows)
-        return send_file(
-            BytesIO(buffer.getvalue().encode("utf-8")),
-            mimetype="text/csv",
-            as_attachment=True,
-            download_name=f"{report_code}.csv",
-        )
-
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = report_code[:31]
@@ -744,16 +728,10 @@ def _export_operational_report(report, report_code: str, title: str, filter_payl
     filters_sheet.freeze_panes = "A2"
     content = BytesIO()
     workbook.save(content)
-    content.seek(0)
-    return send_file(
-        content,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"{report_code}.xlsx",
-    )
+    return content.getvalue()
 
 
-def _export_financial_report(report, report_code: str, title: str, report_filters: FinancialReportFilters):
+def _export_operational_report(report, report_code: str, title: str, filter_payload: dict[str, object]):
     export_format = request.args.get("export")
     if export_format not in {"csv", "xlsx"}:
         return None
@@ -771,6 +749,17 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
             download_name=f"{report_code}.csv",
         )
 
+    xlsx_content = _write_operational_report_xlsx(report, report_code, title, filter_payload)
+    return send_file(
+        BytesIO(xlsx_content),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"{report_code}.xlsx",
+    )
+
+
+def _write_financial_report_xlsx(report, report_code: str, title: str, report_filters: FinancialReportFilters) -> bytes:
+    columns, rows = _report_to_matrix(report)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = report_code[:31]
@@ -811,9 +800,30 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
     filters_sheet.freeze_panes = "A2"
     content = BytesIO()
     workbook.save(content)
-    content.seek(0)
+    return content.getvalue()
+
+
+def _export_financial_report(report, report_code: str, title: str, report_filters: FinancialReportFilters):
+    export_format = request.args.get("export")
+    if export_format not in {"csv", "xlsx"}:
+        return None
+
+    columns, rows = _report_to_matrix(report)
+    if export_format == "csv":
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(columns)
+        writer.writerows(rows)
+        return send_file(
+            BytesIO(buffer.getvalue().encode("utf-8")),
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=f"{report_code}.csv",
+        )
+
+    xlsx_content = _write_financial_report_xlsx(report, report_code, title, report_filters)
     return send_file(
-        content,
+        BytesIO(xlsx_content),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=f"{report_code}.xlsx",
