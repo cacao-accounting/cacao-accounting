@@ -60,6 +60,11 @@
 - **Implementacion:** `handleSelectedValueChange()` paso a usar una condicion positiva para el valor normalizado antes de actualizar etiqueta/opciones, dejando el caso vacio en el branch `else`.
 - **Verificacion:** `npm test -- --grep smart-select` y `black --check` quedaron en verde. `ruff` no aplica a archivos JavaScript en esta configuracion.
 
+## 2026-06-29 (SonarCloud: condicion positiva en importacion del formulario transaccional)
+- **Solicitud:** Cerrar el issue `javascript:S7735` en `cacao_accounting/static/js/transaction-form.js`.
+- **Implementacion:** `mapImportedRows()` ahora usa `foundIndex >= 0` en lugar de la comparacion negada `!== -1` al resolver columnas importadas.
+- **Verificacion:** `npm test -- --grep transaction-form` y `black --check tests/test_transaction_update_elements.py` quedaron en verde. `ruff` no aplica a archivos JavaScript en esta configuracion.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
