@@ -239,7 +239,7 @@ def compras_solicitud_compra_nueva():
                 posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
-            total_qty, total = _save_purchase_request_items(solicitud.id)
+            _, total = _save_purchase_request_items(solicitud.id)
             solicitud.total = total
             solicitud.base_total = total
             solicitud.grand_total = total
