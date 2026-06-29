@@ -148,6 +148,57 @@ class BudgetImportService:
             result.append(row_dict)
         return result
 
+    def _validate_row_periods(
+        self,
+        row: dict,
+        i: int,
+        account_id: str | None,
+        cc_id: str | None,
+        unit_id: str | None,
+        project_id: str | None,
+        period_map: dict,
+        period_names: set,
+        existing_lines: set,
+        row_combs_to_add: list,
+    ) -> tuple[list, Decimal, list]:
+        """Procesa los valores por periodo de una fila del presupuesto."""
+        row_lines_to_add = []
+        row_total = Decimal("0")
+        row_errors = []
+
+        for p_name in period_names:
+            val = row.get(p_name, "").strip()
+            if not val:
+                continue
+            try:
+                amount = Decimal(val)
+            except InvalidOperation:
+                row_errors.append(f"Monto '{val}' no numérico en {p_name}.")
+                continue
+            if amount == 0:
+                continue
+            p_id = period_map[p_name]
+            comb = (account_id, cc_id, p_id, unit_id or "", project_id or "")
+            if comb in existing_lines or comb in row_combs_to_add:
+                row_errors.append(f"Duplicado para {p_name}.")
+            else:
+                row_lines_to_add.append(
+                    {
+                        "row_index": i,
+                        "account_id": account_id,
+                        "cost_center_id": cc_id,
+                        "period_id": p_id,
+                        "business_unit_id": unit_id,
+                        "project_id": project_id,
+                        "amount": amount,
+                        "description": row.get(_LABEL_DESCRIPCION),
+                    }
+                )
+                row_combs_to_add.append(comb)
+                row_total += amount
+
+        return row_lines_to_add, row_total, row_errors
+
     def validate_import(self, budget_id: str, filename: str, file_content: bytes, user_id: str) -> BudgetImport:
         """Valida e inicializa un lote de importación en staging."""
         rows = self.parse_file(filename, file_content)
@@ -197,15 +248,9 @@ class BudgetImportService:
                 if header and header not in allowed_headers:
                     raise BudgetError(f"Columna desconocida detectada: '{header}'.")
 
-        # Unicidad combinada (NULL-safe)
-        def get_comb_key(acc_id, cc_id, p_id, u_id, proj_id):
-            return (acc_id, cc_id, p_id, u_id or "", proj_id or "")
-
         existing_lines = set()
         for bl in database.session.query(BudgetLine).filter_by(budget_id=budget_id).all():
-            existing_lines.add(
-                get_comb_key(bl.account_id, bl.cost_center_id, bl.period_id, bl.business_unit_id, bl.project_id)
-            )
+            existing_lines.add((bl.account_id, bl.cost_center_id, bl.period_id, bl.business_unit_id or "", bl.project_id or ""))
 
         for i, row in enumerate(rows, start=2):
             row_errors = []
@@ -225,36 +270,11 @@ class BudgetImportService:
             if row.get("Proyecto") and not project_id:
                 row_errors.append(f"Proyecto '{row.get('Proyecto')}' no válido.")
 
-            row_lines_to_add = []
             row_combs_to_add: List[Any] = []
-            row_total = Decimal("0")
-            for p_name in period_names:
-                val = row.get(p_name, "").strip()
-                if val:
-                    try:
-                        amount = Decimal(val)
-                        if amount != 0:
-                            p_id = period_map[p_name]
-                            comb = get_comb_key(account_id, cc_id, p_id, unit_id, project_id)
-                            if comb in existing_lines or comb in row_combs_to_add:
-                                row_errors.append(f"Duplicado para {p_name}.")
-                            else:
-                                row_lines_to_add.append(
-                                    {
-                                        "row_index": i,
-                                        "account_id": account_id,
-                                        "cost_center_id": cc_id,
-                                        "period_id": p_id,
-                                        "business_unit_id": unit_id,
-                                        "project_id": project_id,
-                                        "amount": amount,
-                                        "description": row.get(_LABEL_DESCRIPCION),
-                                    }
-                                )
-                                row_combs_to_add.append(comb)
-                                row_total += amount
-                    except InvalidOperation:
-                        row_errors.append(f"Monto '{val}' no numérico en {p_name}.")
+            row_lines_to_add, row_total, period_errors = self._validate_row_periods(
+                row, i, account_id, cc_id, unit_id, project_id, period_map, period_names, existing_lines, row_combs_to_add,
+            )
+            row_errors.extend(period_errors)
 
             total_val = row.get("Total", "").strip()
             if total_val:
