@@ -152,7 +152,7 @@ def _generate_fiscal_period_ranges(start: date, end: date) -> list[tuple[date, d
 
     ranges: list[tuple[date, date]] = []
     current_start = start
-    for period_index in range(12):
+    for _ in range(12):
         next_start = _add_months(current_start, 1)
         period_end = min(next_start - timedelta(days=1), end)
         ranges.append((current_start, period_end))
