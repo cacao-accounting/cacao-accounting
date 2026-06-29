@@ -239,7 +239,7 @@ def compras_solicitud_compra_nueva():
                 posting_date_raw=posting_date,
                 naming_series_id=request.form.get("naming_series") or None,
             )
-            _, total = _save_purchase_request_items(solicitud.id)
+            _qty, total = _save_purchase_request_items(solicitud.id)
             solicitud.total = total
             solicitud.base_total = total
             solicitud.grand_total = total
@@ -316,7 +316,7 @@ def compras_solicitud_compra_editar(request_id: str):
                 database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
             ).scalars():
                 database.session.delete(item)
-            _, total = _save_purchase_request_items(registro.id)
+            _qty, total = _save_purchase_request_items(registro.id)
             registro.total = total
             registro.base_total = total
             registro.grand_total = total
@@ -530,7 +530,7 @@ def _create_supplier_quotation_from_request():
             posting_date_raw=posting_date,
             naming_series_id=request.form.get("naming_series") or None,
         )
-        _, total = _save_supplier_quotation_items(cotizacion.id)
+        _qty, total = _save_supplier_quotation_items(cotizacion.id)
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
@@ -591,7 +591,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
             database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
         ).scalars():
             database.session.delete(item)
-        _, total = _save_supplier_quotation_items(registro.id)
+        _qty, total = _save_supplier_quotation_items(registro.id)
         registro.total = total
         registro.base_total = total
         registro.grand_total = total
@@ -1909,7 +1909,7 @@ def _create_purchase_quotation_from_request():
             posting_date_raw=posting_date,
             naming_series_id=request.form.get("naming_series") or None,
         )
-        _, total = _save_purchase_quotation_items(cotizacion.id)
+        _qty, total = _save_purchase_quotation_items(cotizacion.id)
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
@@ -1985,7 +1985,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
             database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
         ).scalars():
             database.session.delete(item)
-        _, total = _save_purchase_quotation_items(registro.id)
+        _qty, total = _save_purchase_quotation_items(registro.id)
         registro.total = total
         registro.base_total = total
         registro.grand_total = total
