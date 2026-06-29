@@ -479,6 +479,7 @@ nav[aria-label="breadcrumb"] {
   width: 100%;
   min-height: 0;
   border-top-width: 0 !important;
+  border-color: rgba(82, 97, 89, .18) !important;
   overflow: hidden;
   position: relative;
 }
@@ -1244,19 +1245,9 @@ nav[aria-label="breadcrumb"] {
   background: var(--ca-p100);
 }
 
-.ca-card,
-.ca-module-card {
+.ca-card {
   border-color: rgba(82, 97, 89, .18) !important;
-  box-shadow: var(--ca-shadow-sm) !important;
 }
-
-.ca-module-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.25rem;
-  align-items: start;
-}
-
-
 
 .table-responsive {
   border-radius: var(--ca-radius);

@@ -1229,22 +1229,15 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple
     return [(qty, rate) for qty, rate in queue if qty > 0]
 
 
-def _consume_stock_valuation_layers(
-    company: str, item_code: str, warehouse: str, quantity: Decimal
+def _moving_average_valuation(
+    available: list[tuple[Decimal, Decimal]], total_available: Decimal, quantity: Decimal
 ) -> tuple[Decimal, Decimal]:
-    if quantity <= 0:
-        raise PostingError("La cantidad de consumo debe ser mayor que cero.")
-    available = _valuation_queue(company, item_code, warehouse)
-    total_available = sum(qty for qty, _ in available)
-    if total_available < quantity:
-        raise PostingError("No hay suficiente inventario para calcular el costo real.")
+    total_value = sum((qty * rate for qty, rate in available), Decimal("0"))
+    average_rate = total_value / total_available
+    return quantity * average_rate, average_rate
 
-    valuation_method = _valuation_method_for_item(item_code)
-    if valuation_method == "moving_average":
-        total_value = sum((qty * rate for qty, rate in available), Decimal("0"))
-        average_rate = total_value / total_available
-        return quantity * average_rate, average_rate
 
+def _fifo_valuation(available: list[tuple[Decimal, Decimal]], quantity: Decimal) -> tuple[Decimal, Decimal]:
     total_cost = Decimal("0")
     remaining = quantity
     queue = list(available)
@@ -1261,6 +1254,23 @@ def _consume_stock_valuation_layers(
     if remaining > 0:
         raise PostingError("No hay suficiente inventario para calcular el costo real.")
     return total_cost, total_cost / quantity
+
+
+def _consume_stock_valuation_layers(
+    company: str, item_code: str, warehouse: str, quantity: Decimal
+) -> tuple[Decimal, Decimal]:
+    if quantity <= 0:
+        raise PostingError("La cantidad de consumo debe ser mayor que cero.")
+    available = _valuation_queue(company, item_code, warehouse)
+    total_available = sum(qty for qty, _ in available)
+    if total_available < quantity:
+        raise PostingError("No hay suficiente inventario para calcular el costo real.")
+
+    valuation_method = _valuation_method_for_item(item_code)
+    if valuation_method == "moving_average":
+        return _moving_average_valuation(available, total_available, quantity)
+
+    return _fifo_valuation(available, quantity)
 
 
 def _company_for(document: Any) -> str:
@@ -1948,6 +1958,28 @@ def _receipt_total(document: PurchaseReceipt) -> Decimal:
     return total
 
 
+def _should_reconcile_purchase_receipt(document: PurchaseInvoice) -> bool:
+    """Check if purchase receipt should be reconciled and validate it."""
+    purchase_receipt_id = getattr(document, "purchase_receipt_id", None)
+    if purchase_receipt_id:
+        _validate_purchase_receipt_for_reconciliation(document, purchase_receipt_id)
+        return True
+    return bool(getattr(document, "purchase_order_id", None))
+
+
+def _validate_purchase_receipt_for_reconciliation(document: PurchaseInvoice, purchase_receipt_id: str) -> None:
+    """Validate purchase receipt exists and is in valid state for reconciliation."""
+    purchase_receipt = database.session.get(PurchaseReceipt, purchase_receipt_id)
+    if not purchase_receipt:
+        raise PostingError("La recepción de compra referenciada no existe.")
+    if purchase_receipt.company != document.company:
+        raise PostingError("La factura de compra y la recepción de compra deben pertenecer a la misma compañía.")
+    if getattr(purchase_receipt, "docstatus", 0) != 1:
+        raise PostingError("La recepción de compra referenciada debe estar aprobada.")
+    if not _has_active_gl_entries(purchase_receipt) or not _has_stock_ledger_entries(purchase_receipt):
+        raise PostingError("La recepción de compra referenciada debe estar contabilizada antes de facturarse.")
+
+
 def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: Decimal) -> None:
     from cacao_accounting.compras.purchase_reconciliation_service import (
         PurchaseReconciliationError,
@@ -1960,17 +1992,7 @@ def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: D
     if not config.auto_reconcile:
         return
 
-    if getattr(document, "purchase_receipt_id", None):
-        purchase_receipt = database.session.get(PurchaseReceipt, document.purchase_receipt_id)
-        if not purchase_receipt:
-            raise PostingError("La recepción de compra referenciada no existe.")
-        if purchase_receipt.company != document.company:
-            raise PostingError("La factura de compra y la recepción de compra deben pertenecer a la misma compañía.")
-        if getattr(purchase_receipt, "docstatus", 0) != 1:
-            raise PostingError("La recepción de compra referenciada debe estar aprobada.")
-        if not _has_active_gl_entries(purchase_receipt) or not _has_stock_ledger_entries(purchase_receipt):
-            raise PostingError("La recepción de compra referenciada debe estar contabilizada antes de facturarse.")
-    elif not getattr(document, "purchase_order_id", None):
+    if not _should_reconcile_purchase_receipt(document):
         return
 
     try:
@@ -2100,24 +2122,25 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
     return result
 
 
-def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -> list[GLEntry]:
-    """Genera Stock Ledger y GL para una nota de entrega aprobada."""
-    if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una nota de entrega aprobada.")
+def _get_delivery_note_line_value(document: DeliveryNote, line: Any) -> Decimal:
+    """Get the value for a delivery note line."""
+    qty = _line_qty_generic(line)
+    rate = _line_rate_generic(line)
+    amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+    cost_amount = getattr(line, "_inventory_cost_amount", None)
+    return _signed_amount(document, cost_amount if cost_amount is not None else amount)
 
-    company = _company_for(document)
-    movements = _create_stock_ledger_for_document_type(document, Decimal("-1"))
-    if not movements:
-        raise PostingError("No se generaron movimientos de inventario para esta nota de entrega.")
 
+def _create_delivery_note_gl_entries(
+    document: DeliveryNote,
+    company: str,
+    ledger_code: str | None,
+) -> list[GLEntry]:
+    """Create GL entries for delivery note."""
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in _document_items(document):
-            qty = _line_qty_generic(line)
-            rate = _line_rate_generic(line)
-            amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
-            cost_amount = getattr(line, "_inventory_cost_amount", None)
-            value = _signed_amount(document, cost_amount if cost_amount is not None else amount)
+            value = _get_delivery_note_line_value(document, line)
             inventory_account_id = _require_account(
                 _account_id_for_item(line, company, "inventory"),
                 "Falta la cuenta de inventario para una linea de nota de entrega.",
@@ -2135,7 +2158,83 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
                     debit_remarks="Costo de ventas",
                 )
             )
+    return entries
+
+
+def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -> list[GLEntry]:
+    """Genera Stock Ledger y GL para una nota de entrega aprobada."""
+    if getattr(document, "docstatus", 0) != 1:
+        raise PostingError("Solo se puede contabilizar una nota de entrega aprobada.")
+
+    company = _company_for(document)
+    movements = _create_stock_ledger_for_document_type(document, Decimal("-1"))
+    if not movements:
+        raise PostingError("No se generaron movimientos de inventario para esta nota de entrega.")
+
+    entries = _create_delivery_note_gl_entries(document, company, ledger_code)
     return _add_entries(entries)
+
+
+def _comprobante_line_value(
+    context: LedgerContext,
+    original_value: Decimal,
+) -> tuple[LedgerContext, Decimal]:
+    if not context.transaction_currency or not context.company_currency:
+        return context, original_value
+    if context.company_currency == context.transaction_currency:
+        return context, original_value
+
+    if context.exchange_rate is None:
+        exchange_rate = _lookup_exchange_rate(
+            context.transaction_currency,
+            context.company_currency,
+            context.posting_date,
+        )
+        context = context.__class__(**{**context.__dict__, "exchange_rate": exchange_rate})
+    return context, _to_company_currency(original_value, context.exchange_rate or Decimal("1"))
+
+
+def _comprobante_entry_params(
+    context: LedgerContext,
+    line: Any,
+    account_id: str,
+    company_value: Decimal,
+    original_value: Decimal,
+    is_fy_closing: bool,
+) -> GLEntryParams:
+    if company_value > 0:
+        return GLEntryParams(
+            account_id=account_id,
+            debit=company_value,
+            credit=Decimal("0"),
+            debit_in_account_currency=original_value if context.transaction_currency else None,
+            credit_in_account_currency=None,
+            party_type=getattr(line, "third_type", None),
+            party_id=getattr(line, "third_code", None),
+            bank_account_id=getattr(line, "bank_account_id", None),
+            is_advance=bool(getattr(line, "is_advance", False)),
+            cost_center_code=getattr(line, "cost_center", None),
+            unit_code=getattr(line, "unit", None),
+            project_code=getattr(line, "project", None),
+            entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+            is_fiscal_year_closing=is_fy_closing,
+        )
+    return GLEntryParams(
+        account_id=account_id,
+        debit=Decimal("0"),
+        credit=abs(company_value),
+        debit_in_account_currency=None,
+        credit_in_account_currency=abs(original_value) if context.transaction_currency else None,
+        party_type=getattr(line, "third_type", None),
+        party_id=getattr(line, "third_code", None),
+        bank_account_id=getattr(line, "bank_account_id", None),
+        is_advance=bool(getattr(line, "is_advance", False)),
+        cost_center_code=getattr(line, "cost_center", None),
+        unit_code=getattr(line, "unit", None),
+        project_code=getattr(line, "project", None),
+        entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+        is_fiscal_year_closing=is_fy_closing,
+    )
 
 
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
@@ -2154,53 +2253,9 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
                 raise PostingError("Las lineas del comprobante contable deben tener un valor distinto de cero.")
 
             account_id = _account_id_for_comprobante_line(line, company)
-            company_value = original_value
-            if (
-                context.transaction_currency
-                and context.company_currency
-                and context.company_currency != context.transaction_currency
-            ):
-                if context.exchange_rate is None:
-                    context_exchange_rate = _lookup_exchange_rate(
-                        context.transaction_currency,
-                        context.company_currency,
-                        context.posting_date,
-                    )
-                    context = context.__class__(**{**context.__dict__, "exchange_rate": context_exchange_rate})
-                company_value = _to_company_currency(original_value, context.exchange_rate or Decimal("1"))
-
-            if company_value > 0:
-                debit = company_value
-                credit = Decimal("0")
-                debit_in_account_currency = original_value if context.transaction_currency else None
-                credit_in_account_currency = None
-            else:
-                debit = Decimal("0")
-                credit = abs(company_value)
-                debit_in_account_currency = None
-                credit_in_account_currency = abs(original_value) if context.transaction_currency else None
-
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    params=GLEntryParams(
-                        account_id=account_id,
-                        debit=debit,
-                        credit=credit,
-                        debit_in_account_currency=debit_in_account_currency,
-                        credit_in_account_currency=credit_in_account_currency,
-                        party_type=getattr(line, "third_type", None),
-                        party_id=getattr(line, "third_code", None),
-                        bank_account_id=getattr(line, "bank_account_id", None),
-                        is_advance=bool(getattr(line, "is_advance", False)),
-                        cost_center_code=getattr(line, "cost_center", None),
-                        unit_code=getattr(line, "unit", None),
-                        project_code=getattr(line, "project", None),
-                        entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
-                        is_fiscal_year_closing=is_fy_closing,
-                    ),
-                )
-            )
+            context, company_value = _comprobante_line_value(context, original_value)
+            params = _comprobante_entry_params(context, line, account_id, company_value, original_value, is_fy_closing)
+            entries.append(_create_gl_entry(context=context, params=params))
 
     total_value = sum((_decimal_value(getattr(line, "value", None)) for line in lines), Decimal("0"))
     if total_value != 0:
