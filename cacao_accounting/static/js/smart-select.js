@@ -5,8 +5,7 @@
   function normalizeObjectValue(value) {
     if (!value || typeof value !== 'object') return String(value || '');
     const scalarKeys = ['value', 'id', 'code'];
-    for (let i = 0; i < scalarKeys.length; i++) {
-      const key = scalarKeys[i];
+    for (const key of scalarKeys) {
       if (value[key] !== undefined && value[key] !== null) return String(value[key]);
     }
     return '';
@@ -107,7 +106,7 @@
                 this.search = '';
                 this.selectedLabel = '';
               } else {
-                const opt = this.options.find((o) => normalizeValue(o.value !== undefined ? o.value : o.id) === normalized);
+                const opt = this.options.find((o) => normalizeValue(o.value ?? o.id) === normalized);
                 if (opt) {
                   this.selectedLabel = opt.display_name || opt.label || '';
                   this.search = this.selectedLabel;
@@ -154,7 +153,7 @@
         },
 
         onInput(event) {
-          if (event && event.target) {
+          if (event?.target) {
             this.search = event.target.value || '';
           }
           if (this.selectedLabel && this.search !== this.selectedLabel) {
@@ -199,7 +198,7 @@
         },
 
         syncFilledState() {
-          if (!this.$root || !this.$root.classList) return;
+          if (!this.$root?.classList) return;
           this.$root.classList.toggle('filled', Boolean(this.selectedValue));
         },
 
@@ -301,12 +300,14 @@
           if (typeof this.onSelect === 'function') {
             try {
               this.onSelect(option || { value: value, id: value, display_name: label, label: label });
-            } catch (ignore) {}
+            } catch (_) {
+              // Swallow errors from user-provided onSelect callback
+            }
           }
         },
 
         selectOption(option) {
-          const optionValue = option.value !== undefined ? option.value : option.id;
+          const optionValue = option.value ?? option.id;
           this.selectedValue = normalizeValue(optionValue) || '';
           this.selectedLabel = option.display_name || option.label || '';
           this.search = this.selectedLabel;
@@ -316,7 +317,9 @@
           if (typeof this.onSelect === 'function') {
             try {
               this.onSelect(option);
-            } catch (ignore) {}
+            } catch (_) {
+              // Swallow errors from user-provided onSelect callback
+            }
           }
           this.notifyValueChange();
         },
