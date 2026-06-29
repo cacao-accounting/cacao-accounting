@@ -100,6 +100,7 @@
   --ca-table-head-border-bottom: 2px solid var(--ca-p800);
   --ca-table-head-padding: .55rem .75rem;
   --ca-table-body-padding: .5rem .75rem;
+  --ca-smart-select-state-color: var(--ca-text-muted);
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -801,14 +802,14 @@ nav[aria-label="breadcrumb"] {
   font-size: .875rem;
 }
 
+.ca-smart-select-state {
+  color: var(--ca-smart-select-state-color);
+}
+
 .ca-smart-select-option:hover,
 .ca-smart-select-option:focus {
   background: var(--ca-surface-hover);
   outline: none;
-}
-
-.ca-smart-select-state {
-  color: var(--ca-text-muted);
 }
 
 .ca-smart-select.is-invalid .form-control {
