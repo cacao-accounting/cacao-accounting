@@ -316,7 +316,7 @@ def compras_solicitud_compra_editar(request_id: str):
                 database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
             ).scalars():
                 database.session.delete(item)
-            total_qty, total = _save_purchase_request_items(registro.id)
+            _, total = _save_purchase_request_items(registro.id)
             registro.total = total
             registro.base_total = total
             registro.grand_total = total
