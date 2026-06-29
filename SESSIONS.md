@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: persistencia fiscal simplificada)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/fiscal_persistence_service.py` sin alterar el contrato de persistencia o reconstrucción de reglas fiscales.
+- **Implementacion:** Se separaron la persistencia de cabecera, líneas y snapshot de reglas en helpers pequeños, y `build_tax_rule_contexts_from_snapshot` ahora mapea cada fila a `TaxRuleContext` mediante un helper dedicado.
+- **Verificacion:** `ruff check`, `flake8`, `mypy` focal y `tests/test_tax_rules.py -v -s --exitfirst --slow=True` quedaron en verde. `black` se deja para el lote final, tal como se acordó en esta sesión.
+
 ## 2026-06-29 (SonarCloud: constante compartida para importacion de presupuesto)
 - **Solicitud:** Cerrar el issue `python:S1192` reportado en `cacao_accounting/contabilidad/presupuesto.py` por la duplicacion del template `contabilidad/presupuestos/import.html`.
 - **Implementacion:** Se introdujo `_TEMPLATE_PRESUPUESTO_IMPORTAR` y se reemplazaron las tres referencias directas al literal en la vista de importacion de presupuestos.
