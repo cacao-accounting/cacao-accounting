@@ -394,7 +394,8 @@
             line.item_name = item.name || line.item_name;
           }
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
-          if (line.allowed_uoms.length && !line.allowed_uoms.includes(line.uom)) {
+          const allowedUomSet = new Set(line.allowed_uoms);
+          if (line.allowed_uoms.length && !allowedUomSet.has(line.uom)) {
             line.uom = line.allowed_uoms[0];
           }
           if (!line.uom && item.default_uom) line.uom = item.default_uom;
