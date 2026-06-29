@@ -1,14 +1,16 @@
 # SESSIONS - Historical Decisions & Milestones
 
-## 2026-06-29 (SonarCloud: 90 issues abiertos restantes)
+## 2026-06-29 (SonarCloud: 81 issues abiertos restantes)
 - **Consulta API:** `https://sonarcloud.io/api/issues/search?componentKeys=cacao-accounting_cacao-accounting&resolved=false`
-- **Resultado:** 90 issues abiertos
-  - `python:S3776` (cognitive complexity): 49
+- **Resultado:** 81 issues abiertos
+  - `python:S3776` (cognitive complexity): 46
   - `javascript:S2004` (deep nesting): 34
-  - `javascript:S7740` (var self=this): 5
-  - `javascript:S7735` (negated condition): 1
-  - `python:S107` (too many parameters): 1
+  - `python:S1192` (string literals): 1
+- **Progreso desde 90:** Fijados S7735, S7740, S107, y multiples S3776 en ventas, journal, presupuesto, document_flow
+- **Commits recientes:** PaymentAllocationContext dataclass, extract POST handlers, extract validation helpers
 - **Nota:** El test `test_purchase_receipt_lands_import_costs_into_initial_valuation_layers` falla desde antes de nuestro trabajo (pre-existing).
+
+## 2026-06-29 (SonarCloud: 90 issues abiertos restantes)
 
 ## 2026-06-29 (SonarCloud: helper de busqueda en smart select)
 - **Solicitud:** Cerrar el issue `javascript:S2004` en `cacao_accounting/static/js/smart-select.js` y confirmar que no fuera un falso positivo de Alpine.
