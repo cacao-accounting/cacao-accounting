@@ -514,14 +514,18 @@ def _process_payment_entry(
         if incoming > 0:
             rows.append(
                 ReportRow(
-                    values=_build_payment_row_values(payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names)
+                    values=_build_payment_row_values(
+                        payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names
+                    )
                 )
             )
             total_incoming += incoming
         if outgoing > 0:
             rows.append(
                 ReportRow(
-                    values=_build_payment_row_values(payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names)
+                    values=_build_payment_row_values(
+                        payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names
+                    )
                 )
             )
             total_outgoing += outgoing
@@ -534,7 +538,9 @@ def _process_payment_entry(
             if incoming > 0:
                 rows.append(
                     ReportRow(
-                        values=_build_payment_row_values(payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names)
+                        values=_build_payment_row_values(
+                            payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names
+                        )
                     )
                 )
                 total_incoming += incoming
