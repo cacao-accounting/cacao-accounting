@@ -474,7 +474,7 @@ nav[aria-label="breadcrumb"] {
   border-radius: var(--ca-radius) !important;
   box-shadow: var(--ca-shadow-sm) !important;
   padding: var(--ca-module-card-padding);
-  transition: box-shadow .2s, transform .15s, border-top-color .2s;
+  transition: box-shadow .2s, transform .15s, border-color .2s;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -493,7 +493,6 @@ nav[aria-label="breadcrumb"] {
 
 .ca-module-card:hover {
   box-shadow: var(--ca-shadow) !important;
-  border-top-color: var(--ca-border) !important;
   border-color: rgba(47,143,70,.34) !important;
   transform: translateY(-3px);
 }

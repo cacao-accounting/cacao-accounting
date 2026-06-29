@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **Consulta SonarCloud (2026-06-29):** Se uso la API publica de SonarCloud para listar issues abiertos del proyecto y se confirmaron 113 hallazgos activos.
+  - Se priorizaron avisos de bajo riesgo semantico para una primera limpieza: `journal_nuevo.html` y `cacaoaccounting.css`.
+  - `journal_nuevo.html` dejo de usar el patron `this -> self` en la inicializacion del selector de compania y ahora delega en helpers de sincronizacion.
+  - `cacaoaccounting.css` elimino una propiedad de borde redundante reportada por Sonar.
+  - La vista focal `tests/test_01vistas.py::test_visit_views` paso en verde despues del ajuste.
+
 - **Ajuste de calidad (2026-06-29):** Se corrigio el docstring de `_persist_bank_transaction` para cumplir `pydocstyle`/`D401`.
   - El cambio fue solo documental y no modifica logica de negocio.
   - `venv/bin/python -m flake8 cacao_accounting/` valida el arreglo en verde.
