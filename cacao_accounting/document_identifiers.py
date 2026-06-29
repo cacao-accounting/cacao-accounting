@@ -287,7 +287,7 @@ def _condition_matches(condition_json: str | None, context: dict) -> bool:
         return True
     try:
         conditions = json.loads(condition_json)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         return False
     if not isinstance(conditions, dict):
         return False
@@ -354,7 +354,7 @@ def _resolve_external_counter(
         elif _condition_matches(mapping.condition_json, ctx):
             try:
                 num_conditions = len(json.loads(mapping.condition_json))
-            except (json.JSONDecodeError, ValueError):
+            except ValueError:
                 num_conditions = 0
             matched_with_condition.append((mapping, num_conditions))
 
