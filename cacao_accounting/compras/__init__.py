@@ -85,6 +85,7 @@ PURCHASE_RETURN = "purchase_return"
 
 FACTURA_DE_COMPRA = "Factura de Compra"
 COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML = "compras/factura_compra_devolucion_lista.html"
+COMPRAS_PROVEEDOR_NUEVO_TEMPLATE = "compras/proveedor_nuevo.html"
 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
 COMPRAS_COMPRAS_ORDEN_COMPRA = "compras.compras_orden_compra"
 COMPRAS_COMPRAS_RECEPCION = "compras.compras_recepcion"
@@ -770,7 +771,7 @@ def _handle_supplier_create(
             company_settings = draft_party_company_settings("supplier", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
-        "compras/proveedor_nuevo.html",
+        COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
@@ -818,7 +819,7 @@ def _handle_supplier_update(
             company_settings = draft_party_company_settings("supplier", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
-        "compras/proveedor_nuevo.html",
+        COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         edit=True,
@@ -1136,7 +1137,7 @@ def compras_proveedor_nuevo():
     if request.method == "POST":
         return _handle_supplier_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
-        "compras/proveedor_nuevo.html",
+        COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
@@ -1184,7 +1185,7 @@ def compras_proveedor_editar(supplier_id: str):
             proveedor, request.form, selected_company, company_choices, company_settings, formulario, titulo
         )
     return render_template(
-        "compras/proveedor_nuevo.html",
+        COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         edit=True,
