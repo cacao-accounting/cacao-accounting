@@ -68,6 +68,9 @@
   --ca-sidebar-active-border: #B7DD34;              /* lime accent stripe     */
   --ca-content-margin-left: var(--ca-sidebar-width);
   --ca-content-padding: 1.25rem 1.5rem;
+  --ca-card-padding: 1.25rem 1.5rem;
+  --ca-card-header-padding-bottom: .75rem;
+  --ca-card-title-weight: 600;
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -358,7 +361,7 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   border: 1px solid var(--ca-border) !important;
   border-radius: var(--ca-radius) !important;
   box-shadow: var(--ca-shadow-sm) !important;
-  padding: 1.25rem 1.5rem;
+  padding: var(--ca-card-padding);
   margin-bottom: 1rem;
   transition: background .25s, border-color .2s;
 }
@@ -368,13 +371,13 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
-  padding-bottom: .75rem;
+  padding-bottom: var(--ca-card-header-padding-bottom);
   border-bottom: 2px solid var(--ca-border);
 }
 
 .ca-card-title {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: var(--ca-card-title-weight);
   color: var(--ca-text);
   margin: 0;
   display: flex;
@@ -1214,21 +1217,6 @@ nav[aria-label="breadcrumb"] {
 .ca-module-card {
   border-color: rgba(82, 97, 89, .18) !important;
   box-shadow: var(--ca-shadow-sm) !important;
-}
-
-.ca-card {
-  padding: 1.15rem 1.25rem;
-}
-
-.ca-card-header {
-  border-bottom: 1px solid var(--ca-border);
-  margin-bottom: 1rem;
-  padding-bottom: .8rem;
-}
-
-.ca-card-title {
-  font-weight: 700;
-  letter-spacing: -.005em;
 }
 
 .ca-module-grid {
