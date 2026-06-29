@@ -232,7 +232,6 @@ def lista_tipos_documentos() -> list:
         ("purchase-invoice", "Factura de Compra"),
     ]
 
-    # Fixme
     # Pendiente logica para cargar documentos de modulos adicionales
 
     return DOCUMENTOS
