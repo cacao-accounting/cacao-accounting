@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Comprobante manual importador (2026-06-29):** Se cerro un issue menor en `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`.
+  - La carga de celdas importadas del comprobante manual ahora usa una condicion positiva sobre `cellValue` en lugar de una comparacion negada inline.
+  - La vista general y la suite focal del formulario de comprobante quedaron en verde.
+  - `black --check tests/test_09_journal_entry_form.py` quedo en verde.
+
 - **SonarCloud / Pago nuevo (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
   - El watcher de `mode_of_payment` ahora toma primero el caso positivo de cheque y deja el reseteo de contador/numero en `else`.
   - Se validaron el render del formulario nuevo y los dos comportamientos de negocio relevantes: transferencia sin chequera y cheque con contador default.
