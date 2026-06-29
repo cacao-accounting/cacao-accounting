@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: constante compartida para importacion de presupuesto)
+- **Solicitud:** Cerrar el issue `python:S1192` reportado en `cacao_accounting/contabilidad/presupuesto.py` por la duplicacion del template `contabilidad/presupuestos/import.html`.
+- **Implementacion:** Se introdujo `_TEMPLATE_PRESUPUESTO_IMPORTAR` y se reemplazaron las tres referencias directas al literal en la vista de importacion de presupuestos.
+- **Verificacion:** `ruff check cacao_accounting/contabilidad/presupuesto.py tests/test_budget.py`, `mypy cacao_accounting/contabilidad/presupuesto.py tests/test_budget.py` y `tests/test_budget.py -v -s --exitfirst --slow=True` quedaron en verde; `flake8` sigue reportando `CCR001` preexistente en otras funciones del mismo archivo.
+
 ## 2026-06-29 (SonarCloud: constante compartida para plantilla de cliente)
 - **Solicitud:** Cerrar el issue `python:S1192` reportado en `cacao_accounting/ventas/__init__.py` por la duplicacion del template `ventas/cliente_nuevo.html`.
 - **Implementacion:** Se introdujo `VENTAS_CLIENTE_NUEVO_TEMPLATE` y se reemplazaron las cuatro referencias directas al literal en el alta y edicion de clientes.

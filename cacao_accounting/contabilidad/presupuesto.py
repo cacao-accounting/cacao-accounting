@@ -33,6 +33,7 @@ from cacao_accounting.contabilidad.auxiliares import (
 
 _ENDPOINT_LISTAR = "contabilidad.presupuestos.listar"
 _ENDPOINT_DETALLE = "contabilidad.presupuestos.detalle"
+_TEMPLATE_PRESUPUESTO_IMPORTAR = "contabilidad/presupuestos/import.html"
 
 presupuestos = Blueprint("presupuestos", __name__)
 
@@ -371,7 +372,7 @@ def importar(budget_id):
         return _handle_budget_import_post(budget, budget_id)
 
     return render_template(
-        "contabilidad/presupuestos/import.html",
+        _TEMPLATE_PRESUPUESTO_IMPORTAR,
         budget=budget,
         columns=BudgetImportService().get_template_columns(budget_id),
         titulo="Importar Presupuesto - " + APPNAME,
@@ -403,7 +404,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
                     staged_lines = import_service.get_staged_lines(import_obj.id, limit=100)
 
                     return render_template(
-                        "contabilidad/presupuestos/import.html",
+                        _TEMPLATE_PRESUPUESTO_IMPORTAR,
                         budget=budget,
                         staged_lines=staged_lines,
                         import_id=import_obj.id,
@@ -412,7 +413,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
                 except Exception as e:
                     flash(f"Error al procesar el archivo: {str(e)}", "danger")
     return render_template(
-        "contabilidad/presupuestos/import.html",
+        _TEMPLATE_PRESUPUESTO_IMPORTAR,
         budget=budget,
         columns=BudgetImportService().get_template_columns(budget_id),
         titulo="Importar Presupuesto - " + APPNAME,
