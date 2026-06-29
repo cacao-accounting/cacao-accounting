@@ -328,7 +328,7 @@
             try {
               this.onSelect(option || { value: value, id: value, display_name: label, label: label });
             } catch (_) {
-              // Swallow errors from user-provided onSelect callback
+              console.warn('Error in onSelect callback:', _);
             }
           }
         },
@@ -345,7 +345,7 @@
             try {
               this.onSelect(option);
             } catch (_) {
-              // Swallow errors from user-provided onSelect callback
+              console.warn('Error in onSelect callback:', _);
             }
           }
           this.notifyValueChange();

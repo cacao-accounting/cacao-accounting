@@ -996,90 +996,113 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         if payment_type == "pay":
-            defaults = _company_defaults(company)
-            party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
-            advance_account_id = defaults.supplier_advance_account_id if defaults else None
-            account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
-            payable_account_id = _require_account(
-                account_id,
-                "No existe cuenta por pagar o anticipo configurada para el proveedor.",
-            )
-            bank_account_id = _require_account(
-                _resolve_bank_gl_account_id(document, destination=False),
-                "El pago no tiene una cuenta bancaria de origen configurada.",
-            )
-            entries.extend(
-                _normal_entries_for_amount(
-                    context=context,
-                    debit_account_id=payable_account_id,
-                    credit_account_id=bank_account_id,
-                    amount=amount,
-                    party_type="supplier",
-                    party_id=document.party_id,
-                    debit_remarks="Pago a proveedor" if party_account_id else "Anticipo a proveedor",
-                    credit_remarks="Cuenta bancaria de pago",
-                )
-            )
+            entries.extend(_create_payment_pay_entries(context, document, company, amount))
         elif payment_type == "receive":
-            defaults = _company_defaults(company)
-            party_account_id = _resolve_party_account_id(document.party_id, company, receivable=True)
-            advance_account_id = defaults.customer_advance_account_id if defaults else None
-            account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
-            receivable_account_id = _require_account(
-                account_id,
-                "No existe cuenta por cobrar o anticipo configurada para el cliente.",
-            )
-            bank_account_id = _require_account(
-                _resolve_bank_gl_account_id(document, destination=True),
-                "El pago no tiene una cuenta bancaria de destino configurada.",
-            )
-            entries.extend(
-                [
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=bank_account_id,
-                            debit=amount,
-                            credit=Decimal("0"),
-                            entry_remarks="Cuenta bancaria receptora",
-                        ),
-                    ),
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=receivable_account_id,
-                            debit=Decimal("0"),
-                            credit=amount,
-                            party_type="customer",
-                            party_id=document.party_id,
-                            entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
-                        ),
-                    ),
-                ]
-            )
+            entries.extend(_create_payment_receive_entries(context, document, company, amount))
         elif payment_type == "internal_transfer":
-            from_account_id = _require_account(
-                _resolve_bank_gl_account_id(document, destination=False),
-                "La transferencia interna requiere cuenta bancaria de origen.",
-            )
-            to_account_id = _require_account(
-                _resolve_bank_gl_account_id(document, destination=True),
-                "La transferencia interna requiere cuenta bancaria de destino.",
-            )
-            entries.extend(
-                _normal_entries_for_amount(
-                    context=context,
-                    debit_account_id=to_account_id,
-                    credit_account_id=from_account_id,
-                    amount=amount,
-                    debit_remarks="Transferencia interna entrada",
-                    credit_remarks="Transferencia interna salida",
-                )
-            )
+            entries.extend(_create_payment_transfer_entries(context, document, amount))
         else:
             raise PostingError("Tipo de pago no soportado para contabilizacion.")
 
     return _add_entries(entries)
+
+
+def _create_payment_pay_entries(
+    context: LedgerContext,
+    document: PaymentEntry,
+    company: str,
+    amount: Decimal,
+) -> list[GLEntry]:
+    """Crea entradas GL para pagos a proveedores."""
+    defaults = _company_defaults(company)
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
+    advance_account_id = defaults.supplier_advance_account_id if defaults else None
+    account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
+    payable_account_id = _require_account(
+        account_id,
+        "No existe cuenta por pagar o anticipo configurada para el proveedor.",
+    )
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=False),
+        "El pago no tiene una cuenta bancaria de origen configurada.",
+    )
+    return _normal_entries_for_amount(
+        context=context,
+        debit_account_id=payable_account_id,
+        credit_account_id=bank_account_id,
+        amount=amount,
+        party_type="supplier",
+        party_id=document.party_id,
+        debit_remarks="Pago a proveedor" if party_account_id else "Anticipo a proveedor",
+        credit_remarks="Cuenta bancaria de pago",
+    )
+
+
+def _create_payment_receive_entries(
+    context: LedgerContext,
+    document: PaymentEntry,
+    company: str,
+    amount: Decimal,
+) -> list[GLEntry]:
+    """Crea entradas GL para cobros de clientes."""
+    defaults = _company_defaults(company)
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=True)
+    advance_account_id = defaults.customer_advance_account_id if defaults else None
+    account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
+    receivable_account_id = _require_account(
+        account_id,
+        "No existe cuenta por cobrar o anticipo configurada para el cliente.",
+    )
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=True),
+        "El pago no tiene una cuenta bancaria de destino configurada.",
+    )
+    return [
+        _create_gl_entry(
+            context=context,
+            params=GLEntryParams(
+                account_id=bank_account_id,
+                debit=amount,
+                credit=Decimal("0"),
+                entry_remarks="Cuenta bancaria receptora",
+            ),
+        ),
+        _create_gl_entry(
+            context=context,
+            params=GLEntryParams(
+                account_id=receivable_account_id,
+                debit=Decimal("0"),
+                credit=amount,
+                party_type="customer",
+                party_id=document.party_id,
+                entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
+            ),
+        ),
+    ]
+
+
+def _create_payment_transfer_entries(
+    context: LedgerContext,
+    document: PaymentEntry,
+    amount: Decimal,
+) -> list[GLEntry]:
+    """Crea entradas GL para transferencias internas."""
+    from_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=False),
+        "La transferencia interna requiere cuenta bancaria de origen.",
+    )
+    to_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=True),
+        "La transferencia interna requiere cuenta bancaria de destino.",
+    )
+    return _normal_entries_for_amount(
+        context=context,
+        debit_account_id=to_account_id,
+        credit_account_id=from_account_id,
+        amount=amount,
+        debit_remarks="Transferencia interna entrada",
+        credit_remarks="Transferencia interna salida",
+    )
 
 
 def _stock_item_for(line: Any) -> Item:
@@ -1689,6 +1712,16 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     if not items:
         raise PostingError("La entrada de stock no contiene lineas para contabilizar.")
 
+    movements = _create_stock_movements_for_items(document, items, purpose)
+
+    if not movements:
+        raise PostingError("La conciliacion no contiene diferencias de cantidad o valuacion.")
+    database.session.add_all(movements)
+    return movements
+
+
+def _create_stock_movements_for_items(document: StockEntry, items: Sequence[Any], purpose: str) -> list[StockLedgerEntry]:
+    """Crea movimientos de inventario para una lista de lineas segun el proposito."""
     movements: list[StockLedgerEntry] = []
     for line in items:
         _stock_item_for(line)
@@ -1696,60 +1729,60 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
             movement = _create_stock_reconciliation_movement(document, line)
             if movement is not None:
                 movements.append(movement)
-            continue
-        qty = _line_qty(line)
-        valuation_rate = _line_rate(line)
-        value = _decimal_value(line.amount) or (qty * valuation_rate)
-        if purpose in ("material_receipt", "adjustment_positive"):
-            movements.append(
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=line.target_warehouse or document.to_warehouse,
-                    qty_change=qty,
-                    valuation_rate=valuation_rate,
-                    value_change=value,
-                )
-            )
-        elif purpose in ("material_issue", "adjustment_negative"):
-            movements.append(
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=line.source_warehouse or document.from_warehouse,
-                    qty_change=-qty,
-                    valuation_rate=valuation_rate,
-                    value_change=-value,
-                )
-            )
-        elif purpose == "material_transfer":
-            movements.append(
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=line.source_warehouse or document.from_warehouse,
-                    qty_change=-qty,
-                    valuation_rate=valuation_rate,
-                    value_change=-value,
-                )
-            )
-            movements.append(
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=line.target_warehouse or document.to_warehouse,
-                    qty_change=qty,
-                    valuation_rate=valuation_rate,
-                    value_change=value,
-                )
-            )
         else:
-            raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
-
-    if not movements:
-        raise PostingError("La conciliacion no contiene diferencias de cantidad o valuacion.")
-    database.session.add_all(movements)
+            line_movements = _create_movement_for_purpose(document, line, purpose)
+            movements.extend(line_movements)
     return movements
+
+
+def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
+    """Crea movimientos de inventario para una linea segun el proposito."""
+    qty = _line_qty(line)
+    valuation_rate = _line_rate(line)
+    value = _decimal_value(line.amount) or (qty * valuation_rate)
+
+    if purpose in ("material_receipt", "adjustment_positive"):
+        return [
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=line.target_warehouse or document.to_warehouse,
+                qty_change=qty,
+                valuation_rate=valuation_rate,
+                value_change=value,
+            )
+        ]
+    if purpose in ("material_issue", "adjustment_negative"):
+        return [
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=line.source_warehouse or document.from_warehouse,
+                qty_change=-qty,
+                valuation_rate=valuation_rate,
+                value_change=-value,
+            )
+        ]
+    if purpose == "material_transfer":
+        return [
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=line.source_warehouse or document.from_warehouse,
+                qty_change=-qty,
+                valuation_rate=valuation_rate,
+                value_change=-value,
+            ),
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=line.target_warehouse or document.to_warehouse,
+                qty_change=qty,
+                valuation_rate=valuation_rate,
+                value_change=value,
+            ),
+        ]
+    raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
 
 
 def _document_items(document: Any) -> list[Any]:
@@ -2383,13 +2416,33 @@ def cancel_document(document: Any) -> list[GLEntry]:
         raise PostingError("Solo se puede cancelar un documento aprobado.")
 
     company = _company_for(document)
+    _validate_cancel_accounting_period(document, company)
+    voucher_type = _get_voucher_type(document)
+    voucher_id = _get_voucher_id(document)
+    original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
+
+    document.docstatus = 2
+    _update_validation_service(document)
+
+    reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id)
+
+    _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id)
+    _emit_cancel_events(document, voucher_id, company)
+
+    return _add_entries(reversals)
+
+
+def _validate_cancel_accounting_period(document: Any, company: str) -> None:
+    """Valida el periodo contable para cancelacion."""
     try:
         allow_closing = bool(getattr(document, "is_closing", False))
         validate_accounting_period(company, _posting_date_for(document), allow_closing=allow_closing)
     except IdentifierConfigurationError as exc:
         raise PostingError(str(exc)) from exc
-    voucher_type = _get_voucher_type(document)
-    voucher_id = _get_voucher_id(document)
+
+
+def _get_original_gl_entries(company: str, voucher_type: str, voucher_id: str, document: Any) -> list[GLEntry]:
+    """Obtiene las entradas GL originales para reversar."""
     original_entries = (
         database.session.execute(
             select(GLEntry).filter_by(
@@ -2405,13 +2458,23 @@ def cancel_document(document: Any) -> list[GLEntry]:
     )
     if not original_entries and not isinstance(document, StockEntry):
         raise PostingError("El documento no tiene entradas GL para reversar.")
+    return original_entries
 
-    document.docstatus = 2
-    # QR Validation support
+
+def _update_validation_service(document: Any) -> None:
+    """Actualiza el servicio de validacion QR."""
     from cacao_accounting.printing.validation import ValidationService
 
     ValidationService().update_validation_from_document(document)
 
+
+def _create_gl_reversals(
+    document: Any,
+    original_entries: list[GLEntry],
+    voucher_type: str,
+    voucher_id: str,
+) -> list[GLEntry]:
+    """Crea entradas de reversal para las entradas GL originales."""
     reversals: list[GLEntry] = []
     for entry in original_entries:
         context = LedgerContext(
@@ -2449,28 +2512,38 @@ def cancel_document(document: Any) -> list[GLEntry]:
             )
         )
         entry.is_cancelled = True
+    return reversals
 
-    if isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
-        stock_reversals: list[StockLedgerEntry] = []
-        original_movements = (
-            database.session.execute(
-                select(StockLedgerEntry).filter_by(
-                    company=company,
-                    voucher_type=voucher_type,
-                    voucher_id=voucher_id,
-                    is_cancelled=False,
-                )
+
+def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type: str, voucher_id: str) -> None:
+    """Cancela movimientos de inventario si el documento tiene stock."""
+    if not isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
+        return
+
+    original_movements = (
+        database.session.execute(
+            select(StockLedgerEntry).filter_by(
+                company=company,
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                is_cancelled=False,
             )
-            .scalars()
-            .all()
         )
-        if not original_movements:
-            raise PostingError("El documento no tiene movimientos de inventario para reversar.")
-        for movement in original_movements:
-            stock_reversals.append(_create_stock_reversal(document, movement))
-            movement.is_cancelled = True
-        database.session.add_all(stock_reversals)
+        .scalars()
+        .all()
+    )
+    if not original_movements:
+        raise PostingError("El documento no tiene movimientos de inventario para reversar.")
 
+    stock_reversals: list[StockLedgerEntry] = []
+    for movement in original_movements:
+        stock_reversals.append(_create_stock_reversal(document, movement))
+        movement.is_cancelled = True
+    database.session.add_all(stock_reversals)
+
+
+def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
+    """Emite eventos de cancelacion especificos por tipo de documento."""
     if isinstance(document, PurchaseReceipt):
         from cacao_accounting.compras.purchase_reconciliation_service import emit_goods_received_cancelled
 
@@ -2482,5 +2555,3 @@ def cancel_document(document: Any) -> list[GLEntry]:
         from cacao_accounting.compras.purchase_reconciliation_service import cancel_purchase_reconciliation
 
         cancel_purchase_reconciliation(document.id)
-
-    return _add_entries(reversals)
