@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: validacion de linea de presupuesto simplificada)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_service.py` sin alterar las reglas de validación de líneas de presupuesto.
+- **Implementacion:** `_validate_line_data()` se dividio en helpers pequenos para cuenta, centro de costo, periodo, unidad de negocio, proyecto y unicidad de combinación. La lógica pública de creación y actualización de líneas quedó intacta.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_budget.py -v -s --exitfirst --slow=True` quedaron en verde.
+
 ## 2026-06-29 (SonarCloud: adaptador transaccional simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/imports/adapters/transaction_documents.py` sin cambiar el mapeo de campos opcionales en la importación de documentos transaccionales.
 - **Implementacion:** Se separaron las asignaciones opcionales en helpers pequeños para montos base, tasas, campos de recepcion/factura y lote/serie. La lógica principal de `_apply_optional_item_fields` quedó como orquestador lineal.

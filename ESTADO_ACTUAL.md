@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Validación de presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_service.py` separando la validación de cuenta, centro de costo, periodo, unidad de negocio, proyecto y unicidad.
+  - `_validate_line_data()` ahora solo orquesta helpers pequeños y la semántica de alta/edición de líneas se mantiene sin cambios.
+  - Se agregó una prueba focal que cubre cuenta agrupadora, centro de costo inválido, unidad de negocio inválida, proyecto inválido y duplicidad.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_budget.py` quedaron en verde.
+
 - **SonarCloud / Adaptador transaccional (2026-06-29):** Se redujo la complejidad de `cacao_accounting/imports/adapters/transaction_documents.py` separando el mapeo opcional de campos en helpers pequeños.
   - `_apply_optional_item_fields` ahora delega en helpers para montos base, tasas, campos configurados en cero y lote/serie, manteniendo el mismo comportamiento de importación.
   - Se agregó una prueba focal con un item mínimo en memoria para cubrir todas las ramas del mapeo opcional sin depender de base de datos.

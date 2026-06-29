@@ -226,6 +226,92 @@ def test_budget_uniqueness_validation(app_ctx):
         service.add_budget_line(budget.id, line_data, str(admin_user.id))
 
 
+def test_budget_line_validation_rejects_invalid_dimensions(app_ctx):
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "VALIDATION-TEST",
+            "name": "Validation Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+
+    group_account = Accounts(
+        entity="cacao",
+        code="GRP-BUDGET",
+        name="Grupo Presupuesto",
+        active=True,
+        enabled=True,
+        group=True,
+    )
+    database.session.add(group_account)
+    database.session.commit()
+
+    with pytest.raises(BudgetError, match="No se puede presupuestar en una cuenta agrupadora"):
+        service.add_budget_line(
+            budget.id,
+            {"account_id": group_account.id, "cost_center_id": cc.id, "period_id": per.id, "amount": 100},
+            str(admin_user.id),
+        )
+
+    with pytest.raises(BudgetError, match="Centro de costo no válido"):
+        service.add_budget_line(
+            budget.id,
+            {"account_id": acc.id, "cost_center_id": "INVALID", "period_id": per.id, "amount": 100},
+            str(admin_user.id),
+        )
+
+    with pytest.raises(BudgetError, match="Unidad de negocio no válida"):
+        service.add_budget_line(
+            budget.id,
+            {
+                "account_id": acc.id,
+                "cost_center_id": cc.id,
+                "period_id": per.id,
+                "business_unit_id": "INVALID",
+                "amount": 100,
+            },
+            str(admin_user.id),
+        )
+
+    with pytest.raises(BudgetError, match="Proyecto no válido"):
+        service.add_budget_line(
+            budget.id,
+            {
+                "account_id": acc.id,
+                "cost_center_id": cc.id,
+                "period_id": per.id,
+                "project_id": "INVALID",
+                "amount": 100,
+            },
+            str(admin_user.id),
+        )
+
+    service.add_budget_line(
+        budget.id,
+        {"account_id": acc.id, "cost_center_id": cc.id, "period_id": per.id, "amount": 100},
+        str(admin_user.id),
+    )
+
+    with pytest.raises(BudgetError, match="Ya existe una línea para esta combinación"):
+        service.add_budget_line(
+            budget.id,
+            {"account_id": acc.id, "cost_center_id": cc.id, "period_id": per.id, "amount": 100},
+            str(admin_user.id),
+        )
+
+
 def test_budget_import_rollback(app_ctx):
     from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
     from cacao_accounting.database import BudgetImportLine

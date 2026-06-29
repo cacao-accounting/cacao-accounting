@@ -8,6 +8,7 @@
 - [x] Reducir la complejidad de `fiscal_persistence_service.py` con helpers dedicados para resumen, líneas y snapshots.
 - [x] Reducir la complejidad de `contabilidad/budget_import_service.py` con helpers para parseo ODS y validación de filas.
 - [x] Reducir la complejidad de `imports/adapters/transaction_documents.py` con helpers para campos opcionales de líneas.
+- [x] Reducir la complejidad de `contabilidad/budget_service.py` con helpers para validación de líneas de presupuesto.
 - [x] Cerrar el issue `python:S1192` de `contabilidad/presupuestos/import.html` en `contabilidad/presupuesto.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `ventas/cliente_nuevo.html` en `ventas/__init__.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `compras/proveedor_nuevo.html` en `compras/__init__.py` con una constante compartida.
