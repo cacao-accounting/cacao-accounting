@@ -678,7 +678,7 @@ nav[aria-label="breadcrumb"] {
    11. BUTTONS
    ═══════════════════════════════════════════════════════ */
 .btn-primary, .btn-primary:focus {
-  background-color: var(--ca-p800) !important;
+  background: linear-gradient(180deg, var(--ca-p600), var(--ca-p800)) !important;
   border-color: var(--ca-p800) !important;
   color: #fff !important;
   font-weight: 500;
@@ -734,11 +734,13 @@ nav[aria-label="breadcrumb"] {
 .form-control, .form-select {
   font-size: .875rem !important;
   padding: .3rem .6rem !important;
-  border-color: var(--ca-border) !important;
+  border-color: #cfdad4 !important;
   border-radius: var(--ca-radius) !important;
   height: auto !important;
+  min-height: 2.25rem;
   color: var(--ca-text) !important;
   background-color: var(--ca-surface) !important;
+  box-shadow: inset 0 1px 0 rgba(16, 32, 51, .02);
 }
 
 .form-control:focus, .form-select:focus {
@@ -1260,22 +1262,9 @@ nav[aria-label="breadcrumb"] {
   border-radius: var(--ca-radius);
 }
 
-.form-control,
-.form-select {
-  min-height: 2.25rem;
-  border-color: #cfdad4 !important;
-  box-shadow: inset 0 1px 0 rgba(16, 32, 51, .02);
-}
-
 .btn {
   border-radius: 7px !important;
   font-weight: 650 !important;
-}
-
-.btn-primary,
-.btn-primary:focus {
-  background: linear-gradient(180deg, var(--ca-p600), var(--ca-p800)) !important;
-  border-color: var(--ca-p800) !important;
 }
 
 .alert,
