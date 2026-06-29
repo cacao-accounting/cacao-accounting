@@ -94,6 +94,7 @@ FORMKEY_SUPPLIER_QUOTATION = "purchases.supplier_quotation"
 FORMKEY_PURCHASE_ORDER = "purchases.purchase_order"
 FORMKEY_PURCHASE_QUOTATION = "purchases.purchase_quotation"
 FORMKEY_PURCHASE_RECEIPT = "purchases.purchase_receipt"
+FORMKEY_PURCHASE_INVOICE = "purchases.purchase_invoice"
 ROUTE_COMPRAS_SOLICITUD_COMPRA = "compras.compras_solicitud_compra"
 ROUTE_COMPRAS_SOLICITUD_COTIZACION = "compras.compras_solicitud_cotizacion"
 ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
@@ -2377,11 +2378,11 @@ def compras_factura_compra_nuevo():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = f"Nueva {document_title} - {APPNAME}"
     transaction_config = {
-        "formKey": "purchases.purchase_invoice",
+        "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
@@ -2527,11 +2528,11 @@ def compras_factura_compra_editar(invoice_id: str):
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
     ).scalars()
     transaction_config = {
-        "formKey": "purchases.purchase_invoice",
+        "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
