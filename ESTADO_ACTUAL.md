@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Presupuesto importación (2026-06-29):** Se cerro el issue `python:S1192` en `cacao_accounting/contabilidad/presupuesto.py` al consolidar `contabilidad/presupuestos/import.html` en `_TEMPLATE_PRESUPUESTO_IMPORTAR`.
+  - La ruta de importación de presupuestos ahora reutiliza el mismo identificador de plantilla en GET, previsualización y confirmación.
+  - Se agrego una prueba focal en `tests/test_budget.py` que autentica un cliente y verifica que la vista renderiza el template compartido.
+  - `ruff`, `mypy` y la suite focal de presupuesto quedaron en verde; `flake8` mantiene avisos `CCR001` preexistentes en otras funciones del archivo.
+
 - **SonarCloud / Ventas cliente (2026-06-29):** Se cerro el issue `python:S1192` en `cacao_accounting/ventas/__init__.py` al consolidar `ventas/cliente_nuevo.html` en la constante `VENTAS_CLIENTE_NUEVO_TEMPLATE`.
   - Las rutas de alta y edicion de clientes reutilizan ahora el mismo identificador de plantilla sin duplicar el literal.
   - `black --check`, `ruff check`, `mypy` focal y `tests/test_party_management.py` quedaron en verde; `flake8` mantiene avisos `CCR001` preexistentes en otras funciones del mismo archivo.
