@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Compras factura de compra (2026-06-29):** Se cerro un issue menor en `cacao_accounting/compras/__init__.py`.
+  - `_purchase_invoice_document_type()` ahora usa flujo explicito en lugar de ternario anidado para resolver `purchase_return`, `purchase_credit_note` o `purchase_invoice`.
+  - Se agrego una prueba focal en `tests/test_03webactions.py` para cubrir la precedencia de origenes y el override explicito de `document_type`.
+  - `ruff`, `mypy` y la prueba focal quedaron en verde. `black --check` indico que ambos archivos estaban sin cambios antes de expirar por `timeout`.
+
 - **SonarCloud / Bancos validacion de tercero (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/__init__.py`.
   - `_validate_payment_party()` elimino un `if` anidado y ahora expresa la regla en una sola condicion.
   - La semantica funcional no cambia: pagos/cobros siguen exigiendo tercero y los tipos invalidos siguen rechazandose.

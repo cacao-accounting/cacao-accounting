@@ -32,6 +32,12 @@
 - **Implementacion:** `_validate_payment_party()` fusiona la condicion de `payment_type` con la validacion de `party_type`/`party_id`, eliminando el `if` anidado sin cambiar comportamiento.
 - **Verificacion:** `venv/bin/python -m black cacao_accounting/bancos/__init__.py`, `ruff`, `mypy` focal y `tests/test_06transaction_closure.py::test_validate_payment_header_rejects_missing_party_for_payment_and_invalid_type` quedaron en verde.
 
+## 2026-06-29 (SonarCloud: limpieza de ternario en factura de compra)
+- **Solicitud:** Cerrar el issue `python:S3358` en `cacao_accounting/compras/__init__.py`.
+- **Implementacion:** `_purchase_invoice_document_type()` reemplazo el ternario anidado por flujo explicito `if/elif`, manteniendo la precedencia entre recepcion, factura origen y override explicito del request.
+- **Pruebas:** Se agrego `test_purchase_invoice_document_type_helper_prefers_sources_and_explicit_override` en `tests/test_03webactions.py` para cubrir devolucion, nota de credito, factura normal y override manual.
+- **Verificacion:** `ruff`, `mypy` focal y la prueba nueva quedaron en verde. `black --check` reporto ambos archivos sin cambios antes de ser interrumpido por `timeout`.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
