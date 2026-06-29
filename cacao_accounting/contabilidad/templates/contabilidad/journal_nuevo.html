@@ -362,7 +362,6 @@
       },
 
       openImportModal: function () {
-        const self = this;
         this.importModal.schema = null;
         this.importModal.pastedText = '';
         this.importModal.parsedRows = [];
@@ -371,13 +370,13 @@
         fetch('/api/line-import/schema?doctype=journal_entry', {
           credentials: 'same-origin'
         })
-          .then(function (response) { return response.json(); })
-          .then(function (schema) {
-            self.importModal.schema = schema;
+          .then((response) => response.json())
+          .then((schema) => {
+            this.importModal.schema = schema;
             bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).show();
           })
-          .catch(function () {
-            self.importModal.errors = [{ message: '{{ _("No se pudo cargar la plantilla de importación.") }}' }];
+          .catch(() => {
+            this.importModal.errors = [{ message: '{{ _("No se pudo cargar la plantilla de importación.") }}' }];
           });
       },
 
@@ -394,7 +393,6 @@
       },
 
       validateImport: function () {
-        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         var company = this.resolveCompanyValue();
@@ -413,22 +411,22 @@
             rows: this.importModal.parsedRows
           })
         })
-          .then(function (response) { return response.json(); })
-          .then(function (payload) {
+          .then((response) => response.json())
+          .then((payload) => {
             if (payload.valid) {
-              self.importModal.parsedRows = payload.rows || [];
-              self.importModal.isValidated = true;
+              this.importModal.parsedRows = payload.rows || [];
+              this.importModal.isValidated = true;
               return;
             }
-            self.importModal.errors = payload.errors || [{ message: payload.error || '{{ _("No se pudo validar.") }}' }];
-            self.importModal.isValidated = false;
+            this.importModal.errors = payload.errors || [{ message: payload.error || '{{ _("No se pudo validar.") }}' }];
+            this.importModal.isValidated = false;
           })
-          .catch(function () {
-            self.importModal.errors = [{ message: '{{ _("Error de conexión al validar.") }}' }];
-            self.importModal.isValidated = false;
+          .catch(() => {
+            this.importModal.errors = [{ message: '{{ _("Error de conexión al validar.") }}' }];
+            this.importModal.isValidated = false;
           })
-          .finally(function () {
-            self.importModal.validating = false;
+          .finally(() => {
+            this.importModal.validating = false;
           });
       },
 
@@ -462,7 +460,6 @@
       },
 
       savePreferences: function () {
-        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
@@ -471,15 +468,14 @@
           credentials: 'same-origin',
           body: JSON.stringify(this.preferences)
         })
-          .then(function (response) { return response.json(); })
-          .then(function (payload) {
-            self.preferences = payload;
+          .then((response) => response.json())
+          .then((payload) => {
+            this.preferences = payload;
             bootstrap.Modal.getOrCreateInstance(document.getElementById('columnsModal')).hide();
           });
       },
 
       resetPreferences: function () {
-        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
@@ -487,14 +483,13 @@
           headers: { 'X-CSRFToken': csrfToken },
           credentials: 'same-origin'
         })
-          .then(function (response) { return response.json(); })
-          .then(function (payload) {
-            self.preferences = payload;
+          .then((response) => response.json())
+          .then((payload) => {
+            this.preferences = payload;
           });
       },
 
       loadBookOptions: function (companyCode) {
-        const self = this;
         var company = typeof companyCode === 'string' ? companyCode : '';
         if (!company) {
           var companyInput = document.getElementById('company');
@@ -508,22 +503,22 @@
         fetch('/accounting/journal/books?company=' + encodeURIComponent(company), {
           credentials: 'same-origin'
         })
-          .then(function (response) { return response.json(); })
-          .then(function (payload) {
-            self.bookOptions = payload.results || [];
-            if (!self.initialBooksSelectionApplied) {
-              if (self.selectedBooks.length) {
-                self.selectedBooks = self.selectedBooks.filter(function (code) {
-                  return self.bookOptions.some(function (book) { return book.value === code; });
+          .then((response) => response.json())
+          .then((payload) => {
+            this.bookOptions = payload.results || [];
+            if (!this.initialBooksSelectionApplied) {
+              if (this.selectedBooks.length) {
+                this.selectedBooks = this.selectedBooks.filter((code) => {
+                  return this.bookOptions.some((book) => book.value === code);
                 });
               } else {
-                self.selectedBooks = self.bookOptions.map(function (book) { return book.value; });
+                this.selectedBooks = this.bookOptions.map((book) => book.value);
               }
-              self.initialBooksSelectionApplied = true;
+              this.initialBooksSelectionApplied = true;
               return;
             }
 
-            self.selectedBooks = self.bookOptions.map(function (book) { return book.value; });
+            this.selectedBooks = this.bookOptions.map((book) => book.value);
           });
       },
 
