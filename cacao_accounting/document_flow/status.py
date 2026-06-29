@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, Callable
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
     from flask_babel import gettext as _babel_gettext
@@ -95,18 +95,13 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
         return _status("requires_attention", "Requiere Atención", "red")
 
     docstatus = getattr(document, "docstatus", None)
-    if doctype == "journal_entry" and docstatus is None:
-        status = str(getattr(document, "status", "") or "").lower()
-        if status in {"draft", "rejected"}:
-            return _status("draft", "Borrador", "gray")
-        if status == "submitted":
-            return _status("open", "Contabilizado", "blue")
-        if status == "cancelled":
-            return _status("cancelled", "Cancelado", "gray")
-    if docstatus == 0:
-        return _status("draft", "Borrador", "gray")
-    if docstatus == 2:
-        return _status("cancelled", "Cancelado", "gray")
+    journal_status = _journal_entry_status(doctype=doctype, document=document, docstatus=docstatus)
+    if journal_status:
+        return journal_status
+
+    status_by_docstatus = _status_from_docstatus(docstatus)
+    if status_by_docstatus:
+        return status_by_docstatus
 
     payment_status = _payment_status(doctype, document)
     if payment_status:
@@ -119,6 +114,29 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
     if docstatus == 1:
         return _status("open", "Abierto", "blue")
     return _status("requires_attention", "Requiere Atención", "red")
+
+
+def _journal_entry_status(doctype: str, document: Any, docstatus: Any) -> DocumentStatusInfo | None:
+    if doctype != "journal_entry" or docstatus is not None:
+        return None
+    status = str(getattr(document, "status", "") or "").lower()
+    if status in {"draft", "rejected"}:
+        return _status("draft", "Borrador", "gray")
+    if status == "submitted":
+        return _status("open", "Contabilizado", "blue")
+    if status == "cancelled":
+        return _status("cancelled", "Cancelado", "gray")
+    return None
+
+
+def _status_from_docstatus(docstatus: Any) -> DocumentStatusInfo | None:
+    match docstatus:
+        case 0:
+            return _status("draft", "Borrador", "gray")
+        case 2:
+            return _status("cancelled", "Cancelado", "gray")
+        case _:
+            return None
 
 
 def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
@@ -145,7 +163,15 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
 
 def _primary_flow_progress(doctype: str, document: Any) -> FlowProgress | None:
     """Devuelve el flujo operativo que debe gobernar el estado principal."""
-    target_priority = {
+    target_types = _primary_flow_targets(doctype)
+    progress = _find_flow_progress_with_activity(doctype, document.id, target_types)
+    if progress:
+        return progress
+    return _find_flow_progress_with_total(doctype, document.id, target_types)
+
+
+def _primary_flow_targets(doctype: str) -> list[str]:
+    return {
         "purchase_order": ["purchase_receipt", "purchase_invoice"],
         "purchase_receipt": ["purchase_invoice"],
         "purchase_request": ["purchase_order", "purchase_quotation"],
@@ -155,19 +181,38 @@ def _primary_flow_progress(doctype: str, document: Any) -> FlowProgress | None:
         "delivery_note": ["sales_invoice"],
         "sales_request": ["sales_quotation"],
         "sales_quotation": ["sales_order"],
-    }
-    for target_type in target_priority.get(doctype, []):
+    }.get(doctype, [])
+
+
+def _find_flow_progress_with_activity(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
+    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_pending)
+
+
+def _find_flow_progress_with_total(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
+    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_total)
+
+
+def _first_matching_flow_progress(
+    doctype: str,
+    source_id: str,
+    target_types: list[str],
+    predicate: Callable[[FlowProgress], bool],
+) -> FlowProgress | None:
+    for target_type in target_types:
         if (doctype, target_type) not in ALLOWED_FLOWS:
             continue
-        progress = _flow_progress(doctype, document.id, target_type)
-        if progress and (progress.pending_qty > 0 or progress.processed_qty > 0 or progress.closed_qty > 0):
-            if progress.pending_qty > 0:
-                return progress
-    for target_type in target_priority.get(doctype, []):
-        progress = _flow_progress(doctype, document.id, target_type)
-        if progress and progress.total_qty > 0:
+        progress = _flow_progress(doctype, source_id, target_type)
+        if progress and predicate(progress):
             return progress
     return None
+
+
+def _flow_progress_has_pending(progress: FlowProgress) -> bool:
+    return progress.pending_qty > 0
+
+
+def _flow_progress_has_total(progress: FlowProgress) -> bool:
+    return progress.total_qty > 0
 
 
 def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowProgress | None:
