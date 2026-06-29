@@ -103,6 +103,14 @@ def _validate_single_sided_amount(debit: Decimal, credit: Decimal) -> None:
         raise PostingError("Cada entrada GL debe tener un debito o un credito positivo, no ambos.")
 
 
+def _resolve_currency_amount(specific_amount: Decimal | None, fallback_amount: Decimal, use_fallback: bool) -> Decimal | None:
+    if specific_amount is not None:
+        return specific_amount
+    if use_fallback:
+        return fallback_amount
+    return None
+
+
 def _get_voucher_type(document: Any) -> str:
     if isinstance(document, ComprobanteContable):
         return JOURNAL_TRANSACTION_TYPE
@@ -371,15 +379,11 @@ def _create_gl_entry(
         account_code=_account_code_for(account_id),
         debit=debit,
         credit=credit,
-        debit_in_account_currency=(
-            debit_in_account_currency
-            if debit_in_account_currency is not None
-            else (debit if context.transaction_currency else None)
+        debit_in_account_currency=_resolve_currency_amount(
+            debit_in_account_currency, debit, bool(context.transaction_currency)
         ),
-        credit_in_account_currency=(
-            credit_in_account_currency
-            if credit_in_account_currency is not None
-            else (credit if context.transaction_currency else None)
+        credit_in_account_currency=_resolve_currency_amount(
+            credit_in_account_currency, credit, bool(context.transaction_currency)
         ),
         account_currency=context.transaction_currency,
         company_currency=context.company_currency,
@@ -890,9 +894,8 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         if payment_type == "pay":
             defaults = _company_defaults(company)
             party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
-            account_id = party_account_id or (
-                None if _payment_has_references(document.id) else (defaults.supplier_advance_account_id if defaults else None)
-            )
+            advance_account_id = defaults.supplier_advance_account_id if defaults else None
+            account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
             payable_account_id = _require_account(
                 account_id,
                 "No existe cuenta por pagar o anticipo configurada para el proveedor.",
@@ -916,9 +919,8 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         elif payment_type == "receive":
             defaults = _company_defaults(company)
             party_account_id = _resolve_party_account_id(document.party_id, company, receivable=True)
-            account_id = party_account_id or (
-                None if _payment_has_references(document.id) else (defaults.customer_advance_account_id if defaults else None)
-            )
+            advance_account_id = defaults.customer_advance_account_id if defaults else None
+            account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
             receivable_account_id = _require_account(
                 account_id,
                 "No existe cuenta por cobrar o anticipo configurada para el cliente.",

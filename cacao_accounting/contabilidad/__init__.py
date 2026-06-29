@@ -2556,7 +2556,12 @@ def aplicar_recurrentes_cierre(identifier: str):
         except RecurringJournalError as exc:
             errors.append(str(exc))
 
-    check_status = "passed" if success_count and not errors else "failed" if errors else "skipped"
+    if success_count and not errors:
+        check_status = "passed"
+    elif errors:
+        check_status = "failed"
+    else:
+        check_status = "skipped"
     message = f"Plantillas aplicadas: {success_count}."
     if errors:
         message = f"{message} Errores: {' | '.join(errors)}"
@@ -2648,9 +2653,8 @@ def revalorizaciones_cambiarias():
     from cacao_accounting.database import Entity
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
-    query = (
-        database.select(ExchangeRevaluation)
-        .order_by(ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc(), ExchangeRevaluation.id.desc())
+    query = database.select(ExchangeRevaluation).order_by(
+        ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc(), ExchangeRevaluation.id.desc()
     )
     query = apply_list_filters(
         query,
