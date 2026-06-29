@@ -110,7 +110,7 @@
       .map(normalizeJournalImportHeader)
       .filter(Boolean);
     return headers.findIndex(function (header) {
-      return candidates.indexOf(header) >= 0;
+      return candidates.includes(header);
     });
   }
 
@@ -123,7 +123,7 @@
         var obj = {};
         schema.columns.forEach(function (column) {
           var foundIndex = findJournalImportColumnIndex(headers, column);
-          if (foundIndex !== -1) {
+          if (foundIndex >= 0) {
             obj[column.key] = row[foundIndex] !== undefined ? String(row[foundIndex]).trim() : '';
           }
         });
@@ -174,7 +174,7 @@
 
       normalizeLine: function (line) {
         var base = this.newLine();
-        var normalized = Object.assign({}, base, line || {});
+        var normalized = { ...base, ...(line || {}) };
         normalized.uid = normalized.uid || base.uid;
         normalized.account = normalized.account || normalized.account_label || '';
         normalized.account_label = normalized.account_label || normalized.account || '';
@@ -184,7 +184,7 @@
       init: function () {
         this.lines = (this.lines || []).map(this.normalizeLine.bind(this));
         if (!this.lines.length) this.addMultipleRows(2);
-        var self = this;
+        const self = this;
         var companyInput = document.getElementById('company');
         if (companyInput) {
           var loadBooks = this.loadBookOptions.bind(this);
@@ -329,7 +329,7 @@
       },
 
       duplicateRow: function (index) {
-        var copy = Object.assign({}, this.lines[index]);
+        var copy = { ...this.lines[index] };
         copy.uid = globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now() + Math.random());
         this.lines.splice(index + 1, 0, copy);
       },
@@ -344,19 +344,19 @@
 
       openDetails: function (index) {
         this.activeIndex = index;
-        this.modalLine = Object.assign({}, this.lines[index]);
+        this.modalLine = { ...this.lines[index] };
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).show();
       },
 
       saveModalLine: function () {
         if (this.activeIndex !== null && this.modalLine) {
-          this.lines[this.activeIndex] = Object.assign({}, this.modalLine);
+          this.lines[this.activeIndex] = { ...this.modalLine };
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).hide();
       },
 
       openImportModal: function () {
-        var self = this;
+        const self = this;
         this.importModal.schema = null;
         this.importModal.pastedText = '';
         this.importModal.parsedRows = [];
@@ -388,7 +388,7 @@
       },
 
       validateImport: function () {
-        var self = this;
+        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         var company = this.resolveCompanyValue();
@@ -456,7 +456,7 @@
       },
 
       savePreferences: function () {
-        var self = this;
+        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
@@ -473,7 +473,7 @@
       },
 
       resetPreferences: function () {
-        var self = this;
+        const self = this;
         var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
         var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
         fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
@@ -488,7 +488,7 @@
       },
 
       loadBookOptions: function (companyCode) {
-        var self = this;
+        const self = this;
         var company = typeof companyCode === 'string' ? companyCode : '';
         if (!company) {
           var companyInput = document.getElementById('company');
@@ -556,11 +556,11 @@
           is_closing: this.header.is_closing === 'true',
           lines: this.lines.map(function (line, index) {
             var account = line.account || line.account_label;
-            return Object.assign({}, line, {
+            return { ...line,
               order: index + 1,
               account: account,
               currency: this.header.transaction_currency || null
-            });
+            };
           }, this).filter(function (line) {
             return line.account || Number(line.debit || 0) || Number(line.credit || 0);
           })
