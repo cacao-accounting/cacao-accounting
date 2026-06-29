@@ -200,23 +200,33 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 setattr(header, field, total)
 
     def _apply_optional_item_fields(self, item: Any, amount: Decimal, row: dict[str, Any]) -> None:
-        for field in ("base_amount",):
-            if hasattr(item, field):
-                setattr(item, field, amount)
+        self._apply_item_amount_fields(item, amount)
+        self._apply_item_rate_fields(item)
+        self._apply_item_zero_fields(item, self.config.receipt_fields)
+        self._apply_item_zero_fields(item, self.config.invoice_fields)
+        self._apply_item_batch_serial_fields(item, row)
+
+    def _apply_item_amount_fields(self, item: Any, amount: Decimal) -> None:
+        if hasattr(item, "base_amount"):
+            item.base_amount = amount
+
+    def _apply_item_rate_fields(self, item: Any) -> None:
         for field in ("base_rate", "valuation_rate"):
             if hasattr(item, field):
                 setattr(item, field, item.rate)
-        for field in self.config.receipt_fields:
+
+    def _apply_item_zero_fields(self, item: Any, fields: tuple[str, ...]) -> None:
+        for field in fields:
             if hasattr(item, field):
                 setattr(item, field, Decimal("0"))
-        for field in self.config.invoice_fields:
-            if hasattr(item, field):
-                setattr(item, field, Decimal("0"))
-        if self.config.include_batch_serial:
-            if hasattr(item, "batch_id"):
-                item.batch_id = row.get("lote") or None
-            if hasattr(item, "serial_no"):
-                item.serial_no = row.get("serie") or None
+
+    def _apply_item_batch_serial_fields(self, item: Any, row: dict[str, Any]) -> None:
+        if not self.config.include_batch_serial:
+            return
+        if hasattr(item, "batch_id"):
+            item.batch_id = row.get("lote") or None
+        if hasattr(item, "serial_no"):
+            item.serial_no = row.get("serie") or None
 
 
 class PurchaseRequestAdapter(TransactionDocumentAdapter):
