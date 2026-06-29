@@ -17,10 +17,21 @@ PRERELEASE = "dev" + DATE
 # POSTRELESE = "post" + DATE
 POSTRELESE = None
 
-if PRERELEASE:  # pragma: no cover
-    VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + PRERELEASE
-else:
-    if POSTRELESE:
-        VERSION = MAYOR + "." + MENOR + "." + PATCH + "." + POSTRELESE
-    else:
-        VERSION = MAYOR + "." + MENOR + "." + PATCH
+
+def build_version(
+    mayor: str,
+    menor: str,
+    patch: str,
+    prerelease: str | None = None,
+    postrelease: str | None = None,
+) -> str:
+    """Build the package version string from its release components."""
+    version = mayor + "." + menor + "." + patch
+    if prerelease:
+        return version + "." + prerelease
+    if postrelease:
+        return version + "." + postrelease
+    return version
+
+
+VERSION = build_version(MAYOR, MENOR, PATCH, PRERELEASE, POSTRELESE)
