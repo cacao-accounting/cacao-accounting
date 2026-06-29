@@ -124,7 +124,8 @@
         schema.columns.forEach(function (column) {
           var foundIndex = findJournalImportColumnIndex(headers, column);
           if (foundIndex >= 0) {
-            obj[column.key] = row[foundIndex] !== undefined ? String(row[foundIndex]).trim() : '';
+            var cellValue = row[foundIndex];
+            obj[column.key] = cellValue === undefined ? '' : String(cellValue).trim();
           }
         });
         return obj;
