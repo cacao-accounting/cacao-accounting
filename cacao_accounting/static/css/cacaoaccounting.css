@@ -155,7 +155,9 @@ body {
   font-size: 14px !important;
   line-height: 1.5 !important;
   color: var(--ca-text) !important;
-  background-color: var(--ca-bg) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.64) 0, rgba(255,255,255,0) 18rem),
+    var(--ca-bg) !important;
   -webkit-font-smoothing: antialiased;
   transition: background-color .25s, color .25s;
 }
@@ -1155,12 +1157,6 @@ nav[aria-label="breadcrumb"] {
   .ca-flow-tree ul {
     margin-left: 16px;
   }
-}
-
-body {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.64) 0, rgba(255,255,255,0) 18rem),
-    var(--ca-bg) !important;
 }
 
 [data-theme="dark"] body {
