@@ -685,6 +685,7 @@
               });
               this.loadingSource = false;
             } catch (err) {
+              console.warn('Error al obtener source lines:', err);
               this.loadingSource = false;
             }
           } else {
@@ -710,6 +711,7 @@
               .map((doc) => { return { ...doc, selected: false }; });
             this.loadingSource = false;
           } catch (err) {
+            console.warn('Error al obtener source documents:', err);
             this.loadingSource = false;
           }
         },
@@ -734,6 +736,7 @@
             });
             this.loadingSource = false;
           } catch (err) {
+            console.warn('Error al obtener source items:', err);
             this.loadingSource = false;
           }
         },
@@ -797,7 +800,7 @@
             const modalEl = document.getElementById('columnsModal');
             if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
           } catch (err) {
-            // No-op
+            console.warn('Error al guardar preferencias:', err);
           }
         },
 
@@ -817,7 +820,7 @@
             const payload = await response.json();
             this.preferences = { columns: normalizeColumns(payload.columns || [], this.messages) };
           } catch (err) {
-            // No-op
+            console.warn('Error al resetear preferencias:', err);
           }
         },
 
