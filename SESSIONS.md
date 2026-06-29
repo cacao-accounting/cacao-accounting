@@ -65,6 +65,11 @@
 - **Implementacion:** `mapImportedRows()` ahora usa `foundIndex >= 0` en lugar de la comparacion negada `!== -1` al resolver columnas importadas.
 - **Verificacion:** `npm test -- --grep transaction-form` y `black --check tests/test_transaction_update_elements.py` quedaron en verde. `ruff` no aplica a archivos JavaScript en esta configuracion.
 
+## 2026-06-29 (SonarCloud: condicion positiva en formulario de pagos)
+- **Solicitud:** Cerrar el issue `javascript:S7735` en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
+- **Implementacion:** El watcher de `header.mode_of_payment` ahora prioriza el caso positivo `val === 'check'` y deja la limpieza de contador/numero externo en el branch `else`.
+- **Verificacion:** `tests/test_payment_entry_improved.py::test_payment_new_form_uses_smart_select_header_flow`, `tests/test_payment_entry_improved.py::test_payment_ignores_exchange_rate_and_external_counter_for_transfer`, `tests/test_payment_entry_improved.py::test_payment_uses_default_external_counter_for_check` y `black --check tests/test_payment_entry_improved.py` quedaron en verde.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
