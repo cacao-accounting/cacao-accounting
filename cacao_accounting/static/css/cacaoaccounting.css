@@ -16,21 +16,21 @@
    ═══════════════════════════════════════════════════════ */
 :root {
   /* ── Brand greens (accent only, NOT chrome) ─── */
-  --ca-p800:  #2E7D32;   /* primary action buttons, active borders */
-  --ca-p600:  #43A047;   /* hover states on buttons                */
-  --ca-p400:  #78BF30;   /* brand accent / logo companion          */
+  --ca-p800:  #256D37;   /* primary action buttons, active borders */
+  --ca-p600:  #2F8F46;   /* hover states on buttons                */
+  --ca-p400:  #63B332;   /* brand accent / logo companion          */
   --ca-p300:  #B7DD34;   /* secondary accent / active dot          */
-  --ca-p100:  #E8F5E9;   /* tint backgrounds                       */
+  --ca-p100:  #ECF8EE;   /* tint backgrounds                       */
 
   /* ── Gray scale ───────────────────── */
-  --ca-g900: #1F2937;
-  --ca-g800: #374151;
-  --ca-g700: #4B5563;
-  --ca-g500: #9CA3AF;
-  --ca-g400: #C9D0D8;
-  --ca-g300: #D1D5DB;
-  --ca-g100: #F3F4F6;
-  --ca-g050: #F9FAFB;
+  --ca-g900: #13201A;
+  --ca-g800: #25322B;
+  --ca-g700: #526159;
+  --ca-g500: #8B9891;
+  --ca-g400: #C9D3CE;
+  --ca-g300: #DBE3DF;
+  --ca-g100: #F3F6F4;
+  --ca-g050: #F8FAF9;
 
   /* ── Semantic ─────────────────────── */
   --ca-success:     #16A34A;
@@ -45,43 +45,43 @@
   --ca-disabled-bg: #F3F4F6;
 
   /* ── Surface layers ───────────────── */
-  --ca-bg:            #F5F6F7;   /* body — soft neutral background with lower saturation */
+  --ca-bg:            #EEF2F0;   /* body — soft neutral background with lower saturation */
   --ca-surface:       #FFFFFF;   /* cards — pop above background                  */
-  --ca-surface-hover: #F7F8FA;
+  --ca-surface-hover: #F4F8F5;
 
   /* ── Chrome: near-black with a faint green undertone ──
      Think "professional charcoal" not "forest app".
      Navbar is the darkest anchor; sidebar is 1 stop lighter.   */
-  --ca-navbar-bg:   #1E2422;   /* ≈70% black, barely perceptibly greenish       */
-  --ca-navbar-text: #F0F4F2;   /* off-white, not stark white                    */
-  --ca-navbar-hover: rgba(255,255,255,.09);
+  --ca-navbar-bg:   #17211C;   /* ≈70% black, barely perceptibly greenish       */
+  --ca-navbar-text: #F5F8F6;   /* off-white, not stark white                    */
+  --ca-navbar-hover: rgba(255,255,255,.12);
 
-  --ca-sidebar-bg:          #252E2A;   /* slightly lighter charcoal-green              */
-  --ca-sidebar-border-end:  #1C2421;   /* right edge shadow — darker than sidebar       */
-  --ca-sidebar-text:        rgba(240,244,242,.75);
-  --ca-sidebar-icon:        rgba(240,244,242,.45);
-  --ca-sidebar-hover-bg:    rgba(255,255,255,.07);
-  --ca-sidebar-hover-text:  #F0F4F2;
+  --ca-sidebar-bg:          #1F2D26;   /* slightly lighter charcoal-green              */
+  --ca-sidebar-border-end:  rgba(8,17,12,.45);   /* right edge shadow — darker than sidebar       */
+  --ca-sidebar-text:        rgba(245,248,246,.75);
+  --ca-sidebar-icon:        rgba(245,248,246,.45);
+  --ca-sidebar-hover-bg:    rgba(255,255,255,.12);
+  --ca-sidebar-hover-text:  #F5F8F6;
   --ca-sidebar-hover-icon:  rgba(183,221,52,.80);   /* subtle lime on hover   */
-  --ca-sidebar-active-bg:   rgba(183,221,52,.13);
+  --ca-sidebar-active-bg:   rgba(183,221,52,.18);
   --ca-sidebar-active-text: #FFFFFF;
   --ca-sidebar-active-border: #B7DD34;              /* lime accent stripe     */
 
   /* ── Sizes ────────────────────────── */
-  --ca-navbar-height: 52px;
-  --ca-sidebar-width: 220px;
+  --ca-navbar-height: 58px;
+  --ca-sidebar-width: 248px;
 
   /* ── Shadows ──────────────────────── */
-  --ca-shadow-sm: 0 1px 4px rgba(0,0,0,.09), 0 1px 2px rgba(0,0,0,.05);
-  --ca-shadow:    0 4px 12px rgba(0,0,0,.11), 0 2px 6px rgba(0,0,0,.06);
-  --ca-shadow-lg: 0 8px 24px rgba(0,0,0,.13), 0 4px 10px rgba(0,0,0,.07);
+  --ca-shadow-sm: 0 1px 2px rgba(16, 32, 51, .05), 0 8px 22px rgba(16, 32, 51, .07);
+  --ca-shadow:    0 12px 32px rgba(16, 32, 51, .12), 0 2px 8px rgba(16, 32, 51, .06);
+  --ca-shadow-lg: 0 18px 48px rgba(16, 32, 51, .16), 0 6px 18px rgba(16, 32, 51, .08);
 
-  --ca-border:         #D1D5DB;
-  --ca-text:           #1F2937;
-  --ca-text-secondary: #4B5563;
-  --ca-text-muted:     #9CA3AF;
+  --ca-border:         #DBE3DF;
+  --ca-text:           #102033;
+  --ca-text-secondary: #526159;
+  --ca-text-muted:     #7C8A82;
 
-  --ca-radius: 6px;
+  --ca-radius: 8px;
 
   /* ── Backward-compat aliases ──────── */
   --ca-primary:        var(--ca-p400);
@@ -104,29 +104,29 @@
    2. DARK THEME
    ═══════════════════════════════════════════════════════ */
 [data-theme="dark"] {
-  --ca-bg:            #0F1612;
-  --ca-surface:       #1A2320;
-  --ca-surface-hover: #222E29;
-  --ca-border:        #2E3D37;
-  --ca-text:          #EEF2F0;
-  --ca-text-secondary:#C5CEC9;
-  --ca-text-muted:    #7A9088;
+  --ca-bg:            #0D1411;
+  --ca-surface:       #16211C;
+  --ca-surface-hover: #1D2A24;
+  --ca-border:        #2B3A32;
+  --ca-text:          #EEF4F0;
+  --ca-text-secondary:#BECBC4;
+  --ca-text-muted:    #87968E;
 
   /* In dark mode: navbar gets even darker, sidebar marginally lighter */
-  --ca-navbar-bg:      #101714;
+  --ca-navbar-bg:      #0D1511;
   --ca-navbar-hover:   rgba(255,255,255,.07);
 
-  --ca-sidebar-bg:     #161E1A;
-  --ca-sidebar-text:   rgba(238,242,240,.72);
-  --ca-sidebar-icon:   rgba(238,242,240,.40);
+  --ca-sidebar-bg:     #121C17;
+  --ca-sidebar-text:   rgba(238,244,240,.72);
+  --ca-sidebar-icon:   rgba(238,244,240,.40);
   --ca-sidebar-hover-bg:    rgba(255,255,255,.06);
-  --ca-sidebar-hover-text:  #EEF2F0;
+  --ca-sidebar-hover-text:  #EEF4F0;
   --ca-sidebar-hover-icon:  rgba(183,221,52,.75);
   --ca-sidebar-active-bg:   rgba(183,221,52,.12);
   --ca-sidebar-active-text: #FFFFFF;
   --ca-sidebar-active-border: #B7DD34;
 
-  --ca-chrome:      #101714;
+  --ca-chrome:      #0D1511;
   --ca-chrome-deep: #0B1009;
 
   --ca-shadow-sm: 0 1px 4px rgba(0,0,0,.40), 0 1px 2px rgba(0,0,0,.25);
@@ -1155,60 +1155,6 @@ nav[aria-label="breadcrumb"] {
   .ca-flow-tree ul {
     margin-left: 16px;
   }
-}
-
-/* ═══════════════════════════════════════════════════════
-   21. MODERN VISUAL REFRESH
-   ═══════════════════════════════════════════════════════ */
-:root {
-  --ca-p800: #256d37;
-  --ca-p600: #2f8f46;
-  --ca-p400: #63b332;
-  --ca-p300: #b7dd34;
-  --ca-p100: #ecf8ee;
-
-  --ca-g900: #13201a;
-  --ca-g800: #25322b;
-  --ca-g700: #526159;
-  --ca-g500: #8b9891;
-  --ca-g400: #c9d3ce;
-  --ca-g300: #dbe3df;
-  --ca-g100: #f3f6f4;
-  --ca-g050: #f8faf9;
-
-  --ca-bg: #eef2f0;
-  --ca-surface: #ffffff;
-  --ca-surface-hover: #f4f8f5;
-  --ca-border: #dbe3df;
-  --ca-text: #102033;
-  --ca-text-secondary: #526159;
-  --ca-text-muted: #7c8a82;
-
-  --ca-navbar-bg: #17211c;
-  --ca-navbar-text: #f5f8f6;
-  --ca-navbar-hover: rgba(255,255,255,.12);
-  --ca-sidebar-bg: #1f2d26;
-  --ca-sidebar-border-end: rgba(8,17,12,.45);
-  --ca-sidebar-active-bg: rgba(183,221,52,.18);
-
-  --ca-navbar-height: 58px;
-  --ca-sidebar-width: 248px;
-  --ca-radius: 8px;
-  --ca-shadow-sm: 0 1px 2px rgba(16, 32, 51, .05), 0 8px 22px rgba(16, 32, 51, .07);
-  --ca-shadow: 0 12px 32px rgba(16, 32, 51, .12), 0 2px 8px rgba(16, 32, 51, .06);
-  --ca-shadow-lg: 0 18px 48px rgba(16, 32, 51, .16), 0 6px 18px rgba(16, 32, 51, .08);
-}
-
-[data-theme="dark"] {
-  --ca-bg: #0d1411;
-  --ca-surface: #16211c;
-  --ca-surface-hover: #1d2a24;
-  --ca-border: #2b3a32;
-  --ca-text: #eef4f0;
-  --ca-text-secondary: #becbc4;
-  --ca-text-muted: #87968e;
-  --ca-navbar-bg: #0d1511;
-  --ca-sidebar-bg: #121c17;
 }
 
 body {
