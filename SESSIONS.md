@@ -17,6 +17,11 @@
 - **Implementacion:** Se reemplazaron reasignaciones de `batch` por `current_batch` en `_check_batch_cancellation`, `_update_batch_progress`, `_finalize_execution` y `_handle_execution_error` para eliminar ruido de analisis estatico.
 - **Verificacion:** `venv/bin/python -m black cacao_accounting/imports/services/import_service.py`, `ruff`, `mypy` focal y `tests/imports/test_service.py` quedaron en verde.
 
+## 2026-06-29 (SonarCloud: limpieza de clonacion en formulario de pagos)
+- **Solicitud:** Cerrar el issue `javascript:S7744` en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
+- **Implementacion:** Se agrego el helper `cloneModalLine()` para clonar lineas de referencia y fiscales sin usar el patron `{ ...(source || {}) }` que Sonar marcaba como ruido.
+- **Verificacion:** `tests/test_fiscal_preview.py::test_forms_render_tax_charges_block` quedo en verde. `ruff` no aplica a templates Jinja/HTML.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.

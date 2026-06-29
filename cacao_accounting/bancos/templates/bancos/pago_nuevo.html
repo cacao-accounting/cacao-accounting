@@ -123,6 +123,10 @@
 </nav>
 
 <script>
+  function cloneModalLine(line) {
+    return line ? { ...line } : null;
+  }
+
   globalThis.paymentEntryForm = function (config) {
     return {
       header: {
@@ -266,7 +270,7 @@
 
       openReferenceLineDetails: function (index) {
         this.references.activeIndex = index;
-        this.references.modalLine = { ...(this.lines[index] || {}) };
+        this.references.modalLine = cloneModalLine(this.lines[index]);
         const modalEl = document.getElementById('referenceLineDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
       },
@@ -383,7 +387,7 @@
 
       openTaxLineDetails: function (index) {
         this.taxCharges.activeIndex = index;
-        this.taxCharges.modalLine = { ...(this.taxCharges.lines[index] || {}) };
+        this.taxCharges.modalLine = cloneModalLine(this.taxCharges.lines[index]);
         const modalEl = document.getElementById('taxChargeDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
       },
