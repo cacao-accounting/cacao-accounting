@@ -806,16 +806,12 @@ nav[aria-label="breadcrumb"] {
   width: 100%;
   border: 0;
   background: transparent;
-  color: var(--ca-text);
+  color: var(--ca-smart-select-state-color);
   display: block;
   text-align: left;
   padding: .4rem .5rem;
   border-radius: var(--ca-radius);
   font-size: .875rem;
-}
-
-.ca-smart-select-state {
-  color: var(--ca-smart-select-state-color);
 }
 
 .ca-smart-select-option:hover,
