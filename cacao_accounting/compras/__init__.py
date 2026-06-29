@@ -591,7 +591,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
             database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
         ).scalars():
             database.session.delete(item)
-        total_qty, total = _save_supplier_quotation_items(registro.id)
+        _, total = _save_supplier_quotation_items(registro.id)
         registro.total = total
         registro.base_total = total
         registro.grand_total = total
