@@ -1596,47 +1596,74 @@ def compras_orden_compra_editar(order_id: str):
 
     formulario = FormularioOrdenCompra(obj=registro)
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or registro.company
+    selected_company = _purchase_order_selected_company(registro.company)
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
+    formulario.supplier_id.choices = _purchase_order_supplier_choices()
+    items_disponibles, uoms_disponibles = _purchase_order_catalogs()
+
+    if request.method == "POST":
+        response = _update_purchase_order_from_request(registro)
+        if response is not None:
+            return response
+
+    transaction_config = _purchase_order_transaction_config(
+        registro=registro,
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
+    )
+    return render_template(
+        "compras/orden_compra_nuevo.html",
+        form=formulario,
+        titulo="Editar Orden de Compra - " + APPNAME,
+        edit=True,
+        registro=registro,
+        from_request_id=None,
+        solicitud_origen=None,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+def _purchase_order_selected_company(default_company: str | None) -> str | None:
+    """Resuelve la compañía seleccionada para la orden de compra."""
+    return request.values.get("company") or default_company
+
+
+def _purchase_order_supplier_choices() -> list[tuple[str, str]]:
+    """Construye el listado de proveedores para órdenes de compra."""
+    return [("", "")] + [
         (str(p[0].id), p[0].name)
         for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
     ]
+
+
+def _purchase_order_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    """Carga catálogos reutilizados por órdenes de compra."""
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    return items_disponibles, uoms_disponibles
 
-    if request.method == "POST":
-        supplier_id = request.form.get("supplier_id") or None
-        supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        registro.supplier_id = supplier_id
-        registro.supplier_name = supplier.name if supplier else None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        total_qty, total = _save_purchase_order_items(registro.id)
-        registro.total_qty = total_qty
-        registro.total = total
-        registro.net_total = total
-        registro.grand_total = total
-        registro.base_total = total
-        database.session.commit()
-        flash(_("Orden de compra actualizada correctamente."), "success")
-        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
 
+def _purchase_order_transaction_config(
+    *,
+    registro: PurchaseOrder,
+    items: list[dict[str, str | None]],
+    uoms: list[dict[str, str]],
+    columns: list[dict[str, str | bool | int]],
+) -> dict[str, object]:
+    """Construye la configuración transaccional para la edición de órdenes de compra."""
     lineas = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)).scalars()
-    transaction_config = {
+    return {
         "formKey": FORMKEY_PURCHASE_ORDER,
         "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
+        "items": items,
+        "uoms": uoms,
+        "columns": columns,
         "availableSourceTypes": [
             {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
@@ -1660,18 +1687,30 @@ def compras_orden_compra_editar(order_id: str):
             for item in lineas
         ],
     }
-    return render_template(
-        "compras/orden_compra_nuevo.html",
-        form=formulario,
-        titulo="Editar Orden de Compra - " + APPNAME,
-        edit=True,
-        registro=registro,
-        from_request_id=None,
-        solicitud_origen=None,
-        items_disponibles=items_disponibles,
-        uoms_disponibles=uoms_disponibles,
-        transaction_config=transaction_config,
-    )
+
+
+def _update_purchase_order_from_request(registro: PurchaseOrder):
+    """Actualiza una orden de compra desde el formulario enviado."""
+    supplier_id = request.form.get("supplier_id") or None
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.remarks = request.form.get("remarks")
+    for item in database.session.execute(
+        database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    total_qty, total = _save_purchase_order_items(registro.id)
+    registro.total_qty = total_qty
+    registro.total = total
+    registro.net_total = total
+    registro.grand_total = total
+    registro.base_total = total
+    database.session.commit()
+    flash(_("Orden de compra actualizada correctamente."), "success")
+    return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
 
 
 @compras.route("/purchase-order/<order_id>/duplicate", methods=["POST"])
