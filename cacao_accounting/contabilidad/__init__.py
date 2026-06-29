@@ -2502,17 +2502,83 @@ def ver_cierre_mensual(identifier: str):
     )
 
 
+def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
+    templates = (
+        database.session.execute(
+            database.select(RecurringJournalTemplate)
+            .filter_by(company=company, status="approved")
+            .where(RecurringJournalTemplate.start_date <= period_end)
+            .where(RecurringJournalTemplate.end_date >= period_end)
+            .where(RecurringJournalTemplate.is_completed.is_(False))
+        )
+        .scalars()
+        .all()
+    )
+    return [template.id for template in templates]
+
+
+def _apply_recurring_templates(
+    template_ids: list[str],
+    fiscal_year: str,
+    period_name: str,
+    application_date: date,
+    user_id: str,
+) -> tuple[int, list[str]]:
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        apply_recurring_template,
+    )
+
+    success_count = 0
+    errors = []
+    for tid in template_ids:
+        try:
+            apply_recurring_template(
+                template_id=tid,
+                fiscal_year=fiscal_year,
+                period_name=period_name,
+                application_date=application_date,
+                user_id=user_id,
+            )
+            success_count += 1
+        except RecurringJournalError as exc:
+            errors.append(str(exc))
+    return success_count, errors
+
+
+def _record_check_result(
+    close_run_id: str,
+    success_count: int,
+    errors: list[str],
+) -> None:
+    from cacao_accounting.database import PeriodCloseCheck
+
+    if success_count and not errors:
+        check_status = "passed"
+    elif errors:
+        check_status = "failed"
+    else:
+        check_status = "skipped"
+    message = f"Plantillas aplicadas: {success_count}."
+    if errors:
+        message = f"{message} Errores: {' | '.join(errors)}"
+    database.session.add(
+        PeriodCloseCheck(
+            close_run_id=close_run_id,
+            check_type="apply_recurring_journals",
+            check_status=check_status,
+            message=message,
+        )
+    )
+
+
 @contabilidad.route("/period-close/monthly/<identifier>/apply-recurring", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def aplicar_recurrentes_cierre(identifier: str):
     """Aplica plantillas recurrentes desde un registro de cierre mensual."""
-    from cacao_accounting.contabilidad.recurring_journal_service import (
-        RecurringJournalError,
-        apply_recurring_template,
-    )
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, PeriodCloseRun, RecurringJournalTemplate
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
     close_run = database.session.get(PeriodCloseRun, identifier)
     if not close_run:
@@ -2526,53 +2592,18 @@ def aplicar_recurrentes_cierre(identifier: str):
 
     template_ids = request.form.getlist("template_ids")
     if not template_ids:
-        templates = (
-            database.session.execute(
-                database.select(RecurringJournalTemplate)
-                .filter_by(company=close_run.company, status="approved")
-                .where(RecurringJournalTemplate.start_date <= period.end)
-                .where(RecurringJournalTemplate.end_date >= period.end)
-                .where(RecurringJournalTemplate.is_completed.is_(False))
-            )
-            .scalars()
-            .all()
-        )
-        template_ids = [template.id for template in templates]
+        template_ids = _discover_applicable_templates(close_run.company, period.end)
 
-    success_count = 0
-    errors = []
     close_run.run_status = "in_progress"
-
-    for tid in template_ids:
-        try:
-            apply_recurring_template(
-                template_id=tid,
-                fiscal_year=str(period.fiscal_year_id),
-                period_name=period.name,
-                application_date=period.end,
-                user_id=str(current_user.id),
-            )
-            success_count += 1
-        except RecurringJournalError as exc:
-            errors.append(str(exc))
-
-    if success_count and not errors:
-        check_status = "passed"
-    elif errors:
-        check_status = "failed"
-    else:
-        check_status = "skipped"
-    message = f"Plantillas aplicadas: {success_count}."
-    if errors:
-        message = f"{message} Errores: {' | '.join(errors)}"
-    database.session.add(
-        PeriodCloseCheck(
-            close_run_id=close_run.id,
-            check_type="apply_recurring_journals",
-            check_status=check_status,
-            message=message,
-        )
+    success_count, errors = _apply_recurring_templates(
+        template_ids,
+        fiscal_year=str(period.fiscal_year_id),
+        period_name=period.name,
+        application_date=period.end,
+        user_id=str(current_user.id),
     )
+
+    _record_check_result(close_run.id, success_count, errors)
     close_run.run_status = "in_progress" if success_count else "open"
     database.session.commit()
 
