@@ -229,18 +229,19 @@
       },
 
       normalizeReferenceAllocation: function (line) {
-        if (!line) return;
+        if (!line) return null;
         const allocated = this.parseNumber(line.allocated_amount || 0);
         const outstanding = this.parseNumber(line.outstanding_amount || 0);
         if (allocated < 0) {
           line.allocated_amount = 0;
-          return;
+          return line;
         }
         if (outstanding > 0 && allocated > outstanding) {
           line.allocated_amount = outstanding;
-          return;
+          return line;
         }
         line.allocated_amount = allocated;
+        return line;
       },
 
       calculateTotal: function () {
@@ -272,8 +273,8 @@
 
       saveReferenceLineModal: function () {
         if (this.references.activeIndex !== null && this.references.modalLine) {
-          this.normalizeReferenceAllocation(this.references.modalLine);
-          this.lines[this.references.activeIndex] = { ...this.references.modalLine };
+          const line = this.normalizeReferenceAllocation(this.references.modalLine);
+          this.lines[this.references.activeIndex] = { ...line };
           this.calculateTotal();
         }
         const modalEl = document.getElementById('referenceLineDetailModal');
