@@ -30,7 +30,7 @@ def serialize_parameters(params: dict[str, Any]) -> dict[str, Any]:
     """Sanitiza parámetros ocultando valores sensibles y serializando tipos especiales."""
     sanitized = {}
     for key, value in params.items():
-        if key.lower() in {"api_key", "api_key", "password", "secret", "token", "access_token"}:
+        if key.lower() in {"api_key", "password", "secret", "token", "access_token"}:
             sanitized[key] = "***"
         elif isinstance(value, dict):
             sanitized[key] = serialize_parameters(value)  # type: ignore[assignment]
