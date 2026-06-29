@@ -137,7 +137,7 @@
           for (const selector of this.filterSources) {
             const element = document.querySelector(selector);
             if (!element) continue;
-            const handler = () => { this.handleFilterChange(); };
+            const handler = this.handleFilterChange.bind(this);
             element.addEventListener('change', handler);
             element.addEventListener('input', handler);
           }
@@ -402,11 +402,13 @@
         },
 
         closeSoon() {
-          setTimeout(() => {
-            this.open = false;
-            const restoredInitialLabel = this.selectedLabel && this.search === this.selectedLabel;
-            this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
-          }, 300);
+          setTimeout(this._closeSoonHandler.bind(this), 300);
+        },
+
+        _closeSoonHandler() {
+          this.open = false;
+          const restoredInitialLabel = this.selectedLabel && this.search === this.selectedLabel;
+          this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
         }
       };
     });
