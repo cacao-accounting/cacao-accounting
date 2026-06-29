@@ -88,6 +88,7 @@ CONTABILIDAD_MONEDAS = "contabilidad.monedas"
 CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
 CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
 CONTABILIDAD_UNIDADES = "contabilidad.unidades"
+CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 
 
 def _company_label(company_code: str) -> str:
@@ -1740,7 +1741,7 @@ def fiscal_year_new():
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template(
-        "contabilidad/fiscal_year_crear.html",
+        CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,
         titulo=TITULO,
         form=formulario,
     )
@@ -1776,7 +1777,7 @@ def fiscal_year_edit(fy_id):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/fiscal_year_crear.html",
+                CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1795,7 +1796,7 @@ def fiscal_year_edit(fy_id):
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template(
-        "contabilidad/fiscal_year_crear.html",
+        CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,
         titulo=TITULO,
         form=formulario,
         edit=True,
