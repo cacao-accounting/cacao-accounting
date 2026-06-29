@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Importación de presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_import_service.py` separando el parseo ODS, la expansión de celdas repetidas y la validación por fila en helpers pequeños.
+  - La lectura del archivo ahora delega en helpers para filas ODS, normalización de encabezados, conversión de celdas y validación de totales/periodos, manteniendo la semántica de importación.
+  - Se extrajeron resolutores explícitos para cuentas, centros de costo, unidades de negocio y proyectos, lo que deja la validación más lineal y mantenible.
+  - `ruff`, `flake8`, `mypy` focal y `tests/test_budget.py` quedaron en verde.
+
 - **SonarCloud / Estado documental (2026-06-29):** Se redujo la complejidad de `cacao_accounting/document_flow/status.py` separando la resolución de `journal_entry`, los targets primarios y el mapeo de progreso en helpers pequeños.
   - La rama de `journal_entry` ahora se resuelve con un helper dedicado y la selección de progreso primario quedó lineal, sin cambiar la semántica de badges visibles.
   - Se agrego una prueba focal para `journal_entry` sin `docstatus` y la suite de flujo documental quedó en verde (`19 passed`).
