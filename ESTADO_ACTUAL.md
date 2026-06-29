@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Persistencia fiscal (2026-06-29):** Se redujo la complejidad de `cacao_accounting/fiscal_persistence_service.py` separando la persistencia de resumen, líneas y snapshots de reglas en helpers pequeños.
+  - `build_tax_rule_contexts_from_snapshot` ahora delega el mapeo de cada `DocumentTaxLine` a `TaxRuleContext` en un helper dedicado, manteniendo el contrato funcional.
+  - `ruff`, `flake8`, `mypy` focal y `tests/test_tax_rules.py` quedaron en verde. `black` se dejó para el cierre en lote, conforme a la instrucción de la sesión.
+
 - **SonarCloud / Presupuesto importación (2026-06-29):** Se cerro el issue `python:S1192` en `cacao_accounting/contabilidad/presupuesto.py` al consolidar `contabilidad/presupuestos/import.html` en `_TEMPLATE_PRESUPUESTO_IMPORTAR`.
   - La ruta de importación de presupuestos ahora reutiliza el mismo identificador de plantilla en GET, previsualización y confirmación.
   - Se agrego una prueba focal en `tests/test_budget.py` que autentica un cliente y verifica que la vista renderiza el template compartido.

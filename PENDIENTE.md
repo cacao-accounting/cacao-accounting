@@ -4,6 +4,7 @@
 - [x] Consultar la API publica de SonarCloud para enumerar issues abiertos del proyecto.
 - [x] Confirmar el volumen de hallazgos activos antes de tocar hotspots de negocio.
 - [x] Aplicar una primera limpieza de bajo riesgo en `journal_nuevo.html` y `cacaoaccounting.css`.
+- [x] Reducir la complejidad de `fiscal_persistence_service.py` con helpers dedicados para resumen, líneas y snapshots.
 - [x] Cerrar el issue `python:S1192` de `contabilidad/presupuestos/import.html` en `contabilidad/presupuesto.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `ventas/cliente_nuevo.html` en `ventas/__init__.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `compras/proveedor_nuevo.html` en `compras/__init__.py` con una constante compartida.
