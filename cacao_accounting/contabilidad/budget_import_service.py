@@ -107,25 +107,7 @@ class BudgetImportService:
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        ws = tables[0]
-        rows = []
-        for row in ws.getElementsByType(TableRow):
-            row_values = []
-            for cell in row.getElementsByType(TableCell):
-                # ODS uses number-columns-repeated attribute to compact identical cells
-                repeat = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
-                if not repeat:
-                    repeat = cell.getAttribute("numbercolumnsrepeated")
-
-                try:
-                    count = int(repeat) if repeat else 1
-                except (ValueError, TypeError):
-                    count = 1
-
-                txt = extractText(cell)
-                for _ in range(count):
-                    row_values.append(txt)
-            rows.append(row_values)
+        rows = self._ods_rows(tables[0], TableRow, TableCell, extractText)
         return self._matrix_to_dicts(rows)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, str]]:
@@ -133,20 +115,8 @@ class BudgetImportService:
         rows = list(values_iter)
         if not rows:
             return []
-        headers = [str(h).strip() if h is not None else "" for h in rows[0]]
-        result = []
-        for row in rows[1:]:
-            if not any(c is not None and str(c).strip() != "" for c in row):
-                continue
-            row_dict = {}
-            for i, header in enumerate(headers):
-                if i < len(row):
-                    val = row[i]
-                    row_dict[header] = str(val).strip() if val is not None else ""
-                else:
-                    row_dict[header] = ""
-            result.append(row_dict)
-        return result
+        headers = self._normalize_headers(rows[0])
+        return [self._row_to_dict(headers, row) for row in rows[1:] if self._row_has_content(row)]
 
     def _validate_row_periods(
         self,
@@ -164,40 +134,108 @@ class BudgetImportService:
         """Procesa los valores por periodo de una fila del presupuesto."""
         row_lines_to_add = []
         row_total = Decimal("0")
-        row_errors = []
+        row_errors: list[str] = []
 
         for p_name in period_names:
-            val = row.get(p_name, "").strip()
-            if not val:
+            row_line, row_total_delta, row_error, comb = self._build_period_row_entry(
+                row,
+                i,
+                p_name,
+                account_id,
+                cc_id,
+                unit_id,
+                project_id,
+                period_map,
+                existing_lines,
+                row_combs_to_add,
+            )
+            if row_error:
+                row_errors.append(row_error)
                 continue
-            try:
-                amount = Decimal(val)
-            except InvalidOperation:
-                row_errors.append(f"Monto '{val}' no numérico en {p_name}.")
-                continue
-            if amount == 0:
-                continue
-            p_id = period_map[p_name]
-            comb = (account_id, cc_id, p_id, unit_id or "", project_id or "")
-            if comb in existing_lines or comb in row_combs_to_add:
-                row_errors.append(f"Duplicado para {p_name}.")
-            else:
-                row_lines_to_add.append(
-                    {
-                        "row_index": i,
-                        "account_id": account_id,
-                        "cost_center_id": cc_id,
-                        "period_id": p_id,
-                        "business_unit_id": unit_id,
-                        "project_id": project_id,
-                        "amount": amount,
-                        "description": row.get(_LABEL_DESCRIPCION),
-                    }
-                )
+            if row_line:
+                row_lines_to_add.append(row_line)
                 row_combs_to_add.append(comb)
-                row_total += amount
+                row_total += row_total_delta
 
         return row_lines_to_add, row_total, row_errors
+
+    def _build_period_row_entry(
+        self,
+        row: dict,
+        row_index: int,
+        period_name: str,
+        account_id: str | None,
+        cc_id: str | None,
+        unit_id: str | None,
+        project_id: str | None,
+        period_map: dict,
+        existing_lines: set,
+        row_combs_to_add: list,
+    ) -> tuple[dict[str, Any] | None, Decimal, str | None, tuple[str | None, str | None, str | None, str | None, str | None]]:
+        amount, amount_error = self._parse_period_amount(row, period_name)
+        if amount_error:
+            return None, Decimal("0"), amount_error, (None, None, None, None, None)
+        if amount is None:
+            return None, Decimal("0"), None, (None, None, None, None, None)
+        period_id = period_map[period_name]
+        comb = (account_id, cc_id, period_id, unit_id or "", project_id or "")
+        if comb in existing_lines or comb in row_combs_to_add:
+            return None, Decimal("0"), f"Duplicado para {period_name}.", comb
+        return (
+            {
+                "row_index": row_index,
+                "account_id": account_id,
+                "cost_center_id": cc_id,
+                "period_id": period_id,
+                "business_unit_id": unit_id,
+                "project_id": project_id,
+                "amount": amount,
+                "description": row.get(_LABEL_DESCRIPCION),
+            },
+            amount,
+            None,
+            comb,
+        )
+
+    def _ods_rows(self, table, table_row_class, table_cell_class, extract_text) -> list[list[str]]:
+        rows = []
+        for row in table.getElementsByType(table_row_class):
+            rows.append(self._ods_row_values(row, table_cell_class, extract_text))
+        return rows
+
+    def _ods_row_values(self, row, table_cell_class, extract_text) -> list[str]:
+        row_values: list[str] = []
+        for cell in row.getElementsByType(table_cell_class):
+            repeat = self._ods_cell_repeat(cell)
+            row_values.extend([extract_text(cell)] * repeat)
+        return row_values
+
+    def _ods_cell_repeat(self, cell) -> int:
+        repeat = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
+        if not repeat:
+            repeat = cell.getAttribute("numbercolumnsrepeated")
+        try:
+            return int(repeat) if repeat else 1
+        except (ValueError, TypeError):
+            return 1
+
+    def _normalize_headers(self, headers_row) -> list[str]:
+        return [str(header).strip() if header is not None else "" for header in headers_row]
+
+    def _row_has_content(self, row: list[Any]) -> bool:
+        return any(cell is not None and str(cell).strip() != "" for cell in row)
+
+    def _row_to_dict(self, headers: list[str], row: list[Any]) -> Dict[str, str]:
+        row_dict: Dict[str, str] = {}
+        for i, header in enumerate(headers):
+            row_dict[header] = self._cell_value(row, i)
+        return row_dict
+
+    def _cell_value(self, row: list[Any], index: int) -> str:
+        if index < len(row):
+            val = row[index]
+            return str(val).strip() if val is not None else ""
+        return ""
 
     def validate_import(self, budget_id: str, filename: str, file_content: bytes, user_id: str) -> BudgetImport:
         """Valida e inicializa un lote de importación en staging."""
@@ -305,19 +343,17 @@ class BudgetImportService:
         self, row_idx: int, row: Dict[str, Any], caches: Any, existing_lines: set
     ) -> tuple[List[str], list, list]:
         """Validate a single import row and return errors, combinations, and lines."""
-        row_errors = []
-        account_id = caches["accounts_map"].get(row.get("Cuenta"))
-        if not account_id:
-            row_errors.append(f"Cuenta '{row.get('Cuenta')}' no válida.")
-        cc_id = caches["cc_map"].get(row.get(_LABEL_CENTRO_COSTO))
-        if not cc_id:
-            row_errors.append(f"Centro de Costo '{row.get('Centro de Costo')}' no válido.")
-        unit_id = caches["unit_map"].get(row.get(_LABEL_UNIDAD_NEGOCIO)) if row.get(_LABEL_UNIDAD_NEGOCIO) else None
-        if row.get(_LABEL_UNIDAD_NEGOCIO) and not unit_id:
-            row_errors.append(f"Unidad de Negocio '{row.get('Unidad de Negocio')}' no válida.")
-        project_id = caches["project_map"].get(row.get("Proyecto")) if row.get("Proyecto") else None
-        if row.get("Proyecto") and not project_id:
-            row_errors.append(f"Proyecto '{row.get('Proyecto')}' no válido.")
+        row_errors: list[str] = []
+        account_id = self._resolve_required_lookup(
+            caches["accounts_map"], row.get("Cuenta"), "Cuenta", row_errors
+        )
+        cc_id = self._resolve_required_lookup(
+            caches["cc_map"], row.get(_LABEL_CENTRO_COSTO), _LABEL_CENTRO_COSTO, row_errors
+        )
+        unit_id = self._resolve_optional_lookup(
+            caches["unit_map"], row.get(_LABEL_UNIDAD_NEGOCIO), "Unidad de Negocio", row_errors
+        )
+        project_id = self._resolve_optional_lookup(caches["project_map"], row.get("Proyecto"), "Proyecto", row_errors)
 
         row_combs_to_add: List[Any] = []
         row_lines_to_add, row_total, period_errors = self._validate_row_periods(
@@ -334,13 +370,9 @@ class BudgetImportService:
         )
         row_errors.extend(period_errors)
 
-        total_val = row.get("Total", "").strip()
-        if total_val:
-            try:
-                if abs(Decimal(total_val) - row_total) > Decimal("0.01"):
-                    row_errors.append(f"Total {total_val} no coincide con suma {row_total}.")
-            except InvalidOperation:
-                row_errors.append(f"Total '{total_val}' no numérico.")
+        total_error = self._validate_total_value(row.get("Total", ""), row_total)
+        if total_error:
+            row_errors.append(total_error)
 
         return row_errors, row_combs_to_add, row_lines_to_add
 
@@ -388,3 +420,44 @@ class BudgetImportService:
                 failed_batch.status = "failed"
             database.session.commit()
             raise BudgetError(f"Error atómico en inserción: {str(e)}")
+
+    def _parse_period_amount(self, row: dict, period_name: str) -> tuple[Decimal | None, str | None]:
+        raw_value = row.get(period_name, "").strip()
+        if not raw_value:
+            return None, None
+        try:
+            amount = Decimal(raw_value)
+        except InvalidOperation:
+            return None, f"Monto '{raw_value}' no numérico en {period_name}."
+        if amount == 0:
+            return None, None
+        return amount, None
+
+    def _resolve_required_lookup(
+        self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]
+    ) -> str | None:
+        resolved = lookup_map.get(key)
+        if not resolved:
+            row_errors.append(f"{label} '{key}' no válida.")
+        return resolved
+
+    def _resolve_optional_lookup(
+        self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]
+    ) -> str | None:
+        if not key:
+            return None
+        resolved = lookup_map.get(key)
+        if not resolved:
+            row_errors.append(f"{label} '{key}' no válida.")
+        return resolved
+
+    def _validate_total_value(self, total_value: Any, row_total: Decimal) -> str | None:
+        total_val = str(total_value or "").strip()
+        if not total_val:
+            return None
+        try:
+            if abs(Decimal(total_val) - row_total) > Decimal("0.01"):
+                return f"Total {total_val} no coincide con suma {row_total}."
+        except InvalidOperation:
+            return f"Total '{total_val}' no numérico."
+        return None

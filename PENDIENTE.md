@@ -6,6 +6,7 @@
 - [x] Aplicar una primera limpieza de bajo riesgo en `journal_nuevo.html` y `cacaoaccounting.css`.
 - [x] Reducir la complejidad de `document_flow/status.py` con helpers para estados primarios y progreso.
 - [x] Reducir la complejidad de `fiscal_persistence_service.py` con helpers dedicados para resumen, líneas y snapshots.
+- [x] Reducir la complejidad de `contabilidad/budget_import_service.py` con helpers para parseo ODS y validación de filas.
 - [x] Cerrar el issue `python:S1192` de `contabilidad/presupuestos/import.html` en `contabilidad/presupuesto.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `ventas/cliente_nuevo.html` en `ventas/__init__.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `compras/proveedor_nuevo.html` en `compras/__init__.py` con una constante compartida.

@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: importacion de presupuesto simplificada)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_import_service.py` sin alterar la validacion ni el flujo de importacion de presupuestos.
+- **Implementacion:** Se separaron el parseo de filas ODS, la expansion de celdas repetidas, la normalizacion de encabezados y la validacion de periodos/total en helpers pequeños. Tambien se extrajeron resolutores explicitos para cuentas, centros de costo, unidades de negocio y proyectos.
+- **Verificacion:** `ruff check`, `flake8`, `mypy` focal y `tests/test_budget.py -v -s --exitfirst --slow=True` quedaron en verde. `black` se reserva para el lote final, tal como se acordó en esta sesión.
+
 ## 2026-06-29 (SonarCloud: estado documental simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/document_flow/status.py` sin cambiar la semántica de estados documentales.
 - **Implementacion:** Se separaron la resolución de estados por `docstatus`, la selección de flujos primarios y el mapeo de progreso en helpers pequeños. Ademas se agrego una prueba focal para la rama de `journal_entry` sin depender de base de datos.
