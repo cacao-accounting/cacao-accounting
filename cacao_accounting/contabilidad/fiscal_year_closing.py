@@ -73,6 +73,98 @@ def calculate_closing_balances(company: str, fiscal_year: FiscalYear) -> list[di
     return balances
 
 
+def _closing_entry_amounts(balance: Decimal) -> tuple[Decimal, Decimal]:
+    """Calcula el débito y crédito para una cuenta de resultados."""
+    debit = Decimal("0")
+    credit = Decimal("0")
+    if balance > 0:
+        credit = balance
+    else:
+        debit = abs(balance)
+    return debit, credit
+
+
+def _closing_line_payload(
+    *,
+    fiscal_year_name: str,
+    order: int,
+    balance_row: dict[str, Any],
+) -> dict[str, Any]:
+    """Construye una línea de cierre para una cuenta de resultados."""
+    debit, credit = _closing_entry_amounts(Decimal(str(balance_row["balance"])))
+    return {
+        "order": order,
+        "account": balance_row["account_code"],
+        "cost_center": balance_row["cost_center"],
+        "unit": balance_row["unit"],
+        "project": balance_row["project"],
+        "debit": str(debit) if debit > 0 else "",
+        "credit": str(credit) if credit > 0 else "",
+        "remarks": f"Cierre año fiscal {fiscal_year_name}",
+    }
+
+
+def _closing_retain_earnings_payload(
+    *, fiscal_year_name: str, order: int, total_net_balance: Decimal, retained_earnings_code: str
+) -> dict[str, Any]:
+    """Construye la línea de contrapartida para utilidades acumuladas."""
+    debit = Decimal("0")
+    credit = Decimal("0")
+    if total_net_balance > 0:
+        debit = total_net_balance
+    else:
+        credit = abs(total_net_balance)
+    return {
+        "order": order,
+        "account": retained_earnings_code,
+        "debit": str(debit) if debit > 0 else "",
+        "credit": str(credit) if credit > 0 else "",
+        "remarks": f"Resultado neto año fiscal {fiscal_year_name}",
+    }
+
+
+def _build_closing_voucher_payload(
+    *,
+    company: str,
+    fiscal_year: FiscalYear,
+    balances: list[dict[str, Any]],
+    retained_earnings_code: str,
+) -> dict[str, Any]:
+    """Construye el payload completo del comprobante de cierre."""
+    lines = []
+    total_net_balance = Decimal("0")
+
+    for order, balance_row in enumerate(balances, start=1):
+        lines.append(
+            _closing_line_payload(
+                fiscal_year_name=fiscal_year.name,
+                order=order,
+                balance_row=balance_row,
+            )
+        )
+        total_net_balance += Decimal(str(balance_row["balance"]))
+
+    lines.append(
+        _closing_retain_earnings_payload(
+            fiscal_year_name=fiscal_year.name,
+            order=len(balances) + 1,
+            total_net_balance=total_net_balance,
+            retained_earnings_code=retained_earnings_code,
+        )
+    )
+
+    return {
+        "company": company,
+        "posting_date": fiscal_year.year_end_date.isoformat(),
+        "reference": f"CIERRE-{fiscal_year.name}",
+        "memo": f"Cierre contable automático del año fiscal {fiscal_year.name}",
+        "is_closing": True,
+        "is_fiscal_year_closing": True,
+        "fiscal_year_id": fiscal_year.id,
+        "lines": lines,
+    }
+
+
 def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_id: str) -> ComprobanteContable:
     """Ejecuta el proceso de cierre de año fiscal."""
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
@@ -99,63 +191,12 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if not retained_earnings_account:
         raise FiscalYearClosingError("La cuenta de utilidades acumuladas configurada no existe.")
 
-    lines = []
-    total_net_balance = Decimal("0")
-    order = 1
-
-    for b in balances:
-        balance = Decimal(str(b["balance"]))
-        # Para cerrar la cuenta: si saldo es deudor (positivo), acreditamos. Si es acreedor (negativo), debitamos.
-        debit = Decimal("0")
-        credit = Decimal("0")
-        if balance > 0:
-            credit = balance
-        else:
-            debit = abs(balance)
-
-        lines.append(
-            {
-                "order": order,
-                "account": b["account_code"],
-                "cost_center": b["cost_center"],
-                "unit": b["unit"],
-                "project": b["project"],
-                "debit": str(debit) if debit > 0 else "",
-                "credit": str(credit) if credit > 0 else "",
-                "remarks": f"Cierre año fiscal {fiscal_year.name}",
-            }
-        )
-        total_net_balance += balance
-        order += 1
-
-    # Contrapartida a utilidades acumuladas
-    debit_re = Decimal("0")
-    credit_re = Decimal("0")
-    if total_net_balance > 0:
-        debit_re = total_net_balance
-    else:
-        credit_re = abs(total_net_balance)
-
-    lines.append(
-        {
-            "order": order,
-            "account": retained_earnings_account.code,
-            "debit": str(debit_re) if debit_re > 0 else "",
-            "credit": str(credit_re) if credit_re > 0 else "",
-            "remarks": f"Resultado neto año fiscal {fiscal_year.name}",
-        }
+    payload = _build_closing_voucher_payload(
+        company=company,
+        fiscal_year=fiscal_year,
+        balances=balances,
+        retained_earnings_code=retained_earnings_account.code,
     )
-
-    payload = {
-        "company": company,
-        "posting_date": fiscal_year.year_end_date.isoformat(),
-        "reference": f"CIERRE-{fiscal_year.name}",
-        "memo": f"Cierre contable automático del año fiscal {fiscal_year.name}",
-        "is_closing": True,
-        "is_fiscal_year_closing": True,
-        "fiscal_year_id": fiscal_year.id,
-        "lines": lines,
-    }
 
     journal = create_journal_draft(payload, user_id=user_id)
     # Ya no ejecutamos submit_journal aqui para permitir el estado de borrador
