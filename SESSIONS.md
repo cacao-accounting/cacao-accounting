@@ -55,6 +55,11 @@
 - **Implementacion:** `_build_candidate_query()` elimino un branch duplicado y ahora aplica `filter_by(document_type=source_type)` una sola vez cuando el modelo tiene ese atributo.
 - **Verificacion:** `black --check`, `ruff`, `mypy` focal y `tests/test_payment_entry_improved.py::test_payment_reference_candidates_endpoint_filters_by_party_and_company` quedaron en verde.
 
+## 2026-06-29 (SonarCloud: condicion positiva en smart select)
+- **Solicitud:** Cerrar el issue `javascript:S7735` en `cacao_accounting/static/js/smart-select.js`.
+- **Implementacion:** `handleSelectedValueChange()` paso a usar una condicion positiva para el valor normalizado antes de actualizar etiqueta/opciones, dejando el caso vacio en el branch `else`.
+- **Verificacion:** `npm test -- --grep smart-select` y `black --check` quedaron en verde. `ruff` no aplica a archivos JavaScript en esta configuracion.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
