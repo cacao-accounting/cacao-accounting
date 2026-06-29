@@ -4,9 +4,9 @@
 'use strict';
 
 const { JSDOM } = require('jsdom');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 
 /**
  * Creates a fresh jsdom environment with Alpine mocked, then loads smart-select.js.
