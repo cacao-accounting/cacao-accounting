@@ -261,6 +261,27 @@ describe('smart-select', function () {
     assert.strictEqual(hiddenInput.value, 'cacao');
   });
 
+  it('updates label from matched option when selected value changes', function () {
+    const create = loadSmartSelect();
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+
+    component.options = [
+      { value: 'cacao', display_name: 'Cacao SA' },
+      { value: 'cafe', display_name: 'Cafe SA' },
+    ];
+    component.selectedLabel = 'Etiqueta vieja';
+    component.search = 'Etiqueta vieja';
+
+    component.handleSelectedValueChange('cafe');
+
+    assert.strictEqual(component.selectedLabel, 'Cafe SA');
+    assert.strictEqual(component.search, 'Cafe SA');
+  });
+
   it('selectOptionFromValues keeps scalar value and passes option payload to callback', function () {
     const create = loadSmartSelect();
     let selectedOption = null;

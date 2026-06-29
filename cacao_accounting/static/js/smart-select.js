@@ -52,6 +52,10 @@
     }
   }
 
+  function findOptionByNormalizedValue(options, normalized) {
+    return options.find((option) => normalizeValue(option.value ?? option.id) === normalized);
+  }
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('smartSelect', (config) => {
       return {
@@ -117,7 +121,7 @@
         },
 
         updateLabelFromOptions(normalized) {
-          const opt = this.options.find((o) => normalizeValue(o.value ?? o.id) === normalized);
+          const opt = findOptionByNormalizedValue(this.options, normalized);
           if (opt) {
             this.selectedLabel = opt.display_name || opt.label || '';
             this.search = this.selectedLabel;
