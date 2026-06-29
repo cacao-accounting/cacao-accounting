@@ -1566,10 +1566,10 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     # active, reverted, closed. Reverted/closed relations remain as historical trace.
     status = database.Column(database.String(20), default="active", nullable=False, index=True)
     reversed_at = database.Column(database.DateTime, nullable=True)
-    reversed_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    reversed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     reversal_reason = database.Column(database.Text(), nullable=True)
     cancelled_at = database.Column(database.DateTime, nullable=True)
-    cancelled_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     metadata_json = database.Column(database.Text(), nullable=True)
 
 
@@ -1604,7 +1604,7 @@ class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-def
     # open, partial, complete, closed, cancelled
     line_status = database.Column(database.String(30), default="open", nullable=False, index=True)
     closed_at = database.Column(database.DateTime, nullable=True)
-    closed_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     close_reason = database.Column(database.Text(), nullable=True)
 
 
@@ -1721,9 +1721,9 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
     status = database.Column(database.String(20), default="draft", nullable=False, index=True)
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
-    approved_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     approved_at = database.Column(database.DateTime, nullable=True)
-    cancelled_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     cancelled_at = database.Column(database.DateTime, nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
     last_applied_date = database.Column(database.Date(), nullable=True)
@@ -1775,7 +1775,7 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     journal_id = database.Column(
         database.String(26), database.ForeignKey("comprobante_contable.id", use_alter=True), nullable=True
     )
-    applied_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    applied_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     error_message = database.Column(database.Text(), nullable=True)
 
 
@@ -2395,7 +2395,7 @@ class CommentMention(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "comment_mention"
     comment_id = database.Column(database.String(26), database.ForeignKey("comment.id"), nullable=False, index=True)
-    user_id = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=False, index=True)
+    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False, index=True)
 
 
 class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2404,8 +2404,8 @@ class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "assignment"
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
-    assigned_to = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=False, index=True)
-    assigned_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    assigned_to = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False, index=True)
+    assigned_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     # open, in_progress, completed, cancelled
     assignment_status = database.Column(database.String(20), nullable=False, default="open")
     due_date = database.Column(database.Date(), nullable=True)
@@ -2458,7 +2458,7 @@ class WorkflowActionLog(database.Model, BaseTabla):  # type: ignore[name-defined
         database.String(26), database.ForeignKey("workflow_instance.id"), nullable=False, index=True
     )
     action = database.Column(database.String(100), nullable=False)
-    performed_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    performed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     performed_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
     from_state = database.Column(database.String(50), nullable=True)
     to_state = database.Column(database.String(50), nullable=True)
@@ -2477,7 +2477,7 @@ class File(database.Model, BaseTabla):  # type: ignore[name-defined]
     blob_reference = database.Column(database.String(500), nullable=True)
     file_size = database.Column(database.Integer(), nullable=True)
     mime_type = database.Column(database.String(100), nullable=True)
-    uploaded_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
+    uploaded_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
 
 
 class FileAttachment(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2509,7 +2509,7 @@ class AuditLog(database.Model):  # type: ignore[name-defined]
     action = database.Column(database.String(20), nullable=False)
     before_data = database.Column(database.Text(), nullable=True)
     after_data = database.Column(database.Text(), nullable=True)
-    user_id = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True, index=True)
+    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True, index=True)
     timestamp = database.Column(database.DateTime, default=database.func.now(), nullable=False)
 
 
