@@ -497,8 +497,7 @@ def apply_payment_reconciliation(
     payment_remaining: dict[str, Decimal] = {}
     for raw_line in lines:
         _process_reconciliation_line(
-            raw_line, company, party_type, party_id, allocation_date,
-            reconciliation.id, processed, payment_remaining
+            raw_line, company, party_type, party_id, allocation_date, reconciliation.id, processed, payment_remaining
         )
     return reconciliation
 
@@ -546,14 +545,30 @@ def _process_reconciliation_line(
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
 
     _create_payment_reference_and_relation(
-        raw_line, payment, document, flow_source_type, reference_type,
-        reference_id, party_type, party_id, company, allocation_date,
-        allocated, discount, gain_loss, difference, outstanding,
+        raw_line,
+        payment,
+        document,
+        flow_source_type,
+        reference_type,
+        reference_id,
+        party_type,
+        party_id,
+        company,
+        allocation_date,
+        allocated,
+        discount,
+        gain_loss,
+        difference,
+        outstanding,
     )
     _update_document_outstanding(document, outstanding, allocated)
     _create_reconciliation_item(
-        reconciliation_id, flow_source_type, reference_id,
-        payment.id, allocated, allocation_date,
+        reconciliation_id,
+        flow_source_type,
+        reference_id,
+        payment.id,
+        allocated,
+        allocation_date,
     )
     payment_remaining[payment_id] -= consumed
 
@@ -567,9 +582,7 @@ def _validate_payment(payment: Any, company: str, party_type: str, party_id: str
         raise DocumentFlowError("El tipo de pago no corresponde con el documento referenciado.", 409)
 
 
-def _get_reference_document(
-    flow_source_type: str, reference_id: str, company: str, party_type: str, party_id: str
-) -> Any:
+def _get_reference_document(flow_source_type: str, reference_id: str, company: str, party_type: str, party_id: str) -> Any:
     model = _payment_reference_model(flow_source_type)
     document = database.session.get(model, reference_id)
     if not document or getattr(document, "docstatus", 0) != 1:
@@ -609,9 +622,21 @@ def _validate_and_get_outstanding(document: Any, allocated: Decimal, allocation_
 
 
 def _create_payment_reference_and_relation(
-    raw_line: dict[str, Any], payment: Any, document: Any, flow_source_type: str, reference_type: str,
-    reference_id: str, party_type: str, party_id: str, company: str, allocation_date: date,
-    allocated: Decimal, discount: Decimal, gain_loss: Decimal, difference: Decimal, outstanding: Decimal,
+    raw_line: dict[str, Any],
+    payment: Any,
+    document: Any,
+    flow_source_type: str,
+    reference_type: str,
+    reference_id: str,
+    party_type: str,
+    party_id: str,
+    company: str,
+    allocation_date: date,
+    allocated: Decimal,
+    discount: Decimal,
+    gain_loss: Decimal,
+    difference: Decimal,
+    outstanding: Decimal,
 ) -> None:
     physical_type = _payment_candidate_physical_type(flow_source_type)
     outstanding_after = outstanding - allocated
@@ -661,8 +686,12 @@ def _update_document_outstanding(document: Any, outstanding: Decimal, allocated:
 
 
 def _create_reconciliation_item(
-    reconciliation_id: str, flow_source_type: str, reference_id: str,
-    payment_id: str, allocated: Decimal, allocation_date: date,
+    reconciliation_id: str,
+    flow_source_type: str,
+    reference_id: str,
+    payment_id: str,
+    allocated: Decimal,
+    allocation_date: date,
 ) -> None:
     database.session.add(
         ReconciliationItem(

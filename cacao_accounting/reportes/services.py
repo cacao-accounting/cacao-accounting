@@ -512,16 +512,12 @@ def _process_payment_entry(
         incoming = _decimal_value(payment.received_amount or payment.paid_amount)
 
     if incoming > 0:
-        values = _build_payment_row_values(
-            payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names
-        )
+        values = _build_payment_row_values(payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names)
         rows.append(ReportRow(values=values))
         total_incoming += incoming
 
     if outgoing > 0:
-        values = _build_payment_row_values(
-            payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names
-        )
+        values = _build_payment_row_values(payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names)
         rows.append(ReportRow(values=values))
         total_outgoing += outgoing
 
@@ -555,9 +551,7 @@ def _process_payment_entries(
     for payment in database.session.execute(
         payments.order_by(PaymentEntry.posting_date.asc(), PaymentEntry.created.asc())
     ).scalars():
-        entry_rows, entry_incoming, entry_outgoing = _process_payment_entry(
-            payment, filters, bank_accounts, party_names
-        )
+        entry_rows, entry_incoming, entry_outgoing = _process_payment_entry(payment, filters, bank_accounts, party_names)
         rows.extend(entry_rows)
         total_incoming += entry_incoming
         total_outgoing += entry_outgoing
@@ -690,9 +684,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     total_balance = Decimal("0")
     for bank_account in bank_accounts:
         balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date)
-        receipts, payments = _compute_account_receipts_and_payments(
-            bank_account.id, filters.company, filters.as_of_date
-        )
+        receipts, payments = _compute_account_receipts_and_payments(bank_account.id, filters.company, filters.as_of_date)
 
         total_balance += balance
         rows.append(

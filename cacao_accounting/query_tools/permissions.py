@@ -9,9 +9,7 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 
 
-def validate_company_access(
-    context: QueryContext, company_id: str
-) -> None:
+def validate_company_access(context: QueryContext, company_id: str) -> None:
     """Verifica que el contexto tenga acceso a la compañía indicada y que esta exista."""
     if context.company_ids and company_id not in context.company_ids:
         raise QueryToolError(
@@ -20,9 +18,7 @@ def validate_company_access(
             request_id=context.request_id,
         )
 
-    entity = database.session.execute(
-        database.select(Entity).where(Entity.code == company_id)
-    ).scalars().first()
+    entity = database.session.execute(database.select(Entity).where(Entity.code == company_id)).scalars().first()
 
     if not entity:
         raise QueryToolError(

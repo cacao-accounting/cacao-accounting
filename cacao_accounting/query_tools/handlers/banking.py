@@ -48,14 +48,9 @@ def get_banking_accounts(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(BankAccount)
-        .where(BankAccount.entity == company_id)
-    )
+    query = database.select(BankAccount).where(BankAccount.entity == company_id)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
@@ -128,10 +123,7 @@ def get_banking_transactions(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(BankTransaction)
-        .where(BankTransaction.entity == company_id)
-    )
+    query = database.select(BankTransaction).where(BankTransaction.entity == company_id)
 
     if bank_account_id:
         query = query.where(BankTransaction.bank_account == bank_account_id)
@@ -140,15 +132,11 @@ def get_banking_transactions(
     if date_to:
         query = query.where(BankTransaction.posting_date <= date_to)
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(BankTransaction.posting_date.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(BankTransaction.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()

@@ -138,9 +138,7 @@ class ImportService:
             return False
         return True
 
-    def _collect_structural_errors(
-        self, batch_id: str, table: Any, adapter: Any
-    ) -> List[ImportBatchError]:
+    def _collect_structural_errors(self, batch_id: str, table: Any, adapter: Any) -> List[ImportBatchError]:
         """Recolecta errores estructurales de columnas."""
         errors = []
         for col in table.columns:
@@ -173,9 +171,7 @@ class ImportService:
         batch.import_status = 7
         database.session.commit()
 
-    def _collect_business_errors(
-        self, adapter: Any, batch_id: str, company_id: str, docs: Dict[str, List]
-    ) -> int:
+    def _collect_business_errors(self, adapter: Any, batch_id: str, company_id: str, docs: Dict[str, List]) -> int:
         """Recolecta errores de negocio de filas y documentos."""
         errors_count = 0
         for ref, rows in docs.items():
@@ -327,9 +323,7 @@ class ImportService:
                     "created_by": batch.created_by,
                 }
 
-                success_count, error_count = self._process_all_documents(
-                    batch, batch_id, adapter, docs, context
-                )
+                success_count, error_count = self._process_all_documents(batch, batch_id, adapter, docs, context)
                 self._finalize_execution(batch, batch_id, success_count, error_count)
 
             except Exception as e:
@@ -369,15 +363,11 @@ class ImportService:
             return True
         return False
 
-    def _handle_document_error(
-        self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int
-    ) -> int:
+    def _handle_document_error(self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int) -> int:
         """Maneja error en procesamiento de documento individual."""
         database.session.rollback()
         error_count += 1
-        err_record = ImportBatchError(
-            batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc)
-        )
+        err_record = ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc))
         database.session.add(err_record)
         database.session.commit()
         return error_count
