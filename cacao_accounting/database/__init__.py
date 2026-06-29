@@ -49,10 +49,12 @@ BATCH_ID = "batch.id"
 PURCHASE_ORDER_ID = "purchase_order.id"
 PURCHASE_RECEIPT_ID = "purchase_receipt.id"
 SALES_ORDER_ID = "sales_order.id"
+GL_ENTRY_ID = "gl_entry.id"
 BANK_ACCOUNT_ID = "bank_account.id"
 RECURRING_JOURNAL_TEMPLATE_ID = "recurring_journal_template.id"
 BOOK_ID = "book.id"
 WORKFLOW_STATE_ID = "workflow_state.id"
+ACCOUNTING_PERIOD_ID = "accounting_period.id"
 
 # < --------------------------------------------------------------------------------------------- >
 # Definición central de status web.
@@ -1852,7 +1854,7 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID), nullable=True)
     # Periodo fiscal
     fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID), nullable=True)
-    accounting_period_id = database.Column(database.String(26), database.ForeignKey("accounting_period.id"), nullable=True)
+    accounting_period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID), nullable=True)
     # Dimensiones analiticas de primer nivel
     cost_center_code = database.Column(database.String(10), nullable=True)
     # Unidad de negocio como dimension analitica (sucursal, oficina, punto de venta)
@@ -1861,7 +1863,7 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     remarks = database.Column(database.String(500), nullable=True)
     # Reversion contable append-only
     is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
-    reversal_of = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=True)
+    reversal_of = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
     created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
@@ -1905,7 +1907,7 @@ class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Dimension analitica adicional de una entrada GL (0..N por entrada)."""
 
     __tablename__ = "gl_entry_dimension"
-    gl_entry_id = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=False, index=True)
+    gl_entry_id = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID), nullable=False, index=True)
     dimension_type_id = database.Column(
         database.String(26), database.ForeignKey("dimension_type.id"), nullable=False, index=True
     )
@@ -2348,7 +2350,7 @@ class ExchangeRevaluationItem(database.Model, BaseTabla):  # type: ignore[name-d
     closing_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     revalued_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     exchange_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    journal_line_id = database.Column(database.String(26), database.ForeignKey("gl_entry.id"), nullable=True, index=True)
+    journal_line_id = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID), nullable=True, index=True)
     bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID), nullable=True, index=True)
 
 
@@ -2360,7 +2362,7 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "period_close_run"
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
-    period_id = database.Column(database.String(26), database.ForeignKey("accounting_period.id"), nullable=False, index=True)
+    period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID), nullable=False, index=True)
     # open, in_progress, closed
     run_status = database.Column(database.String(20), nullable=False)
     closed_by = database.Column(database.String(15), nullable=True)
@@ -2639,7 +2641,7 @@ class BudgetLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     cost_center_id = database.Column(database.String(26), database.ForeignKey("cost_center.id"), nullable=False, index=True)
     business_unit_id = database.Column(database.String(26), database.ForeignKey("unit.id"), nullable=True, index=True)
     project_id = database.Column(database.String(26), database.ForeignKey("project.id"), nullable=True, index=True)
-    period_id = database.Column(database.String(26), database.ForeignKey("accounting_period.id"), nullable=False, index=True)
+    period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID), nullable=False, index=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     description = database.Column(database.String(200), nullable=True)
 
