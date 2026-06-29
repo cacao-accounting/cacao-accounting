@@ -4,6 +4,7 @@
 """Servicios de flujo documental y parcialidades."""
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -48,6 +49,18 @@ from cacao_accounting.document_identifiers import assign_document_identifier
 
 _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 _MSG_LINEA_ORIGEN = "Linea origen no encontrada."
+
+
+@dataclass
+class PaymentAllocationContext:
+    """Contexto de asignación de pago para crear referencias y relaciones."""
+
+    allocation_date: date
+    allocated: Decimal
+    discount: Decimal
+    gain_loss: Decimal
+    difference: Decimal
+    outstanding: Decimal
 
 
 class DocumentFlowError(ValueError):
