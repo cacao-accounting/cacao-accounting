@@ -165,7 +165,7 @@ class ImportService:
         return errors
 
     def _commit_structural_errors(self, batch: ImportBatch, batch_id: str, errors: List[ImportBatchError]) -> None:
-        """Persiste errores estructurales y marca batch como fallido."""
+        """Persistir errores estructurales y marca batch como fallido."""
         for err in errors:
             database.session.add(err)
         batch.import_status = 7
@@ -242,12 +242,12 @@ class ImportService:
         if len(table.rows) > IMPORT_SYNC_MAX_ROWS:
             thread = threading.Thread(
                 target=self._execute_task,
-                args=(current_app._get_current_object(), batch_id),
+                args=(current_app._get_current_object(), batch_id),  # type: ignore[attr-defined]
                 daemon=True,
             )
             thread.start()
         else:
-            self._execute_task(current_app._get_current_object(), batch_id)
+            self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
 
     def cancel(self, batch_id: str):
         """Solicita la cancelación de un lote de importación."""

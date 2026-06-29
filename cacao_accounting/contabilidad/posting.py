@@ -961,7 +961,7 @@ def _update_purchase_grand_total(document: PurchaseInvoice, amount_total: Decima
 
 
 def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> None:
-    """Emite el evento economico para factura de compra."""
+    """Emitir el evento economico para factura de compra."""
     from cacao_accounting.compras.purchase_reconciliation_service import EventType, emit_economic_event
 
     emit_economic_event(
@@ -2498,7 +2498,7 @@ def _validate_cancel_accounting_period(document: Any, company: str) -> None:
 
 def _get_original_gl_entries(company: str, voucher_type: str, voucher_id: str, document: Any) -> list[GLEntry]:
     """Obtiene las entradas GL originales para reversar."""
-    original_entries = (
+    original_entries = list(
         database.session.execute(
             select(GLEntry).filter_by(
                 company=company,
@@ -2598,7 +2598,7 @@ def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type:
 
 
 def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
-    """Emite eventos de cancelacion especificos por tipo de documento."""
+    """Emitir eventos de cancelacion especificos por tipo de documento."""
     if isinstance(document, PurchaseReceipt):
         from cacao_accounting.compras.purchase_reconciliation_service import emit_goods_received_cancelled
 

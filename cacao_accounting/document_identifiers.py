@@ -354,7 +354,7 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
     if not mappings:
         return None
 
-    matched_with_condition, fallback = _collect_matching_counters(mappings, ctx)
+    matched_with_condition, fallback = _collect_matching_counters(list(mappings), ctx)
 
     if matched_with_condition:
         best = sorted(matched_with_condition, key=lambda x: -x[1])[0][0]
@@ -367,7 +367,7 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
 
 
 def _collect_matching_counters(
-    mappings: list, ctx: dict
+    mappings: "list | tuple", ctx: dict
 ) -> tuple[list[tuple[SeriesExternalCounterMap, int]], SeriesExternalCounterMap | None]:
     """Clasifica mapeos en candidatos con condición y fallback sin condición."""
     matched_with_condition: list[tuple[SeriesExternalCounterMap, int]] = []
