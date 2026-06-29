@@ -22,12 +22,14 @@ from cacao_accounting.query_tools.permissions import (
     validate_permission,
 )
 
+_PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
+
 
 @query_tool(
     name="accounting_periods.list",
     description="Lista los períodos contables de una compañía.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -53,7 +55,7 @@ def list_accounting_periods(
     """Lista los períodos contables de una compañía, con filtro opcional por estado."""
     validate_permission(
         context,
-        required_permission="accounting.reports.read",
+        required_permission=_PERM_ACCOUNTING_REPORTS_READ,
         required_module="accounting",
         company_id=company_id,
     )
@@ -110,7 +112,7 @@ def list_accounting_periods(
     name="accounts.search",
     description="Busca cuentas contables por código o nombre.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -138,7 +140,7 @@ def search_accounts(
     """Busca cuentas contables por código o nombre, con filtro opcional de clasificación."""
     validate_permission(
         context,
-        required_permission="accounting.reports.read",
+        required_permission=_PERM_ACCOUNTING_REPORTS_READ,
         required_module="accounting",
         company_id=company_id,
     )
@@ -198,7 +200,7 @@ def search_accounts(
     name="accounting.get_trial_balance",
     description="Obtiene la balanza de comprobación para una compañía, libro y rango de fechas.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     max_date_range_months=12,
     parameters_schema={
         "type": "object",
@@ -226,7 +228,7 @@ def get_trial_balance(
     """Obtiene la balanza de comprobación para una compañía, libro y rango de fechas."""
     validate_permission(
         context,
-        required_permission="accounting.reports.read",
+        required_permission=_PERM_ACCOUNTING_REPORTS_READ,
         required_module="accounting",
         company_id=company_id,
     )
@@ -286,7 +288,7 @@ def get_trial_balance(
     name="accounting.get_general_ledger",
     description="Consulta los movimientos del libro mayor por cuenta.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     max_date_range_months=12,
     parameters_schema={
         "type": "object",
@@ -316,7 +318,7 @@ def get_general_ledger(
     """Consulta los movimientos del libro mayor por cuenta y rango de fechas."""
     validate_permission(
         context,
-        required_permission="accounting.reports.read",
+        required_permission=_PERM_ACCOUNTING_REPORTS_READ,
         required_module="accounting",
         company_id=company_id,
     )
