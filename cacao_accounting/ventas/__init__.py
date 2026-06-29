@@ -620,7 +620,9 @@ def ventas_cliente_editar(customer_id: str):
         build_party_company_settings("customer", selected_company, party_id=cliente.id) if selected_company else None
     )
     if request.method == "POST":
-        return _handle_cliente_update(cliente, request.form, selected_company, company_choices, company_settings, formulario, titulo)
+        return _handle_cliente_update(
+            cliente, request.form, selected_company, company_choices, company_settings, formulario, titulo
+        )
     return render_template(
         "ventas/cliente_nuevo.html",
         form=formulario,
