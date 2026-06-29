@@ -95,7 +95,10 @@
         }
 
         fetch(`/api/dashboard/data?${params.toString()}`)
-          .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+          .then(async (response) => {
+            const data = await response.json();
+            return { ok: response.ok, data };
+          })
           .then((result) => {
             if (!result.ok) {
               this.error = result.data.error || config.messages.dashboardLoadError;

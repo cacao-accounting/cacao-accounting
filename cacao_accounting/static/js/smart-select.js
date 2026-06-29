@@ -131,20 +131,20 @@
         },
 
         bindFilterSources() {
-          this.filterSources.forEach((selector) => {
+          for (const selector of this.filterSources) {
             const element = document.querySelector(selector);
-            if (!element) return;
+            if (!element) continue;
             const handler = () => { this.handleFilterChange(); };
             element.addEventListener('change', handler);
             element.addEventListener('input', handler);
-          });
+          }
         },
 
         resolvedFilters() {
           const resolved = {};
-          Object.keys(this.filters).forEach((key) => {
+          for (const key of Object.keys(this.filters)) {
             resolved[key] = normalizeValue(this.filters[key]);
-          });
+          }
           return resolved;
         },
 
@@ -251,10 +251,21 @@
         },
 
         autoSelectDefaultOption() {
-          const defaultOption = this.options.find((opt) => opt.is_default);
+          const defaultOption = this._findDefaultOption();
           if (defaultOption) {
             this.selectOption(defaultOption);
           }
+        },
+
+        _findDefaultOption() {
+          for (const opt of this.options) {
+            if (opt.is_default) return opt;
+          }
+          return undefined;
+        },
+
+        _isDefaultOption(opt) {
+          return opt.is_default;
         },
 
         async fetchOptions() {
@@ -314,9 +325,9 @@
           params.append('limit', this.limit);
 
           const currentFilters = this.resolvedFilters();
-          Object.keys(currentFilters).forEach((key) => {
+          for (const key of Object.keys(currentFilters)) {
             appendParam(params, key, currentFilters[key]);
-          });
+          }
           return params;
         },
 
@@ -350,20 +361,30 @@
           this.invalid = false;
           this.error = '';
           if (typeof this.onSelect === 'function') {
-            try {
-              this.onSelect(option);
-            } catch (_) {
-              console.warn('Error in onSelect callback:', _);
-            }
+            this._safeCallOnSelect(option);
           }
           this.notifyValueChange();
         },
 
+        _safeCallOnSelect(option) {
+          try {
+            this.onSelect(option);
+          } catch (_) {
+            console.warn('Error in onSelect callback:', _);
+          }
+        },
+
         requiredFiltersPresent() {
           const currentFilters = this.resolvedFilters();
-          return !this.requiredFilters.some((key) => {
-            return currentFilters[key] === '' || (Array.isArray(currentFilters[key]) && currentFilters[key].length === 0);
-          });
+          return !this._hasEmptyRequiredFilter(currentFilters);
+        },
+
+        _hasEmptyRequiredFilter(currentFilters) {
+          for (const key of this.requiredFilters) {
+            const val = currentFilters[key];
+            if (val === '' || (Array.isArray(val) && val.length === 0)) return true;
+          }
+          return false;
         },
 
         clearSelection() {
