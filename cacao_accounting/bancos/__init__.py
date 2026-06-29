@@ -1274,30 +1274,56 @@ def _save_payment_references(
     if lines is None:
         lines = _payment_reference_lines_from_form()
 
-    totals = {
+    totals = _payment_reference_totals()
+    _reset_payment_reference_line_cache()
+    for line in lines:
+        totals = _process_payment_reference_line(
+            payment=payment,
+            line=line,
+            totals=totals,
+            allow_order_references=allow_order_references,
+        )
+    return totals
+
+
+def _payment_reference_totals() -> dict[str, Decimal]:
+    """Inicializa el acumulador de totales de referencias de pago."""
+    return {
         "allocated": Decimal("0"),
         "discount": Decimal("0"),
         "gain_loss": Decimal("0"),
     }
+
+
+def _reset_payment_reference_line_cache() -> None:
+    """Reinicia el cache de validación de líneas de referencias de pago."""
     _validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
-    for line in lines:
-        reference_type, reference_id, requested_flow_source_type, allocated, applied_amount = _validate_payment_reference_line(
-            payment=payment,
-            line=line,
-            allow_order_references=allow_order_references,
-        )
-        if applied_amount <= 0:
-            continue
-        totals = _apply_payment_reference_line(
-            payment=payment,
-            line=line,
-            reference_type=reference_type,
-            reference_id=reference_id,
-            requested_flow_source_type=requested_flow_source_type,
-            allocated=allocated,
-            totals=totals,
-        )
-    return totals
+
+
+def _process_payment_reference_line(
+    *,
+    payment: PaymentEntry,
+    line: dict,
+    totals: dict[str, Decimal],
+    allow_order_references: bool,
+) -> dict[str, Decimal]:
+    """Valida una línea de referencia y la aplica cuando corresponde."""
+    reference_type, reference_id, requested_flow_source_type, allocated, applied_amount = _validate_payment_reference_line(
+        payment=payment,
+        line=line,
+        allow_order_references=allow_order_references,
+    )
+    if applied_amount <= 0:
+        return totals
+    return _apply_payment_reference_line(
+        payment=payment,
+        line=line,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        requested_flow_source_type=requested_flow_source_type,
+        allocated=allocated,
+        totals=totals,
+    )
 
 
 def _apply_payment_reference_line(
