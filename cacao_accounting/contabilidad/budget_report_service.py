@@ -28,11 +28,11 @@ class BudgetReportService:
 
     def get_real_vs_budget_report(self, filters: Dict[str, Any]) -> PaginatedReport:
         """Genera el reporte Real vs Presupuesto integrando con la infraestructura de reportes."""
-        company = filters.get("company")
-        budget_id = filters.get("budget_id")
-        ledger_id = filters.get("ledger_id")
-        fiscal_year_id = filters.get("fiscal_year_id")
-        granularity = filters.get("granularity", "month")
+        company: Optional[str] = filters.get("company")
+        budget_id: Optional[str] = filters.get("budget_id")
+        ledger_id: Optional[str] = filters.get("ledger_id")
+        fiscal_year_id: Optional[str] = filters.get("fiscal_year_id")
+        granularity: str = filters.get("granularity") or "month"
 
         period_from_id = filters.get("period_from_id")
         period_to_id = filters.get("period_to_id")
@@ -44,6 +44,8 @@ class BudgetReportService:
 
         budget = database.session.get(Budget, budget_id)
         if not budget:
+            return self._empty_report()
+        if not company or not fiscal_year_id or not ledger_id or not budget_id:
             return self._empty_report()
         if not self._validate_budget_access(budget, company, ledger_id, fiscal_year_id):
             return self._empty_report()
