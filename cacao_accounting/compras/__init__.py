@@ -780,6 +780,56 @@ def _handle_supplier_create(
     )
 
 
+def _handle_supplier_update(
+    proveedor: Party,
+    form: dict,
+    selected_company: str | None,
+    company_choices: list,
+    company_settings: Any,
+    formulario: Any,
+    titulo: str,
+):
+    """Maneja la actualizacion de un proveedor existente desde el formulario POST."""
+    try:
+        proveedor.name = form.get("name") or ""
+        proveedor.comercial_name = form.get("comercial_name") or None
+        proveedor.tax_id = form.get("tax_id") or None
+        proveedor.is_active = form.get("is_active") is not None
+        apply_party_group(proveedor, form.get("party_group_id") or None)
+        company = form.get("company") or None
+        if company:
+            upsert_party_company_settings(
+                proveedor.id,
+                "supplier",
+                company,
+                is_active=form.get("company_is_active") is not None,
+                receivable_account_id=None,
+                payable_account_id=form.get("payable_account_id") or None,
+                tax_template_id=form.get("tax_template_id") or None,
+                allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
+                allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
+            )
+        database.session.commit()
+        flash(_("Proveedor actualizado correctamente."), "success")
+        return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=proveedor.id))
+    except ValueError as exc:
+        database.session.rollback()
+        if selected_company:
+            company_settings = draft_party_company_settings("supplier", selected_company, form)
+        flash(str(exc), "danger")
+    return render_template(
+        "compras/proveedor_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        edit=True,
+        registro=proveedor,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+        group_label=party_group_label(proveedor.party_group_id),
+    )
+
+
 @compras.route("/supplier-quotation/<quotation_id>/duplicate", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1130,35 +1180,9 @@ def compras_proveedor_editar(supplier_id: str):
         build_party_company_settings("supplier", selected_company, party_id=proveedor.id) if selected_company else None
     )
     if request.method == "POST":
-        try:
-            proveedor.name = request.form.get("name") or ""
-            proveedor.comercial_name = request.form.get("comercial_name") or None
-            proveedor.tax_id = request.form.get("tax_id") or None
-            proveedor.is_active = request.form.get("is_active") is not None
-            apply_party_group(proveedor, request.form.get("party_group_id") or None)
-            company = request.form.get("company") or None
-            if company:
-                upsert_party_company_settings(
-                    proveedor.id,
-                    "supplier",
-                    company,
-                    is_active=request.form.get("company_is_active") is not None,
-                    receivable_account_id=None,
-                    payable_account_id=request.form.get("payable_account_id") or None,
-                    tax_template_id=request.form.get("tax_template_id") or None,
-                    allow_purchase_invoice_without_order=request.form.get("allow_purchase_invoice_without_order") is not None,
-                    allow_purchase_invoice_without_receipt=(
-                        request.form.get("allow_purchase_invoice_without_receipt") is not None
-                    ),
-                )
-            database.session.commit()
-            flash(_("Proveedor actualizado correctamente."), "success")
-            return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=proveedor.id))
-        except ValueError as exc:
-            database.session.rollback()
-            if selected_company:
-                company_settings = draft_party_company_settings("supplier", selected_company, request.form)
-            flash(str(exc), "danger")
+        return _handle_supplier_update(
+            proveedor, request.form, selected_company, company_choices, company_settings, formulario, titulo
+        )
     return render_template(
         "compras/proveedor_nuevo.html",
         form=formulario,
