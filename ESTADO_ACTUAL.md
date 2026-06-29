@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Cierre fiscal (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/fiscal_year_closing.py` separando la construcción del voucher en helpers pequeños.
+  - El cálculo de débitos y créditos por línea, la línea de contrapartida y el payload final quedaron separados en funciones auxiliares.
+  - `create_fiscal_year_closing_voucher()` mantiene la validación de compañía, cierre administrativo, configuración de utilidades acumuladas y creación del draft.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_fiscal_year_closing.py` quedaron en verde.
+
 - **SonarCloud / Validación de presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_service.py` separando la validación de cuenta, centro de costo, periodo, unidad de negocio, proyecto y unicidad.
   - `_validate_line_data()` ahora solo orquesta helpers pequeños y la semántica de alta/edición de líneas se mantiene sin cambios.
   - Se agregó una prueba focal que cubre cuenta agrupadora, centro de costo inválido, unidad de negocio inválida, proyecto inválido y duplicidad.
