@@ -1,5 +1,15 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: 90 issues abiertos restantes)
+- **Consulta API:** `https://sonarcloud.io/api/issues/search?componentKeys=cacao-accounting_cacao-accounting&resolved=false`
+- **Resultado:** 90 issues abiertos
+  - `python:S3776` (cognitive complexity): 49
+  - `javascript:S2004` (deep nesting): 34
+  - `javascript:S7740` (var self=this): 5
+  - `javascript:S7735` (negated condition): 1
+  - `python:S107` (too many parameters): 1
+- **Nota:** El test `test_purchase_receipt_lands_import_costs_into_initial_valuation_layers` falla desde antes de nuestro trabajo (pre-existing).
+
 ## 2026-06-29 (SonarCloud: helper de busqueda en smart select)
 - **Solicitud:** Cerrar el issue `javascript:S2004` en `cacao_accounting/static/js/smart-select.js` y confirmar que no fuera un falso positivo de Alpine.
 - **Implementacion:** Se extrajo `findOptionByNormalizedValue()` para sacar la busqueda con `find()` fuera del callback anidado de `Alpine.data`, reduciendo la profundidad de funciones sin cambiar la semantica de `updateLabelFromOptions()`. Ademas se agrego una prueba JS para verificar que al cambiar `selectedValue` se actualiza la etiqueta visible desde las opciones precargadas.
