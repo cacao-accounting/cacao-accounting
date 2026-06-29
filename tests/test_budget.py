@@ -3,6 +3,7 @@
 
 import pytest
 from decimal import Decimal
+from types import SimpleNamespace
 from cacao_accounting import create_app
 from cacao_accounting.contabilidad.budget_service import BudgetService, BudgetError
 from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
@@ -152,6 +153,49 @@ def test_budget_import(app_ctx):
     lines = database.session.query(BudgetLine).filter_by(budget_id=budget.id).all()
     assert len(lines) == 1
     assert lines[0].amount == Decimal("500")
+
+
+def test_budget_import_route_uses_shared_template(app_ctx, monkeypatch):
+    from cacao_accounting.contabilidad import presupuesto as presupuesto_module
+
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "ROUTE-IMPORT-TEST",
+            "name": "Route Import Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_render_template(template_name: str, **context):
+        captured["template"] = template_name
+        captured["budget_id"] = context["budget"].id
+        return template_name
+
+    monkeypatch.setattr(presupuesto_module, "render_template", fake_render_template)
+    monkeypatch.setattr(presupuesto_module, "Permisos", lambda *args, **kwargs: SimpleNamespace(importar=True))
+
+    with app_ctx.test_client() as client:
+        with client.session_transaction() as session:
+            session["_user_id"] = admin_user.id
+            session["_fresh"] = True
+
+        response = client.get(f"/accounting/presupuestos/{budget.id}/import")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "contabilidad/presupuestos/import.html"
+    assert captured["template"] == "contabilidad/presupuestos/import.html"
+    assert captured["budget_id"] == budget.id
 
 
 def test_budget_uniqueness_validation(app_ctx):
