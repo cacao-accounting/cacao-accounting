@@ -1262,7 +1262,7 @@ def _consume_stock_valuation_layers(
     if quantity <= 0:
         raise PostingError("La cantidad de consumo debe ser mayor que cero.")
     available = _valuation_queue(company, item_code, warehouse)
-    total_available = sum(qty for qty, _ in available)
+    total_available: Decimal = sum((qty for qty, _ in available), Decimal("0"))
     if total_available < quantity:
         raise PostingError("No hay suficiente inventario para calcular el costo real.")
 
