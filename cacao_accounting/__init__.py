@@ -281,51 +281,9 @@ def create_app(ajustes: dict | None = None) -> Flask:
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
 
-    if not cacao_app.config.get("SECRET_KEY"):
-        if cacao_app.config.get("TESTING"):
-            cacao_app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
-        else:
-            cacao_app.config["SECRET_KEY"] = token_urlsafe(32)
-
-    @cacao_app.cli.command()
-    def cleandb():  # pragma: no cover
-        """Elimina la base de datos, solo disponible para desarrollo."""
-        if TESTING_MODE:
-            database.drop_all()
-
-    @cacao_app.cli.command()
-    def version():  # pragma: no cover
-        """Muestra la version actual instalada."""
-        from cacao_accounting.version import VERSION
-
-        print(VERSION)
-
-    @cacao_app.cli.command()
-    def serve():  # pragma: no cover
-        """Inicio la aplicacion con waitress como servidor WSGI por  defecto."""
-        from cacao_accounting.server import server
-
-        server()
-
-    @cacao_app.cli.command()
-    def setupdb():  # pragma: no cover
-        """Define una base de datos de desarrollo nueva."""
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
-        user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PSWD") or "cacao"
-
-        if TESTING_MODE:
-            database.drop_all()
-            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=True)
-        else:
-            inicia_base_de_datos(app=cacao_app, user=user, passwd=passwd, with_examples=False)
-
-    @cacao_app.before_request
-    def before_request():  # pragma: no cover
-        """Establece un periodo de 30 minutos de valides de la sesión."""
-        session.permanent = True
-        cacao_app.permanent_session_lifetime = timedelta(minutes=30)
+    _configure_app_secret_key(cacao_app)
+    _register_app_commands(cacao_app)
+    _register_app_hooks(cacao_app)
 
     actualiza_variables_globales_jinja(app=cacao_app)
     iniciar_extenciones(app=cacao_app)
@@ -339,6 +297,64 @@ def create_app(ajustes: dict | None = None) -> Flask:
             log.error("Error al recuperar lotes de importación: {}", e)
 
     return cacao_app
+
+
+def _configure_app_secret_key(app: Flask) -> None:
+    """Configure a deterministic test secret or a random production key."""
+    if app.config.get("SECRET_KEY"):
+        return
+    if app.config.get("TESTING"):
+        app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
+        return
+    app.config["SECRET_KEY"] = token_urlsafe(32)
+
+
+def _register_app_commands(app: Flask) -> None:
+    """Register CLI commands for the application factory."""
+
+    @app.cli.command()
+    def cleandb():  # pragma: no cover
+        """Elimina la base de datos, solo disponible para desarrollo."""
+        if TESTING_MODE:
+            database.drop_all()
+
+    @app.cli.command()
+    def version():  # pragma: no cover
+        """Muestra la version actual instalada."""
+        from cacao_accounting.version import VERSION
+
+        print(VERSION)
+
+    @app.cli.command()
+    def serve():  # pragma: no cover
+        """Inicio la aplicacion con waitress como servidor WSGI por  defecto."""
+        from cacao_accounting.server import server
+
+        server()
+
+    @app.cli.command()
+    def setupdb():  # pragma: no cover
+        """Define una base de datos de desarrollo nueva."""
+        from cacao_accounting.database.helpers import inicia_base_de_datos
+
+        user = environ.get("CACAO_USER") or "cacao"
+        passwd = environ.get("CACAO_PSWD") or "cacao"
+
+        if TESTING_MODE:
+            database.drop_all()
+            inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=True)
+        else:
+            inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
+
+
+def _register_app_hooks(app: Flask) -> None:
+    """Register request hooks used by the application factory."""
+
+    @app.before_request
+    def before_request():  # pragma: no cover
+        """Establece un periodo de 30 minutos de valides de la sesión."""
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(minutes=30)
 
 
 # <---------------------------------------------------------------------------------------------> #

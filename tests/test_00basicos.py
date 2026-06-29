@@ -92,6 +92,24 @@ def test_build_version_returns_plain_semver_without_release_suffixes():
     assert build_version("1", "2", "3") == "1.2.3"
 
 
+def test_create_app_uses_fixed_secret_key_in_testing():
+    from cacao_accounting import create_app
+
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+
+    assert app.config["SECRET_KEY"] == "test-secret-key"
+
+
+def test_create_app_generates_secret_key_when_missing(monkeypatch):
+    from cacao_accounting import create_app
+
+    monkeypatch.setattr("cacao_accounting.token_urlsafe", lambda _: "generated-secret")
+
+    app = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+
+    assert app.config["SECRET_KEY"] == "generated-secret"
+
+
 def test_falla_verificar_conn_db(request):
     from cacao_accounting import create_app
 
