@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Transaction Form (2026-06-29):** Se cerro un issue menor en `cacao_accounting/static/js/transaction-form.js`.
+  - La resolucion de columnas importadas usa una condicion positiva (`foundIndex >= 0`) en lugar de la comparacion negada previa.
+  - La suite JS del formulario transaccional paso completa (`11 passing`).
+  - `ruff` no aplica a archivos JavaScript en esta configuracion del proyecto.
+
 - **SonarCloud / Smart Select (2026-06-29):** Se cerro un issue menor en `cacao_accounting/static/js/smart-select.js`.
   - `handleSelectedValueChange()` ahora usa una condicion positiva en lugar de negar el valor normalizado.
   - La suite JS del componente `smart-select` paso completa (`16 passing`).
