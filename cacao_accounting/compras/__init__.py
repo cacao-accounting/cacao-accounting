@@ -93,12 +93,14 @@ FORMKEY_PURCHASE_REQUEST = "purchases.purchase_request"
 FORMKEY_SUPPLIER_QUOTATION = "purchases.supplier_quotation"
 FORMKEY_PURCHASE_ORDER = "purchases.purchase_order"
 FORMKEY_PURCHASE_QUOTATION = "purchases.purchase_quotation"
+FORMKEY_PURCHASE_RECEIPT = "purchases.purchase_receipt"
 ROUTE_COMPRAS_SOLICITUD_COMPRA = "compras.compras_solicitud_compra"
 ROUTE_COMPRAS_SOLICITUD_COTIZACION = "compras.compras_solicitud_cotizacion"
 ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 ROUTE_COMPRAS_PROVEEDOR = "compras.compras_proveedor"
 LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
 LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
+LABEL_ORDEN_COMPRA = "Orden de Compra"
 LABEL_FACTURA_COMPRA_LONG = "Factura de Compra"
 
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
@@ -2065,13 +2067,13 @@ def compras_recepcion_nuevo():
     ]
     titulo = "Nueva Recepción de Compra - " + APPNAME
     transaction_config = {
-        "formKey": "purchases.purchase_receipt",
+        "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_receipt"),
-        "availableSourceTypes": [{"value": "purchase_order", "label": _("Orden de Compra")}],
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_RECEIPT),
+        "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
     }
     if request.method == "POST":
         try:
@@ -2194,13 +2196,13 @@ def compras_recepcion_editar(receipt_id: str):
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
     ).scalars()
     transaction_config = {
-        "formKey": "purchases.purchase_receipt",
+        "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, "purchases.purchase_receipt"),
-        "availableSourceTypes": [{"value": "purchase_order", "label": _("Orden de Compra")}],
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_RECEIPT),
+        "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -2381,7 +2383,7 @@ def compras_factura_compra_nuevo():
         "uoms": uoms_disponibles,
         "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
         "availableSourceTypes": [
-            {"value": "purchase_order", "label": _("Orden de Compra")},
+            {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
         ],
@@ -2531,7 +2533,7 @@ def compras_factura_compra_editar(invoice_id: str):
         "uoms": uoms_disponibles,
         "columns": get_column_preferences(current_user.id, "purchases.purchase_invoice"),
         "availableSourceTypes": [
-            {"value": "purchase_order", "label": _("Orden de Compra")},
+            {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
         ],
