@@ -228,9 +228,7 @@
             const response = await this.fetchOptionsResponse(params);
             this.handlePreloadResponse(response);
           } catch (err) {
-            this.options = [];
-            this.loading = false;
-            this.error = this.messages.error;
+            this.handleFetchError(err, { keepOpen: false });
           }
         },
 
@@ -278,11 +276,17 @@
             this.loading = false;
             this.open = true;
           } catch (err) {
-            this.options = [];
-            this.loading = false;
-            this.error = this.messages.error;
-            this.open = true;
+            this.handleFetchError(err, { keepOpen: true });
           }
+        },
+
+        handleFetchError(err, settings) {
+          const errorSettings = settings || {};
+          console.warn('smartSelect fetch failed', err);
+          this.options = [];
+          this.loading = false;
+          this.error = this.messages.error;
+          this.open = Boolean(errorSettings.keepOpen);
         },
 
         hasValidFilters() {
