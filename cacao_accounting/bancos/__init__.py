@@ -1218,6 +1218,25 @@ def _validate_payment_header(
     target_bank_account_id: str | None = None,
 ) -> None:
     """Validate the required Payment Entry header fields."""
+    _validate_payment_header_required_fields(
+        company=company,
+        bank_account_id=bank_account_id,
+        posting_date_raw=posting_date_raw,
+        amount=amount,
+    )
+    _validate_payment_bank_account(company=company, bank_account_id=bank_account_id)
+    _validate_payment_target_bank_account(company=company, target_bank_account_id=target_bank_account_id)
+    _validate_payment_party(payment_type=payment_type, party_type=party_type, party_id=party_id)
+
+
+def _validate_payment_header_required_fields(
+    *,
+    company: str | None,
+    bank_account_id: str | None,
+    posting_date_raw: str | None,
+    amount: Decimal,
+) -> None:
+    """Validate the required payment header fields that are independent."""
     if not company:
         raise ValueError(_("La compañía es obligatoria."))
     if not bank_account_id:
@@ -1226,10 +1245,6 @@ def _validate_payment_header(
         raise ValueError(_("La fecha del pago es obligatoria."))
     if amount <= 0:
         raise ValueError(_("El monto del pago debe ser mayor que cero."))
-
-    _validate_payment_bank_account(company=company, bank_account_id=bank_account_id)
-    _validate_payment_target_bank_account(company=company, target_bank_account_id=target_bank_account_id)
-    _validate_payment_party(payment_type=payment_type, party_type=party_type, party_id=party_id)
 
 
 def _validate_payment_bank_account(*, company: str, bank_account_id: str) -> None:
