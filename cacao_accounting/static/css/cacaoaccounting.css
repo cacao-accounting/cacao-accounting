@@ -107,6 +107,8 @@
   --ca-module-card-padding: 1rem 1.25rem;
   --ca-module-card-border-top-width: 3px;
   --ca-module-card-hover-transform: translateY(-2px);
+  --ca-navbar-control-size: 2.25rem;
+  --ca-navbar-control-radius: 999px;
 
   /* ── Sizes ────────────────────────── */
   --ca-navbar-height: 58px;
@@ -256,7 +258,7 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   color: var(--ca-navbar-text) !important;
   font-size: 1.35rem;
   padding: .3rem .45rem;
-  border-radius: var(--ca-radius);
+  border-radius: var(--ca-navbar-control-radius);
   cursor: pointer;
 }
 
@@ -1217,9 +1219,9 @@ nav[aria-label="breadcrumb"] {
 
 .ca-nav-btn,
 .ca-navbar-toggler {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 999px !important;
+  width: var(--ca-navbar-control-size);
+  height: var(--ca-navbar-control-size);
+  border-radius: var(--ca-navbar-control-radius) !important;
 }
 
 .ca-page-header h4 {
