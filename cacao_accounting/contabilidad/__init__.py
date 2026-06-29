@@ -2440,13 +2440,7 @@ def nuevo_cierre_mensual():
 @verifica_acceso("accounting")
 def ver_cierre_mensual(identifier: str):
     """Vista paso a paso de una ejecución de cierre mensual."""
-    from cacao_accounting.database import (
-        AccountingPeriod,
-        PeriodCloseCheck,
-        PeriodCloseRun,
-        RecurringJournalApplication,
-        RecurringJournalTemplate,
-    )
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
     close_run = database.session.get(PeriodCloseRun, identifier)
     if not close_run:
@@ -2454,42 +2448,8 @@ def ver_cierre_mensual(identifier: str):
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
-    templates: Sequence[RecurringJournalTemplate] = []
-    applied_ids: list[str] = []
-    if period:
-        templates = (
-            database.session.execute(
-                database.select(RecurringJournalTemplate)
-                .filter_by(company=close_run.company, status="approved")
-                .where(RecurringJournalTemplate.start_date <= period.end)
-                .where(RecurringJournalTemplate.end_date >= period.end)
-                .where(RecurringJournalTemplate.is_completed.is_(False))
-                .order_by(RecurringJournalTemplate.code)
-            )
-            .scalars()
-            .all()
-        )
-        applied_apps = (
-            database.session.query(RecurringJournalApplication)
-            .filter_by(
-                company=close_run.company,
-                fiscal_year=str(period.fiscal_year_id),
-                accounting_period=period.name,
-                status="applied",
-            )
-            .all()
-        )
-        applied_ids = [app.template_id for app in applied_apps]
-
-    checks = (
-        database.session.execute(
-            database.select(PeriodCloseCheck)
-            .filter_by(close_run_id=close_run.id)
-            .order_by(PeriodCloseCheck.created.desc(), PeriodCloseCheck.id.desc())
-        )
-        .scalars()
-        .all()
-    )
+    templates, applied_ids = _get_templates_and_applied_ids(close_run, period)
+    checks = _get_period_close_checks(close_run)
 
     return render_template(
         "contabilidad/monthly_close_assistant.html",
@@ -2499,6 +2459,54 @@ def ver_cierre_mensual(identifier: str):
         templates=templates,
         applied_ids=applied_ids,
         checks=checks,
+    )
+
+
+def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str]]:
+    """Obtiene plantillas aplicables y sus aplicaciones para un periodo de cierre."""
+    from cacao_accounting.database import RecurringJournalApplication, RecurringJournalTemplate
+
+    if not period:
+        return (), []
+
+    templates = (
+        database.session.execute(
+            database.select(RecurringJournalTemplate)
+            .filter_by(company=close_run.company, status="approved")
+            .where(RecurringJournalTemplate.start_date <= period.end)
+            .where(RecurringJournalTemplate.end_date >= period.end)
+            .where(RecurringJournalTemplate.is_completed.is_(False))
+            .order_by(RecurringJournalTemplate.code)
+        )
+        .scalars()
+        .all()
+    )
+    applied_apps = (
+        database.session.query(RecurringJournalApplication)
+        .filter_by(
+            company=close_run.company,
+            fiscal_year=str(period.fiscal_year_id),
+            accounting_period=period.name,
+            status="applied",
+        )
+        .all()
+    )
+    applied_ids = [app.template_id for app in applied_apps]
+    return templates, applied_ids
+
+
+def _get_period_close_checks(close_run: Any) -> Sequence[Any]:
+    """Obtiene los checks de cierre mensual."""
+    from cacao_accounting.database import PeriodCloseCheck
+
+    return (
+        database.session.execute(
+            database.select(PeriodCloseCheck)
+            .filter_by(close_run_id=close_run.id)
+            .order_by(PeriodCloseCheck.created.desc(), PeriodCloseCheck.id.desc())
+        )
+        .scalars()
+        .all()
     )
 
 
