@@ -831,6 +831,8 @@ nav[aria-label="breadcrumb"] {
   background: none !important;
   padding: 0;
   margin-bottom: .75rem;
+  color: var(--ca-text-muted);
+  font-weight: 500;
 }
 .breadcrumb-item a { color: var(--ca-text-muted); text-decoration: none; }
 .breadcrumb-item a:hover { color: var(--ca-p800); }
@@ -1234,11 +1236,6 @@ nav[aria-label="breadcrumb"] {
   border-radius: var(--ca-radius);
   color: var(--ca-p800) !important;
   background: var(--ca-p100);
-}
-
-.breadcrumb {
-  color: var(--ca-text-muted);
-  font-weight: 500;
 }
 
 .ca-card,
