@@ -5,7 +5,7 @@
   let uidCounter = 0;
 
   function createUid() {
-    if (globalThis.crypto && globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
     uidCounter += 1;
     return `transaction-line-${Date.now()}-${uidCounter}`;
   }
@@ -47,7 +47,7 @@
   function normalizeColumns(columns, messages) {
     const baseColumns = defaultColumns(messages);
     const normalized = Array.isArray(columns) ? columns
-      .filter((column) => column && column.field)
+      .filter((column) => column?.field)
       .map((column) => {
         return {
           field: String(column.field),
@@ -149,14 +149,14 @@
   function normalizeAvailableSourceTypes(formKey, configuredTypes) {
     const documentType = String(formKey || '').split('.')[1] || '';
     const configured = Array.isArray(configuredTypes) ? [...configuredTypes] : [];
-    if (!Object.prototype.hasOwnProperty.call(OPERATIONAL_DOCUMENT_LABELS, documentType)) {
+    if (!Object.hasOwn(OPERATIONAL_DOCUMENT_LABELS, documentType)) {
       return configured;
     }
 
     const sourceTypes = [{ value: documentType, label: OPERATIONAL_DOCUMENT_LABELS[documentType] }, ...configured];
     const seen = new Set();
     return sourceTypes.filter((sourceType) => {
-      const value = sourceType && sourceType.value;
+      const value = sourceType?.value;
       if (!value || seen.has(value)) return false;
       seen.add(value);
       return true;
@@ -172,10 +172,10 @@
   }
 
   function findImportColumnIndex(headers, column) {
-    const candidates = [column.key, column.label, ...(Array.isArray(column.aliases) ? column.aliases : [])]
+    const candidates = new Set([column.key, column.label, ...(Array.isArray(column.aliases) ? column.aliases : [])]
       .map((value) => normalizeImportHeader(value))
-      .filter(Boolean);
-    return headers.findIndex((header) => candidates.includes(header));
+      .filter(Boolean));
+    return headers.findIndex((header) => candidates.has(header));
   }
 
   function mapImportedRows(rawRows, schema) {
@@ -350,7 +350,7 @@
 
         normalizeLine(line) {
           const base = this.newLine();
-          const normalized = { ...base, ...(line || {}) };
+          const normalized = { ...base, ...line };
           normalized.uid = normalized.uid || base.uid;
           normalized.allowed_uoms = normalizeAllowedUoms(normalized.allowed_uoms, normalized.uom);
           this.calcAmount(normalized);
@@ -367,8 +367,8 @@
         getLineUoms(line) {
           const item = this.findItem(line.item_code);
           const allowed = normalizeAllowedUoms(
-            (item && item.allowed_uoms) || line.allowed_uoms,
-            (item && item.default_uom) || line.uom
+            item?.allowed_uoms || line.allowed_uoms,
+            item?.default_uom || line.uom
           );
           if (!allowed.length) {
             return [...this.availableUoms];
@@ -388,7 +388,7 @@
             line.item_name = item.name || line.item_name;
           }
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
-          if (line.allowed_uoms.length && line.allowed_uoms.indexOf(line.uom) === -1) {
+          if (line.allowed_uoms.length && !line.allowed_uoms.includes(line.uom)) {
             line.uom = line.allowed_uoms[0];
           }
           if (!line.uom && item.default_uom) line.uom = item.default_uom;
@@ -556,7 +556,7 @@
             });
             const data = await response.json();
             if (!response.ok) {
-              this.taxCharges.error = (data && data.message) || 'No se pudo calcular.';
+              this.taxCharges.error = data?.message || 'No se pudo calcular.';
               this.taxCharges.loading = false;
               return;
 	            }
@@ -612,7 +612,7 @@
 	        },
 
 	        normalizeTaxLine(line) {
-	          const normalized = { ...this.newTaxLine(), ...(line || {}) };
+	          const normalized = { ...this.newTaxLine(), ...line };
 	          normalized.manual = Boolean(normalized.manual || String(normalized.source_rule_id || '').startsWith('MANUAL-'));
 	          if (normalized.manual) {
 	            this.calcTaxLine(normalized);
