@@ -80,6 +80,12 @@
 - **Implementacion:** Se extrajo `handleFetchError()` para registrar el error con `console.warn` y unificar el estado UI (`options`, `loading`, `error`, `open`) cuando fallan `preloadOptions()` o `fetchOptions()`.
 - **Verificacion:** `npm test -- --grep smart-select` y `black --check tests/test_10_smart_select_js.py` quedaron en verde.
 
+## 2026-06-29 (SonarCloud: manejo explicito de errores en transaction form)
+- **Solicitud:** Cerrar los issues `javascript:S2486` en `cacao_accounting/static/js/transaction-form.js`.
+- **Implementacion:** Se extrajeron `handleTaxPreviewError()` y `handleImportValidationError()` para registrar errores con `console.warn` y centralizar el estado UI. En el harness JS se stubearon `setTimeout`/`clearTimeout` para evitar timers pendientes ruidosos durante la suite.
+- **Pruebas:** Se agregaron dos pruebas JS para cubrir fallo de preview fiscal y fallo de validacion de importacion.
+- **Verificacion:** `npm test -- --grep transaction-form` quedo en verde. `black` no aplica a archivos JavaScript.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.

@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Transaction Form errores (2026-06-29):** Se cerraron issues menores en `cacao_accounting/static/js/transaction-form.js`.
+  - Los errores de preview fiscal y validacion de importacion ahora pasan por helpers explicitos con `console.warn` y estado UI consistente.
+  - La suite JS del formulario transaccional quedo en verde (`13 passing`), incluyendo pruebas nuevas para ambos caminos de error.
+  - `black` no aplica a archivos JavaScript en esta configuracion del proyecto.
+
 - **SonarCloud / Smart Select errores (2026-06-29):** Se cerraron issues menores en `cacao_accounting/static/js/smart-select.js`.
   - Los errores de fetch ya no quedan capturados de forma muda; ahora pasan por `handleFetchError()` con `console.warn` y estado UI consistente.
   - La suite JS de `smart-select` quedo en verde (`16 passing`).
