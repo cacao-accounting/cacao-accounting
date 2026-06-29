@@ -304,7 +304,11 @@
         },
 
         get visibleColumns() {
-          return (this.preferences.columns || []).filter((column) => column.visible !== false);
+          return this._filterVisibleColumns(this.preferences.columns || []);
+        },
+
+        _filterVisibleColumns(columns) {
+          return columns.filter((column) => column.visible !== false);
         },
 
         get totalAmount() {
@@ -369,11 +373,19 @@
         },
 
         mapAllowedUomCodes(allowed) {
-          return allowed.map((code) => this.findUomByCode(code) || { code, name: code });
+          const result = [];
+          for (const code of allowed) {
+            const uom = this._findUomByCode(code);
+            result.push(uom || { code, name: code });
+          }
+          return result;
         },
 
-        findUomByCode(code) {
-          return this.availableUoms.find((uom) => uom.code === code);
+        _findUomByCode(code) {
+          for (const uom of this.availableUoms) {
+            if (uom.code === code) return uom;
+          }
+          return undefined;
         },
 
         syncLineFromItem(line, keepCustomName) {
@@ -496,7 +508,11 @@
         },
 
         mapLinesToPayload() {
-          return this.lines.map((line) => ({
+          return this.lines.map((line) => this._serializeLine(line));
+        },
+
+        _serializeLine(line) {
+          return {
             uid: line.uid || '',
             item_code: line.item_code || '',
             item_name: line.item_name || '',
@@ -504,11 +520,15 @@
             uom: line.uom || '',
             rate: toNumber(line.rate),
             amount: toNumber(line.amount),
-          }));
+          };
         },
 
         mapTaxLinesToPayload() {
-          return this.taxCharges.lines.map((line) => ({
+          return this.taxCharges.lines.map((line) => this._serializeTaxLine(line));
+        },
+
+        _serializeTaxLine(line) {
+          return {
             source_rule_id: line.source_rule_id || '',
             manual: Boolean(line.manual),
             concept: line.concept || '',
@@ -526,7 +546,7 @@
             included_in_price: Boolean(line.included_in_price),
             account_id: line.account_id || '',
             notes: line.notes || '',
-          }));
+          };
         },
 
         queueTaxPreview() {
