@@ -7,6 +7,7 @@
 - [x] Cerrar un issue menor adicional en `imports/services/import_service.py`.
 - [x] Cerrar un issue menor adicional en `bancos/templates/bancos/pago_nuevo.html`.
 - [x] Cerrar un issue menor adicional en `contabilidad/templates/contabilidad/journal_nuevo.html`.
+- [x] Cerrar un issue menor adicional en `bancos/__init__.py`.
 - [ ] Seguir cerrando issues SonarCloud por prioridad, empezando por los de menor riesgo semantico y luego los de mayor complejidad tecnica.
 
 ## Seguimiento 2026-06-27 (Auditoria de pendientes - completado)

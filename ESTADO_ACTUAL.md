@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Bancos validacion de tercero (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/__init__.py`.
+  - `_validate_payment_party()` elimino un `if` anidado y ahora expresa la regla en una sola condicion.
+  - La semantica funcional no cambia: pagos/cobros siguen exigiendo tercero y los tipos invalidos siguen rechazandose.
+  - La prueba focal `tests/test_06transaction_closure.py::test_validate_payment_header_rejects_missing_party_for_payment_and_invalid_type` paso en verde con Black, Ruff y Mypy focal.
+
 - **SonarCloud / Comprobante manual (2026-06-29):** Se cerraron issues menores en `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`.
   - La deteccion de columnas importadas usa `Set.has()` en lugar de `includes()` sobre una lista derivada.
   - La normalizacion de lineas ahora usa `mergeJournalLine()` y elimina el fallback con objeto vacio en el spread.
