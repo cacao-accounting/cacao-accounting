@@ -642,6 +642,7 @@ nav[aria-label="breadcrumb"] {
   width: 100%;
   font-size: .875rem;
   border-collapse: var(--ca-table-border-collapse);
+  border-spacing: 0;
 }
 
 .ca-table thead tr {
@@ -1266,10 +1267,6 @@ nav[aria-label="breadcrumb"] {
   border-color: rgba(47,143,70,.34) !important;
   box-shadow: var(--ca-shadow) !important;
   transform: translateY(-3px);
-}
-
-.ca-table {
-  border-spacing: 0;
 }
 
 .table-responsive {
