@@ -2445,93 +2445,28 @@ def compras_factura_compra_nuevo():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     from cacao_accounting.form_preferences import get_column_preferences
 
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
-    )
+    selected_company = _purchase_invoice_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
-    ]
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
-    from_invoice_id = (
-        request.args.get("from_invoice")
-        or request.form.get("from_invoice")
-        or request.args.get("from_return")
-        or request.form.get("from_return")
-    )
-    document_type = (
-        request.args.get("document_type")
-        or request.form.get("document_type")
-        or (PURCHASE_RETURN if from_receipt_id else PURCHASE_CREDIT_NOTE if from_invoice_id else PURCHASE_INVOICE)
-    )
+    formulario.supplier_id.choices = _purchase_invoice_supplier_choices()
+    source_ids = _purchase_invoice_source_ids()
+    from_order_id = source_ids["from_order_id"]
+    from_receipt_id = source_ids["from_receipt_id"]
+    from_invoice_id = source_ids["from_invoice_id"]
+    document_type = _purchase_invoice_document_type(source_ids)
     formulario.is_return.data = document_type == PURCHASE_RETURN
-    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
-    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
-    factura_origen = database.session.get(PurchaseInvoice, from_invoice_id) if from_invoice_id else None
+    orden_origen, recepcion_origen, factura_origen = _purchase_invoice_sources(source_ids)
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
-    items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
     titulo = f"Nueva {document_title} - {APPNAME}"
-    transaction_config = {
-        "formKey": FORMKEY_PURCHASE_INVOICE,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
-        "availableSourceTypes": [
-            {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
-            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
-            {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
-        ],
-    }
+    transaction_config = _purchase_invoice_transaction_config(
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
+    )
     if request.method == "POST":
-        try:
-            document_type = request.form.get("document_type") or PURCHASE_INVOICE
-            posting_date = _parse_date(request.form.get("posting_date"))
-            factura = PurchaseInvoice(
-                supplier_id=request.form.get("supplier_id") or None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                supplier_invoice_no=request.form.get("supplier_invoice_no"),
-                document_type=document_type,
-                purchase_order_id=request.form.get("from_order") or None,
-                purchase_receipt_id=request.form.get("from_receipt") or None,
-                is_return=document_type == PURCHASE_RETURN,
-                reversal_of=(
-                    (request.form.get("from_invoice") or request.form.get("from_return"))
-                    if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
-                    else None
-                ),
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(factura)
-            database.session.flush()
-            assign_document_identifier(
-                document=factura,
-                entity_type="purchase_invoice",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_purchase_invoice_items(factura.id)
-            factura.total = total
-            factura.base_total = total
-            factura.grand_total = total
-            factura.base_grand_total = total
-            factura.outstanding_amount = total
-            factura.base_outstanding_amount = total
-            _persist_purchase_invoice_fiscal_snapshot(factura)
-            database.session.commit()
-            flash("Factura de compra creada correctamente.", "success")
-            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
-        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        response = _create_purchase_invoice_from_request()
+        if response is not None:
+            return response
     return render_template(
         "compras/factura_compra_nuevo.html",
         form=formulario,
@@ -2547,6 +2482,142 @@ def compras_factura_compra_nuevo():
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _purchase_invoice_selected_company(choices: list[tuple[str, str]]) -> str | None:
+    """Resolve the selected company for the purchase invoice."""
+    return request.values.get("company") or (choices[0][0] if choices else None)
+
+
+def _purchase_invoice_supplier_choices() -> list[tuple[str, str]]:
+    """Build the supplier choices list for purchase invoices."""
+    return [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+
+
+def _purchase_invoice_source_ids() -> dict[str, str | None]:
+    """Get the source identifiers used by the purchase invoice."""
+    return {
+        "from_order_id": request.args.get("from_order") or request.form.get("from_order"),
+        "from_receipt_id": request.args.get("from_receipt") or request.form.get("from_receipt"),
+        "from_invoice_id": (
+            request.args.get("from_invoice")
+            or request.form.get("from_invoice")
+            or request.args.get("from_return")
+            or request.form.get("from_return")
+        ),
+    }
+
+
+def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
+    """Resolve the document type for the purchase invoice."""
+    return (
+        request.args.get("document_type")
+        or request.form.get("document_type")
+        or (
+            PURCHASE_RETURN
+            if source_ids["from_receipt_id"]
+            else PURCHASE_CREDIT_NOTE
+            if source_ids["from_invoice_id"]
+            else PURCHASE_INVOICE
+        )
+    )
+
+
+def _purchase_invoice_sources(
+    source_ids: dict[str, str | None],
+) -> tuple[PurchaseOrder | None, PurchaseReceipt | None, PurchaseInvoice | None]:
+    """Load the source documents for the purchase invoice."""
+    orden_origen = database.session.get(PurchaseOrder, source_ids["from_order_id"]) if source_ids["from_order_id"] else None
+    recepcion_origen = (
+        database.session.get(PurchaseReceipt, source_ids["from_receipt_id"])
+        if source_ids["from_receipt_id"]
+        else None
+    )
+    factura_origen = (
+        database.session.get(PurchaseInvoice, source_ids["from_invoice_id"]) if source_ids["from_invoice_id"] else None
+    )
+    return orden_origen, recepcion_origen, factura_origen
+
+
+def _purchase_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    """Load the catalogs reused by purchase invoices."""
+    items_disponibles = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    return items_disponibles, uoms_disponibles
+
+
+def _purchase_invoice_transaction_config(
+    *,
+    items: list[dict[str, str | None]],
+    uoms: list[dict[str, str]],
+    columns: list[dict[str, str | bool | int]],
+) -> dict[str, object]:
+    """Build the transaction configuration for purchase invoices."""
+    return {
+        "formKey": FORMKEY_PURCHASE_INVOICE,
+        "viewKey": "draft",
+        "items": items,
+        "uoms": uoms,
+        "columns": columns,
+        "availableSourceTypes": [
+            {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
+            {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+            {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
+        ],
+    }
+
+
+def _create_purchase_invoice_from_request():
+    """Create a purchase invoice from the submitted form."""
+    try:
+        document_type = request.form.get("document_type") or PURCHASE_INVOICE
+        posting_date = _parse_date(request.form.get("posting_date"))
+        factura = PurchaseInvoice(
+            supplier_id=request.form.get("supplier_id") or None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            supplier_invoice_no=request.form.get("supplier_invoice_no"),
+            document_type=document_type,
+            purchase_order_id=request.form.get("from_order") or None,
+            purchase_receipt_id=request.form.get("from_receipt") or None,
+            is_return=document_type == PURCHASE_RETURN,
+            reversal_of=(
+                (request.form.get("from_invoice") or request.form.get("from_return"))
+                if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
+                else None
+            ),
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(factura)
+        database.session.flush()
+        assign_document_identifier(
+            document=factura,
+            entity_type="purchase_invoice",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        _total_qty, total = _save_purchase_invoice_items(factura.id)
+        factura.total = total
+        factura.base_total = total
+        factura.grand_total = total
+        factura.base_grand_total = total
+        factura.outstanding_amount = total
+        factura.base_outstanding_amount = total
+        _persist_purchase_invoice_fiscal_snapshot(factura)
+        database.session.commit()
+        flash("Factura de compra creada correctamente.", "success")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
+    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return None
 
 
 @compras.route("/purchase-invoice/<invoice_id>")
