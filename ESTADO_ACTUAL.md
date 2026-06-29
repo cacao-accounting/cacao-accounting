@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Pago nuevo (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
+  - El watcher de `mode_of_payment` ahora toma primero el caso positivo de cheque y deja el reseteo de contador/numero en `else`.
+  - Se validaron el render del formulario nuevo y los dos comportamientos de negocio relevantes: transferencia sin chequera y cheque con contador default.
+  - `black --check tests/test_payment_entry_improved.py` quedo en verde.
+
 - **SonarCloud / Transaction Form (2026-06-29):** Se cerro un issue menor en `cacao_accounting/static/js/transaction-form.js`.
   - La resolucion de columnas importadas usa una condicion positiva (`foundIndex >= 0`) en lugar de la comparacion negada previa.
   - La suite JS del formulario transaccional paso completa (`11 passing`).
