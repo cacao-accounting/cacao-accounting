@@ -84,6 +84,7 @@ CONTABILIDAD_EXTERNAL_COUNTER_LIST = "contabilidad.external_counter_list"
 CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST = "contabilidad.fiscal_year_closing_list"
 CONTABILIDAD_REVALORIZACION_LIST = "contabilidad.revalorizaciones_cambiarias"
 CONTABILIDAD_REVALORIZACION_VER = "contabilidad.ver_revalorizacion_cambiaria"
+CONTABILIDAD_MONEDAS = "contabilidad.monedas"
 
 
 def _company_label(company_code: str) -> str:
@@ -185,7 +186,7 @@ def nueva_moneda():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.monedas"))
+        return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
         "contabilidad/moneda_crear.html",
@@ -205,7 +206,7 @@ def moneda(code):
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
         flash(_("La moneda indicada no existe."), "warning")
-        return redirect(url_for("contabilidad.monedas"))
+        return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
         "contabilidad/moneda.html",
@@ -226,7 +227,7 @@ def editar_moneda(code):
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
         flash(_("La moneda indicada no existe."), "warning")
-        return redirect(url_for("contabilidad.monedas"))
+        return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     formulario = FormularioMoneda(obj=registro)
     formulario.code.data = registro.code
@@ -274,7 +275,7 @@ def currency_toggle_active(code):
     registro = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
     if registro is None:
         flash(_("La moneda indicada no existe."), "warning")
-        return redirect(url_for("contabilidad.monedas"))
+        return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     if registro.active:
         try:
@@ -287,7 +288,7 @@ def currency_toggle_active(code):
         registro.active = True
 
     database.session.commit()
-    return redirect(url_for("contabilidad.monedas"))
+    return redirect(url_for(CONTABILIDAD_MONEDAS))
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
