@@ -94,6 +94,7 @@ FORMKEY_SUPPLIER_QUOTATION = "purchases.supplier_quotation"
 FORMKEY_PURCHASE_ORDER = "purchases.purchase_order"
 FORMKEY_PURCHASE_QUOTATION = "purchases.purchase_quotation"
 ROUTE_COMPRAS_SOLICITUD_COMPRA = "compras.compras_solicitud_compra"
+ROUTE_COMPRAS_SOLICITUD_COTIZACION = "compras.compras_solicitud_cotizacion"
 ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 ROUTE_COMPRAS_PROVEEDOR = "compras.compras_proveedor"
 LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
@@ -1785,7 +1786,7 @@ def compras_solicitud_cotizacion_nueva():
             cotizacion.grand_total = total
             database.session.commit()
             flash("Solicitud de cotización creada correctamente.", "success")
-            return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=cotizacion.id))
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
@@ -1870,7 +1871,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
         registro.grand_total = total
         database.session.commit()
         flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
-        return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=registro.id))
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
 
     lineas = database.session.execute(
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
@@ -1962,7 +1963,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
     duplicada.grand_total = total
     database.session.commit()
     flash(_("Solicitud de cotizacion duplicada como nuevo borrador."), "success")
-    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=duplicada.id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=duplicada.id))
 
 
 @compras.route("/request-for-quotation/<quotation_id>/submit", methods=["POST"])
@@ -1978,7 +1979,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
     registro.docstatus = 1
     database.session.commit()
     flash(_("Solicitud de cotizacion aprobada."), "success")
-    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=quotation_id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
 
 
 @compras.route("/request-for-quotation/<quotation_id>/cancel", methods=["POST"])
@@ -1995,7 +1996,7 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
     revert_relations_for_target("purchase_quotation", quotation_id)
     database.session.commit()
     flash(_("Solicitud de cotizacion cancelada."), "warning")
-    return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=quotation_id))
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
 
 
 @compras.route("/purchase-order/<order_id>/submit", methods=["POST"])
