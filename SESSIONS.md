@@ -546,3 +546,11 @@
 - **Alcance acordado:** Se priorizaron solo los hotspots reales; `_save_payment_references` se trató como falso positivo histórico porque ya figuraba refactorizado en la bitácora.
 - **Implementación:** Se simplificaron los handlers y servicios de Bancos con helpers de dispatch, validación y persistencia; `find_bank_reconciliation_candidates`, `reconcile_bank_items`, `import_bank_statement`, `bancos_pago_nuevo`, `_crear_nota_bancaria`, `_payment_source_rows` y `_validate_payment_header` quedaron menos anidados. En Compras, `compras_cotizacion_proveedor_nueva` y `compras_cotizacion_proveedor_editar` comparten ahora helpers de contexto y catálogos.
 - **Validación:** Se ejecutaron `ruff`, `mypy` y pruebas focales de Bancos, Conciliación, Importación y Compras; el bloque relevante quedó en verde con `116 passed`.
+
+## 2026-06-29 (Fix unit tests in CI workflows)
+- **Solicitud:** Revisar y corregir fallos en las pruebas unitarias definidas en los workflows de GitHub.
+- **Implementación:**
+  - En `cacao_accounting/contabilidad/posting.py`: Se corrigió `_landed_cost_result_is_invalid` para que no trate una lista de errores vacía como un resultado inválido. Esto corrigió `test_purchase_receipt_lands_import_costs_into_initial_valuation_layers`.
+  - En `cacao_accounting/reportes/services.py`: Se reescribió `_process_payment_entry` para manejar correctamente las transferencias internas en el reporte de movimientos bancarios y se corrigió el cálculo de totales en `get_bank_movement_detail`. Esto corrigió `test_get_bank_movement_detail_supports_bank_filter`.
+  - En `tests/test_transaction_update_elements.py`: Se corrigió una regresión en las aserciones de etiquetas de UI que usaban constantes internas en lugar de los valores esperados.
+- **Verificación:** Se ejecutó la suite completa de pruebas unitarias (`1015 passed`).
