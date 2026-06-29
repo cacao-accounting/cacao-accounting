@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Versionado (2026-06-29):** Se cerro un issue menor en `cacao_accounting/version/__init__.py`.
+  - La composicion de `VERSION` ahora usa `build_version()` en lugar de una condicion constante sobre `PRERELEASE`.
+  - Se agregaron pruebas unitarias para prerelease, postrelease y version simple en `tests/test_00basicos.py`.
+  - `ruff`, `mypy` y `tests/test_00basicos.py` quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
+
 - **SonarCloud / Ventas orden de venta (2026-06-29):** Se cerro un issue menor en `cacao_accounting/ventas/__init__.py`.
   - La resolucion del `initialSourceType` ahora vive en `_sales_order_initial_source_type()` con flujo explicito.
   - Se agrego una prueba focal en `tests/test_03webactions.py` para cubrir solicitud, cotizacion, vacio y precedencia.

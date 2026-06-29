@@ -44,6 +44,12 @@
 - **Pruebas:** Se agrego `test_sales_order_initial_source_type_helper_prefers_request_then_quotation` en `tests/test_03webactions.py`.
 - **Verificacion:** `ruff`, `mypy` focal y la prueba nueva quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
 
+## 2026-06-29 (SonarCloud: composicion explicita de version)
+- **Solicitud:** Cerrar el issue `python:S5797` en `cacao_accounting/version/__init__.py`.
+- **Implementacion:** Se reemplazo la condicion constante sobre `PRERELEASE` por la funcion pura `build_version()`, manteniendo `VERSION` como salida publica del modulo.
+- **Pruebas:** Se agregaron pruebas unitarias en `tests/test_00basicos.py` para prerelease, postrelease y version semantica simple.
+- **Verificacion:** `ruff`, `mypy` focal y `tests/test_00basicos.py` quedaron en verde. `black --check` indico ambos archivos sin cambios antes de expirar por `timeout`.
+
 ## 2026-06-27 (Auditoria de PENDIENTE.md contra codigo fuente)
 - **Solicitud:** Revisar `PENDIENTE.md` porque parecia no estar actualizado y marcar como completados los puntos que realmente ya estuvieran implementados.
 - **Verificacion:** Se contrastaron los pendientes abiertos contra rutas, servicios, templates y pruebas. La paridad de formularios transaccionales con `edit`/`duplicate` y transiciones POST ya esta implementada en Compras, Ventas e Inventario y cubierta por `tests/test_03webactions.py`.
