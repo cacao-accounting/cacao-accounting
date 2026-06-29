@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Reporte real vs presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_report_service.py` separando la acumulación de datos de presupuesto y GL en helpers pequeños.
+  - `_populate_data_map()` ahora delega en helpers para acumular líneas de presupuesto, traducir dimensiones reales y calcular el monto real por clasificación contable.
+  - Se agregó una prueba focal con una unidad de negocio y un proyecto reales para validar el reporte con presupuesto y GL en la misma dimensión.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_budget.py` quedaron en verde; `ruff --select C901` ya no reporta complejidad en este archivo.
+
 - **SonarCloud / Cierre fiscal (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/fiscal_year_closing.py` separando la construcción del voucher en helpers pequeños.
   - El cálculo de débitos y créditos por línea, la línea de contrapartida y el payload final quedaron separados en funciones auxiliares.
   - `create_fiscal_year_closing_voucher()` mantiene la validación de compañía, cierre administrativo, configuración de utilidades acumuladas y creación del draft.

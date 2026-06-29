@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: reporte real vs presupuesto simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_report_service.py` sin cambiar el cálculo del reporte Real vs Presupuesto.
+- **Implementacion:** Se separó la acumulación de líneas presupuestarias, la traducción de dimensiones reales y el cálculo del monto real en helpers pequeños. `_populate_data_map()` ahora orquesta los helpers en vez de mezclar la lógica de presupuesto y GL.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_budget.py` quedaron en verde. `ruff --select C901` ya no reporta complejidad en `budget_report_service.py`.
+
 ## 2026-06-29 (SonarCloud: cierre fiscal simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/fiscal_year_closing.py` sin alterar el comportamiento del voucher de cierre fiscal.
 - **Implementacion:** Se separaron el cálculo de débitos/créditos, la construcción de líneas de cierre y la contrapartida a utilidades acumuladas en helpers pequeños. `create_fiscal_year_closing_voucher()` quedó como orquestador de validaciones y armado de payload.
