@@ -12,6 +12,7 @@
 - [x] Reducir la complejidad de `contabilidad/budget_report_service.py` con helpers para el reporte real vs presupuesto.
 - [x] Reducir la complejidad de `contabilidad/fiscal_year_closing.py` con helpers para el voucher de cierre fiscal.
 - [x] Reducir la complejidad de `__init__.py` con helpers para el factory de aplicación.
+- [x] Reducir la complejidad de `compras/purchase_reconciliation_service.py` con helpers para matching 2-way y 3-way.
 - [x] Cerrar el issue `python:S1192` de `contabilidad/presupuestos/import.html` en `contabilidad/presupuesto.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `ventas/cliente_nuevo.html` en `ventas/__init__.py` con una constante compartida.
 - [x] Cerrar el issue `python:S1192` de `compras/proveedor_nuevo.html` en `compras/__init__.py` con una constante compartida.

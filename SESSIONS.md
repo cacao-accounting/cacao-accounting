@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: conciliacion de compras simplificada)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/compras/purchase_reconciliation_service.py` sin alterar el matching 2-way y 3-way de facturas de compra.
+- **Implementacion:** Se separaron la carga y validacion de orden/recepcion, la lectura de lineas y la construccion de items de conciliacion en helpers pequeños. `_reconcile_two_way()` y `_reconcile_three_way()` ahora orquestan esos helpers en vez de mezclar validaciones y armado de detalle.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_08_reconciliation_reports.py` quedaron en verde. `ruff --select C901` ya no reporta complejidad en este archivo.
+
 ## 2026-06-29 (SonarCloud: factory de aplicacion simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/__init__.py` en `create_app()` sin alterar el comportamiento de arranque de la aplicación.
 - **Implementacion:** Se extrajeron helpers para configurar la `SECRET_KEY`, registrar comandos CLI y registrar hooks de request. `create_app()` quedó como orquestador de arranque y recuperación de lotes.
