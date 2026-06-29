@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -102,6 +103,24 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
     if not party:
         abort(404)
     return party
+
+
+def _upsert_customer_company_settings_from_request(customer_id: str, form: dict) -> None:
+    """Actualiza la configuracion de compania para un cliente desde el formulario."""
+    company = form.get("company") or None
+    if not company:
+        return
+    upsert_party_company_settings(
+        customer_id,
+        "customer",
+        company,
+        is_active=form.get("company_is_active") is not None,
+        receivable_account_id=form.get("receivable_account_id") or None,
+        payable_account_id=None,
+        tax_template_id=form.get("tax_template_id") or None,
+        allow_purchase_invoice_without_order=False,
+        allow_purchase_invoice_without_receipt=False,
+    )
 
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
@@ -515,38 +534,7 @@ def ventas_cliente_nuevo():
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings = build_party_company_settings("customer", selected_company) if selected_company else None
     if request.method == "POST":
-        cliente = Party(
-            party_type="customer",
-            name=request.form.get("name") or "",
-            comercial_name=request.form.get("comercial_name"),
-            tax_id=request.form.get("tax_id"),
-            classification=request.form.get("classification"),
-            is_active=request.form.get("is_active", "on") is not None,
-        )
-        try:
-            database.session.add(cliente)
-            apply_party_group(cliente, request.form.get("party_group_id") or None)
-            database.session.flush()
-            company = request.form.get("company") or None
-            if company:
-                upsert_party_company_settings(
-                    cliente.id,
-                    "customer",
-                    company,
-                    is_active=request.form.get("company_is_active") is not None,
-                    receivable_account_id=request.form.get("receivable_account_id") or None,
-                    payable_account_id=None,
-                    tax_template_id=request.form.get("tax_template_id") or None,
-                    allow_purchase_invoice_without_order=False,
-                    allow_purchase_invoice_without_receipt=False,
-                )
-            database.session.commit()
-            return redirect("/sales/customer/list")
-        except ValueError as exc:
-            database.session.rollback()
-            if selected_company:
-                company_settings = draft_party_company_settings("customer", selected_company, request.form)
-            flash(str(exc), "danger")
+        return _handle_cliente_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
         "ventas/cliente_nuevo.html",
         form=formulario,
@@ -555,6 +543,46 @@ def ventas_cliente_nuevo():
         selected_company=selected_company,
         company_settings=company_settings,
         group_label=party_group_label(request.form.get("party_group_id") or None),
+    )
+
+
+def _handle_cliente_create(
+    form: dict,
+    selected_company: str | None,
+    company_choices: list,
+    company_settings: Any,
+    formulario: Any,
+    titulo: str,
+):
+    """Maneja la creacion de un nuevo cliente desde el formulario POST."""
+    cliente = Party(
+        party_type="customer",
+        name=form.get("name") or "",
+        comercial_name=form.get("comercial_name"),
+        tax_id=form.get("tax_id"),
+        classification=form.get("classification"),
+        is_active=form.get("is_active", "on") is not None,
+    )
+    try:
+        database.session.add(cliente)
+        apply_party_group(cliente, form.get("party_group_id") or None)
+        database.session.flush()
+        _upsert_customer_company_settings_from_request(cliente.id, form)
+        database.session.commit()
+        return redirect("/sales/customer/list")
+    except ValueError as exc:
+        database.session.rollback()
+        if selected_company:
+            company_settings = draft_party_company_settings("customer", selected_company, form)
+        flash(str(exc), "danger")
+    return render_template(
+        "ventas/cliente_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+        group_label=party_group_label(form.get("party_group_id") or None),
     )
 
 
@@ -592,33 +620,45 @@ def ventas_cliente_editar(customer_id: str):
         build_party_company_settings("customer", selected_company, party_id=cliente.id) if selected_company else None
     )
     if request.method == "POST":
-        try:
-            cliente.name = request.form.get("name") or ""
-            cliente.comercial_name = request.form.get("comercial_name") or None
-            cliente.tax_id = request.form.get("tax_id") or None
-            cliente.is_active = request.form.get("is_active") is not None
-            apply_party_group(cliente, request.form.get("party_group_id") or None)
-            company = request.form.get("company") or None
-            if company:
-                upsert_party_company_settings(
-                    cliente.id,
-                    "customer",
-                    company,
-                    is_active=request.form.get("company_is_active") is not None,
-                    receivable_account_id=request.form.get("receivable_account_id") or None,
-                    payable_account_id=None,
-                    tax_template_id=request.form.get("tax_template_id") or None,
-                    allow_purchase_invoice_without_order=False,
-                    allow_purchase_invoice_without_receipt=False,
-                )
-            database.session.commit()
-            flash(_("Cliente actualizado correctamente."), "success")
-            return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=cliente.id))
-        except ValueError as exc:
-            database.session.rollback()
-            if selected_company:
-                company_settings = draft_party_company_settings("customer", selected_company, request.form)
-            flash(str(exc), "danger")
+        return _handle_cliente_update(cliente, request.form, selected_company, company_choices, company_settings, formulario, titulo)
+    return render_template(
+        "ventas/cliente_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        edit=True,
+        registro=cliente,
+        company_choices=company_choices,
+        selected_company=selected_company,
+        company_settings=company_settings,
+        group_label=party_group_label(cliente.party_group_id),
+    )
+
+
+def _handle_cliente_update(
+    cliente: Party,
+    form: dict,
+    selected_company: str | None,
+    company_choices: list,
+    company_settings: Any,
+    formulario: Any,
+    titulo: str,
+):
+    """Maneja la actualizacion de un cliente existente desde el formulario POST."""
+    try:
+        cliente.name = form.get("name") or ""
+        cliente.comercial_name = form.get("comercial_name") or None
+        cliente.tax_id = form.get("tax_id") or None
+        cliente.is_active = form.get("is_active") is not None
+        apply_party_group(cliente, form.get("party_group_id") or None)
+        _upsert_customer_company_settings_from_request(cliente.id, form)
+        database.session.commit()
+        flash(_("Cliente actualizado correctamente."), "success")
+        return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=cliente.id))
+    except ValueError as exc:
+        database.session.rollback()
+        if selected_company:
+            company_settings = draft_party_company_settings("customer", selected_company, form)
+        flash(str(exc), "danger")
     return render_template(
         "ventas/cliente_nuevo.html",
         form=formulario,
