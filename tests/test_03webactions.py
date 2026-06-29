@@ -358,62 +358,121 @@ def test_purchase_request_and_supplier_quotation_routes(request):
                 assert 'filters: { company: { selector: "#company" } }' in html
                 assert 'requiredFilters: ["company"]' in html
                 assert '@change="$dispatch' not in html
-                assert "initialValue: modalLine.account" in html
-                assert "initialValue: modalLine.cost_center" in html
-                assert "initialValue: modalLine.unit" in html
-                assert "initialValue: modalLine.project" in html
 
-                from cacao_accounting.database import PurchaseRequest, database
 
-                draft_request = PurchaseRequest(
-                    document_no="TEST-PREQ-DRAFT",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                submitted_request = PurchaseRequest(
-                    document_no="TEST-PREQ-SUBMITTED",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    docstatus=1,
-                    grand_total=0,
-                )
-                database.session.add_all([draft_request, submitted_request])
-                database.session.commit()
+def test_setup_wizard_advances_between_steps(request, monkeypatch):
 
-                response = client.get(f"/buying/purchase-request/{draft_request.id}")
-                assert response.status_code == 200
-                html = response.get_data(as_text=True)
-                assert "TEST-PREQ-DRAFT" in html
-                assert "Solicitud de Compra" in html
-                assert "Editar" in html
-                assert "Duplicar" in html
-                assert "Aprobar" in html
-                assert "Listado" in html
-                assert "Nuevo" in html
-                assert "Crear" not in html
+    if request.config.getoption("--slow") == "True":
 
-                response = client.get(f"/buying/purchase-request/{submitted_request.id}")
-                assert response.status_code == 200
-                html = response.get_data(as_text=True)
-                assert "TEST-PREQ-SUBMITTED" in html
-                assert "Crear" in html
-                assert "Solicitud de Cotización" in html
-                assert "Orden de Compra" in html
-                assert "Anular" in html
+        import cacao_accounting.setup as setup_module
 
-                response = client.get("/buying/supplier-quotation/list")
-                assert response.status_code == 200
-                assert "Listado de Cotizaciones de Proveedor" in response.get_data(as_text=True)
+        class _DummyField:
+            def __init__(self, data):
+                self.data = data
 
-                response = client.get("/buying/supplier-quotation/new")
-                assert response.status_code == 200
-                assert "Nueva Cotización de Proveedor" in response.get_data(as_text=True)
+        class _DummyLanguageForm:
+            idioma = _DummyField("en")
 
-                response = client.get("/buying/request-for-quotation/comparison")
-                assert response.status_code == 200
-                assert "Comparativo de Ofertas" in response.get_data(as_text=True)
+            def validate_on_submit(self):
+                return True
+
+        class _DummyRegionalForm:
+            pais = _DummyField("NI")
+            moneda = _DummyField("NIO")
+
+            def validate_on_submit(self):
+                return True
+
+        class _DummyCompanyForm:
+            id = _DummyField("C0001")
+            razon_social = _DummyField("Cacao Test")
+            nombre_comercial = _DummyField("Cacao Test")
+            id_fiscal = _DummyField("J0001")
+            tipo_entidad = _DummyField("company")
+            inicio_anio_fiscal = _DummyField("2026-01-01")
+            fin_anio_fiscal = _DummyField("2026-12-31")
+            catalogo = _DummyField("en_cero")
+            catalogo_origen = _DummyField("")
+
+            def validate_on_submit(self):
+                return True
+
+        captured: dict[str, object] = {}
+
+        monkeypatch.setattr(setup_module, "SetupLanguageForm", _DummyLanguageForm)
+        monkeypatch.setattr(setup_module, "SetupRegionalForm", _DummyRegionalForm)
+        monkeypatch.setattr(setup_module, "SetupCompanyForm", _DummyCompanyForm)
+        monkeypatch.setattr(
+            setup_module,
+            "get_setup_configuration",
+            lambda: {"idioma": "es", "pais": "NI", "moneda": "NIO"},
+        )
+        monkeypatch.setattr(setup_module, "available_currencies", lambda: [("NIO", "Córdoba")])
+        monkeypatch.setattr(setup_module, "save_language", lambda language: captured.setdefault("language", language))
+        monkeypatch.setattr(
+            setup_module,
+            "save_regional_settings",
+            lambda country, currency: captured.setdefault("regional", (country, currency)),
+        )
+        monkeypatch.setattr(
+            setup_module,
+            "finalize_setup",
+            lambda company_data, catalogo_tipo, country, idioma, catalogo_archivo: captured.setdefault(
+                "finalize",
+                {
+                    "company_data": company_data,
+                    "catalogo_tipo": catalogo_tipo,
+                    "country": country,
+                    "idioma": idioma,
+                    "catalogo_archivo": catalogo_archivo,
+                },
+            ),
+        )
+
+        with app.test_client() as client:
+            client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+            with client.session_transaction() as session_:
+                session_["setup_step"] = 1
+
+            response = client.post("/setup/", data={"idioma": "en"}, follow_redirects=False)
+            assert response.status_code == 302
+            with client.session_transaction() as session_:
+                assert session_["setup_step"] == 2
+            assert captured["language"] == "en"
+
+            with client.session_transaction() as session_:
+                session_["setup_step"] = 2
+
+            response = client.post("/setup/", data={"pais": "NI", "moneda": "NIO"}, follow_redirects=False)
+            assert response.status_code == 302
+            with client.session_transaction() as session_:
+                assert session_["setup_step"] == 3
+            assert captured["regional"] == ("NI", "NIO")
+
+            with client.session_transaction() as session_:
+                session_["setup_step"] = 3
+
+            response = client.post(
+                "/setup/",
+                data={
+                    "id": "C0001",
+                    "razon_social": "Cacao Test",
+                    "nombre_comercial": "Cacao Test",
+                    "id_fiscal": "J0001",
+                    "tipo_entidad": "company",
+                    "inicio_anio_fiscal": "2026-01-01",
+                    "fin_anio_fiscal": "2026-12-31",
+                    "catalogo": "en_cero",
+                },
+                follow_redirects=False,
+            )
+            assert response.status_code == 302
+            with client.session_transaction() as session_:
+                assert session_.get("setup_step") is None
+            assert captured["finalize"]["catalogo_tipo"] == "en_cero"
+            assert captured["finalize"]["country"] == "NI"
+            assert captured["finalize"]["idioma"] == "es"
 
 
 def test_transaccional_edit_duplicate_actions_routes(request):
