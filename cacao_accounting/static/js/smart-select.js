@@ -107,11 +107,11 @@
 
         handleSelectedValueChange(value) {
           const normalized = normalizeValue(value);
-          if (!normalized) {
+          if (normalized) {
+            this.updateLabelFromOptions(normalized);
+          } else {
             this.search = '';
             this.selectedLabel = '';
-          } else {
-            this.updateLabelFromOptions(normalized);
           }
           this.syncFilledState();
         },
