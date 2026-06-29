@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Wizard de setup (2026-06-29):** Se redujo la complejidad de `cacao_accounting/setup/__init__.py` separando la lógica de pasos POST y el armado del payload de compañía en helpers pequeños.
+  - `setup()` ahora delega en helpers para manejar los pasos del wizard, construir los datos de compañía y seleccionar el formulario activo.
+  - Se agregó una prueba focal que recorre los tres pasos del asistente con formularios simulados para validar transición, persistencia de estado y finalización.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_03webactions.py` quedaron en verde; `ruff --select C901` ya no reporta complejidad en este archivo.
+
 - **SonarCloud / Conciliación de compras (2026-06-29):** Se redujo la complejidad de `cacao_accounting/compras/purchase_reconciliation_service.py` separando la carga de documentos y la construcción de items en helpers pequeños.
   - `_reconcile_two_way()` y `_reconcile_three_way()` ahora delegan en helpers para cargar y validar la orden/recepción, leer líneas y construir los items de conciliación.
   - La semántica de matching 2-way y 3-way se mantiene; la suite focal de conciliaciones sigue en verde.
