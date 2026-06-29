@@ -460,41 +460,24 @@ def compras_cotizacion_proveedor_nueva():
     """Formulario para crear una cotización de proveedor."""
     from cacao_accounting.compras.forms import FormularioCotizacionProveedor
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     formulario = FormularioCotizacionProveedor()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
 
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
-    )
+    selected_company = _supplier_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
-    ]
+    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
     from_rfq_id = request.args.get("from_rfq") or request.form.get("from_rfq")
-    solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
-    rfq_origen = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else None
-    items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
+    items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
-    transaction_config = {
-        "formKey": FORMKEY_SUPPLIER_QUOTATION,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_SUPPLIER_QUOTATION),
-        "availableSourceTypes": [
-            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
-            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
-        ],
-        "initialSourceType": "purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
-    }
+    transaction_config = _supplier_quotation_transaction_config(
+        form_key=FORMKEY_SUPPLIER_QUOTATION,
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        initial_source_type="purchase_request" if from_request_id else "purchase_quotation" if from_rfq_id else "",
+    )
     if request.method == "POST":
         try:
             supplier_id = request.form.get("supplier_id") or None
@@ -563,7 +546,6 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     """Edita una cotizacion de proveedor en borrador."""
     from cacao_accounting.compras.forms import FormularioCotizacionProveedor
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
@@ -575,15 +557,8 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
-    ]
-    items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
+    items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
         supplier_id = request.form.get("supplier_id") or None
@@ -608,21 +583,19 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     lineas = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
     ).scalars()
-    transaction_config = {
-        "formKey": FORMKEY_SUPPLIER_QUOTATION,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_SUPPLIER_QUOTATION),
-        "availableSourceTypes": [{"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)}],
-        "initialHeader": {
+    transaction_config = _supplier_quotation_transaction_config(
+        form_key=FORMKEY_SUPPLIER_QUOTATION,
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        initial_source_type="purchase_quotation",
+        initial_header={
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
         },
-        "initialLines": [
+        initial_lines=[
             {
                 "item_code": item.item_code,
                 "item_name": item.item_name,
@@ -633,7 +606,8 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
             }
             for item in lineas
         ],
-    }
+        available_source_types=[{"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)}],
+    )
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
@@ -646,6 +620,74 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _supplier_quotation_selected_company(choices: list[tuple[str, str]]) -> str | None:
+    """Resuelve la compañía seleccionada para la cotización de proveedor."""
+    return request.values.get("company") or (choices[0][0] if choices else None)
+
+
+def _supplier_quotation_supplier_choices() -> list[tuple[str, str]]:
+    """Construye el listado de proveedores para el formulario."""
+    return [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+
+
+def _supplier_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    """Carga catálogos reutilizados por la cotización de proveedor."""
+    items_disponibles = [
+        {"code": item[0].code, "name": item[0].name, "uom": item[0].default_uom}
+        for item in database.session.execute(database.select(Item)).all()
+    ]
+    uoms_disponibles = [
+        {"code": uom[0].code, "name": uom[0].name} for uom in database.session.execute(database.select(UOM)).all()
+    ]
+    return items_disponibles, uoms_disponibles
+
+
+def _supplier_quotation_transaction_config(
+    *,
+    form_key: str,
+    items: list[dict[str, str | None]],
+    uoms: list[dict[str, str]],
+    initial_source_type: str,
+    initial_header: dict[str, str] | None = None,
+    initial_lines: list[dict[str, str]] | None = None,
+    available_source_types: list[dict[str, str]] | None = None,
+) -> dict[str, object]:
+    """Construye la configuración transaccional compartida de cotización."""
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    transaction_config: dict[str, object] = {
+        "formKey": form_key,
+        "viewKey": "draft",
+        "items": items,
+        "uoms": uoms,
+        "columns": get_column_preferences(current_user.id, form_key),
+        "availableSourceTypes": available_source_types
+        or [
+            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
+            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
+        ],
+        "initialSourceType": initial_source_type,
+    }
+    if initial_header:
+        transaction_config["initialHeader"] = initial_header
+    if initial_lines:
+        transaction_config["initialLines"] = initial_lines
+    return transaction_config
+
+
+def _supplier_quotation_sources(
+    from_request_id: str | None,
+    from_rfq_id: str | None,
+) -> tuple[PurchaseRequest | None, PurchaseQuotation | None]:
+    """Resuelve los documentos origen de la cotización de proveedor."""
+    solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    rfq_origen = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else None
+    return solicitud_origen, rfq_origen
 
 
 @compras.route("/supplier-quotation/<quotation_id>/duplicate", methods=["POST"])
