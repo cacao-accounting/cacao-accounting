@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Factory de aplicación (2026-06-29):** Se redujo la complejidad de `cacao_accounting/__init__.py` separando la configuración de secret key, comandos CLI y hooks de request en helpers pequeños.
+  - `create_app()` mantiene el flujo de arranque, registro de blueprints, extensiones y recuperación de lotes, pero sin mezclar toda la lógica condicional en una sola función.
+  - Se agregó prueba focal para `SECRET_KEY` fija en testing y generación de secret key cuando falta la configuración.
+  - `black`, `ruff`, `flake8`, `mypy` focal y `tests/test_00basicos.py` quedaron en verde.
+
 - **SonarCloud / Reporte real vs presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_report_service.py` separando la acumulación de datos de presupuesto y GL en helpers pequeños.
   - `_populate_data_map()` ahora delega en helpers para acumular líneas de presupuesto, traducir dimensiones reales y calcular el monto real por clasificación contable.
   - Se agregó una prueba focal con una unidad de negocio y un proyecto reales para validar el reporte con presupuesto y GL en la misma dimensión.

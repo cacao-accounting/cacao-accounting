@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: factory de aplicacion simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/__init__.py` en `create_app()` sin alterar el comportamiento de arranque de la aplicación.
+- **Implementacion:** Se extrajeron helpers para configurar la `SECRET_KEY`, registrar comandos CLI y registrar hooks de request. `create_app()` quedó como orquestador de arranque y recuperación de lotes.
+- **Verificacion:** `black`, `ruff check`, `flake8`, `mypy` focal y `tests/test_00basicos.py` quedaron en verde.
+
 ## 2026-06-29 (SonarCloud: reporte real vs presupuesto simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_report_service.py` sin cambiar el cálculo del reporte Real vs Presupuesto.
 - **Implementacion:** Se separó la acumulación de líneas presupuestarias, la traducción de dimensiones reales y el cálculo del monto real en helpers pequeños. `_populate_data_map()` ahora orquesta los helpers en vez de mezclar la lógica de presupuesto y GL.
