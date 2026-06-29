@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Bancos (2026-06-29):** Se cerro un issue menor en `cacao_accounting/bancos/templates/bancos/pago_nuevo.html`.
+  - La clonacion de lineas para modales de referencias e impuestos ahora usa `cloneModalLine()` en lugar del patron con objeto vacio que Sonar marcaba.
+  - El cambio no altera logica funcional del formulario de pagos.
+  - `tests/test_fiscal_preview.py::test_forms_render_tax_charges_block` paso en verde.
+
 - **SonarCloud / Importaciones (2026-06-29):** Se cerro un issue menor de SonarCloud en `cacao_accounting/imports/services/import_service.py`.
   - Se eliminaron reasignaciones de `batch` en helpers internos y se uso `current_batch` para hacer explicito el acceso al estado persistido.
   - El cambio es funcionalmente neutro y reduce ruido de analisis estatica.
