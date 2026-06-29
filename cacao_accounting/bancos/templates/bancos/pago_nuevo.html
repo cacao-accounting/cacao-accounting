@@ -255,7 +255,7 @@
       unallocatedAmount: function () {
         const headerTotal = this.parseNumber(this.header.paid_amount || 0);
         const delta = headerTotal - this.totalApplied();
-        return delta > 0 ? delta : 0;
+        return Math.max(delta, 0);
       },
 
       removeReferenceLine: function (index) {
@@ -265,7 +265,7 @@
 
       openReferenceLineDetails: function (index) {
         this.references.activeIndex = index;
-        this.references.modalLine = Object.assign({}, this.lines[index] || {});
+        this.references.modalLine = { ...(this.lines[index] || {}) };
         const modalEl = document.getElementById('referenceLineDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
       },
@@ -273,7 +273,7 @@
       saveReferenceLineModal: function () {
         if (this.references.activeIndex !== null && this.references.modalLine) {
           this.normalizeReferenceAllocation(this.references.modalLine);
-          this.lines[this.references.activeIndex] = Object.assign({}, this.references.modalLine);
+          this.lines[this.references.activeIndex] = { ...this.references.modalLine };
           this.calculateTotal();
         }
         const modalEl = document.getElementById('referenceLineDetailModal');
@@ -374,7 +374,7 @@
           this.taxCharges.summary = data.summary || this.taxCharges.summary;
           this.taxCharges.lines = data.tax_lines || [];
           this.taxCharges.loading = false;
-        } catch (err) {
+        } catch {
           this.taxCharges.error = '{{ _("No se pudo calcular.") }}';
           this.taxCharges.loading = false;
         }
@@ -382,7 +382,7 @@
 
       openTaxLineDetails: function (index) {
         this.taxCharges.activeIndex = index;
-        this.taxCharges.modalLine = Object.assign({}, this.taxCharges.lines[index] || {});
+        this.taxCharges.modalLine = { ...(this.taxCharges.lines[index] || {}) };
         const modalEl = document.getElementById('taxChargeDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
       },
@@ -435,7 +435,7 @@
         const line = this.newTaxLine();
         this.taxCharges.lines.push(line);
         this.taxCharges.activeIndex = this.taxCharges.lines.length - 1;
-        this.taxCharges.modalLine = Object.assign({}, line);
+        this.taxCharges.modalLine = { ...line };
         this.recalculateTaxSummary();
         const modalEl = document.getElementById('taxChargeDetailModal');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();

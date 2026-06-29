@@ -252,7 +252,7 @@
     const saveViewName = document.getElementById('save-view-name');
     if (saveViewConfirm && saveViewName && filterForm) {
       saveViewConfirm.addEventListener('click', function () {
-        const savedViewInput = filterForm.querySelector('input[name=\"saved_view\"]');
+        const savedViewInput = filterForm.querySelector('input[name="saved_view"]');
         if (savedViewInput) savedViewInput.value = saveViewName.value || '';
         const hiddenAction = document.createElement('input');
         hiddenAction.type = 'hidden';
@@ -265,8 +265,8 @@
     const advancedToggle = document.getElementById('financial-advanced-toggle');
     const advancedPanel = document.getElementById('financial-advanced-filters');
     const advancedState = document.getElementById('financial-advanced-state');
-    const advancedShowLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label=\"show\"]') : null;
-    const advancedHideLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label=\"hide\"]') : null;
+    const advancedShowLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label="show"]') : null;
+    const advancedHideLabel = advancedToggle ? advancedToggle.querySelector('[data-advanced-label="hide"]') : null;
 
     function setAdvancedFiltersVisibility(isVisible) {
       if (!advancedPanel || !advancedToggle || !advancedState || !advancedShowLabel || !advancedHideLabel) return;
@@ -288,7 +288,6 @@
     rows.forEach(function (row) {
       const cell = row.querySelector('td[data-code]');
       if (!cell) return;
-      const code = cell.dataset.code || '';
       const parent = cell.dataset.parent || '';
       if (parent) row.dataset.parentCode = parent;
     });
