@@ -1721,7 +1721,6 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
     frequency = database.Column(database.String(20), default="monthly", nullable=False)
     status = database.Column(database.String(20), default="draft", nullable=False, index=True)
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
-    # 0=draft, 1=approved, 2=cancelled, 3=completed
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
     approved_by = database.Column(database.String(26), database.ForeignKey("user.id"), nullable=True)
     approved_at = database.Column(database.DateTime, nullable=True)
