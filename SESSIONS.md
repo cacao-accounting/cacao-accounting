@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: adaptador transaccional simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/imports/adapters/transaction_documents.py` sin cambiar el mapeo de campos opcionales en la importación de documentos transaccionales.
+- **Implementacion:** Se separaron las asignaciones opcionales en helpers pequeños para montos base, tasas, campos de recepcion/factura y lote/serie. La lógica principal de `_apply_optional_item_fields` quedó como orquestador lineal.
+- **Verificacion:** `ruff check`, `flake8`, `mypy` focal y `tests/imports/test_transaction_documents_adapter.py` junto con `tests/test_06transaction_closure.py` quedaron en verde. `black` sigue reservado para el lote final.
+
 ## 2026-06-29 (SonarCloud: importacion de presupuesto simplificada)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/contabilidad/budget_import_service.py` sin alterar la validacion ni el flujo de importacion de presupuestos.
 - **Implementacion:** Se separaron el parseo de filas ODS, la expansion de celdas repetidas, la normalizacion de encabezados y la validacion de periodos/total en helpers pequeños. Tambien se extrajeron resolutores explicitos para cuentas, centros de costo, unidades de negocio y proyectos.

@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Adaptador transaccional (2026-06-29):** Se redujo la complejidad de `cacao_accounting/imports/adapters/transaction_documents.py` separando el mapeo opcional de campos en helpers pequeños.
+  - `_apply_optional_item_fields` ahora delega en helpers para montos base, tasas, campos configurados en cero y lote/serie, manteniendo el mismo comportamiento de importación.
+  - Se agregó una prueba focal con un item mínimo en memoria para cubrir todas las ramas del mapeo opcional sin depender de base de datos.
+  - `ruff`, `flake8`, `mypy` focal y la suite focal de imports/closure quedaron en verde.
+
 - **SonarCloud / Importación de presupuesto (2026-06-29):** Se redujo la complejidad de `cacao_accounting/contabilidad/budget_import_service.py` separando el parseo ODS, la expansión de celdas repetidas y la validación por fila en helpers pequeños.
   - La lectura del archivo ahora delega en helpers para filas ODS, normalización de encabezados, conversión de celdas y validación de totales/periodos, manteniendo la semántica de importación.
   - Se extrajeron resolutores explícitos para cuentas, centros de costo, unidades de negocio y proyectos, lo que deja la validación más lineal y mantenible.
