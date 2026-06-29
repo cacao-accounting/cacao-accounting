@@ -9,6 +9,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -641,6 +642,11 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
 
 def _supplier_quotation_selected_company(choices: list[tuple[str, str]]) -> str | None:
     """Resuelve la compañía seleccionada para la cotización de proveedor."""
+    return request.values.get("company") or (choices[0][0] if choices else None)
+
+
+def _purchase_quotation_selected_company(choices: list[tuple[str, str]]) -> str | None:
+    """Resuelve la compañía seleccionada para la solicitud de cotización."""
     return request.values.get("company") or (choices[0][0] if choices else None)
 
 
@@ -1744,68 +1750,29 @@ def compras_solicitud_cotizacion_nueva():
 
     formulario = FormularioSolicitudCotizacion()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
-    )
+    selected_company = _purchase_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
-    ]
-    items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    from_request_id = request.args.get("from_request") or request.form.get("from_request")
+    formulario.supplier_id.choices = _purchase_quotation_supplier_choices()
+    from_request_id = _purchase_quotation_origin_id()
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
     titulo = "Nueva Solicitud de Cotización - " + APPNAME
-    transaction_config = {
-        "formKey": FORMKEY_PURCHASE_QUOTATION,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
-        "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
-        "initialSourceType": "purchase_request" if from_request_id else "",
-    }
-    if solicitud_origen:
-        transaction_config["initialHeader"] = {
+    transaction_config = _purchase_quotation_transaction_config(
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        initial_source_type="purchase_request" if from_request_id else "",
+        initial_header={
             "company": solicitud_origen.company or "",
             "posting_date": str(date.today()),
         }
+        if solicitud_origen
+        else None,
+        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
+    )
     if request.method == "POST":
-        try:
-            supplier_id = request.form.get("supplier_id") or None
-            supplier = database.session.get(Party, supplier_id) if supplier_id else None
-            posting_date = _parse_date(request.form.get("posting_date"))
-            cotizacion = PurchaseQuotation(
-                supplier_id=supplier_id,
-                supplier_name=supplier.name if supplier else None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(cotizacion)
-            database.session.flush()
-            assign_document_identifier(
-                document=cotizacion,
-                entity_type="purchase_quotation",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            total_qty, total = _save_purchase_quotation_items(cotizacion.id)
-            cotizacion.total = total
-            cotizacion.base_total = total
-            cotizacion.grand_total = total
-            database.session.commit()
-            flash("Solicitud de cotización creada correctamente.", "success")
-            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
-        except IdentifierConfigurationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        response = _create_purchase_quotation_from_request()
+        if response is not None:
+            return response
     return render_template(
         "compras/solicitud_cotizacion_nuevo.html",
         form=formulario,
@@ -1816,6 +1783,87 @@ def compras_solicitud_cotizacion_nueva():
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _purchase_quotation_origin_id() -> str | None:
+    """Obtiene el documento origen para una solicitud de cotización."""
+    return request.args.get("from_request") or request.form.get("from_request")
+
+
+def _purchase_quotation_supplier_choices() -> list[tuple[str, str]]:
+    """Construye las opciones de proveedores para solicitudes de cotización."""
+    return [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+    ]
+
+
+def _purchase_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    """Carga los catálogos de ítems y unidades usados en solicitudes de cotización."""
+    items = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    return items, uoms
+
+
+def _purchase_quotation_transaction_config(
+    *,
+    items: list[dict[str, str | None]],
+    uoms: list[dict[str, str]],
+    initial_source_type: str,
+    initial_header: dict[str, str] | None = None,
+    columns: list[dict[str, str | bool | int]] | None = None,
+) -> dict[str, Any]:
+    """Construye la configuración transaccional para solicitudes de cotización."""
+    transaction_config = {
+        "formKey": FORMKEY_PURCHASE_QUOTATION,
+        "viewKey": "draft",
+        "items": items,
+        "uoms": uoms,
+        "columns": columns or [],
+        "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
+        "initialSourceType": initial_source_type,
+    }
+    if initial_header:
+        transaction_config["initialHeader"] = initial_header
+    return transaction_config
+
+
+def _create_purchase_quotation_from_request():
+    """Crea una solicitud de cotización a partir del formulario enviado."""
+    try:
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        posting_date = _parse_date(request.form.get("posting_date"))
+        cotizacion = PurchaseQuotation(
+            supplier_id=supplier_id,
+            supplier_name=supplier.name if supplier else None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(cotizacion)
+        database.session.flush()
+        assign_document_identifier(
+            document=cotizacion,
+            entity_type="purchase_quotation",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        total_qty, total = _save_purchase_quotation_items(cotizacion.id)
+        cotizacion.total = total
+        cotizacion.base_total = total
+        cotizacion.grand_total = total
+        database.session.commit()
+        flash("Solicitud de cotización creada correctamente.", "success")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
+    except IdentifierConfigurationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    return None
 
 
 @compras.route("/request-for-quotation/<quotation_id>")
