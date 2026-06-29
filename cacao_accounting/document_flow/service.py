@@ -46,6 +46,9 @@ from cacao_accounting.document_flow.repository import (
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
 
+_MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
+_MSG_LINEA_ORIGEN = "Linea origen no encontrada."
+
 
 class DocumentFlowError(ValueError):
     """Error controlado del motor de flujo documental."""
@@ -476,7 +479,7 @@ def apply_payment_reconciliation(
         difference = decimal_or_zero(raw_line.get("difference_amount") or gain_loss)
 
         if allocated <= 0:
-            raise DocumentFlowError("El monto aplicado debe ser mayor que cero.", 409)
+            raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO, 409)
         key = (payment_id, flow_source_type, reference_id)
         if key in processed:
             raise DocumentFlowError("No se puede aplicar la misma factura dos veces en un pago.", 409)
@@ -630,7 +633,7 @@ def apply_advance_to_invoice(
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
     if amount <= 0:
-        raise DocumentFlowError("El monto aplicado debe ser mayor que cero.")
+        raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO)
     if amount > payment_total - allocated_before:
         raise DocumentFlowError("El monto excede el remanente del anticipo.")
     if amount > outstanding:
@@ -750,7 +753,7 @@ def pending_qty(source_type: str, source_id: str, source_item_id: str | None, ta
     """Calcula la cantidad pendiente para una linea origen hacia un target."""
     source_item = get_document_item(source_type, source_item_id)
     if not source_item:
-        raise DocumentFlowError("Linea origen no encontrada.", 404)
+        raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
     qty = decimal_or_zero(getattr(source_item, "qty", 0))
     consumed = consumed_qty_for_source(source_type, source_id, source_item_id, target_type)
     cancelled, closed = _state_quantities(source_type, source_id, source_item_id, target_type)
@@ -818,7 +821,7 @@ def create_document_relation(
     target_item = get_document_item(target_key, target_item_id) if target_item_id else None
 
     if source_item_id and not source_item:
-        raise DocumentFlowError("Linea origen no encontrada.", 404)
+        raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
     if target_item_id and not target_item:
         raise DocumentFlowError("Linea destino no encontrada.", 404)
 
@@ -1088,7 +1091,7 @@ def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
         source_item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
         source_item = get_document_item(source_type, source_item_id)
         if not source_item:
-            raise DocumentFlowError("Linea origen no encontrada.", 404)
+            raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
         qty = decimal_or_zero(selected.get("qty"))
         rate = decimal_or_zero(getattr(source_item, "rate", 0))
         amount = qty * rate
@@ -1175,7 +1178,7 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
         allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
         outstanding = compute_outstanding_amount(invoice)
         if allocated <= 0:
-            raise DocumentFlowError("El monto aplicado debe ser mayor que cero.", 409)
+            raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO, 409)
         if allocated > outstanding:
             raise DocumentFlowError("El monto aplicado excede el saldo pendiente.", 409)
         reference = PaymentReference(
