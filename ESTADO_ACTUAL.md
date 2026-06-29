@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Smart Select errores (2026-06-29):** Se cerraron issues menores en `cacao_accounting/static/js/smart-select.js`.
+  - Los errores de fetch ya no quedan capturados de forma muda; ahora pasan por `handleFetchError()` con `console.warn` y estado UI consistente.
+  - La suite JS de `smart-select` quedo en verde (`16 passing`).
+  - `black --check tests/test_10_smart_select_js.py` quedo en verde.
+
 - **SonarCloud / Comprobante manual importador (2026-06-29):** Se cerro un issue menor en `cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html`.
   - La carga de celdas importadas del comprobante manual ahora usa una condicion positiva sobre `cellValue` en lugar de una comparacion negada inline.
   - La vista general y la suite focal del formulario de comprobante quedaron en verde.
