@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Smart Select (2026-06-29):** Se cerro un issue menor en `cacao_accounting/static/js/smart-select.js`.
+  - `handleSelectedValueChange()` ahora usa una condicion positiva en lugar de negar el valor normalizado.
+  - La suite JS del componente `smart-select` paso completa (`16 passing`).
+  - `ruff` no aplica a archivos JavaScript en esta configuracion del proyecto.
+
 - **SonarCloud / Document Flow candidatos (2026-06-29):** Se cerro un issue menor en `cacao_accounting/document_flow/service.py`.
   - `_build_candidate_query()` elimino un branch duplicado y mantiene un unico filtro por `document_type` cuando el modelo lo soporta.
   - La prueba focal del endpoint de candidatos de referencia quedo en verde junto con Black, Ruff y Mypy focal.
