@@ -93,21 +93,11 @@ class ImportService:
         if not batch:
             return
 
-        batch.import_status = 4  # Procesando validación
+        batch.import_status = 4
         database.session.commit()
 
         try:
-            if batch.record_type != "journal_entry" and batch.accounting_book_id:
-                database.session.add(
-                    ImportBatchError(
-                        batch_id=batch_id,
-                        field_name="accounting_book_id",
-                        error_type="BUSINESS_RULE",
-                        message="El libro contable solo se permite para comprobantes contables.",
-                    )
-                )
-                batch.import_status = 7
-                database.session.commit()
+            if not self._validate_accounting_book_rule(batch):
                 return
 
             reader = self._get_reader(batch.source_format)
@@ -115,83 +105,105 @@ class ImportService:
             table = reader.read(batch.source_path)
             normalized_rows = self._normalize_rows(table.columns, table.rows)
 
-            # Limpiar errores previos
             ImportBatchError.query.filter_by(batch_id=batch_id).delete()
 
-            # Validación estructural
-            errors = []
-            # Validar columnas prohibidas
-            for col in table.columns:
-                if col.lower() in self.FORBIDDEN_COLUMNS:
-                    errors.append(
-                        ImportBatchError(
-                            batch_id=batch_id,
-                            field_name=col,
-                            error_type="PROHIBITED_COLUMN",
-                            message=f"Columna prohibida detectada: {col}",
-                        )
-                    )
-
-            # Validar columnas requeridas
-            for req_col in adapter.required_columns:
-                if req_col not in table.columns:
-                    errors.append(
-                        ImportBatchError(
-                            batch_id=batch_id,
-                            field_name=req_col,
-                            error_type="MISSING_COLUMN",
-                            message=f"Columna requerida faltante: {req_col}",
-                        )
-                    )
-
-            if errors:
-                for err in errors:
-                    database.session.add(err)
-                batch.import_status = 7  # Fallido (validación estructural)
-                database.session.commit()
+            structural_errors = self._collect_structural_errors(batch_id, table, adapter)
+            if structural_errors:
+                self._commit_structural_errors(batch, batch_id, structural_errors)
                 return
 
-            # Agrupar por document_ref
             docs = self._group_by_reference(table.columns, normalized_rows)
             batch.total_rows = len(normalized_rows)
 
-            # Validación de filas y negocio (pre-importación)
-            business_errors_count = 0
-            for ref, rows in docs.items():
-                # Validación de filas
-                for i, row in enumerate(rows):
-                    row_errors = adapter.validate_row(row)
-                    for err_msg in row_errors:
-                        business_errors_count += 1
-                        database.session.add(
-                            ImportBatchError(
-                                batch_id=batch_id,
-                                row_number=i + 1,
-                                document_ref=ref,
-                                error_type="ROW_VALIDATION",
-                                message=err_msg,
-                            )
-                        )
-
-                # Validación de documento (negocio)
-                doc_errors = adapter.validate_document(rows, {"company_id": batch.company_id})
-                for err_msg in doc_errors:
-                    business_errors_count += 1
-                    database.session.add(
-                        ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="BUSINESS_RULE", message=err_msg)
-                    )
-
-            if business_errors_count > 0:
-                batch.import_status = 2  # Validado (con errores de negocio)
-            else:
-                batch.import_status = 3  # Listo para ejecutar
-
+            business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
+            batch.import_status = 2 if business_errors_count > 0 else 3
             database.session.commit()
 
         except Exception as e:
-            database.session.add(ImportBatchError(batch_id=batch_id, error_type="SYSTEM_ERROR", message=str(e)))
+            self._handle_validation_error(batch, batch_id, e)
+
+    def _validate_accounting_book_rule(self, batch: ImportBatch) -> bool:
+        """Valida regla de libro contable solo para journal_entry."""
+        if batch.record_type != "journal_entry" and batch.accounting_book_id:
+            database.session.add(
+                ImportBatchError(
+                    batch_id=batch.id,
+                    field_name="accounting_book_id",
+                    error_type="BUSINESS_RULE",
+                    message="El libro contable solo se permite para comprobantes contables.",
+                )
+            )
             batch.import_status = 7
             database.session.commit()
+            return False
+        return True
+
+    def _collect_structural_errors(
+        self, batch_id: str, table: Any, adapter: Any
+    ) -> List[ImportBatchError]:
+        """Recolecta errores estructurales de columnas."""
+        errors = []
+        for col in table.columns:
+            if col.lower() in self.FORBIDDEN_COLUMNS:
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        field_name=col,
+                        error_type="PROHIBITED_COLUMN",
+                        message=f"Columna prohibida detectada: {col}",
+                    )
+                )
+
+        for req_col in adapter.required_columns:
+            if req_col not in table.columns:
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        field_name=req_col,
+                        error_type="MISSING_COLUMN",
+                        message=f"Columna requerida faltante: {req_col}",
+                    )
+                )
+        return errors
+
+    def _commit_structural_errors(self, batch: ImportBatch, batch_id: str, errors: List[ImportBatchError]) -> None:
+        """Persiste errores estructurales y marca batch como fallido."""
+        for err in errors:
+            database.session.add(err)
+        batch.import_status = 7
+        database.session.commit()
+
+    def _collect_business_errors(
+        self, adapter: Any, batch_id: str, company_id: str, docs: Dict[str, List]
+    ) -> int:
+        """Recolecta errores de negocio de filas y documentos."""
+        errors_count = 0
+        for ref, rows in docs.items():
+            for i, row in enumerate(rows):
+                for err_msg in adapter.validate_row(row):
+                    errors_count += 1
+                    database.session.add(
+                        ImportBatchError(
+                            batch_id=batch_id,
+                            row_number=i + 1,
+                            document_ref=ref,
+                            error_type="ROW_VALIDATION",
+                            message=err_msg,
+                        )
+                    )
+
+            for err_msg in adapter.validate_document(rows, {"company_id": company_id}):
+                errors_count += 1
+                database.session.add(
+                    ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="BUSINESS_RULE", message=err_msg)
+                )
+        return errors_count
+
+    def _handle_validation_error(self, batch: ImportBatch, batch_id: str, e: Exception) -> None:
+        """Maneja errores inesperados durante validación."""
+        database.session.add(ImportBatchError(batch_id=batch_id, error_type="SYSTEM_ERROR", message=str(e)))
+        batch.import_status = 7
+        database.session.commit()
 
     def preview(self, batch_id: str) -> Dict[str, Any]:
         """Obtiene información para la vista previa del lote."""
@@ -206,7 +218,6 @@ class ImportService:
 
         errors = ImportBatchError.query.filter_by(batch_id=batch_id).all()
 
-        # Para la vista previa en HTML necesitamos los valores como lista
         sample_rows_list = table.rows[:10]
 
         return {
@@ -223,29 +234,24 @@ class ImportService:
         if not batch:
             return
 
-        # Solo permitir ejecutar lotes en estado 'Listo' (3)
-        # El estado 'Validado con errores' (2) debe corregirse y re-validarse
         if batch.import_status != 3:
             return
 
         reader = self._get_reader(batch.source_format)
         table = reader.read(batch.source_path)
 
-        # Cambiar a estado procesando inmediatamente para evitar doble ejecución
-        batch.import_status = 4  # Procesando
+        batch.import_status = 4
         database.session.commit()
 
         if len(table.rows) > IMPORT_SYNC_MAX_ROWS:
-            # Async
             thread = threading.Thread(
                 target=self._execute_task,
-                args=(current_app._get_current_object(), batch_id),  # type: ignore[attr-defined]
+                args=(current_app._get_current_object(), batch_id),
                 daemon=True,
             )
             thread.start()
         else:
-            # Sync
-            self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
+            self._execute_task(current_app._get_current_object(), batch_id)
 
     def cancel(self, batch_id: str):
         """Solicita la cancelación de un lote de importación."""
@@ -265,25 +271,35 @@ class ImportService:
     ) -> tuple[int, int]:
         """Procesa un documento individual dentro de la importación."""
         doc_obj = adapter.build_document(rows, context)
-
-        doc_date = None
-        if isinstance(doc_obj, dict):
-            doc_date = doc_obj.get("posting_date")
-        elif hasattr(doc_obj, "posting_date"):
-            doc_date = doc_obj.posting_date
-
-        if doc_date:
-            if isinstance(doc_date, str):
-                try:
-                    doc_date = datetime.strptime(doc_date, "%Y-%m-%d").date()
-                except ValueError:
-                    doc_date = None
-            if doc_date and not is_period_open(batch.company_id, doc_date):
-                raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
-
+        self._validate_document_period(doc_obj, batch)
         adapter.persist_document(doc_obj)
         database.session.commit()
         return 1, 0
+
+    def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
+        """Valida que el periodo contable esté abierto para el documento."""
+        doc_date = self._extract_document_date(doc_obj)
+        if not doc_date:
+            return
+        if not is_period_open(batch.company_id, doc_date):
+            raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
+
+    def _extract_document_date(self, doc_obj: Any) -> Any:
+        """Extrae la fecha de publicación del documento."""
+        if isinstance(doc_obj, dict):
+            return doc_obj.get("posting_date")
+        if hasattr(doc_obj, "posting_date"):
+            return doc_obj.posting_date
+        return None
+
+    def _parse_document_date(self, doc_date: Any) -> Any:
+        """Convierte fecha en string ISO a objeto date."""
+        if isinstance(doc_date, str):
+            try:
+                return datetime.strptime(doc_date, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+        return doc_date
 
     def _execute_task(self, app, batch_id: str):
         """Tarea de fondo para procesar la importación."""
@@ -311,57 +327,90 @@ class ImportService:
                     "created_by": batch.created_by,
                 }
 
-                success_count = 0
-                error_count = 0
-
-                for ref, rows in docs.items():
-                    database.session.expire(batch)
-                    batch = database.session.get(ImportBatch, batch_id)
-                    if not batch:
-                        return
-                    if batch.cancel_requested:
-                        batch.import_status = 8
-                        database.session.commit()
-                        return
-
-                    try:
-                        s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
-                        success_count += s
-                        error_count += e
-                    except Exception as exc:
-                        database.session.rollback()
-                        error_count += 1
-                        err_record = ImportBatchError(
-                            batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc)
-                        )
-                        database.session.add(err_record)
-                        database.session.commit()
-
-                    batch = database.session.get(ImportBatch, batch_id)
-                    if batch:
-                        batch.processed_rows = min(success_count + error_count, batch.total_rows or 0)
-                        database.session.commit()
-
-                batch = database.session.get(ImportBatch, batch_id)
-                if batch:
-                    batch.success_rows = success_count
-                    batch.error_rows = error_count
-                    batch.completed_at = datetime.now()
-                    batch.import_status = 5 if error_count == 0 else 6
-                    database.session.commit()
+                success_count, error_count = self._process_all_documents(
+                    batch, batch_id, adapter, docs, context
+                )
+                self._finalize_execution(batch, batch_id, success_count, error_count)
 
             except Exception as e:
-                batch = database.session.get(ImportBatch, batch_id)
-                if batch:
-                    batch.import_status = 7
-                    err_record = ImportBatchError(batch_id=batch_id, error_type="FATAL_ERROR", message=str(e))
-                    database.session.add(err_record)
-                    database.session.commit()
+                self._handle_execution_error(batch, batch_id, e)
+
+    def _process_all_documents(
+        self, batch: Any, batch_id: str, adapter: Any, docs: Dict[str, List], context: dict
+    ) -> tuple[int, int]:
+        """Procesa todos los documentos del lote."""
+        success_count = 0
+        error_count = 0
+
+        for ref, rows in docs.items():
+            if self._check_batch_cancellation(batch, batch_id):
+                return success_count, error_count
+
+            try:
+                s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                success_count += s
+                error_count += e
+            except Exception as exc:
+                error_count = self._handle_document_error(batch_id, batch, ref, exc, error_count)
+
+            self._update_batch_progress(batch, batch_id, success_count, error_count)
+
+        return success_count, error_count
+
+    def _check_batch_cancellation(self, batch: Any, batch_id: str) -> bool:
+        """Verifica si el batch fue cancelado."""
+        database.session.expire(batch)
+        batch = database.session.get(ImportBatch, batch_id)
+        if not batch:
+            return True
+        if batch.cancel_requested:
+            batch.import_status = 8
+            database.session.commit()
+            return True
+        return False
+
+    def _handle_document_error(
+        self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int
+    ) -> int:
+        """Maneja error en procesamiento de documento individual."""
+        database.session.rollback()
+        error_count += 1
+        err_record = ImportBatchError(
+            batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc)
+        )
+        database.session.add(err_record)
+        database.session.commit()
+        return error_count
+
+    def _update_batch_progress(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
+        """Actualiza el progreso del batch durante ejecución."""
+        batch = database.session.get(ImportBatch, batch_id)
+        if batch:
+            batch.processed_rows = min(success_count + error_count, batch.total_rows or 0)
+            database.session.commit()
+
+    def _finalize_execution(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
+        """Finaliza la ejecución actualizando estados y contadores."""
+        batch = database.session.get(ImportBatch, batch_id)
+        if batch:
+            batch.success_rows = success_count
+            batch.error_rows = error_count
+            batch.completed_at = datetime.now()
+            batch.import_status = 5 if error_count == 0 else 6
+            database.session.commit()
+
+    def _handle_execution_error(self, batch: Any, batch_id: str, e: Exception) -> None:
+        """Maneja errores fatales durante la ejecución."""
+        batch = database.session.get(ImportBatch, batch_id)
+        if batch:
+            batch.import_status = 7
+            err_record = ImportBatchError(batch_id=batch_id, error_type="FATAL_ERROR", message=str(e))
+            database.session.add(err_record)
+            database.session.commit()
 
     def _group_by_reference(self, columns: List[str], rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Agrupa las filas por la columna document_ref."""
         if "document_ref" not in columns:
-            # Si no hay document_ref, cada fila es un documento
             return {f"row_{i}": [row] for i, row in enumerate(rows)}
 
         docs: Dict[str, List[Dict[str, Any]]] = {}

@@ -741,7 +741,6 @@ def inventario_entrada(entry_id):
 def inventario_entrada_editar(entry_id: str):
     """Edita un movimiento de inventario en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
     registro = database.session.get(StockEntry, entry_id)
@@ -766,31 +765,60 @@ def inventario_entrada_editar(entry_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        before_state = {
-            "purpose": registro.purpose,
-            "company": registro.company,
-            "posting_date": str(registro.posting_date or ""),
-            "remarks": registro.remarks or "",
-        }
-        registro.purpose = request.form.get("purpose") or registro.purpose
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.from_warehouse = request.form.get("from_warehouse") or None
-        registro.to_warehouse = request.form.get("to_warehouse") or None
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
-            database.session.delete(item)
-        registro.total_amount = _save_stock_entry_items(registro)
-        after_state = {
-            "purpose": registro.purpose,
-            "company": registro.company,
-            "posting_date": str(registro.posting_date or ""),
-            "remarks": registro.remarks or "",
-        }
-        log_update(registro, before=before_state, after=after_state)
-        database.session.commit()
-        flash(_("Movimiento de inventario actualizado correctamente."), "success")
-        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+        return _handle_stock_entry_edit_post(registro)
+
+    return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles)
+
+
+def _handle_stock_entry_edit_post(registro: StockEntry):
+    """Procesa el POST para editar entrada de inventario."""
+    before_state = _capture_stock_entry_state(registro)
+    _update_stock_entry_from_form(registro)
+    _delete_and_resave_stock_entry_items(registro)
+    after_state = _capture_stock_entry_state(registro)
+    log_update(registro, before=before_state, after=after_state)
+    database.session.commit()
+    flash(_("Movimiento de inventario actualizado correctamente."), "success")
+    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+
+
+def _capture_stock_entry_state(registro: StockEntry) -> dict:
+    """Captura el estado del registro antes/después de la edición."""
+    return {
+        "purpose": registro.purpose,
+        "company": registro.company,
+        "posting_date": str(registro.posting_date or ""),
+        "remarks": registro.remarks or "",
+    }
+
+
+def _update_stock_entry_from_form(registro: StockEntry) -> None:
+    """Actualiza campos del registro desde el formulario."""
+    registro.purpose = request.form.get("purpose") or registro.purpose
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.from_warehouse = request.form.get("from_warehouse") or None
+    registro.to_warehouse = request.form.get("to_warehouse") or None
+    registro.remarks = request.form.get("remarks")
+
+
+def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
+    """Elimina y recrea los items de la entrada de inventario."""
+    for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
+        database.session.delete(item)
+    registro.total_amount = _save_stock_entry_items(registro)
+
+
+def _render_stock_entry_edit_form(
+    registro: StockEntry,
+    items_disponibles: list,
+    uoms_disponibles: list,
+):
+    """Renderiza el formulario de edición de entrada de inventario."""
+    from cacao_accounting.form_preferences import get_column_preferences
+    from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+
+    formulario = FormularioEntradaAlmacen(obj=registro)
 
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
     transaction_config = {

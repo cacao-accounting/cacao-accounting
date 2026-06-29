@@ -586,6 +586,88 @@ def _invoice_items_total(items: Sequence[Any], document: Any) -> Decimal:
     return signed_total
 
 
+def _create_receivable_entry(
+    *,
+    context: LedgerContext,
+    receivable_account_id: str,
+    amount: Decimal,
+    party_id: str,
+) -> GLEntry:
+    is_receivable = amount > 0
+    return _create_gl_entry(
+        context=context,
+        params=GLEntryParams(
+            account_id=receivable_account_id,
+            debit=amount if is_receivable else Decimal("0"),
+            credit=Decimal("0") if is_receivable else abs(amount),
+            party_type="customer",
+            party_id=party_id,
+            entry_remarks="Cuentas por cobrar",
+        ),
+    )
+
+
+def _create_income_entry(
+    *,
+    context: LedgerContext,
+    income_account_id: str,
+    amount: Decimal,
+    item_name: str | None,
+    item_code: str | None,
+) -> GLEntry:
+    is_income = amount > 0
+    return _create_gl_entry(
+        context=context,
+        params=GLEntryParams(
+            account_id=income_account_id,
+            debit=Decimal("0") if is_income else abs(amount),
+            credit=amount if is_income else Decimal("0"),
+            entry_remarks=item_name or item_code,
+        ),
+    )
+
+
+def _create_expense_entry(
+    *,
+    context: LedgerContext,
+    expense_account_id: str,
+    amount: Decimal,
+    item_name: str | None,
+    item_code: str | None,
+) -> GLEntry:
+    is_expense = amount > 0
+    return _create_gl_entry(
+        context=context,
+        params=GLEntryParams(
+            account_id=expense_account_id,
+            debit=amount if is_expense else Decimal("0"),
+            credit=Decimal("0") if is_expense else abs(amount),
+            entry_remarks=item_name or item_code,
+        ),
+    )
+
+
+def _create_payable_entry(
+    *,
+    context: LedgerContext,
+    payable_account_id: str,
+    amount: Decimal,
+    party_id: str,
+) -> GLEntry:
+    is_payable = amount > 0
+    return _create_gl_entry(
+        context=context,
+        params=GLEntryParams(
+            account_id=payable_account_id,
+            debit=Decimal("0") if is_payable else abs(amount),
+            credit=amount if is_payable else Decimal("0"),
+            party_type="supplier",
+            party_id=party_id,
+            entry_remarks="Cuentas por pagar",
+        ),
+    )
+
+
 def _tax_result_for_document(document: Any, items: Sequence[Any]) -> TaxCalculationResult | None:
     template_id = getattr(document, "tax_template_id", None)
     if not template_id:
@@ -606,6 +688,48 @@ def _signed_tax_delta(document: Any, tax_result: TaxCalculationResult | None) ->
     return _signed_amount(document, tax_result.payable_delta)
 
 
+def _tax_gl_entry_params(account_id: str, amount: Decimal, tax_line: Any, is_deductive: bool) -> GLEntryParams:
+    if is_deductive:
+        debit = abs(amount) if amount > 0 else Decimal("0")
+        credit = abs(amount) if amount < 0 else Decimal("0")
+    else:
+        debit = abs(amount) if amount < 0 else Decimal("0")
+        credit = abs(amount) if amount > 0 else Decimal("0")
+    return GLEntryParams(account_id=account_id, debit=debit, credit=credit, entry_remarks=tax_line.name)
+
+
+def _append_tax_entries(
+    *,
+    entries: list[GLEntry],
+    context: LedgerContext,
+    document: Any,
+    tax_result: TaxCalculationResult | None,
+    default_account_attr: str,
+    error_message: str,
+) -> None:
+    if tax_result is None:
+        return
+    company = _company_for(document)
+    defaults = _company_defaults(company)
+    for tax_line in tax_result.lines:
+        if tax_line.is_inclusive or tax_line.amount == 0:
+            continue
+        default_account_id = getattr(defaults, default_account_attr, None) if defaults else None
+        account_id = _require_account(
+            tax_line.account_id or default_account_id,
+            error_message,
+        )
+        amount = _signed_amount(document, tax_line.amount)
+        is_deductive = tax_line.behavior == "deductive"
+        tax_params = _tax_gl_entry_params(
+            account_id=account_id,
+            amount=amount,
+            tax_line=tax_line,
+            is_deductive=is_deductive,
+        )
+        entries.append(_create_gl_entry(context=context, params=tax_params))
+
+
 def _append_sales_tax_entries(
     *,
     entries: list[GLEntry],
@@ -613,41 +737,14 @@ def _append_sales_tax_entries(
     document: SalesInvoice,
     tax_result: TaxCalculationResult | None,
 ) -> None:
-    if tax_result is None:
-        return
-    for tax_line in tax_result.lines:
-        if tax_line.is_inclusive or tax_line.amount == 0:
-            continue
-        defaults = _company_defaults(_company_for(document))
-        account_id = _require_account(
-            tax_line.account_id or (defaults.default_sales_tax_account_id if defaults else None),
-            "Falta la cuenta contable de impuesto de venta.",
-        )
-        amount = _signed_amount(document, tax_line.amount)
-        if tax_line.behavior == "deductive":
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    params=GLEntryParams(
-                        account_id=account_id,
-                        debit=abs(amount) if amount > 0 else Decimal("0"),
-                        credit=abs(amount) if amount < 0 else Decimal("0"),
-                        entry_remarks=tax_line.name,
-                    ),
-                )
-            )
-        else:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    params=GLEntryParams(
-                        account_id=account_id,
-                        debit=abs(amount) if amount < 0 else Decimal("0"),
-                        credit=abs(amount) if amount > 0 else Decimal("0"),
-                        entry_remarks=tax_line.name,
-                    ),
-                )
-            )
+    _append_tax_entries(
+        entries=entries,
+        context=context,
+        document=document,
+        tax_result=tax_result,
+        default_account_attr="default_sales_tax_account_id",
+        error_message="Falta la cuenta contable de impuesto de venta.",
+    )
 
 
 def _append_purchase_tax_entries(
@@ -657,41 +754,14 @@ def _append_purchase_tax_entries(
     document: PurchaseInvoice,
     tax_result: TaxCalculationResult | None,
 ) -> None:
-    if tax_result is None:
-        return
-    for tax_line in tax_result.lines:
-        if tax_line.is_inclusive or tax_line.amount == 0:
-            continue
-        defaults = _company_defaults(_company_for(document))
-        account_id = _require_account(
-            tax_line.account_id or (defaults.default_purchase_tax_account_id if defaults else None),
-            "Falta la cuenta contable de impuesto de compra.",
-        )
-        amount = _signed_amount(document, tax_line.amount)
-        if tax_line.behavior == "deductive":
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    params=GLEntryParams(
-                        account_id=account_id,
-                        debit=abs(amount) if amount < 0 else Decimal("0"),
-                        credit=abs(amount) if amount > 0 else Decimal("0"),
-                        entry_remarks=tax_line.name,
-                    ),
-                )
-            )
-        else:
-            entries.append(
-                _create_gl_entry(
-                    context=context,
-                    params=GLEntryParams(
-                        account_id=account_id,
-                        debit=abs(amount) if amount > 0 else Decimal("0"),
-                        credit=abs(amount) if amount < 0 else Decimal("0"),
-                        entry_remarks=tax_line.name,
-                    ),
-                )
-            )
+    _append_tax_entries(
+        entries=entries,
+        context=context,
+        document=document,
+        tax_result=tax_result,
+        default_account_attr="default_purchase_tax_account_id",
+        error_message="Falta la cuenta contable de impuesto de compra.",
+    )
 
 
 def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -> list[GLEntry]:
@@ -709,86 +779,78 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
         raise PostingError("La factura de venta no contiene lineas para contabilizar.")
 
     result = _post_with_calculation_engine(document, ledger_code=ledger_code)
-    if result is None:
-        tax_result = _tax_result_for_document(document, items)
-        entries: list[GLEntry] = []
-        for context in _document_contexts(document, ledger_code=ledger_code):
-            amount_total = _invoice_items_total(items, document) + _signed_tax_delta(document, tax_result)
-            if amount_total > 0:
-                entries.append(
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=receivable_account_id,
-                            debit=amount_total,
-                            credit=Decimal("0"),
-                            party_type="customer",
-                            party_id=document.customer_id,
-                            entry_remarks="Cuentas por cobrar",
-                        ),
-                    )
-                )
-            else:
-                entries.append(
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=receivable_account_id,
-                            debit=Decimal("0"),
-                            credit=abs(amount_total),
-                            party_type="customer",
-                            party_id=document.customer_id,
-                            entry_remarks="Cuentas por cobrar",
-                        ),
-                    )
-                )
+    if result is not None:
+        _update_grand_total_if_needed(document, items)
+        return result
 
-            for item in items:
-                amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
-                if amount == 0:
-                    continue
-                income_account_id = _require_account(
-                    _account_id_for_item(item, company, "income"),
-                    "Falta la cuenta de ingresos para una linea de factura de venta.",
-                )
-                if amount > 0:
-                    entries.append(
-                        _create_gl_entry(
-                            context=context,
-                            params=GLEntryParams(
-                                account_id=income_account_id,
-                                debit=Decimal("0"),
-                                credit=amount,
-                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
-                            ),
-                        )
-                    )
-                else:
-                    entries.append(
-                        _create_gl_entry(
-                            context=context,
-                            params=GLEntryParams(
-                                account_id=income_account_id,
-                                debit=abs(amount),
-                                credit=Decimal("0"),
-                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
-                            ),
-                        )
-                    )
+    tax_result = _tax_result_for_document(document, items)
+    entries: list[GLEntry] = []
+    for context in _document_contexts(document, ledger_code=ledger_code):
+        _add_sales_receivable_entry(entries, context, receivable_account_id, document, items, tax_result)
+        _add_sales_income_entries(entries, context, company, document, items)
+        _append_sales_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
 
-            _append_sales_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
+    result = _add_entries(entries)
+    _update_grand_total_if_needed(document, items)
+    return result
 
-        result = _add_entries(entries)
 
+def _update_grand_total_if_needed(document: SalesInvoice, items: Sequence[Any]) -> None:
+    """Actualiza el grand_total del documento si no esta establecido."""
+    if document.grand_total:
+        return
     from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
 
-    if not document.grand_total:
-        tax_result = _tax_result_for_document(document, items)
-        # Se asume que el debito a cuentas por cobrar (amount_total calculado arriba) es el total
-        document.grand_total = abs(_invoice_items_total(items, document) + _signed_tax_delta(document, tax_result))
+    tax_result = _tax_result_for_document(document, items)
+    document.grand_total = abs(_invoice_items_total(items, document) + _signed_tax_delta(document, tax_result))
     refresh_outstanding_amount_cache(document)
 
-    return result
+
+def _add_sales_receivable_entry(
+    entries: list[GLEntry],
+    context: LedgerContext,
+    receivable_account_id: str,
+    document: SalesInvoice,
+    items: Sequence[Any],
+    tax_result: TaxCalculationResult | None,
+) -> None:
+    """Agrega la entrada de receivable para una factura de venta."""
+    amount_total = _invoice_items_total(items, document) + _signed_tax_delta(document, tax_result)
+    entries.append(
+        _create_receivable_entry(
+            context=context,
+            receivable_account_id=receivable_account_id,
+            amount=amount_total,
+            party_id=document.customer_id,
+        )
+    )
+
+
+def _add_sales_income_entries(
+    entries: list[GLEntry],
+    context: LedgerContext,
+    company: str,
+    document: SalesInvoice,
+    items: Sequence[Any],
+) -> None:
+    """Agrega las entradas de ingreso por cada item de la factura de venta."""
+    for item in items:
+        amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
+        if amount == 0:
+            continue
+        income_account_id = _require_account(
+            _account_id_for_item(item, company, "income"),
+            "Falta la cuenta de ingresos para una linea de factura de venta.",
+        )
+        entries.append(
+            _create_income_entry(
+                context=context,
+                income_account_id=income_account_id,
+                amount=amount,
+                item_name=getattr(item, "item_name", None),
+                item_code=getattr(item, "item_code", None),
+            )
+        )
 
 
 def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = None) -> list[GLEntry]:
@@ -820,81 +882,86 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
             landed_cost_result=engine_payload.results.get("landed_cost"),
         )
     else:
-        entries: list[GLEntry] = []
-        for context in _document_contexts(document, ledger_code=ledger_code):
-            for item in items:
-                amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
-                if amount == 0:
-                    continue
-                debit_account_type = "bridge" if getattr(document, "purchase_receipt_id", None) else "expense"
-                debit_account_id = _require_account(
-                    _account_id_for_item(item, company, debit_account_type),
-                    "Falta la cuenta de gasto o cuenta puente para una linea de factura de compra.",
-                )
-                if amount > 0:
-                    entries.append(
-                        _create_gl_entry(
-                            context=context,
-                            params=GLEntryParams(
-                                account_id=debit_account_id,
-                                debit=amount,
-                                credit=Decimal("0"),
-                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
-                            ),
-                        )
-                    )
-                else:
-                    entries.append(
-                        _create_gl_entry(
-                            context=context,
-                            params=GLEntryParams(
-                                account_id=debit_account_id,
-                                debit=Decimal("0"),
-                                credit=abs(amount),
-                                entry_remarks=getattr(item, "item_name", None) or getattr(item, "item_code", None),
-                            ),
-                        )
-                    )
-
-            _append_purchase_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
-
-            if amount_total > 0:
-                entries.append(
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=payable_account_id,
-                            debit=Decimal("0"),
-                            credit=amount_total,
-                            party_type="supplier",
-                            party_id=document.supplier_id,
-                            entry_remarks="Cuentas por pagar",
-                        ),
-                    )
-                )
-            else:
-                entries.append(
-                    _create_gl_entry(
-                        context=context,
-                        params=GLEntryParams(
-                            account_id=payable_account_id,
-                            debit=abs(amount_total),
-                            credit=Decimal("0"),
-                            party_type="supplier",
-                            party_id=document.supplier_id,
-                            entry_remarks="Cuentas por pagar",
-                        ),
-                    )
-                )
-
+        entries = _create_purchase_invoice_gl_entries(
+            document=document,
+            company=company,
+            payable_account_id=payable_account_id,
+            items=items,
+            amount_total=amount_total,
+            tax_result=tax_result,
+            ledger_code=ledger_code,
+        )
         result = _add_entries(entries)
 
+    _update_purchase_grand_total(document, amount_total)
+    _emit_purchase_invoice_event(document, company)
+    return result
+
+
+def _create_purchase_invoice_gl_entries(
+    document: PurchaseInvoice,
+    company: str,
+    payable_account_id: str,
+    items: Sequence[Any],
+    amount_total: Decimal,
+    tax_result: TaxCalculationResult | None,
+    ledger_code: str | None,
+) -> list[GLEntry]:
+    """Crea las entradas GL para una factura de compra sin motor de calculo."""
+    entries: list[GLEntry] = []
+    for context in _document_contexts(document, ledger_code=ledger_code):
+        _add_purchase_expense_entries(entries, context, company, document, items)
+        _append_purchase_tax_entries(entries=entries, context=context, document=document, tax_result=tax_result)
+        entries.append(
+            _create_payable_entry(
+                context=context,
+                payable_account_id=payable_account_id,
+                amount=amount_total,
+                party_id=document.supplier_id,
+            )
+        )
+    return entries
+
+
+def _add_purchase_expense_entries(
+    entries: list[GLEntry],
+    context: LedgerContext,
+    company: str,
+    document: PurchaseInvoice,
+    items: Sequence[Any],
+) -> None:
+    """Agrega las entradas de gasto por cada item de la factura de compra."""
+    for item in items:
+        amount = _signed_amount(document, _decimal_value(getattr(item, "amount", None)))
+        if amount == 0:
+            continue
+        debit_account_type = "bridge" if getattr(document, "purchase_receipt_id", None) else "expense"
+        debit_account_id = _require_account(
+            _account_id_for_item(item, company, debit_account_type),
+            "Falta la cuenta de gasto o cuenta puente para una linea de factura de compra.",
+        )
+        entries.append(
+            _create_expense_entry(
+                context=context,
+                expense_account_id=debit_account_id,
+                amount=amount,
+                item_name=getattr(item, "item_name", None),
+                item_code=getattr(item, "item_code", None),
+            )
+        )
+
+
+def _update_purchase_grand_total(document: PurchaseInvoice, amount_total: Decimal) -> None:
+    """Actualiza el grand_total del documento si no esta establecido."""
     from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache
 
     if not document.grand_total:
         document.grand_total = abs(amount_total)
     refresh_outstanding_amount_cache(document)
 
+
+def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> None:
+    """Emite el evento economico para factura de compra."""
     from cacao_accounting.compras.purchase_reconciliation_service import EventType, emit_economic_event
 
     emit_economic_event(
@@ -909,8 +976,6 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
             "purchase_receipt_id": str(document.purchase_receipt_id) if document.purchase_receipt_id else None,
         },
     )
-
-    return result
 
 
 def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -> list[GLEntry]:
@@ -1331,7 +1396,7 @@ def _persist_landed_cost_allocations(
     create_valuation_adjustment: bool = True,
 ) -> None:
     """Persist landed cost allocations and their inventory valuation effect."""
-    if landed_cost_result is None or getattr(landed_cost_result, "errors", None):
+    if _landed_cost_result_is_invalid(landed_cost_result):
         return
     allocations = list(getattr(landed_cost_result, "allocations", []) or [])
     if not allocations:
@@ -1341,72 +1406,129 @@ def _persist_landed_cost_allocations(
 
     items_by_line_id = {str(item.id): item for item in items}
     for allocation in allocations:
-        allocated_amount = _decimal_value(getattr(allocation, "allocated_total", None))
-        if allocated_amount == 0:
-            continue
-        item = items_by_line_id.get(str(allocation.item_line_id))
-        if item is None:
-            raise PostingError("El prorrateo de costo capitalizable no coincide con una linea de factura.")
-        warehouse = getattr(item, "warehouse", None)
-        if not warehouse:
-            raise PostingError("La linea con costo capitalizable requiere almacen para ajustar valuacion.")
-
-        stock_layer_id = getattr(item, "_stock_valuation_layer_id", None)
-        if create_valuation_adjustment:
-            bin_row = _stock_bin_for(document.company, item.item_code, warehouse)
-            if bin_row is None or _decimal_value(bin_row.actual_qty) <= 0:
-                raise PostingError("No hay inventario disponible para materializar el costo capitalizable.")
-
-            _upsert_stock_bin(
-                company=document.company,
-                item_code=item.item_code,
-                warehouse=warehouse,
-                qty_change=Decimal("0"),
-                valuation_rate=_decimal_value(bin_row.valuation_rate),
-                value_change=allocated_amount,
-            )
-            database.session.flush()
-            updated_bin = _stock_bin_for(document.company, item.item_code, warehouse)
-            if updated_bin is None:
-                raise PostingError("No se pudo actualizar la valuacion de inventario.")
-
-            stock_layer = StockValuationLayer(
-                item_code=item.item_code,
-                warehouse=warehouse,
-                company=document.company,
-                qty=Decimal("0"),
-                rate=_decimal_value(updated_bin.valuation_rate),
-                stock_value_difference=allocated_amount,
-                remaining_qty=max(_decimal_value(updated_bin.actual_qty), Decimal("0")),
-                remaining_stock_value=max(_decimal_value(updated_bin.stock_value), Decimal("0")),
-                voucher_type=_get_voucher_type(document),
-                voucher_id=_get_voucher_id(document),
-                posting_date=document.posting_date,
-            )
-            database.session.add(stock_layer)
-            database.session.flush()
-            stock_layer_id = stock_layer.id
-        database.session.add(
-            LandedCostAllocation(
-                company=document.company,
-                document_type=_get_voucher_type(document),
-                document_id=_get_voucher_id(document),
-                document_line_id=str(item.id),
-                item_code=item.item_code,
-                warehouse=warehouse,
-                posting_date=document.posting_date,
-                base_amount=_decimal_value(getattr(allocation, "base_amount", None)),
-                allocated_amount=allocated_amount,
-                final_inventory_cost=_decimal_value(getattr(allocation, "final_inventory_cost", None)),
-                unit_inventory_cost=_decimal_value(getattr(allocation, "unit_inventory_cost", None)),
-                allocation_method=None,
-                allocation_detail_json=json.dumps(
-                    _serializable_cost_details(list(getattr(allocation, "allocated_costs", []) or [])),
-                    sort_keys=True,
-                ),
-                stock_valuation_layer_id=stock_layer_id,
-            )
+        _persist_single_allocation(
+            document=document,
+            allocation=allocation,
+            items_by_line_id=items_by_line_id,
+            create_valuation_adjustment=create_valuation_adjustment,
         )
+
+
+def _landed_cost_result_is_invalid(landed_cost_result: Any) -> bool:
+    """Check if landed cost result is None or has errors."""
+    return landed_cost_result is None or getattr(landed_cost_result, "errors", None) is not None
+
+
+def _persist_single_allocation(
+    document: Any,
+    allocation: Any,
+    items_by_line_id: dict[str, Any],
+    create_valuation_adjustment: bool,
+) -> None:
+    """Persist a single landed cost allocation and optionally create valuation layer."""
+    allocated_amount = _decimal_value(getattr(allocation, "allocated_total", None))
+    if allocated_amount == 0:
+        return
+    item = items_by_line_id.get(str(allocation.item_line_id))
+    if item is None:
+        raise PostingError("El prorrateo de costo capitalizable no coincide con una linea de factura.")
+    warehouse = getattr(item, "warehouse", None)
+    if not warehouse:
+        raise PostingError("La linea con costo capitalizable requiere almacen para ajustar valuacion.")
+
+    stock_layer_id = _create_valuation_layer_if_needed(
+        document=document,
+        item=item,
+        warehouse=warehouse,
+        allocated_amount=allocated_amount,
+        create_valuation_adjustment=create_valuation_adjustment,
+    )
+    _persist_landed_cost_allocation_record(
+        document=document,
+        allocation=allocation,
+        item=item,
+        warehouse=warehouse,
+        allocated_amount=allocated_amount,
+        stock_layer_id=stock_layer_id,
+    )
+
+
+def _create_valuation_layer_if_needed(
+    document: Any,
+    item: Any,
+    warehouse: str,
+    allocated_amount: Decimal,
+    create_valuation_adjustment: bool,
+) -> Any:
+    """Create stock valuation layer if adjustment flag is set."""
+    if not create_valuation_adjustment:
+        return getattr(item, "_stock_valuation_layer_id", None)
+
+    bin_row = _stock_bin_for(document.company, item.item_code, warehouse)
+    if bin_row is None or _decimal_value(bin_row.actual_qty) <= 0:
+        raise PostingError("No hay inventario disponible para materializar el costo capitalizable.")
+
+    _upsert_stock_bin(
+        company=document.company,
+        item_code=item.item_code,
+        warehouse=warehouse,
+        qty_change=Decimal("0"),
+        valuation_rate=_decimal_value(bin_row.valuation_rate),
+        value_change=allocated_amount,
+    )
+    database.session.flush()
+    updated_bin = _stock_bin_for(document.company, item.item_code, warehouse)
+    if updated_bin is None:
+        raise PostingError("No se pudo actualizar la valuacion de inventario.")
+
+    stock_layer = StockValuationLayer(
+        item_code=item.item_code,
+        warehouse=warehouse,
+        company=document.company,
+        qty=Decimal("0"),
+        rate=_decimal_value(updated_bin.valuation_rate),
+        stock_value_difference=allocated_amount,
+        remaining_qty=max(_decimal_value(updated_bin.actual_qty), Decimal("0")),
+        remaining_stock_value=max(_decimal_value(updated_bin.stock_value), Decimal("0")),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+        posting_date=document.posting_date,
+    )
+    database.session.add(stock_layer)
+    database.session.flush()
+    return stock_layer.id
+
+
+def _persist_landed_cost_allocation_record(
+    document: Any,
+    allocation: Any,
+    item: Any,
+    warehouse: str,
+    allocated_amount: Decimal,
+    stock_layer_id: Any,
+) -> None:
+    """Persist the landed cost allocation record."""
+    database.session.add(
+        LandedCostAllocation(
+            company=document.company,
+            document_type=_get_voucher_type(document),
+            document_id=_get_voucher_id(document),
+            document_line_id=str(item.id),
+            item_code=item.item_code,
+            warehouse=warehouse,
+            posting_date=document.posting_date,
+            base_amount=_decimal_value(getattr(allocation, "base_amount", None)),
+            allocated_amount=allocated_amount,
+            final_inventory_cost=_decimal_value(getattr(allocation, "final_inventory_cost", None)),
+            unit_inventory_cost=_decimal_value(getattr(allocation, "unit_inventory_cost", None)),
+            allocation_method=None,
+            allocation_detail_json=json.dumps(
+                _serializable_cost_details(list(getattr(allocation, "allocated_costs", []) or [])),
+                sort_keys=True,
+            ),
+            stock_valuation_layer_id=stock_layer_id,
+        )
+    )
 
 
 def _create_stock_movement(
@@ -2067,93 +2189,154 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
         return []
 
     company = _company_for(document)
-    entries: list[GLEntry] = []
-    items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
-    for context in _document_contexts(document, ledger_code=ledger_code):
-        for line in items:
-            amount = (
-                abs(_decimal_value(line.stock_value_difference))
-                if purpose == "stock_reconciliation"
-                else _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
-            )
-            if amount <= 0:
-                continue
-            inventory_account_id = _require_account(
-                (
-                    _warehouse_inventory_account_id(document, line, company)
-                    if purpose == "stock_reconciliation"
-                    else _account_id_for_item(line, company, "inventory")
-                ),
-                "Falta la cuenta de inventario para la linea de stock.",
-            )
-            offset_type = "bridge" if purpose == "material_receipt" else "inventory_adjustment"
-            offset_account = (
-                getattr(document, "adjustment_account_id", None)
-                if purpose == "stock_reconciliation"
-                else _account_id_for_item(line, company, offset_type)
-            )
-            offset_account_id = _require_account(
-                offset_account or _account_id_for_item(line, company, offset_type),
-                "Falta la cuenta de contrapartida para la linea de stock.",
-            )
-            dimension_kwargs = {
-                "cost_center_code": getattr(document, "cost_center_code", None),
-                "unit_code": getattr(document, "unit_code", None),
-                "project_code": getattr(document, "project_code", None),
-            }
-            if purpose == "stock_reconciliation":
-                value_difference = _decimal_value(line.stock_value_difference)
-                if value_difference > 0:
-                    entries.extend(
-                        _normal_entries_for_amount(
-                            context=context,
-                            debit_account_id=inventory_account_id,
-                            credit_account_id=offset_account_id,
-                            amount=amount,
-                            **dimension_kwargs,
-                            debit_remarks="Ajuste de valor de inventario",
-                            credit_remarks="Conciliación de inventario",
-                        )
-                    )
-                else:
-                    entries.extend(
-                        _normal_entries_for_amount(
-                            context=context,
-                            debit_account_id=offset_account_id,
-                            credit_account_id=inventory_account_id,
-                            amount=amount,
-                            **dimension_kwargs,
-                            debit_remarks="Conciliación de inventario",
-                            credit_remarks="Ajuste de valor de inventario",
-                        )
-                    )
-            elif purpose in ("material_receipt", "adjustment_positive"):
-                entries.extend(
-                    _normal_entries_for_amount(
-                        context=context,
-                        debit_account_id=inventory_account_id,
-                        credit_account_id=offset_account_id,
-                        amount=amount,
-                        debit_remarks="Ingreso de inventario",
-                        credit_remarks="Cuenta puente compras",
-                    )
-                )
-            else:
-                entries.extend(
-                    _normal_entries_for_amount(
-                        context=context,
-                        debit_account_id=offset_account_id,
-                        credit_account_id=inventory_account_id,
-                        amount=amount,
-                        debit_remarks="Costo de material",
-                        credit_remarks="Salida de inventario",
-                    )
-                )
+    entries = _create_stock_entry_gl_entries(document, company, purpose, ledger_code)
 
     _add_entries(entries)
     if not movements and not entries:
         raise PostingError("No se generan movimientos para este documento de inventario.")
     return entries
+
+
+def _create_stock_entry_gl_entries(
+    document: StockEntry,
+    company: str,
+    purpose: str,
+    ledger_code: str | None,
+) -> list[GLEntry]:
+    """Create GL entries for a stock entry document."""
+    entries: list[GLEntry] = []
+    items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
+    for context in _document_contexts(document, ledger_code=ledger_code):
+        for line in items:
+            _add_stock_entry_line_gl_entries(
+                entries=entries,
+                context=context,
+                document=document,
+                company=company,
+                line=line,
+                purpose=purpose,
+            )
+    return entries
+
+
+def _add_stock_entry_line_gl_entries(
+    entries: list[GLEntry],
+    context: LedgerContext,
+    document: StockEntry,
+    company: str,
+    line: StockEntryItem,
+    purpose: str,
+) -> None:
+    """Add GL entries for a single stock entry line."""
+    amount = _get_stock_entry_line_amount(line, purpose)
+    if amount <= 0:
+        return
+
+    inventory_account_id = _get_inventory_account_for_line(document, line, company, purpose)
+    offset_account_id = _get_offset_account_for_line(document, line, company, purpose)
+    dimension_kwargs = _get_dimension_kwargs(document)
+
+    if purpose == "stock_reconciliation":
+        _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
+    elif purpose in ("material_receipt", "adjustment_positive"):
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=inventory_account_id,
+                credit_account_id=offset_account_id,
+                amount=amount,
+                **dimension_kwargs,
+                debit_remarks="Ingreso de inventario",
+                credit_remarks="Cuenta puente compras",
+            )
+        )
+    else:
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=offset_account_id,
+                credit_account_id=inventory_account_id,
+                amount=amount,
+                **dimension_kwargs,
+                debit_remarks="Costo de material",
+                credit_remarks="Salida de inventario",
+            )
+        )
+
+
+def _get_stock_entry_line_amount(line: StockEntryItem, purpose: str) -> Decimal:
+    """Get the amount for a stock entry line based on its purpose."""
+    if purpose == "stock_reconciliation":
+        return abs(_decimal_value(line.stock_value_difference))
+    return _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
+
+
+def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
+    """Get the inventory account for a stock entry line."""
+    if purpose == "stock_reconciliation":
+        account = _warehouse_inventory_account_id(document, line, company)
+    else:
+        account = _account_id_for_item(line, company, "inventory")
+    return _require_account(account, "Falta la cuenta de inventario para la linea de stock.")
+
+
+def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
+    """Get the offset account for a stock entry line."""
+    offset_type = "bridge" if purpose == "material_receipt" else "inventory_adjustment"
+    if purpose == "stock_reconciliation":
+        account = getattr(document, "adjustment_account_id", None)
+    else:
+        account = _account_id_for_item(line, company, offset_type)
+    return _require_account(
+        account or _account_id_for_item(line, company, offset_type),
+        "Falta la cuenta de contrapartida para la linea de stock.",
+    )
+
+
+def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:
+    """Get dimension kwargs from document."""
+    return {
+        "cost_center_code": getattr(document, "cost_center_code", None),
+        "unit_code": getattr(document, "unit_code", None),
+        "project_code": getattr(document, "project_code", None),
+    }
+
+
+def _add_reconciliation_entries(
+    entries: list[GLEntry],
+    context: LedgerContext,
+    inventory_account_id: str,
+    offset_account_id: str,
+    amount: Decimal,
+    line: StockEntryItem,
+    dimension_kwargs: dict[str, Any],
+) -> None:
+    """Add GL entries for stock reconciliation purpose."""
+    value_difference = _decimal_value(line.stock_value_difference)
+    if value_difference > 0:
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=inventory_account_id,
+                credit_account_id=offset_account_id,
+                amount=amount,
+                **dimension_kwargs,
+                debit_remarks="Ajuste de valor de inventario",
+                credit_remarks="Conciliación de inventario",
+            )
+        )
+    else:
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=offset_account_id,
+                credit_account_id=inventory_account_id,
+                amount=amount,
+                **dimension_kwargs,
+                debit_remarks="Conciliación de inventario",
+                credit_remarks="Ajuste de valor de inventario",
+            )
+        )
 
 
 def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[GLEntry]:

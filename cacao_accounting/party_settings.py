@@ -72,37 +72,33 @@ def _party_account_record(party_id: str, company: str) -> PartyAccount | None:
     return database.session.execute(select(PartyAccount).filter_by(party_id=party_id, company=company)).scalar_one_or_none()
 
 
-def build_party_company_settings(
-    party_type: str,
+def _build_customer_settings(
     company: str,
-    *,
-    party_id: str | None = None,
+    resolved_account: Accounts | None,
+    company_party: CompanyParty | None,
 ) -> PartyCompanySettings:
-    """Construye los valores a prellenar en la tabla de configuracion por compania."""
-    company_party = _party_company_record(party_id, company) if party_id else None
-    party_account = _party_account_record(party_id, company) if party_id else None
-    default_account = _default_company_account(company, party_type)
-    if party_type == "customer":
-        resolved_account = _account_for_company(company, party_account.receivable_account_id if party_account else None)
-        if resolved_account is None:
-            resolved_account = default_account
-        return PartyCompanySettings(
-            company=company,
-            company_label=_company_label(company),
-            is_active=bool(company_party.is_active) if company_party else True,
-            receivable_account_id=resolved_account.id if resolved_account else None,
-            receivable_account_label=account_label(resolved_account),
-            payable_account_id=None,
-            payable_account_label="",
-            tax_template_id=company_party.tax_template_id if company_party else None,
-            tax_template_label=_tax_template_label(company_party.tax_template_id if company_party else None),
-            allow_purchase_invoice_without_order=False,
-            allow_purchase_invoice_without_receipt=False,
-        )
+    """Construye configuración para cliente."""
+    return PartyCompanySettings(
+        company=company,
+        company_label=_company_label(company),
+        is_active=bool(company_party.is_active) if company_party else True,
+        receivable_account_id=resolved_account.id if resolved_account else None,
+        receivable_account_label=account_label(resolved_account),
+        payable_account_id=None,
+        payable_account_label="",
+        tax_template_id=company_party.tax_template_id if company_party else None,
+        tax_template_label=_tax_template_label(company_party.tax_template_id if company_party else None),
+        allow_purchase_invoice_without_order=False,
+        allow_purchase_invoice_without_receipt=False,
+    )
 
-    resolved_account = _account_for_company(company, party_account.payable_account_id if party_account else None)
-    if resolved_account is None:
-        resolved_account = default_account
+
+def _build_supplier_settings(
+    company: str,
+    resolved_account: Accounts | None,
+    company_party: CompanyParty | None,
+) -> PartyCompanySettings:
+    """Construye configuración para proveedor."""
     return PartyCompanySettings(
         company=company,
         company_label=_company_label(company),
@@ -120,6 +116,27 @@ def build_party_company_settings(
             bool(company_party.allow_purchase_invoice_without_receipt) if company_party else False
         ),
     )
+
+
+def build_party_company_settings(
+    party_type: str,
+    company: str,
+    *,
+    party_id: str | None = None,
+) -> PartyCompanySettings:
+    """Construye los valores a prellenar en la tabla de configuracion por compania."""
+    company_party = _party_company_record(party_id, company) if party_id else None
+    party_account = _party_account_record(party_id, company) if party_id else None
+    default_account = _default_company_account(company, party_type)
+
+    if party_type == "customer":
+        account_id = party_account.receivable_account_id if party_account else None
+        resolved_account = _account_for_company(company, account_id) or default_account
+        return _build_customer_settings(company, resolved_account, company_party)
+
+    account_id = party_account.payable_account_id if party_account else None
+    resolved_account = _account_for_company(company, account_id) or default_account
+    return _build_supplier_settings(company, resolved_account, company_party)
 
 
 def draft_party_company_settings(
