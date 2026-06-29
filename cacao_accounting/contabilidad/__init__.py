@@ -93,6 +93,17 @@ CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
 CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
 
+# ---------------------------------------------------------------------------------------
+# Constantes para templates (evita duplicacion de cadenas literales - SonarQube S1192)
+# ---------------------------------------------------------------------------------------
+_TPL_UNIDAD_CREAR = "contabilidad/unidad_crear.html"
+_TPL_BOOK_CREAR = "contabilidad/book_crear.html"
+_TPL_CUENTA_CREAR = "contabilidad/cuenta_crear.html"
+_TPL_CENTRO_COSTO_CREAR = "contabilidad/centro-costo_crear.html"
+_TPL_PROYECTO_CREAR = "contabilidad/proyecto_crear.html"
+_TPL_PERIODO_CREAR = "contabilidad/periodo_crear.html"
+_TPL_TC_CREAR = "contabilidad/tc_crear.html"
+
 
 def _company_label(company_code: str) -> str:
     """Devuelve etiqueta de entidad para Smart Select."""
@@ -633,7 +644,7 @@ def nueva_unidad():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/unidad_crear.html",
+                _TPL_UNIDAD_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
@@ -649,7 +660,7 @@ def nueva_unidad():
 
         return redirect(url_for(CONTABILIDAD_UNIDADES))
     return render_template(
-        "contabilidad/unidad_crear.html",
+        _TPL_UNIDAD_CREAR,
         titulo=TITULO,
         form=formulario,
     )
@@ -683,7 +694,7 @@ def editar_unidad(id_unidad):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/unidad_crear.html",
+                _TPL_UNIDAD_CREAR,
                 titulo="Editar Unidad de Negocio - " + APPNAME,
                 form=formulario,
                 edit=True,
@@ -696,7 +707,7 @@ def editar_unidad(id_unidad):
         return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
 
     return render_template(
-        "contabilidad/unidad_crear.html",
+        _TPL_UNIDAD_CREAR,
         titulo="Editar Unidad de Negocio - " + APPNAME,
         form=formulario,
         edit=True,
@@ -796,7 +807,7 @@ def editar_libro(id_libro):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/book_crear.html",
+                _TPL_BOOK_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -813,7 +824,7 @@ def editar_libro(id_libro):
         except CurrencyGuardError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/book_crear.html",
+                _TPL_BOOK_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -827,7 +838,7 @@ def editar_libro(id_libro):
         return redirect(url_for(CONTABILIDAD_LIBROS))
 
     return render_template(
-        "contabilidad/book_crear.html",
+        _TPL_BOOK_CREAR,
         titulo=TITULO,
         form=formulario,
         edit=True,
@@ -854,7 +865,7 @@ def nuevo_libro():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/book_crear.html",
+                _TPL_BOOK_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
@@ -869,7 +880,7 @@ def nuevo_libro():
         except CurrencyGuardError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/book_crear.html",
+                _TPL_BOOK_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
@@ -885,7 +896,7 @@ def nuevo_libro():
 
         return redirect(url_for(CONTABILIDAD_LIBROS))
     return render_template(
-        "contabilidad/book_crear.html",
+        _TPL_BOOK_CREAR,
         titulo=TITULO,
         form=formulario,
     )
@@ -1068,7 +1079,7 @@ def nueva_cuenta():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/cuenta_crear.html",
+                _TPL_CUENTA_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 entity_initial_label=entity_initial_label,
@@ -1079,7 +1090,7 @@ def nueva_cuenta():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/cuenta_crear.html",
+                _TPL_CUENTA_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 entity_initial_label=entity_initial_label,
@@ -1103,7 +1114,7 @@ def nueva_cuenta():
         return redirect(url_for("contabilidad.cuentas"))
 
     return render_template(
-        "contabilidad/cuenta_crear.html",
+        _TPL_CUENTA_CREAR,
         titulo=TITULO,
         form=formulario,
         entity_initial_label=entity_initial_label,
@@ -1154,7 +1165,7 @@ def editar_cuenta(entity, id_cta):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/cuenta_crear.html",
+                _TPL_CUENTA_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1170,7 +1181,7 @@ def editar_cuenta(entity, id_cta):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/cuenta_crear.html",
+                _TPL_CUENTA_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1188,7 +1199,7 @@ def editar_cuenta(entity, id_cta):
         return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
 
     return render_template(
-        "contabilidad/cuenta_crear.html",
+        _TPL_CUENTA_CREAR,
         titulo=TITULO,
         form=formulario,
         edit=True,
@@ -1314,7 +1325,7 @@ def nuevo_centro_costo():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/centro-costo_crear.html",
+                _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 entity_initial_label=entity_initial_label,
@@ -1325,7 +1336,7 @@ def nuevo_centro_costo():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/centro-costo_crear.html",
+                _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 entity_initial_label=entity_initial_label,
@@ -1347,7 +1358,7 @@ def nuevo_centro_costo():
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     return render_template(
-        "contabilidad/centro-costo_crear.html",
+        _TPL_CENTRO_COSTO_CREAR,
         titulo=TITULO,
         form=formulario,
         entity_initial_label=entity_initial_label,
@@ -1406,7 +1417,7 @@ def editar_centro_costo(id_cc):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/centro-costo_crear.html",
+                _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1422,7 +1433,7 @@ def editar_centro_costo(id_cc):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/centro-costo_crear.html",
+                _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1440,7 +1451,7 @@ def editar_centro_costo(id_cc):
         return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
 
     return render_template(
-        "contabilidad/centro-costo_crear.html",
+        _TPL_CENTRO_COSTO_CREAR,
         titulo=TITULO,
         form=formulario,
         edit=True,
@@ -1533,7 +1544,7 @@ def nuevo_proyecto():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/proyecto_crear.html",
+                _TPL_PROYECTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 budget_currency_code="",
@@ -1546,7 +1557,7 @@ def nuevo_proyecto():
             except CurrencyGuardError as error:
                 flash(str(error), "danger")
                 return render_template(
-                    "contabilidad/proyecto_crear.html",
+                    _TPL_PROYECTO_CREAR,
                     titulo=TITULO,
                     form=formulario,
                     budget_currency_code="",
@@ -1567,7 +1578,7 @@ def nuevo_proyecto():
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template(
-        "contabilidad/proyecto_crear.html",
+        _TPL_PROYECTO_CREAR,
         titulo=TITULO,
         form=formulario,
         budget_currency_code="",
@@ -1628,7 +1639,7 @@ def editar_proyecto(project_id):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/proyecto_crear.html",
+                _TPL_PROYECTO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1645,7 +1656,7 @@ def editar_proyecto(project_id):
             except CurrencyGuardError as error:
                 flash(str(error), "danger")
                 return render_template(
-                    "contabilidad/proyecto_crear.html",
+                    _TPL_PROYECTO_CREAR,
                     titulo=TITULO,
                     form=formulario,
                     edit=True,
@@ -1664,7 +1675,7 @@ def editar_proyecto(project_id):
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template(
-        "contabilidad/proyecto_crear.html",
+        _TPL_PROYECTO_CREAR,
         titulo=TITULO,
         form=formulario,
         edit=True,
@@ -1867,7 +1878,7 @@ def accounting_period_new():
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/periodo_crear.html",
+                _TPL_PERIODO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 no_fiscal_years=no_fiscal_years,
@@ -1887,7 +1898,7 @@ def accounting_period_new():
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     return render_template(
-        "contabilidad/periodo_crear.html",
+        _TPL_PERIODO_CREAR,
         titulo=TITULO,
         form=formulario,
         no_fiscal_years=no_fiscal_years,
@@ -1929,7 +1940,7 @@ def accounting_period_edit(period_id):
         except ValueError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/periodo_crear.html",
+                _TPL_PERIODO_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 edit=True,
@@ -1947,7 +1958,7 @@ def accounting_period_edit(period_id):
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
     return render_template(
-        "contabilidad/periodo_crear.html",
+        _TPL_PERIODO_CREAR,
         titulo=TITULO,
         form=formulario,
         edit=True,
@@ -2048,21 +2059,21 @@ def nueva_tasa_cambio():
         except CurrencyGuardError as error:
             flash(str(error), "danger")
             return render_template(
-                "contabilidad/tc_crear.html",
+                _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
         if formulario.origin.data == formulario.destination.data:
             flash(_("La moneda origen y destino deben ser diferentes."), "danger")
             return render_template(
-                "contabilidad/tc_crear.html",
+                _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
         if formulario.rate.data is None or formulario.rate.data <= 0:
             flash(_("La tasa debe ser mayor a cero."), "danger")
             return render_template(
-                "contabilidad/tc_crear.html",
+                _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
             )
@@ -2077,7 +2088,7 @@ def nueva_tasa_cambio():
         return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     return render_template(
-        "contabilidad/tc_crear.html",
+        _TPL_TC_CREAR,
         titulo=TITULO,
         form=formulario,
     )
@@ -2135,7 +2146,7 @@ def editar_tasa_cambio(rate_id):
             return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
 
     return render_template(
-        "contabilidad/tc_crear.html",
+        _TPL_TC_CREAR,
         titulo="Editar Tasa de Cambio - " + APPNAME,
         form=formulario,
         edit=True,
