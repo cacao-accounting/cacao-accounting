@@ -182,7 +182,6 @@ class BaseTercero(BaseTabla):
 class DocBase(BaseTabla):
     """Base para documentos transaccionales con ciclo de vida contable completo."""
 
-    # 0=draft, 1=submitted, 2=cancelled
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
     posting_date = database.Column(database.Date(), nullable=True, index=True)
     document_date = database.Column(database.Date(), nullable=True)
