@@ -531,9 +531,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "outstanding_amount",
             "docstatus",
         ),
-        create_actions=(
-            DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_credit_note"),
-        ),
+        create_actions=(DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_credit_note"),),
     ),
     "sales_debit_note": DocumentType(
         key="sales_debit_note",

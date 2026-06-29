@@ -10,6 +10,7 @@ from typing import Any
 
 from cacao_accounting.accounting_engine.common.context import CalculationContext, JournalEntryProforma
 from cacao_accounting.contabilidad.posting import (
+    GLEntryParams,
     PostingError,
     _add_entries,
     _create_gl_entry,
@@ -43,16 +44,18 @@ def post_proforma_to_gl(
             entries.append(
                 _create_gl_entry(
                     context=ledger_context,
-                    account_id=account_id,
-                    debit=debit,
-                    credit=credit,
-                    debit_in_account_currency=debit_in_account_currency,
-                    credit_in_account_currency=credit_in_account_currency,
-                    party_type=context.party_type if line.party_id else None,
-                    party_id=line.party_id,
-                    cost_center_code=line.cost_center_id,
-                    project_code=line.project_id,
-                    entry_remarks=line.description or proforma.memo,
+                    params=GLEntryParams(
+                        account_id=account_id,
+                        debit=debit,
+                        credit=credit,
+                        debit_in_account_currency=debit_in_account_currency,
+                        credit_in_account_currency=credit_in_account_currency,
+                        party_type=context.party_type if line.party_id else None,
+                        party_id=line.party_id,
+                        cost_center_code=line.cost_center_id,
+                        project_code=line.project_id,
+                        entry_remarks=line.description or proforma.memo,
+                    ),
                 )
             )
     return _add_entries(entries)

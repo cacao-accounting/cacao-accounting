@@ -558,9 +558,7 @@ def _enrich_section_nodes(section_nodes: dict[str, dict[str, dict[str, object]]]
             node["is_group"] = bool(children_map.get(node_code))
 
 
-def _propagate_child_amounts_to_parents(
-    nodes: dict[str, dict[str, object]], numeric_fields: set[str]
-) -> None:
+def _propagate_child_amounts_to_parents(nodes: dict[str, dict[str, object]], numeric_fields: set[str]) -> None:
     for code in sorted(nodes.keys(), key=lambda value: value.count("."), reverse=True):
         parent = ".".join(code.split(".")[:-1])
         if not parent or parent not in nodes:

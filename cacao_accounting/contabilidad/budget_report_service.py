@@ -57,26 +57,30 @@ class BudgetReportService:
         period_range_ids = self._get_period_range_ids(all_periods, period_from_id, period_to_id)
 
         budget_lines = self._get_budget_lines(budget_id, period_range_ids, cost_center_id, business_unit_id, project_id)
-        actual_entries = self._get_actual_gl_entries(
-            company, ledger_id, period_range_ids, account_from, account_to
-        )
+        actual_entries = self._get_actual_gl_entries(company, ledger_id, period_range_ids, account_from, account_to)
 
         account_info = {a.id: a for a in database.session.query(Accounts).filter_by(entity=company).all()}
         period_to_group = self._build_period_to_group(all_periods, granularity)
 
         data_map = self._populate_data_map(
-            budget_lines, actual_entries, period_to_group,
-            cost_center_id, business_unit_id, project_id,
-            cc_map, u_map, p_map
+            budget_lines, actual_entries, period_to_group, cost_center_id, business_unit_id, project_id, cc_map, u_map, p_map
         )
 
-        rows, total_budget, total_actual = self._build_report_rows(
-            data_map, account_info, cc_names, u_names, p_names, filters
-        )
+        rows, total_budget, total_actual = self._build_report_rows(data_map, account_info, cc_names, u_names, p_names, filters)
 
         rows.sort(key=lambda x: (x.values["period_group"], x.values["account_code"]))
-        columns = ["period_group", "account_code", "account_name", "cost_center",
-                   "business_unit", "project", "budget", "actual", "variance", "variance_pct"]
+        columns = [
+            "period_group",
+            "account_code",
+            "account_name",
+            "cost_center",
+            "business_unit",
+            "project",
+            "budget",
+            "actual",
+            "variance",
+            "variance_pct",
+        ]
 
         return PaginatedReport(
             rows=rows,
@@ -90,8 +94,7 @@ class BudgetReportService:
         return PaginatedReport(rows=[], totals={}, columns=[], ledger_currency=None)
 
     def _validate_budget_access(
-        self, budget: Budget, company: Optional[str],
-        ledger_id: Optional[str], fiscal_year_id: Optional[str]
+        self, budget: Budget, company: Optional[str], ledger_id: Optional[str], fiscal_year_id: Optional[str]
     ) -> bool:
         """Validate budget belongs to requested company/ledger/fiscal_year."""
         if company and budget.company != company:
@@ -102,10 +105,9 @@ class BudgetReportService:
             return False
         return True
 
-    def _build_dimension_maps(self, company: str) -> Tuple[
-        Dict[str, str], Dict[str, str], Dict[str, str],
-        Dict[str, str], Dict[str, str], Dict[str, str]
-    ]:
+    def _build_dimension_maps(
+        self, company: str
+    ) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
         """Build code→ID and ID→name maps for dimensions."""
         cc_objs = database.session.query(CostCenter).filter_by(entity=company).all()
         u_objs = database.session.query(Unit).filter_by(entity=company).all()
@@ -146,8 +148,7 @@ class BudgetReportService:
         )
 
     def _get_period_range_ids(
-        self, all_periods: List[AccountingPeriod],
-        period_from_id: Optional[str], period_to_id: Optional[str]
+        self, all_periods: List[AccountingPeriod], period_from_id: Optional[str], period_to_id: Optional[str]
     ) -> List[str]:
         """Build list of period IDs within the requested range."""
         if not (period_from_id and period_to_id):
@@ -156,10 +157,7 @@ class BudgetReportService:
         end_p = database.session.get(AccountingPeriod, period_to_id)
         if not (start_p and end_p):
             return [p.id for p in all_periods]
-        return [
-            p.id for p in all_periods
-            if p.start >= start_p.start and p.end <= end_p.end
-        ]
+        return [p.id for p in all_periods if p.start >= start_p.start and p.end <= end_p.end]
 
     def _get_budget_lines(
         self,

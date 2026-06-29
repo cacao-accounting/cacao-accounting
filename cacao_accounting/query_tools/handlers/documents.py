@@ -50,29 +50,18 @@ def get_document_flow(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(DocumentRelation)
-        .where(
-            (DocumentRelation.source_id == document_id)
-            | (DocumentRelation.target_id == document_id)
-        )
+    query = database.select(DocumentRelation).where(
+        (DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id)
     )
 
     if document_type:
-        query = query.where(
-            (DocumentRelation.source_type == document_type)
-            | (DocumentRelation.target_type == document_type)
-        )
+        query = query.where((DocumentRelation.source_type == document_type) | (DocumentRelation.target_type == document_type))
 
-    total = database.session.execute(
-        database.select(func.count()).select_from(query.subquery())
-    ).scalar() or 0
+    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(DocumentRelation.created.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+            query.order_by(DocumentRelation.created.desc()).offset((_page - 1) * _page_size).limit(_page_size)
         )
         .scalars()
         .all()

@@ -25,8 +25,7 @@ class QueryTool:
 def _validate_read_only(tool: QueryTool) -> None:
     if not tool.read_only:
         raise ValueError(
-            f"Tool '{tool.name}' must declare read_only=True. "
-            "Write operations are not allowed in query_tools."
+            f"Tool '{tool.name}' must declare read_only=True. " "Write operations are not allowed in query_tools."
         )
 
 

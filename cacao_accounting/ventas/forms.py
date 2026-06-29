@@ -7,7 +7,6 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired
 
-
 _LABEL_COMPANY = "Compañía"
 _LABEL_POSTING_DATE = "Fecha de Publicación"
 
