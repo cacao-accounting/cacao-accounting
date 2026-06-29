@@ -440,12 +440,6 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   margin: 0;
 }
 
-@media (max-width: 768px) {
-  .ca-kv-list {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ═══════════════════════════════════════════════════════
    9. MODULE INDEX CARDS
    ═══════════════════════════════════════════════════════ */
@@ -1190,6 +1184,10 @@ nav[aria-label="breadcrumb"] {
     flex-direction: column;
     align-items: stretch;
     padding: 12px;
+  }
+
+  .ca-kv-list {
+    grid-template-columns: 1fr;
   }
 
   .ca-document-flow__body {
