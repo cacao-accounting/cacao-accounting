@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-27
 
+- **SonarCloud / Estado documental (2026-06-29):** Se redujo la complejidad de `cacao_accounting/document_flow/status.py` separando la resolución de `journal_entry`, los targets primarios y el mapeo de progreso en helpers pequeños.
+  - La rama de `journal_entry` ahora se resuelve con un helper dedicado y la selección de progreso primario quedó lineal, sin cambiar la semántica de badges visibles.
+  - Se agrego una prueba focal para `journal_entry` sin `docstatus` y la suite de flujo documental quedó en verde (`19 passed`).
+
 - **SonarCloud / Persistencia fiscal (2026-06-29):** Se redujo la complejidad de `cacao_accounting/fiscal_persistence_service.py` separando la persistencia de resumen, líneas y snapshots de reglas en helpers pequeños.
   - `build_tax_rule_contexts_from_snapshot` ahora delega el mapeo de cada `DocumentTaxLine` a `TaxRuleContext` en un helper dedicado, manteniendo el contrato funcional.
   - `ruff`, `flake8`, `mypy` focal y `tests/test_tax_rules.py` quedaron en verde. `black` se dejó para el cierre en lote, conforme a la instrucción de la sesión.

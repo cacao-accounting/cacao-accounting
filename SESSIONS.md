@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-29 (SonarCloud: estado documental simplificado)
+- **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/document_flow/status.py` sin cambiar la semántica de estados documentales.
+- **Implementacion:** Se separaron la resolución de estados por `docstatus`, la selección de flujos primarios y el mapeo de progreso en helpers pequeños. Ademas se agrego una prueba focal para la rama de `journal_entry` sin depender de base de datos.
+- **Verificacion:** `ruff check`, `flake8`, `mypy` focal y `tests/test_05document_flow.py -v -s --exitfirst --slow=True` quedaron en verde.
+
 ## 2026-06-29 (SonarCloud: persistencia fiscal simplificada)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/fiscal_persistence_service.py` sin alterar el contrato de persistencia o reconstrucción de reglas fiscales.
 - **Implementacion:** Se separaron la persistencia de cabecera, líneas y snapshot de reglas en helpers pequeños, y `build_tax_rule_contexts_from_snapshot` ahora mapea cada fila a `TaxRuleContext` mediante un helper dedicado.
