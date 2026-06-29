@@ -384,10 +384,13 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   transition: margin-left .3s ease;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   html {
     --ca-content-margin-left: 0;
     --ca-content-padding: 1rem;
+    --ca-page-header-align-items: flex-start;
+    --ca-page-header-flex-direction: column;
+    --ca-module-grid-columns: 1fr;
   }
 }
 
@@ -913,11 +916,6 @@ nav[aria-label="breadcrumb"] {
    17. PAGE HEADER
    ═══════════════════════════════════════════════════════ */
 @media (max-width: 767.98px) {
-  html {
-    --ca-page-header-align-items: flex-start;
-    --ca-page-header-flex-direction: column;
-  }
-
   .ca-sidebar {
     transform: translateX(-100%) !important;
     transition: transform .2s ease !important;
@@ -1309,13 +1307,4 @@ nav[aria-label="breadcrumb"] {
   border-color: var(--ca-border) !important;
   border-radius: var(--ca-radius) !important;
   box-shadow: var(--ca-shadow-sm);
-}
-
-@media (max-width: 640px) {
-  html { --ca-module-grid-columns: 1fr; }
-
-  .ca-page-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
