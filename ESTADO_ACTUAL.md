@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Candidatos de conciliación (2026-06-30):** Se simplificó `_build_candidate_query()` en `cacao_accounting/document_flow/service.py` extrayendo `_apply_candidate_party_filter()`.
+  - La consulta de candidatos AR/AP sigue filtrando por tercero y por compañía, pero la bifurcación por tipo de tercero quedó separada.
+  - `black`, `ruff`, `mypy` y la prueba focal de pagos/anticipo quedaron en verde.
+
 - **SonarCloud / Anticipo aplicado a factura (2026-06-30):** Se simplificó `apply_advance_to_invoice()` en `cacao_accounting/document_flow/service.py` extrayendo helpers para carga de factura y validación de asignación.
   - La creación de `PaymentReference` y `DocumentRelation` sigue intacta, pero la validación quedó separada en piezas más pequeñas.
   - `black`, `ruff`, `mypy` y la prueba focal de flujo documental quedaron en verde.
