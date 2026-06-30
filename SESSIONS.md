@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: anticipo aplicado a factura simplificado)
+- **Solicitud:** Seguir reduciendo issues abiertos de SonarCloud con refactors seguros en Python, manteniendo fuera de alcance los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se extrajeron `_load_advance_invoice()` y `_validate_advance_allocation()` para simplificar `apply_advance_to_invoice()` en `cacao_accounting/document_flow/service.py`. La función pública quedó como orquestador de carga, validación, creación de referencia y relación documental.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_05document_flow.py -k 'advance or payment or invoice or outstanding'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: balance de cuentas bancarias desglosado)
 - **Solicitud:** Continuar bajando deuda de SonarCloud con un refactor Python verificable, evitando tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se descompuso `_compute_account_receipts_and_payments()` en `cacao_accounting/reportes/services.py` con helpers específicos para construir la consulta y separar el cálculo de receipts/payments por tipo de movimiento bancario.
