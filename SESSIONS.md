@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: balance de cuentas bancarias desglosado)
+- **Solicitud:** Continuar bajando deuda de SonarCloud con un refactor Python verificable, evitando tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se descompuso `_compute_account_receipts_and_payments()` en `cacao_accounting/reportes/services.py` con helpers específicos para construir la consulta y separar el cálculo de receipts/payments por tipo de movimiento bancario.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_report_account_summary.py tests/test_08_reconciliation_reports.py -k 'bank_balance or bank_movement or account_summary or trial_balance'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: saldos bancarios resumidos)
 - **Solicitud:** Seguir cerrando issues abiertos de SonarCloud en Python con refactors verificables y dejar de lado los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se extrajo `_bank_account_payment_movements()` para simplificar `_compute_account_receipts_and_payments()` en `cacao_accounting/reportes/services.py`, dejando el loop principal como acumulador lineal.
