@@ -582,6 +582,9 @@ def _serialize_journal_line(
     value = Decimal(str(line.value or 0))
     account_code = line.account or ""
     cost_center_code = line.cost_center or ""
+    debit = str(value) if value > 0 else ""
+    credit = str(abs(value)) if value < 0 else ""
+    reference_name = getattr(line, "internal_reference_id", None) or getattr(line, "reference", None) or ""
     return {
         "order": line.order or 0,
         "account": account_code,
@@ -590,14 +593,14 @@ def _serialize_journal_line(
         "cost_center_label": cost_center_labels.get(cost_center_code, cost_center_code),
         "party_type": line.third_type or "",
         "party": line.third_code or "",
-        "debit": str(value) if value > 0 else "",
-        "credit": str(abs(value)) if value < 0 else "",
+        "debit": debit,
+        "credit": credit,
         "unit": line.unit or "",
         "project": line.project or "",
         "currency": line.currency_id or "",
         "exchange_rate": str(line.exchange_rate) if line.exchange_rate is not None else "",
         "reference_type": line.internal_reference or "",
-        "reference_name": line.internal_reference_id or line.reference or "",
+        "reference_name": reference_name,
         "reference1": line.reference1 or "",
         "reference2": line.reference2 or "",
         "remarks": line.memo or line.line_memo or "",

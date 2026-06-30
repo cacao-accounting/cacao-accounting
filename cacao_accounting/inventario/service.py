@@ -66,30 +66,38 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
     raise InventoryServiceError("No existe conversion UOM para el item.")
 
 
+def _validate_batch(line, item):
+    batch_id = getattr(line, "batch_id", None)
+    if not batch_id:
+        raise InventoryServiceError("El item requiere lote.")
+    batch = database.session.get(Batch, batch_id)
+    if not batch or batch.item_code != item.code or not batch.is_active:
+        raise InventoryServiceError("El lote no existe, esta inactivo o no pertenece al item.")
+
+
+def _validate_serial(line, item, outgoing):
+    serial_no = getattr(line, "serial_no", None)
+    if not serial_no:
+        raise InventoryServiceError("El item requiere numero de serie.")
+    serial = database.session.execute(
+        select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
+    ).scalar_one_or_none()
+    if outgoing:
+        if not serial or serial.serial_status != "available":
+            raise InventoryServiceError("El serial no esta disponible para salida.")
+    elif serial and serial.serial_status == "delivered":
+        raise InventoryServiceError("El serial ya fue entregado.")
+
+
 def validate_batch_serial(line: Any, *, outgoing: bool) -> None:
     """Valida obligatoriedad y disponibilidad de lote/serial en una linea."""
     item = database.session.get(Item, getattr(line, "item_code", None))
     if not item or not item.is_stock_item:
         return
     if item.has_batch:
-        batch_id = getattr(line, "batch_id", None)
-        if not batch_id:
-            raise InventoryServiceError("El item requiere lote.")
-        batch = database.session.get(Batch, batch_id)
-        if not batch or batch.item_code != item.code or not batch.is_active:
-            raise InventoryServiceError("El lote no existe, esta inactivo o no pertenece al item.")
+        _validate_batch(line, item)
     if item.has_serial_no:
-        serial_no = getattr(line, "serial_no", None)
-        if not serial_no:
-            raise InventoryServiceError("El item requiere numero de serie.")
-        serial = database.session.execute(
-            select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
-        ).scalar_one_or_none()
-        if outgoing:
-            if not serial or serial.serial_status != "available":
-                raise InventoryServiceError("El serial no esta disponible para salida.")
-        elif serial and serial.serial_status == "delivered":
-            raise InventoryServiceError("El serial ya fue entregado.")
+        _validate_serial(line, item, outgoing)
 
 
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:
