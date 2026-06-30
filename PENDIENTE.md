@@ -1,6 +1,7 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
 ## Seguimiento 2026-06-30 (SonarCloud - revisión cautelosa)
+- [x] Desglosar `payment_reconciliation_candidates()` en helpers dedicados.
 - [x] Simplificar `document_flow/service.py` en `_build_candidate_query()`.
 - [x] Simplificar `document_flow/service.py` en `apply_advance_to_invoice()`.
 - [x] Desglosar `_compute_account_receipts_and_payments()` en `reportes/services.py`.
