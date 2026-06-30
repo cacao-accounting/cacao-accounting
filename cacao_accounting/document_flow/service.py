@@ -1452,7 +1452,7 @@ def _persist_payment_target_allocation(
     allocated: Decimal,
     outstanding: Decimal,
 ) -> None:
-    """Persiste la referencia y la relacion documental para una aplicacion."""
+    """Persist the payment reference and document relation for an allocation."""
     reference = PaymentReference(
         payment_id=payment.id,
         reference_type=reference_type,
