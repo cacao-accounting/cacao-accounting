@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Detalle de movimiento contable (2026-06-30):** Se simplificó `get_account_movement_detail()` en `cacao_accounting/reportes/services.py` extrayendo helpers para la consulta, la construcción de filas y el acumulado de totales.
+  - La lógica de running balance y paginación se mantiene, pero la función pública quedó como orquestador.
+  - `black`, `ruff`, `mypy` y las pruebas focales de reportes/conciliaciones quedaron en verde.
+
 - **SonarCloud / Reportes GL (2026-06-30):** Se simplificaron `get_account_summary_report()` y `get_trial_balance_report()` en `cacao_accounting/reportes/services.py` mediante helpers para bucket de periodo, acumulación de saldos y construcción de filas.
   - La semántica de la sabana contable y la balanza de comprobación se mantiene.
   - `black`, `ruff`, `mypy` y las pruebas focales de reportes/conciliaciones quedaron en verde.
