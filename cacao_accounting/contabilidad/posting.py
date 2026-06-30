@@ -1196,6 +1196,19 @@ def _valuation_method_for_item(item_code: str) -> str:
     return (getattr(item, "valuation_method", None) or "fifo").lower()
 
 
+def _consume_valuation_layer(queue: list, remaining: Decimal) -> Decimal:
+    while remaining > 0 and queue:
+        available_qty, available_rate = queue[0]
+        consumed_qty = min(available_qty, remaining)
+        remaining -= consumed_qty
+        available_qty -= consumed_qty
+        if available_qty > 0:
+            queue[0] = (available_qty, available_rate)
+        else:
+            queue.pop(0)
+    return remaining
+
+
 def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple[Decimal, Decimal]]:
     layers = (
         database.session.execute(
@@ -1214,16 +1227,7 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple
             queue.append((qty, rate))
             continue
         if qty < 0:
-            remaining = abs(qty)
-            while remaining > 0 and queue:
-                available_qty, available_rate = queue[0]
-                consumed_qty = min(available_qty, remaining)
-                remaining -= consumed_qty
-                available_qty -= consumed_qty
-                if available_qty > 0:
-                    queue[0] = (available_qty, available_rate)
-                else:
-                    queue.pop(0)
+            remaining = _consume_valuation_layer(queue, abs(qty))
             if remaining > 0:
                 raise PostingError("El registro de valuacion de inventario esta inconsistente.")
     return [(qty, rate) for qty, rate in queue if qty > 0]
@@ -2050,6 +2054,35 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
     )
 
 
+def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):
+    from cacao_accounting.database import GLEntry
+
+    entries: list[GLEntry] = []
+    for context in _document_contexts(document, ledger_code=ledger_code):
+        for line in _document_items(document):
+            qty = _line_qty_generic(line)
+            rate = _line_rate_generic(line)
+            amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+            value = _signed_amount(document, amount)
+            inventory_account_id = _require_account(
+                _account_id_for_item(line, company, "inventory"),
+                "Falta la cuenta de inventario para una linea de recepcion de compra.",
+            )
+            entries.extend(
+                _normal_entries_for_amount(
+                    context=context,
+                    debit_account_id=inventory_account_id,
+                    credit_account_id=bridge_account_id,
+                    amount=value,
+                    party_type="supplier",
+                    party_id=document.supplier_id,
+                    debit_remarks="Recepción de compra",
+                    credit_remarks="Cuenta puente compras",
+                )
+            )
+    return _add_entries(entries)
+
+
 def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para una recepción de compra aprobada."""
     if getattr(document, "docstatus", 0) != 1:
@@ -2063,7 +2096,7 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
     if matching_config.bridge_account_required:
         bridge_account_id = _require_account(
             bridge_account_id,
-            "Falta la cuenta puente configurada para la compañia.",
+            "Falta la cuenta puente configurada para lacompañia.",
         )
     engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code) if bridge_account_id else None
     landed_cost_result = engine_payload.results.get("landed_cost") if engine_payload is not None else None
@@ -2078,36 +2111,12 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
             create_valuation_adjustment=False,
         )
 
-    entries: list[GLEntry] = []
-    if bridge_account_id:
-        if engine_payload is not None:
-            result = engine_payload.entries
-        else:
-            for context in _document_contexts(document, ledger_code=ledger_code):
-                for line in _document_items(document):
-                    qty = _line_qty_generic(line)
-                    rate = _line_rate_generic(line)
-                    amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
-                    value = _signed_amount(document, amount)
-                    inventory_account_id = _require_account(
-                        _account_id_for_item(line, company, "inventory"),
-                        "Falta la cuenta de inventario para una linea de recepcion de compra.",
-                    )
-                    entries.extend(
-                        _normal_entries_for_amount(
-                            context=context,
-                            debit_account_id=inventory_account_id,
-                            credit_account_id=bridge_account_id,
-                            amount=value,
-                            party_type="supplier",
-                            party_id=document.supplier_id,
-                            debit_remarks="Recepción de compra",
-                            credit_remarks="Cuenta puente compras",
-                        )
-                    )
-            result = _add_entries(entries)
+    if bridge_account_id and engine_payload is not None:
+        result = engine_payload.entries
+    elif bridge_account_id:
+        result = _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code)
     else:
-        result = _add_entries(entries)
+        result = []
 
     from cacao_accounting.compras.purchase_reconciliation_service import EventType, emit_economic_event
 
