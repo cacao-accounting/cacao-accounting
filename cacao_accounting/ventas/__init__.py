@@ -1002,13 +1002,71 @@ def _sales_order_initial_source_type(from_request_id: str | None, from_quotation
     return ""
 
 
+def _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type):
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    transaction_config = {
+        "formKey": _FORMKEY_SALES_ORDER,
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
+        "availableSourceTypes": [
+            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
+            {"value": "sales_quotation", "label": _("Cotización de Venta")},
+        ],
+        "initialSourceType": initial_source_type,
+    }
+    if source_origen:
+        transaction_config["initialHeader"] = {
+            "company": source_origen.company or "",
+            "posting_date": str(date.today()),
+        }
+    return transaction_config
+
+
+def _handle_sales_order_new_post(from_quotation_id, from_request_id):
+    from cacao_accounting.database import IdentifierConfigurationError
+
+    try:
+        customer_id = request.form.get("customer_id") or None
+        customer = database.session.get(Party, customer_id) if customer_id else None
+        posting_date = _parse_date(request.form.get("posting_date"))
+        orden = SalesOrder(
+            customer_id=customer_id,
+            customer_name=customer.name if customer else None,
+            sales_quotation_id=from_quotation_id or None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(orden)
+        database.session.flush()
+        assign_document_identifier(
+            document=orden,
+            entity_type="sales_order",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        _total_qty, total = _save_sales_order_items(orden.id)
+        orden.total = total
+        orden.base_total = total
+        orden.grand_total = total
+        database.session.commit()
+        flash("Orden de venta creada correctamente.", "success")
+        return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
+    except IdentifierConfigurationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+
+
 @ventas.route("/sales-order/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
 def ventas_orden_venta_nuevo():
     """Formulario para crear una orden de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioOrdenVenta
 
     formulario = FormularioOrdenVenta()
@@ -1034,56 +1092,12 @@ def ventas_orden_venta_nuevo():
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Orden de Venta - " + APPNAME
     initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
-    transaction_config = {
-        "formKey": _FORMKEY_SALES_ORDER,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
-        "availableSourceTypes": [
-            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
-            {"value": "sales_quotation", "label": _("Cotización de Venta")},
-        ],
-        "initialSourceType": initial_source_type,
-    }
     source_origen = solicitud_origen or cotizacion_origen
-    if source_origen:
-        transaction_config["initialHeader"] = {
-            "company": source_origen.company or "",
-            "posting_date": str(date.today()),
-        }
+    transaction_config = _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type)
     if request.method == "POST":
-        try:
-            customer_id = request.form.get("customer_id") or None
-            customer = database.session.get(Party, customer_id) if customer_id else None
-            posting_date = _parse_date(request.form.get("posting_date"))
-            orden = SalesOrder(
-                customer_id=customer_id,
-                customer_name=customer.name if customer else None,
-                sales_quotation_id=from_quotation_id or None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(orden)
-            database.session.flush()
-            assign_document_identifier(
-                document=orden,
-                entity_type="sales_order",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_sales_order_items(orden.id)
-            orden.total = total
-            orden.base_total = total
-            orden.grand_total = total
-            database.session.commit()
-            flash("Orden de venta creada correctamente.", "success")
-            return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
-        except IdentifierConfigurationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        result = _handle_sales_order_new_post(from_quotation_id, from_request_id)
+        if result is not None:
+            return result
     return render_template(
         "ventas/orden_venta_nuevo.html",
         form=formulario,
@@ -1376,24 +1390,7 @@ def ventas_cotizacion_editar(quotation_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        customer_id = request.form.get("customer_id") or None
-        customer = database.session.get(Party, customer_id) if customer_id else None
-        registro.customer_id = customer_id
-        registro.customer_name = customer.name if customer else None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _total_qty, total = _save_sales_quotation_items(registro.id)
-        registro.total = total
-        registro.base_total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Cotización de venta actualizada correctamente."), "success")
-        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
+        return _handle_sales_quotation_edit_post(registro)
 
     lineas = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)).scalars()
     transaction_config = {
@@ -1434,6 +1431,27 @@ def ventas_cotizacion_editar(quotation_id: str):
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _handle_sales_quotation_edit_post(registro):
+    customer_id = request.form.get("customer_id") or None
+    customer = database.session.get(Party, customer_id) if customer_id else None
+    registro.customer_id = customer_id
+    registro.customer_name = customer.name if customer else None
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.remarks = request.form.get("remarks")
+    for item in database.session.execute(
+        database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _total_qty, total = _save_sales_quotation_items(registro.id)
+    registro.total = total
+    registro.base_total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Cotización de venta actualizada correctamente."), "success")
+    return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
 
 
 @ventas.route("/sales-quotation/<quotation_id>/duplicate", methods=["POST"])
@@ -1687,20 +1705,7 @@ def ventas_entrega_editar(note_id: str):
     ]
 
     if request.method == "POST":
-        registro.customer_id = request.form.get("customer_id") or None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _total_qty, total = _save_delivery_note_items(registro.id)
-        registro.total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Nota de entrega actualizada correctamente."), "success")
-        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
+        return _handle_delivery_note_edit_post(registro)
 
     lineas = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars()
     transaction_config = {
@@ -1744,6 +1749,23 @@ def ventas_entrega_editar(note_id: str):
         bodegas_disponibles=bodegas_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _handle_delivery_note_edit_post(registro):
+    registro.customer_id = request.form.get("customer_id") or None
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.remarks = request.form.get("remarks")
+    for item in database.session.execute(
+        database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _total_qty, total = _save_delivery_note_items(registro.id)
+    registro.total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Nota de entrega actualizada correctamente."), "success")
+    return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
 
 
 @ventas.route("/delivery-note/<note_id>/duplicate", methods=["POST"])
@@ -1992,29 +2014,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        try:
-            registro.customer_id = request.form.get("customer_id") or None
-            registro.company = request.form.get("company") or None
-            registro.posting_date = _parse_date(request.form.get("posting_date"))
-            registro.remarks = request.form.get("remarks")
-            for item in database.session.execute(
-                database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
-            ).scalars():
-                database.session.delete(item)
-            _total_qty, total = _save_sales_invoice_items(registro.id)
-            registro.total = total
-            registro.base_total = total
-            registro.grand_total = total
-            registro.base_grand_total = total
-            registro.outstanding_amount = total
-            registro.base_outstanding_amount = total
-            _persist_sales_invoice_fiscal_snapshot(registro)
-            database.session.commit()
-            flash(_("Factura de venta actualizada correctamente."), "success")
-            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
-        except ValueError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        return _handle_sales_invoice_edit_post(registro)
 
     lineas = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars()
     transaction_config = {
@@ -2067,6 +2067,32 @@ def ventas_factura_venta_editar(invoice_id: str):
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _handle_sales_invoice_edit_post(registro):
+    try:
+        registro.customer_id = request.form.get("customer_id") or None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _total_qty, total = _save_sales_invoice_items(registro.id)
+        registro.total = total
+        registro.base_total = total
+        registro.grand_total = total
+        registro.base_grand_total = total
+        registro.outstanding_amount = total
+        registro.base_outstanding_amount = total
+        _persist_sales_invoice_fiscal_snapshot(registro)
+        database.session.commit()
+        flash(_("Factura de venta actualizada correctamente."), "success")
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
 
 
 @ventas.route("/sales-invoice/<invoice_id>/duplicate", methods=["POST"])

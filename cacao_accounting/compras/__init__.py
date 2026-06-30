@@ -1519,6 +1519,30 @@ def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
     )
 
 
+def _build_purchase_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type):
+    from cacao_accounting.form_preferences import get_column_preferences
+
+    transaction_config = {
+        "formKey": FORMKEY_PURCHASE_ORDER,
+        "viewKey": "draft",
+        "items": items_disponibles,
+        "uoms": uoms_disponibles,
+        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
+        "availableSourceTypes": [
+            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
+            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
+            {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
+        ],
+        "initialSourceType": initial_source_type,
+    }
+    if source_origen:
+        transaction_config["initialHeader"] = {
+            "company": source_origen.company or "",
+            "posting_date": str(date.today()),
+        }
+    return transaction_config
+
+
 @compras.route("/purchase-order/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1529,7 +1553,6 @@ def compras_orden_compra_nuevo():
 
     formulario = FormularioOrdenCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    from cacao_accounting.form_preferences import get_column_preferences
 
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
@@ -1566,25 +1589,8 @@ def compras_orden_compra_nuevo():
     else:
         initial_source_type = ""
 
-    transaction_config = {
-        "formKey": FORMKEY_PURCHASE_ORDER,
-        "viewKey": "draft",
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
-        "availableSourceTypes": [
-            {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
-            {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
-            {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
-        ],
-        "initialSourceType": initial_source_type,
-    }
     source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
-    if source_origen:
-        transaction_config["initialHeader"] = {
-            "company": source_origen.company or "",
-            "posting_date": str(date.today()),
-        }
+    transaction_config = _build_purchase_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type)
     return render_template(
         "compras/orden_compra_nuevo.html",
         form=formulario,
@@ -2001,6 +2007,29 @@ def compras_solicitud_cotizacion(quotation_id: str):
     )
 
 
+def _handle_purchase_quotation_edit_post(registro):
+    from cacao_accounting.database import Party
+
+    supplier_id = request.form.get("supplier_id") or None
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.remarks = request.form.get("remarks")
+    for item in database.session.execute(
+        database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _qty, total = _save_purchase_quotation_items(registro.id)
+    registro.total = total
+    registro.base_total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
+
+
 @compras.route("/request-for-quotation/<quotation_id>/edit", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2031,24 +2060,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        supplier_id = request.form.get("supplier_id") or None
-        supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        registro.supplier_id = supplier_id
-        registro.supplier_name = supplier.name if supplier else None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _qty, total = _save_purchase_quotation_items(registro.id)
-        registro.total = total
-        registro.base_total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
-        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
+        return _handle_purchase_quotation_edit_post(registro)
 
     lineas = database.session.execute(
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
@@ -2352,20 +2364,7 @@ def compras_recepcion_editar(receipt_id: str):
     ]
 
     if request.method == "POST":
-        registro.supplier_id = request.form.get("supplier_id") or None
-        registro.company = request.form.get("company") or None
-        registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
-        _total_qty, total = _save_purchase_receipt_items(registro.id)
-        registro.total = total
-        registro.grand_total = total
-        database.session.commit()
-        flash(_("Recepcion de compra actualizada correctamente."), "success")
-        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
+        return _handle_purchase_receipt_edit_post(registro)
 
     lineas = database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
@@ -2411,6 +2410,23 @@ def compras_recepcion_editar(receipt_id: str):
         bodegas_disponibles=bodegas_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _handle_purchase_receipt_edit_post(registro):
+    registro.supplier_id = request.form.get("supplier_id") or None
+    registro.company = request.form.get("company") or None
+    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.remarks = request.form.get("remarks")
+    for item in database.session.execute(
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    _total_qty, total = _save_purchase_receipt_items(registro.id)
+    registro.total = total
+    registro.grand_total = total
+    database.session.commit()
+    flash(_("Recepcion de compra actualizada correctamente."), "success")
+    return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
 
 
 @compras.route("/purchase-receipt/<receipt_id>/duplicate", methods=["POST"])
@@ -2737,30 +2753,7 @@ def compras_factura_compra_editar(invoice_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        try:
-            registro.supplier_id = request.form.get("supplier_id") or None
-            registro.company = request.form.get("company") or None
-            registro.posting_date = _parse_date(request.form.get("posting_date"))
-            registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
-            registro.remarks = request.form.get("remarks")
-            for item in database.session.execute(
-                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
-            ).scalars():
-                database.session.delete(item)
-            _total_qty, total = _save_purchase_invoice_items(registro.id)
-            registro.total = total
-            registro.base_total = total
-            registro.grand_total = total
-            registro.base_grand_total = total
-            registro.outstanding_amount = total
-            registro.base_outstanding_amount = total
-            _persist_purchase_invoice_fiscal_snapshot(registro)
-            database.session.commit()
-            flash(_("Factura de compra actualizada correctamente."), "success")
-            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
-        except ValueError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        return _handle_purchase_invoice_edit_post(registro)
 
     lineas = database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
@@ -2814,6 +2807,33 @@ def compras_factura_compra_editar(invoice_id: str):
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _handle_purchase_invoice_edit_post(registro):
+    try:
+        registro.supplier_id = request.form.get("supplier_id") or None
+        registro.company = request.form.get("company") or None
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
+        registro.remarks = request.form.get("remarks")
+        for item in database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _total_qty, total = _save_purchase_invoice_items(registro.id)
+        registro.total = total
+        registro.base_total = total
+        registro.grand_total = total
+        registro.base_grand_total = total
+        registro.outstanding_amount = total
+        registro.base_outstanding_amount = total
+        _persist_purchase_invoice_fiscal_snapshot(registro)
+        database.session.commit()
+        flash(_("Factura de compra actualizada correctamente."), "success")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
 
 
 @compras.route("/purchase-invoice/<invoice_id>/duplicate", methods=["POST"])
