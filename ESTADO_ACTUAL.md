@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Anticipo aplicado a factura (2026-06-30):** Se simplificó `apply_advance_to_invoice()` en `cacao_accounting/document_flow/service.py` extrayendo helpers para carga de factura y validación de asignación.
+  - La creación de `PaymentReference` y `DocumentRelation` sigue intacta, pero la validación quedó separada en piezas más pequeñas.
+  - `black`, `ruff`, `mypy` y la prueba focal de flujo documental quedaron en verde.
+
 - **SonarCloud / Balance de cuentas bancarias desglosado (2026-06-30):** Se descompuso `_compute_account_receipts_and_payments()` en `cacao_accounting/reportes/services.py` con helpers específicos para consulta, receipts y payments.
   - El reporte bancario mantiene su salida, pero la lógica quedó más modular y con menor complejidad cognitiva.
   - `black`, `ruff`, `mypy` y las pruebas focales de reportes quedaron en verde.
