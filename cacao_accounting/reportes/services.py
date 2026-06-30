@@ -682,15 +682,9 @@ def _compute_account_receipts_and_payments(
     company: str,
     as_of_date: date | None,
 ) -> tuple[Decimal, Decimal]:
-    movements_query = select(PaymentEntry).where(PaymentEntry.company == company)
-    movements_query = movements_query.where(
-        (PaymentEntry.bank_account_id == bank_account_id) | (PaymentEntry.target_bank_account_id == bank_account_id)
-    )
-    if as_of_date is not None:
-        movements_query = movements_query.where(PaymentEntry.posting_date <= as_of_date)
-
     receipts = Decimal("0")
     payments = Decimal("0")
+    movements_query = _bank_account_movements_query(bank_account_id, company, as_of_date)
     for payment in database.session.execute(movements_query).scalars():
         receipt_amount, payment_amount = _bank_account_payment_movements(payment, bank_account_id)
         receipts += receipt_amount
@@ -698,21 +692,69 @@ def _compute_account_receipts_and_payments(
     return receipts, payments
 
 
+def _bank_account_movements_query(bank_account_id: str, company: str, as_of_date: date | None) -> Any:
+    """Construye la consulta de movimientos que afectan una cuenta bancaria."""
+    movements_query = select(PaymentEntry).where(PaymentEntry.company == company)
+    movements_query = movements_query.where(
+        (PaymentEntry.bank_account_id == bank_account_id) | (PaymentEntry.target_bank_account_id == bank_account_id)
+    )
+    if as_of_date is not None:
+        movements_query = movements_query.where(PaymentEntry.posting_date <= as_of_date)
+    return movements_query
+
+
 def _bank_account_payment_movements(payment: PaymentEntry, bank_account_id: str) -> tuple[Decimal, Decimal]:
     """Devuelve el impacto de un PaymentEntry sobre una cuenta bancaria."""
-    if payment.payment_type == "receive" and payment.bank_account_id == bank_account_id:
-        return _decimal_value(payment.received_amount or payment.paid_amount), Decimal("0")
-    if payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
-        return Decimal("0"), _decimal_value(payment.paid_amount or payment.received_amount)
+    return (
+        _bank_account_receipt_amount(payment, bank_account_id),
+        _bank_account_payment_amount(payment, bank_account_id),
+    )
+
+
+def _bank_account_receipt_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Devuelve el importe recibido por una cuenta bancaria para un pago."""
+    if payment.payment_type == "receive":
+        return _received_payment_amount(payment, bank_account_id)
     if payment.payment_type == "internal_transfer":
-        receipt_amount = (
-            _decimal_value(payment.received_amount or payment.paid_amount)
-            if payment.target_bank_account_id == bank_account_id
-            else Decimal("0")
-        )
-        payment_amount = _decimal_value(payment.paid_amount) if payment.bank_account_id == bank_account_id else Decimal("0")
-        return receipt_amount, payment_amount
-    return Decimal("0"), Decimal("0")
+        return _transfer_receipt_amount(payment, bank_account_id)
+    return Decimal("0")
+
+
+def _bank_account_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Devuelve el importe pagado por una cuenta bancaria para un pago."""
+    if payment.payment_type == "pay":
+        return _paid_payment_amount(payment, bank_account_id)
+    if payment.payment_type == "internal_transfer":
+        return _transfer_payment_amount(payment, bank_account_id)
+    return Decimal("0")
+
+
+def _received_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Calcula el importe recibido cuando la cuenta principal coincide."""
+    if payment.bank_account_id != bank_account_id:
+        return Decimal("0")
+    return _decimal_value(payment.received_amount or payment.paid_amount)
+
+
+def _paid_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Calcula el importe pagado cuando la cuenta principal coincide."""
+    if payment.bank_account_id != bank_account_id:
+        return Decimal("0")
+    return _decimal_value(payment.paid_amount or payment.received_amount)
+
+
+def _transfer_receipt_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Calcula el importe recibido por la cuenta destino de una transferencia."""
+    if payment.target_bank_account_id != bank_account_id:
+        return Decimal("0")
+    return _decimal_value(payment.received_amount or payment.paid_amount)
+
+
+def _transfer_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Decimal:
+    """Calcula el importe pagado por la cuenta origen de una transferencia."""
+    if payment.bank_account_id != bank_account_id:
+        return Decimal("0")
+    return _decimal_value(payment.paid_amount)
 
 
 def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
