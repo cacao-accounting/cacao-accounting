@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+# SESSIONS - Historical Decisions & Milestones
+
+## 2026-06-30 (SonarCloud: reportes bancarios y conciliación)
+- **Solicitud:** Analizar los issues abiertos de SonarCloud del proyecto y corregir los de menor riesgo con commits semánticos y sign-off, cuidando posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se corrigió el uso de variable local no utilizada en `cacao_accounting/compras/purchase_reconciliation_service.py` y se refactorizó `cacao_accounting/reportes/services.py` para separar la resolución de importes de movimientos bancarios y la acumulación de saldos por cuenta en helpers más pequeños.
+- **Cautela aplicada:** Los hallazgos `javascript:S2004` de `cacao_accounting/static/js/transaction-form.js` se dejaron en revisión por posible falso positivo asociado al patrón Alpine; no se tocaron sin una verificación más fuerte.
+- **Verificacion:** `ruff check`, `mypy`, `pytest tests/test_08_reconciliation_reports.py -k 'purchase_reconciliation or bank_reconciliation or bank_balance or bank_movement or reports_return_subledger_aging_kardex_and_reconciliations'` y `pytest tests/test_report_account_summary.py::test_get_account_summary_report` quedaron en verde. `black --check` confirmó que ambos archivos modificados quedarían sin cambios.
+
 ## 2026-06-29 (SonarCloud: wizard de setup simplificado)
 - **Solicitud:** Reducir la complejidad cognitiva de `cacao_accounting/setup/__init__.py` sin alterar el flujo del asistente de configuración inicial.
 - **Implementacion:** Se separaron la gestión de pasos POST, el armado del payload de compañía y la selección del formulario activo en helpers pequeños. `setup()` quedó como punto de orquestación del wizard.
