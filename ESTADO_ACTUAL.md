@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Reportes GL (2026-06-30):** Se simplificaron `get_account_summary_report()` y `get_trial_balance_report()` en `cacao_accounting/reportes/services.py` mediante helpers para bucket de periodo, acumulación de saldos y construcción de filas.
+  - La semántica de la sabana contable y la balanza de comprobación se mantiene.
+  - `black`, `ruff`, `mypy` y las pruebas focales de reportes/conciliaciones quedaron en verde.
+  - Los `javascript:S2004` de `transaction-form.js` siguen marcados como posibles falsos positivos de Alpine y no se tocaron en esta iteración.
+
 - **SonarCloud / Reportes bancarios y conciliación (2026-06-30):** Se corrigió el issue `python:S1481` en `cacao_accounting/compras/purchase_reconciliation_service.py` y se redujo la complejidad de `cacao_accounting/reportes/services.py` separando el cálculo de movimientos bancarios y saldos por cuenta en helpers más pequeños.
   - `get_bank_movement_detail()` y `get_bank_balance_summary()` siguen produciendo los mismos reportes, pero con la lógica de importes y acumulación más explícita y mantenible.
   - Los chequeos locales `ruff`, `mypy` y las pruebas focales de conciliación y resumen de cuentas quedaron en verde.
