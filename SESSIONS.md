@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: arbol documental de pago refinado)
+- **Solicitud:** Seguir reduciendo issues abiertos de SonarCloud con refactors Python verificables y dejar fuera de alcance los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se descompuso `_append_payment_reference_nodes()` en `cacao_accounting/document_flow/tree.py` extrayendo helpers para cargar referencias, reutilizar construcción de nodos y separar la rama de `payment_entry` de la rama de documentos origen.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_05document_flow.py -k 'document_flow_summary_includes_create_actions or document_flow_summary_includes_note_payment_actions or document_flow_summary_includes_sales_order_payment_action'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: pago destino refinado)
 - **Solicitud:** Continuar reduciendo issues abiertos de SonarCloud con refactors Python verificables y no tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se descompuso `_create_payment_target()` en helpers dedicados para cargar la cuenta bancaria, crear el pago, asignar identificador, aplicar líneas, validar montos y construir la respuesta final en `cacao_accounting/document_flow/service.py`.
