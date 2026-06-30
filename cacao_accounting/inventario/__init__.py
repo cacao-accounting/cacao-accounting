@@ -580,41 +580,8 @@ def inventario_entrada_nuevo():
         ],
     }
     if request.method == "POST":
-        try:
-            posting_date = _parse_date(request.form.get("posting_date"))
-            posted_purpose = request.form.get("purpose") or "material_receipt"
-            entry = StockEntry(
-                purpose=posted_purpose,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                from_warehouse=request.form.get("from_warehouse") or None,
-                to_warehouse=request.form.get("to_warehouse") or None,
-                adjustment_account_id=request.form.get("adjustment_account_id") or None,
-                cost_center_code=request.form.get("cost_center_code") or None,
-                unit_code=request.form.get("unit_code") or None,
-                project_code=request.form.get("project_code") or None,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(entry)
-            database.session.flush()
-            assign_document_identifier(
-                document=entry,
-                entity_type="stock_entry",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            if posted_purpose == "stock_reconciliation":
-                entry.total_amount = _save_stock_reconciliation_items(entry)
-            else:
-                entry.total_amount = _save_stock_entry_items(entry)
-            log_create(entry)
-            database.session.commit()
-            flash("Entrada de almacén creada correctamente.", "success")
-            return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
-        except IdentifierConfigurationError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
+        return _handle_stock_entry_new_post(request.form)
+
     if purpose == "stock_reconciliation":
         return render_template(
             "inventario/stock_reconciliation_nuevo.html",
@@ -667,6 +634,46 @@ def _stock_entry_title(purpose: str | None) -> str:
         "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
     }
     return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+
+
+def _handle_stock_entry_new_post(form_data):
+    from cacao_accounting.database import IdentifierConfigurationError
+
+    try:
+        posting_date = _parse_date(form_data.get("posting_date"))
+        posted_purpose = form_data.get("purpose") or "material_receipt"
+        entry = StockEntry(
+            purpose=posted_purpose,
+            company=form_data.get("company") or None,
+            posting_date=posting_date,
+            from_warehouse=form_data.get("from_warehouse") or None,
+            to_warehouse=form_data.get("to_warehouse") or None,
+            adjustment_account_id=form_data.get("adjustment_account_id") or None,
+            cost_center_code=form_data.get("cost_center_code") or None,
+            unit_code=form_data.get("unit_code") or None,
+            project_code=form_data.get("project_code") or None,
+            remarks=form_data.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(entry)
+        database.session.flush()
+        assign_document_identifier(
+            document=entry,
+            entity_type="stock_entry",
+            posting_date_raw=posting_date,
+            naming_series_id=form_data.get("naming_series") or None,
+        )
+        if posted_purpose == "stock_reconciliation":
+            entry.total_amount = _save_stock_reconciliation_items(entry)
+        else:
+            entry.total_amount = _save_stock_entry_items(entry)
+        log_create(entry)
+        database.session.commit()
+        flash("Entrada de almacén creada correctamente.", "success")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
+    except IdentifierConfigurationError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
 
 
 @inventario.route("/stock-entry/adjustment/new-shortcut")
