@@ -83,6 +83,29 @@ def _document_items_total(document: Any) -> Decimal:
     return total
 
 
+def _calculate_template_item_tax(template_item, base_amount, running_total):
+    from cacao_accounting.database import Tax, TaxTemplateItem
+
+    tax = database.session.get(Tax, template_item.tax_id)
+    if not tax or not tax.is_active:
+        return None
+    calculation_base = template_item.calculation_base or "net_document"
+    taxable_base = running_total if calculation_base == "previous_total" else base_amount
+    rate = _decimal_value(tax.rate)
+    amount = rate if tax.tax_type == "fixed" else (taxable_base * rate / Decimal("100"))
+    amount = amount.quantize(Decimal("0.0001"))
+    return TaxLineResult(
+        tax_id=tax.id,
+        name=tax.name,
+        account_id=tax.account_id,
+        amount=amount,
+        behavior=template_item.behavior or "additive",
+        is_inclusive=bool(template_item.is_inclusive),
+        is_charge=bool(tax.is_charge),
+        is_capitalizable=bool(tax.is_capitalizable),
+    )
+
+
 def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
     """Calcula impuestos/cargos de un documento usando una plantilla."""
     template = database.session.get(TaxTemplate, template_id)
@@ -109,35 +132,18 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         .all()
     )
     for template_item in items:
-        tax = database.session.get(Tax, template_item.tax_id)
-        if not tax or not tax.is_active:
+        result = _calculate_template_item_tax(template_item, base_amount, running_total)
+        if not result:
             continue
-        calculation_base = template_item.calculation_base or "net_document"
-        taxable_base = running_total if calculation_base == "previous_total" else base_amount
-        rate = _decimal_value(tax.rate)
-        amount = rate if tax.tax_type == "fixed" else (taxable_base * rate / Decimal("100"))
-        amount = amount.quantize(Decimal("0.0001"))
-        behavior = template_item.behavior or "additive"
-        if template_item.is_inclusive:
-            inclusive_total += amount
-        elif behavior == "deductive":
-            deductive_total += amount
-            running_total -= amount
+        if result.is_inclusive:
+            inclusive_total += result.amount
+        elif result.behavior == "deductive":
+            deductive_total += result.amount
+            running_total -= result.amount
         else:
-            additive_total += amount
-            running_total += amount
-        lines.append(
-            TaxLineResult(
-                tax_id=tax.id,
-                name=tax.name,
-                account_id=tax.account_id,
-                amount=amount,
-                behavior=behavior,
-                is_inclusive=bool(template_item.is_inclusive),
-                is_charge=bool(tax.is_charge),
-                is_capitalizable=bool(tax.is_capitalizable),
-            )
-        )
+            additive_total += result.amount
+            running_total += result.amount
+        lines.append(result)
 
     return TaxCalculationResult(
         lines=lines,
