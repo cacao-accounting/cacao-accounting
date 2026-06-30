@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence, cast
 
 from sqlalchemy import func, or_, select
 
@@ -960,6 +960,94 @@ def _build_trial_balance_row(values: dict[str, Any]) -> tuple[ReportRow, Decimal
     )
 
 
+def _movement_detail_row_values(
+    entry: GLEntry,
+    account: Accounts | None,
+    period: AccountingPeriod | None,
+    selected_ledger: Book,
+    running_balance: Decimal | None,
+    include_running_balance: bool,
+) -> dict[str, Any]:
+    """Construye el diccionario de salida para una fila de movimiento contable."""
+    account_code = entry.account_code or (account.code if account else "") or ""
+    row_values: dict[str, Any] = {
+        "posting_date": entry.posting_date,
+        "accounting_period": period.name if period else None,
+        "document_no": entry.document_no or entry.voucher_id,
+        "voucher_type": entry.voucher_type,
+        "account_code": account_code,
+        "account_name": account.name if account else None,
+        "debit": _decimal_value(entry.debit),
+        "credit": _decimal_value(entry.credit),
+        "currency": selected_ledger.currency or entry.company_currency or entry.account_currency,
+        "ledger": selected_ledger.code,
+        "company": entry.company,
+        "cost_center": entry.cost_center_code,
+        "unit": entry.unit_code,
+        "project": entry.project_code,
+        "party_type": entry.party_type,
+        "party_id": entry.party_id,
+        "line_comment": entry.remarks,
+        "created_by": entry.created_by,
+        "created_at": entry.created,
+        "voucher_status": "cancelled" if entry.is_cancelled else "submitted",
+    }
+    if include_running_balance and running_balance is not None:
+        row_values["running_balance"] = running_balance
+    return row_values
+
+
+def _collect_movement_detail_rows(
+    entries: Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None]],
+    selected_ledger: Book,
+    filters: FinancialReportFilters,
+    display_from_index: int,
+) -> tuple[list[ReportRow], Decimal, Decimal]:
+    """Convierte las entradas del mayor en filas y totales para el reporte."""
+    running_per_account: dict[str, Decimal] = defaultdict(Decimal)
+    rows: list[ReportRow] = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+
+    for index, (entry, account, period) in enumerate(entries):
+        account_code = entry.account_code or (account.code if account else None) or ""
+        debit = _decimal_value(entry.debit)
+        credit = _decimal_value(entry.credit)
+        running_per_account[account_code] += debit - credit
+        if index < display_from_index:
+            continue
+
+        total_debit += debit
+        total_credit += credit
+        row_values = _movement_detail_row_values(
+            entry,
+            account,
+            period,
+            selected_ledger,
+            running_per_account[account_code],
+            filters.include_running_balance,
+        )
+        rows.append(ReportRow(values=row_values))
+
+    return rows, total_debit, total_credit
+
+
+def _movement_detail_query(
+    filters: FinancialReportFilters,
+    period_start: date | None,
+    period_end: date | None,
+    selected_ledger: Book,
+) -> Any:
+    """Construye la consulta base del detalle de movimiento contable."""
+    query = (
+        select(GLEntry, Accounts, AccountingPeriod)
+        .join(Accounts, (Accounts.id == GLEntry.account_id), isouter=True)
+        .join(AccountingPeriod, (AccountingPeriod.id == GLEntry.accounting_period_id), isouter=True)
+    )
+    query = _apply_gl_filters(query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
+
+
 def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
     period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
@@ -967,21 +1055,7 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
 
-    query = (
-        select(GLEntry, Accounts, AccountingPeriod)
-        .join(
-            Accounts,
-            (Accounts.id == GLEntry.account_id),
-            isouter=True,
-        )
-        .join(
-            AccountingPeriod,
-            (AccountingPeriod.id == GLEntry.accounting_period_id),
-            isouter=True,
-        )
-    )
-    query = _apply_gl_filters(query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
-    query = _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
+    query = _movement_detail_query(filters, period_start, period_end, selected_ledger)
 
     count_query = query.order_by(None).with_only_columns(func.count())
     total_rows = database.session.execute(count_query).scalar_one()
@@ -996,44 +1070,11 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
         else:
             query = query.offset(row_offset).limit(page_size)
 
-    running_per_account: dict[str, Decimal] = defaultdict(Decimal)
-    rows: list[ReportRow] = []
-    total_debit = Decimal("0")
-    total_credit = Decimal("0")
-    for index, (entry, account, period) in enumerate(database.session.execute(query).all()):
-        account_code = entry.account_code or (account.code if account else None) or ""
-        debit = _decimal_value(entry.debit)
-        credit = _decimal_value(entry.credit)
-        running_per_account[account_code] += debit - credit
-        if index < display_from_index:
-            continue
-        total_debit += debit
-        total_credit += credit
-        row_values: dict[str, Any] = {
-            "posting_date": entry.posting_date,
-            "accounting_period": period.name if period else None,
-            "document_no": entry.document_no or entry.voucher_id,
-            "voucher_type": entry.voucher_type,
-            "account_code": account_code,
-            "account_name": account.name if account else None,
-            "debit": debit,
-            "credit": credit,
-            "currency": selected_ledger.currency or entry.company_currency or entry.account_currency,
-            "ledger": selected_ledger.code,
-            "company": entry.company,
-            "cost_center": entry.cost_center_code,
-            "unit": entry.unit_code,
-            "project": entry.project_code,
-            "party_type": entry.party_type,
-            "party_id": entry.party_id,
-            "line_comment": entry.remarks,
-            "created_by": entry.created_by,
-            "created_at": entry.created,
-            "voucher_status": "cancelled" if entry.is_cancelled else "submitted",
-        }
-        if filters.include_running_balance:
-            row_values["running_balance"] = running_per_account[account_code]
-        rows.append(ReportRow(values=row_values))
+    entries = cast(
+        Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None]],
+        database.session.execute(query).all(),
+    )
+    rows, total_debit, total_credit = _collect_movement_detail_rows(entries, selected_ledger, filters, display_from_index)
 
     columns = list(rows[0].values.keys()) if rows else []
     return PaginatedReport(
