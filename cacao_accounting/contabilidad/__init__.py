@@ -3397,10 +3397,6 @@ def naming_series_toggle_default(series_id: str):
     return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
-@contabilidad.route("/naming-series/<series_id>/edit", methods=["GET", "POST"])
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
 def _update_series_sequence(serie, form):
     from cacao_accounting.database import Sequence, SeriesSequenceMap
     from cacao_accounting.logs import log
@@ -3420,6 +3416,10 @@ def _update_series_sequence(serie, form):
         log.warning(f"Sequence record not found for sequence_id={sequence_id} on series={serie.id}")
 
 
+@contabilidad.route("/naming-series/<series_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
 def naming_series_edit(series_id: str):
     """Editar una serie de numeracion."""
     from cacao_accounting.contabilidad.forms import FormularioNamingSeries
