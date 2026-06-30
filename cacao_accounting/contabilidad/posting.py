@@ -2055,7 +2055,6 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
 
 
 def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):
-    from cacao_accounting.database import GLEntry
 
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):

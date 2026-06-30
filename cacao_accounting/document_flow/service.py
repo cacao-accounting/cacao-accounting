@@ -182,9 +182,7 @@ def _compute_cash_consumed_from_reference(
     source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
     if source_type in {"purchase_order", "sales_order"}:
         return Decimal("0"), None
-    cash_consumed = (
-        decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
-    )
+    cash_consumed = decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
     if cash_consumed < 0:
         cash_consumed = Decimal("0")
     return cash_consumed, str(relation_status) if relation_status else None
@@ -226,7 +224,8 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
         if relation_status:
             relation_status_by_reference.setdefault(reference_id_str, set()).add(relation_status)
     consumed = sum(
-        cash for ref_id, cash in consumed_by_reference.items()
+        cash
+        for ref_id, cash in consumed_by_reference.items()
         if not relation_status_by_reference.get(ref_id) or "active" in relation_status_by_reference[ref_id]
     )
     remaining = payment_total - consumed

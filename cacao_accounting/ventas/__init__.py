@@ -1093,7 +1093,9 @@ def ventas_orden_venta_nuevo():
     titulo = "Nueva Orden de Venta - " + APPNAME
     initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
     source_origen = solicitud_origen or cotizacion_origen
-    transaction_config = _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type)
+    transaction_config = _build_sales_order_transaction_config(
+        items_disponibles, uoms_disponibles, source_origen, initial_source_type
+    )
     if request.method == "POST":
         result = _handle_sales_order_new_post(from_quotation_id, from_request_id)
         if result is not None:
@@ -1756,9 +1758,7 @@ def _handle_delivery_note_edit_post(registro):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
-    for item in database.session.execute(
-        database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)
-    ).scalars():
+    for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_delivery_note_items(registro.id)
     registro.total = total

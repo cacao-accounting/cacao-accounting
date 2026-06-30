@@ -637,8 +637,6 @@ def _stock_entry_title(purpose: str | None) -> str:
 
 
 def _handle_stock_entry_new_post(form_data):
-    from cacao_accounting.database import IdentifierConfigurationError
-
     try:
         posting_date = _parse_date(form_data.get("posting_date"))
         posted_purpose = form_data.get("purpose") or "material_receipt"
