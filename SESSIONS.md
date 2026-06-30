@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: edición de proyecto simplificada)
+- **Solicitud:** Seguir reduciendo issues abiertos de SonarCloud con refactors Python verificables y no tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se extrajeron `_render_project_edit_form()`, `_resolve_project_budget_currency()` y `_update_project_from_form()` para simplificar `editar_proyecto()` en `cacao_accounting/contabilidad/__init__.py`.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_03webactions.py -k 'project or fiscal_year or account or cost_center'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: arbol documental de pago refinado)
 - **Solicitud:** Seguir reduciendo issues abiertos de SonarCloud con refactors Python verificables y dejar fuera de alcance los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se descompuso `_append_payment_reference_nodes()` en `cacao_accounting/document_flow/tree.py` extrayendo helpers para cargar referencias, reutilizar construcción de nodos y separar la rama de `payment_entry` de la rama de documentos origen.
