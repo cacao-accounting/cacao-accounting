@@ -1639,50 +1639,54 @@ def editar_proyecto(project_id):
             _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
         except ValueError as error:
             flash(str(error), "danger")
-            return render_template(
-                _TPL_PROYECTO_CREAR,
-                titulo=TITULO,
-                form=formulario,
-                edit=True,
-                budget_currency_code=proyecto.budget_currency_code or "",
-                entity_initial_label=entity_initial_label,
-            )
+            return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         budget_amount = formulario.presupuesto.data
-        budget_currency = None
-        if budget_amount is not None:
-            try:
-                budget_currency = (
-                    CurrencyGuard().validate_company_functional_currency(request.form.get("entidad", proyecto.entity)).code
-                )
-            except CurrencyGuardError as error:
-                flash(str(error), "danger")
-                return render_template(
-                    _TPL_PROYECTO_CREAR,
-                    titulo=TITULO,
-                    form=formulario,
-                    edit=True,
-                    budget_currency_code=proyecto.budget_currency_code or "",
-                    entity_initial_label=entity_initial_label,
-                )
-        proyecto.name = request.form.get("nombre", proyecto.name)
-        proyecto.entity = request.form.get("entidad", proyecto.entity)
-        proyecto.start = formulario.inicio.data
-        proyecto.end = formulario.fin.data
-        proyecto.budget = Decimal(str(budget_amount or 0))
-        proyecto.budget_currency_code = budget_currency
-        proyecto.enabled = bool(formulario.habilitado.data)
-        proyecto.status = formulario.status.data or "open"
+        try:
+            budget_currency = _resolve_project_budget_currency(request.form.get("entidad", proyecto.entity), budget_amount)
+        except CurrencyGuardError as error:
+            flash(str(error), "danger")
+            return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
+        _update_project_from_form(proyecto, formulario, budget_amount, budget_currency)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
+    return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
+
+
+def _render_project_edit_form(formulario: Any, titulo: str, proyecto: Any, entity_initial_label: str) -> str:
+    """Renderiza el formulario de edición de proyecto con el contexto estándar."""
     return render_template(
         _TPL_PROYECTO_CREAR,
-        titulo=TITULO,
+        titulo=titulo,
         form=formulario,
         edit=True,
         budget_currency_code=proyecto.budget_currency_code or "",
         entity_initial_label=entity_initial_label,
     )
+
+
+def _resolve_project_budget_currency(entity: str | None, budget_amount: Any) -> str | None:
+    """Resuelve la moneda funcional del presupuesto cuando aplica."""
+    if budget_amount is None:
+        return None
+    return CurrencyGuard().validate_company_functional_currency(entity).code
+
+
+def _update_project_from_form(
+    proyecto: Any,
+    formulario: Any,
+    budget_amount: Any,
+    budget_currency: str | None,
+) -> None:
+    """Actualiza un proyecto editado con los valores enviados por formulario."""
+    proyecto.name = request.form.get("nombre", proyecto.name)
+    proyecto.entity = request.form.get("entidad", proyecto.entity)
+    proyecto.start = formulario.inicio.data
+    proyecto.end = formulario.fin.data
+    proyecto.budget = Decimal(str(budget_amount or 0))
+    proyecto.budget_currency_code = budget_currency
+    proyecto.enabled = bool(formulario.habilitado.data)
+    proyecto.status = formulario.status.data or "open"
 
 
 @contabilidad.route("/project/<project_id>/delete")
