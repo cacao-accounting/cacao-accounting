@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Saldos bancarios resumidos (2026-06-30):** Se simplificó `_compute_account_receipts_and_payments()` en `cacao_accounting/reportes/services.py` extrayendo `_bank_account_payment_movements()` como helper puro.
+  - La suma de receipts/payments por cuenta bancaria sigue igual, pero la decisión por tipo de pago quedó aislada y más fácil de leer.
+  - `black`, `ruff`, `mypy` y las pruebas focales de reportes quedaron en verde.
+
 - **SonarCloud / Detalle de movimiento contable (2026-06-30):** Se simplificó `get_account_movement_detail()` en `cacao_accounting/reportes/services.py` extrayendo helpers para la consulta, la construcción de filas y el acumulado de totales.
   - La lógica de running balance y paginación se mantiene, pero la función pública quedó como orquestador.
   - `black`, `ruff`, `mypy` y las pruebas focales de reportes/conciliaciones quedaron en verde.
