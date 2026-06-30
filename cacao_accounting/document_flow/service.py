@@ -389,11 +389,14 @@ def _build_candidate_query(
     query = database.select(model).filter_by(company=company, docstatus=1)
     if hasattr(model, "document_type"):
         query = query.filter_by(document_type=source_type)
+    return _apply_candidate_party_filter(query, party_type, party_id)
+
+
+def _apply_candidate_party_filter(query: Any, party_type: str, party_id: str) -> Any:
+    """Aplica el filtro de tercero esperado a la consulta de candidatos."""
     if party_type == "supplier":
-        query = query.filter_by(supplier_id=party_id)
-    else:
-        query = query.filter_by(customer_id=party_id)
-    return query
+        return query.filter_by(supplier_id=party_id)
+    return query.filter_by(customer_id=party_id)
 
 
 def _collect_candidates_from_documents(
