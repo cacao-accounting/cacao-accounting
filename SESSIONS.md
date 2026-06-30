@@ -2,6 +2,13 @@
 
 # SESSIONS - Historical Decisions & Milestones
 
+# SESSIONS - Historical Decisions & Milestones
+
+## 2026-06-30 (SonarCloud: reportes GL simplificados)
+- **Solicitud:** Continuar corrigiendo issues abiertos de SonarCloud del proyecto, evitando falsos positivos de Alpine en `transaction-form.js` y atacando primero los reportes de menor riesgo semántico.
+- **Implementacion:** Se extrajeron helpers para clasificar entradas por periodo y para construir/acumular filas en `get_account_summary_report()` y `get_trial_balance_report()` dentro de `cacao_accounting/reportes/services.py`. El objetivo fue reducir la complejidad cognitiva sin alterar el cálculo de saldos o la presentación de filas.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_report_account_summary.py tests/test_08_reconciliation_reports.py -k 'account_summary or trial_balance or bank_movement or bank_balance or reconciliation'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: reportes bancarios y conciliación)
 - **Solicitud:** Analizar los issues abiertos de SonarCloud del proyecto y corregir los de menor riesgo con commits semánticos y sign-off, cuidando posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se corrigió el uso de variable local no utilizada en `cacao_accounting/compras/purchase_reconciliation_service.py` y se refactorizó `cacao_accounting/reportes/services.py` para separar la resolución de importes de movimientos bancarios y la acumulación de saldos por cuenta en helpers más pequeños.

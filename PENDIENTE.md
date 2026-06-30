@@ -1,6 +1,7 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
 ## Seguimiento 2026-06-30 (SonarCloud - revisión cautelosa)
+- [x] Simplificar `reportes/services.py` en `get_account_summary_report()` y `get_trial_balance_report()`.
 - [x] Corregir el uso de variable local no utilizada en `compras/purchase_reconciliation_service.py`.
 - [x] Reducir la complejidad de `reportes/services.py` en el detalle y resumen bancario.
 - [ ] Revisar los `javascript:S2004` de `static/js/transaction-form.js` antes de refactorizar más, porque pueden ser falsos positivos del patrón Alpine.
