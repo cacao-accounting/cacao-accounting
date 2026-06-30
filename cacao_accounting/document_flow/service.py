@@ -232,6 +232,50 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     return remaining if remaining > 0 else Decimal("0")
 
 
+def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoice, str, str | None]:
+    """Carga la factura de un anticipo y devuelve su tipo de referencia y tercero."""
+    invoice: SalesInvoice | PurchaseInvoice | None = database.session.get(SalesInvoice, invoice_id)
+    reference_type = "sales_invoice"
+    party_id = getattr(invoice, "customer_id", None) if invoice else None
+    if invoice is None:
+        invoice = database.session.get(PurchaseInvoice, invoice_id)
+        reference_type = "purchase_invoice"
+        party_id = getattr(invoice, "supplier_id", None) if invoice else None
+    if invoice is None:
+        raise DocumentFlowError("La factura no existe.")
+    return invoice, reference_type, party_id
+
+
+def _validate_advance_allocation(
+    payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
+    party_id: str | None,
+    amount: Decimal,
+    allocation_date: date,
+) -> tuple[Decimal, Decimal]:
+    """Valida la aplicación del anticipo y devuelve el outstanding antes/despues."""
+    if payment.company != invoice.company:
+        raise DocumentFlowError("El anticipo y la factura pertenecen a companias distintas.")
+    if payment.party_id and party_id and payment.party_id != party_id:
+        raise DocumentFlowError("El anticipo pertenece a otro tercero.")
+    allocated_before = sum(
+        (
+            decimal_or_zero(reference.allocated_amount)
+            for reference in database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars()
+        ),
+        Decimal("0"),
+    )
+    payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
+    outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
+    if amount <= 0:
+        raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO)
+    if amount > payment_total - allocated_before:
+        raise DocumentFlowError("El monto excede el remanente del anticipo.")
+    if amount > outstanding:
+        raise DocumentFlowError("El monto excede el saldo pendiente de la factura.")
+    return outstanding, outstanding - amount
+
+
 def _payment_candidate_date(document: Any) -> date | None:
     """Resuelve la fecha representativa de un candidato de pago."""
     value = (
@@ -732,35 +776,8 @@ def apply_advance_to_invoice(
     payment = database.session.get(PaymentEntry, payment_entry_id)
     if not payment:
         raise DocumentFlowError("El pago/anticipo no existe.")
-    invoice: SalesInvoice | PurchaseInvoice | None = database.session.get(SalesInvoice, invoice_id)
-    reference_type = "sales_invoice"
-    party_id = getattr(invoice, "customer_id", None) if invoice else None
-    if invoice is None:
-        invoice = database.session.get(PurchaseInvoice, invoice_id)
-        reference_type = "purchase_invoice"
-        party_id = getattr(invoice, "supplier_id", None) if invoice else None
-    if invoice is None:
-        raise DocumentFlowError("La factura no existe.")
-    if payment.company != invoice.company:
-        raise DocumentFlowError("El anticipo y la factura pertenecen a companias distintas.")
-    if payment.party_id and party_id and payment.party_id != party_id:
-        raise DocumentFlowError("El anticipo pertenece a otro tercero.")
-    allocated_before = sum(
-        (
-            decimal_or_zero(reference.allocated_amount)
-            for reference in database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars()
-        ),
-        Decimal("0"),
-    )
-    payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
-    outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
-    if amount <= 0:
-        raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO)
-    if amount > payment_total - allocated_before:
-        raise DocumentFlowError("El monto excede el remanente del anticipo.")
-    if amount > outstanding:
-        raise DocumentFlowError("El monto excede el saldo pendiente de la factura.")
-    outstanding_after = outstanding - amount
+    invoice, reference_type, party_id = _load_advance_invoice(invoice_id)
+    outstanding, outstanding_after = _validate_advance_allocation(payment, invoice, party_id, amount, allocation_date)
     reference = PaymentReference(
         payment_id=payment.id,
         reference_type=reference_type,
