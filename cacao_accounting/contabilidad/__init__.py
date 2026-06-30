@@ -1124,6 +1124,7 @@ def nueva_cuenta():
 
 
 def _build_cost_center_edit_form(registro):
+    from cacao_accounting.contabilidad.forms import FormularioCentroCosto
     from cacao_accounting.database import CostCenter
 
     formulario = FormularioCentroCosto(obj=registro)
@@ -1155,6 +1156,7 @@ def _build_cost_center_edit_form(registro):
 
 
 def _build_account_edit_form(registro, entity):
+    from cacao_accounting.contabilidad.forms import FormularioCuenta
     from cacao_accounting.database import Accounts
 
     formulario = FormularioCuenta(obj=registro)
@@ -1183,7 +1185,6 @@ def _build_account_edit_form(registro, entity):
 @verifica_acceso("accounting")
 def editar_cuenta(entity, id_cta):
     """Formulario para editar una cuenta contable existente."""
-    from cacao_accounting.contabilidad.forms import FormularioCuenta
     from cacao_accounting.database import Accounts
 
     registro = database.session.execute(
@@ -3035,9 +3036,7 @@ def _build_journal_selected_books(journal, entity: str) -> list[str]:
     if not selected_book_codes:
         return []
     selected_book_rows = (
-        database.session.execute(
-            database.select(Book).filter(Book.entity == entity).where(Book.code.in_(selected_book_codes))
-        )
+        database.session.execute(database.select(Book).filter(Book.entity == entity).where(Book.code.in_(selected_book_codes)))
         .scalars()
         .all()
     )
@@ -3048,9 +3047,7 @@ def _build_journal_selected_books(journal, entity: str) -> list[str]:
     if not selected_books:
         fallback_book_rows = (
             database.session.execute(
-                database.select(Book)
-                .filter(Book.entity == entity)
-                .where(Book.status.is_(None) | (Book.status == "activo"))
+                database.select(Book).filter(Book.entity == entity).where(Book.status.is_(None) | (Book.status == "activo"))
             )
             .scalars()
             .all()

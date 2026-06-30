@@ -624,7 +624,7 @@ def test_currency_detail_shows_edit_action(app_ctx):
 
 
 def test_currency_edit_rejects_default_currency_deactivation(app_ctx):
-    from cacao_accounting.database import Currency, User, database
+    from cacao_accounting.database import Currency, User
 
     client = app_ctx.test_client()
     _login(client, User.query.filter_by(user="admin").first().id)
@@ -690,7 +690,7 @@ def test_currency_edit_rejects_active_ledger_currency_deactivation(app_ctx):
 
 
 def test_currency_edit_preserves_single_default_currency(app_ctx):
-    from cacao_accounting.database import Currency, User, database
+    from cacao_accounting.database import Currency, User
 
     client = app_ctx.test_client()
     _login(client, User.query.filter_by(user="admin").first().id)
