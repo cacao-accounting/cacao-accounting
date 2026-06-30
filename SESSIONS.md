@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: candidatos de conciliacion simplificados)
+- **Solicitud:** Continuar reduciendo issues abiertos de SonarCloud con refactors Python de bajo riesgo y mantener fuera de alcance los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se extrajo `_apply_candidate_party_filter()` para simplificar `_build_candidate_query()` en `cacao_accounting/document_flow/service.py`, dejando la selección de filtros por tercero aislada y reutilizable.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_payment_entry_improved.py -k 'payment_reconciliation_candidates or advance or document_flow'` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: anticipo aplicado a factura simplificado)
 - **Solicitud:** Seguir reduciendo issues abiertos de SonarCloud con refactors seguros en Python, manteniendo fuera de alcance los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se extrajeron `_load_advance_invoice()` y `_validate_advance_allocation()` para simplificar `apply_advance_to_invoice()` en `cacao_accounting/document_flow/service.py`. La función pública quedó como orquestador de carga, validación, creación de referencia y relación documental.
