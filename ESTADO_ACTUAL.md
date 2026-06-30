@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Árbol documental de pago refinado (2026-06-30):** Se descompuso `_append_payment_reference_nodes()` en `cacao_accounting/document_flow/tree.py` con helpers para cargar referencias y reutilizar la construcción de nodos.
+  - El árbol documental sigue exponiendo relaciones de pago y PaymentReference, pero la lógica quedó más lineal.
+  - `black`, `ruff`, `mypy` y la prueba focal del árbol quedaron en verde.
+
 - **SonarCloud / Pago destino refinado (2026-06-30):** Se descompuso `_create_payment_target()` en `cacao_accounting/document_flow/service.py` para aislar carga de cuenta, aplicación de líneas y actualización de montos.
   - La semántica de anticipos y conciliación de facturas se mantiene, pero el flujo quedó más lineal y verificable.
   - `black`, `ruff`, `mypy` y la prueba focal de pago/conciliación quedaron en verde.
