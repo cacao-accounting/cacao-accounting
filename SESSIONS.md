@@ -1,5 +1,19 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (Análisis de cobertura de código y tests para servicios)
+- **Solicitud:** Analizar la cobertura de código actual en Coveralls y mejorar los tests para aumentar cobertura.
+- **Análisis:** El proyecto tiene 80.4% de cobertura (22,566 líneas relevantes, 18,144 cubiertas). Se identificaron módulos sin tests: `collaboration_service`, `party_settings`, `auth/forms`, `tax_pricing_service`, `module_badges`, etc.
+- **Implementación:** Se crearon `tests/test_services_simple.py` con tests unitarios para:
+  - Dataclasses de `tax_pricing_service` (TaxLineResult, TaxCalculationResult, PriceSuggestion, PriceToleranceResult)
+  - Función `validate_price_tolerance` (lógica de validación de tolerancia)
+  - Constantes de colaboración (TASK_STATUSES, TASK_PRIORITIES)
+  - Excepción CollaborationError
+  - Función `module_badge` (todos los casos de estado)
+  - Helper `is_truthy` de runtime_mode
+  - Dataclass PartyCompanySettings
+- **Resultado:** 17 tests nuevos agregados, todos pasando. Commit: `test(coverage): add tests for tax_pricing_service and collaboration_service`
+- **Nota:** Tests más complejos que requieren fixtures de base de datos completa (collaboration_service con cloud mode, party_settings con CompanyParty) requieren setup más elaborado y se dejaron para próximas iteraciones.
+
 ## 2026-06-27 (Filtros de busqueda en listados)
 - **Solicitud:** Accionar un pendiente real del backlog: filtros de busqueda en listados de Compras, Ventas y Bancos.
 - **Implementacion:** Se agrego `cacao_accounting/list_filters.py` para aplicar `search` y `status` de forma reusable, se conectaron rutas de listados en Compras, Ventas y Bancos, y se agrego el macro `list_filters` con preservacion de filtros en paginacion.
