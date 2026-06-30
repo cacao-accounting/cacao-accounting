@@ -1123,22 +1123,39 @@ def nueva_cuenta():
     )
 
 
-@contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def editar_cuenta(entity, id_cta):
-    """Formulario para editar una cuenta contable existente."""
-    from cacao_accounting.contabilidad.forms import FormularioCuenta
+def _build_cost_center_edit_form(registro):
+    from cacao_accounting.database import CostCenter
+
+    formulario = FormularioCentroCosto(obj=registro)
+    formulario.id.data = registro.code
+    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.padre.choices = [("", SIN_PADRE)]
+    formulario.entidad.data = registro.entity
+
+    padre_row = None
+    if request.method == "POST" and request.form.get("padre"):
+        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
+    if registro.parent:
+        padre_row = database.session.execute(
+            database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
+        ).scalar_one_or_none()
+        if padre_row:
+            formulario.padre.choices.append((str(padre_row.id), f"{padre_row.code} - {padre_row.name}"))
+
+    if request.method != "POST":
+        formulario.nombre.data = registro.name
+        formulario.activo.data = bool(registro.active)
+        formulario.predeterminado.data = bool(registro.default)
+        formulario.grupo.data = bool(registro.group)
+        formulario.padre.data = str(padre_row.id) if padre_row else registro.parent
+
+    entity_initial_label = _company_label(registro.entity) if registro.entity else ""
+    parent_initial_label = f"{padre_row.code} - {padre_row.name}" if padre_row else ""
+    return formulario, entity_initial_label, parent_initial_label
+
+
+def _build_account_edit_form(registro, entity):
     from cacao_accounting.database import Accounts
-
-    registro = database.session.execute(
-        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
-    ).scalar_one_or_none()
-
-    if registro is None:
-        flash("La cuenta contable indicada no existe.", "warning")
-        return redirect(url_for("contabilidad.cuentas"))
 
     formulario = FormularioCuenta(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -1157,56 +1174,76 @@ def editar_cuenta(entity, id_cta):
             formulario.padre.data = str(padre_row.id) if padre_row else registro.parent
     entity_initial_label = _company_label(registro.entity) if registro.entity else ""
     parent_initial_label = f"{padre_row.code} - {padre_row.name}" if registro.parent and padre_row else ""
+    return formulario, entity_initial_label, parent_initial_label
 
+
+@contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_cuenta(entity, id_cta):
+    """Formulario para editar una cuenta contable existente."""
+    from cacao_accounting.contabilidad.forms import FormularioCuenta
+    from cacao_accounting.database import Accounts
+
+    registro = database.session.execute(
+        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
+    ).scalar_one_or_none()
+
+    if registro is None:
+        flash("La cuenta contable indicada no existe.", "warning")
+        return redirect(url_for("contabilidad.cuentas"))
+
+    formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
     TITULO = "Contabilidad | Editar Cuenta Contable - " + APPNAME
 
-    if formulario.validate_on_submit():
-        try:
-            _validate_active_entity_submission(formulario.entidad.data)
-        except ValueError as error:
-            flash(str(error), "danger")
-            return render_template(
-                _TPL_CUENTA_CREAR,
-                titulo=TITULO,
-                form=formulario,
-                edit=True,
-                entity_initial_label=entity_initial_label,
-                parent_initial_label=parent_initial_label,
-            )
-        try:
-            parent_code = _validate_account_parent(
-                formulario.entidad.data,
-                formulario.padre.data or None,
-                current_code=registro.code,
-            )
-        except ValueError as error:
-            flash(str(error), "danger")
-            return render_template(
-                _TPL_CUENTA_CREAR,
-                titulo=TITULO,
-                form=formulario,
-                edit=True,
-                entity_initial_label=entity_initial_label,
-                parent_initial_label=parent_initial_label,
-            )
-        registro.name = formulario.name.data
-        registro.group = bool(formulario.grupo.data)
-        registro.parent = parent_code
-        registro.classification = formulario.clasificacion.data or None
-        registro.account_type = formulario.account_type.data or None
-        registro.active = bool(formulario.activo.data)
-        registro.enabled = bool(formulario.activo.data)
-        database.session.commit()
-        return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
+    if not formulario.validate_on_submit():
+        return render_template(
+            _TPL_CUENTA_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
 
-    return render_template(
-        _TPL_CUENTA_CREAR,
-        titulo=TITULO,
-        form=formulario,
-        edit=True,
-        entity_initial_label=entity_initial_label,
-        parent_initial_label=parent_initial_label,
-    )
+    try:
+        _validate_active_entity_submission(formulario.entidad.data)
+    except ValueError as error:
+        flash(str(error), "danger")
+        return render_template(
+            _TPL_CUENTA_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    try:
+        parent_code = _validate_account_parent(
+            formulario.entidad.data,
+            formulario.padre.data or None,
+            current_code=registro.code,
+        )
+    except ValueError as error:
+        flash(str(error), "danger")
+        return render_template(
+            _TPL_CUENTA_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    registro.name = formulario.name.data
+    registro.group = bool(formulario.grupo.data)
+    registro.parent = parent_code
+    registro.classification = formulario.clasificacion.data or None
+    registro.account_type = formulario.account_type.data or None
+    registro.active = bool(formulario.activo.data)
+    registro.enabled = bool(formulario.activo.data)
+    database.session.commit()
+    return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
 
 
 @contabilidad.route("/costs_center", methods=["GET", "POST"])
@@ -1373,92 +1410,63 @@ def nuevo_centro_costo():
 @verifica_acceso("accounting")
 def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
-    from cacao_accounting.contabilidad.forms import FormularioCentroCosto
     from cacao_accounting.database import CostCenter
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
-    formulario = FormularioCentroCosto(obj=registro)
-    formulario.id.data = registro.code
-    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.padre.choices = [("", SIN_PADRE)]
-
-    # Pre-select entity so filter bindings work consistently
-    formulario.entidad.data = registro.entity
-
-    padre_row = None
-    if request.method == "POST" and request.form.get("padre"):
-        # Preserve submitted parent value (id) so the form shows it after validation errors
-        formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
-    if registro.parent:
-        padre_row = database.session.execute(
-            database.select(CostCenter).filter(CostCenter.entity == registro.entity, CostCenter.code == registro.parent)
-        ).scalar_one_or_none()
-        if padre_row:
-            formulario.padre.choices.append((str(padre_row.id), f"{padre_row.code} - {padre_row.name}"))
-
-    if request.method != "POST":
-        formulario.nombre.data = registro.name
-        formulario.activo.data = bool(registro.active)
-        formulario.predeterminado.data = bool(registro.default)
-        formulario.grupo.data = bool(registro.group)
-        # Set padre field to the stored parent id if available, otherwise to the stored parent code
-        formulario.padre.data = str(padre_row.id) if padre_row else registro.parent
-
-    entity_initial_label = _company_label(registro.entity) if registro.entity else ""
-    parent_initial_label = f"{padre_row.code} - {padre_row.name}" if padre_row else ""
+    formulario, entity_initial_label, parent_initial_label = _build_cost_center_edit_form(registro)
     TITULO = "Contabilidad | Editar Centro de Costos - " + APPNAME
 
-    if formulario.validate_on_submit():
-        entity = request.form.get("entidad", registro.entity)
-        try:
-            _validate_active_entity_submission(entity)
-        except ValueError as error:
-            flash(str(error), "danger")
-            return render_template(
-                _TPL_CENTRO_COSTO_CREAR,
-                titulo=TITULO,
-                form=formulario,
-                edit=True,
-                entity_initial_label=entity_initial_label,
-                parent_initial_label=parent_initial_label,
-            )
-        try:
-            parent_code = _validate_cost_center_parent(
-                entity,
-                request.form.get("padre") or None,
-                current_code=registro.code,
-            )
-        except ValueError as error:
-            flash(str(error), "danger")
-            return render_template(
-                _TPL_CENTRO_COSTO_CREAR,
-                titulo=TITULO,
-                form=formulario,
-                edit=True,
-                entity_initial_label=entity_initial_label,
-                parent_initial_label=parent_initial_label,
-            )
-        registro.name = request.form.get("nombre", registro.name)
-        registro.entity = entity
-        registro.active = bool(formulario.activo.data)
-        registro.enabled = bool(formulario.activo.data)
-        registro.default = bool(formulario.predeterminado.data)
-        registro.group = bool(formulario.grupo.data)
-        registro.parent = parent_code
-        database.session.commit()
-        return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
+    if not formulario.validate_on_submit():
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
 
-    return render_template(
-        _TPL_CENTRO_COSTO_CREAR,
-        titulo=TITULO,
-        form=formulario,
-        edit=True,
-        entity_initial_label=entity_initial_label,
-        parent_initial_label=parent_initial_label,
-    )
+    entity = request.form.get("entidad", registro.entity)
+    try:
+        _validate_active_entity_submission(entity)
+    except ValueError as error:
+        flash(str(error), "danger")
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    try:
+        parent_code = _validate_cost_center_parent(
+            entity,
+            request.form.get("padre") or None,
+            current_code=registro.code,
+        )
+    except ValueError as error:
+        flash(str(error), "danger")
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    registro.name = request.form.get("nombre", registro.name)
+    registro.entity = entity
+    registro.active = bool(formulario.activo.data)
+    registro.enabled = bool(formulario.activo.data)
+    registro.default = bool(formulario.predeterminado.data)
+    registro.group = bool(formulario.grupo.data)
+    registro.parent = parent_code
+    database.session.commit()
+    return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
 
 
 @contabilidad.route("/costs_center/<id_cc>")
@@ -2747,6 +2755,19 @@ def _resolve_period_from_date(company: str, year: str, month: str) -> tuple[str,
     return "", ""
 
 
+def _validate_exchange_revaluation_period(company: str, fiscal_year_id: str, period_id: str):
+    from cacao_accounting.database import AccountingPeriod
+
+    period = database.session.get(AccountingPeriod, period_id)
+    if not period or period.entity != company:
+        flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
+        return None
+    if fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
+        flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
+        return None
+    return period
+
+
 def _handle_exchange_revaluation_post() -> "Any":
     """Procesa el formulario POST de revalorizacion cambiaria. Retorna redirect o None."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
@@ -2774,14 +2795,8 @@ def _handle_exchange_revaluation_post() -> "Any":
         flash("El periodo contable es requerido.", "danger")
         return None
 
-    from cacao_accounting.database import AccountingPeriod
-
-    period = database.session.get(AccountingPeriod, period_id)
-    if not period or period.entity != company:
-        flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
-        return None
-    if fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
-        flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
+    period = _validate_exchange_revaluation_period(company, fiscal_year_id, period_id)
+    if not period:
         return None
 
     try:
@@ -3012,33 +3027,19 @@ def anular_comprobante(identifier: str):
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
-@contabilidad.route("/journal/<identifier>")
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def ver_comprobante(identifier: str):
-    """Ver comprobante contable."""
-    from cacao_accounting.contabilidad.journal_repository import get_journal, list_journal_lines
+def _build_journal_selected_books(journal, entity: str) -> list[str]:
     from cacao_accounting.contabilidad.journal_service import serialize_journal_for_form
-    from cacao_accounting.database import Accounts, Book, CostCenter, Entity, User
-
-    journal = get_journal(identifier)
-    if journal is None:
-        flash("El comprobante contable indicado no existe.", "warning")
-        return redirect(url_for("contabilidad.conta"))
-    creator = database.session.get(User, journal.user_id) if journal.user_id else None
-    creator_nickname = creator.user if creator is not None else (journal.user_id or "")
-    lineas_raw = list_journal_lines(identifier)
+    from cacao_accounting.database import Book
 
     selected_book_codes = serialize_journal_for_form(journal).get("books") or []
+    if not selected_book_codes:
+        return []
     selected_book_rows = (
         database.session.execute(
-            database.select(Book).filter(Book.entity == journal.entity).where(Book.code.in_(selected_book_codes))
+            database.select(Book).filter(Book.entity == entity).where(Book.code.in_(selected_book_codes))
         )
         .scalars()
         .all()
-        if selected_book_codes
-        else []
     )
     selected_books = [
         f"{book.code} - {book.name}" + (f" ({book.currency})" if getattr(book, "currency", None) else "")
@@ -3048,7 +3049,7 @@ def ver_comprobante(identifier: str):
         fallback_book_rows = (
             database.session.execute(
                 database.select(Book)
-                .filter(Book.entity == journal.entity)
+                .filter(Book.entity == entity)
                 .where(Book.status.is_(None) | (Book.status == "activo"))
             )
             .scalars()
@@ -3060,46 +3061,10 @@ def ver_comprobante(identifier: str):
         ]
     if not selected_books and journal.book:
         selected_books = [str(journal.book)]
+    return selected_books
 
-    entity = (
-        database.session.execute(database.select(Entity).filter_by(code=journal.entity)).scalars().first()
-        if journal.entity
-        else None
-    )
-    company_currency_code = getattr(entity, "currency", None)
-    currency_label = ""
-    if journal.transaction_currency:
-        currency_label = str(journal.transaction_currency)
-    elif company_currency_code:
-        currency_label = str(company_currency_code)
-    else:
-        currency_label = _("Moneda local")
 
-    account_codes = {line.account for line in lineas_raw if line.account}
-    cost_center_codes = {line.cost_center for line in lineas_raw if line.cost_center}
-    account_rows = (
-        database.session.execute(
-            database.select(Accounts).filter(Accounts.entity == journal.entity).where(Accounts.code.in_(account_codes))
-        )
-        .scalars()
-        .all()
-        if account_codes
-        else []
-    )
-    cost_center_rows = (
-        database.session.execute(
-            database.select(CostCenter)
-            .filter(CostCenter.entity == journal.entity)
-            .where(CostCenter.code.in_(cost_center_codes))
-        )
-        .scalars()
-        .all()
-        if cost_center_codes
-        else []
-    )
-    account_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in account_rows}
-    cost_center_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in cost_center_rows}
-
+def _build_journal_lineas(lineas_raw, account_labels: dict, cost_center_labels: dict) -> list[dict]:
     lineas = []
     for line in lineas_raw:
         account_code = line.account or ""
@@ -3126,7 +3091,67 @@ def ver_comprobante(identifier: str):
                 "line_memo": line.line_memo,
             }
         )
+    return lineas
 
+
+def _get_journal_currency_label(journal, entity) -> str:
+    from cacao_accounting.database import Entity
+
+    entity_obj = database.session.execute(database.select(Entity).filter_by(code=entity)).scalars().first() if entity else None
+    company_currency_code = getattr(entity_obj, "currency", None)
+    if journal.transaction_currency:
+        return str(journal.transaction_currency)
+    if company_currency_code:
+        return str(company_currency_code)
+    return _("Moneda local")
+
+
+@contabilidad.route("/journal/<identifier>")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ver_comprobante(identifier: str):
+    """Ver comprobante contable."""
+    from cacao_accounting.contabilidad.journal_repository import get_journal, list_journal_lines
+    from cacao_accounting.database import Accounts, CostCenter, User
+
+    journal = get_journal(identifier)
+    if journal is None:
+        flash("El comprobante contable indicado no existe.", "warning")
+        return redirect(url_for("contabilidad.conta"))
+    creator = database.session.get(User, journal.user_id) if journal.user_id else None
+    creator_nickname = creator.user if creator is not None else (journal.user_id or "")
+    lineas_raw = list_journal_lines(identifier)
+
+    selected_books = _build_journal_selected_books(journal, journal.entity)
+    currency_label = _get_journal_currency_label(journal, journal.entity)
+
+    account_codes = {line.account for line in lineas_raw if line.account}
+    cost_center_codes = {line.cost_center for line in lineas_raw if line.cost_center}
+    account_rows = (
+        database.session.execute(
+            database.select(Accounts).filter(Accounts.entity == journal.entity).where(Accounts.code.in_(account_codes))
+        )
+        .scalars()
+        .all()
+        if account_codes
+        else []
+    )
+    cost_center_rows = (
+        database.session.execute(
+            database.select(CostCenter)
+            .filter(CostCenter.entity == journal.entity)
+            .where(CostCenter.code.in_(cost_center_codes))
+        )
+        .scalars()
+        .all()
+        if cost_center_codes
+        else []
+    )
+    account_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in account_rows}
+    cost_center_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in cost_center_rows}
+
+    lineas = _build_journal_lineas(lineas_raw, account_labels, cost_center_labels)
     audit_timeline = format_document_timeline("journal_entry", journal.id)
 
     return render_template(
@@ -3376,6 +3401,25 @@ def naming_series_toggle_default(series_id: str):
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
+def _update_series_sequence(serie, form):
+    from cacao_accounting.database import Sequence, SeriesSequenceMap
+    from cacao_accounting.logs import log
+
+    sequence_id = database.session.execute(
+        database.select(SeriesSequenceMap.sequence_id).filter_by(naming_series_id=serie.id)
+    ).scalar_one_or_none()
+    if not sequence_id:
+        return
+    sequence = database.session.get(Sequence, sequence_id)
+    if sequence is not None:
+        sequence.current_value = form.current_value.data or 0
+        sequence.increment = form.increment.data or 1
+        sequence.padding = form.padding.data or 5
+        sequence.reset_policy = form.reset_policy.data or "never"
+    else:
+        log.warning(f"Sequence record not found for sequence_id={sequence_id} on series={serie.id}")
+
+
 def naming_series_edit(series_id: str):
     """Editar una serie de numeracion."""
     from cacao_accounting.contabilidad.forms import FormularioNamingSeries
@@ -3399,45 +3443,32 @@ def naming_series_edit(series_id: str):
         or 0
     )
 
-    if form.validate_on_submit():
-        company = form.company.data or None
-        if form.is_default.data:
-            enforce_single_default_series(
-                entity_type=form.entity_type.data,
-                company=company,
-                exclude_id=serie.id,
-            )
-        serie.name = form.nombre.data
-        serie.entity_type = form.entity_type.data
-        serie.company = company
-        serie.prefix_template = form.prefix_template.data
-        serie.is_active = bool(form.is_active.data)
-        serie.is_default = bool(form.is_default.data)
+    if not form.validate_on_submit():
+        return render_template(
+            "contabilidad/naming_series_nueva.html",
+            form=form,
+            titulo="Editar Serie de Numeracion - " + APPNAME,
+            edit=True,
+        )
 
-        sequence_id = database.session.execute(
-            database.select(SeriesSequenceMap.sequence_id).filter_by(naming_series_id=serie.id)
-        ).scalar_one_or_none()
-        if sequence_id:
-            sequence = database.session.get(Sequence, sequence_id)
-            if sequence is not None:
-                sequence.current_value = form.current_value.data or 0
-                sequence.increment = form.increment.data or 1
-                sequence.padding = form.padding.data or 5
-                sequence.reset_policy = form.reset_policy.data or "never"
-            else:
-                from cacao_accounting.logs import log
+    company = form.company.data or None
+    if form.is_default.data:
+        enforce_single_default_series(
+            entity_type=form.entity_type.data,
+            company=company,
+            exclude_id=serie.id,
+        )
+    serie.name = form.nombre.data
+    serie.entity_type = form.entity_type.data
+    serie.company = company
+    serie.prefix_template = form.prefix_template.data
+    serie.is_active = bool(form.is_active.data)
+    serie.is_default = bool(form.is_default.data)
 
-                log.warning(f"Sequence record not found for sequence_id={sequence_id} on series={serie.id}")
+    _update_series_sequence(serie, form)
 
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
-
-    return render_template(
-        "contabilidad/naming_series_nueva.html",
-        form=form,
-        titulo="Editar Serie de Numeracion - " + APPNAME,
-        edit=True,
-    )
+    database.session.commit()
+    return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
 @contabilidad.route("/naming-series/<series_id>/delete", methods=["GET", "POST"])
