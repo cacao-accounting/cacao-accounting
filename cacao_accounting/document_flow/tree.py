@@ -438,6 +438,71 @@ def _has_cycle_flag(nodes: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _payment_reference_documents(doctype: str, document_id: str) -> list[PaymentReference]:
+    """Devuelve referencias de pago relacionadas con un documento."""
+    return list(
+        database.session.execute(
+            database.select(PaymentReference)
+            .filter_by(reference_type=doctype, reference_id=document_id)
+            .order_by(PaymentReference.created)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _payment_entry_references(document_id: str) -> list[PaymentReference]:
+    """Devuelve referencias de pago asociadas a un pago."""
+    return list(
+        database.session.execute(
+            database.select(PaymentReference).filter_by(payment_id=document_id).order_by(PaymentReference.created)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _append_payment_reference_node(
+    result: list[dict[str, Any]],
+    *,
+    seen_pairs: set[tuple[str, str]],
+    pair: tuple[str, str],
+    relation_type: str,
+    related_doctype: str,
+    related_id: str,
+    allocated_amount: float,
+    visited: set[tuple[str, str]],
+    depth: int,
+    max_depth: int,
+    node_counter: list[int],
+    max_nodes: int,
+) -> None:
+    """Agrega un nodo de PaymentReference al árbol si aún no fue visto."""
+    if pair in seen_pairs:
+        return
+    seen_pairs.add(pair)
+
+    if node_counter[0] >= max_nodes:
+        result.append({"max_nodes_reached": True})
+        return
+
+    node = get_document_node(related_doctype, related_id)
+    node["relation_type"] = relation_type
+    node["relation_status"] = "active"
+    node["applied_amount"] = allocated_amount
+    node_counter[0] += 1
+    node["children"] = get_downstream_tree(
+        related_doctype,
+        related_id,
+        visited=visited,
+        depth=depth + 1,
+        max_depth=max_depth,
+        node_counter=node_counter,
+        max_nodes=max_nodes,
+    )
+    result.append(node)
+
+
 def _append_payment_reference_nodes(
     doctype: str,
     document_id: str,
@@ -468,81 +533,41 @@ def _append_payment_reference_nodes(
         "purchase_order",
     }
     if doctype in ref_doctypes:
-        pay_refs: list[PaymentReference] = list(
-            database.session.execute(
-                database.select(PaymentReference)
-                .filter_by(reference_type=doctype, reference_id=document_id)
-                .order_by(PaymentReference.created)
-            )
-            .scalars()
-            .all()
-        )
-
+        pay_refs = _payment_reference_documents(doctype, document_id)
         for ref in pay_refs:
-            pay_id = ref.payment_id
-            pair = ("payment_entry", pay_id)
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
-
-            if node_counter[0] >= max_nodes:
-                result.append({"max_nodes_reached": True})
-                break
-
-            node = get_document_node("payment_entry", pay_id)
-            node["relation_type"] = "payment"
-            node["relation_status"] = "active"
-            node["applied_amount"] = float(ref.allocated_amount or 0)
-            node_counter[0] += 1
-
-            node["children"] = get_downstream_tree(
-                "payment_entry",
-                pay_id,
+            _append_payment_reference_node(
+                result,
+                seen_pairs=seen_pairs,
+                pair=("payment_entry", ref.payment_id),
+                relation_type="payment",
+                related_doctype="payment_entry",
+                related_id=ref.payment_id,
+                allocated_amount=float(ref.allocated_amount or 0),
                 visited=visited,
-                depth=depth + 1,
+                depth=depth,
                 max_depth=max_depth,
                 node_counter=node_counter,
                 max_nodes=max_nodes,
             )
-            result.append(node)
         return
 
     if doctype != "payment_entry":
         return
 
-    refs: list[PaymentReference] = list(
-        database.session.execute(
-            database.select(PaymentReference).filter_by(payment_id=document_id).order_by(PaymentReference.created)
-        )
-        .scalars()
-        .all()
-    )
-
+    refs = _payment_entry_references(document_id)
     for ref in refs:
         ref_type = normalize_doctype(ref.reference_type)
-        ref_id = ref.reference_id
-        pair = (ref_type, ref_id)
-        if pair in seen_pairs:
-            continue
-        seen_pairs.add(pair)
-
-        if node_counter[0] >= max_nodes:
-            result.append({"max_nodes_reached": True})
-            break
-
-        node = get_document_node(ref_type, ref_id)
-        node["relation_type"] = "payment_reference"
-        node["relation_status"] = "active"
-        node["applied_amount"] = float(ref.allocated_amount or 0)
-        node_counter[0] += 1
-
-        node["children"] = get_downstream_tree(
-            ref_type,
-            ref_id,
+        _append_payment_reference_node(
+            result,
+            seen_pairs=seen_pairs,
+            pair=(ref_type, ref.reference_id),
+            relation_type="payment_reference",
+            related_doctype=ref_type,
+            related_id=ref.reference_id,
+            allocated_amount=float(ref.allocated_amount or 0),
             visited=visited,
-            depth=depth + 1,
+            depth=depth,
             max_depth=max_depth,
             node_counter=node_counter,
             max_nodes=max_nodes,
         )
-        result.append(node)
