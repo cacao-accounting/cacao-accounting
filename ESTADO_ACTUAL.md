@@ -1,4 +1,9 @@
-# Estado Actual del Proyecto - 2026-06-27
+# Estado Actual del Proyecto - 2026-06-30
+
+- **SonarCloud / Reportes bancarios y conciliación (2026-06-30):** Se corrigió el issue `python:S1481` en `cacao_accounting/compras/purchase_reconciliation_service.py` y se redujo la complejidad de `cacao_accounting/reportes/services.py` separando el cálculo de movimientos bancarios y saldos por cuenta en helpers más pequeños.
+  - `get_bank_movement_detail()` y `get_bank_balance_summary()` siguen produciendo los mismos reportes, pero con la lógica de importes y acumulación más explícita y mantenible.
+  - Los chequeos locales `ruff`, `mypy` y las pruebas focales de conciliación y resumen de cuentas quedaron en verde.
+  - Los hallazgos `javascript:S2004` de `cacao_accounting/static/js/transaction-form.js` quedaron en revisión por posible falso positivo de Alpine; no se tocaron sin una verificación adicional.
 
 - **SonarCloud / Wizard de setup (2026-06-29):** Se redujo la complejidad de `cacao_accounting/setup/__init__.py` separando la lógica de pasos POST y el armado del payload de compañía en helpers pequeños.
   - `setup()` ahora delega en helpers para manejar los pasos del wizard, construir los datos de compañía y seleccionar el formulario activo.

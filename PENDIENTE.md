@@ -1,5 +1,11 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
+## Seguimiento 2026-06-30 (SonarCloud - revisión cautelosa)
+- [x] Corregir el uso de variable local no utilizada en `compras/purchase_reconciliation_service.py`.
+- [x] Reducir la complejidad de `reportes/services.py` en el detalle y resumen bancario.
+- [ ] Revisar los `javascript:S2004` de `static/js/transaction-form.js` antes de refactorizar más, porque pueden ser falsos positivos del patrón Alpine.
+- [ ] Continuar cerrando issues SonarCloud por prioridad, validando primero si los hallazgos de JavaScript son reales o ruido del analizador.
+
 ## Seguimiento 2026-06-29 (SonarCloud API - en curso)
 - [x] Consultar la API publica de SonarCloud para enumerar issues abiertos del proyecto.
 - [x] Confirmar el volumen de hallazgos activos antes de tocar hotspots de negocio.
