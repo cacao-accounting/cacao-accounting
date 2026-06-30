@@ -487,6 +487,47 @@ def _build_transaction_row_values(
     }
 
 
+def _payment_entry_primary_amounts(payment: PaymentEntry) -> tuple[Decimal, Decimal]:
+    """Devuelve los importes de ingreso y egreso para la cuenta principal."""
+    if payment.payment_type == "receive":
+        return _decimal_value(payment.received_amount or payment.paid_amount), Decimal("0")
+    if payment.payment_type == "pay":
+        return Decimal("0"), _decimal_value(payment.paid_amount or payment.received_amount)
+    if payment.payment_type == "internal_transfer":
+        return Decimal("0"), _decimal_value(payment.paid_amount)
+    return Decimal("0"), Decimal("0")
+
+
+def _append_payment_rows(
+    rows: list[ReportRow],
+    payment: PaymentEntry,
+    bank_account_id: str | None,
+    incoming: Decimal,
+    outgoing: Decimal,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> tuple[Decimal, Decimal]:
+    """Agrega filas de reporte para un movimiento y retorna sus totales."""
+    if incoming > 0:
+        rows.append(
+            ReportRow(
+                values=_build_payment_row_values(payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names)
+            )
+        )
+    if outgoing > 0:
+        rows.append(
+            ReportRow(
+                values=_build_payment_row_values(payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names)
+            )
+        )
+    return incoming, outgoing
+
+
+def _payment_entry_target_amount(payment: PaymentEntry) -> Decimal:
+    """Devuelve el importe de ingreso para la cuenta destino de una transferencia."""
+    return _decimal_value(payment.received_amount or payment.paid_amount)
+
+
 def _process_payment_entry(
     payment: PaymentEntry,
     filters: BankingFilters,
@@ -501,45 +542,28 @@ def _process_payment_entry(
     # 1. Movimiento en la cuenta principal (bank_account_id)
     bank_account_id = payment.bank_account_id
     if bank_account_id and (not filters.bank_account_id or bank_account_id == filters.bank_account_id):
-        incoming = Decimal("0")
-        outgoing = Decimal("0")
-
-        if payment.payment_type == "receive":
-            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
-        elif payment.payment_type == "pay":
-            outgoing = _decimal_value(payment.paid_amount or payment.received_amount)
-        elif payment.payment_type == "internal_transfer":
-            outgoing = _decimal_value(payment.paid_amount)
-
-        if incoming > 0:
-            rows.append(
-                ReportRow(
-                    values=_build_payment_row_values(
-                        payment, bank_account_id, incoming, Decimal("0"), bank_accounts, party_names
-                    )
-                )
-            )
-            total_incoming += incoming
-        if outgoing > 0:
-            rows.append(
-                ReportRow(
-                    values=_build_payment_row_values(
-                        payment, bank_account_id, Decimal("0"), outgoing, bank_accounts, party_names
-                    )
-                )
-            )
-            total_outgoing += outgoing
+        incoming, outgoing = _payment_entry_primary_amounts(payment)
+        incoming_total, outgoing_total = _append_payment_rows(
+            rows, payment, bank_account_id, incoming, outgoing, bank_accounts, party_names
+        )
+        total_incoming += incoming_total
+        total_outgoing += outgoing_total
 
     # 2. Movimiento en la cuenta destino (solo para transferencias internas)
     if payment.payment_type == "internal_transfer" and payment.target_bank_account_id:
         target_bank_id = payment.target_bank_account_id
         if not filters.bank_account_id or target_bank_id == filters.bank_account_id:
-            incoming = _decimal_value(payment.received_amount or payment.paid_amount)
+            incoming = _payment_entry_target_amount(payment)
             if incoming > 0:
                 rows.append(
                     ReportRow(
                         values=_build_payment_row_values(
-                            payment, target_bank_id, incoming, Decimal("0"), bank_accounts, party_names
+                            payment,
+                            target_bank_id,
+                            incoming,
+                            Decimal("0"),
+                            bank_accounts,
+                            party_names,
                         )
                     )
                 )
@@ -670,9 +694,11 @@ def _compute_account_receipts_and_payments(
     for payment in database.session.execute(movements_query).scalars():
         if payment.payment_type == "receive" and payment.bank_account_id == bank_account_id:
             receipts += _decimal_value(payment.received_amount or payment.paid_amount)
-        elif payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
+            continue
+        if payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
             payments += _decimal_value(payment.paid_amount or payment.received_amount)
-        elif payment.payment_type == "internal_transfer":
+            continue
+        if payment.payment_type == "internal_transfer":
             if payment.target_bank_account_id == bank_account_id:
                 receipts += _decimal_value(payment.received_amount or payment.paid_amount)
             if payment.bank_account_id == bank_account_id:
