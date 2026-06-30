@@ -220,7 +220,7 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
         if cash_consumed == Decimal("0") and relation_status is None:
             continue
         reference_id_str = str(row[0])
-        consumed_by_reference.setdefault(reference_id_str, Decimal("0"))
+        consumed_by_reference[reference_id_str] = consumed_by_reference.get(reference_id_str, Decimal("0")) + cash_consumed
         if relation_status:
             relation_status_by_reference.setdefault(reference_id_str, set()).add(relation_status)
     consumed = sum(
