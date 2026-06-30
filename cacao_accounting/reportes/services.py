@@ -692,18 +692,27 @@ def _compute_account_receipts_and_payments(
     receipts = Decimal("0")
     payments = Decimal("0")
     for payment in database.session.execute(movements_query).scalars():
-        if payment.payment_type == "receive" and payment.bank_account_id == bank_account_id:
-            receipts += _decimal_value(payment.received_amount or payment.paid_amount)
-            continue
-        if payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
-            payments += _decimal_value(payment.paid_amount or payment.received_amount)
-            continue
-        if payment.payment_type == "internal_transfer":
-            if payment.target_bank_account_id == bank_account_id:
-                receipts += _decimal_value(payment.received_amount or payment.paid_amount)
-            if payment.bank_account_id == bank_account_id:
-                payments += _decimal_value(payment.paid_amount)
+        receipt_amount, payment_amount = _bank_account_payment_movements(payment, bank_account_id)
+        receipts += receipt_amount
+        payments += payment_amount
     return receipts, payments
+
+
+def _bank_account_payment_movements(payment: PaymentEntry, bank_account_id: str) -> tuple[Decimal, Decimal]:
+    """Devuelve el impacto de un PaymentEntry sobre una cuenta bancaria."""
+    if payment.payment_type == "receive" and payment.bank_account_id == bank_account_id:
+        return _decimal_value(payment.received_amount or payment.paid_amount), Decimal("0")
+    if payment.payment_type == "pay" and payment.bank_account_id == bank_account_id:
+        return Decimal("0"), _decimal_value(payment.paid_amount or payment.received_amount)
+    if payment.payment_type == "internal_transfer":
+        receipt_amount = (
+            _decimal_value(payment.received_amount or payment.paid_amount)
+            if payment.target_bank_account_id == bank_account_id
+            else Decimal("0")
+        )
+        payment_amount = _decimal_value(payment.paid_amount) if payment.bank_account_id == bank_account_id else Decimal("0")
+        return receipt_amount, payment_amount
+    return Decimal("0"), Decimal("0")
 
 
 def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
