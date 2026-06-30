@@ -1,8 +1,9 @@
 # SESSIONS - Historical Decisions & Milestones
 
-# SESSIONS - Historical Decisions & Milestones
-
-# SESSIONS - Historical Decisions & Milestones
+## 2026-06-30 (SonarCloud: detalle de movimiento contable simplificado)
+- **Solicitud:** Continuar cerrando issues abiertos de SonarCloud en Python con refactors verificables y sin tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se extrajeron helpers para construir la consulta, materializar filas y acumular totales en `get_account_movement_detail()` dentro de `cacao_accounting/reportes/services.py`. La función pública quedó como orquestador y la salida del reporte no cambió.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_report_account_summary.py tests/test_08_reconciliation_reports.py -k 'account_summary or trial_balance or bank_movement or bank_balance or reconciliation'` quedaron en verde.
 
 ## 2026-06-30 (SonarCloud: reportes GL simplificados)
 - **Solicitud:** Continuar corrigiendo issues abiertos de SonarCloud del proyecto, evitando falsos positivos de Alpine en `transaction-form.js` y atacando primero los reportes de menor riesgo semántico.
