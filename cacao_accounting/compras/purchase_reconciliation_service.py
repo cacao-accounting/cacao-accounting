@@ -586,7 +586,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
 
 def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase order vs invoice without requiring a receipt."""
-    purchase_order_id, order = _load_purchase_order_for_invoice(invoice)
+    purchase_order_id, _ = _load_purchase_order_for_invoice(invoice)
     order_items = _purchase_order_items(purchase_order_id)
     invoice_items = _invoice_items(invoice.id)
     if not order_items or not invoice_items:
