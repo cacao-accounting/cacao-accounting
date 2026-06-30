@@ -443,6 +443,18 @@ def payment_reconciliation_candidates(
     if not company or party_type not in {"supplier", "customer"}:
         raise DocumentFlowError("Debe indicar compania y tipo de tercero.", 400)
 
+    payments = _candidate_payments(company, party_type, party_id, currency)
+    documents = _candidate_documents(company, party_type, party_id, currency)
+    return {"payments": payments, "documents": documents}
+
+
+def _candidate_payments(
+    company: str,
+    party_type: str,
+    party_id: str | None,
+    currency: str | None,
+) -> list[dict[str, Any]]:
+    """Devuelve pagos abiertos candidatos para conciliacion."""
     payment_query = (
         select(PaymentEntry)
         .filter_by(company=company, party_type=party_type, docstatus=1)
@@ -453,12 +465,12 @@ def payment_reconciliation_candidates(
     if currency:
         payment_query = payment_query.filter_by(currency=currency)
 
-    payments: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for payment in database.session.execute(payment_query.order_by(PaymentEntry.posting_date, PaymentEntry.id)).scalars():
         unallocated = compute_payment_unallocated_amount(payment)
         if unallocated <= 0:
             continue
-        payments.append(
+        rows.append(
             {
                 "payment_id": payment.id,
                 "document_no": getattr(payment, "document_no", None) or payment.id,
@@ -472,26 +484,44 @@ def payment_reconciliation_candidates(
                 "unallocated_amount": _to_json_number(unallocated),
             }
         )
+    return rows
 
-    source_types = (
-        ["purchase_invoice", "purchase_debit_note", "purchase_credit_note"]
-        if party_type == "supplier"
-        else ["sales_invoice", "sales_debit_note", "sales_credit_note"]
-    )
-    documents = (
-        payment_reference_candidates(
-            company=company,
-            party_type=party_type,
-            party_id=party_id or "",
-            source_types=source_types,
-        )
-        if party_id
-        else []
-    )
-    if currency:
-        documents = [document for document in documents if document.get("currency") in {"", currency}]
 
-    return {"payments": payments, "documents": documents}
+def _candidate_documents(
+    company: str,
+    party_type: str,
+    party_id: str | None,
+    currency: str | None,
+) -> list[dict[str, Any]]:
+    """Devuelve documentos origen candidatos para conciliacion."""
+    if not party_id:
+        return []
+
+    source_types = _candidate_source_types(party_type)
+    documents = payment_reference_candidates(
+        company=company,
+        party_type=party_type,
+        party_id=party_id,
+        source_types=source_types,
+    )
+    return _filter_candidates_by_currency(documents, currency)
+
+
+def _candidate_source_types(party_type: str) -> list[str]:
+    """Resuelve los doctypes origen válidos para el tipo de tercero."""
+    if party_type == "supplier":
+        return ["purchase_invoice", "purchase_debit_note", "purchase_credit_note"]
+    return ["sales_invoice", "sales_debit_note", "sales_credit_note"]
+
+
+def _filter_candidates_by_currency(
+    documents: list[dict[str, Any]],
+    currency: str | None,
+) -> list[dict[str, Any]]:
+    """Filtra documentos candidatos por moneda si aplica."""
+    if not currency:
+        return documents
+    return [document for document in documents if document.get("currency") in {"", currency}]
 
 
 def _payment_reference_model(reference_type: str) -> type[PurchaseInvoice] | type[SalesInvoice]:
