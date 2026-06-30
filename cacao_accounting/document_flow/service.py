@@ -176,6 +176,20 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
     return outstanding if outstanding > 0 else Decimal("0")
 
 
+def _compute_cash_consumed_from_reference(
+    reference_id, reference_type, flow_source_type, allocated_amount, discount_amount, gain_loss_amount, relation_status
+):
+    source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
+    if source_type in {"purchase_order", "sales_order"}:
+        return Decimal("0"), None
+    cash_consumed = (
+        decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
+    )
+    if cash_consumed < 0:
+        cash_consumed = Decimal("0")
+    return cash_consumed, str(relation_status) if relation_status else None
+
+
 def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     """Calcula el saldo no aplicado (abierto) de un pago."""
     if getattr(payment, "docstatus", 0) == 2:
@@ -203,31 +217,18 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
         return payment_total
     consumed_by_reference: dict[str, Decimal] = {}
     relation_status_by_reference: dict[str, set[str]] = {}
-    for (
-        reference_id,
-        reference_type,
-        flow_source_type,
-        allocated_amount,
-        discount_amount,
-        gain_loss_amount,
-        relation_status,
-    ) in reference_rows:
-        source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
-        if source_type in {"purchase_order", "sales_order"}:
+    for row in reference_rows:
+        cash_consumed, relation_status = _compute_cash_consumed_from_reference(*row)
+        if cash_consumed == Decimal("0") and relation_status is None:
             continue
-        cash_consumed = (
-            decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
-        )
-        if cash_consumed < 0:
-            cash_consumed = Decimal("0")
-        consumed_by_reference.setdefault(str(reference_id), cash_consumed)
+        reference_id_str = str(row[0])
+        consumed_by_reference.setdefault(reference_id_str, Decimal("0"))
         if relation_status:
-            relation_status_by_reference.setdefault(str(reference_id), set()).add(str(relation_status))
-    consumed = Decimal("0")
-    for reference_id, cash_consumed in consumed_by_reference.items():
-        statuses = relation_status_by_reference.get(reference_id, set())
-        if not statuses or "active" in statuses:
-            consumed += cash_consumed
+            relation_status_by_reference.setdefault(reference_id_str, set()).add(relation_status)
+    consumed = sum(
+        cash for ref_id, cash in consumed_by_reference.items()
+        if not relation_status_by_reference.get(ref_id) or "active" in relation_status_by_reference[ref_id]
+    )
     remaining = payment_total - consumed
     return remaining if remaining > 0 else Decimal("0")
 
