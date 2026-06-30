@@ -854,6 +854,112 @@ def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
     return query.order_by(direction, GLEntry.id.asc())
 
 
+def _entry_bucket(posting_date: date, period_start: date | None, period_end: date | None) -> str | None:
+    """Clasifica una entrada como saldo inicial o movimiento del periodo."""
+    if period_start and posting_date < period_start:
+        return "opening"
+    if period_end and posting_date > period_end:
+        return None
+    return "movement"
+
+
+def _account_summary_base_values(account_code: str, account: Accounts | None) -> dict[str, Any]:
+    """Construye el acumulador inicial para la sabana por cuenta."""
+    return {
+        "account_code": account_code,
+        "account_name": account.name if account else None,
+        "account_type": account.account_type if account else None,
+        "classification": _normalize_account_classification(account),
+        "currency": account.currency if account else None,
+        "opening_balance": Decimal("0"),
+        "debit": Decimal("0"),
+        "credit": Decimal("0"),
+        "movement_count": 0,
+        "first_movement": None,
+        "last_movement": None,
+        "level": account_code.count(".") + 1 if account_code else 1,
+    }
+
+
+def _apply_account_summary_entry(row: dict[str, Any], bucket: str, entry: GLEntry, debit: Decimal, credit: Decimal) -> None:
+    """Acumula una entrada en el resumen por cuenta."""
+    if bucket == "opening":
+        row["opening_balance"] += debit - credit
+        return
+    row["debit"] += debit
+    row["credit"] += credit
+    row["movement_count"] += 1
+    if row["first_movement"] is None or entry.posting_date < row["first_movement"]:
+        row["first_movement"] = entry.posting_date
+    if row["last_movement"] is None or entry.posting_date > row["last_movement"]:
+        row["last_movement"] = entry.posting_date
+
+
+def _build_account_summary_row(values: dict[str, Any]) -> tuple[ReportRow, Decimal]:
+    """Construye la fila de salida y su saldo final para la sabana por cuenta."""
+    ending = values["opening_balance"] + values["debit"] - values["credit"]
+    return (
+        ReportRow(
+            values={
+                "account_code": values["account_code"],
+                "account_name": values["account_name"],
+                "account_type": values["account_type"],
+                "classification": values["classification"],
+                "currency": values["currency"],
+                "opening_balance": values["opening_balance"],
+                "debit": values["debit"],
+                "credit": values["credit"],
+                "ending_balance": ending,
+                "movement_count": values["movement_count"],
+                "first_movement": values["first_movement"],
+                "last_movement": values["last_movement"],
+                "level": values["level"],
+            }
+        ),
+        ending,
+    )
+
+
+def _trial_balance_base_values(account_code: str, account: Accounts | None) -> dict[str, Any]:
+    """Construye el acumulador inicial para la balanza de comprobación."""
+    return {
+        "account_code": account_code,
+        "account_name": account.name if account else None,
+        "opening": Decimal("0"),
+        "debit": Decimal("0"),
+        "credit": Decimal("0"),
+        "level": account_code.count(".") + 1 if account_code else 1,
+    }
+
+
+def _apply_trial_balance_entry(row: dict[str, Any], bucket: str, debit: Decimal, credit: Decimal) -> None:
+    """Acumula una entrada en la balanza de comprobación."""
+    if bucket == "opening":
+        row["opening"] += debit - credit
+        return
+    row["debit"] += debit
+    row["credit"] += credit
+
+
+def _build_trial_balance_row(values: dict[str, Any]) -> tuple[ReportRow, Decimal]:
+    """Construye la fila de salida y su saldo final para la balanza."""
+    ending = values["opening"] + values["debit"] - values["credit"]
+    return (
+        ReportRow(
+            values={
+                "account_code": values["account_code"],
+                "account_name": values["account_name"],
+                "opening_balance": values["opening"],
+                "debit": values["debit"],
+                "credit": values["credit"],
+                "ending_balance": ending,
+                "level": values["level"],
+            }
+        ),
+        ending,
+    )
+
+
 def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
     period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
@@ -958,51 +1064,22 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
 
     account_totals: dict[str, dict[str, Any]] = {}
     for entry, account in entries:
-        if period_start and entry.posting_date < period_start:
-            bucket = "opening"
-        elif period_end and entry.posting_date > period_end:
+        bucket = _entry_bucket(entry.posting_date, period_start, period_end)
+        if bucket is None:
             continue
-        else:
-            bucket = "movement"
 
         account_code = entry.account_code or (account.code if account else "")
         # Podemos extender la llave de agrupación si en el futuro se requiere soportar
         # agrupaciones múltiples (ej. Cuenta + Centro de Costos) en una sola fila.
         group_key = account_code
 
-        row = account_totals.setdefault(
-            group_key,
-            {
-                "account_code": account_code,
-                "account_name": account.name if account else None,
-                "account_type": account.account_type if account else None,
-                "classification": _normalize_account_classification(account),
-                "currency": account.currency if account else None,
-                "opening_balance": Decimal("0"),
-                "debit": Decimal("0"),
-                "credit": Decimal("0"),
-                "movement_count": 0,
-                "first_movement": None,
-                "last_movement": None,
-                "level": account_code.count(".") + 1 if account_code else 1,
-            },
-        )
+        summary_row = account_totals.setdefault(group_key, _account_summary_base_values(account_code, account))
 
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
+        _apply_account_summary_entry(summary_row, bucket, entry, debit, credit)
 
-        if bucket == "opening":
-            row["opening_balance"] += debit - credit
-        else:
-            row["debit"] += debit
-            row["credit"] += credit
-            row["movement_count"] += 1
-            if row["first_movement"] is None or entry.posting_date < row["first_movement"]:
-                row["first_movement"] = entry.posting_date
-            if row["last_movement"] is None or entry.posting_date > row["last_movement"]:
-                row["last_movement"] = entry.posting_date
-
-    rows = []
+    rows: list[ReportRow] = []
     total_opening = Decimal("0")
     total_debit = Decimal("0")
     total_credit = Decimal("0")
@@ -1010,31 +1087,12 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
 
     for group_key in sorted(account_totals):
         values = account_totals[group_key]
-        ending = values["opening_balance"] + values["debit"] - values["credit"]
+        row, ending = _build_account_summary_row(values)
         total_opening += values["opening_balance"]
         total_debit += values["debit"]
         total_credit += values["credit"]
         total_ending += ending
-
-        rows.append(
-            ReportRow(
-                values={
-                    "account_code": values["account_code"],
-                    "account_name": values["account_name"],
-                    "account_type": values["account_type"],
-                    "classification": values["classification"],
-                    "currency": values["currency"],
-                    "opening_balance": values["opening_balance"],
-                    "debit": values["debit"],
-                    "credit": values["credit"],
-                    "ending_balance": ending,
-                    "movement_count": values["movement_count"],
-                    "first_movement": values["first_movement"],
-                    "last_movement": values["last_movement"],
-                    "level": values["level"],
-                }
-            )
-        )
+        rows.append(row)
 
     return PaginatedReport(
         rows=rows,
@@ -1066,57 +1124,28 @@ def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport
 
     account_totals: dict[str, dict[str, Any]] = {}
     for entry, account in entries:
-        if period_start and entry.posting_date < period_start:
-            bucket = "opening"
-        elif period_end and entry.posting_date > period_end:
+        bucket = _entry_bucket(entry.posting_date, period_start, period_end)
+        if bucket is None:
             continue
-        else:
-            bucket = "movement"
         account_code = entry.account_code or (account.code if account else "")
-        row = account_totals.setdefault(
-            account_code,
-            {
-                "account_code": account_code,
-                "account_name": account.name if account else None,
-                "opening": Decimal("0"),
-                "debit": Decimal("0"),
-                "credit": Decimal("0"),
-                "level": account_code.count(".") + 1 if account_code else 1,
-            },
-        )
+        trial_row = account_totals.setdefault(account_code, _trial_balance_base_values(account_code, account))
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
-        if bucket == "opening":
-            row["opening"] += debit - credit
-        else:
-            row["debit"] += debit
-            row["credit"] += credit
+        _apply_trial_balance_entry(trial_row, bucket, debit, credit)
 
-    rows = []
+    rows: list[ReportRow] = []
     total_opening = Decimal("0")
     total_debit = Decimal("0")
     total_credit = Decimal("0")
     total_ending = Decimal("0")
     for account_code in sorted(account_totals):
         values = account_totals[account_code]
-        ending = values["opening"] + values["debit"] - values["credit"]
+        row, ending = _build_trial_balance_row(values)
         total_opening += values["opening"]
         total_debit += values["debit"]
         total_credit += values["credit"]
         total_ending += ending
-        rows.append(
-            ReportRow(
-                values={
-                    "account_code": values["account_code"],
-                    "account_name": values["account_name"],
-                    "opening_balance": values["opening"],
-                    "debit": values["debit"],
-                    "credit": values["credit"],
-                    "ending_balance": ending,
-                    "level": values["level"],
-                }
-            )
-        )
+        rows.append(row)
     return PaginatedReport(
         rows=rows,
         totals={
