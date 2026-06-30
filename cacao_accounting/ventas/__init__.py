@@ -1026,7 +1026,7 @@ def _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, s
 
 
 def _handle_sales_order_new_post(from_quotation_id, from_request_id):
-    from cacao_accounting.database import IdentifierConfigurationError
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
 
     try:
         customer_id = request.form.get("customer_id") or None
