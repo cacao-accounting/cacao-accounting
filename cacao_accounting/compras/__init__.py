@@ -1590,7 +1590,9 @@ def compras_orden_compra_nuevo():
         initial_source_type = ""
 
     source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
-    transaction_config = _build_purchase_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type)
+    transaction_config = _build_purchase_order_transaction_config(
+        items_disponibles, uoms_disponibles, source_origen, initial_source_type
+    )
     return render_template(
         "compras/orden_compra_nuevo.html",
         form=formulario,
