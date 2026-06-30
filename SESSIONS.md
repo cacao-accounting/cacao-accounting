@@ -1,5 +1,10 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-06-30 (SonarCloud: pago destino refinado)
+- **Solicitud:** Continuar reduciendo issues abiertos de SonarCloud con refactors Python verificables y no tocar los posibles falsos positivos de Alpine en `transaction-form.js`.
+- **Implementacion:** Se descompuso `_create_payment_target()` en helpers dedicados para cargar la cuenta bancaria, crear el pago, asignar identificador, aplicar líneas, validar montos y construir la respuesta final en `cacao_accounting/document_flow/service.py`.
+- **Verificacion:** `black`, `ruff`, `mypy` focal y `pytest tests/test_payment_entry_improved.py::test_payment_reconciliation_screen_menu_and_candidates_endpoint_render` quedaron en verde.
+
 ## 2026-06-30 (SonarCloud: candidatos de conciliacion refinados)
 - **Solicitud:** Seguir cerrando issues abiertos de SonarCloud con refactors Python verificables, dejando fuera los posibles falsos positivos de Alpine en `transaction-form.js`.
 - **Implementacion:** Se descompuso `payment_reconciliation_candidates()` en helpers dedicados para pagos, documentos, tipos fuente y filtro por moneda en `cacao_accounting/document_flow/service.py`.

@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Pago destino refinado (2026-06-30):** Se descompuso `_create_payment_target()` en `cacao_accounting/document_flow/service.py` para aislar carga de cuenta, aplicación de líneas y actualización de montos.
+  - La semántica de anticipos y conciliación de facturas se mantiene, pero el flujo quedó más lineal y verificable.
+  - `black`, `ruff`, `mypy` y la prueba focal de pago/conciliación quedaron en verde.
+
 - **SonarCloud / Candidatos de conciliación refinados (2026-06-30):** Se descompuso `payment_reconciliation_candidates()` en helpers dedicados para pagos, documentos, tipos fuente y filtro por moneda.
   - La respuesta del endpoint JSON se mantiene, pero la lógica quedó más legible y con menor complejidad cognitiva.
   - `black`, `ruff`, `mypy` y la prueba focal de candidatos quedaron en verde.
