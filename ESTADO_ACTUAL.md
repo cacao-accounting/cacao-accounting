@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **Cobertura de código (2026-06-30):** Análisis de cobertura en Coveralls muestra 80.4% (22,566 líneas relevantes, 18,144 cubiertas).
+  - Se identificaron módulos sin tests dedicados: `collaboration_service`, `party_settings`, `auth/forms`, `tax_pricing_service`, `module_badges`.
+  - Se agregaron 17 tests unitarios en `tests/test_services_simple.py` cubriendo dataclasses, constantes y funciones de validación.
+  - Tests más complejos que requieren fixtures de base de datos completos (collaboration con cloud mode, party_settings con relaciones) requieren setup más elaborado y se planifican para próximas iteraciones.
+  - Commit: `test(coverage): add tests for tax_pricing_service and collaboration_service`
+
 - **Auditoria de pendientes (2026-06-27):** Se contrastaron los puntos abiertos de `PENDIENTE.md` contra el codigo fuente antes de actualizar el backlog.
   - La paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST queda marcada como completada.
   - La verificacion se basa en rutas implementadas en Compras, Ventas e Inventario y cobertura en `tests/test_03webactions.py`.
