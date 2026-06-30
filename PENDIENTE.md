@@ -1,6 +1,7 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
 ## Seguimiento 2026-06-30 (SonarCloud - revisión cautelosa)
+- [x] Desglosar `_compute_account_receipts_and_payments()` en `reportes/services.py`.
 - [x] Simplificar `reportes/services.py` en `_compute_account_receipts_and_payments()`.
 - [x] Simplificar `reportes/services.py` en `get_account_movement_detail()`.
 - [x] Simplificar `reportes/services.py` en `get_account_summary_report()` y `get_trial_balance_report()`.
