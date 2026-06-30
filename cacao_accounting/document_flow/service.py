@@ -1347,9 +1347,25 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
     """Crea un pago generico desde facturas fuente."""
     company = payload.get("company") or payload.get("company_id")
     posting_date = payload.get("posting_date")
-    bank_account = (
-        database.session.get(BankAccount, payload.get("bank_account_id")) if payload.get("bank_account_id") else None
-    )
+    bank_account = _load_payment_bank_account(payload)
+    payment = _build_payment_target_payment(company, posting_date, payload)
+    assign_payment_identifier(payment, bank_account, posting_date, payload)
+    total = _apply_payment_target_lines(payment, company, payload)
+    _update_payment_target_amounts(payment, total)
+    database.session.commit()
+    return _payment_target_result(payment)
+
+
+def _load_payment_bank_account(payload: dict[str, Any]) -> BankAccount | None:
+    """Carga la cuenta bancaria opcional para un pago destino."""
+    bank_account_id = payload.get("bank_account_id")
+    if not bank_account_id:
+        return None
+    return database.session.get(BankAccount, bank_account_id)
+
+
+def _build_payment_target_payment(company: str | None, posting_date: Any, payload: dict[str, Any]) -> PaymentEntry:
+    """Construye el pago destino a partir del payload validado."""
     payment = PaymentEntry(
         company=company,
         docstatus=0,
@@ -1362,6 +1378,16 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
     )
     database.session.add(payment)
     database.session.flush()
+    return payment
+
+
+def assign_payment_identifier(
+    payment: PaymentEntry,
+    bank_account: BankAccount | None,
+    posting_date: Any,
+    payload: dict[str, Any],
+) -> None:
+    """Asigna el identificador físico al pago destino."""
     assign_document_identifier(
         document=payment,
         entity_type="payment_entry",
@@ -1372,57 +1398,98 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
         external_number=payload.get("external_number"),
         external_context={"bank_account_id": payment.bank_account_id},
     )
+
+
+def _apply_payment_target_lines(payment: PaymentEntry, company: str | None, payload: dict[str, Any]) -> Decimal:
+    """Aplica las lineas de conciliacion al pago destino y devuelve el total."""
     total = Decimal("0")
     processed_reference_keys: set[tuple[str, str]] = set()
     for selected in payload.get("lines") or []:
-        reference_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
-        reference_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
-        reference_key = (reference_type, reference_id)
-        if reference_key in processed_reference_keys:
-            raise DocumentFlowError("No se puede repetir la misma factura en un solo pago.", 409)
-        processed_reference_keys.add(reference_key)
-        invoice = get_document(reference_type, reference_id)
-        if not invoice:
-            raise DocumentFlowError("Factura origen no encontrada.", 404)
-        if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
-            raise DocumentFlowError("No se pueden mezclar companias incompatibles.", 409)
-        allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
-        outstanding = compute_outstanding_amount(invoice)
-        if allocated <= 0:
-            raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO, 409)
-        if allocated > outstanding:
-            raise DocumentFlowError("El monto aplicado excede el saldo pendiente.", 409)
-        reference = PaymentReference(
-            payment_id=payment.id,
-            reference_type=reference_type,
-            reference_id=reference_id,
-            total_amount=getattr(invoice, "grand_total", None),
-            outstanding_amount=outstanding,
-            allocated_amount=allocated,
-            allocation_date=payment.posting_date,
-        )
-        database.session.add(reference)
-        database.session.flush()
-        create_document_relation(
-            source_type=reference_type,
-            source_id=reference_id,
-            source_item_id=None,
-            target_type="payment_entry",
-            target_id=payment.id,
-            target_item_id=reference.id,
-            qty=Decimal("1"),
-            uom=None,
-            rate=allocated,
-            amount=allocated,
-        )
-        setattr(invoice, "outstanding_amount", outstanding - allocated)
-        setattr(invoice, "base_outstanding_amount", outstanding - allocated)
-        total += allocated
+        total += _apply_payment_target_line(payment, company, selected, processed_reference_keys)
+    return total
+
+
+def _apply_payment_target_line(
+    payment: PaymentEntry,
+    company: str | None,
+    selected: dict[str, Any],
+    processed_reference_keys: set[tuple[str, str]],
+) -> Decimal:
+    """Aplica una linea de conciliacion a un pago destino."""
+    reference_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
+    reference_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
+    reference_key = (reference_type, reference_id)
+    if reference_key in processed_reference_keys:
+        raise DocumentFlowError("No se puede repetir la misma factura en un solo pago.", 409)
+    processed_reference_keys.add(reference_key)
+
+    invoice = get_document(reference_type, reference_id)
+    if not invoice:
+        raise DocumentFlowError("Factura origen no encontrada.", 404)
+    if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
+        raise DocumentFlowError("No se pueden mezclar companias incompatibles.", 409)
+
+    allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
+    outstanding = compute_outstanding_amount(invoice)
+    _validate_payment_target_allocation(allocated, outstanding)
+    _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding)
+    return allocated
+
+
+def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
+    """Valida la cantidad a aplicar contra una factura origen."""
+    if allocated <= 0:
+        raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO, 409)
+    if allocated > outstanding:
+        raise DocumentFlowError("El monto aplicado excede el saldo pendiente.", 409)
+
+
+def _persist_payment_target_allocation(
+    payment: PaymentEntry,
+    reference_type: str,
+    reference_id: str,
+    invoice: Any,
+    allocated: Decimal,
+    outstanding: Decimal,
+) -> None:
+    """Persiste la referencia y la relacion documental para una aplicacion."""
+    reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        total_amount=getattr(invoice, "grand_total", None),
+        outstanding_amount=outstanding,
+        allocated_amount=allocated,
+        allocation_date=payment.posting_date,
+    )
+    database.session.add(reference)
+    database.session.flush()
+    create_document_relation(
+        source_type=reference_type,
+        source_id=reference_id,
+        source_item_id=None,
+        target_type="payment_entry",
+        target_id=payment.id,
+        target_item_id=reference.id,
+        qty=Decimal("1"),
+        uom=None,
+        rate=allocated,
+        amount=allocated,
+    )
+    setattr(invoice, "outstanding_amount", outstanding - allocated)
+    setattr(invoice, "base_outstanding_amount", outstanding - allocated)
+
+
+def _update_payment_target_amounts(payment: PaymentEntry, total: Decimal) -> None:
+    """Actualiza los importes del pago segun su direccion contable."""
     if payment.payment_type == "pay":
         payment.paid_amount = total
         payment.base_paid_amount = total
     else:
         payment.received_amount = total
         payment.base_received_amount = total
-    database.session.commit()
+
+
+def _payment_target_result(payment: PaymentEntry) -> dict[str, Any]:
+    """Construye la respuesta final del pago destino."""
     return {"target_type": "payment_entry", "target_id": payment.id, "document_no": payment.document_no, "lines": []}
