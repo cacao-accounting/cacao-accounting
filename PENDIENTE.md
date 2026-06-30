@@ -1,6 +1,7 @@
 # PENDIENTE - Cacao Accounting (Backlog Priorizado)
 
 ## Seguimiento 2026-06-30 (SonarCloud - revisión cautelosa)
+- [x] Simplificar `contabilidad/__init__.py` en `editar_proyecto()`.
 - [x] Desglosar `_append_payment_reference_nodes()` en `document_flow/tree.py`.
 - [x] Desglosar `_create_payment_target()` en helpers dedicados.
 - [x] Desglosar `payment_reconciliation_candidates()` en helpers dedicados.

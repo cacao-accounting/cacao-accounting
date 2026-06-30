@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **SonarCloud / Edición de proyecto (2026-06-30):** Se simplificó `editar_proyecto()` en `cacao_accounting/contabilidad/__init__.py` con helpers para render de error, resolución de moneda y actualización del modelo.
+  - El flujo de edición sigue validando entidad, presupuesto y moneda funcional, pero con menos complejidad en la ruta principal.
+  - `black`, `ruff`, `mypy` y la prueba focal de webactions quedaron en verde.
+
 - **SonarCloud / Árbol documental de pago refinado (2026-06-30):** Se descompuso `_append_payment_reference_nodes()` en `cacao_accounting/document_flow/tree.py` con helpers para cargar referencias y reutilizar la construcción de nodos.
   - El árbol documental sigue exponiendo relaciones de pago y PaymentReference, pero la lógica quedó más lineal.
   - `black`, `ruff`, `mypy` y la prueba focal del árbol quedaron en verde.
