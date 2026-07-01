@@ -137,10 +137,10 @@
     <div class="col-12">
       <div class="ca-card shadow-sm" x-data='{
         rows: {{ account_rows|tojson }},
-        addRow() { this.rows.push({company: "", income_account_id: "", expense_account_id: "", inventory_account_id: ""}); },
+        addRow() { this.rows.push({company: "", expense_account_id: "", cost_center_code: ""}); },
         removeRow(index) {
           if (this.rows.length <= 1) {
-            this.rows[0] = {company: "", income_account_id: "", expense_account_id: "", inventory_account_id: ""};
+            this.rows[0] = {company: "", expense_account_id: "", cost_center_code: ""};
             return;
           }
           this.rows.splice(index, 1);
@@ -160,9 +160,8 @@
               <thead>
                 <tr>
                   <th>{{ _('Compañía') }}</th>
-                  <th>{{ _('Cuenta de ingreso') }}</th>
                   <th>{{ _('Cuenta de gasto') }}</th>
-                  <th>{{ _('Cuenta de inventario') }}</th>
+                  <th>{{ _('Centro de costo') }}</th>
                   <th>{{ _('Acciones') }}</th>
                 </tr>
               </thead>
@@ -178,14 +177,6 @@
                       </select>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="income_account_id" x-model="row.income_account_id">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
-                        {% endfor %}
-                      </select>
-                    </td>
-                    <td>
                       <select class="form-select form-select-sm" name="expense_account_id" x-model="row.expense_account_id">
                         <option value="">{{ _('Seleccione') }}</option>
                         {% for account in account_choices %}
@@ -194,10 +185,10 @@
                       </select>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="inventory_account_id" x-model="row.inventory_account_id">
+                      <select class="form-select form-select-sm" name="cost_center_code" x-model="row.cost_center_code">
                         <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% for cost_center in cost_center_choices %}
+                        <option value="{{ cost_center.code }}">{{ cost_center.label }}</option>
                         {% endfor %}
                       </select>
                     </td>
