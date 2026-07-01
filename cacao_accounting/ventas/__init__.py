@@ -119,6 +119,8 @@ def _upsert_customer_company_settings_from_request(customer_id: str, form: dict)
         receivable_account_id=form.get("receivable_account_id") or None,
         payable_account_id=None,
         tax_template_id=form.get("tax_template_id") or None,
+        default_tax_rule_id=form.get("default_tax_rule_id") or None,
+        default_price_list_id=form.get("default_price_list_id") or None,
         allow_purchase_invoice_without_order=False,
         allow_purchase_invoice_without_receipt=False,
     )

@@ -60,7 +60,7 @@ def client(app_ctx):
 
 def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     """El tipo de cliente se crea, se asigna y aparece en el detalle."""
-    from cacao_accounting.database import Contact, Party, PartyGroup, database
+    from cacao_accounting.database import Contact, Party, PartyGroup, PriceList, TaxRule, database
 
     response = client.post(
         "/settings/party-groups",
@@ -80,6 +80,8 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
             "is_active": "on",
             "company": "cacao",
             "company_is_active": "on",
+            "default_price_list_id": "",
+            "default_tax_rule_id": "",
         },
         follow_redirects=False,
     )
@@ -103,10 +105,35 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     contact = database.session.execute(database.select(Contact).filter_by(first_name="Ana")).scalar_one()
     assert contact.is_active is True
 
+    sales_list = PriceList(
+        name="Lista Cliente", company="cacao", currency="NIO", is_selling=True, is_active=True, is_default=True
+    )
+    sales_rule = TaxRule(name="IVA Cliente", company="cacao", applies_to="sales", concept="iva", is_active=True)
+    database.session.add_all([sales_list, sales_rule])
+    database.session.commit()
+
+    response = client.post(
+        f"/sales/customer/{customer.id}/edit",
+        data={
+            "name": "Cliente Test",
+            "tax_id": "C-001",
+            "party_group_id": group.id,
+            "is_active": "on",
+            "company": "cacao",
+            "company_is_active": "on",
+            "default_price_list_id": sales_list.id,
+            "default_tax_rule_id": sales_rule.id,
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Lista Cliente".encode() in response.data
+    assert "IVA Cliente".encode() in response.data
+
 
 def test_supplier_edit_and_address_deactivation(app_ctx, client):
     """Proveedor permite tipo, edicion y desactivacion de direcciones."""
-    from cacao_accounting.database import Address, Party, PartyAddress, PartyGroup, database
+    from cacao_accounting.database import Address, Party, PartyAddress, PartyGroup, PriceList, TaxRule, database
 
     supplier_group = PartyGroup(group_type="supplier", name="Importador", is_active=True)
     database.session.add(supplier_group)
@@ -121,6 +148,8 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
             "is_active": "on",
             "company": "cacao",
             "company_is_active": "on",
+            "default_price_list_id": "",
+            "default_tax_rule_id": "",
         },
         follow_redirects=False,
     )
@@ -142,12 +171,31 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     assert address is not None
     assert address.is_active is False
 
+    purchase_list = PriceList(
+        name="Lista Proveedor", company="cacao", currency="NIO", is_buying=True, is_active=True, is_default=True
+    )
+    purchase_rule = TaxRule(name="IVA Compra", company="cacao", applies_to="purchase", concept="iva", is_active=True)
+    database.session.add_all([purchase_list, purchase_rule])
+    database.session.commit()
+
     client.post(
         f"/buying/supplier/{supplier.id}/edit",
-        data={"name": "Proveedor Editado", "party_group_id": supplier_group.id, "is_active": "on", "company": "cacao"},
+        data={
+            "name": "Proveedor Editado",
+            "party_group_id": supplier_group.id,
+            "is_active": "on",
+            "company": "cacao",
+            "default_price_list_id": purchase_list.id,
+            "default_tax_rule_id": purchase_rule.id,
+        },
     )
     database.session.refresh(supplier)
     assert supplier.name == "Proveedor Editado"
+
+    detail_response = client.get(f"/buying/supplier/{supplier.id}")
+    assert detail_response.status_code == 200
+    assert "Lista Proveedor".encode() in detail_response.data
+    assert "IVA Compra".encode() in detail_response.data
 
 
 def test_purchase_and_sales_admin_menus_show_party_management_links(client):

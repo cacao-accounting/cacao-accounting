@@ -30,7 +30,9 @@ from cacao_accounting.database import (
     NamingSeries,
     Party,
     PartyGroup,
+    PriceList,
     Project,
+    TaxRule,
     TaxTemplate,
     Unit,
     UOM,
@@ -149,6 +151,21 @@ def _external_counter_label(counter: ExternalCounter) -> str:
 
 def _string_label(value: Any) -> str:
     return str(value)
+
+
+def _price_list_label(price_list: PriceList) -> str:
+    kinds: list[str] = []
+    if price_list.is_selling:
+        kinds.append("Venta")
+    if price_list.is_buying:
+        kinds.append("Compra")
+    kind_label = "/".join(kinds) if kinds else "General"
+    return f"{price_list.name} ({kind_label})"
+
+
+def _tax_rule_label(rule: TaxRule) -> str:
+    applies_to = {"sales": "Ventas", "purchase": "Compras", "both": "Ambos"}.get(rule.applies_to or "", "General")
+    return f"{rule.name} ({applies_to})"
 
 
 def _party_type_label(party: Party) -> str:
@@ -452,6 +469,30 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         value_field="id",
         label_builder=_string_label,
         allowed_filters={"company": "company", "template_type": "template_type", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "tax_rule": SearchSelectSpec(
+        doctype="tax_rule",
+        model=TaxRule,
+        search_fields=("name", "concept"),
+        value_field="id",
+        label_builder=_tax_rule_label,
+        allowed_filters={"company": "company", "applies_to": "applies_to", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "price_list": SearchSelectSpec(
+        doctype="price_list",
+        model=PriceList,
+        search_fields=("name",),
+        value_field="id",
+        label_builder=_price_list_label,
+        allowed_filters={
+            "company": "company",
+            "is_selling": "is_selling",
+            "is_buying": "is_buying",
+            "is_active": "is_active",
+            "is_default": "is_default",
+        },
         default_filters={"is_active": True},
     ),
     "naming_series": SearchSelectSpec(
