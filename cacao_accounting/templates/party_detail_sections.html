@@ -1,45 +1,15 @@
 <div class="ca-card mt-3">
-  <div class="ca-card-header">
-    <h6 class="ca-card-title">{{ _("Configuracion por compania") }}</h6>
-  </div>
   <div class="p-3">
-    <table class="ca-table">
-      <caption style="display:none;">{{ _("Configuracion por compania del tercero") }}</caption>
-      <thead>
-        <tr>
-          <th>{{ _("Compania") }}</th>
-          <th>{{ _("Activo") }}</th>
-          <th>{{ _("Cuenta AR") }}</th>
-          <th>{{ _("Cuenta AP") }}</th>
-          <th>{{ _("Lista de Precio") }}</th>
-          <th>{{ _("Regla Fiscal") }}</th>
-          <th>{{ _("Plantilla fiscal") }}</th>
-          <th>{{ _("Sin OC") }}</th>
-          <th>{{ _("Sin recibo") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for settings in detail.company_settings %}
-        <tr>
-          <td>{{ settings.company_label or settings.company }}</td>
-          <td>{{ _("Si") if settings.is_active else _("No") }}</td>
-          <td>{{ settings.receivable_account_label or "-" }}</td>
-          <td>{{ settings.payable_account_label or "-" }}</td>
-          <td>{{ settings.default_price_list_label or "-" }}</td>
-          <td>{{ settings.default_tax_rule_label or "-" }}</td>
-          <td>{{ settings.tax_template_label or "-" }}</td>
-          <td>{{ _("Si") if settings.allow_purchase_invoice_without_order else _("No") }}</td>
-          <td>{{ _("Si") if settings.allow_purchase_invoice_without_receipt else _("No") }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="9">{{ _("No hay configuracion por compania.") }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="text-muted small">{{ _("Secciones del tercero") }}</span>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-company-settings">{{ _("Configuracion por compania") }}</a>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-contacts">{{ _("Contactos") }} <span class="badge text-bg-light ms-1">{{ detail.contacts | length }}</span></a>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-addresses">{{ _("Direcciones") }} <span class="badge text-bg-light ms-1">{{ detail.addresses | length }}</span></a>
+    </div>
   </div>
 </div>
 
-<div class="ca-card mt-3">
+<div class="ca-card mt-3" id="party-contacts">
   <div class="ca-card-header">
     <h6 class="ca-card-title">{{ _("Contactos") }}</h6>
   </div>
@@ -94,7 +64,7 @@
   </div>
 </div>
 
-<div class="ca-card mt-3">
+<div class="ca-card mt-3" id="party-addresses">
   <div class="ca-card-header">
     <h6 class="ca-card-title">{{ _("Direcciones") }}</h6>
   </div>
@@ -144,6 +114,47 @@
         </tr>
         {% else %}
         <tr><td colspan="5">{{ _("No hay direcciones registradas.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ca-card mt-3" id="party-company-settings">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Configuracion por compania") }}</h6>
+  </div>
+  <div class="p-3">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Configuracion por compania del tercero") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Compania") }}</th>
+          <th>{{ _("Activo") }}</th>
+          <th>{{ _("Cuenta AR") }}</th>
+          <th>{{ _("Cuenta AP") }}</th>
+          <th>{{ _("Lista de Precio") }}</th>
+          <th>{{ _("Regla Fiscal") }}</th>
+          <th>{{ _("Plantilla fiscal") }}</th>
+          <th>{{ _("Sin OC") }}</th>
+          <th>{{ _("Sin recibo") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for settings in detail.company_settings %}
+        <tr>
+          <td>{{ settings.company_label or settings.company }}</td>
+          <td>{{ _("Si") if settings.is_active else _("No") }}</td>
+          <td>{{ settings.receivable_account_label or "-" }}</td>
+          <td>{{ settings.payable_account_label or "-" }}</td>
+          <td>{{ settings.default_price_list_label or "-" }}</td>
+          <td>{{ settings.default_tax_rule_label or "-" }}</td>
+          <td>{{ settings.tax_template_label or "-" }}</td>
+          <td>{{ _("Si") if settings.allow_purchase_invoice_without_order else _("No") }}</td>
+          <td>{{ _("Si") if settings.allow_purchase_invoice_without_receipt else _("No") }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">{{ _("No hay configuracion por compania.") }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

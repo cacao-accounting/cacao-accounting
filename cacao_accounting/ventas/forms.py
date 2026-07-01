@@ -17,7 +17,6 @@ class FormularioCliente(FlaskForm):
     name = StringField("Nombre", validators=[DataRequired()])
     comercial_name = StringField("Nombre Comercial")
     tax_id = StringField("ID Fiscal")
-    classification = StringField("Clasificación")
     company = StringField(_LABEL_COMPANY)
     party_group_id = StringField("Tipo de Cliente")
     receivable_account_id = StringField("Cuenta por cobrar")

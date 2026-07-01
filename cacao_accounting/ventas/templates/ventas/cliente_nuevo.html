@@ -42,10 +42,6 @@
             <label class="form-label" for="tax_id">{{ _('ID fiscal') }}</label>
             {{ form.tax_id(class="form-control form-control-sm", id="tax_id") }}
           </div>
-          <div class="col-md-8">
-            <label class="form-label" for="classification">{{ _('Clasificación') }}</label>
-            {{ form.classification(class="form-control form-control-sm", id="classification", readonly=True) }}
-          </div>
           <div class="col-md-4">
             <label class="form-label" for="party_group_id">{{ _('Tipo de Cliente') }}</label>
             <div class="ca-smart-select" x-data='smartSelect({

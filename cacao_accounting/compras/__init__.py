@@ -743,7 +743,6 @@ def _handle_supplier_create(
         name=form.get("name") or "",
         comercial_name=form.get("comercial_name"),
         tax_id=form.get("tax_id"),
-        classification=form.get("classification"),
         is_active=form.get("is_active", "on") is not None,
     )
     try:

@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-01 (Cliente/Proveedor: simplificacion de clasificacion y visibilidad de contactos)
+- **Solicitud:** Eliminar el campo libre `Clasificación` en Cliente y Proveedor, y hacer más visibles `Contactos` y `Direcciones` porque en la ficha no se apreciaban claramente.
+- **Implementacion:** Los formularios de alta/edicion de Cliente y Proveedor ya no exponen ni envian `classification`; la clasificacion funcional queda representada por `party_group_id` (Tipo de Cliente / Tipo de Proveedor) y el backend deja de tomar ese valor desde POST.
+- **Detalle del tercero:** Las fichas de Cliente y Proveedor ya no muestran `Clasificación` en el resumen superior. La seccion compartida agrega accesos visibles a `Configuracion por compañia`, `Contactos` y `Direcciones`, con contadores y anclas internas para navegar rápido.
+- **Layout:** `Contactos` y `Direcciones` quedan primero en la ficha del tercero, dejando `Configuracion por compañia` después, para priorizar la gestion operativa que el usuario estaba buscando.
+- **Validacion:** `tests/test_party_management.py` en verde (`3 passed`).
+
 ## 2026-07-01 (Cliente/Proveedor: cuentas, regla fiscal y lista de precio por compania)
 - **Solicitud:** Completar Cliente y Proveedor con configuracion por compania para cuenta por cobrar/pagar predeterminada, regla fiscal predeterminada y lista de precio predeterminada, tomando como base las referencias visuales compartidas.
 - **Correccion de fondo:** No se creo un maestro nuevo para precios; se reutilizo `PriceList` como concepto funcional de **Lista de Precio** y `ItemPrice` sigue como detalle de precios por item. La relacion por defecto del tercero se persiste en `CompanyParty`.

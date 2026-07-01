@@ -10,7 +10,7 @@
 - [ ] Implementar `LedgerMappingRule` para diferencias automaticas entre libros.
 
 ## UI/UX y Reportes
-- [ ] Completar la segunda iteracion visual de Cliente y Proveedor para acercar mas la disposicion por secciones a las referencias, manteniendo la funcionalidad ya implementada de cuenta AR/AP, lista de precio y regla fiscal por compañia.
+- [ ] Completar la siguiente iteracion visual de Cliente y Proveedor para acercar aun mas la disposicion fina a las referencias, partiendo de que ya se elimino `Clasificación` y ya quedaron visibles `Contactos`/`Direcciones` con accesos rapidos en la ficha.
 - [ ] Agregar edicion del item para mantener y ajustar la configuracion contable por compañia despues de la creacion, respetando bloqueos de negocio donde aplique.
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
 - [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
