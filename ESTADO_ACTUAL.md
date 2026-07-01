@@ -1,5 +1,15 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **Cliente/Proveedor / simplificacion de clasificación (2026-07-01):** La UI de terceros ya no expone el campo libre `Clasificación`.
+  - Cliente y Proveedor usan `Tipo de Cliente` / `Tipo de Proveedor` como fuente funcional de clasificación.
+  - Los handlers de creación ya no toman `classification` desde el formulario; el valor legacy sigue sincronizado internamente desde `party_group_id` por compatibilidad.
+  - El resumen superior de la ficha de Cliente/Proveedor ya no muestra `Clasificación`.
+
+- **Cliente/Proveedor / visibilidad de contactos y direcciones (2026-07-01):** La ficha del tercero hace más evidentes las secciones operativas compartidas.
+  - Se agregó una franja de navegación con accesos rápidos a `Configuración por compañía`, `Contactos` y `Direcciones`.
+  - `Contactos` y `Direcciones` quedaron priorizados antes de la configuración por compañía dentro del detalle.
+  - Cada acceso rápido muestra contador y ancla interna para ubicar rápidamente la tabla correspondiente.
+
 - **Cliente/Proveedor por compañia (2026-07-01):** Los terceros ya soportan configuracion ampliada por compañia para cuentas, fiscalidad y precios.
   - `CompanyParty` ahora persiste regla fiscal predeterminada y lista de precio predeterminada.
   - Cliente valida listas de precio de venta; Proveedor valida listas de precio de compra.
