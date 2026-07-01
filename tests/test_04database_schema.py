@@ -1494,9 +1494,9 @@ class TestPartyClassificationField(unittest.TestCase):
     def tearDown(self):
         self.ctx.pop()
 
-    def test_party_has_classification_not_clasification(self):
-        self.assertIn("classification", self.columns)
-        self.assertNotIn("clasification", self.columns)
+    def test_party_has_is_customer_is_supplier(self):
+        self.assertIn("is_customer", self.columns)
+        self.assertIn("is_supplier", self.columns)
 
     def test_party_has_party_group_id(self):
         self.assertIn("party_group_id", self.columns)
