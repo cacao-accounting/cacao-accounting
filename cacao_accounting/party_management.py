@@ -21,9 +21,9 @@ from cacao_accounting.database import (
     PartyGroup,
     database,
 )
+from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
-PARTY_TYPE_LABELS = {"customer": "Cliente", "supplier": "Proveedor"}
 NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
 PERSON_TYPE_LABELS = {"natural": "Natural", "juridical": "Jurídica"}
 
@@ -71,25 +71,26 @@ def party_group_label(group_id: str | None) -> str:
     return group.name if group else ""
 
 
-def validate_party_group(group_id: str | None, party_type: str) -> PartyGroup | None:
-    """Valida que el grupo exista, este activo y corresponda al tipo de tercero."""
+def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
+    """Valida que el grupo exista, este activo y corresponda al rol del tercero."""
     if not group_id:
         return None
+    if role not in ("customer", "supplier"):
+        raise ValueError("El rol debe ser 'customer' o 'supplier'.")
     group = database.session.get(PartyGroup, group_id)
     if not group:
         raise ValueError("El tipo seleccionado no existe.")
-    if group.group_type != party_type:
+    if group.group_type != role:
         raise ValueError("El tipo seleccionado no corresponde al tercero.")
     if not group.is_active:
         raise ValueError("El tipo seleccionado no esta activo.")
     return group
 
 
-def apply_party_group(party: Party, group_id: str | None) -> None:
-    """Asigna el grupo y sincroniza la clasificacion legacy."""
-    group = validate_party_group(group_id, party.party_type)
+def apply_party_group(party: Party, group_id: str | None, role: str) -> None:
+    """Asigna el grupo segun el rol (customer/supplier)."""
+    group = validate_party_group(group_id, role)
     party.party_group_id = group.id if group else None
-    party.classification = group.name if group else None
 
 
 def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
@@ -103,6 +104,7 @@ def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
 
     party.nationality_type = nationality_type
     party.person_type = person_type
+    party.fiscal_name = _clean_text(values.get("fiscal_name"))
     party.primary_phone = _clean_text(values.get("primary_phone"))
     party.primary_email = _clean_text(values.get("primary_email"))
     party.website = _clean_text(values.get("website"))
@@ -167,9 +169,11 @@ def build_party_detail_context(party: Party) -> PartyDetailContext:
         .scalars()
         .all()
     )
-    settings = [build_party_company_settings(party.party_type, row.company, party_id=party.id) for row in company_rows]
+    settings = [
+        build_party_company_settings(party.id, row.company, party_id=party.id) for row in company_rows
+    ]
     return PartyDetailContext(
-        group_label=party_group_label(party.party_group_id) or party.classification or "",
+        group_label=party_group_label(party.party_group_id) or "",
         nationality_label=_choice_label(NATIONALITY_LABELS, party.nationality_type),
         person_type_label=_choice_label(PERSON_TYPE_LABELS, party.person_type),
         primary_phone=party.primary_phone or "",
@@ -339,3 +343,21 @@ def _party_address_link(party_id: str, link_id: str) -> PartyAddress:
     if not link or link.party_id != party_id:
         raise ValueError("Direccion no encontrada.")
     return link
+
+
+def generate_party_code(party_id: str, company: str | None, role: str) -> str:
+    """Genera un codigo unico para un tercero via naming series."""
+    from datetime import date as date_func
+    today = date_func.today()
+    code = generate_identifier(
+        entity_type=role,
+        entity_id=party_id,
+        posting_date=today,
+        company=company or None,
+    )
+    return code
+
+
+def build_party_code(party_id: str, company: str | None, role: str) -> str:
+    """Obtiene o genera el codigo para un tercero."""
+    return generate_party_code(party_id, company, role)
