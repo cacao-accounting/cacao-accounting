@@ -26,6 +26,7 @@
     <caption style="display: none;">Listado de clientes.</caption>
     <thead>
       <tr>
+        <th scope="col">Código</th>
         <th scope="col">Nombre</th>
         <th scope="col">Nombre Comercial</th>
         <th scope="col">RUC / ID Fiscal</th>
@@ -34,9 +35,10 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
-        <td><a class="fw-bold" href="{{ url_for('ventas.ventas_cliente', customer_id=item.id) }}">{{ item.name }}</a></td>
-        <td>{{ item.comercial_name or "" }}</td>
-        <td>{{ item.tax_id or "" }}</td>
+        <td><a class="fw-bold" href="{{ url_for('ventas.ventas_cliente', customer_id=item.id) }}">{{ item.code }}</a></td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.comercial_name or "-" }}</td>
+        <td>{{ item.tax_id or "-" }}</td>
       </tr>
       {%- endfor %}
     </tbody>
