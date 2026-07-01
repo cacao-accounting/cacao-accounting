@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     ExternalCounter,
     FiscalYear,
     Item,
+    ItemCategory,
     ItemUOMConversion,
     NamingSeries,
     Party,
@@ -116,7 +117,7 @@ def _project_label(project: Project) -> str:
 
 def _party_label(party: Party) -> str:
     tax_suffix = f" ({party.tax_id})" if party.tax_id else ""
-    return f"{party.name}{tax_suffix}"
+    return f"{party.code} - {party.name}{tax_suffix}"
 
 
 def _party_group_label(group: PartyGroup) -> str:
@@ -125,6 +126,10 @@ def _party_group_label(group: PartyGroup) -> str:
 
 def _item_label(item: Item) -> str:
     return f"{item.code} - {item.name}"
+
+
+def _item_category_label(category: ItemCategory) -> str:
+    return category.name
 
 
 def _warehouse_label(warehouse: Warehouse) -> str:
@@ -166,12 +171,6 @@ def _price_list_label(price_list: PriceList) -> str:
 def _tax_rule_label(rule: TaxRule) -> str:
     applies_to = {"sales": "Ventas", "purchase": "Compras", "both": "Ambos"}.get(rule.applies_to or "", "General")
     return f"{rule.name} ({applies_to})"
-
-
-def _party_type_label(party: Party) -> str:
-    labels = {"customer": "Cliente", "supplier": "Proveedor"}
-    party_type = str(getattr(party, "party_type", "") or "")
-    return labels.get(party_type, party_type)
 
 
 def _voucher_type_label(entry: GLEntry) -> str:
@@ -356,7 +355,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
     "party": SearchSelectSpec(
         doctype="party",
         model=Party,
-        search_fields=("name", "comercial_name", "tax_id"),
+        search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
         allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
@@ -392,7 +391,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
     "customer": SearchSelectSpec(
         doctype="customer",
         model=Party,
-        search_fields=("name", "comercial_name", "tax_id"),
+        search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
         allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
@@ -401,7 +400,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
     "supplier": SearchSelectSpec(
         doctype="supplier",
         model=Party,
-        search_fields=("name", "comercial_name", "tax_id"),
+        search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
         allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
@@ -419,6 +418,15 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
             "item_type": "item_type",
             "is_stock_item": "is_stock_item",
         },
+        default_filters={"is_active": True},
+    ),
+    "item_category": SearchSelectSpec(
+        doctype="item_category",
+        model=ItemCategory,
+        search_fields=("name", "description"),
+        value_field="name",
+        label_builder=_item_category_label,
+        allowed_filters={"is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "budget": SearchSelectSpec(
@@ -517,16 +525,6 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
             "naming_series_id": "naming_series_id",
         },
         default_filters={"is_active": True},
-    ),
-    "party_type": SearchSelectSpec(
-        doctype="party_type",
-        model=Party,
-        search_fields=("party_type",),
-        value_field="party_type",
-        label_builder=_party_type_label,
-        allowed_filters={"is_active": "is_active"},
-        default_filters={"is_active": True},
-        deduplicate_by_value=True,
     ),
     "voucher_type": SearchSelectSpec(
         doctype="voucher_type",
@@ -665,6 +663,9 @@ def _apply_default_filters(
             continue
         if not active_only and _is_activity_default(field, value):
             continue
+        if spec.model is Party and field == "party_type":
+            statement = _apply_party_type_filter(statement, [str(value)] if isinstance(value, str) else [value])
+            continue
         column = _column_for(spec.model, field)
         statement = statement.where(_condition_for(column, [str(value)] if isinstance(value, str) else [value]))
     return statement
@@ -693,14 +694,30 @@ def _apply_request_filters(
         if not clean_values:
             continue
         if spec.model is Item and filter_name == "company":
-            # Item is global master data today; keep the company filter mandatory at the API boundary
-            # so callers cannot accidentally query the global catalog without company context.
             continue
         if spec.model is Party and filter_name == "company":
             statement = statement.where(CompanyParty.company.in_(clean_values))
             continue
+        if spec.model is Party and filter_name == "party_type":
+            statement = _apply_party_type_filter(statement, clean_values)
+            continue
         column = _column_for(spec.model, spec.allowed_filters[filter_name])
         statement = statement.where(_condition_for(column, clean_values))
+    return statement
+
+
+def _apply_party_type_filter(
+    statement: Select[tuple[Any]], values: Sequence[str | bool]
+) -> Select[tuple[Any]]:
+    conditions = []
+    for v in values:
+        sv = str(v)
+        if sv == "customer":
+            conditions.append(Party.is_customer.is_(True))
+        elif sv == "supplier":
+            conditions.append(Party.is_supplier.is_(True))
+    if conditions:
+        statement = statement.where(or_(*conditions))
     return statement
 
 
@@ -764,7 +781,6 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "company_name",
         "group_type",
         "account_type",
-        "party_type",
         "item_type",
         "account_name",
         "account_no",

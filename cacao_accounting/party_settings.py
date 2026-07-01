@@ -39,6 +39,21 @@ class PartyCompanySettings:
     default_price_list_label: str
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
+    default_currency: str | None
+    default_income_account_id: str | None
+    default_income_account_label: str
+    default_expense_account_id: str | None
+    default_expense_account_label: str
+    default_purchase_account_id: str | None
+    default_purchase_account_label: str
+    default_advance_account_id: str | None
+    default_advance_account_label: str
+    default_cost_center: str | None
+    default_business_unit: str | None
+    default_bank_name: str | None
+    default_bank_account_no: str | None
+    default_bank_iban: str | None
+    block_overdue: bool
 
 
 def _account_by_id(account_id: str | None) -> Accounts | None:
@@ -91,11 +106,11 @@ def _company_label(company: str) -> str:
     return company
 
 
-def _default_company_account(company: str, party_type: str) -> Accounts | None:
+def _default_company_account(company: str, role: str) -> Accounts | None:
     config = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalar_one_or_none()
     if not config:
         return None
-    default_field = "default_receivable" if party_type == "customer" else "default_payable"
+    default_field = "default_receivable" if role == "customer" else "default_payable"
     return _account_for_company(company, getattr(config, default_field))
 
 
@@ -107,9 +122,9 @@ def _party_account_record(party_id: str, company: str) -> PartyAccount | None:
     return database.session.execute(select(PartyAccount).filter_by(party_id=party_id, company=company)).scalar_one_or_none()
 
 
-def _default_company_price_list(company: str, party_type: str) -> PriceList | None:
+def _default_company_price_list(company: str, role: str) -> PriceList | None:
     query = select(PriceList).where(PriceList.is_active.is_(True), PriceList.is_default.is_(True))
-    if party_type == "customer":
+    if role == "customer":
         query = query.where(PriceList.is_selling.is_(True))
     else:
         query = query.where(PriceList.is_buying.is_(True))
@@ -118,47 +133,39 @@ def _default_company_price_list(company: str, party_type: str) -> PriceList | No
     return database.session.execute(query).scalars().first()
 
 
-def _build_customer_settings(
+def _settings_for_account_labels(company: str, account_id: str | None) -> tuple[str | None, str]:
+    account = _account_for_company(company, account_id) if account_id else None
+    return (account.id if account else None, account_label(account))
+
+
+def _build_settings(
     company: str,
-    resolved_account: Accounts | None,
     company_party: CompanyParty | None,
+    receivable_account: Accounts | None,
+    payable_account: Accounts | None,
     price_list: PriceList | None,
 ) -> PartyCompanySettings:
-    """Construye configuración para cliente."""
-    return PartyCompanySettings(
-        company=company,
-        company_label=_company_label(company),
-        is_active=bool(company_party.is_active) if company_party else True,
-        receivable_account_id=resolved_account.id if resolved_account else None,
-        receivable_account_label=account_label(resolved_account),
-        payable_account_id=None,
-        payable_account_label="",
-        tax_template_id=company_party.tax_template_id if company_party else None,
-        tax_template_label=_tax_template_label(company_party.tax_template_id if company_party else None),
-        default_tax_rule_id=company_party.default_tax_rule_id if company_party else None,
-        default_tax_rule_label=_tax_rule_label(company_party.default_tax_rule_id if company_party else None),
-        default_price_list_id=price_list.id if price_list else None,
-        default_price_list_label=price_list.name if price_list else "",
-        allow_purchase_invoice_without_order=False,
-        allow_purchase_invoice_without_receipt=False,
+    """Construye la configuración completa por compañía."""
+    inc_id, inc_label = _settings_for_account_labels(
+        company, company_party.default_income_account_id if company_party else None
     )
-
-
-def _build_supplier_settings(
-    company: str,
-    resolved_account: Accounts | None,
-    company_party: CompanyParty | None,
-    price_list: PriceList | None,
-) -> PartyCompanySettings:
-    """Construye configuración para proveedor."""
+    exp_id, exp_label = _settings_for_account_labels(
+        company, company_party.default_expense_account_id if company_party else None
+    )
+    pur_id, pur_label = _settings_for_account_labels(
+        company, company_party.default_purchase_account_id if company_party else None
+    )
+    adv_id, adv_label = _settings_for_account_labels(
+        company, company_party.default_advance_account_id if company_party else None
+    )
     return PartyCompanySettings(
         company=company,
         company_label=_company_label(company),
         is_active=bool(company_party.is_active) if company_party else True,
-        receivable_account_id=None,
-        receivable_account_label="",
-        payable_account_id=resolved_account.id if resolved_account else None,
-        payable_account_label=account_label(resolved_account),
+        receivable_account_id=receivable_account.id if receivable_account else None,
+        receivable_account_label=account_label(receivable_account),
+        payable_account_id=payable_account.id if payable_account else None,
+        payable_account_label=account_label(payable_account),
         tax_template_id=company_party.tax_template_id if company_party else None,
         tax_template_label=_tax_template_label(company_party.tax_template_id if company_party else None),
         default_tax_rule_id=company_party.default_tax_rule_id if company_party else None,
@@ -171,20 +178,42 @@ def _build_supplier_settings(
         allow_purchase_invoice_without_receipt=(
             bool(company_party.allow_purchase_invoice_without_receipt) if company_party else False
         ),
+        default_currency=company_party.default_currency if company_party else None,
+        default_income_account_id=inc_id,
+        default_income_account_label=inc_label,
+        default_expense_account_id=exp_id,
+        default_expense_account_label=exp_label,
+        default_purchase_account_id=pur_id,
+        default_purchase_account_label=pur_label,
+        default_advance_account_id=adv_id,
+        default_advance_account_label=adv_label,
+        default_cost_center=company_party.default_cost_center if company_party else None,
+        default_business_unit=company_party.default_business_unit if company_party else None,
+        default_bank_name=company_party.default_bank_name if company_party else None,
+        default_bank_account_no=company_party.default_bank_account_no if company_party else None,
+        default_bank_iban=company_party.default_bank_iban if company_party else None,
+        block_overdue=bool(company_party.block_overdue) if company_party else False,
     )
 
 
 def build_party_company_settings(
-    party_type: str,
+    party_id: str,
     company: str,
     *,
-    party_id: str | None = None,
+    role: str | None = None,
 ) -> PartyCompanySettings:
     """Construye los valores a prellenar en la tabla de configuracion por compania."""
-    company_party = _party_company_record(party_id, company) if party_id else None
+    company_party = _party_company_record(party_id, company)
     party_account = _party_account_record(party_id, company) if party_id else None
-    default_account = _default_company_account(company, party_type)
-    default_price_list = _default_company_price_list(company, party_type)
+    if role is None:
+        from cacao_accounting.database import Party as PartyModel
+        party = database.session.get(PartyModel, party_id)
+        if party:
+            role = "customer" if party.is_customer else "supplier"
+    if role not in ("customer", "supplier"):
+        role = "customer"
+    default_account = _default_company_account(company, role)
+    default_price_list = _default_company_price_list(company, role)
     configured_price_list = (
         _price_list_for_company(company, company_party.default_price_list_id)
         if company_party and company_party.default_price_list_id
@@ -192,70 +221,95 @@ def build_party_company_settings(
     )
     resolved_price_list = configured_price_list or default_price_list
 
-    if party_type == "customer":
+    receivable_account: Accounts | None = None
+    payable_account: Accounts | None = None
+    if role == "customer":
         account_id = party_account.receivable_account_id if party_account else None
-        resolved_account = _account_for_company(company, account_id) or default_account
-        return _build_customer_settings(company, resolved_account, company_party, resolved_price_list)
+        receivable_account = _account_for_company(company, account_id) or default_account
+    else:
+        account_id = party_account.payable_account_id if party_account else None
+        payable_account = _account_for_company(company, account_id) or default_account
 
-    account_id = party_account.payable_account_id if party_account else None
-    resolved_account = _account_for_company(company, account_id) or default_account
-    return _build_supplier_settings(company, resolved_account, company_party, resolved_price_list)
+    return _build_settings(company, company_party, receivable_account, payable_account, resolved_price_list)
 
 
 def draft_party_company_settings(
-    party_type: str,
+    role: str,
     company: str,
     values: Mapping[str, str | None],
+    *,
+    base: PartyCompanySettings | None = None,
 ) -> PartyCompanySettings:
     """Construye un estado temporal a partir del formulario enviado."""
-    base = build_party_company_settings(party_type, company)
-    if party_type == "customer":
-        receivable_account_id = values.get("receivable_account_id") or base.receivable_account_id
-        receivable_account = _account_for_company(company, receivable_account_id)
-        tax_template_id = values.get("tax_template_id") or base.tax_template_id
-        default_tax_rule_id = values.get("default_tax_rule_id") or base.default_tax_rule_id
-        default_price_list_id = values.get("default_price_list_id") or base.default_price_list_id
-        default_price_list = _price_list_for_company(company, default_price_list_id)
-        return PartyCompanySettings(
-            company=company,
-            company_label=base.company_label,
-            is_active=values.get("company_is_active") is not None,
-            receivable_account_id=receivable_account.id if receivable_account else None,
-            receivable_account_label=account_label(receivable_account),
-            payable_account_id=None,
-            payable_account_label="",
-            tax_template_id=tax_template_id,
-            tax_template_label=_tax_template_label(tax_template_id),
-            default_tax_rule_id=default_tax_rule_id,
-            default_tax_rule_label=_tax_rule_label(default_tax_rule_id),
-            default_price_list_id=default_price_list.id if default_price_list else None,
-            default_price_list_label=default_price_list.name if default_price_list else "",
+    if base is None:
+        base = PartyCompanySettings(
+            company=company, company_label=_company_label(company), is_active=True,
+            receivable_account_id=None, receivable_account_label="",
+            payable_account_id=None, payable_account_label="",
+            tax_template_id=None, tax_template_label="",
+            default_tax_rule_id=None, default_tax_rule_label="",
+            default_price_list_id=None, default_price_list_label="",
             allow_purchase_invoice_without_order=False,
             allow_purchase_invoice_without_receipt=False,
+            default_currency=None,
+            default_income_account_id=None, default_income_account_label="",
+            default_expense_account_id=None, default_expense_account_label="",
+            default_purchase_account_id=None, default_purchase_account_label="",
+            default_advance_account_id=None, default_advance_account_label="",
+            default_cost_center=None, default_business_unit=None,
+            default_bank_name=None, default_bank_account_no=None, default_bank_iban=None,
+            block_overdue=False,
         )
 
-    payable_account_id = values.get("payable_account_id") or base.payable_account_id
-    payable_account = _account_for_company(company, payable_account_id)
+    receivable_account_id = values.get("receivable_account_id") if role == "customer" else None
+    receivable_account = _account_for_company(company, receivable_account_id) if receivable_account_id else None
+    payable_account_id = values.get("payable_account_id") if role == "supplier" else None
+    payable_account = _account_for_company(company, payable_account_id) if payable_account_id else None
     tax_template_id = values.get("tax_template_id") or base.tax_template_id
     default_tax_rule_id = values.get("default_tax_rule_id") or base.default_tax_rule_id
     default_price_list_id = values.get("default_price_list_id") or base.default_price_list_id
     default_price_list = _price_list_for_company(company, default_price_list_id)
+
+    inc_id, inc_label = _settings_for_account_labels(company, values.get("default_income_account_id"))
+    exp_id, exp_label = _settings_for_account_labels(company, values.get("default_expense_account_id"))
+    pur_id, pur_label = _settings_for_account_labels(company, values.get("default_purchase_account_id"))
+    adv_id, adv_label = _settings_for_account_labels(company, values.get("default_advance_account_id"))
+
     return PartyCompanySettings(
         company=company,
         company_label=base.company_label,
         is_active=values.get("company_is_active") is not None,
-        receivable_account_id=None,
-        receivable_account_label="",
-        payable_account_id=payable_account.id if payable_account else None,
-        payable_account_label=account_label(payable_account),
+        receivable_account_id=receivable_account.id if receivable_account else base.receivable_account_id,
+        receivable_account_label=account_label(receivable_account) if receivable_account else base.receivable_account_label,
+        payable_account_id=payable_account.id if payable_account else base.payable_account_id,
+        payable_account_label=account_label(payable_account) if payable_account else base.payable_account_label,
         tax_template_id=tax_template_id,
         tax_template_label=_tax_template_label(tax_template_id),
         default_tax_rule_id=default_tax_rule_id,
         default_tax_rule_label=_tax_rule_label(default_tax_rule_id),
         default_price_list_id=default_price_list.id if default_price_list else None,
         default_price_list_label=default_price_list.name if default_price_list else "",
-        allow_purchase_invoice_without_order=values.get("allow_purchase_invoice_without_order") is not None,
-        allow_purchase_invoice_without_receipt=values.get("allow_purchase_invoice_without_receipt") is not None,
+        allow_purchase_invoice_without_order=(
+            values.get("allow_purchase_invoice_without_order") is not None if role == "supplier" else False
+        ),
+        allow_purchase_invoice_without_receipt=(
+            values.get("allow_purchase_invoice_without_receipt") is not None if role == "supplier" else False
+        ),
+        default_currency=values.get("default_currency") or base.default_currency,
+        default_income_account_id=inc_id or base.default_income_account_id,
+        default_income_account_label=inc_label or base.default_income_account_label,
+        default_expense_account_id=exp_id or base.default_expense_account_id,
+        default_expense_account_label=exp_label or base.default_expense_account_label,
+        default_purchase_account_id=pur_id or base.default_purchase_account_id,
+        default_purchase_account_label=pur_label or base.default_purchase_account_label,
+        default_advance_account_id=adv_id or base.default_advance_account_id,
+        default_advance_account_label=adv_label or base.default_advance_account_label,
+        default_cost_center=values.get("default_cost_center") or base.default_cost_center,
+        default_business_unit=values.get("default_business_unit") or base.default_business_unit,
+        default_bank_name=values.get("default_bank_name") or base.default_bank_name,
+        default_bank_account_no=values.get("default_bank_account_no") or base.default_bank_account_no,
+        default_bank_iban=values.get("default_bank_iban") or base.default_bank_iban,
+        block_overdue=values.get("block_overdue") is not None,
     )
 
 
@@ -280,7 +334,7 @@ def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
         raise ValueError("La plantilla de impuestos debe pertenecer a la misma compañía.")
 
 
-def _validate_tax_rule(company: str, rule_id: str | None, party_type: str) -> None:
+def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
     if not rule_id:
         return
     rule = _tax_rule_by_id(rule_id)
@@ -288,7 +342,7 @@ def _validate_tax_rule(company: str, rule_id: str | None, party_type: str) -> No
         raise ValueError("La regla fiscal seleccionada no existe.")
     if rule.company not in (None, company):
         raise ValueError("La regla fiscal debe pertenecer a la misma compañía.")
-    expected_applies_to = "sales" if party_type == "customer" else "purchase"
+    expected_applies_to = "sales" if role == "customer" else "purchase"
     if rule.applies_to not in ("both", expected_applies_to):
         raise ValueError("La regla fiscal no corresponde al tipo de tercero seleccionado.")
     if not rule.is_active:
@@ -304,7 +358,7 @@ def _price_list_for_company(company: str, price_list_id: str | None) -> PriceLis
     return price_list
 
 
-def _validate_price_list(company: str, price_list_id: str | None, party_type: str) -> None:
+def _validate_price_list(company: str, price_list_id: str | None, role: str) -> None:
     if not price_list_id:
         return
     price_list = _price_list_for_company(company, price_list_id)
@@ -312,15 +366,15 @@ def _validate_price_list(company: str, price_list_id: str | None, party_type: st
         raise ValueError("La lista de precio seleccionada no pertenece a la compañía.")
     if not price_list.is_active:
         raise ValueError("La lista de precio seleccionada no esta activa.")
-    if party_type == "customer" and not price_list.is_selling:
+    if role == "customer" and not price_list.is_selling:
         raise ValueError("La lista de precio debe ser de ventas para clientes.")
-    if party_type == "supplier" and not price_list.is_buying:
+    if role == "supplier" and not price_list.is_buying:
         raise ValueError("La lista de precio debe ser de compras para proveedores.")
 
 
 def upsert_party_company_settings(
     party_id: str,
-    party_type: str,
+    role: str,
     company: str,
     *,
     is_active: bool,
@@ -331,9 +385,20 @@ def upsert_party_company_settings(
     default_price_list_id: str | None,
     allow_purchase_invoice_without_order: bool,
     allow_purchase_invoice_without_receipt: bool,
+    default_currency: str | None = None,
+    default_income_account_id: str | None = None,
+    default_expense_account_id: str | None = None,
+    default_purchase_account_id: str | None = None,
+    default_advance_account_id: str | None = None,
+    default_cost_center: str | None = None,
+    default_business_unit: str | None = None,
+    default_bank_name: str | None = None,
+    default_bank_account_no: str | None = None,
+    default_bank_iban: str | None = None,
+    block_overdue: bool = False,
 ) -> None:
     """Crea o actualiza la configuracion de activacion del tercero por compania."""
-    if party_type == "customer":
+    if role == "customer":
         _validate_account(company, receivable_account_id, "receivable")
         payable_account_id = None
     else:
@@ -341,8 +406,8 @@ def upsert_party_company_settings(
         receivable_account_id = None
 
     _validate_tax_template(company, tax_template_id)
-    _validate_tax_rule(company, default_tax_rule_id, party_type)
-    _validate_price_list(company, default_price_list_id, party_type)
+    _validate_tax_rule(company, default_tax_rule_id, role)
+    _validate_price_list(company, default_price_list_id, role)
 
     company_party = _party_company_record(party_id, company)
     if company_party is None:
@@ -355,6 +420,17 @@ def upsert_party_company_settings(
     company_party.default_price_list_id = default_price_list_id
     company_party.allow_purchase_invoice_without_order = allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = allow_purchase_invoice_without_receipt
+    company_party.default_currency = default_currency
+    company_party.default_income_account_id = default_income_account_id
+    company_party.default_expense_account_id = default_expense_account_id
+    company_party.default_purchase_account_id = default_purchase_account_id
+    company_party.default_advance_account_id = default_advance_account_id
+    company_party.default_cost_center = default_cost_center
+    company_party.default_business_unit = default_business_unit
+    company_party.default_bank_name = default_bank_name
+    company_party.default_bank_account_no = default_bank_account_no
+    company_party.default_bank_iban = default_bank_iban
+    company_party.block_overdue = block_overdue
 
     party_account = _party_account_record(party_id, company)
     if party_account is None:
