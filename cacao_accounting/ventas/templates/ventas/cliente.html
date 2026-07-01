@@ -17,7 +17,7 @@
 <div class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title">
-      <i class="bi bi-person-vcard"></i>{{ registro.name }}
+      <i class="bi bi-person-vcard"></i>{{ registro.code }} - {{ registro.name }}
       {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activo') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactivo') }}</span>{% endif %}
     </h5>
     <div class="d-flex gap-2 flex-wrap">
@@ -28,8 +28,10 @@
   </div>
   <div class="p-3">
     <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Código') }}</label><p>{{ registro.code }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Nombre comercial') }}</label><p>{{ registro.comercial_name or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Nombre fiscal') }}</label><p>{{ registro.fiscal_name or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('ID fiscal') }}</label><p>{{ registro.tax_id or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Tipo de Cliente') }}</label><p>{{ detail.group_label or '-' }}</p></div>
     </div>
