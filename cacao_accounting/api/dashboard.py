@@ -655,14 +655,15 @@ def _recent_sales_invoices(
     ]
 
 
-def _active_parties(company: str, party_type: str) -> int:
+def _active_parties(company: str, role: str) -> int:
     """Cuenta terceros activos en una compañía."""
+    party_filter = Party.is_customer.is_(True) if role == "customer" else Party.is_supplier.is_(True)
     return (
         database.session.query(CompanyParty)
         .join(Party, Party.id == CompanyParty.party_id)
         .filter(CompanyParty.company == company)
         .filter(CompanyParty.is_active.is_(True))
-        .filter(Party.party_type == party_type, Party.is_active.is_(True))
+        .filter(party_filter, Party.is_active.is_(True))
         .count()
     )
 

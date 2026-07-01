@@ -18,11 +18,10 @@ class CustomerAdapter(BaseImportAdapter):
         """Build a dictionary with customer and company info."""
         row = document_data[0]
         cliente = Party(
-            party_type="customer",
+            is_customer=True,
             name=row.get("nombre"),
             comercial_name=row.get("nombre_comercial"),
             tax_id=row.get("identificacion_fiscal"),
-            classification=row.get("clasificacion"),
             is_active=True,
         )
         return {"party": cliente, "company_id": context.get("company_id")}

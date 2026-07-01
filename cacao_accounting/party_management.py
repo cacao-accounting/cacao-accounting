@@ -21,7 +21,7 @@ from cacao_accounting.database import (
     PartyGroup,
     database,
 )
-from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
+from cacao_accounting.database.helpers import generate_identifier
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
 NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
@@ -169,9 +169,7 @@ def build_party_detail_context(party: Party) -> PartyDetailContext:
         .scalars()
         .all()
     )
-    settings = [
-        build_party_company_settings(party.id, row.company, party_id=party.id) for row in company_rows
-    ]
+    settings = [build_party_company_settings(party.id, row.company) for row in company_rows]
     return PartyDetailContext(
         group_label=party_group_label(party.party_group_id) or "",
         nationality_label=_choice_label(NATIONALITY_LABELS, party.nationality_type),
@@ -348,6 +346,7 @@ def _party_address_link(party_id: str, link_id: str) -> PartyAddress:
 def generate_party_code(party_id: str, company: str | None, role: str) -> str:
     """Genera un codigo unico para un tercero via naming series."""
     from datetime import date as date_func
+
     today = date_func.today()
     code = generate_identifier(
         entity_type=role,

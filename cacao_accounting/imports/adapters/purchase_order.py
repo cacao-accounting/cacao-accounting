@@ -45,7 +45,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         first_row = document_data[0]
         supplier_id = first_row.get("proveedor")
         supplier = database.session.execute(
-            database.select(Party).filter_by(id=supplier_id, party_type="supplier")
+            database.select(Party).filter_by(id=supplier_id, is_supplier=True)
         ).scalar_one_or_none()
 
         posting_date = None

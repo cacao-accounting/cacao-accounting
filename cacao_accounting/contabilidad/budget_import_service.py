@@ -344,12 +344,8 @@ class BudgetImportService:
     ) -> tuple[List[str], list, list]:
         """Validate a single import row and return errors, combinations, and lines."""
         row_errors: list[str] = []
-        account_id = self._resolve_required_lookup(
-            caches["accounts_map"], row.get("Cuenta"), "Cuenta", row_errors
-        )
-        cc_id = self._resolve_required_lookup(
-            caches["cc_map"], row.get(_LABEL_CENTRO_COSTO), _LABEL_CENTRO_COSTO, row_errors
-        )
+        account_id = self._resolve_required_lookup(caches["accounts_map"], row.get("Cuenta"), "Cuenta", row_errors)
+        cc_id = self._resolve_required_lookup(caches["cc_map"], row.get(_LABEL_CENTRO_COSTO), _LABEL_CENTRO_COSTO, row_errors)
         unit_id = self._resolve_optional_lookup(
             caches["unit_map"], row.get(_LABEL_UNIDAD_NEGOCIO), "Unidad de Negocio", row_errors
         )
@@ -433,17 +429,13 @@ class BudgetImportService:
             return None, None
         return amount, None
 
-    def _resolve_required_lookup(
-        self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]
-    ) -> str | None:
+    def _resolve_required_lookup(self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]) -> str | None:
         resolved = lookup_map.get(key)
         if not resolved:
             row_errors.append(f"{label} '{key}' no válida.")
         return resolved
 
-    def _resolve_optional_lookup(
-        self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]
-    ) -> str | None:
+    def _resolve_optional_lookup(self, lookup_map: dict[str, str], key: Any, label: str, row_errors: list[str]) -> str | None:
         if not key:
             return None
         resolved = lookup_map.get(key)

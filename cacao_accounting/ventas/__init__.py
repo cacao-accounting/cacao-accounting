@@ -102,7 +102,9 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
 
 def _party_or_404(party_id: str, party_type: str) -> Party:
     """Obtiene un tercero por tipo o aborta."""
-    party = database.session.execute(database.select(Party).filter_by(id=party_id).filter(Party.is_customer.is_(True))).scalar_one_or_none()
+    party = database.session.execute(
+        database.select(Party).filter_by(id=party_id).filter(Party.is_customer.is_(True))
+    ).scalar_one_or_none()
     if not party:
         abort(404)
     return party
@@ -115,8 +117,8 @@ def _upsert_customer_company_settings_from_request(customer_id: str, form: dict)
         return
     upsert_party_company_settings(
         customer_id,
+        "customer",
         company,
-        role="customer",
         is_active=form.get("company_is_active") is not None,
         receivable_account_id=form.get("receivable_account_id") or None,
         payable_account_id=None,
@@ -574,7 +576,7 @@ def _handle_cliente_create(
     except ValueError as exc:
         database.session.rollback()
         if selected_company:
-            company_settings = draft_party_company_settings(None, selected_company, form, role="customer")
+            company_settings = draft_party_company_settings("customer", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -592,7 +594,9 @@ def _handle_cliente_create(
 @login_required
 def ventas_cliente(customer_id):
     """Detalle de cliente."""
-    registro = database.session.execute(database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))).first()
+    registro = database.session.execute(
+        database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
+    ).first()
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
@@ -662,7 +666,7 @@ def _handle_cliente_update(
     except ValueError as exc:
         database.session.rollback()
         if selected_company:
-            company_settings = draft_party_company_settings(cliente.id, selected_company, form, role="customer")
+            company_settings = draft_party_company_settings("customer", selected_company, form)
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
