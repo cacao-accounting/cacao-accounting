@@ -72,4 +72,37 @@
   </div>
 </div>
 
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Configuración contable por compañía') }}</h6>
+  </div>
+  <div class="p-3">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _('Cuentas del item por compañía') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Cuenta de ingreso') }}</th>
+          <th>{{ _('Cuenta de gasto') }}</th>
+          <th>{{ _('Cuenta de inventario') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in item_accounts %}
+        <tr>
+          <td>{{ row.company }}</td>
+          <td>{{ row.income_account_id or '-' }}</td>
+          <td>{{ row.expense_account_id or '-' }}</td>
+          <td>{{ row.inventory_account_id or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4">{{ _('No hay configuración contable por compañía.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}

@@ -134,6 +134,84 @@
         </div>
       </div>
     </div>
+    <div class="col-12">
+      <div class="ca-card shadow-sm" x-data='{
+        rows: {{ account_rows|tojson }},
+        addRow() { this.rows.push({company: "", income_account_id: "", expense_account_id: "", inventory_account_id: ""}); },
+        removeRow(index) {
+          if (this.rows.length <= 1) {
+            this.rows[0] = {company: "", income_account_id: "", expense_account_id: "", inventory_account_id: ""};
+            return;
+          }
+          this.rows.splice(index, 1);
+        }
+      }'>
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Configuración contable por compañía') }}</h6>
+          <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+            <i class="bi bi-plus-lg me-1"></i>{{ _('Añadir fila') }}
+          </button>
+        </div>
+        <div class="p-3">
+          <p class="text-muted small mb-3">{{ _('Si el item es servicio o no es de inventario, la cuenta de gasto por compañía es obligatoria porque el costo se registra directo al gasto.') }}</p>
+          <div class="table-responsive">
+            <table class="ca-table">
+              <caption style="display:none;">{{ _('Configuración contable del item por compañía') }}</caption>
+              <thead>
+                <tr>
+                  <th>{{ _('Compañía') }}</th>
+                  <th>{{ _('Cuenta de ingreso') }}</th>
+                  <th>{{ _('Cuenta de gasto') }}</th>
+                  <th>{{ _('Cuenta de inventario') }}</th>
+                  <th>{{ _('Acciones') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, index) in rows" :key="index">
+                  <tr>
+                    <td>
+                      <select class="form-select form-select-sm" name="account_company" x-model="row.company">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for code, name in company_choices %}
+                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="income_account_id" x-model="row.income_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="expense_account_id" x-model="row.expense_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="inventory_account_id" x-model="row.inventory_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td class="text-nowrap">
+                      <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </form>
 </div>
 

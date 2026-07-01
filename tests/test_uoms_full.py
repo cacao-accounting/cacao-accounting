@@ -209,7 +209,7 @@ def test_uom_conversion_cycle(app_ctx):
 
 def test_item_uom_rows_persist_against_default_uom(app_ctx):
     from cacao_accounting.database import database
-    from cacao_accounting.inventario.service import ItemUOMRow, create_item_with_uoms, list_item_uom_conversions
+    from cacao_accounting.inventario.service import ItemAccountRow, ItemUOMRow, create_item_with_uoms, list_item_uom_conversions
 
     create_item_with_uoms(
         code="UOM-ITEM-001",
@@ -222,6 +222,7 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
             ItemUOMRow(uom_code="BOX", conversion_factor=Decimal("12")),
             ItemUOMRow(uom_code="DZ", conversion_factor=Decimal("12")),
         ],
+        account_rows=[],
     )
     database.session.commit()
 
@@ -230,6 +231,58 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
         ("BOX", "UND", Decimal("12")),
         ("DZ", "UND", Decimal("12")),
     ]
+
+
+def test_service_item_requires_company_expense_account(app_ctx):
+    from cacao_accounting.inventario.service import ItemUOMRow, create_item_with_uoms
+
+    with pytest.raises(ValueError, match="cuenta de gasto predeterminada por compañia"):
+        create_item_with_uoms(
+            code="SERV-ITEM-001",
+            name="Servicio sin cuenta",
+            description="",
+            item_type="service",
+            is_stock_item=False,
+            default_uom="SERV",
+            uom_rows=[],
+            account_rows=[],
+        )
+
+
+def test_service_item_persists_company_accounts(app_ctx):
+    from cacao_accounting.database import Accounts, ItemAccount, database
+    from cacao_accounting.inventario.service import ItemAccountRow, create_item_with_uoms
+
+    expense_account = (
+        database.session.execute(
+            database.select(Accounts).filter_by(entity="cacao", account_type="expense", group=False, active=True, enabled=True)
+        )
+        .scalars()
+        .first()
+    )
+    assert expense_account is not None
+
+    create_item_with_uoms(
+        code="SERV-ITEM-002",
+        name="Servicio con cuenta",
+        description="",
+        item_type="service",
+        is_stock_item=False,
+        default_uom="SERV",
+        uom_rows=[],
+        account_rows=[
+            ItemAccountRow(
+                company="cacao",
+                income_account_id=None,
+                expense_account_id=expense_account.id,
+                inventory_account_id=None,
+            )
+        ],
+    )
+    database.session.commit()
+
+    mapping = database.session.execute(database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="cacao")).scalar_one()
+    assert mapping.expense_account_id == expense_account.id
 
 
 def test_item_default_uom_is_locked_after_usage(app_ctx):
