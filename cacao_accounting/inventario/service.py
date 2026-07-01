@@ -12,8 +12,11 @@ from typing import Any, Mapping
 from sqlalchemy import func, select
 
 from cacao_accounting.database import (
+    Accounts,
     Batch,
+    Entity,
     Item,
+    ItemAccount,
     ItemUOMConversion,
     PurchaseInvoiceItem,
     PurchaseOrderItem,
@@ -48,6 +51,16 @@ class ItemUOMRow:
 
     uom_code: str
     conversion_factor: Decimal
+
+
+@dataclass(frozen=True)
+class ItemAccountRow:
+    """Fila de cuenta contable por compania para un item."""
+
+    company: str
+    income_account_id: str | None
+    expense_account_id: str | None
+    inventory_account_id: str | None
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -228,11 +241,17 @@ def create_item_with_uoms(
     is_stock_item: bool,
     default_uom: str,
     uom_rows: list[ItemUOMRow],
+    account_rows: list[ItemAccountRow],
 ) -> Item:
     """Crea un item junto con sus conversiones de UOM."""
     validate_item_uom_rows(default_uom, uom_rows)
     resolved_item_type = item_type or "goods"
     resolved_stock_flag = is_stock_item if resolved_item_type != "service" else False
+    validate_item_account_rows(
+        resolved_item_type,
+        resolved_stock_flag,
+        account_rows,
+    )
     item = Item(
         code=code,
         name=name,
@@ -252,7 +271,99 @@ def create_item_with_uoms(
                 conversion_factor=row.conversion_factor,
             )
         )
+    for row in account_rows:
+        database.session.add(
+            ItemAccount(
+                item_code=item.code,
+                company=row.company,
+                income_account_id=row.income_account_id,
+                expense_account_id=row.expense_account_id,
+                inventory_account_id=row.inventory_account_id,
+            )
+        )
     return item
+
+
+def list_item_account_rows(item_code: str) -> list[ItemAccount]:
+    """Lista la configuracion contable por compania de un item."""
+    query = select(ItemAccount).filter_by(item_code=item_code).order_by(ItemAccount.company)
+    return list(database.session.execute(query).scalars().all())
+
+
+def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
+    """Convierte filas contables por compania enviadas por formulario en objetos tipados."""
+    companies = _request_values(form, "account_company")
+    income_accounts = _request_values(form, "income_account_id")
+    expense_accounts = _request_values(form, "expense_account_id")
+    inventory_accounts = _request_values(form, "inventory_account_id")
+    rows: list[ItemAccountRow] = []
+    for index, company in enumerate(companies):
+        income_account_id = income_accounts[index] if index < len(income_accounts) else ""
+        expense_account_id = expense_accounts[index] if index < len(expense_accounts) else ""
+        inventory_account_id = inventory_accounts[index] if index < len(inventory_accounts) else ""
+        cleaned_company = str(company or "").strip()
+        cleaned_income = str(income_account_id or "").strip() or None
+        cleaned_expense = str(expense_account_id or "").strip() or None
+        cleaned_inventory = str(inventory_account_id or "").strip() or None
+        if not cleaned_company and not cleaned_income and not cleaned_expense and not cleaned_inventory:
+            continue
+        rows.append(
+            ItemAccountRow(
+                company=cleaned_company,
+                income_account_id=cleaned_income,
+                expense_account_id=cleaned_expense,
+                inventory_account_id=cleaned_inventory,
+            )
+        )
+    return rows
+
+
+def validate_item_account_rows(
+    item_type: str,
+    is_stock_item: bool,
+    rows: list[ItemAccountRow],
+) -> None:
+    """Valida la configuracion contable del item por compania."""
+    requires_expense_by_company = item_type == "service" or not is_stock_item
+    if requires_expense_by_company and not rows:
+        raise InventoryServiceError(
+            "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+        )
+
+    seen_companies: set[str] = set()
+    for row in rows:
+        if not row.company:
+            raise InventoryServiceError("Cada fila contable del item debe indicar una compañia.")
+        if row.company in seen_companies:
+            raise InventoryServiceError("No se puede repetir la misma compañia en la configuracion contable del item.")
+        company = database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none()
+        if company is None:
+            raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
+        _validate_item_account(row.company, row.income_account_id, "income", "ingreso")
+        _validate_item_account(row.company, row.expense_account_id, "expense", "gasto")
+        _validate_item_account(row.company, row.inventory_account_id, "asset", "inventario")
+        if requires_expense_by_company and not row.expense_account_id:
+            raise InventoryServiceError(
+                "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            )
+        seen_companies.add(row.company)
+
+
+def _validate_item_account(company: str, account_id: str | None, expected_type: str, label: str) -> None:
+    """Valida que una cuenta exista, pertenezca a la compañia y coincida con el tipo esperado."""
+    if not account_id:
+        return
+    account = database.session.get(Accounts, account_id)
+    if account is None or account.entity != company:
+        raise InventoryServiceError(f"La cuenta de {label} no pertenece a la compañia seleccionada.")
+    account_type = (account.account_type or "").strip().lower()
+    expected_aliases = {
+        "income": {"income"},
+        "expense": {"expense", "cogs"},
+        "asset": {"asset", "inventory"},
+    }[expected_type]
+    if account_type and account_type not in expected_aliases:
+        raise InventoryServiceError(f"La cuenta de {label} debe ser valida para {label} en la compañia.")
 
 
 def default_uom_change_allowed(item_code: str, new_default_uom: str) -> bool:
