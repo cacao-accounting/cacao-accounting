@@ -760,6 +760,8 @@ def _handle_supplier_create(
                 receivable_account_id=None,
                 payable_account_id=form.get("payable_account_id") or None,
                 tax_template_id=form.get("tax_template_id") or None,
+                default_tax_rule_id=form.get("default_tax_rule_id") or None,
+                default_price_list_id=form.get("default_price_list_id") or None,
                 allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
                 allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
             )
@@ -807,6 +809,8 @@ def _handle_supplier_update(
                 receivable_account_id=None,
                 payable_account_id=form.get("payable_account_id") or None,
                 tax_template_id=form.get("tax_template_id") or None,
+                default_tax_rule_id=form.get("default_tax_rule_id") or None,
+                default_price_list_id=form.get("default_price_list_id") or None,
                 allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
                 allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
             )

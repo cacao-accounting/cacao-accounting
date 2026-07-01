@@ -206,9 +206,15 @@ class TestPartySettingsDataclass:
             payable_account_label="",
             tax_template_id="tax-456",
             tax_template_label="IVA General",
+            default_tax_rule_id="rule-1",
+            default_tax_rule_label="IVA Ventas",
+            default_price_list_id="plist-1",
+            default_price_list_label="Lista Ventas",
             allow_purchase_invoice_without_order=False,
             allow_purchase_invoice_without_receipt=False,
         )
         assert settings.company == "test"
         assert settings.is_active is True
         assert settings.receivable_account_id == "acc-123"
+        assert settings.default_tax_rule_id == "rule-1"
+        assert settings.default_price_list_id == "plist-1"

@@ -16,6 +16,8 @@ from cacao_accounting.database import (
     CostCenter,
     Entity,
     FiscalYear,
+    PriceList,
+    UOM,
     database,
 )
 
@@ -136,6 +138,109 @@ def create_default_cost_center(entity: Entity) -> "CostCenter":
     )
     database.session.add(cost_center)
     return cost_center
+
+
+def create_default_uoms(language: str | None = None) -> list[UOM]:
+    """Crea un conjunto razonable de UOM base si el catálogo esta vacío."""
+    seed_uoms = _default_uom_catalog(language)
+    created: list[UOM] = []
+    for code, name in seed_uoms:
+        existing = database.session.execute(database.select(UOM).filter_by(code=code)).scalar_one_or_none()
+        if existing is not None:
+            continue
+        uom = UOM(code=code, name=name, is_active=True)
+        database.session.add(uom)
+        created.append(uom)
+    return created
+
+
+def create_default_price_lists(company: str, currency: str | None, language: str | None = None) -> list[PriceList]:
+    """Crea las listas de precio predeterminadas de ventas y compras para una compañia."""
+    definitions = _default_price_list_catalog(language)
+    created: list[PriceList] = []
+    for definition in definitions:
+        existing = database.session.execute(
+            database.select(PriceList).filter_by(company=company, name=definition["name"])
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.currency = existing.currency or currency
+            existing.is_active = True
+            existing.is_default = True
+            existing.is_selling = bool(definition["is_selling"])
+            existing.is_buying = bool(definition["is_buying"])
+            continue
+        price_list = PriceList(
+            name=str(definition["name"]),
+            company=company,
+            currency=currency,
+            is_selling=bool(definition["is_selling"]),
+            is_buying=bool(definition["is_buying"]),
+            is_default=True,
+            is_active=True,
+        )
+        database.session.add(price_list)
+        created.append(price_list)
+    return created
+
+
+def _default_uom_catalog(language: str | None) -> list[tuple[str, str]]:
+    """Devuelve el catálogo base de UOM en el idioma solicitado."""
+    is_english = (language or "").lower().startswith("en")
+    if is_english:
+        return [
+            ("UND", "Unit"),
+            ("CAJ", "Box"),
+            ("PQT", "Pack"),
+            ("DOC", "Dozen"),
+            ("CJA12", "Box x 12"),
+            ("CJA24", "Box x 24"),
+            ("PAL", "Pallet"),
+            ("KG", "Kilogram"),
+            ("G", "Gram"),
+            ("LB", "Pound"),
+            ("L", "Liter"),
+            ("ML", "Milliliter"),
+            ("M", "Meter"),
+            ("CM", "Centimeter"),
+            ("MM", "Millimeter"),
+            ("HRS", "Hour"),
+            ("MIN", "Minute"),
+            ("SERV", "Service"),
+        ]
+    return [
+        ("UND", "Unidad"),
+        ("CAJ", "Caja"),
+        ("PQT", "Paquete"),
+        ("DOC", "Docena"),
+        ("CJA12", "Caja x 12"),
+        ("CJA24", "Caja x 24"),
+        ("PAL", "Pallet"),
+        ("KG", "Kilogramo"),
+        ("G", "Gramo"),
+        ("LB", "Libra"),
+        ("L", "Litro"),
+        ("ML", "Mililitro"),
+        ("M", "Metro"),
+        ("CM", "Centimetro"),
+        ("MM", "Milimetro"),
+        ("HRS", "Hora"),
+        ("MIN", "Minuto"),
+        ("SERV", "Servicio"),
+    ]
+
+
+def _default_price_list_catalog(language: str | None) -> list[dict[str, object]]:
+    """Devuelve las listas de precio predeterminadas en el idioma solicitado."""
+    is_english = (language or "").lower().startswith("en")
+    if is_english:
+        return [
+            {"name": "Default Sales Price List", "is_selling": True, "is_buying": False},
+            {"name": "Default Purchase Price List", "is_selling": False, "is_buying": True},
+        ]
+    return [
+        {"name": "Lista de Precio Venta por Defecto", "is_selling": True, "is_buying": False},
+        {"name": "Lista de Precio Compra por Defecto", "is_selling": False, "is_buying": True},
+    ]
 
 
 def _add_months(original_date: date, months: int) -> date:

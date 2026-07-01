@@ -740,7 +740,7 @@ def test_financial_report_can_group_by_voucher_type_when_column_is_hidden(app_ct
 
 
 def test_search_select_party_type_labels_and_party_filter(app_ctx):
-    from cacao_accounting.database import CompanyParty, Modules, Party, PartyGroup, User, database
+    from cacao_accounting.database import CompanyParty, Modules, Party, PartyGroup, PriceList, TaxRule, User, database
 
     user = User(user="party-filter-user", name="Party Filter User", password=b"x", classification="admin", active=True)
     database.session.add_all(
@@ -754,6 +754,10 @@ def test_search_select_party_type_labels_and_party_filter(app_ctx):
             Party(id="CUST-F", party_type="customer", name="Cliente F", tax_id="CUST-F", is_active=True),
             CompanyParty(company="cacao", party_id="SUPP-F", is_active=True),
             CompanyParty(company="cacao", party_id="CUST-F", is_active=True),
+            PriceList(name="Lista Ventas Cacao", company="cacao", is_selling=True, is_active=True),
+            PriceList(name="Lista Compras Cacao", company="cacao", is_buying=True, is_selling=False, is_active=True),
+            TaxRule(name="IVA Venta", company="cacao", applies_to="sales", concept="iva", is_active=True),
+            TaxRule(name="IVA Compra", company="cacao", applies_to="purchase", concept="iva", is_active=True),
         ]
     )
     database.session.commit()
@@ -768,12 +772,16 @@ def test_search_select_party_type_labels_and_party_filter(app_ctx):
     supplier_payload = client.get("/api/search-select?doctype=party&q=Proveedor&company=cacao&party_type=supplier").json
     customer_group_payload = client.get("/api/search-select?doctype=customer_group&q=may").json
     supplier_group_payload = client.get("/api/search-select?doctype=party_group&group_type=supplier&q=i").json
+    price_list_payload = client.get("/api/search-select?doctype=price_list&q=Lista&company=cacao&is_selling=true").json
+    tax_rule_payload = client.get("/api/search-select?doctype=tax_rule&q=IVA&company=cacao&applies_to=sales").json
 
     assert party_type_payload["results"][0]["value"] == "supplier"
     assert party_type_payload["results"][0]["display_name"] == "Proveedor"
     assert [item["value"] for item in supplier_payload["results"]] == ["SUPP-F"]
     assert [item["display_name"] for item in customer_group_payload["results"]] == ["Mayorista"]
     assert [item["display_name"] for item in supplier_group_payload["results"]] == ["Importador"]
+    assert [item["display_name"] for item in price_list_payload["results"]] == ["Lista Ventas Cacao (Venta)"]
+    assert [item["display_name"] for item in tax_rule_payload["results"]] == ["IVA Venta (Ventas)"]
 
 
 def test_trial_balance_uses_tree_presentation_without_level_column(app_ctx):
@@ -1110,6 +1118,54 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     assert currency_usd.default is False
     assert currency_eur.active is True
     assert currency_eur.default is False
+
+
+def test_setup_seeds_uoms_using_selected_language():
+    from cacao_accounting import create_app
+    from cacao_accounting.database import PriceList, UOM, database
+    from cacao_accounting.setup.service import finalize_setup
+
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+        }
+    )
+    with app.app_context():
+        database.create_all()
+        finalize_setup(
+            {
+                "id": "uomco",
+                "razon_social": "UOM Company",
+                "nombre_comercial": "UOM Company",
+                "id_fiscal": "J-UOM",
+                "moneda": "NIO",
+                "tipo_entidad": "Sociedad Anonima",
+            },
+            catalogo_tipo="preexistente",
+            country="NI",
+            idioma="EN",
+            catalogo_archivo="base_en.csv",
+        )
+
+        unit = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        box = database.session.execute(database.select(UOM).filter_by(code="CAJ")).scalar_one()
+        service = database.session.execute(database.select(UOM).filter_by(code="SERV")).scalar_one()
+        sales_price_list = database.session.execute(
+            database.select(PriceList).filter_by(company="uomco", is_selling=True, is_default=True)
+        ).scalar_one()
+        purchase_price_list = database.session.execute(
+            database.select(PriceList).filter_by(company="uomco", is_buying=True, is_default=True)
+        ).scalar_one()
+
+        assert unit.name == "Unit"
+        assert box.name == "Box"
+        assert service.name == "Service"
+        assert sales_price_list.name == "Default Sales Price List"
+        assert purchase_price_list.name == "Default Purchase Price List"
 
 
 def test_example_seed_creates_company_default_accounts(app_ctx):

@@ -1568,6 +1568,10 @@ class TestCompanyPartyPaymentTermsFk(unittest.TestCase):
     def test_company_party_no_longer_has_payment_terms_text(self):
         self.assertNotIn("payment_terms", self.columns)
 
+    def test_company_party_has_tax_rule_and_price_list_defaults(self):
+        self.assertIn("default_tax_rule_id", self.columns)
+        self.assertIn("default_price_list_id", self.columns)
+
 
 class TestBatchUniqueConstraint(unittest.TestCase):
     """Verifica que batch tiene constraint unico por (item_code, batch_no)."""
