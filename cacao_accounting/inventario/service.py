@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
@@ -31,7 +32,9 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     database,
     UOM,
+    obtiene_texto_unico,
 )
+from cacao_accounting.database.helpers import generate_identifier
 
 
 class InventoryServiceError(ValueError):
@@ -60,7 +63,11 @@ class ItemAccountRow:
 
     company: str
     expense_account_id: str | None
-    cost_center_code: str | None
+    cost_center_code: str | None = None
+    income_account_id: str | None = None
+    cogs_account_id: str | None = None
+    inventory_account_id: str | None = None
+    stock_adjustment_account_id: str | None = None
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -190,6 +197,109 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
     return StockRebuildResult(rebuilt_bins=rebuilt, inconsistencies=inconsistencies)
 
 
+def update_item_with_uoms(
+    item_code: str,
+    *,
+    name: str,
+    description: str | None = None,
+    item_type: str = "goods",
+    is_stock_item: bool = False,
+    is_purchase_item: bool = True,
+    is_sale_item: bool = True,
+    item_category_id: str | None = None,
+    default_uom: str,
+    purchase_uom: str | None = None,
+    sale_uom: str | None = None,
+    valuation_method: str | None = None,
+    default_warehouse_id: str | None = None,
+    default_supplier_id: str | None = None,
+    allow_negative_stock: bool = False,
+    min_stock_qty: Decimal | None = None,
+    max_stock_qty: Decimal | None = None,
+    reorder_level: Decimal | None = None,
+    standard_rate: Decimal | None = None,
+    last_purchase_rate: Decimal | None = None,
+    currency: str | None = None,
+    brand: str | None = None,
+    model_name: str | None = None,
+    barcode: str | None = None,
+    has_batch: bool = False,
+    has_serial_no: bool = False,
+    has_expiry_date: bool = False,
+    uom_rows: list[ItemUOMRow] | None = None,
+    account_rows: list[ItemAccountRow] | None = None,
+) -> Item:
+    """Actualiza un item existente junto con sus conversiones de UOM.
+
+    Reemplaza por completo las conversiones UOM y la configuracion contable.
+    """
+    item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        raise InventoryServiceError(f"El item '{item_code}' no existe.")
+    if not default_uom_change_allowed(item_code, default_uom):
+        raise InventoryServiceError("No se puede cambiar la UOM base si el item tiene transacciones.")
+    resolved_uom_rows = uom_rows or []
+    resolved_account_rows = account_rows or []
+    resolved_item_type = item_type or "goods"
+    resolved_stock_flag = is_stock_item if resolved_item_type != "service" else False
+    validate_item_uom_rows(default_uom, resolved_uom_rows)
+    validate_item_account_rows(resolved_item_type, resolved_stock_flag, resolved_account_rows)
+    item.name = name
+    item.description = description
+    item.item_type = resolved_item_type
+    item.is_stock_item = resolved_stock_flag
+    item.is_purchase_item = is_purchase_item
+    item.is_sale_item = is_sale_item
+    item.item_category_id = item_category_id
+    item.default_uom = default_uom
+    item.purchase_uom = purchase_uom
+    item.sale_uom = sale_uom
+    item.valuation_method = valuation_method
+    item.default_warehouse_id = default_warehouse_id
+    item.default_supplier_id = default_supplier_id
+    item.allow_negative_stock = allow_negative_stock
+    item.min_stock_qty = min_stock_qty
+    item.max_stock_qty = max_stock_qty
+    item.reorder_level = reorder_level
+    item.standard_rate = standard_rate
+    item.last_purchase_rate = last_purchase_rate
+    item.currency = currency
+    item.brand = brand
+    item.model_name = model_name
+    item.barcode = barcode
+    item.has_batch = has_batch
+    item.has_serial_no = has_serial_no
+    item.has_expiry_date = has_expiry_date
+    database.session.flush()
+    for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code)).scalars():
+        database.session.delete(old)
+    for uom_row in resolved_uom_rows:
+        database.session.add(
+            ItemUOMConversion(
+                item_code=item.code,
+                from_uom=uom_row.uom_code,
+                to_uom=default_uom,
+                conversion_factor=uom_row.conversion_factor,
+            )
+        )
+    for old_account in database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars():
+        database.session.delete(old_account)
+    for account_row in resolved_account_rows:
+        database.session.add(
+            ItemAccount(
+                item_code=item.code,
+                company=account_row.company,
+                expense_account_id=account_row.expense_account_id,
+                income_account_id=account_row.income_account_id,
+                cogs_account_id=account_row.cogs_account_id,
+                inventory_account_id=account_row.inventory_account_id,
+                stock_adjustment_account_id=account_row.stock_adjustment_account_id,
+                cost_center_code=account_row.cost_center_code,
+            )
+        )
+    return item
+
+
 def list_item_uom_conversions(item_code: str) -> list[ItemUOMConversion]:
     """Lista las conversiones UOM configuradas para un item."""
     query = select(ItemUOMConversion).filter_by(item_code=item_code).order_by(ItemUOMConversion.from_uom)
@@ -234,50 +344,106 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
 
 def create_item_with_uoms(
     *,
-    code: str,
+    code: str | None = None,
     name: str,
-    description: str | None,
-    item_type: str,
-    is_stock_item: bool,
+    description: str | None = None,
+    item_type: str = "goods",
+    is_stock_item: bool = False,
+    is_purchase_item: bool = True,
+    is_sale_item: bool = True,
+    item_category_id: str | None = None,
     default_uom: str,
-    uom_rows: list[ItemUOMRow],
-    account_rows: list[ItemAccountRow],
+    purchase_uom: str | None = None,
+    sale_uom: str | None = None,
+    valuation_method: str | None = None,
+    default_warehouse_id: str | None = None,
+    default_supplier_id: str | None = None,
+    allow_negative_stock: bool = False,
+    min_stock_qty: Decimal | None = None,
+    max_stock_qty: Decimal | None = None,
+    reorder_level: Decimal | None = None,
+    standard_rate: Decimal | None = None,
+    last_purchase_rate: Decimal | None = None,
+    currency: str | None = None,
+    brand: str | None = None,
+    model_name: str | None = None,
+    barcode: str | None = None,
+    has_batch: bool = False,
+    has_serial_no: bool = False,
+    has_expiry_date: bool = False,
+    uom_rows: list[ItemUOMRow] | None = None,
+    account_rows: list[ItemAccountRow] | None = None,
 ) -> Item:
-    """Crea un item junto con sus conversiones de UOM."""
-    validate_item_uom_rows(default_uom, uom_rows)
+    """Crea un item junto con sus conversiones de UOM.
+
+    Si ``code`` no se proporciona, se genera automaticamente mediante
+    :func:`~cacao_accounting.database.helpers.generate_identifier`.
+    """
+    resolved_uom_rows = uom_rows or []
+    resolved_account_rows = account_rows or []
+    validate_item_uom_rows(default_uom, resolved_uom_rows)
     resolved_item_type = item_type or "goods"
     resolved_stock_flag = is_stock_item if resolved_item_type != "service" else False
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,
-        account_rows,
+        resolved_account_rows,
     )
+    item_id = obtiene_texto_unico()
+    if code is None:
+        code = generate_identifier("item", item_id, posting_date=date.today(), company=None)
     item = Item(
+        id=item_id,
         code=code,
         name=name,
         description=description,
         item_type=resolved_item_type,
         is_stock_item=resolved_stock_flag,
+        is_purchase_item=is_purchase_item,
+        is_sale_item=is_sale_item,
+        item_category_id=item_category_id,
         default_uom=default_uom,
+        purchase_uom=purchase_uom,
+        sale_uom=sale_uom,
+        valuation_method=valuation_method,
+        default_warehouse_id=default_warehouse_id,
+        default_supplier_id=default_supplier_id,
+        allow_negative_stock=allow_negative_stock,
+        min_stock_qty=min_stock_qty,
+        max_stock_qty=max_stock_qty,
+        reorder_level=reorder_level,
+        standard_rate=standard_rate,
+        last_purchase_rate=last_purchase_rate,
+        currency=currency,
+        brand=brand,
+        model_name=model_name,
+        barcode=barcode,
+        has_batch=has_batch,
+        has_serial_no=has_serial_no,
+        has_expiry_date=has_expiry_date,
     )
     database.session.add(item)
     database.session.flush()
-    for row in uom_rows:
+    for uom_row in resolved_uom_rows:
         database.session.add(
             ItemUOMConversion(
                 item_code=item.code,
-                from_uom=row.uom_code,
+                from_uom=uom_row.uom_code,
                 to_uom=default_uom,
-                conversion_factor=row.conversion_factor,
+                conversion_factor=uom_row.conversion_factor,
             )
         )
-    for row in account_rows:
+    for account_row in resolved_account_rows:
         database.session.add(
             ItemAccount(
                 item_code=item.code,
-                company=row.company,
-                expense_account_id=row.expense_account_id,
-                cost_center_code=row.cost_center_code,
+                company=account_row.company,
+                expense_account_id=account_row.expense_account_id,
+                income_account_id=account_row.income_account_id,
+                cogs_account_id=account_row.cogs_account_id,
+                inventory_account_id=account_row.inventory_account_id,
+                stock_adjustment_account_id=account_row.stock_adjustment_account_id,
+                cost_center_code=account_row.cost_center_code,
             )
         )
     return item
@@ -293,13 +459,25 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     """Convierte filas contables por compania enviadas por formulario en objetos tipados."""
     companies = _request_values(form, "account_company")
     expense_accounts = _request_values(form, "expense_account_id")
+    income_accounts = _request_values(form, "income_account_id")
+    cogs_accounts = _request_values(form, "cogs_account_id")
+    inventory_accounts = _request_values(form, "inventory_account_id")
+    stock_adjustment_accounts = _request_values(form, "stock_adjustment_account_id")
     cost_centers = _request_values(form, "cost_center_code")
     rows: list[ItemAccountRow] = []
     for index, company in enumerate(companies):
         expense_account_id = expense_accounts[index] if index < len(expense_accounts) else ""
+        income_account_id = income_accounts[index] if index < len(income_accounts) else ""
+        cogs_account_id = cogs_accounts[index] if index < len(cogs_accounts) else ""
+        inventory_account_id = inventory_accounts[index] if index < len(inventory_accounts) else ""
+        stock_adjustment_account_id = stock_adjustment_accounts[index] if index < len(stock_adjustment_accounts) else ""
         cost_center_code = cost_centers[index] if index < len(cost_centers) else ""
         cleaned_company = str(company or "").strip()
         cleaned_expense = str(expense_account_id or "").strip() or None
+        cleaned_income = str(income_account_id or "").strip() or None
+        cleaned_cogs = str(cogs_account_id or "").strip() or None
+        cleaned_inventory = str(inventory_account_id or "").strip() or None
+        cleaned_stock_adjustment = str(stock_adjustment_account_id or "").strip() or None
         cleaned_cost_center = str(cost_center_code or "").strip() or None
         if not cleaned_company and not cleaned_expense and not cleaned_cost_center:
             continue
@@ -307,6 +485,10 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
             ItemAccountRow(
                 company=cleaned_company,
                 expense_account_id=cleaned_expense,
+                income_account_id=cleaned_income,
+                cogs_account_id=cleaned_cogs,
+                inventory_account_id=cleaned_inventory,
+                stock_adjustment_account_id=cleaned_stock_adjustment,
                 cost_center_code=cleaned_cost_center,
             )
         )
@@ -335,6 +517,10 @@ def validate_item_account_rows(
         if company is None:
             raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
         _validate_item_account(row.company, row.expense_account_id, "expense", "gasto")
+        _validate_item_account(row.company, row.income_account_id, "income", "ingreso")
+        _validate_item_account(row.company, row.cogs_account_id, "cogs", "costo de venta")
+        _validate_item_account(row.company, row.inventory_account_id, "inventory", "inventario")
+        _validate_item_account(row.company, row.stock_adjustment_account_id, "stock_adjustment", "ajuste de inventario")
         _validate_cost_center(row.company, row.cost_center_code)
         if requires_expense_by_company and not row.expense_account_id:
             raise InventoryServiceError(
@@ -357,6 +543,10 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
     account_type = (account.account_type or "").strip().lower()
     expected_aliases = {
         "expense": {"expense", "cogs"},
+        "income": {"income"},
+        "cogs": {"cogs", "expense"},
+        "inventory": {"inventory", "current_asset"},
+        "stock_adjustment": {"expense", "income"},
     }[expected_type]
     if account_type and account_type not in expected_aliases:
         raise InventoryServiceError(f"La cuenta de {label} debe ser valida para {label} en la compañia.")
