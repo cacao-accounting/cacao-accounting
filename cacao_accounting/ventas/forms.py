@@ -4,8 +4,8 @@
 """Formularios web del modulo de ventas."""
 
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, SelectField, StringField, TextAreaField
-from wtforms.validators import DataRequired
+from wtforms import BooleanField, DateField, SelectField, StringField, TextAreaField
+from wtforms.validators import DataRequired, Optional
 
 _LABEL_COMPANY = "Compañía"
 _LABEL_POSTING_DATE = "Fecha de Publicación"
@@ -19,10 +19,39 @@ class FormularioCliente(FlaskForm):
     tax_id = StringField("ID Fiscal")
     company = StringField(_LABEL_COMPANY)
     party_group_id = StringField("Tipo de Cliente")
+    nationality_type = SelectField(
+        "Nacionalidad",
+        choices=[("", "Seleccione"), ("national", "Nacional"), ("foreign", "Extranjero")],
+        validators=[Optional()],
+    )
+    person_type = SelectField(
+        "Tipo de Persona",
+        choices=[("", "Seleccione"), ("natural", "Natural"), ("juridical", "Jurídica")],
+        validators=[Optional()],
+    )
+    primary_phone = StringField("Teléfono principal")
+    primary_email = StringField("Correo principal")
+    website = StringField("Página web")
+    primary_address_line1 = StringField("Dirección principal")
+    primary_address_line2 = StringField("Dirección principal línea 2")
+    primary_address_city = StringField("Ciudad")
+    primary_address_state = StringField("Estado / Departamento")
+    primary_address_country = StringField("País")
+    primary_address_postal_code = StringField("Código postal")
     receivable_account_id = StringField("Cuenta por cobrar")
     tax_template_id = StringField("Plantilla de impuestos")
     default_tax_rule_id = StringField("Regla fiscal predeterminada")
     default_price_list_id = StringField("Lista de precio predeterminada")
+    legal_representative_name = StringField("Representante legal")
+    legal_representative_id = StringField("Documento del representante")
+    legal_representative_position = StringField("Cargo del representante")
+    legal_representative_email = StringField("Correo del representante")
+    legal_representative_phone = StringField("Teléfono del representante")
+    legal_constitution_date = DateField("Fecha de constitución", format="%Y-%m-%d", validators=[Optional()])
+    legal_constitution_place = StringField("Lugar de constitución")
+    legal_registration_number = StringField("Número de registro")
+    legal_notification_address = StringField("Dirección para notificaciones legales")
+    legal_notes = TextAreaField("Observaciones legales")
     company_is_active = BooleanField("Activo en la compañía", default=True)
 
 

@@ -1,0 +1,53 @@
+<div class="col-12">
+  <div class="ca-card shadow-sm">
+    <div class="ca-card-header">
+      <h6 class="ca-card-title mb-0">{{ _('Datos básicos') }}</h6>
+    </div>
+    <div class="row g-3 p-3">
+      <div class="col-md-3">
+        <label class="form-label" for="nationality_type">{{ _('Nacionalidad') }}</label>
+        {{ form.nationality_type(class="form-select form-select-sm", id="nationality_type") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="person_type">{{ _('Tipo de persona') }}</label>
+        {{ form.person_type(class="form-select form-select-sm", id="person_type") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_phone">{{ _('Teléfono principal') }}</label>
+        {{ form.primary_phone(class="form-control form-control-sm", id="primary_phone") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_email">{{ _('Correo principal') }}</label>
+        {{ form.primary_email(class="form-control form-control-sm", id="primary_email") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="website">{{ _('Página web') }}</label>
+        {{ form.website(class="form-control form-control-sm", id="website") }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="primary_address_line1">{{ _('Dirección principal') }}</label>
+        {{ form.primary_address_line1(class="form-control form-control-sm", id="primary_address_line1") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="primary_address_line2">{{ _('Dirección principal línea 2') }}</label>
+        {{ form.primary_address_line2(class="form-control form-control-sm", id="primary_address_line2") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_address_city">{{ _('Ciudad') }}</label>
+        {{ form.primary_address_city(class="form-control form-control-sm", id="primary_address_city") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_address_state">{{ _('Estado / Departamento') }}</label>
+        {{ form.primary_address_state(class="form-control form-control-sm", id="primary_address_state") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_address_country">{{ _('País') }}</label>
+        {{ form.primary_address_country(class="form-control form-control-sm", id="primary_address_country") }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="primary_address_postal_code">{{ _('Código postal') }}</label>
+        {{ form.primary_address_postal_code(class="form-control form-control-sm", id="primary_address_postal_code") }}
+      </div>
+    </div>
+  </div>
+</div>

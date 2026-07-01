@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -23,6 +24,8 @@ from cacao_accounting.database import (
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
 PARTY_TYPE_LABELS = {"customer": "Cliente", "supplier": "Proveedor"}
+NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
+PERSON_TYPE_LABELS = {"natural": "Natural", "juridical": "Jurídica"}
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,12 @@ class PartyDetailContext:
     """Datos agregados para la vista de detalle de un tercero."""
 
     group_label: str
+    nationality_label: str
+    person_type_label: str
+    primary_phone: str
+    primary_email: str
+    website: str
+    primary_address_label: str
     company_settings: list[PartyCompanySettings]
     contacts: list[ContactRow]
     addresses: list[AddressRow]
@@ -83,6 +92,74 @@ def apply_party_group(party: Party, group_id: str | None) -> None:
     party.classification = group.name if group else None
 
 
+def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
+    """Asigna los campos basicos y legales de un tercero."""
+    nationality_type = (values.get("nationality_type") or "").strip() or None
+    person_type = (values.get("person_type") or "").strip() or None
+    if nationality_type and nationality_type not in NATIONALITY_LABELS:
+        raise ValueError("La nacionalidad seleccionada no es valida.")
+    if person_type and person_type not in PERSON_TYPE_LABELS:
+        raise ValueError("El tipo de persona seleccionada no es valido.")
+
+    party.nationality_type = nationality_type
+    party.person_type = person_type
+    party.primary_phone = _clean_text(values.get("primary_phone"))
+    party.primary_email = _clean_text(values.get("primary_email"))
+    party.website = _clean_text(values.get("website"))
+    party.primary_address_line1 = _clean_text(values.get("primary_address_line1"))
+    party.primary_address_line2 = _clean_text(values.get("primary_address_line2"))
+    party.primary_address_city = _clean_text(values.get("primary_address_city"))
+    party.primary_address_state = _clean_text(values.get("primary_address_state"))
+    party.primary_address_country = _clean_text(values.get("primary_address_country"))
+    party.primary_address_postal_code = _clean_text(values.get("primary_address_postal_code"))
+    party.legal_representative_name = _clean_text(values.get("legal_representative_name"))
+    party.legal_representative_id = _clean_text(values.get("legal_representative_id"))
+    party.legal_representative_position = _clean_text(values.get("legal_representative_position"))
+    party.legal_representative_email = _clean_text(values.get("legal_representative_email"))
+    party.legal_representative_phone = _clean_text(values.get("legal_representative_phone"))
+    party.legal_constitution_date = _parse_date(values.get("legal_constitution_date"))
+    party.legal_constitution_place = _clean_text(values.get("legal_constitution_place"))
+    party.legal_registration_number = _clean_text(values.get("legal_registration_number"))
+    party.legal_notification_address = _clean_text(values.get("legal_notification_address"))
+    party.legal_notes = _clean_text(values.get("legal_notes"))
+
+
+def _clean_text(value: str | None) -> str | None:
+    """Normaliza texto opcional eliminando espacios vacios."""
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
+def _parse_date(value: str | None) -> date | None:
+    """Convierte una fecha ISO opcional en un objeto date."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:  # pragma: no cover - validado en rutas
+        raise ValueError("La fecha de constitucion no es valida.") from exc
+
+
+def _choice_label(labels: dict[str, str], value: str | None) -> str:
+    """Resuelve un valor de lista a su etiqueta legible."""
+    if not value:
+        return ""
+    return labels.get(value, "")
+
+
+def _compose_address_label(
+    line1: str | None,
+    line2: str | None,
+    city: str | None,
+    state: str | None,
+    country: str | None,
+    postal_code: str | None,
+) -> str:
+    """Concatena una direccion principal en formato compacto."""
+    parts = [line1, line2, city, state, postal_code, country]
+    return ", ".join([part for part in parts if part])
+
+
 def build_party_detail_context(party: Party) -> PartyDetailContext:
     """Construye el contexto completo del detalle de cliente/proveedor."""
     company_rows = (
@@ -93,6 +170,19 @@ def build_party_detail_context(party: Party) -> PartyDetailContext:
     settings = [build_party_company_settings(party.party_type, row.company, party_id=party.id) for row in company_rows]
     return PartyDetailContext(
         group_label=party_group_label(party.party_group_id) or party.classification or "",
+        nationality_label=_choice_label(NATIONALITY_LABELS, party.nationality_type),
+        person_type_label=_choice_label(PERSON_TYPE_LABELS, party.person_type),
+        primary_phone=party.primary_phone or "",
+        primary_email=party.primary_email or "",
+        website=party.website or "",
+        primary_address_label=_compose_address_label(
+            party.primary_address_line1,
+            party.primary_address_line2,
+            party.primary_address_city,
+            party.primary_address_state,
+            party.primary_address_country,
+            party.primary_address_postal_code,
+        ),
         company_settings=settings,
         contacts=list_party_contacts(party.id),
         addresses=list_party_addresses(party.id),

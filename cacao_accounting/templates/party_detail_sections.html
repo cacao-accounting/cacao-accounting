@@ -1,4 +1,40 @@
 <div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Datos básicos") }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _("Nacionalidad") }}</label><p>{{ detail.nationality_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Tipo de persona") }}</label><p>{{ detail.person_type_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Teléfono principal") }}</label><p>{{ detail.primary_phone or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Correo principal") }}</label><p>{{ detail.primary_email or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Página web") }}</label><p>{{ detail.website or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Dirección principal") }}</label><p>{{ detail.primary_address_label or '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Cumplimiento legal") }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _("Representante legal") }}</label><p>{{ registro.legal_representative_name or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Documento del representante") }}</label><p>{{ registro.legal_representative_id or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Cargo del representante") }}</label><p>{{ registro.legal_representative_position or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Correo del representante") }}</label><p>{{ registro.legal_representative_email or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Teléfono del representante") }}</label><p>{{ registro.legal_representative_phone or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Fecha de constitución") }}</label><p>{{ registro.legal_constitution_date.strftime('%Y-%m-%d') if registro.legal_constitution_date else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Lugar de constitución") }}</label><p>{{ registro.legal_constitution_place or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Número de registro") }}</label><p>{{ registro.legal_registration_number or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Dirección para notificaciones legales") }}</label><p>{{ registro.legal_notification_address or detail.primary_address_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Observaciones legales") }}</label><p>{{ registro.legal_notes or '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
   <div class="p-3">
     <div class="d-flex flex-wrap gap-2 align-items-center">
       <span class="text-muted small">{{ _("Secciones del tercero") }}</span>
