@@ -22,21 +22,68 @@
     </h5>
     <div class="d-flex gap-2 flex-wrap">
       <a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+      <a href="{{ url_for('inventario.inventario_articulo_editar', item_id=registro.code) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
       <a href="{{ url_for('inventario.inventario_articulo_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
     </div>
   </div>
   <div class="p-3">
     <div class="ca-kv-list">
-      <div class="ca-kv-item"><label>{{ _('Código') }}</label><p>{{ registro.code }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Codigo') }}</label><p>{{ registro.code }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Categoria') }}</label><p>{{ item_category.name if item_category else '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Tipo') }}</label><p>{{ registro.item_type or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('UOM base') }}</label><p>{{ registro.default_uom or '-' }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Item de inventario') }}</label><p>{{ _('Sí') if registro.is_stock_item else _('No') }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Método de valuación') }}</label><p>{{ registro.valuation_method or '-' }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Control por lote') }}</label><p>{{ _('Sí') if registro.has_batch else _('No') }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Control por serie') }}</label><p>{{ _('Sí') if registro.has_serial_no else _('No') }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Descripción') }}</label><p>{{ registro.description or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('UOM compra') }}</label><p>{{ registro.purchase_uom or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('UOM venta') }}</label><p>{{ registro.sale_uom or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Codigo de barras') }}</label><p>{{ registro.barcode or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Marca') }}</label><p>{{ registro.brand or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Modelo') }}</label><p>{{ registro.model_name or '-' }}</p></div>
     </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Clasificacion y flags') }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Es item de inventario') }}</label><p>{{ _('Si') if registro.is_stock_item else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Es comprable') }}</label><p>{{ _('Si') if registro.is_purchase_item else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Es vendible') }}</label><p>{{ _('Si') if registro.is_sale_item else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Control por lote') }}</label><p>{{ _('Si') if registro.has_batch else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Control por serie') }}</label><p>{{ _('Si') if registro.has_serial_no else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Maneja vencimiento') }}</label><p>{{ _('Si') if registro.has_expiry_date else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Permitir stock negativo') }}</label><p>{{ _('Si') if registro.allow_negative_stock else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Metodo de valuacion') }}</label><p>{{ registro.valuation_method or '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Inventario y precios') }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Almacen predeterminado') }}</label><p>{{ default_warehouse.name if default_warehouse else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Stock minimo') }}</label><p>{{ registro.min_stock_qty or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Stock maximo') }}</label><p>{{ registro.max_stock_qty or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Punto de reorden') }}</label><p>{{ registro.reorder_level or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Precio base') }}</label><p>{{ registro.standard_rate or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Ultimo costo') }}</label><p>{{ registro.last_purchase_rate or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Proveedor predeterminado') }}</label><p>{{ default_supplier.name if default_supplier else '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Descripcion') }}</h6>
+  </div>
+  <div class="p-3">
+    <p>{{ registro.description or '-' }}</p>
   </div>
 </div>
 
@@ -63,9 +110,7 @@
           <td>{{ conversion.conversion_factor }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="3">{{ _('No hay conversiones UOM configuradas.') }}</td>
-        </tr>
+        <tr><td colspan="3">{{ _('No hay conversiones UOM configuradas.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -74,16 +119,20 @@
 
 <div class="ca-card mt-3">
   <div class="ca-card-header">
-    <h6 class="ca-card-title mb-0">{{ _('Configuración contable por compañía') }}</h6>
+    <h6 class="ca-card-title mb-0">{{ _('Configuracion contable por compania') }}</h6>
   </div>
   <div class="p-3">
     <table class="ca-table">
-      <caption style="display:none;">{{ _('Cuentas del item por compañía') }}</caption>
+      <caption style="display:none;">{{ _('Cuentas del item por compania') }}</caption>
       <thead>
         <tr>
-          <th>{{ _('Compañía') }}</th>
-          <th>{{ _('Cuenta de gasto') }}</th>
-          <th>{{ _('Centro de costo') }}</th>
+          <th>{{ _('Compania') }}</th>
+          <th>{{ _('Gasto') }}</th>
+          <th>{{ _('Ingresos') }}</th>
+          <th>{{ _('COGS') }}</th>
+          <th>{{ _('Inventario') }}</th>
+          <th>{{ _('Ajuste') }}</th>
+          <th>{{ _('Centro costo') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -91,12 +140,14 @@
         <tr>
           <td>{{ row.company }}</td>
           <td>{{ row.expense_account_id or '-' }}</td>
+          <td>{{ row.income_account_id or '-' }}</td>
+          <td>{{ row.cogs_account_id or '-' }}</td>
+          <td>{{ row.inventory_account_id or '-' }}</td>
+          <td>{{ row.stock_adjustment_account_id or '-' }}</td>
           <td>{{ row.cost_center_code or '-' }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="3">{{ _('No hay configuración contable por compañía.') }}</td>
-        </tr>
+        <tr><td colspan="7">{{ _('No hay configuracion contable por compania.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
