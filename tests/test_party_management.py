@@ -99,8 +99,10 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     assert response.status_code == 200
     assert b"Contactos" in response.data
     assert b"Direcciones" in response.data
+    assert b"Secciones del tercero" in response.data
     assert b"Tipo de Cliente" in response.data
     assert "Mayorista".encode() in response.data
+    assert b"Clasificaci" not in response.data
 
     contact = database.session.execute(database.select(Contact).filter_by(first_name="Ana")).scalar_one()
     assert contact.is_active is True
@@ -162,8 +164,10 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
         follow_redirects=True,
     )
     assert response.status_code == 200
+    assert b"Secciones del tercero" in response.data
     assert b"Tipo de Proveedor" in response.data
     assert "Importador".encode() in response.data
+    assert b"Clasificaci" not in response.data
 
     link = database.session.execute(database.select(PartyAddress).filter_by(party_id=supplier.id)).scalar_one()
     client.post(f"/buying/supplier/{supplier.id}/addresses/{link.id}/deactivate", follow_redirects=True)
@@ -196,6 +200,9 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     assert detail_response.status_code == 200
     assert "Lista Proveedor".encode() in detail_response.data
     assert "IVA Compra".encode() in detail_response.data
+    assert b'href="#party-contacts"' in detail_response.data
+    assert b'href="#party-addresses"' in detail_response.data
+    assert b'href="#party-company-settings"' in detail_response.data
 
 
 def test_purchase_and_sales_admin_menus_show_party_management_links(client):
