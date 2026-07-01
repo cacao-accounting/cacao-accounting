@@ -513,7 +513,7 @@ def ventas_cliente_lista():
     """Listado de clientes."""
     consulta = _paginate_list(
         Party,
-        (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
+        (Party.code, Party.name, Party.comercial_name, Party.tax_id),
         database.select(Party).filter(Party.is_customer.is_(True)),
         include_status=False,
     )
