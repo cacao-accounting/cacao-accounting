@@ -63,6 +63,7 @@ from cacao_accounting.party_settings import (
 )
 from cacao_accounting.party_management import (
     apply_party_group,
+    apply_party_profile,
     build_party_detail_context,
     create_party_address,
     create_party_contact,
@@ -748,6 +749,7 @@ def _handle_supplier_create(
     try:
         database.session.add(proveedor)
         apply_party_group(proveedor, form.get("party_group_id") or None)
+        apply_party_profile(proveedor, form)
         database.session.flush()
         company = form.get("company") or None
         if company:
@@ -798,6 +800,7 @@ def _handle_supplier_update(
         proveedor.tax_id = form.get("tax_id") or None
         proveedor.is_active = form.get("is_active") is not None
         apply_party_group(proveedor, form.get("party_group_id") or None)
+        apply_party_profile(proveedor, form)
         company = form.get("company") or None
         if company:
             upsert_party_company_settings(

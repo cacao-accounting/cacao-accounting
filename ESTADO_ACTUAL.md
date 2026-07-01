@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **Cliente/Proveedor / perfil basico y cumplimiento legal (2026-07-01):** Los terceros ya incluyen los campos basicos y legales que faltaban.
+  - `Party` guarda nacionalidad, tipo de persona, telefono y correo principales, pagina web y direccion principal.
+  - El formulario agrega un bloque de cumplimiento legal con representante, documento, cargo, fechas y datos de notificacion.
+  - La ficha de detalle muestra las secciones de datos basicos y cumplimiento legal antes de contactos/direcciones.
+
 - **Cliente/Proveedor / simplificacion de clasificación (2026-07-01):** La UI de terceros ya no expone el campo libre `Clasificación`.
   - Cliente y Proveedor usan `Tipo de Cliente` / `Tipo de Proveedor` como fuente funcional de clasificación.
   - Los handlers de creación ya no toman `classification` desde el formulario; el valor legacy sigue sincronizado internamente desde `party_group_id` por compatibilidad.

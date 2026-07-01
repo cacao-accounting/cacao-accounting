@@ -1,0 +1,49 @@
+<div class="col-12">
+  <div class="ca-card shadow-sm">
+    <div class="ca-card-header">
+      <h6 class="ca-card-title mb-0">{{ _('Cumplimiento legal') }}</h6>
+    </div>
+    <div class="row g-3 p-3">
+      <div class="col-md-4">
+        <label class="form-label" for="legal_representative_name">{{ _('Representante legal') }}</label>
+        {{ form.legal_representative_name(class="form-control form-control-sm", id="legal_representative_name") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_representative_id">{{ _('Documento del representante') }}</label>
+        {{ form.legal_representative_id(class="form-control form-control-sm", id="legal_representative_id") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_representative_position">{{ _('Cargo del representante') }}</label>
+        {{ form.legal_representative_position(class="form-control form-control-sm", id="legal_representative_position") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_representative_email">{{ _('Correo del representante') }}</label>
+        {{ form.legal_representative_email(class="form-control form-control-sm", id="legal_representative_email") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_representative_phone">{{ _('Teléfono del representante') }}</label>
+        {{ form.legal_representative_phone(class="form-control form-control-sm", id="legal_representative_phone") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_constitution_date">{{ _('Fecha de constitución') }}</label>
+        {{ form.legal_constitution_date(class="form-control form-control-sm", id="legal_constitution_date", type="date") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_constitution_place">{{ _('Lugar de constitución') }}</label>
+        {{ form.legal_constitution_place(class="form-control form-control-sm", id="legal_constitution_place") }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="legal_registration_number">{{ _('Número de registro') }}</label>
+        {{ form.legal_registration_number(class="form-control form-control-sm", id="legal_registration_number") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="legal_notification_address">{{ _('Dirección para notificaciones legales') }}</label>
+        {{ form.legal_notification_address(class="form-control form-control-sm", id="legal_notification_address") }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="legal_notes">{{ _('Observaciones legales') }}</label>
+        {{ form.legal_notes(class="form-control form-control-sm", id="legal_notes", rows="3") }}
+      </div>
+    </div>
+  </div>
+</div>
