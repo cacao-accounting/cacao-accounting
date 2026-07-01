@@ -16,6 +16,7 @@ class FormularioProveedor(FlaskForm):
 
     name = StringField("Nombre", validators=[DataRequired()])
     comercial_name = StringField("Nombre Comercial")
+    fiscal_name = StringField("Nombre fiscal")
     tax_id = StringField("ID Fiscal")
     party_group_id = StringField("Tipo de Proveedor")
     nationality_type = SelectField(
@@ -52,6 +53,7 @@ class FormularioProveedor(FlaskForm):
     legal_registration_number = StringField("Número de registro")
     legal_notification_address = StringField("Dirección para notificaciones legales")
     legal_notes = TextAreaField("Observaciones legales")
+    is_active = BooleanField("Activo", default=True)
     company_is_active = BooleanField("Activo en la compañía", default=True)
     allow_purchase_invoice_without_order = BooleanField("Permitir factura sin orden de compra", default=False)
     allow_purchase_invoice_without_receipt = BooleanField("Permitir factura sin recibo de compra", default=False)
