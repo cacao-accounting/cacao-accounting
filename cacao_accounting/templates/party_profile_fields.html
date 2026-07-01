@@ -21,10 +21,14 @@
         {{ form.primary_email(class="form-control form-control-sm", id="primary_email") }}
       </div>
       <div class="col-md-4">
+        <label class="form-label" for="fiscal_name">{{ _('Nombre fiscal') }}</label>
+        {{ form.fiscal_name(class="form-control form-control-sm", id="fiscal_name") }}
+      </div>
+      <div class="col-md-4">
         <label class="form-label" for="website">{{ _('Página web') }}</label>
         {{ form.website(class="form-control form-control-sm", id="website") }}
       </div>
-      <div class="col-md-8">
+      <div class="col-md-4">
         <label class="form-label" for="primary_address_line1">{{ _('Dirección principal') }}</label>
         {{ form.primary_address_line1(class="form-control form-control-sm", id="primary_address_line1") }}
       </div>
