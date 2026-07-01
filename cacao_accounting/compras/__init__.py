@@ -69,6 +69,7 @@ from cacao_accounting.party_management import (
     create_party_contact,
     deactivate_party_address,
     deactivate_party_contact,
+    generate_party_code,
     party_group_label,
     update_party_address,
     update_party_contact,
@@ -136,9 +137,9 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
     ]
 
 
-def _party_or_404(party_id: str, party_type: str) -> Party:
+def _party_or_404(party_id: str) -> Party:
     """Obtiene un tercero por tipo o aborta."""
-    party = database.session.execute(database.select(Party).filter_by(id=party_id, party_type=party_type)).scalar_one_or_none()
+    party = database.session.execute(database.select(Party).filter_by(id=party_id, is_supplier=True)).scalar_one_or_none()
     if not party:
         abort(404)
     return party
@@ -640,7 +641,7 @@ def _supplier_quotation_supplier_choices() -> list[tuple[str, str]]:
     """Construye el listado de proveedores para el formulario."""
     return [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -740,7 +741,7 @@ def _handle_supplier_create(
 ):
     """Maneja la creacion de un nuevo proveedor desde el formulario POST."""
     proveedor = Party(
-        party_type="supplier",
+        is_supplier=True,
         name=form.get("name") or "",
         comercial_name=form.get("comercial_name"),
         tax_id=form.get("tax_id"),
@@ -748,9 +749,10 @@ def _handle_supplier_create(
     )
     try:
         database.session.add(proveedor)
-        apply_party_group(proveedor, form.get("party_group_id") or None)
+        apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
         database.session.flush()
+        generate_party_code(proveedor.id, selected_company, "supplier")
         company = form.get("company") or None
         if company:
             upsert_party_company_settings(
@@ -765,6 +767,17 @@ def _handle_supplier_create(
                 default_price_list_id=form.get("default_price_list_id") or None,
                 allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
                 allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
+                default_currency=form.get("default_currency") or None,
+                default_income_account_id=form.get("default_income_account_id") or None,
+                default_expense_account_id=form.get("default_expense_account_id") or None,
+                default_purchase_account_id=form.get("default_purchase_account_id") or None,
+                default_advance_account_id=form.get("default_advance_account_id") or None,
+                default_cost_center=form.get("default_cost_center") or None,
+                default_business_unit=form.get("default_business_unit") or None,
+                default_bank_name=form.get("default_bank_name") or None,
+                default_bank_account_no=form.get("default_bank_account_no") or None,
+                default_bank_iban=form.get("default_bank_iban") or None,
+                block_overdue=form.get("block_overdue") is not None,
             )
         database.session.commit()
         return redirect("/buying/supplier/list")
@@ -799,7 +812,7 @@ def _handle_supplier_update(
         proveedor.comercial_name = form.get("comercial_name") or None
         proveedor.tax_id = form.get("tax_id") or None
         proveedor.is_active = form.get("is_active") is not None
-        apply_party_group(proveedor, form.get("party_group_id") or None)
+        apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
         company = form.get("company") or None
         if company:
@@ -815,6 +828,17 @@ def _handle_supplier_update(
                 default_price_list_id=form.get("default_price_list_id") or None,
                 allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
                 allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
+                default_currency=form.get("default_currency") or None,
+                default_income_account_id=form.get("default_income_account_id") or None,
+                default_expense_account_id=form.get("default_expense_account_id") or None,
+                default_purchase_account_id=form.get("default_purchase_account_id") or None,
+                default_advance_account_id=form.get("default_advance_account_id") or None,
+                default_cost_center=form.get("default_cost_center") or None,
+                default_business_unit=form.get("default_business_unit") or None,
+                default_bank_name=form.get("default_bank_name") or None,
+                default_bank_account_no=form.get("default_bank_account_no") or None,
+                default_bank_iban=form.get("default_bank_iban") or None,
+                block_overdue=form.get("block_overdue") is not None,
             )
         database.session.commit()
         flash(_("Proveedor actualizado correctamente."), "success")
@@ -1092,7 +1116,7 @@ def compras_proveedor_lista():
     consulta = _paginate_list(
         Party,
         (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
-        database.select(Party).filter(Party.party_type == "supplier"),
+        database.select(Party).filter(Party.is_supplier.is_(True)),
         include_status=False,
     )
     titulo = "Listado de Proveedores - " + APPNAME
@@ -1139,7 +1163,7 @@ def compras_proveedor_nuevo():
     company_choices = obtener_lista_entidades_por_id_razonsocial()
 
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = build_party_company_settings("supplier", selected_company) if selected_company else None
+    company_settings = build_party_company_settings(None, selected_company, role="supplier") if selected_company else None
     if request.method == "POST":
         return _handle_supplier_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
@@ -1158,7 +1182,7 @@ def compras_proveedor_nuevo():
 @login_required
 def compras_proveedor(supplier_id):
     """Detalle de proveedor."""
-    registro = database.session.execute(database.select(Party).filter_by(id=supplier_id, party_type="supplier")).first()
+    registro = database.session.execute(database.select(Party).filter_by(id=supplier_id, is_supplier=True)).first()
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
@@ -1175,7 +1199,7 @@ def compras_proveedor_editar(supplier_id: str):
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     proveedor = database.session.execute(
-        database.select(Party).filter_by(id=supplier_id, party_type="supplier")
+        database.select(Party).filter_by(id=supplier_id, is_supplier=True)
     ).scalar_one_or_none()
     if not proveedor:
         abort(404)
@@ -1184,7 +1208,7 @@ def compras_proveedor_editar(supplier_id: str):
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings = (
-        build_party_company_settings("supplier", selected_company, party_id=proveedor.id) if selected_company else None
+        build_party_company_settings(proveedor.id, selected_company, role="supplier") if selected_company else None
     )
     if request.method == "POST":
         return _handle_supplier_update(
@@ -1208,7 +1232,7 @@ def compras_proveedor_editar(supplier_id: str):
 @login_required
 def compras_proveedor_contacto_crear(supplier_id: str):
     """Crea un contacto para un proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     try:
         create_party_contact(supplier_id, request.form)
         database.session.commit()
@@ -1224,7 +1248,7 @@ def compras_proveedor_contacto_crear(supplier_id: str):
 @login_required
 def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
     """Edita un contacto de proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     try:
         update_party_contact(supplier_id, link_id, request.form)
         database.session.commit()
@@ -1240,7 +1264,7 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
 @login_required
 def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
     """Desactiva un contacto de proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     deactivate_party_contact(supplier_id, link_id)
     database.session.commit()
     flash(_("Contacto desactivado correctamente."), "success")
@@ -1252,7 +1276,7 @@ def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
 @login_required
 def compras_proveedor_direccion_crear(supplier_id: str):
     """Crea una direccion para un proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     try:
         create_party_address(supplier_id, request.form)
         database.session.commit()
@@ -1268,7 +1292,7 @@ def compras_proveedor_direccion_crear(supplier_id: str):
 @login_required
 def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     """Edita una direccion de proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     try:
         update_party_address(supplier_id, link_id, request.form)
         database.session.commit()
@@ -1284,7 +1308,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
 @login_required
 def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     """Desactiva una direccion de proveedor."""
-    _party_or_404(supplier_id, "supplier")
+    _party_or_404(supplier_id)
     deactivate_party_address(supplier_id, link_id)
     database.session.commit()
     flash(_("Direccion desactivada correctamente."), "success")
@@ -1566,7 +1590,7 @@ def compras_orden_compra_nuevo():
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -1684,7 +1708,7 @@ def _purchase_order_supplier_choices() -> list[tuple[str, str]]:
     """Construye el listado de proveedores para órdenes de compra."""
     return [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -1921,7 +1945,7 @@ def _purchase_quotation_supplier_choices() -> list[tuple[str, str]]:
     """Construye las opciones de proveedores para solicitudes de cotización."""
     return [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -2059,7 +2083,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -2248,7 +2272,7 @@ def compras_recepcion_nuevo():
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
@@ -2360,7 +2384,7 @@ def compras_recepcion_editar(receipt_id: str):
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -2591,7 +2615,7 @@ def _purchase_invoice_supplier_choices() -> list[tuple[str, str]]:
     """Build the supplier choices list for purchase invoices."""
     return [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -2752,7 +2776,7 @@ def compras_factura_compra_editar(invoice_id: str):
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="supplier")).all()
+        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}

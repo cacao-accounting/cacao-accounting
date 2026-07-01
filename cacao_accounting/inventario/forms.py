@@ -5,7 +5,7 @@
 
 from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, Optional
 
 CODIGO = "Código"
 
@@ -13,11 +13,22 @@ CODIGO = "Código"
 class FormularioArticulo(FlaskForm):
     """Formulario para crear o editar un artículo."""
 
-    code = StringField(CODIGO, validators=[DataRequired()])
+    code = StringField(CODIGO, validators=[Optional()])
     name = StringField("Nombre", validators=[DataRequired()])
     description = TextAreaField("Descripción")
     item_type = SelectField("Tipo", choices=[("goods", "Bien"), ("service", "Servicio")], validators=[DataRequired()])
     is_stock_item = BooleanField("Es artículo de inventario")
+    is_purchase_item = BooleanField("Es artículo de compra", default=True)
+    is_sale_item = BooleanField("Es artículo de venta", default=True)
+    item_category_id = SelectField("Categoría", choices=[], validators=[Optional()])
+    has_expiry_date = BooleanField("Controlar vencimiento")
+    valuation_method = SelectField(
+        "Método de valuación",
+        choices=[("", ""), ("FIFO", "FIFO"), ("moving_average", "Promedio ponderado")],
+        validators=[Optional()],
+    )
+    allow_negative_stock = BooleanField("Permitir stock negativo")
+    currency = SelectField("Moneda", choices=[], validators=[Optional()])
     default_uom = SelectField("UOM Base", choices=[], validators=[DataRequired()])
 
 
