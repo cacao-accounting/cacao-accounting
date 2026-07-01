@@ -46,6 +46,7 @@ from cacao_accounting.party_settings import (
 )
 from cacao_accounting.party_management import (
     apply_party_group,
+    apply_party_profile,
     build_party_detail_context,
     create_party_address,
     create_party_contact,
@@ -551,6 +552,7 @@ def _handle_cliente_create(
     try:
         database.session.add(cliente)
         apply_party_group(cliente, form.get("party_group_id") or None)
+        apply_party_profile(cliente, form)
         database.session.flush()
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
@@ -637,6 +639,7 @@ def _handle_cliente_update(
         cliente.tax_id = form.get("tax_id") or None
         cliente.is_active = form.get("is_active") is not None
         apply_party_group(cliente, form.get("party_group_id") or None)
+        apply_party_profile(cliente, form)
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
         flash(_("Cliente actualizado correctamente."), "success")

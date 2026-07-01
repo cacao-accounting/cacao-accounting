@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-01 (Cliente/Proveedor: perfil basico y cumplimiento legal)
+- **Solicitud:** Completar Cliente y Proveedor con los datos basicos que faltaban: nacional/extranjero, telefono y correo predeterminados, pagina web, direccion principal, tipo de persona natural/juridica y un bloque final de cumplimiento legal con datos de representación para notificacion formal.
+- **Implementacion:** `Party` ahora guarda nacionalidad, tipo de persona, telefono/correo principales, pagina web, direccion principal y un paquete de datos legales de representacion/constitucion/notificacion.
+- **UI:** Los formularios de Cliente y Proveedor agregan una seccion de `Datos básicos`, una seccion de direccion principal y un bloque final de `Cumplimiento legal`. Las fichas de detalle muestran esos mismos datos en cards separadas antes de la gestion de contactos/direcciones.
+- **Validacion:** Se ampliaron las pruebas de terceros y del esquema para cubrir persistencia de los nuevos campos y render del detalle. La regresion focal paso en verde.
+
 ## 2026-07-01 (Cliente/Proveedor: simplificacion de clasificacion y visibilidad de contactos)
 - **Solicitud:** Eliminar el campo libre `Clasificación` en Cliente y Proveedor, y hacer más visibles `Contactos` y `Direcciones` porque en la ficha no se apreciaban claramente.
 - **Implementacion:** Los formularios de alta/edicion de Cliente y Proveedor ya no exponen ni envian `classification`; la clasificacion funcional queda representada por `party_group_id` (Tipo de Cliente / Tipo de Proveedor) y el backend deja de tomar ese valor desde POST.

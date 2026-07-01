@@ -77,6 +77,20 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
             "comercial_name": "Cliente Comercial",
             "tax_id": "C-001",
             "party_group_id": group.id,
+            "nationality_type": "national",
+            "person_type": "juridical",
+            "primary_phone": "+505 8888 0001",
+            "primary_email": "cliente@example.com",
+            "website": "https://cliente.example.com",
+            "primary_address_line1": "Km 10 Carretera Norte",
+            "primary_address_city": "Managua",
+            "legal_representative_name": "María López",
+            "legal_representative_email": "maria.legal@example.com",
+            "legal_representative_phone": "+505 7777 0001",
+            "legal_constitution_date": "2024-01-15",
+            "legal_constitution_place": "Managua",
+            "legal_registration_number": "REG-123",
+            "legal_notification_address": "Apartado postal 123",
             "is_active": "on",
             "company": "cacao",
             "company_is_active": "on",
@@ -90,6 +104,14 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     customer = database.session.execute(database.select(Party).filter_by(name="Cliente Test")).scalar_one()
     assert customer.party_group_id == group.id
     assert customer.classification == "Mayorista"
+    assert customer.nationality_type == "national"
+    assert customer.person_type == "juridical"
+    assert customer.primary_phone == "+505 8888 0001"
+    assert customer.primary_email == "cliente@example.com"
+    assert customer.website == "https://cliente.example.com"
+    assert customer.primary_address_line1 == "Km 10 Carretera Norte"
+    assert customer.legal_representative_name == "María López"
+    assert customer.legal_registration_number == "REG-123"
 
     response = client.post(
         f"/sales/customer/{customer.id}/contacts",
@@ -100,9 +122,13 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     assert b"Contactos" in response.data
     assert b"Direcciones" in response.data
     assert b"Secciones del tercero" in response.data
+    assert b"Datos b\xc3\xa1sicos" in response.data
+    assert b"Cumplimiento legal" in response.data
     assert b"Tipo de Cliente" in response.data
     assert "Mayorista".encode() in response.data
     assert b"Clasificaci" not in response.data
+    assert b"maria.legal@example.com" in response.data
+    assert b"REG-123" in response.data
 
     contact = database.session.execute(database.select(Contact).filter_by(first_name="Ana")).scalar_one()
     assert contact.is_active is True
@@ -147,6 +173,20 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
             "name": "Proveedor Test",
             "tax_id": "P-001",
             "party_group_id": supplier_group.id,
+            "nationality_type": "foreign",
+            "person_type": "natural",
+            "primary_phone": "+505 8888 0002",
+            "primary_email": "proveedor@example.com",
+            "website": "https://proveedor.example.com",
+            "primary_address_line1": "Zona Franca",
+            "primary_address_city": "Masaya",
+            "legal_representative_name": "Carlos Pérez",
+            "legal_representative_email": "carlos.legal@example.com",
+            "legal_representative_phone": "+505 7777 0002",
+            "legal_constitution_date": "2023-08-10",
+            "legal_constitution_place": "Masaya",
+            "legal_registration_number": "REG-999",
+            "legal_notification_address": "Oficina central Masaya",
             "is_active": "on",
             "company": "cacao",
             "company_is_active": "on",
@@ -168,6 +208,10 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     assert b"Tipo de Proveedor" in response.data
     assert "Importador".encode() in response.data
     assert b"Clasificaci" not in response.data
+    assert b"Datos b\xc3\xa1sicos" in response.data
+    assert b"Cumplimiento legal" in response.data
+    assert b"REG-999" in response.data
+    assert b"carlos.legal@example.com" in response.data
 
     link = database.session.execute(database.select(PartyAddress).filter_by(party_id=supplier.id)).scalar_one()
     client.post(f"/buying/supplier/{supplier.id}/addresses/{link.id}/deactivate", follow_redirects=True)

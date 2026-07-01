@@ -1501,6 +1501,20 @@ class TestPartyClassificationField(unittest.TestCase):
     def test_party_has_party_group_id(self):
         self.assertIn("party_group_id", self.columns)
 
+    def test_party_has_profile_and_legal_fields(self):
+        for column in {
+            "nationality_type",
+            "person_type",
+            "primary_phone",
+            "primary_email",
+            "website",
+            "primary_address_line1",
+            "legal_representative_name",
+            "legal_constitution_date",
+            "legal_notification_address",
+        }:
+            self.assertIn(column, self.columns)
+
 
 class TestPaymentTermsTable(unittest.TestCase):
     """Verifica que la tabla payment_terms existe y tiene los campos requeridos."""
