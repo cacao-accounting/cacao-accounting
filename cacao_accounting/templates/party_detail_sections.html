@@ -6,6 +6,7 @@
     <div class="ca-kv-list">
       <div class="ca-kv-item"><label>{{ _("Nacionalidad") }}</label><p>{{ detail.nationality_label or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _("Tipo de persona") }}</label><p>{{ detail.person_type_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Nombre fiscal") }}</label><p>{{ registro.fiscal_name or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _("Teléfono principal") }}</label><p>{{ detail.primary_phone or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _("Correo principal") }}</label><p>{{ detail.primary_email or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _("Página web") }}</label><p>{{ detail.website or '-' }}</p></div>
@@ -167,13 +168,14 @@
         <tr>
           <th>{{ _("Compania") }}</th>
           <th>{{ _("Activo") }}</th>
+          <th>{{ _("Moneda") }}</th>
           <th>{{ _("Cuenta AR") }}</th>
           <th>{{ _("Cuenta AP") }}</th>
           <th>{{ _("Lista de Precio") }}</th>
           <th>{{ _("Regla Fiscal") }}</th>
-          <th>{{ _("Plantilla fiscal") }}</th>
           <th>{{ _("Sin OC") }}</th>
           <th>{{ _("Sin recibo") }}</th>
+          <th>{{ _("Bloqueado") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -181,16 +183,17 @@
         <tr>
           <td>{{ settings.company_label or settings.company }}</td>
           <td>{{ _("Si") if settings.is_active else _("No") }}</td>
+          <td>{{ settings.default_currency or "-" }}</td>
           <td>{{ settings.receivable_account_label or "-" }}</td>
           <td>{{ settings.payable_account_label or "-" }}</td>
           <td>{{ settings.default_price_list_label or "-" }}</td>
           <td>{{ settings.default_tax_rule_label or "-" }}</td>
-          <td>{{ settings.tax_template_label or "-" }}</td>
           <td>{{ _("Si") if settings.allow_purchase_invoice_without_order else _("No") }}</td>
           <td>{{ _("Si") if settings.allow_purchase_invoice_without_receipt else _("No") }}</td>
+          <td>{{ _("Si") if settings.block_overdue else _("No") }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="9">{{ _("No hay configuracion por compania.") }}</td></tr>
+        <tr><td colspan="10">{{ _("No hay configuracion por compania.") }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -16,6 +16,7 @@ class FormularioCliente(FlaskForm):
 
     name = StringField("Nombre", validators=[DataRequired()])
     comercial_name = StringField("Nombre Comercial")
+    fiscal_name = StringField("Nombre fiscal")
     tax_id = StringField("ID Fiscal")
     company = StringField(_LABEL_COMPANY)
     party_group_id = StringField("Tipo de Cliente")
@@ -52,6 +53,7 @@ class FormularioCliente(FlaskForm):
     legal_registration_number = StringField("Número de registro")
     legal_notification_address = StringField("Dirección para notificaciones legales")
     legal_notes = TextAreaField("Observaciones legales")
+    is_active = BooleanField("Activo", default=True)
     company_is_active = BooleanField("Activo en la compañía", default=True)
 
 

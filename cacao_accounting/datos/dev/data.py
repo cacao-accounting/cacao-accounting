@@ -538,8 +538,8 @@ def _make_bancos() -> tuple:
 def _make_terceros() -> tuple:
     """Crea instancias frescas de Terceros."""
     return (
-        Party(party_type="supplier", name="Proveedor Demo SA", comercial_name="Demo Proveedor", tax_id="P001", is_active=True),
-        Party(party_type="customer", name="Cliente Demo SA", comercial_name="Demo Cliente", tax_id="C001", is_active=True),
+        Party(code="P001", is_supplier=True, name="Proveedor Demo SA", comercial_name="Demo Proveedor", tax_id="P001", is_active=True),
+        Party(code="C001", is_customer=True, name="Cliente Demo SA", comercial_name="Demo Cliente", tax_id="C001", is_active=True),
     )
 
 
