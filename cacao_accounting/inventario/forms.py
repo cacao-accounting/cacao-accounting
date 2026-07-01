@@ -30,6 +30,7 @@ class FormularioArticulo(FlaskForm):
     allow_negative_stock = BooleanField("Permitir stock negativo")
     currency = SelectField("Moneda", choices=[], validators=[Optional()])
     default_uom = SelectField("UOM Base", choices=[], validators=[DataRequired()])
+    barcode = StringField("Código de barras", validators=[Optional()])
 
 
 class FormularioUOM(FlaskForm):
