@@ -18,11 +18,10 @@ class VendorAdapter(BaseImportAdapter):
         """Construye un objeto Party de tipo proveedor."""
         row = document_data[0]
         proveedor = Party(
-            party_type="supplier",
+            is_supplier=True,
             name=row.get("nombre"),
             comercial_name=row.get("nombre_comercial"),
             tax_id=row.get("identificacion_fiscal"),
-            classification=row.get("clasificacion"),
             is_active=True,
         )
         return {"party": proveedor, "company_id": context.get("company_id")}

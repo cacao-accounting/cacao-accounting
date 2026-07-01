@@ -179,9 +179,20 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         setattr(header, self.config.party_field, party_id or None)
         party = None
         if party_id:
-            party = database.session.execute(
-                database.select(Party).filter_by(id=party_id, party_type=self.config.party_type)
-            ).scalar_one_or_none()
+            if self.config.party_type == "customer":
+                party_filter = Party.is_customer.is_(True)
+            elif self.config.party_type == "supplier":
+                party_filter = Party.is_supplier.is_(True)
+            else:
+                party_filter = None
+            if party_filter is not None:
+                party = database.session.execute(
+                    database.select(Party).filter(Party.id == party_id, party_filter)
+                ).scalar_one_or_none()
+            else:
+                party = database.session.execute(
+                    database.select(Party).filter_by(id=party_id)
+                ).scalar_one_or_none()
         if self.config.party_name_field:
             setattr(header, self.config.party_name_field, party.name if party else None)
 
