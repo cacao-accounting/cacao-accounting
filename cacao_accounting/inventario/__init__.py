@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+from cacao_accounting.database import Accounts, Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
@@ -23,7 +23,9 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 from cacao_accounting.inventario.service import (
     InventoryServiceError,
     create_item_with_uoms,
+    list_item_account_rows,
     list_item_uom_conversions,
+    parse_item_account_rows,
     parse_item_uom_rows,
 )
 
@@ -298,9 +300,11 @@ def inventario_articulo_nuevo():
     formulario.default_uom.choices = _uom_choices()
     titulo = "Nuevo Artículo - " + APPNAME
     uom_rows = [{"uom_code": "", "conversion_factor": ""}]
+    account_rows = [{"company": "", "income_account_id": "", "expense_account_id": "", "inventory_account_id": ""}]
 
     if request.method == "POST":
         uom_rows = _item_uom_rows_for_template(request.form)
+        account_rows = _item_account_rows_for_template(request.form)
         if formulario.validate():
             try:
                 create_item_with_uoms(
@@ -311,6 +315,7 @@ def inventario_articulo_nuevo():
                     is_stock_item=request.form.get("is_stock_item") is not None,
                     default_uom=str(request.form.get("default_uom") or "").strip(),
                     uom_rows=parse_item_uom_rows(request.form),
+                    account_rows=parse_item_account_rows(request.form),
                 )
                 database.session.commit()
                 return redirect("/inventory/item/list")
@@ -328,7 +333,10 @@ def inventario_articulo_nuevo():
         form=formulario,
         titulo=titulo,
         uom_rows=uom_rows,
+        account_rows=account_rows,
         uom_choices=_uom_choices(),
+        company_choices=_company_choices(),
+        account_choices=_account_choices(),
     )
 
 
@@ -348,6 +356,7 @@ def inventario_articulo(item_id):
         registro=registro[0],
         titulo=titulo,
         uom_conversions=list_item_uom_conversions(registro[0].code),
+        item_accounts=list_item_account_rows(registro[0].code),
     )
 
 
@@ -382,6 +391,43 @@ def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, 
     if not parsed_rows:
         return [{"uom_code": "", "conversion_factor": ""}]
     return [{"uom_code": row.uom_code, "conversion_factor": str(row.conversion_factor)} for row in parsed_rows]
+
+
+def _company_choices() -> list[tuple[str, str]]:
+    """Devuelve companias disponibles para el formulario de item."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    return obtener_lista_entidades_por_id_razonsocial()
+
+
+def _account_choices() -> list[dict[str, str]]:
+    """Devuelve cuentas activas para la tabla contable del item."""
+    accounts = (
+        database.session.execute(
+            database.select(Accounts)
+            .filter_by(active=True, enabled=True, group=False)
+            .order_by(Accounts.entity, Accounts.code)
+        )
+        .scalars()
+        .all()
+    )
+    return [{"id": account.id, "label": f"{account.entity} - {account.code} - {account.name}"} for account in accounts]
+
+
+def _item_account_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Normaliza filas contables para re-renderizar el formulario."""
+    parsed_rows = parse_item_account_rows(form_data)
+    if not parsed_rows:
+        return [{"company": "", "income_account_id": "", "expense_account_id": "", "inventory_account_id": ""}]
+    return [
+        {
+            "company": row.company,
+            "income_account_id": row.income_account_id or "",
+            "expense_account_id": row.expense_account_id or "",
+            "inventory_account_id": row.inventory_account_id or "",
+        }
+        for row in parsed_rows
+    ]
 
 
 @inventario.route("/uom/<uom_id>")
