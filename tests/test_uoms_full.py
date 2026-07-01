@@ -249,8 +249,8 @@ def test_service_item_requires_company_expense_account(app_ctx):
         )
 
 
-def test_service_item_persists_company_accounts(app_ctx):
-    from cacao_accounting.database import Accounts, ItemAccount, database
+def test_service_item_requires_company_cost_center(app_ctx):
+    from cacao_accounting.database import Accounts, database
     from cacao_accounting.inventario.service import ItemAccountRow, create_item_with_uoms
 
     expense_account = (
@@ -260,6 +260,39 @@ def test_service_item_persists_company_accounts(app_ctx):
         .scalars()
         .first()
     )
+    assert expense_account is not None
+
+    with pytest.raises(ValueError, match="centro de costo predeterminado por compañia"):
+        create_item_with_uoms(
+            code="SERV-ITEM-003",
+            name="Servicio sin centro de costo",
+            description="",
+            item_type="service",
+            is_stock_item=False,
+            default_uom="SERV",
+            uom_rows=[],
+            account_rows=[
+                ItemAccountRow(
+                    company="cacao",
+                    expense_account_id=expense_account.id,
+                    cost_center_code=None,
+                )
+            ],
+        )
+
+
+def test_service_item_persists_company_accounts(app_ctx):
+    from cacao_accounting.database import Accounts, CostCenter, ItemAccount, database
+    from cacao_accounting.inventario.service import ItemAccountRow, create_item_with_uoms
+
+    expense_account = (
+        database.session.execute(
+            database.select(Accounts).filter_by(entity="cacao", account_type="expense", group=False, active=True, enabled=True)
+        )
+        .scalars()
+        .first()
+    )
+    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="cacao", code="MAIN")).scalar_one()
     assert expense_account is not None
 
     create_item_with_uoms(
@@ -273,9 +306,8 @@ def test_service_item_persists_company_accounts(app_ctx):
         account_rows=[
             ItemAccountRow(
                 company="cacao",
-                income_account_id=None,
                 expense_account_id=expense_account.id,
-                inventory_account_id=None,
+                cost_center_code=cost_center.code,
             )
         ],
     )
@@ -283,6 +315,7 @@ def test_service_item_persists_company_accounts(app_ctx):
 
     mapping = database.session.execute(database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="cacao")).scalar_one()
     assert mapping.expense_account_id == expense_account.id
+    assert mapping.cost_center_code == cost_center.code
 
 
 def test_item_default_uom_is_locked_after_usage(app_ctx):

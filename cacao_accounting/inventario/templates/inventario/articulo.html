@@ -82,22 +82,20 @@
       <thead>
         <tr>
           <th>{{ _('Compañía') }}</th>
-          <th>{{ _('Cuenta de ingreso') }}</th>
           <th>{{ _('Cuenta de gasto') }}</th>
-          <th>{{ _('Cuenta de inventario') }}</th>
+          <th>{{ _('Centro de costo') }}</th>
         </tr>
       </thead>
       <tbody>
         {% for row in item_accounts %}
         <tr>
           <td>{{ row.company }}</td>
-          <td>{{ row.income_account_id or '-' }}</td>
           <td>{{ row.expense_account_id or '-' }}</td>
-          <td>{{ row.inventory_account_id or '-' }}</td>
+          <td>{{ row.cost_center_code or '-' }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="4">{{ _('No hay configuración contable por compañía.') }}</td>
+          <td colspan="3">{{ _('No hay configuración contable por compañía.') }}</td>
         </tr>
         {% endfor %}
       </tbody>

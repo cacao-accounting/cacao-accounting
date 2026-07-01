@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from cacao_accounting.database import (
     Accounts,
     Batch,
+    CostCenter,
     Entity,
     Item,
     ItemAccount,
@@ -58,9 +59,8 @@ class ItemAccountRow:
     """Fila de cuenta contable por compania para un item."""
 
     company: str
-    income_account_id: str | None
     expense_account_id: str | None
-    inventory_account_id: str | None
+    cost_center_code: str | None
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -276,9 +276,8 @@ def create_item_with_uoms(
             ItemAccount(
                 item_code=item.code,
                 company=row.company,
-                income_account_id=row.income_account_id,
                 expense_account_id=row.expense_account_id,
-                inventory_account_id=row.inventory_account_id,
+                cost_center_code=row.cost_center_code,
             )
         )
     return item
@@ -293,26 +292,22 @@ def list_item_account_rows(item_code: str) -> list[ItemAccount]:
 def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     """Convierte filas contables por compania enviadas por formulario en objetos tipados."""
     companies = _request_values(form, "account_company")
-    income_accounts = _request_values(form, "income_account_id")
     expense_accounts = _request_values(form, "expense_account_id")
-    inventory_accounts = _request_values(form, "inventory_account_id")
+    cost_centers = _request_values(form, "cost_center_code")
     rows: list[ItemAccountRow] = []
     for index, company in enumerate(companies):
-        income_account_id = income_accounts[index] if index < len(income_accounts) else ""
         expense_account_id = expense_accounts[index] if index < len(expense_accounts) else ""
-        inventory_account_id = inventory_accounts[index] if index < len(inventory_accounts) else ""
+        cost_center_code = cost_centers[index] if index < len(cost_centers) else ""
         cleaned_company = str(company or "").strip()
-        cleaned_income = str(income_account_id or "").strip() or None
         cleaned_expense = str(expense_account_id or "").strip() or None
-        cleaned_inventory = str(inventory_account_id or "").strip() or None
-        if not cleaned_company and not cleaned_income and not cleaned_expense and not cleaned_inventory:
+        cleaned_cost_center = str(cost_center_code or "").strip() or None
+        if not cleaned_company and not cleaned_expense and not cleaned_cost_center:
             continue
         rows.append(
             ItemAccountRow(
                 company=cleaned_company,
-                income_account_id=cleaned_income,
                 expense_account_id=cleaned_expense,
-                inventory_account_id=cleaned_inventory,
+                cost_center_code=cleaned_cost_center,
             )
         )
     return rows
@@ -339,12 +334,15 @@ def validate_item_account_rows(
         company = database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none()
         if company is None:
             raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
-        _validate_item_account(row.company, row.income_account_id, "income", "ingreso")
         _validate_item_account(row.company, row.expense_account_id, "expense", "gasto")
-        _validate_item_account(row.company, row.inventory_account_id, "asset", "inventario")
+        _validate_cost_center(row.company, row.cost_center_code)
         if requires_expense_by_company and not row.expense_account_id:
             raise InventoryServiceError(
                 "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            )
+        if requires_expense_by_company and not row.cost_center_code:
+            raise InventoryServiceError(
+                "Los servicios y articulos no inventariables requieren centro de costo predeterminado por compañia."
             )
         seen_companies.add(row.company)
 
@@ -358,12 +356,21 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         raise InventoryServiceError(f"La cuenta de {label} no pertenece a la compañia seleccionada.")
     account_type = (account.account_type or "").strip().lower()
     expected_aliases = {
-        "income": {"income"},
         "expense": {"expense", "cogs"},
-        "asset": {"asset", "inventory"},
     }[expected_type]
     if account_type and account_type not in expected_aliases:
         raise InventoryServiceError(f"La cuenta de {label} debe ser valida para {label} en la compañia.")
+
+
+def _validate_cost_center(company: str, cost_center_code: str | None) -> None:
+    """Valida que el centro de costo exista y pertenezca a la compañia."""
+    if not cost_center_code:
+        return
+    cost_center = database.session.execute(
+        select(CostCenter).filter_by(entity=company, code=cost_center_code, active=True, enabled=True)
+    ).scalar_one_or_none()
+    if cost_center is None:
+        raise InventoryServiceError("El centro de costo no pertenece a la compañia seleccionada.")
 
 
 def default_uom_change_allowed(item_code: str, new_default_uom: str) -> bool:

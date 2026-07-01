@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from cacao_accounting.database import Accounts, Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+from cacao_accounting.database import Accounts, CostCenter, Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
@@ -300,7 +300,7 @@ def inventario_articulo_nuevo():
     formulario.default_uom.choices = _uom_choices()
     titulo = "Nuevo Artículo - " + APPNAME
     uom_rows = [{"uom_code": "", "conversion_factor": ""}]
-    account_rows = [{"company": "", "income_account_id": "", "expense_account_id": "", "inventory_account_id": ""}]
+    account_rows = [{"company": "", "expense_account_id": "", "cost_center_code": ""}]
 
     if request.method == "POST":
         uom_rows = _item_uom_rows_for_template(request.form)
@@ -337,6 +337,7 @@ def inventario_articulo_nuevo():
         uom_choices=_uom_choices(),
         company_choices=_company_choices(),
         account_choices=_account_choices(),
+        cost_center_choices=_cost_center_choices(),
     )
 
 
@@ -414,17 +415,33 @@ def _account_choices() -> list[dict[str, str]]:
     return [{"id": account.id, "label": f"{account.entity} - {account.code} - {account.name}"} for account in accounts]
 
 
+def _cost_center_choices() -> list[dict[str, str]]:
+    """Devuelve centros de costo activos para la tabla contable del item."""
+    cost_centers = (
+        database.session.execute(
+            database.select(CostCenter)
+            .filter_by(active=True, enabled=True, group=False)
+            .order_by(CostCenter.entity, CostCenter.code)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {"code": cost_center.code, "label": f"{cost_center.entity} - {cost_center.code} - {cost_center.name}"}
+        for cost_center in cost_centers
+    ]
+
+
 def _item_account_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
     """Normaliza filas contables para re-renderizar el formulario."""
     parsed_rows = parse_item_account_rows(form_data)
     if not parsed_rows:
-        return [{"company": "", "income_account_id": "", "expense_account_id": "", "inventory_account_id": ""}]
+        return [{"company": "", "expense_account_id": "", "cost_center_code": ""}]
     return [
         {
             "company": row.company,
-            "income_account_id": row.income_account_id or "",
             "expense_account_id": row.expense_account_id or "",
-            "inventory_account_id": row.inventory_account_id or "",
+            "cost_center_code": row.cost_center_code or "",
         }
         for row in parsed_rows
     ]
