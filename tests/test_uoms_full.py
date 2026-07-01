@@ -207,6 +207,57 @@ def test_uom_conversion_cycle(app_ctx):
     assert bin_p.actual_qty == 54  # 100 - 10 - 36
 
 
+def test_item_uom_rows_persist_against_default_uom(app_ctx):
+    from cacao_accounting.database import database
+    from cacao_accounting.inventario.service import ItemUOMRow, create_item_with_uoms, list_item_uom_conversions
+
+    create_item_with_uoms(
+        code="UOM-ITEM-001",
+        name="Item con conversiones",
+        description="",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="UND",
+        uom_rows=[
+            ItemUOMRow(uom_code="BOX", conversion_factor=Decimal("12")),
+            ItemUOMRow(uom_code="DZ", conversion_factor=Decimal("12")),
+        ],
+    )
+    database.session.commit()
+
+    conversions = list_item_uom_conversions("UOM-ITEM-001")
+    assert [(row.from_uom, row.to_uom, row.conversion_factor) for row in conversions] == [
+        ("BOX", "UND", Decimal("12")),
+        ("DZ", "UND", Decimal("12")),
+    ]
+
+
+def test_item_default_uom_is_locked_after_usage(app_ctx):
+    from cacao_accounting.database import Item, PurchaseReceipt, PurchaseReceiptItem, database
+
+    item = Item(code="UOM-LOCK-001", name="Item bloqueado", item_type="goods", is_stock_item=True, default_uom="UND")
+    database.session.add(item)
+    database.session.add(PurchaseReceipt(id="PR-UOM-LOCK", company="cacao", posting_date=date.today(), docstatus=0))
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id="PR-UOM-LOCK",
+            item_code="UOM-LOCK-001",
+            item_name="Item bloqueado",
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("1"),
+            amount=Decimal("1"),
+        )
+    )
+    database.session.commit()
+
+    item.default_uom = "BOX"
+    database.session.add(item)
+
+    with pytest.raises(ValueError, match="La unidad predeterminada no se puede cambiar"):
+        database.session.commit()
+
+
 def test_average_cost(app_ctx):
     from tests.test_e2e_modules import check_ledger_entries
 

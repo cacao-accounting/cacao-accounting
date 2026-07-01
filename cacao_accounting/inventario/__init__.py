@@ -6,6 +6,7 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Any, Mapping
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -19,6 +20,12 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
+from cacao_accounting.inventario.service import (
+    InventoryServiceError,
+    create_item_with_uoms,
+    list_item_uom_conversions,
+    parse_item_uom_rows,
+)
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
@@ -288,21 +295,41 @@ def inventario_articulo_nuevo():
     from cacao_accounting.inventario.forms import FormularioArticulo
 
     formulario = FormularioArticulo()
-    formulario.default_uom.choices = [(u[0].code, u[0].name) for u in database.session.execute(database.select(UOM)).all()]
+    formulario.default_uom.choices = _uom_choices()
     titulo = "Nuevo Artículo - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
-        articulo = Item(
-            code=request.form.get("code"),
-            name=request.form.get("name"),
-            description=request.form.get("description"),
-            item_type=request.form.get("item_type", "goods"),
-            is_stock_item=bool(request.form.get("is_stock_item")),
-            default_uom=request.form.get("default_uom"),
-        )
-        database.session.add(articulo)
-        database.session.commit()
-        return redirect("/inventory/item/list")
-    return render_template("inventario/articulo_nuevo.html", form=formulario, titulo=titulo)
+    uom_rows = [{"uom_code": "", "conversion_factor": ""}]
+
+    if request.method == "POST":
+        uom_rows = _item_uom_rows_for_template(request.form)
+        if formulario.validate():
+            try:
+                create_item_with_uoms(
+                    code=str(request.form.get("code") or "").strip(),
+                    name=str(request.form.get("name") or "").strip(),
+                    description=(request.form.get("description") or "").strip() or None,
+                    item_type=str(request.form.get("item_type") or "goods").strip(),
+                    is_stock_item=request.form.get("is_stock_item") is not None,
+                    default_uom=str(request.form.get("default_uom") or "").strip(),
+                    uom_rows=parse_item_uom_rows(request.form),
+                )
+                database.session.commit()
+                return redirect("/inventory/item/list")
+            except InventoryServiceError as exc:
+                database.session.rollback()
+                flash(str(exc), "danger")
+            except ValueError as exc:
+                database.session.rollback()
+                flash(str(exc), "danger")
+        else:
+            flash("Revise los datos del formulario de artículo.", "danger")
+
+    return render_template(
+        "inventario/articulo_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        uom_rows=uom_rows,
+        uom_choices=_uom_choices(),
+    )
 
 
 @inventario.route("/item/<item_id>")
@@ -316,7 +343,12 @@ def inventario_articulo(item_id):
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
-    return render_template("inventario/articulo.html", registro=registro[0], titulo=titulo)
+    return render_template(
+        "inventario/articulo.html",
+        registro=registro[0],
+        titulo=titulo,
+        uom_conversions=list_item_uom_conversions(registro[0].code),
+    )
 
 
 @inventario.route("/uom/new", methods=["GET", "POST"])
@@ -337,6 +369,19 @@ def inventario_uom_nuevo():
         database.session.commit()
         return redirect("/inventory/uom/list")
     return render_template("inventario/uom_nuevo.html", form=formulario, titulo=titulo)
+
+
+def _uom_choices() -> list[tuple[str, str]]:
+    """Devuelve las UOM disponibles para el formulario de articulo."""
+    return [(u.code, u.name) for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()]
+
+
+def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Normaliza filas de UOM para re-renderizar el formulario."""
+    parsed_rows = parse_item_uom_rows(form_data)
+    if not parsed_rows:
+        return [{"uom_code": "", "conversion_factor": ""}]
+    return [{"uom_code": row.uom_code, "conversion_factor": str(row.conversion_factor)} for row in parsed_rows]
 
 
 @inventario.route("/uom/<uom_id>")

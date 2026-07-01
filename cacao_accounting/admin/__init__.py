@@ -428,6 +428,7 @@ def lista_precios():
             company=request.form.get("company") or None,
             is_buying=bool(request.form.get("is_buying")),
             is_selling=bool(request.form.get("is_selling", "1")),
+            is_default=bool(request.form.get("is_default")),
             is_active=bool(request.form.get("is_active", "1")),
         )
         database.session.add(price_list)

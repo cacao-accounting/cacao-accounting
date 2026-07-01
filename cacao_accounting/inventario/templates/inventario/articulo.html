@@ -40,4 +40,36 @@
   </div>
 </div>
 
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0">{{ _('Unidades de medida') }}</h6>
+  </div>
+  <div class="p-3">
+    <p class="text-muted small">{{ _('La unidad base es la referencia para todas las conversiones del item.') }}</p>
+    <table class="ca-table">
+      <caption style="display:none;">{{ _('Conversiones UOM del item') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('UOM origen') }}</th>
+          <th>{{ _('Unidad base') }}</th>
+          <th>{{ _('Factor') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for conversion in uom_conversions %}
+        <tr>
+          <td>{{ conversion.from_uom }}</td>
+          <td>{{ conversion.to_uom }}</td>
+          <td>{{ conversion.conversion_factor }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3">{{ _('No hay conversiones UOM configuradas.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}

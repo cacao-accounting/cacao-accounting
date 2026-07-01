@@ -29,6 +29,8 @@ from cacao_accounting.setup.repository import (
     create_default_accounting_period,
     create_default_book,
     create_default_cost_center,
+    create_default_price_lists,
+    create_default_uoms,
     create_default_entity,
     create_default_fiscal_year,
     get_setup_value,
@@ -91,6 +93,8 @@ def create_company(
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
     create_default_cost_center(entity)
+    create_default_uoms(idioma)
+    create_default_price_lists(entity.code, entity.currency, idioma)
     fiscal_year = create_default_fiscal_year(
         entity,
         year_start_date=company_data.get("inicio_anio_fiscal"),

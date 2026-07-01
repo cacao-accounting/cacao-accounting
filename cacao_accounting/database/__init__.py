@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, event, inspect, select
 from ulid import ULID
 
 # ---------------------------------------------------------------------------------------
@@ -806,6 +806,10 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
     credit_limit = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     payment_terms_id = database.Column(database.String(26), database.ForeignKey(PAYMENT_TERMS_ID), nullable=True, index=True)
     tax_template_id = database.Column(database.String(26), database.ForeignKey(TAX_TEMPLATE_ID), nullable=True, index=True)
+    default_tax_rule_id = database.Column(database.String(26), database.ForeignKey("tax_rule.id"), nullable=True, index=True)
+    default_price_list_id = database.Column(
+        database.String(26), database.ForeignKey("price_list.id"), nullable=True, index=True
+    )
     allow_purchase_invoice_without_order = database.Column(database.Boolean(), default=False, nullable=False)
     allow_purchase_invoice_without_receipt = database.Column(database.Boolean(), default=False, nullable=False)
 
@@ -2116,6 +2120,7 @@ class PriceList(database.Model, BaseTabla):  # type: ignore[name-defined]
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True)
     is_buying = database.Column(database.Boolean(), default=False, nullable=False)
     is_selling = database.Column(database.Boolean(), default=True, nullable=False)
+    is_default = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -2686,3 +2691,35 @@ class UserBookAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     can_write = database.Column(database.Boolean, default=False, nullable=False)
     can_cancel = database.Column(database.Boolean, default=False, nullable=False)
     can_approve = database.Column(database.Boolean, default=False, nullable=False)
+
+
+def _item_has_usage(connection, item_code: str) -> bool:
+    """Detecta si un item ya tiene registros transaccionales o de stock."""
+    usage_tables = (
+        StockLedgerEntry.__table__,
+        StockEntryItem.__table__,
+        PurchaseOrderItem.__table__,
+        PurchaseReceiptItem.__table__,
+        PurchaseInvoiceItem.__table__,
+        SalesOrderItem.__table__,
+        DeliveryNoteItem.__table__,
+        SalesInvoiceItem.__table__,
+    )
+    for table in usage_tables:
+        if "item_code" not in table.c:
+            continue
+        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
+        if connection.execute(statement).first():
+            return True
+    return False
+
+
+@event.listens_for(Item, "before_update", propagate=True)
+def _lock_item_default_uom_after_usage(_mapper, connection, target) -> None:
+    """Impide modificar la UOM base de un item con uso transaccional."""
+    state = inspect(target)
+    if not state.attrs.default_uom.history.has_changes():
+        return
+    if not target.code or not _item_has_usage(connection, str(target.code)):
+        return
+    raise ValueError("La unidad predeterminada no se puede cambiar cuando el item ya tiene registros.")

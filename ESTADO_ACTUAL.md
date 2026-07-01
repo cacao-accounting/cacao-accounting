@@ -1,5 +1,21 @@
 # Estado Actual del Proyecto - 2026-06-30
 
+- **Cliente/Proveedor por compañia (2026-07-01):** Los terceros ya soportan configuracion ampliada por compañia para cuentas, fiscalidad y precios.
+  - `CompanyParty` ahora persiste regla fiscal predeterminada y lista de precio predeterminada.
+  - Cliente valida listas de precio de venta; Proveedor valida listas de precio de compra.
+  - `PriceList` queda consolidado como maestro funcional de listas de precio; `ItemPrice` sigue siendo el detalle por item.
+  - El setup inicial crea listas de precio de venta y compra predeterminadas por compañia y las localiza por idioma de instalacion.
+  - Las pantallas de Cliente y Proveedor ya muestran cuenta AR/AP, lista de precio, regla fiscal y plantilla fiscal dentro de la configuracion por compañia.
+  - `search-select` ya expone `price_list` y `tax_rule`.
+
+- **Maestro UOM e idioma de setup (2026-07-01):** El item de inventario ya maneja un maestro de UOM con conversiones contra una unidad predeterminada.
+  - Cada item puede definir una unidad base y varias UOM adicionales con su factor de conversión hacia esa base.
+  - Si el item ya tiene registros de uso, la unidad predeterminada queda bloqueada y no puede modificarse.
+  - El alta de item valida la configuración contable mínima para servicios antes de permitir guardar.
+  - El seed inicial de UOM respeta el idioma seleccionado en setup y carga nombres localizados para `ES` o `EN`.
+  - El catálogo de desarrollo evita duplicados al reaprovechar los mismos códigos de UOM.
+  - Verificación focal y regresiones relacionadas en verde.
+
 - **Cobertura de código (2026-06-30):** Análisis de cobertura en Coveralls muestra 80.4% (22,566 líneas relevantes, 18,144 cubiertas).
   - Se identificaron módulos sin tests dedicados: `collaboration_service`, `party_settings`, `auth/forms`, `tax_pricing_service`, `module_badges`.
   - Se agregaron 17 tests unitarios en `tests/test_services_simple.py` cubriendo dataclasses, constantes y funciones de validación.

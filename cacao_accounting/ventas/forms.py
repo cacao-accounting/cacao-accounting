@@ -22,6 +22,8 @@ class FormularioCliente(FlaskForm):
     party_group_id = StringField("Tipo de Cliente")
     receivable_account_id = StringField("Cuenta por cobrar")
     tax_template_id = StringField("Plantilla de impuestos")
+    default_tax_rule_id = StringField("Regla fiscal predeterminada")
+    default_price_list_id = StringField("Lista de precio predeterminada")
     company_is_active = BooleanField("Activo en la compañía", default=True)
 
 

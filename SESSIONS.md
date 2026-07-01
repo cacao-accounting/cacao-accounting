@@ -1,5 +1,19 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-01 (Cliente/Proveedor: cuentas, regla fiscal y lista de precio por compania)
+- **Solicitud:** Completar Cliente y Proveedor con configuracion por compania para cuenta por cobrar/pagar predeterminada, regla fiscal predeterminada y lista de precio predeterminada, tomando como base las referencias visuales compartidas.
+- **Correccion de fondo:** No se creo un maestro nuevo para precios; se reutilizo `PriceList` como concepto funcional de **Lista de Precio** y `ItemPrice` sigue como detalle de precios por item. La relacion por defecto del tercero se persiste en `CompanyParty`.
+- **Implementacion:** `CompanyParty` ahora guarda `default_tax_rule_id` y `default_price_list_id`. `party_settings` resuelve defaults, valida compania/tipo (`sales` vs `purchase`) y hace fallback a listas predeterminadas por compania. `search-select` incorpora `tax_rule` y `price_list`.
+- **Setup inicial:** El asistente crea listas de precio predeterminadas de venta y compra por compania, localizadas segun idioma (`ES`/`EN`) y marcadas como default.
+- **UI:** Cliente y Proveedor muestran y editan por compania cuenta AR/AP, lista de precio, regla fiscal y plantilla fiscal; el detalle del tercero expone esos valores en la tabla de configuracion.
+- **Validacion:** Pruebas focales de terceros, setup, search-select, esquema y vistas en verde.
+
+## 2026-07-01 (Maestro UOM e idioma de setup)
+- **Solicitud:** Mejorar el item de inventario con un maestro de UOM, conversión contra una unidad predeterminada y un feed inicial de unidades de medida, respetando el idioma elegido en el setup.
+- **Implementacion:** Se agrego soporte de UOM por item con unidad predeterminada, tabla de conversiones y bloqueo de cambio de la unidad base cuando el item ya tiene registros. El alta de item ahora valida la definicion contable minima para servicios y expone el detalle de conversiones en la vista.
+- **Seed inicial:** El setup ahora carga un catalogo razonable de UOM localizados segun `idioma` (`ES`/`EN`), y el seed de desarrollo evita duplicados al reutilizar los mismos codigos.
+- **Validacion:** Se agregaron pruebas para persistencia de conversiones, bloqueo de unidad base tras uso y verificacion del seed de UOM en ingles; la suite focal y la regresion de vistas/esquema quedaron en verde.
+
 ## 2026-06-30 (Análisis de cobertura de código y tests para servicios)
 - **Solicitud:** Analizar la cobertura de código actual en Coveralls y mejorar los tests para aumentar cobertura.
 - **Análisis:** El proyecto tiene 80.4% de cobertura (22,566 líneas relevantes, 18,144 cubiertas). Se identificaron módulos sin tests: `collaboration_service`, `party_settings`, `auth/forms`, `tax_pricing_service`, `module_badges`, etc.

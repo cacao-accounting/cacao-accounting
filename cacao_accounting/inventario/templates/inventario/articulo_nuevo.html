@@ -27,17 +27,20 @@
     <div class="col-md-4">
       <label class="form-label" for="code">{{ _('Código') }} <span class="text-danger">*</span></label>
       {{ form.code(class="form-control form-control-sm", id="code", required=True) }}
+      {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors[0] }}</div>{% endif %}
     </div>
     <div class="col-md-8">
       <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
       {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+      {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="item_type">{{ _('Tipo') }}</label>
       {{ form.item_type(class="form-select form-select-sm", id="item_type") }}
+      {% if form.item_type.errors %}<div class="text-danger small">{{ form.item_type.errors[0] }}</div>{% endif %}
     </div>
     <div class="col-md-8">
-      <label class="form-label" for="default_uom">{{ _('UOM base') }} <span class="text-danger">*</span></label>
+      <label class="form-label" for="default_uom">{{ _('Unidad de medida predeterminada') }} <span class="text-danger">*</span></label>
       <div class="ca-smart-select" x-data='smartSelect({
         doctype: "uom",
         name: "default_uom",
@@ -64,6 +67,7 @@
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
         </div>
       </div>
+      {% if form.default_uom.errors %}<div class="text-danger small mt-1">{{ form.default_uom.errors[0] }}</div>{% endif %}
     </div>
     <div class="col-12">
       <label class="form-label" for="description">{{ _('Descripción') }}</label>
@@ -73,6 +77,61 @@
       <div class="form-check">
         {{ form.is_stock_item(class="form-check-input", id="is_stock_item") }}
         <label class="form-check-label" for="is_stock_item">{{ _('Es item de inventario') }}</label>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="ca-card shadow-sm" x-data='{
+        rows: {{ uom_rows|tojson }},
+        addRow() { this.rows.push({uom_code: "", conversion_factor: ""}); },
+        removeRow(index) {
+          if (this.rows.length <= 1) {
+            this.rows[0] = {uom_code: "", conversion_factor: ""};
+            return;
+          }
+          this.rows.splice(index, 1);
+        }
+      }'>
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Unidades de medida del item') }}</h6>
+          <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+            <i class="bi bi-plus-lg me-1"></i>{{ _('Añadir UOM') }}
+          </button>
+        </div>
+        <div class="p-3">
+          <p class="text-muted small mb-3">{{ _('Cada fila guarda una UOM adicional y su equivalencia frente a la unidad predeterminada.') }}</p>
+          <div class="table-responsive">
+            <table class="ca-table">
+              <caption style="display:none;">{{ _('Conversiones UOM del item') }}</caption>
+              <thead>
+                <tr>
+                  <th>{{ _('UOM') }}</th>
+                  <th>{{ _('Equivale a') }}</th>
+                  <th>{{ _('Acciones') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, index) in rows" :key="index">
+                  <tr>
+                    <td>
+                      <select class="form-select form-select-sm" name="uom_code" x-model="row.uom_code">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for code, name in uom_choices %}
+                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <input class="form-control form-control-sm" type="number" min="0.000000001" step="0.000000001" name="uom_conversion_factor" x-model="row.conversion_factor">
+                    </td>
+                    <td class="text-nowrap">
+                      <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </form>

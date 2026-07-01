@@ -101,6 +101,8 @@
                 <th>{{ _('Compañía') }}</th>
                 <th>{{ _('Activo') }}</th>
                 <th>{{ _('Cuenta por cobrar') }}</th>
+                <th>{{ _('Lista de Precio') }}</th>
+                <th>{{ _('Regla Fiscal') }}</th>
                 <th>{{ _('Plantilla de impuestos') }}</th>
               </tr>
             </thead>
@@ -168,6 +170,82 @@
                     <input type="hidden" name="receivable_account_id" x-model="selectedValue">
                     <div class="ca-smart-select-input-wrap">
                       <input class="form-control ca-smart-select-input" id="receivable_account_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "price_list",
+                    name: "default_price_list_id",
+                    minChars: 1,
+                    initialValue: {{ (company_settings.default_price_list_id if company_settings else "") | tojson }},
+                    initialLabel: {{ (company_settings.default_price_list_label if company_settings else "") | tojson }},
+                    filters: {
+                      company: { selector: "#company_value" },
+                      is_selling: true,
+                      is_active: true
+                    },
+                    filterSources: ["#company_value"],
+                    requiredFilters: ["company"],
+                    messages: {
+                      placeholder: {{ _('Buscar lista de precio')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="default_price_list_id" x-model="selectedValue">
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" id="default_price_list_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "tax_rule",
+                    name: "default_tax_rule_id",
+                    minChars: 1,
+                    initialValue: {{ (company_settings.default_tax_rule_id if company_settings else "") | tojson }},
+                    initialLabel: {{ (company_settings.default_tax_rule_label if company_settings else "") | tojson }},
+                    filters: {
+                      company: { selector: "#company_value" },
+                      applies_to: ["sales", "both"],
+                      is_active: true
+                    },
+                    filterSources: ["#company_value"],
+                    requiredFilters: ["company"],
+                    messages: {
+                      placeholder: {{ _('Buscar regla fiscal')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="default_tax_rule_id" x-model="selectedValue">
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" id="default_tax_rule_id" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak>

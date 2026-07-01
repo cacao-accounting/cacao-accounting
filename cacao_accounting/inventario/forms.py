@@ -16,9 +16,9 @@ class FormularioArticulo(FlaskForm):
     code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
     description = TextAreaField("Descripción")
-    item_type = SelectField("Tipo", choices=[("goods", "Bien"), ("service", "Servicio")])
+    item_type = SelectField("Tipo", choices=[("goods", "Bien"), ("service", "Servicio")], validators=[DataRequired()])
     is_stock_item = BooleanField("Es artículo de inventario")
-    default_uom = SelectField("UOM Base", choices=[])
+    default_uom = SelectField("UOM Base", choices=[], validators=[DataRequired()])
 
 
 class FormularioUOM(FlaskForm):

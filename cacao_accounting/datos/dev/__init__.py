@@ -285,6 +285,9 @@ def cargar_terceros():
 def cargar_unidades_medida():
     """Unidades de medida de demostración."""
     for u in _make_unidades_medida():
+        existing = database.session.execute(database.select(type(u)).filter_by(code=u.code)).scalars().first()
+        if existing:
+            continue
         database.session.add(u)
     database.session.commit()
 
