@@ -1934,6 +1934,7 @@ class ItemAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    cost_center_code = database.Column(database.String(10), nullable=True)
 
 
 class PartyAccount(database.Model, BaseTabla):  # type: ignore[name-defined]

@@ -10,10 +10,10 @@
 
 ## 2026-07-01 (Item: configuracion contable por compañia)
 - **Solicitud:** Completar el formulario de Item con una tabla de cuenta predeterminada por empresa, porque los servicios y articulos no inventariables se registran directo al costo.
-- **Implementacion:** El alta de item ahora incluye una tabla por compañia con cuenta de ingreso, gasto e inventario; la configuracion se persiste en `ItemAccount`.
-- **Regla de negocio:** Si el item es `service` o `is_stock_item=False`, al menos una fila por compañia con cuenta de gasto predeterminada es obligatoria; si falta, el guardado falla.
+- **Implementacion:** El alta de item ahora incluye una tabla minima por compañia con cuenta de gasto y centro de costo; la configuracion se persiste en `ItemAccount` usando `expense_account_id` y `cost_center_code`.
+- **Regla de negocio:** Si el item es `service` o `is_stock_item=False`, al menos una fila por compañia con cuenta de gasto y centro de costo predeterminados es obligatoria; si falta cualquiera de los dos, el guardado falla.
 - **UI:** La vista detalle del item muestra la configuracion contable por compañia junto a las conversiones UOM.
-- **Validacion:** Se agregaron pruebas para exigir cuenta de gasto en servicios/no inventariables y para persistir `ItemAccount` correctamente.
+- **Validacion:** Se agregaron pruebas para exigir cuenta de gasto y centro de costo en servicios/no inventariables y para persistir `ItemAccount` correctamente.
 
 ## 2026-07-01 (Maestro UOM e idioma de setup)
 - **Solicitud:** Mejorar el item de inventario con un maestro de UOM, conversión contra una unidad predeterminada y un feed inicial de unidades de medida, respetando el idioma elegido en el setup.

@@ -9,9 +9,9 @@
   - `search-select` ya expone `price_list` y `tax_rule`.
 
 - **Item / configuracion contable por compañia (2026-07-01):** El formulario de item ya soporta cuentas predeterminadas por empresa.
-  - El alta de item muestra una tabla por compañia con cuenta de ingreso, gasto e inventario.
+  - El alta de item muestra una tabla por compañia con cuenta de gasto y centro de costo.
   - La configuracion se persiste en `ItemAccount`.
-  - Si el item es servicio o no inventariable, la cuenta de gasto por compañia es obligatoria y el guardado falla si falta.
+  - Si el item es servicio o no inventariable, la cuenta de gasto y el centro de costo por compañia son obligatorios y el guardado falla si falta cualquiera.
   - El detalle del item ya muestra la configuracion contable por compañia.
 
 - **Maestro UOM e idioma de setup (2026-07-01):** El item de inventario ya maneja un maestro de UOM con conversiones contra una unidad predeterminada.
