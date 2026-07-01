@@ -207,6 +207,7 @@ def build_party_company_settings(
     party_account = _party_account_record(party_id, company) if party_id else None
     if role is None:
         from cacao_accounting.database import Party as PartyModel
+
         party = database.session.get(PartyModel, party_id)
         if party:
             role = "customer" if party.is_customer else "supplier"
@@ -243,21 +244,35 @@ def draft_party_company_settings(
     """Construye un estado temporal a partir del formulario enviado."""
     if base is None:
         base = PartyCompanySettings(
-            company=company, company_label=_company_label(company), is_active=True,
-            receivable_account_id=None, receivable_account_label="",
-            payable_account_id=None, payable_account_label="",
-            tax_template_id=None, tax_template_label="",
-            default_tax_rule_id=None, default_tax_rule_label="",
-            default_price_list_id=None, default_price_list_label="",
+            company=company,
+            company_label=_company_label(company),
+            is_active=True,
+            receivable_account_id=None,
+            receivable_account_label="",
+            payable_account_id=None,
+            payable_account_label="",
+            tax_template_id=None,
+            tax_template_label="",
+            default_tax_rule_id=None,
+            default_tax_rule_label="",
+            default_price_list_id=None,
+            default_price_list_label="",
             allow_purchase_invoice_without_order=False,
             allow_purchase_invoice_without_receipt=False,
             default_currency=None,
-            default_income_account_id=None, default_income_account_label="",
-            default_expense_account_id=None, default_expense_account_label="",
-            default_purchase_account_id=None, default_purchase_account_label="",
-            default_advance_account_id=None, default_advance_account_label="",
-            default_cost_center=None, default_business_unit=None,
-            default_bank_name=None, default_bank_account_no=None, default_bank_iban=None,
+            default_income_account_id=None,
+            default_income_account_label="",
+            default_expense_account_id=None,
+            default_expense_account_label="",
+            default_purchase_account_id=None,
+            default_purchase_account_label="",
+            default_advance_account_id=None,
+            default_advance_account_label="",
+            default_cost_center=None,
+            default_business_unit=None,
+            default_bank_name=None,
+            default_bank_account_no=None,
+            default_bank_iban=None,
             block_overdue=False,
         )
 

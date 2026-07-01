@@ -640,8 +640,7 @@ def _purchase_quotation_selected_company(choices: list[tuple[str, str]]) -> str 
 def _supplier_quotation_supplier_choices() -> list[tuple[str, str]]:
     """Construye el listado de proveedores para el formulario."""
     return [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -1115,7 +1114,7 @@ def compras_proveedor_lista():
     """Listado de proveedores."""
     consulta = _paginate_list(
         Party,
-        (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
+        (Party.code, Party.name, Party.comercial_name, Party.tax_id),
         database.select(Party).filter(Party.is_supplier.is_(True)),
         include_status=False,
     )
@@ -1589,8 +1588,7 @@ def compras_orden_compra_nuevo():
     )
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -1707,8 +1705,7 @@ def _purchase_order_selected_company(default_company: str | None) -> str | None:
 def _purchase_order_supplier_choices() -> list[tuple[str, str]]:
     """Construye el listado de proveedores para órdenes de compra."""
     return [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -1944,8 +1941,7 @@ def _purchase_quotation_origin_id() -> str | None:
 def _purchase_quotation_supplier_choices() -> list[tuple[str, str]]:
     """Construye las opciones de proveedores para solicitudes de cotización."""
     return [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -2082,8 +2078,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -2271,8 +2266,7 @@ def compras_recepcion_nuevo():
     )
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
@@ -2383,8 +2377,7 @@ def compras_recepcion_editar(receipt_id: str):
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -2614,8 +2607,7 @@ def _purchase_invoice_selected_company(choices: list[tuple[str, str]]) -> str | 
 def _purchase_invoice_supplier_choices() -> list[tuple[str, str]]:
     """Build the supplier choices list for purchase invoices."""
     return [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
 
 
@@ -2775,8 +2767,7 @@ def compras_factura_compra_editar(invoice_id: str):
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}

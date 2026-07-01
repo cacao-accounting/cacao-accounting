@@ -358,7 +358,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
+        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "party_group": SearchSelectSpec(
@@ -394,8 +394,8 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
-        default_filters={"party_type": "customer", "is_active": True},
+        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
+        default_filters={"role": "customer", "is_active": True},
     ),
     "supplier": SearchSelectSpec(
         doctype="supplier",
@@ -403,8 +403,8 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "party_type": "party_type", "is_active": "is_active"},
-        default_filters={"party_type": "supplier", "is_active": True},
+        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
+        default_filters={"role": "supplier", "is_active": True},
     ),
     "item": SearchSelectSpec(
         doctype="item",
@@ -663,8 +663,8 @@ def _apply_default_filters(
             continue
         if not active_only and _is_activity_default(field, value):
             continue
-        if spec.model is Party and field == "party_type":
-            statement = _apply_party_type_filter(statement, [str(value)] if isinstance(value, str) else [value])
+        if spec.model is Party and field == "role":
+            statement = _apply_role_filter(statement, [str(value)] if isinstance(value, str) else [value])
             continue
         column = _column_for(spec.model, field)
         statement = statement.where(_condition_for(column, [str(value)] if isinstance(value, str) else [value]))
@@ -698,17 +698,15 @@ def _apply_request_filters(
         if spec.model is Party and filter_name == "company":
             statement = statement.where(CompanyParty.company.in_(clean_values))
             continue
-        if spec.model is Party and filter_name == "party_type":
-            statement = _apply_party_type_filter(statement, clean_values)
+        if spec.model is Party and filter_name == "role":
+            statement = _apply_role_filter(statement, clean_values)
             continue
         column = _column_for(spec.model, spec.allowed_filters[filter_name])
         statement = statement.where(_condition_for(column, clean_values))
     return statement
 
 
-def _apply_party_type_filter(
-    statement: Select[tuple[Any]], values: Sequence[str | bool]
-) -> Select[tuple[Any]]:
+def _apply_role_filter(statement: Select[tuple[Any]], values: Sequence[str | bool]) -> Select[tuple[Any]]:
     conditions = []
     for v in values:
         sv = str(v)
