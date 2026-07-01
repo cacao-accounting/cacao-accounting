@@ -52,6 +52,7 @@ from cacao_accounting.party_management import (
     create_party_contact,
     deactivate_party_address,
     deactivate_party_contact,
+    generate_party_code,
     party_group_label,
     update_party_address,
     update_party_contact,
@@ -101,7 +102,7 @@ def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, st
 
 def _party_or_404(party_id: str, party_type: str) -> Party:
     """Obtiene un tercero por tipo o aborta."""
-    party = database.session.execute(database.select(Party).filter_by(id=party_id, party_type=party_type)).scalar_one_or_none()
+    party = database.session.execute(database.select(Party).filter_by(id=party_id).filter(Party.is_customer.is_(True))).scalar_one_or_none()
     if not party:
         abort(404)
     return party
@@ -114,8 +115,8 @@ def _upsert_customer_company_settings_from_request(customer_id: str, form: dict)
         return
     upsert_party_company_settings(
         customer_id,
-        "customer",
         company,
+        role="customer",
         is_active=form.get("company_is_active") is not None,
         receivable_account_id=form.get("receivable_account_id") or None,
         payable_account_id=None,
@@ -124,6 +125,17 @@ def _upsert_customer_company_settings_from_request(customer_id: str, form: dict)
         default_price_list_id=form.get("default_price_list_id") or None,
         allow_purchase_invoice_without_order=False,
         allow_purchase_invoice_without_receipt=False,
+        default_currency=form.get("default_currency"),
+        default_income_account_id=form.get("default_income_account_id") or None,
+        default_expense_account_id=form.get("default_expense_account_id") or None,
+        default_purchase_account_id=form.get("default_purchase_account_id") or None,
+        default_advance_account_id=form.get("default_advance_account_id") or None,
+        default_cost_center=form.get("default_cost_center"),
+        default_business_unit=form.get("default_business_unit"),
+        default_bank_name=form.get("default_bank_name"),
+        default_bank_account_no=form.get("default_bank_account_no"),
+        default_bank_iban=form.get("default_bank_iban"),
+        block_overdue=form.get("block_overdue") is not None,
     )
 
 
@@ -192,7 +204,7 @@ def ventas_pedido_venta_nuevo():
     formulario.naming_series.choices = _series_choices("sales_request", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -283,7 +295,7 @@ def ventas_pedido_venta_editar(request_id: str):
     formulario.naming_series.choices = _series_choices("sales_request", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -500,7 +512,7 @@ def ventas_cliente_lista():
     consulta = _paginate_list(
         Party,
         (Party.name, Party.comercial_name, Party.tax_id, Party.classification),
-        database.select(Party).filter(Party.party_type == "customer"),
+        database.select(Party).filter(Party.is_customer.is_(True)),
         include_status=False,
     )
     titulo = "Listado de Clientes - " + APPNAME
@@ -519,7 +531,7 @@ def ventas_cliente_nuevo():
     titulo = "Nuevo Cliente - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = build_party_company_settings("customer", selected_company) if selected_company else None
+    company_settings = build_party_company_settings(None, selected_company, role="customer") if selected_company else None
     if request.method == "POST":
         return _handle_cliente_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
     return render_template(
@@ -543,24 +555,26 @@ def _handle_cliente_create(
 ):
     """Maneja la creacion de un nuevo cliente desde el formulario POST."""
     cliente = Party(
-        party_type="customer",
+        is_customer=True,
         name=form.get("name") or "",
         comercial_name=form.get("comercial_name"),
         tax_id=form.get("tax_id"),
+        fiscal_name=form.get("fiscal_name"),
         is_active=form.get("is_active", "on") is not None,
     )
     try:
         database.session.add(cliente)
-        apply_party_group(cliente, form.get("party_group_id") or None)
+        apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
         apply_party_profile(cliente, form)
         database.session.flush()
+        generate_party_code(cliente.id, form.get("company"), "customer")
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
         return redirect("/sales/customer/list")
     except ValueError as exc:
         database.session.rollback()
         if selected_company:
-            company_settings = draft_party_company_settings("customer", selected_company, form)
+            company_settings = draft_party_company_settings(None, selected_company, form, role="customer")
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -578,7 +592,7 @@ def _handle_cliente_create(
 @login_required
 def ventas_cliente(customer_id):
     """Detalle de cliente."""
-    registro = database.session.execute(database.select(Party).filter_by(id=customer_id, party_type="customer")).first()
+    registro = database.session.execute(database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))).first()
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
@@ -595,7 +609,7 @@ def ventas_cliente_editar(customer_id: str):
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     cliente = database.session.execute(
-        database.select(Party).filter_by(id=customer_id, party_type="customer")
+        database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
     ).scalar_one_or_none()
     if not cliente:
         abort(404)
@@ -604,7 +618,7 @@ def ventas_cliente_editar(customer_id: str):
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings = (
-        build_party_company_settings("customer", selected_company, party_id=cliente.id) if selected_company else None
+        build_party_company_settings(cliente.id, selected_company, role="customer") if selected_company else None
     )
     if request.method == "POST":
         return _handle_cliente_update(
@@ -637,8 +651,9 @@ def _handle_cliente_update(
         cliente.name = form.get("name") or ""
         cliente.comercial_name = form.get("comercial_name") or None
         cliente.tax_id = form.get("tax_id") or None
+        cliente.fiscal_name = form.get("fiscal_name")
         cliente.is_active = form.get("is_active") is not None
-        apply_party_group(cliente, form.get("party_group_id") or None)
+        apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
         apply_party_profile(cliente, form)
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
@@ -647,7 +662,7 @@ def _handle_cliente_update(
     except ValueError as exc:
         database.session.rollback()
         if selected_company:
-            company_settings = draft_party_company_settings("customer", selected_company, form)
+            company_settings = draft_party_company_settings(cliente.id, selected_company, form, role="customer")
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -1081,7 +1096,7 @@ def ventas_orden_venta_nuevo():
     formulario.naming_series.choices = _series_choices("sales_order", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
@@ -1154,7 +1169,7 @@ def ventas_orden_venta_editar(order_id: str):
     formulario.naming_series.choices = _series_choices("sales_order", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -1291,7 +1306,7 @@ def ventas_cotizacion_nueva():
     formulario.naming_series.choices = _series_choices("sales_quotation", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
@@ -1387,7 +1402,7 @@ def ventas_cotizacion_editar(quotation_id: str):
     formulario.naming_series.choices = _series_choices("sales_quotation", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -1594,7 +1609,7 @@ def ventas_entrega_nuevo():
     formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
@@ -1699,7 +1714,7 @@ def ventas_entrega_editar(note_id: str):
     formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
@@ -1881,7 +1896,7 @@ def ventas_factura_venta_nuevo():
     formulario.naming_series.choices = _series_choices("sales_invoice", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     from_note_id = request.args.get("from_note") or request.form.get("from_note")
@@ -2009,7 +2024,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     formulario.naming_series.choices = _series_choices("sales_invoice", selected_company)
     formulario.customer_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter_by(party_type="customer")).all()
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}

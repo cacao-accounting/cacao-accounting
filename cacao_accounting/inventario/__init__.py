@@ -11,13 +11,25 @@ from typing import Any, Mapping
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from cacao_accounting.database import Accounts, CostCenter, Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+from cacao_accounting.database import (
+    Accounts,
+    CostCenter,
+    Item,
+    ItemCategory,
+    StockBin,
+    StockEntry,
+    StockEntryItem,
+    UOM,
+    Warehouse,
+    database,
+)
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.inventario.service import (
@@ -27,6 +39,7 @@ from cacao_accounting.inventario.service import (
     list_item_uom_conversions,
     parse_item_account_rows,
     parse_item_uom_rows,
+    update_item_with_uoms,
 )
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
@@ -74,9 +87,14 @@ def inventario_():
 @modulo_activo("inventory")
 @login_required
 def inventario_articulo_lista():
-    """Listado de articulos."""
+    """Listado de articulos con busqueda."""
     consulta = database.paginate(
-        database.select(Item),
+        apply_list_filters(
+            database.select(Item),
+            Item,
+            (Item.code, Item.name),
+            include_status=False,
+        ),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -293,11 +311,13 @@ def inventario_salida_inventario_lista():
 @modulo_activo("inventory")
 @login_required
 def inventario_articulo_nuevo():
-    """Formulario para crear un nuevo artículo."""
+    """Formulario para crear un nuevo artículo (codigo auto-generado)."""
     from cacao_accounting.inventario.forms import FormularioArticulo
 
     formulario = FormularioArticulo()
     formulario.default_uom.choices = _uom_choices()
+    formulario.item_category_id.choices = _item_category_choices()
+    formulario.currency.choices = _currency_choices()
     titulo = "Nuevo Artículo - " + APPNAME
     uom_rows = [{"uom_code": "", "conversion_factor": ""}]
     account_rows = [{"company": "", "expense_account_id": "", "cost_center_code": ""}]
@@ -308,12 +328,32 @@ def inventario_articulo_nuevo():
         if formulario.validate():
             try:
                 create_item_with_uoms(
-                    code=str(request.form.get("code") or "").strip(),
                     name=str(request.form.get("name") or "").strip(),
                     description=(request.form.get("description") or "").strip() or None,
                     item_type=str(request.form.get("item_type") or "goods").strip(),
                     is_stock_item=request.form.get("is_stock_item") is not None,
+                    is_purchase_item=request.form.get("is_purchase_item") is not None,
+                    is_sale_item=request.form.get("is_sale_item") is not None,
+                    item_category_id=(request.form.get("item_category_id") or "").strip() or None,
                     default_uom=str(request.form.get("default_uom") or "").strip(),
+                    purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
+                    sale_uom=(request.form.get("sale_uom") or "").strip() or None,
+                    valuation_method=(request.form.get("valuation_method") or "").strip() or None,
+                    default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
+                    default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
+                    allow_negative_stock=request.form.get("allow_negative_stock") is not None,
+                    min_stock_qty=_form_decimal("min_stock_qty"),
+                    max_stock_qty=_form_decimal("max_stock_qty"),
+                    reorder_level=_form_decimal("reorder_level"),
+                    standard_rate=_form_decimal("standard_rate"),
+                    last_purchase_rate=_form_decimal("last_purchase_rate"),
+                    currency=(request.form.get("currency") or "").strip() or None,
+                    brand=(request.form.get("brand") or "").strip() or None,
+                    model_name=(request.form.get("model_name") or "").strip() or None,
+                    barcode=(request.form.get("barcode") or "").strip() or None,
+                    has_batch=request.form.get("has_batch") is not None,
+                    has_serial_no=request.form.get("has_serial_no") is not None,
+                    has_expiry_date=request.form.get("has_expiry_date") is not None,
                     uom_rows=parse_item_uom_rows(request.form),
                     account_rows=parse_item_account_rows(request.form),
                 )
@@ -338,6 +378,120 @@ def inventario_articulo_nuevo():
         company_choices=_company_choices(),
         account_choices=_account_choices(),
         cost_center_choices=_cost_center_choices(),
+        category_choices=_item_category_choices(),
+        currency_choices=_currency_choices(),
+    )
+
+
+@inventario.route("/item/<item_id>/edit", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+def inventario_articulo_editar(item_id):
+    """Formulario para editar un artículo existente."""
+    from cacao_accounting.inventario.forms import FormularioArticulo
+
+    registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
+    if not registro:
+        abort(404)
+    item = registro[0]
+
+    formulario = FormularioArticulo(obj=item)
+    formulario.default_uom.choices = _uom_choices()
+    formulario.item_category_id.choices = _item_category_choices()
+    formulario.currency.choices = _currency_choices()
+    titulo = f"Editar {item.name} - " + APPNAME
+
+    existing_uom_rows = [
+        {"uom_code": c.from_uom, "conversion_factor": str(c.conversion_factor)} for c in list_item_uom_conversions(item.code)
+    ] or [{"uom_code": "", "conversion_factor": ""}]
+    existing_account_rows = [
+        {
+            "company": a.company,
+            "expense_account_id": a.expense_account_id or "",
+            "income_account_id": a.income_account_id or "",
+            "cogs_account_id": a.cogs_account_id or "",
+            "inventory_account_id": a.inventory_account_id or "",
+            "stock_adjustment_account_id": a.stock_adjustment_account_id or "",
+            "cost_center_code": a.cost_center_code or "",
+        }
+        for a in list_item_account_rows(item.code)
+    ] or [
+        {
+            "company": "",
+            "expense_account_id": "",
+            "income_account_id": "",
+            "cogs_account_id": "",
+            "inventory_account_id": "",
+            "stock_adjustment_account_id": "",
+            "cost_center_code": "",
+        }
+    ]
+
+    uom_rows = existing_uom_rows
+    account_rows = existing_account_rows
+
+    if request.method == "POST":
+        uom_rows = _item_uom_rows_for_template(request.form)
+        account_rows = _item_account_rows_for_template(request.form)
+        if formulario.validate():
+            try:
+                update_item_with_uoms(
+                    item_code=item.code,
+                    name=str(request.form.get("name") or "").strip(),
+                    description=(request.form.get("description") or "").strip() or None,
+                    item_type=str(request.form.get("item_type") or "goods").strip(),
+                    is_stock_item=request.form.get("is_stock_item") is not None,
+                    is_purchase_item=request.form.get("is_purchase_item") is not None,
+                    is_sale_item=request.form.get("is_sale_item") is not None,
+                    item_category_id=(request.form.get("item_category_id") or "").strip() or None,
+                    default_uom=str(request.form.get("default_uom") or "").strip(),
+                    purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
+                    sale_uom=(request.form.get("sale_uom") or "").strip() or None,
+                    valuation_method=(request.form.get("valuation_method") or "").strip() or None,
+                    default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
+                    default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
+                    allow_negative_stock=request.form.get("allow_negative_stock") is not None,
+                    min_stock_qty=_form_decimal("min_stock_qty"),
+                    max_stock_qty=_form_decimal("max_stock_qty"),
+                    reorder_level=_form_decimal("reorder_level"),
+                    standard_rate=_form_decimal("standard_rate"),
+                    last_purchase_rate=_form_decimal("last_purchase_rate"),
+                    currency=(request.form.get("currency") or "").strip() or None,
+                    brand=(request.form.get("brand") or "").strip() or None,
+                    model_name=(request.form.get("model_name") or "").strip() or None,
+                    barcode=(request.form.get("barcode") or "").strip() or None,
+                    has_batch=request.form.get("has_batch") is not None,
+                    has_serial_no=request.form.get("has_serial_no") is not None,
+                    has_expiry_date=request.form.get("has_expiry_date") is not None,
+                    uom_rows=parse_item_uom_rows(request.form),
+                    account_rows=parse_item_account_rows(request.form),
+                )
+                database.session.commit()
+                flash("Artículo actualizado correctamente.", "success")
+                return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
+            except InventoryServiceError as exc:
+                database.session.rollback()
+                flash(str(exc), "danger")
+            except ValueError as exc:
+                database.session.rollback()
+                flash(str(exc), "danger")
+        else:
+            flash("Revise los datos del formulario de artículo.", "danger")
+
+    return render_template(
+        "inventario/articulo_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        edit=True,
+        registro=item,
+        uom_rows=uom_rows,
+        account_rows=account_rows,
+        uom_choices=_uom_choices(),
+        company_choices=_company_choices(),
+        account_choices=_account_choices(),
+        cost_center_choices=_cost_center_choices(),
+        category_choices=_item_category_choices(),
+        currency_choices=_currency_choices(),
     )
 
 
@@ -352,12 +506,29 @@ def inventario_articulo(item_id):
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
+    item_category = None
+    if registro[0].item_category_id:
+        item_category = database.session.get(ItemCategory, registro[0].item_category_id)
+    from cacao_accounting.database import Warehouse as WarehouseModel
+
+    item = registro[0]
+    default_warehouse = None
+    default_supplier = None
+    if item.default_warehouse_id:
+        default_warehouse = database.session.get(WarehouseModel, item.default_warehouse_id)
+    if item.default_supplier_id:
+        from cacao_accounting.database import Party
+
+        default_supplier = database.session.get(Party, item.default_supplier_id)
     return render_template(
         "inventario/articulo.html",
-        registro=registro[0],
+        registro=item,
         titulo=titulo,
-        uom_conversions=list_item_uom_conversions(registro[0].code),
-        item_accounts=list_item_account_rows(registro[0].code),
+        item_category=item_category,
+        default_warehouse=default_warehouse,
+        default_supplier=default_supplier,
+        uom_conversions=list_item_uom_conversions(item.code),
+        item_accounts=list_item_account_rows(item.code),
     )
 
 
@@ -436,15 +607,46 @@ def _item_account_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[s
     """Normaliza filas contables para re-renderizar el formulario."""
     parsed_rows = parse_item_account_rows(form_data)
     if not parsed_rows:
-        return [{"company": "", "expense_account_id": "", "cost_center_code": ""}]
+        return [
+            {
+                "company": "",
+                "expense_account_id": "",
+                "income_account_id": "",
+                "cogs_account_id": "",
+                "inventory_account_id": "",
+                "stock_adjustment_account_id": "",
+                "cost_center_code": "",
+            }
+        ]
     return [
         {
             "company": row.company,
             "expense_account_id": row.expense_account_id or "",
+            "income_account_id": row.income_account_id or "",
+            "cogs_account_id": row.cogs_account_id or "",
+            "inventory_account_id": row.inventory_account_id or "",
+            "stock_adjustment_account_id": row.stock_adjustment_account_id or "",
             "cost_center_code": row.cost_center_code or "",
         }
         for row in parsed_rows
     ]
+
+
+def _item_category_choices() -> list[tuple[str, str]]:
+    """Devuelve categorias de articulo disponibles para el formulario."""
+    categories = (
+        database.session.execute(database.select(ItemCategory).filter_by(is_active=True).order_by(ItemCategory.name))
+        .scalars()
+        .all()
+    )
+    return [("", "")] + [(cat.id, cat.name) for cat in categories]
+
+
+def _currency_choices() -> list[tuple[str, str]]:
+    """Devuelve monedas disponibles para el formulario de item."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas_activas
+
+    return obtener_lista_monedas_activas()
 
 
 @inventario.route("/uom/<uom_id>")
