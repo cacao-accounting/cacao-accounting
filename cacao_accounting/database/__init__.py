@@ -36,6 +36,7 @@ PARTY_ID = "party.id"
 PARTY_GROUP_ID = "party_group.id"
 WAREHOUSE_CODE = "warehouse.code"
 ITEM_CODE = "item.code"
+ITEM_CATEGORY_ID = "item_category.id"
 UOM_CODE = "uom.code"
 BOOK_CODE = "book.code"
 NAMING_SERIES_ID = "naming_series.id"
@@ -715,16 +716,18 @@ class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     Los terceros son globales — no pertenecen a una sola compania.
     La activacion por compania se gestiona mediante CompanyParty.
+    Un tercero puede ser cliente, proveedor o ambos simultaneamente.
     """
 
     __tablename__ = "party"
-    # customer, supplier
-    party_type = database.Column(database.String(20), nullable=False, index=True)
+    code = database.Column(database.String(50), unique=True, index=True, nullable=False)
+    is_customer = database.Column(database.Boolean(), default=False, nullable=False)
+    is_supplier = database.Column(database.Boolean(), default=False, nullable=False)
     party_group_id = database.Column(database.String(26), database.ForeignKey(PARTY_GROUP_ID), nullable=True, index=True)
     name = database.Column(database.String(150), nullable=False)
     comercial_name = database.Column(database.String(150), nullable=True)
+    fiscal_name = database.Column(database.String(150), nullable=True)
     tax_id = database.Column(database.String(50), nullable=True, index=True)
-    classification = database.Column(database.String(50), nullable=True)
     nationality_type = database.Column(database.String(20), nullable=True)
     person_type = database.Column(database.String(20), nullable=True)
     primary_phone = database.Column(database.String(50), nullable=True)
@@ -833,6 +836,17 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     allow_purchase_invoice_without_order = database.Column(database.Boolean(), default=False, nullable=False)
     allow_purchase_invoice_without_receipt = database.Column(database.Boolean(), default=False, nullable=False)
+    default_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    default_income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    default_expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    default_purchase_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    default_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    default_cost_center = database.Column(database.String(10), nullable=True)
+    default_business_unit = database.Column(database.String(10), nullable=True)
+    default_bank_name = database.Column(database.String(150), nullable=True)
+    default_bank_account_no = database.Column(database.String(50), nullable=True)
+    default_bank_iban = database.Column(database.String(50), nullable=True)
+    block_overdue = database.Column(database.Boolean(), default=False, nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -863,11 +877,29 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     # goods, service
     item_type = database.Column(database.String(20), nullable=False, index=True)
     is_stock_item = database.Column(database.Boolean(), default=False, nullable=False)
+    is_purchase_item = database.Column(database.Boolean(), default=True, nullable=False)
+    is_sale_item = database.Column(database.Boolean(), default=True, nullable=False)
+    item_category_id = database.Column(database.String(26), database.ForeignKey(ITEM_CATEGORY_ID), nullable=True, index=True)
     has_batch = database.Column(database.Boolean(), default=False, nullable=False)
     has_serial_no = database.Column(database.Boolean(), default=False, nullable=False)
+    has_expiry_date = database.Column(database.Boolean(), default=False, nullable=False)
     default_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=False)
+    purchase_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=True)
+    sale_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=True)
     # FIFO, moving_average — inmutable una vez hay transacciones
     valuation_method = database.Column(database.String(20), nullable=True)
+    default_warehouse_id = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True, index=True)
+    default_supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
+    allow_negative_stock = database.Column(database.Boolean(), default=False, nullable=False)
+    min_stock_qty = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    max_stock_qty = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    reorder_level = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    standard_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    last_purchase_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
+    brand = database.Column(database.String(100), nullable=True)
+    model_name = database.Column(database.String(100), nullable=True)
+    barcode = database.Column(database.String(100), nullable=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -896,6 +928,15 @@ class Warehouse(database.Model, BaseTabla):  # type: ignore[name-defined]
     inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     parent_warehouse = database.Column(database.String(20), nullable=True)
     is_group = database.Column(database.Boolean(), default=False, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+
+
+class ItemCategory(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Categoria para clasificar items de inventario."""
+
+    __tablename__ = "item_category"
+    name = database.Column(database.String(100), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -1954,7 +1995,9 @@ class ItemAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
     income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    cogs_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    stock_adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     cost_center_code = database.Column(database.String(10), nullable=True)
 
 
