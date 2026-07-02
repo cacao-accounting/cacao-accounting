@@ -102,7 +102,7 @@ def test_payment_to_single_invoice(app_ctx):
     login(client, "cacao", "cacao")
 
     # 1. Create a submitted Sales Invoice
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -171,7 +171,7 @@ def test_payment_over_application_blocking(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -211,7 +211,7 @@ def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -247,7 +247,7 @@ def test_payment_with_discount_and_gain_loss(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -295,7 +295,7 @@ def test_unallocated_payment(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
 
     # Payment with NO lines (unallocated / advance)
@@ -329,7 +329,7 @@ def test_unallocated_payment_excludes_reverted_references(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     invoice = SalesInvoice(
         company="cacao",
@@ -372,7 +372,7 @@ def test_unallocated_payment_uses_cash_consumed_formula(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     invoice = PurchaseInvoice(
         company="cacao",
@@ -424,7 +424,7 @@ def test_partial_allocation_no_discount(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     invoice = PurchaseInvoice(
         company="cacao",
@@ -472,7 +472,7 @@ def test_payment_to_multiple_invoices(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si1 = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -536,7 +536,7 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -591,7 +591,7 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -666,7 +666,7 @@ def test_order_reference_requires_advance_mode(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1, grand_total=1000)
     database.session.add(order)
     database.session.commit()
@@ -692,7 +692,7 @@ def test_accounting_entries_for_customer_collection(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     defaults = _ensure_company_default_accounts("cacao", bank)
 
@@ -745,7 +745,11 @@ def test_accounting_entries_for_payment_variants(
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    party = database.session.execute(database.select(Party).filter_by(party_type=party_type)).scalars().first()
+    if party_type == "supplier":
+        party_filter = Party.is_supplier.is_(True)
+    else:
+        party_filter = Party.is_customer.is_(True)
+    party = database.session.execute(database.select(Party).filter(party_filter)).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
     if party_type == "supplier":
@@ -812,7 +816,7 @@ def test_supplier_discount_is_persisted_on_reference(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     defaults = _ensure_company_default_accounts("cacao", bank)
     invoice = PurchaseInvoice(
@@ -862,7 +866,7 @@ def test_accounting_entries_with_gain_loss_adjustment(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     defaults = _ensure_company_default_accounts("cacao", bank)
     invoice = SalesInvoice(
@@ -920,7 +924,7 @@ def test_advance_payment_from_purchase_order(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     defaults = _ensure_company_default_accounts("cacao", bank)
 
@@ -1012,7 +1016,7 @@ def test_advance_payment_from_sales_order(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     defaults = _ensure_company_default_accounts("cacao", bank)
 
@@ -1083,7 +1087,7 @@ def test_payment_from_purchase_order_prefills_reference_line(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     order = PurchaseOrder(
         company="cacao",
         supplier_id=supplier.id,
@@ -1108,8 +1112,8 @@ def test_payment_source_rows_preserve_order_and_skip_missing(app_ctx):
     from cacao_accounting.bancos import _payment_source_rows
     from cacao_accounting.database import Party, PurchaseInvoice, SalesOrder, database
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     purchase_invoice = PurchaseInvoice(
         company="cacao",
         supplier_id=supplier.id,
@@ -1151,8 +1155,8 @@ def test_payment_source_rows_filters_note_document_types(app_ctx):
     from cacao_accounting.bancos import _payment_source_rows
     from cacao_accounting.database import Party, PurchaseInvoice, SalesInvoice, database
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     purchase_credit_note = PurchaseInvoice(
         company="cacao",
         supplier_id=supplier.id,
@@ -1213,8 +1217,8 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
-    other_customer = Party(id="candidate_other_customer", party_type="customer", name="Cliente Candidatos Otro")
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    other_customer = Party(id="candidate_other_customer", code="CANDIDATE_OTHER", is_customer=True, name="Cliente Candidatos Otro")
     invoice = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -1265,7 +1269,7 @@ def test_payment_reference_snapshot_is_persisted(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
     invoice = PurchaseInvoice(
@@ -1345,7 +1349,7 @@ def test_payment_to_draft_document_blocked(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
 
@@ -1387,7 +1391,7 @@ def test_payment_to_cancelled_document_blocked(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
 
@@ -1428,7 +1432,7 @@ def test_payment_company_mismatch_blocked(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
 
@@ -1470,7 +1474,7 @@ def test_payment_party_mismatch_blocked(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    parties = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().all()
+    parties = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().all()
     assert len(parties) >= 1
     supplier_a = parties[0]
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
@@ -1480,7 +1484,7 @@ def test_payment_party_mismatch_blocked(app_ctx):
     supplier_b_id = "other_supplier_id"
     supplier_b = database.session.get(Party, supplier_b_id)
     if not supplier_b:
-        supplier_b = Party(id=supplier_b_id, party_type="supplier", name="Otro Proveedor")
+        supplier_b = Party(id=supplier_b_id, code="OTHER_SUPPLIER", is_supplier=True, name="Otro Proveedor")
         database.session.add(supplier_b)
         database.session.commit()
 
@@ -1523,7 +1527,7 @@ def test_payment_detail_view_shows_references(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     _ensure_company_default_accounts("cacao", bank)
 
@@ -1616,7 +1620,7 @@ def test_payment_ignores_exchange_rate_and_external_counter_for_transfer(app_ctx
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     assert bank.default_external_counter_id
 
@@ -1656,7 +1660,7 @@ def test_payment_uses_default_external_counter_for_check(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     counter = database.session.get(ExternalCounter, bank.default_external_counter_id)
     assert counter is not None
@@ -1691,7 +1695,7 @@ def test_payment_detail_view_matches_payment_header_changes(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
     payload = {
         "payment_type": "receive",
@@ -1731,11 +1735,12 @@ def _open_payment(
 ) -> PaymentEntry:
     """Crea un pago aprobado sin referencias para pruebas de conciliacion masiva."""
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    party_type_value = "customer" if party.is_customer else "supplier"
     payment = PaymentEntry(
         company="cacao",
         posting_date=date.today(),
         payment_type=payment_type,
-        party_type=party.party_type,
+        party_type=party_type_value,
         party_id=party.id,
         party_name=party.name,
         bank_account_id=bank.id,
@@ -1757,7 +1762,7 @@ def test_mass_payment_reconciliation_applies_customer_payment_to_multiple_sales_
         compute_payment_unallocated_amount,
     )
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("500.00"), document_no="PAY-AR-001")
     invoices = [
         SalesInvoice(
@@ -1812,7 +1817,7 @@ def test_mass_payment_reconciliation_applies_supplier_payment_to_purchase_invoic
     """La conciliacion masiva aplica un pago abierto contra facturas AP."""
     from cacao_accounting.document_flow.service import apply_payment_reconciliation, compute_payment_unallocated_amount
 
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     payment = _open_payment(party=supplier, payment_type="pay", amount=Decimal("600.00"), document_no="PAY-AP-001")
     invoices = [
         PurchaseInvoice(
@@ -1857,8 +1862,8 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
     """La aplicacion masiva bloquea saldos excedidos y documentos de otro tercero."""
     from cacao_accounting.document_flow.service import DocumentFlowError, apply_payment_reconciliation
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
-    other_customer = Party(id="customer_mass_mismatch", party_type="customer", name="Cliente distinto conciliacion")
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    other_customer = Party(id="customer_mass_mismatch", code="MASS_MISMATCH", is_customer=True, name="Cliente distinto conciliacion")
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("100.00"), document_no="PAY-ERR-001")
     invoice = SalesInvoice(
         company="cacao",
@@ -1922,7 +1927,7 @@ def test_payment_reconciliation_screen_menu_and_candidates_endpoint_render(app_c
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("80.00"), document_no="PAY-UI-001")
     invoice = SalesInvoice(
         company="cacao",

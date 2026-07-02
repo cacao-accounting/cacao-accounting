@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -557,6 +558,7 @@ def _handle_cliente_create(
 ):
     """Maneja la creacion de un nuevo cliente desde el formulario POST."""
     cliente = Party(
+        code=str(ULID()),
         is_customer=True,
         name=form.get("name") or "",
         comercial_name=form.get("comercial_name"),
@@ -569,7 +571,7 @@ def _handle_cliente_create(
         apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
         apply_party_profile(cliente, form)
         database.session.flush()
-        generate_party_code(cliente.id, form.get("company"), "customer")
+        cliente.code = generate_party_code(cliente.id, form.get("company"), "customer")
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
         return redirect("/sales/customer/list")

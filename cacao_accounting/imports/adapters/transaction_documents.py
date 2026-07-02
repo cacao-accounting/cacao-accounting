@@ -190,9 +190,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                     database.select(Party).filter(Party.id == party_id, party_filter)
                 ).scalar_one_or_none()
             else:
-                party = database.session.execute(
-                    database.select(Party).filter_by(id=party_id)
-                ).scalar_one_or_none()
+                party = database.session.execute(database.select(Party).filter_by(id=party_id)).scalar_one_or_none()
         if self.config.party_name_field:
             setattr(header, self.config.party_name_field, party.name if party else None)
 

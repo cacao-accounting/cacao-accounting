@@ -212,6 +212,21 @@ class TestPartySettingsDataclass:
             default_price_list_label="Lista Ventas",
             allow_purchase_invoice_without_order=False,
             allow_purchase_invoice_without_receipt=False,
+            default_currency=None,
+            default_income_account_id=None,
+            default_income_account_label="",
+            default_expense_account_id=None,
+            default_expense_account_label="",
+            default_purchase_account_id=None,
+            default_purchase_account_label="",
+            default_advance_account_id=None,
+            default_advance_account_label="",
+            default_cost_center=None,
+            default_business_unit=None,
+            default_bank_name=None,
+            default_bank_account_no=None,
+            default_bank_iban=None,
+            block_overdue=False,
         )
         assert settings.company == "test"
         assert settings.is_active is True

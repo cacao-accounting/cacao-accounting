@@ -88,7 +88,7 @@ def test_uom_conversion_cycle(app_ctx):
     login(client, "cacao", "cacao")
 
     # 1. Buy 2 BOX (Should be 100 UND in inventory)
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     prc_data = {
         "company": "cacao",
         "supplier_id": supplier.id,
@@ -164,7 +164,7 @@ def test_uom_conversion_cycle(app_ctx):
     assert Decimal("10") in qtys
 
     # 3. Sell 3 DZ from PRINCIPAL (Remaining in PRINCIPAL: 100 - 10 - 36 = 54 UND)
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
 
     dn_data = {
         "company": "cacao",
@@ -437,7 +437,7 @@ def test_average_cost(app_ctx):
     # 4. Sell 5 UND (Should use 150 as cost)
     dn_data = {
         "company": "cacao",
-        "customer_id": database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first().id,
+        "customer_id": database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first().id,
         "posting_date": date.today().isoformat(),
         "remarks": "AVG COST SALE",
         "item_code_0": "AVG-ITEM",
