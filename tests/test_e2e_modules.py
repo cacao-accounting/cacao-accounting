@@ -217,7 +217,7 @@ def test_purchase_happy_path(app_ctx):
     assert rfq.docstatus == 1
 
     # 3. Create Supplier Quotation from RFQ
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     sq_data = {
         "company": "cacao",
         "supplier_id": supplier.id,
@@ -345,7 +345,7 @@ def test_sales_happy_path(app_ctx):
     login(client, "cacao", "cacao")
 
     # 1. Create Sales Request
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     sr_data = {
         "company": "cacao",
         "customer_id": customer.id,
@@ -594,7 +594,7 @@ def test_returns(app_ctx):
 
     # 1. Sales Return (Credit Note)
     # First need a submitted invoice
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao", customer_id=customer.id, posting_date=date.today(), document_type="sales_invoice", docstatus=1
     )
@@ -643,7 +643,7 @@ def test_returns(app_ctx):
     check_ledger_entries(cn.id)
 
     # 2. Purchase Return
-    supplier = database.session.execute(database.select(Party).filter_by(party_type="supplier")).scalars().first()
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     pi = PurchaseInvoice(
         company="cacao", supplier_id=supplier.id, posting_date=date.today(), document_type="purchase_invoice", docstatus=1
     )
@@ -693,7 +693,7 @@ def test_partial_and_over_deliveries(app_ctx):
     login(client, "cacao", "cacao")
 
     # 1. Partial Delivery
-    customer = database.session.execute(database.select(Party).filter_by(party_type="customer")).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     so = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
     database.session.add(so)
     database.session.flush()
