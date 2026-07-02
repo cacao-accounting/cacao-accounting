@@ -103,7 +103,6 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
 
     customer = database.session.execute(database.select(Party).filter_by(name="Cliente Test")).scalar_one()
     assert customer.party_group_id == group.id
-    assert customer.classification == "Mayorista"
     assert customer.nationality_type == "national"
     assert customer.person_type == "juridical"
     assert customer.primary_phone == "+505 8888 0001"

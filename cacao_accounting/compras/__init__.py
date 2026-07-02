@@ -42,6 +42,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -740,6 +741,7 @@ def _handle_supplier_create(
 ):
     """Maneja la creacion de un nuevo proveedor desde el formulario POST."""
     proveedor = Party(
+        code=str(ULID()),
         is_supplier=True,
         name=form.get("name") or "",
         comercial_name=form.get("comercial_name"),
@@ -751,7 +753,7 @@ def _handle_supplier_create(
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
         database.session.flush()
-        generate_party_code(proveedor.id, selected_company, "supplier")
+        proveedor.code = generate_party_code(proveedor.id, selected_company, "supplier")
         company = form.get("company") or None
         if company:
             upsert_party_company_settings(
