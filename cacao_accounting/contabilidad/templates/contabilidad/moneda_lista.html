@@ -12,31 +12,86 @@
 </nav>
 
 {% if entidades_creadas %}
-<div class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-currency-exchange"></i> Listado de Monedas.</h5>
-    <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.nueva_unidad') }}" role="button">
-      <i class="bi bi-plus-lg me-1"></i>Nueva Moneda
+<div class="ca-page-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-currency-exchange me-2" style="color:#78BF30"></i>{{ _('Monedas') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('contabilidad.nueva_moneda') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva Moneda') }}
     </a>
   </div>
-  <table class="ca-table">
-    <caption style="display: none;">Listado de monedas.</caption>
-    <thead>
-      <tr {%- if TESTING -%} data-render-currency-ok="true" {%- endif -%}>
-        <th scope="col">Código</th>
-        <th scope="col">Nombre</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for moneda in consulta.items -%}
-      <tr>
-        <td>{{ moneda.code }}</td>
-        <td>{{ moneda.name }}</td>
-      </tr>
-      {%- endfor %}
-    </tbody>
-  </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.monedas") }}</div>
+</div>
+
+<div class="ca-card mb-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Filtros') }}</h5>
+  </div>
+  <div class="p-3">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="{{ _('Buscar por nombre o código...') }}" value="{{ request.args.get('search', '') }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Filtrar') }}</button>
+        <a href="{{ url_for('contabilidad.monedas') }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0">{{ _('Listado de Monedas') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none;">{{ _('Listado de monedas') }}</caption>
+      <thead>
+        <tr {%- if TESTING -%} data-render-currency-ok="true" {%- endif -%}>
+          <th scope="col">{{ _('Código') }}</th>
+          <th scope="col">{{ _('Nombre') }}</th>
+          <th scope="col" class="text-center">{{ _('Predeterminada') }}</th>
+          <th scope="col" class="text-center">{{ _('Estado') }}</th>
+          <th scope="col" class="text-center">{{ _('Acciones') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for moneda in consulta.items -%}
+        <tr>
+          <td><a class="fw-bold" href="{{ url_for('contabilidad.moneda', code=moneda.code) }}">{{ moneda.code }}</a></td>
+          <td>{{ moneda.name }}</td>
+          <td class="text-center">
+            {% if moneda.default %}
+            <i class="bi bi-star-fill text-warning"></i>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if moneda.active %}
+            <span class="badge bg-success">{{ _('Activo') }}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ _('Inactivo') }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <form method="post" action="{{ url_for('contabilidad.currency_toggle_active', code=moneda.code) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-xs btn-outline-{% if moneda.active %}danger{% else %}success{% endif %}"
+                      title="{{ _('Deshabilitar') if moneda.active else _('Habilitar') }}">
+                <i class="bi bi-{% if moneda.active %}pause-circle{% else %}play-circle{% endif %}"></i>
+                {{ _('Deshabilitar') if moneda.active else _('Habilitar') }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="ca-card-footer">
+    {{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.monedas") }}
+  </div>
 </div>
 {% else %}
 {{ macros.crear_nueva_entidad() }}

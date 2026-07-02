@@ -1,5 +1,11 @@
+{% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -17,28 +23,111 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Cuentas Bancarias</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Cajas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('bancos.bancos_banco_lista') }}">Bancos</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_cuenta_bancaria_lista') }}">Cuentas Bancarias</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_reglas_matching') }}">{{ _("Reglas de Matching") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Bancos</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Cuentas Bancarias</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Movimientos de Caja</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="#">Transferencias Bancarias</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Conciliaciones</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('bancos.bancos_pago_lista') }}">Entradas de Pago</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_transferencia_lista') }}">Transferencias Bancarias</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_nota_debito_lista') }}">Notas de Débito Bancarias</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_nota_credito_lista') }}">Notas de Crédito Bancarias</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_transaccion_lista') }}">Transacciones Bancarias</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_extracto_importar') }}">{{ _("Importar Extracto Bancario") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='importar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_conciliacion_bancaria') }}">{{ _("Conciliación Bancaria") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.bancos_conciliacion_facturas_pagos') }}">{{ _("Conciliación Facturas/Pagos") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Entradas de Pago</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Transacciones Bancarias</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Saldo de Cuentas</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Libro de Bancos</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('reportes.bank_balance_summary') }}">Resumen de Saldos Bancarios</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.bank_movement') }}">Detalle de Movimiento Bancario</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

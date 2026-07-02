@@ -5,12 +5,14 @@
 build
 twine
 wheel
+packaging>=26.0
 
 # Control de calidad python
 black
 flake8
 ruff
 bandit
+pydocstyle
 
 # Cobertura de código
 coverage

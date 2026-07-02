@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.presupuestos.listar') }}" class="link-dark">{{ _("Presupuestos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ budget.budget_code }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h4><i class="bi bi-wallet2 me-2"></i>{{ budget.name }}</h4>
+    <small class="text-muted">{{ budget.budget_code }} | {{ budget.company }} | {{ budget.fiscal_year_id }}</small>
+  </div>
+  <div class="d-flex gap-2">
+    {% if budget.status == 'draft' %}
+      {% if permisos.editar %}
+      <a href="{{ url_for('contabilidad.presupuestos.editar', budget_id=budget.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-pencil"></i> {{ _("Editar Encabezado") }}
+      </a>
+      {% endif %}
+      {% if permisos.importar %}
+      <a href="{{ url_for('contabilidad.presupuestos.importar', budget_id=budget.id) }}" class="btn btn-outline-success">
+        <i class="bi bi-file-earmark-spreadsheet"></i> {{ _("Importar Líneas") }}
+      </a>
+      {% endif %}
+      {% if permisos.autorizar %}
+      <form action="{{ url_for('contabilidad.presupuestos.aprobar', budget_id=budget.id) }}" method="post" onsubmit="return confirm('{{ _('¿Seguro que desea aprobar este presupuesto? Ya no podrá editar líneas.') }}');">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-circle"></i> {{ _("Aprobar") }}
+        </button>
+      </form>
+      {% endif %}
+    {% elif budget.status == 'approved' %}
+      {% if permisos.cerrar %}
+      <form action="{{ url_for('contabilidad.presupuestos.cerrar', budget_id=budget.id) }}" method="post" onsubmit="return confirm('{{ _('¿Seguro que desea cerrar este presupuesto?') }}');">
+        <button type="submit" class="btn btn-outline-info">
+          <i class="bi bi-lock"></i> {{ _("Cerrar") }}
+        </button>
+      </form>
+      {% endif %}
+      {% if permisos.reportes %}
+      <a href="{{ url_for('contabilidad.presupuestos.reporte', budget_id=budget.id, company=budget.company, fiscal_year_id=budget.fiscal_year_id, ledger_id=budget.ledger_id) }}" class="btn btn-primary">
+        <i class="bi bi-bar-chart-fill"></i> {{ _("Real vs Presupuesto") }}
+      </a>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-lg-3">
+    <div class="ca-card p-3">
+      <h6>{{ _("Detalles") }}</h6>
+      <hr class="my-2">
+      <p class="mb-1"><small><strong>{{ _("Estado") }}:</strong></small><br>
+        <span class="badge bg-{{ 'secondary' if budget.status == 'draft' else 'success' if budget.status == 'approved' else 'info' }}">
+          {{ _("Borrador") if budget.status == "draft" else _("Aprobado") if budget.status == "approved" else _("Cerrado") }}
+        </span>
+      </p>
+      <p class="mb-1"><small><strong>{{ _("Libro") }}:</strong></small><br>{{ budget.ledger_id }}</p>
+      <p class="mb-1"><small><strong>{{ _("Moneda") }}:</strong></small><br>{{ budget.currency_id }}</p>
+      {% if budget.description %}
+      <p class="mb-1"><small><strong>{{ _("Descripción") }}:</strong></small><br>{{ budget.description }}</p>
+      {% endif %}
+    </div>
+
+    <div class="ca-card mt-3 p-3">
+      <h6>{{ _("Totales por Período") }}</h6>
+      <p class="text-muted small mb-2">{{ _("Esta vista detalla el monto asignado a cada período del presupuesto para facilitar el seguimiento de su ejecución.") }}</p>
+      <hr class="my-2">
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <caption>{{ _("Totales por Período") }}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ _("Período") }}</th>
+              <th scope="col" class="text-end">{{ _("Monto") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in periods %}
+            <tr>
+              <td><small>{{ p.name }}</small></td>
+              <td class="text-end"><small>{{ totals.get(p.id, 0)|format_currency }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    <div class="ca-card">
+      <div class="ca-card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{{ _("Líneas Presupuestarias") }}</h5>
+        {% if budget.status == 'draft' and permisos.crear %}
+        <a href="{{ url_for('contabilidad.presupuestos.nueva_linea', budget_id=budget.id) }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> {{ _("Agregar Línea") }}
+        </a>
+        {% endif %}
+      </div>
+      <div class="table-responsive">
+        <table class="ca-table">
+          <caption>{{ _("Líneas Presupuestarias") }}</caption>
+          <thead>
+            <tr>
+              <th>{{ _("Cuenta") }}</th>
+              <th>{{ _("Centro de Costo") }}</th>
+              <th>{{ _("Dimensiones") }}</th>
+              <th>{{ _("Período") }}</th>
+              <th class="text-end">{{ _("Monto") }}</th>
+              {% if budget.status == 'draft' %}
+              <th>{{ _("Acciones") }}</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for line, acc, cc, per, unit, project in lines %}
+            <tr>
+              <td>{{ acc.code }} - {{ acc.name }}</td>
+              <td>{{ cc.code }} - {{ cc.name }}</td>
+              <td>
+                {% if unit %}<span class="badge bg-light text-dark"><i class="bi bi-building"></i> {{ unit.name }}</span>{% endif %}
+                {% if project %}<span class="badge bg-light text-dark"><i class="bi bi-diagram-3"></i> {{ project.name }}</span>{% endif %}
+              </td>
+              <td>{{ per.name }}</td>
+              <td class="text-end">{{ line.amount|format_currency }}</td>
+              {% if budget.status == 'draft' %}
+              <td>
+                <div class="btn-group btn-group-sm">
+                  {% if permisos.editar %}
+                  <a href="{{ url_for('contabilidad.presupuestos.editar_linea', line_id=line.id) }}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                  {% endif %}
+                  {% if permisos.eliminar %}
+                  <form action="{{ url_for('contabilidad.presupuestos.eliminar_linea', line_id=line.id) }}" method="post" style="display:inline;" onsubmit="return confirm('{{ _('¿Eliminar línea?') }}');">
+                    <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+              {% endif %}
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center">{{ _("No hay líneas registradas.") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

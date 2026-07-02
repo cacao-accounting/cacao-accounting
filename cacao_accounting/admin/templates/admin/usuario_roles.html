@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
+        <i class="bi bi-house"></i> Inicio
+      </a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.lista_usuarios') }}" class="link-dark">Usuarios</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Asignar Roles</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-award me-2" style="color:#78BF30"></i>Roles para {{ usuario.user }}</h4>
+</div>
+
+<div class="ca-card p-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 small">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="post" id="roles-form">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <label class="form-label mb-0">{{ form.roles.label.text }}</label>
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="setAllRoles(true)">Seleccionar todo</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setAllRoles(false)">Deseleccionar todo</button>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        {% for subfield in form.roles %}
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="form-check">
+              {{ subfield(class="form-check-input", id=subfield.id) }}
+              <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% for error in form.roles.errors %}
+        <div class="text-danger small mt-2">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">Guardar roles</button>
+      <a href="{{ url_for('admin.lista_usuarios') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+    </div>
+  </form>
+
+  <script>
+    function setAllRoles(value) {
+      document.querySelectorAll('#roles-form .form-check-input').forEach(function(element) {
+        element.checked = value;
+      });
+    }
+  </script>
+</div>
+
+{% endblock %}

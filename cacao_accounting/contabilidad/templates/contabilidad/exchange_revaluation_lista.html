@@ -1,0 +1,66 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Revalorización cambiaria') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-currency-exchange"></i> {{ _('Revalorización cambiaria') }}</h5>
+    {% if acceso.crear %}
+    <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nueva_revalorizacion_cambiaria') }}">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva') }}
+    </a>
+    {% endif %}
+  </div>
+  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por número, compañía o moneda...")) }}
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption>{{ _('Historial de revalorizaciones cambiarias') }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _('Número') }}</th>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Mes') }}</th>
+          <th>{{ _('Año') }}</th>
+          <th>{{ _('Fecha') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th class="text-end">{{ _('Total ganancia') }}</th>
+          <th class="text-end">{{ _('Total pérdida') }}</th>
+          <th class="text-end">{{ _('Procesados') }}</th>
+          <th class="text-end">{{ _('Afectados') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in consulta.items %}
+        <tr>
+          <td><a href="{{ url_for('contabilidad.ver_revalorizacion_cambiaria', identifier=run.id) }}">{{ run.document_no or run.id }}</a></td>
+          <td>{{ run.company }}</td>
+          <td>{{ run.month }}</td>
+          <td>{{ run.year }}</td>
+          <td>{{ run.run_date or run.posting_date }}</td>
+          <td><span class="badge text-bg-secondary">{{ run.status }}</span></td>
+          <td class="text-end">{{ "{:,.2f}".format(run.total_gain or 0) }}</td>
+          <td class="text-end">{{ "{:,.2f}".format(run.total_loss or 0) }}</td>
+          <td class="text-end">{{ run.processed_documents_count or 0 }}</td>
+          <td class="text-end">{{ run.affected_documents_count or 0 }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="text-center text-muted py-4">{{ _('No hay revalorizaciones registradas.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.revalorizaciones_cambiarias") }}</div>
+</div>
+
+{% endblock %}

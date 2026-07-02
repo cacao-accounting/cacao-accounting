@@ -1,0 +1,123 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: contabilidad/naming_series_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Series de Numeracion</li>
+  </ol>
+</nav>
+
+{% if entidades_creadas %}
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-hash"></i> Series de Numeracion (NamingSeries)</h5>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.naming_series_new') }}">
+      <i class="bi bi-plus-lg me-1"></i>Nueva Serie
+    </a>
+  </div>
+
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <div class="col-auto">
+      <label class="form-label" for="company">Compania</label>
+      <select class="form-select form-select-sm" id="company" name="company" style="min-width:180px;">
+        <option value="">— Todas —</option>
+        {% for e in entidades %}
+        <option value="{{ e.code }}" {% if company_filter == e.code %}selected{% endif %}>{{ e.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+    </div>
+  </form>
+
+  <table class="ca-table">
+    <caption style="display: none;">Listado de series de numeracion.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nombre</th>
+        <th scope="col">Tipo de Documento</th>
+        <th scope="col">Compania</th>
+        <th scope="col">Plantilla</th>
+        <th scope="col">Ultimo Interno</th>
+        <th scope="col">Padding</th>
+        <th scope="col">Reinicio</th>
+        <th scope="col">Contadores Externos</th>
+        <th scope="col">Activa</th>
+        <th scope="col">Predeterminada</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.entity_type }}</td>
+        <td>{{ item.company or '— Global —' }}</td>
+        <td><code>{{ item.prefix_template }}</code></td>
+        {% set sequence = series_sequences.get(item.id) %}
+        <td>{{ sequence.current_value if sequence else '—' }}</td>
+        <td>{{ sequence.padding if sequence else '—' }}</td>
+        <td>{{ sequence.reset_policy if sequence else '—' }}</td>
+        <td>{{ external_counter_counts.get(item.id, 0) }}</td>
+        <td>
+          {% if item.is_active %}
+          <span class="badge text-bg-success">Activa</span>
+          {% else %}
+          <span class="badge text-bg-secondary">Inactiva</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.is_default %}
+          <span class="badge text-bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>Predeterminada</span>
+          {% else %}
+          <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{{ url_for('contabilidad.naming_series_edit', series_id=item.id) }}" class="btn btn-xs btn-outline-secondary" title="Editar serie">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <a href="{{ url_for('contabilidad.naming_series_delete', series_id=item.id) }}" class="btn btn-xs btn-outline-danger" title="Eliminar serie">
+              <i class="bi bi-trash"></i>
+            </a>
+            <form method="post" action="{{ url_for('contabilidad.naming_series_toggle_default', series_id=item.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-xs btn-outline-warning"
+                      title="{{ 'Quitar predeterminada' if item.is_default else 'Marcar como predeterminada' }}">
+                <i class="bi bi-star{% if item.is_default %}-fill{% endif %}"></i>
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('contabilidad.naming_series_toggle_active', series_id=item.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-xs btn-outline-{% if item.is_active %}danger{% else %}success{% endif %}"
+                      title="{{ 'Desactivar' if item.is_active else 'Activar' }}">
+                <i class="bi bi-{% if item.is_active %}pause-circle{% else %}play-circle{% endif %}"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-muted text-center">No hay series registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.naming_series_list") }}</div>
+</div>
+{% else %}
+{{ macros.crear_nueva_entidad() }}
+{% endif %}
+
+{% endblock %}

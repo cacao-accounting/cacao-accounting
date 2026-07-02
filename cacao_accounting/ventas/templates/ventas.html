@@ -1,5 +1,11 @@
+{% set acceso = permisos(modulo=id_modulo("sales"), usuario=usuario.id) %}
+{% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas.html"></div>
+{%- endif -%}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -17,29 +23,119 @@
 
 <div class="ca-module-grid">
 
+  {# ── Columna 1: Configuración ─────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración</h5>
+    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Clientes</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Lista de Precios</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Condiciones de Venta</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.configurar %}
+      <li>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Clientes</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('admin.lista_grupos_terceros', group_type='customer') }}">Tipos de Cliente</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">Contactos y Direcciones de Clientes</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Clientes</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Tipos de Cliente</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Contactos y Direcciones de Clientes</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 2: Registros ─────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Órdenes de Venta</a><span class="ca-status-dot ca-status-warning" title="Hay registros pendientes de aprobación"></span></li>
-      <li><a href="#">Facturas</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
-      <li><a href="#">Notas de Crédito</a><span class="ca-status-dot ca-status-ok" title="Configurado correctamente"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('ventas.ventas_pedido_venta_lista') }}">Pedidos de Venta</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_orden_venta_lista') }}">Órdenes de Venta</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_cotizacion_lista') }}">Cotizaciones</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_entrega_lista') }}">Notas de Entrega</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}">Facturas de Venta</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Órdenes de Venta</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Notas de Entrega</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Facturas de Venta</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 
+  {# ── Columna 3: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes</h5>
+    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Ventas por Cliente</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
-      <li><a href="#">Cuentas por Cobrar</a><span class="ca-status-dot ca-status-ok" title="Disponible"></span></li>
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('reportes.ar_aging') }}">Aging de Cuentas por Cobrar</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.accounts_receivable') }}">Cuentas por Cobrar</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.sales_by_customer') }}">Ventas por Cliente</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.sales_by_item') }}">Ventas por Artículo</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('reportes.gross_margin') }}">Margen Bruto</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Reportes</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
+      </li>
+      {% endif %}
+
     </ul>
   </div>
 

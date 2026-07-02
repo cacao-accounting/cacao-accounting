@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Conciliación de Compras") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-arrow-left-right me-2" style="color:#78BF30"></i>{{ _("Configuración de Conciliación de Compras") }}</h4>
+  <p class="text-muted small">
+    {{ _("Define el tipo de matching (2-way / 3-way) y las tolerancias de precio y cantidad por compañía. Los parámetros se aplican al motor de conciliación sin alterar datos históricos.") }}
+  </p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-3">
+
+  {# — Formulario nueva/editar configuracion — #}
+  <div class="col-lg-5">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-sliders me-1"></i>{{ _("Nueva configuración") }}</h6>
+      </div>
+      <div class="p-3">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Compañía") }}</label>
+            <select name="company" class="form-select" required>
+              <option value="">— {{ _("Seleccionar") }} —</option>
+              {% for company in companies %}
+              <option value="{{ company.code }}">{{ company.code }} – {{ company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Tipo de Matching") }}</label>
+            <select name="matching_type" class="form-select">
+              <option value="3-way">{{ _("3-way — OC + Recepción + Factura (recomendado)") }}</option>
+              <option value="2-way">{{ _("2-way — OC + Factura") }}</option>
+            </select>
+            <div class="form-text">{{ _("El modo 3-way es el más estricto y se configura por defecto al crear una compañía.") }}</div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Tipo tolerancia precio") }}</label>
+              <select name="price_tolerance_type" class="form-select">
+                <option value="percentage">%</option>
+                <option value="absolute">{{ _("Absoluto") }}</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Valor tolerancia precio") }}</label>
+              <input type="number" name="price_tolerance_value" class="form-control" value="0" min="0" step="0.0001">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Tipo tolerancia cantidad") }}</label>
+              <select name="qty_tolerance_type" class="form-select">
+                <option value="percentage">%</option>
+                <option value="absolute">{{ _("Absoluto") }}</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Valor tolerancia cantidad") }}</label>
+              <input type="number" name="qty_tolerance_value" class="form-control" value="0" min="0" step="0.0001">
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="require_purchase_order" id="req_po" checked>
+              <label class="form-check-label" for="req_po">{{ _("Requerir Orden de Compra") }}</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="bridge_account_required" id="req_bridge" checked>
+              <label class="form-check-label" for="req_bridge">{{ _("Requerir cuenta puente configurada") }}</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="auto_reconcile" id="auto_rec" checked>
+              <label class="form-check-label" for="auto_rec">{{ _("Conciliar automáticamente al aprobar factura") }}</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="allow_price_difference" id="allow_price">
+              <label class="form-check-label" for="allow_price">{{ _("Permitir diferencias de precio (genera ajuste)") }}</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary mt-2">
+            <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# — Listado de configuraciones existentes — #}
+  <div class="col-lg-7">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-list-ul me-1"></i>{{ _("Configuraciones por compañía") }}</h6>
+      </div>
+      <div class="p-2">
+        {% if configs %}
+        <table class="ca-table">
+          <caption style="display:none;">{{ _("Configuraciones de conciliacion") }}</caption>
+          <thead>
+            <tr>
+              <th>{{ _("Compañía") }}</th>
+              <th>{{ _("Matching") }}</th>
+              <th>{{ _("Tol. Precio") }}</th>
+              <th>{{ _("Tol. Cant.") }}</th>
+              <th>{{ _("Opciones") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cfg in configs %}
+            <tr>
+              <td><strong>{{ cfg.company }}</strong></td>
+              <td>
+                {% if cfg.matching_type == "3-way" %}
+                <span class="badge bg-success">3-way</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">2-way</span>
+                {% endif %}
+              </td>
+              <td>{{ cfg.price_tolerance_value }} {{ cfg.price_tolerance_type }}</td>
+              <td>{{ cfg.qty_tolerance_value }} {{ cfg.qty_tolerance_type }}</td>
+              <td class="small text-muted">
+                {% if cfg.require_purchase_order %}<i class="bi bi-check-circle-fill text-success" title="{{ _('Requiere OC') }}"></i>{% endif %}
+                {% if cfg.bridge_account_required %}<i class="bi bi-link-45deg text-info ms-1" title="{{ _('Requiere cuenta puente') }}"></i>{% endif %}
+                {% if cfg.auto_reconcile %}<i class="bi bi-lightning-fill text-warning ms-1" title="{{ _('Auto-conciliar') }}"></i>{% endif %}
+                {% if cfg.allow_price_difference %}<i class="bi bi-percent text-secondary ms-1" title="{{ _('Permite diferencia precio') }}"></i>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted text-center">
+          <i class="bi bi-info-circle me-1"></i>{{ _("No hay configuraciones registradas. Al crear una compañía se aplica el modo más estricto automáticamente.") }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

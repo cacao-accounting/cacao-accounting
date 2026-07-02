@@ -1,0 +1,201 @@
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Datos básicos") }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _("Nacionalidad") }}</label><p>{{ detail.nationality_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Tipo de persona") }}</label><p>{{ detail.person_type_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Nombre fiscal") }}</label><p>{{ registro.fiscal_name or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Teléfono principal") }}</label><p>{{ detail.primary_phone or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Correo principal") }}</label><p>{{ detail.primary_email or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Página web") }}</label><p>{{ detail.website or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Dirección principal") }}</label><p>{{ detail.primary_address_label or '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Cumplimiento legal") }}</h6>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _("Representante legal") }}</label><p>{{ registro.legal_representative_name or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Documento del representante") }}</label><p>{{ registro.legal_representative_id or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Cargo del representante") }}</label><p>{{ registro.legal_representative_position or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Correo del representante") }}</label><p>{{ registro.legal_representative_email or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Teléfono del representante") }}</label><p>{{ registro.legal_representative_phone or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Fecha de constitución") }}</label><p>{{ registro.legal_constitution_date.strftime('%Y-%m-%d') if registro.legal_constitution_date else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Lugar de constitución") }}</label><p>{{ registro.legal_constitution_place or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Número de registro") }}</label><p>{{ registro.legal_registration_number or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Dirección para notificaciones legales") }}</label><p>{{ registro.legal_notification_address or detail.primary_address_label or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _("Observaciones legales") }}</label><p>{{ registro.legal_notes or '-' }}</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="p-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="text-muted small">{{ _("Secciones del tercero") }}</span>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-company-settings">{{ _("Configuracion por compania") }}</a>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-contacts">{{ _("Contactos") }} <span class="badge text-bg-light ms-1">{{ detail.contacts | length }}</span></a>
+      <a class="btn btn-outline-secondary btn-sm" href="#party-addresses">{{ _("Direcciones") }} <span class="badge text-bg-light ms-1">{{ detail.addresses | length }}</span></a>
+    </div>
+  </div>
+</div>
+
+<div class="ca-card mt-3" id="party-contacts">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Contactos") }}</h6>
+  </div>
+  <div class="p-3">
+    <form method="post" action="{{ contact_create_url }}" class="row g-2 mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-2"><input class="form-control form-control-sm" name="first_name" placeholder="{{ _('Nombre') }}" required></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="last_name" placeholder="{{ _('Apellido') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="email" placeholder="{{ _('Correo') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="phone" placeholder="{{ _('Telefono') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="mobile" placeholder="{{ _('Movil') }}"></div>
+      <div class="col-md-1"><input class="form-control form-control-sm" name="role" placeholder="{{ _('Rol') }}"></div>
+      <div class="col-md-1"><button class="btn btn-primary btn-sm" type="submit">{{ _("Agregar") }}</button></div>
+    </form>
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Contactos del tercero") }}</caption>
+      <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Correo") }}</th><th>{{ _("Telefono") }}</th><th>{{ _("Rol") }}</th><th>{{ _("Acciones") }}</th></tr></thead>
+      <tbody>
+        {% for row in detail.contacts %}
+        <tr>
+          <td>{{ row.contact.first_name }} {{ row.contact.last_name or "" }}</td>
+          <td>{{ row.contact.email or "-" }}</td>
+          <td>{{ row.contact.phone or row.contact.mobile or "-" }}</td>
+          <td>{{ row.role or "-" }}</td>
+          <td class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-link btn-sm p-0" type="button" data-bs-toggle="collapse" data-bs-target="#contact-{{ row.link_id }}">{{ _("Editar") }}</button>
+            <form method="post" action="{{ url_for(contact_deactivate_endpoint, **{party_param: registro.id, 'link_id': row.link_id}) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") }}</button>
+            </form>
+          </td>
+        </tr>
+        <tr class="collapse" id="contact-{{ row.link_id }}">
+          <td colspan="5">
+            <form method="post" action="{{ url_for(contact_edit_endpoint, **{party_param: registro.id, 'link_id': row.link_id}) }}" class="row g-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="col-md-2"><input class="form-control form-control-sm" name="first_name" value="{{ row.contact.first_name }}" required></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="last_name" value="{{ row.contact.last_name or '' }}"></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="email" value="{{ row.contact.email or '' }}"></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="phone" value="{{ row.contact.phone or '' }}"></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="mobile" value="{{ row.contact.mobile or '' }}"></div>
+              <div class="col-md-1"><input class="form-control form-control-sm" name="role" value="{{ row.role }}"></div>
+              <div class="col-md-1"><button class="btn btn-primary btn-sm" type="submit">{{ _("Guardar") }}</button></div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">{{ _("No hay contactos registrados.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ca-card mt-3" id="party-addresses">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Direcciones") }}</h6>
+  </div>
+  <div class="p-3">
+    <form method="post" action="{{ address_create_url }}" class="row g-2 mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><input class="form-control form-control-sm" name="address_line1" placeholder="{{ _('Direccion') }}" required></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="city" placeholder="{{ _('Ciudad') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="state" placeholder="{{ _('Departamento') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" name="country" placeholder="{{ _('Pais') }}"></div>
+      <div class="col-md-1"><input class="form-control form-control-sm" name="address_type" placeholder="{{ _('Tipo') }}"></div>
+      <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_primary" id="new-primary"><label class="form-check-label" for="new-primary">{{ _("Principal") }}</label></div>
+      <div class="col-md-1"><button class="btn btn-primary btn-sm" type="submit">{{ _("Agregar") }}</button></div>
+    </form>
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Direcciones del tercero") }}</caption>
+      <thead><tr><th>{{ _("Direccion") }}</th><th>{{ _("Ciudad") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Principal") }}</th><th>{{ _("Acciones") }}</th></tr></thead>
+      <tbody>
+        {% for row in detail.addresses %}
+        <tr>
+          <td>{{ row.address.address_line1 }}</td>
+          <td>{{ row.address.city or "-" }}</td>
+          <td>{{ row.address_type or "-" }}</td>
+          <td>{{ _("Si") if row.is_primary else _("No") }}</td>
+          <td class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-link btn-sm p-0" type="button" data-bs-toggle="collapse" data-bs-target="#address-{{ row.link_id }}">{{ _("Editar") }}</button>
+            <form method="post" action="{{ url_for(address_deactivate_endpoint, **{party_param: registro.id, 'link_id': row.link_id}) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") }}</button>
+            </form>
+          </td>
+        </tr>
+        <tr class="collapse" id="address-{{ row.link_id }}">
+          <td colspan="5">
+            <form method="post" action="{{ url_for(address_edit_endpoint, **{party_param: registro.id, 'link_id': row.link_id}) }}" class="row g-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="col-md-3"><input class="form-control form-control-sm" name="address_line1" value="{{ row.address.address_line1 }}" required></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="address_line2" value="{{ row.address.address_line2 or '' }}"></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" name="city" value="{{ row.address.city or '' }}"></div>
+              <div class="col-md-1"><input class="form-control form-control-sm" name="state" value="{{ row.address.state or '' }}"></div>
+              <div class="col-md-1"><input class="form-control form-control-sm" name="country" value="{{ row.address.country or '' }}"></div>
+              <div class="col-md-1"><input class="form-control form-control-sm" name="address_type" value="{{ row.address_type }}"></div>
+              <div class="col-md-1 form-check"><input class="form-check-input" type="checkbox" name="is_primary" id="primary-{{ row.link_id }}" {% if row.is_primary %}checked{% endif %}><label class="form-check-label" for="primary-{{ row.link_id }}">{{ _("Principal") }}</label></div>
+              <div class="col-md-1"><button class="btn btn-primary btn-sm" type="submit">{{ _("Guardar") }}</button></div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">{{ _("No hay direcciones registradas.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ca-card mt-3" id="party-company-settings">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Configuracion por compania") }}</h6>
+  </div>
+  <div class="p-3">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Configuracion por compania del tercero") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Compania") }}</th>
+          <th>{{ _("Activo") }}</th>
+          <th>{{ _("Moneda") }}</th>
+          <th>{{ _("Cuenta AR") }}</th>
+          <th>{{ _("Cuenta AP") }}</th>
+          <th>{{ _("Lista de Precio") }}</th>
+          <th>{{ _("Regla Fiscal") }}</th>
+          <th>{{ _("Sin OC") }}</th>
+          <th>{{ _("Sin recibo") }}</th>
+          <th>{{ _("Bloqueado") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for settings in detail.company_settings %}
+        <tr>
+          <td>{{ settings.company_label or settings.company }}</td>
+          <td>{{ _("Si") if settings.is_active else _("No") }}</td>
+          <td>{{ settings.default_currency or "-" }}</td>
+          <td>{{ settings.receivable_account_label or "-" }}</td>
+          <td>{{ settings.payable_account_label or "-" }}</td>
+          <td>{{ settings.default_price_list_label or "-" }}</td>
+          <td>{{ settings.default_tax_rule_label or "-" }}</td>
+          <td>{{ _("Si") if settings.allow_purchase_invoice_without_order else _("No") }}</td>
+          <td>{{ _("Si") if settings.allow_purchase_invoice_without_receipt else _("No") }}</td>
+          <td>{{ _("Si") if settings.block_overdue else _("No") }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10">{{ _("No hay configuracion por compania.") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

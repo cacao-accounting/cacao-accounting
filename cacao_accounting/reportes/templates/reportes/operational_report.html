@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "reportes/report_macros.html" import smart_select_field %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ module_home_url }}" class="link-dark">{{ module_home_label }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ report_title }}</li>
+  </ol>
+</nav>
+
+<div x-data="{ collapsed: false }" class="ca-report-layout">
+  <aside class="ca-report-filters ca-card" :class="{ 'ca-report-filters-collapsed': collapsed }">
+    <div class="ca-card-header d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title mb-0">{{ _("Filtros") }}</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapsed = !collapsed">
+        <span x-show="!collapsed">{{ _("Colapsar") }}</span>
+        <span x-show="collapsed">{{ _("Expandir") }}</span>
+      </button>
+    </div>
+    <div class="p-3" x-show="!collapsed">
+      <form method="get" class="d-grid gap-2">
+        {{ smart_select_field("Compañía", "company", "company", filter_state.company or '', "report-company") }}
+
+        {% if filter_mode in ("bank_movement", "bank_balance_summary") %}
+          {{ smart_select_field("Cuenta bancaria", "bank_account_id", "bank_account", filter_state.bank_account_id or '', "report-bank-account", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {% endif %}
+
+        {% if filter_mode in ("kardex", "inventory_existence") %}
+          {{ smart_select_field("Artículo", "item_code", "item", filter_state.item_code or '', "report-item-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field("Bodega", "warehouse", "warehouse", filter_state.warehouse or '', "report-warehouse", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {% endif %}
+
+        {% if filter_mode in ("accounts_payable", "ap_aging") %}
+          {{ smart_select_field("Proveedor", "party_id", "supplier", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {% elif filter_mode in ("accounts_receivable", "ar_aging") %}
+          {{ smart_select_field("Cliente", "party_id", "customer", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {% endif %}
+
+        {% if filter_mode in ("bank_movement", "kardex") %}
+          <label class="form-label mb-0">
+            {{ _("Fecha desde") }}
+            <input class="form-control" type="date" name="date_from" value="{{ filter_state.date_from or '' }}">
+          </label>
+          <label class="form-label mb-0">
+            {{ _("Fecha hasta") }}
+            <input class="form-control" type="date" name="date_to" value="{{ filter_state.date_to or '' }}">
+          </label>
+        {% else %}
+          <label class="form-label mb-0">
+            {{ _("Fecha clave") }}
+            <input class="form-control" type="date" name="as_of_date" value="{{ filter_state.as_of_date or '' }}">
+          </label>
+        {% endif %}
+
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
+          <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <section class="ca-report-results ca-card">
+    <div class="ca-card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+      <h5 class="ca-card-title mb-0">{{ report_title }}</h5>
+      <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-success" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=xlsx">{{ _("Exportar Excel") }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=csv">{{ _("Exportar CSV") }}</a>
+      </div>
+    </div>
+    <div class="ca-report-context">
+      {% for key, value in context_summary.items() %}
+      <div><strong>{{ _(key.replace("_", " ").title()) }}:</strong> {{ value }}</div>
+      {% endfor %}
+    </div>
+    <div class="ca-report-table-wrapper">
+      <table class="ca-table ca-report-table">
+        <caption style="display:none;">{{ report_title }}</caption>
+        <thead>
+          <tr>
+            {% for column in columns %}
+            <th scope="col" class="{% if column in right_align_columns %}text-end{% endif %}">{{ display_headers.get(column, column) }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in display_rows %}
+          <tr>
+            {% for column in columns %}
+            <td class="{% if column in right_align_columns %}text-end{% endif %}">{{ row.get(column, "—") }}</td>
+            {% endfor %}
+          </tr>
+          {% else %}
+          <tr><td colspan="{{ columns|length if columns else 1 }}">{{ _("No hay registros para los filtros seleccionados.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="ca-report-totals-sticky">
+      {% for key, value in totals.items() %}
+      <div class="ca-total-item">
+        <span class="ca-total-label">{{ _(key.replace("_", " ").title()) }}</span>
+        <strong class="ca-total-value">{{ value }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .ca-report-layout{display:flex;gap:1rem;min-height:70vh}
+  .ca-report-filters{width:340px;position:sticky;top:88px;align-self:flex-start;max-height:calc(100vh - 110px);overflow-y:auto;flex-shrink:0}
+  .ca-report-filters-collapsed{width:auto}
+  .ca-report-results{flex:1;min-width:0;display:flex;flex-direction:column}
+  .ca-report-context{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;padding:.75rem 1rem;background:var(--ca-bg-soft,#f8f9fa);border-bottom:1px solid var(--ca-border,#dee2e6)}
+  .ca-report-table-wrapper{overflow:auto;max-height:calc(100vh - 330px)}
+  .ca-report-table thead th{position:sticky;top:0;z-index:2;white-space:nowrap}
+  .ca-report-table td,.ca-report-table th{white-space:nowrap}
+  .ca-report-table tbody tr:nth-child(even){background-color:rgba(0,0,0,.02)}
+  .ca-report-totals-sticky{position:sticky;bottom:0;display:flex;gap:.5rem;flex-wrap:wrap;padding:.75rem 1rem;border-top:1px solid var(--ca-border,#dee2e6);background:var(--ca-bg,#fff)}
+  .ca-total-item{display:flex;flex-direction:column;min-width:180px}
+  .ca-total-label{font-size:.75rem;color:var(--bs-secondary-color,#6c757d)}
+  .ca-total-value{text-align:right}
+  @media (max-width: 1100px){.ca-report-layout{flex-direction:column}.ca-report-filters{position:static;width:100%;max-height:none}}
+</style>
+{% endblock %}

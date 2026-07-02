@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _('Inventario') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">{{ _('Items') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Editar item') if edit else _('Nuevo item') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-box-seam"></i>{{ _('Editar item') if edit else _('Nuevo item') }}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
+    </div>
+  </div>
+  <form method="post" id="form-main" class="row g-3 p-3">
+    {{ form.csrf_token }}
+
+    {# Card 1: Datos basicos #}
+    <div class="col-12">
+      <div class="ca-card shadow-sm">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Datos basicos') }}</h6>
+        </div>
+        <div class="row g-3 p-3">
+          <div class="col-md-3">
+            <label class="form-label">{{ _('Codigo') }}</label>
+            <p class="form-control-plaintext form-control-sm">{{ registro.code if edit else _('(Se generara automaticamente)') }}</p>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+            {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+            {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="item_category_id">{{ _('Categoria') }}</label>
+            <div class="ca-smart-select" x-data='smartSelect({
+              doctype: "item_category",
+              name: "item_category_id",
+              minChars: 1,
+              initialValue: {{ (form.item_category_id.data or '')|tojson }},
+              messages: {
+                placeholder: {{ _('Buscar categoria')|tojson }},
+                loading: {{ _('Cargando...')|tojson }},
+                noResults: {{ _('Sin resultados')|tojson }},
+                minChars: {{ _('Escriba para buscar')|tojson }},
+                clear: {{ _('Limpiar')|tojson }},
+                invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                error: {{ _('No se pudieron cargar las opciones')|tojson }}
+              }
+            })'>
+              <input type="hidden" name="item_category_id" x-model="selectedValue">
+              <input class="form-control form-control-sm ca-smart-select-input" id="item_category_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+              <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                <template x-for="option in options" :key="option.id">
+                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                </template>
+                <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="barcode">{{ _('Codigo de barras') }}</label>
+            {{ form.barcode(class="form-control form-control-sm", id="barcode") }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="brand">{{ _('Marca') }}</label>
+            {{ form.brand(class="form-control form-control-sm", id="brand") }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="model_name">{{ _('Modelo') }}</label>
+            {{ form.model_name(class="form-control form-control-sm", id="model_name") }}
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="description">{{ _('Descripcion') }}</label>
+            {{ form.description(class="form-control form-control-sm", id="description", rows=2) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Card 2: Tipo y flags #}
+    <div class="col-md-6">
+      <div class="ca-card shadow-sm h-100">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Tipo y clasificacion') }}</h6>
+        </div>
+        <div class="p-3">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="item_type">{{ _('Tipo') }}</label>
+              {{ form.item_type(class="form-select form-select-sm", id="item_type") }}
+              {% if form.item_type.errors %}<div class="text-danger small">{{ form.item_type.errors[0] }}</div>{% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="valuation_method">{{ _('Metodo de valuacion') }}</label>
+              {{ form.valuation_method(class="form-select form-select-sm", id="valuation_method") }}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.is_stock_item(class="form-check-input", id="is_stock_item") }}
+                <label class="form-check-label" for="is_stock_item">{{ _('Es item de inventario') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.is_purchase_item(class="form-check-input", id="is_purchase_item") }}
+                <label class="form-check-label" for="is_purchase_item">{{ _('Es comprable') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.is_sale_item(class="form-check-input", id="is_sale_item") }}
+                <label class="form-check-label" for="is_sale_item">{{ _('Es vendible') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.has_batch(class="form-check-input", id="has_batch") }}
+                <label class="form-check-label" for="has_batch">{{ _('Control por lote') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.has_serial_no(class="form-check-input", id="has_serial_no") }}
+                <label class="form-check-label" for="has_serial_no">{{ _('Control por serie') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.has_expiry_date(class="form-check-input", id="has_expiry_date") }}
+                <label class="form-check-label" for="has_expiry_date">{{ _('Maneja fecha de vencimiento') }}</label>
+              </div>
+              <div class="form-check">
+                {{ form.allow_negative_stock(class="form-check-input", id="allow_negative_stock") }}
+                <label class="form-check-label" for="allow_negative_stock">{{ _('Permitir stock negativo') }}</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Card 3: UOM y precios #}
+    <div class="col-md-6">
+      <div class="ca-card shadow-sm h-100">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Unidades y precios') }}</h6>
+        </div>
+        <div class="p-3">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="default_uom">{{ _('UOM base') }} <span class="text-danger">*</span></label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "uom",
+                name: "default_uom",
+                minChars: 1,
+                preload: true,
+                initialValue: {{ (form.default_uom.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar UOM')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="default_uom" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="default_uom" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+              {% if form.default_uom.errors %}<div class="text-danger small">{{ form.default_uom.errors[0] }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="purchase_uom">{{ _('UOM compra') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "uom",
+                name: "purchase_uom",
+                minChars: 1,
+                initialValue: {{ (form.purchase_uom.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar UOM')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="purchase_uom" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="purchase_uom" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="sale_uom">{{ _('UOM venta') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "uom",
+                name: "sale_uom",
+                minChars: 1,
+                initialValue: {{ (form.sale_uom.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar UOM')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="sale_uom" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="sale_uom" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.value">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="standard_rate">{{ _('Precio base') }}</label>
+              {{ form.standard_rate(class="form-control form-control-sm", id="standard_rate", type="number", step="0.0001") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="last_purchase_rate">{{ _('Ultimo costo') }}</label>
+              {{ form.last_purchase_rate(class="form-control form-control-sm", id="last_purchase_rate", type="number", step="0.0001", readonly=True) }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="currency">{{ _('Moneda') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "currency",
+                name: "currency",
+                minChars: 1,
+                initialValue: {{ (form.currency.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar moneda')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="currency" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="currency" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.id">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="default_supplier_id">{{ _('Proveedor predeterminado') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "supplier",
+                name: "default_supplier_id",
+                minChars: 1,
+                initialValue: {{ (form.default_supplier_id.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar proveedor')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="default_supplier_id" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="default_supplier_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.id">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="default_warehouse_id">{{ _('Almacen predeterminado') }}</label>
+              <div class="ca-smart-select" x-data='smartSelect({
+                doctype: "warehouse",
+                name: "default_warehouse_id",
+                minChars: 1,
+                initialValue: {{ (form.default_warehouse_id.data or '')|tojson }},
+                messages: {
+                  placeholder: {{ _('Buscar almacen')|tojson }},
+                  loading: {{ _('Cargando...')|tojson }},
+                  noResults: {{ _('Sin resultados')|tojson }},
+                  minChars: {{ _('Escriba para buscar')|tojson }},
+                  clear: {{ _('Limpiar')|tojson }},
+                  invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                  error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                }
+              })'>
+                <input type="hidden" name="default_warehouse_id" x-model="selectedValue">
+                <input class="form-control form-control-sm ca-smart-select-input" id="default_warehouse_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <template x-for="option in options" :key="option.id">
+                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                  </template>
+                  <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                  <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Card 4: Inventario #}
+    <div class="col-md-6">
+      <div class="ca-card shadow-sm">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Control de inventario') }}</h6>
+        </div>
+        <div class="p-3">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="min_stock_qty">{{ _('Stock minimo') }}</label>
+              {{ form.min_stock_qty(class="form-control form-control-sm", id="min_stock_qty", type="number", step="0.0001") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="max_stock_qty">{{ _('Stock maximo') }}</label>
+              {{ form.max_stock_qty(class="form-control form-control-sm", id="max_stock_qty", type="number", step="0.0001") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="reorder_level">{{ _('Punto de reorden') }}</label>
+              {{ form.reorder_level(class="form-control form-control-sm", id="reorder_level", type="number", step="0.0001") }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Card 5: UOM Conversions #}
+    <div class="col-12">
+      <div class="ca-card shadow-sm" x-data='{
+        rows: {{ uom_rows|tojson }},
+        addRow() { this.rows.push({uom_code: "", conversion_factor: ""}); },
+        removeRow(index) {
+          if (this.rows.length <= 1) { this.rows[0] = {uom_code: "", conversion_factor: ""}; return; }
+          this.rows.splice(index, 1);
+        }
+      }'>
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Conversiones de UOM') }}</h6>
+          <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+            <i class="bi bi-plus-lg me-1"></i>{{ _('Anadir UOM') }}
+          </button>
+        </div>
+        <div class="p-3">
+          <p class="text-muted small mb-3">{{ _('Cada fila guarda una UOM adicional y su equivalencia frente a la unidad predeterminada.') }}</p>
+          <div class="table-responsive">
+            <table class="ca-table">
+              <caption style="display:none;">{{ _('Conversiones UOM del item') }}</caption>
+              <thead>
+                <tr>
+                  <th>{{ _('UOM') }}</th>
+                  <th>{{ _('Equivale a') }}</th>
+                  <th>{{ _('Acciones') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, index) in rows" :key="index">
+                  <tr>
+                    <td>
+                      <select class="form-select form-select-sm" name="uom_code" x-model="row.uom_code">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for code, name in uom_choices %}
+                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <input class="form-control form-control-sm" type="number" min="0.000000001" step="0.000000001" name="uom_conversion_factor" x-model="row.conversion_factor">
+                    </td>
+                    <td class="text-nowrap">
+                      <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Card 6: Configuracion contable por compania #}
+    <div class="col-12">
+      <div class="ca-card shadow-sm" x-data='{
+        rows: {{ account_rows|tojson }},
+        addRow() { this.rows.push({company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", inventory_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}); },
+        removeRow(index) {
+          if (this.rows.length <= 1) { this.rows[0] = {company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", inventory_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}; return; }
+          this.rows.splice(index, 1);
+        }
+      }'>
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Configuracion contable por compania') }}</h6>
+          <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+            <i class="bi bi-plus-lg me-1"></i>{{ _('Anadir fila') }}
+          </button>
+        </div>
+        <div class="p-3">
+          <p class="text-muted small mb-3">{{ _('Si el item es servicio o no es de inventario, la cuenta de gasto por compania es obligatoria.') }}</p>
+          <div class="table-responsive">
+            <table class="ca-table">
+              <caption style="display:none;">{{ _('Configuracion contable del item por compania') }}</caption>
+              <thead>
+                <tr>
+                  <th>{{ _('Compania') }}</th>
+                  <th>{{ _('Cuenta de gasto') }}</th>
+                  <th>{{ _('Cuenta de ingresos') }}</th>
+                  <th>{{ _('Cuenta COGS') }}</th>
+                  <th>{{ _('Cuenta de inventario') }}</th>
+                  <th>{{ _('Centro de costo') }}</th>
+                  <th>{{ _('Acciones') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, index) in rows" :key="index">
+                  <tr>
+                    <td>
+                      <select class="form-select form-select-sm" name="account_company" x-model="row.company">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for code, name in company_choices %}
+                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="expense_account_id" x-model="row.expense_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="income_account_id" x-model="row.income_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="cogs_account_id" x-model="row.cogs_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="inventory_account_id" x-model="row.inventory_account_id">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for account in account_choices %}
+                        <option value="{{ account.id }}">{{ account.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="cost_center_code" x-model="row.cost_center_code">
+                        <option value="">{{ _('Seleccione') }}</option>
+                        {% for cost_center in cost_center_choices %}
+                        <option value="{{ cost_center.code }}">{{ cost_center.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td class="text-nowrap">
+                      <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

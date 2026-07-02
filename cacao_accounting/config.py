@@ -7,11 +7,14 @@
 # --------------------------------------------------------------------------------------
 from os import environ, name
 from pathlib import Path
+import ssl
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
+from cacao_accounting.runtime_mode import detect_desktop_mode
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -23,6 +26,7 @@ DIRECTORIO_APP = Path(__file__).parent
 DIRECTORIO_PRINCIPAL = DIRECTORIO_APP.parent
 DIRECTORIO_PLANTILLAS = str(DIRECTORIO_APP / "templates")
 DIRECTORIO_ARCHIVOS = str(DIRECTORIO_APP / "static")
+POSTGRESQL_URI_PREFIX = "postgresql://"
 
 # < --------------------------------------------------------------------------------------------- >
 # URI de conexión a bases de datos por defecto
@@ -49,6 +53,30 @@ DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or e
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
+def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, ssl.SSLContext]]]:
+    """Normaliza la URI de base de datos para compatibilidad entre proveedores."""
+    direccion = str(uri)
+    opciones_motor: dict[str, dict[str, ssl.SSLContext]] = {}
+
+    if direccion.startswith(POSTGRESQL_URI_PREFIX):
+        direccion = direccion.replace(POSTGRESQL_URI_PREFIX, "postgresql+pg8000://", 1)
+
+    if direccion.startswith("postgresql+pg8000://"):
+        uri_parseada = urlsplit(direccion)
+        query = dict(parse_qsl(uri_parseada.query, keep_blank_values=True))
+        sslmode = query.pop("sslmode", "").lower()
+        query.pop("channel_binding", None)
+
+        if sslmode in {"require", "verify-ca", "verify-full"}:
+            opciones_motor["connect_args"] = {"ssl_context": ssl.create_default_context()}
+
+        direccion = urlunsplit(
+            (uri_parseada.scheme, uri_parseada.netloc, uri_parseada.path, urlencode(query), uri_parseada.fragment)
+        )
+
+    return direccion, opciones_motor
+
+
 def valida_direccion_base_datos(uri: str) -> bool:
     """Verifica que la URI de la database este en el formato correcto."""
     direccion = str(uri)
@@ -57,6 +85,8 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return True
         case _ if direccion.startswith("mariadb+mariadbconnector"):
             log.warning("El soporte a MariaDB es expimental.")
+            return True
+        case _ if direccion.startswith(POSTGRESQL_URI_PREFIX):
             return True
         case _ if direccion.startswith("postgresql+pg8000") or direccion.startswith("postgresql+psycopg2"):
             return True
@@ -67,12 +97,24 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, str] = {}
+configuracion: dict[str, bool | str | dict[str, dict[str, ssl.SSLContext]]] = {}
 
-if valida_direccion_base_datos(DATABASE_URL):
-    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
+
+if valida_direccion_base_datos(DATABASE_URL_NORMALIZADA):
+    configuracion["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL_NORMALIZADA
+    if DATABASE_ENGINE_OPTIONS:
+        configuracion["SQLALCHEMY_ENGINE_OPTIONS"] = DATABASE_ENGINE_OPTIONS
 configuracion["SECRET_KEY"] = SECRET_KEY or ""
 configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
+
+# Printing and validation settings
+configuracion["EXTERNAL_DOCUMENT_VALIDATION_ENABLED"] = (
+    environ.get("EXTERNAL_DOCUMENT_VALIDATION_ENABLED", "True").lower() == "true"
+)
+configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
+    "EXTERNAL_DOCUMENT_VALIDATION_BASE_URL", "https://cacaocontent.com"
+)
 
 if environ.get("CACAO_TEST"):
     configuracion["DEGUG"] = "True"
@@ -86,29 +128,10 @@ else:
 
 
 def probar_modo_escritorio() -> bool:
-    """Función utilitaria para establecer nodo de escritorio."""
-    # Probamos si estamos en un paquete SNAP
-    # Referencias
-    #  - https://snapcraft.io/docs/environment-variables
-    if environ.get("SNAP_NAME", default=False):
-        return True
-
-    # Probamos si estamos en un paquete FLATPAK
-    # Referencias:
-    #  - https://www.systutorials.com/docs/linux/man/1-flatpak-run/
-    elif environ.get("FLATPAK_ID", default=False):
-        return True
-
-    # Probamos si se ha establecido la variable de entorno CACAO_ACCOUNTING-DESKTOP
-    # En el codigo fuente de la distribución de escritorio se establece esta opción
-    # previo a importar la aplicación principal.
-    elif environ.get("CACAO_ACCOUNTING_DESKTOP", default=False):
-        return True
-
-    else:
-        return False
+    """Compatibility wrapper for the centralized runtime mode detector."""
+    return detect_desktop_mode()
 
 
-MODO_ESCRITORIO = probar_modo_escritorio()
+MODO_ESCRITORIO = detect_desktop_mode()
 
 TESTING_MODE = environ.get("CACAO_TEST", False) or environ.get("CI", False) or environ.get("PYTEST_VERSION") is not None

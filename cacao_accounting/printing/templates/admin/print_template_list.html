@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Formatos de impresión</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('printing_admin.validation_settings') }}" class="btn btn-sm btn-outline-secondary me-2">
+                <i class="bi bi-qr-code"></i> Configuración validación
+            </a>
+            <a href="{{ url_for('printing_admin.create_template') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus"></i> Nuevo formato
+            </a>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <p class="text-muted small mb-2">{{ _("Resumen de formatos de impresión registrados, con su estado, versión y disponibilidad para cada documento.") }}</p>
+        <table class="table table-striped table-sm">
+            <caption class="visually-hidden">{{ _("Formatos de impresión registrados") }}</caption>
+            <thead>
+                <tr>
+                    <th>Documento</th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Sistema</th>
+                    <th>Default</th>
+                    <th>Versión</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for template in templates %}
+                <tr>
+                    <td>{{ template.document_type }}</td>
+                    <td>{{ template.code }}</td>
+                    <td>{{ template.name }}</td>
+                    <td>
+                        <span class="badge {% if template.status == 'published' %}bg-success{% elif template.status == 'archived' %}bg-secondary{% else %}bg-warning{% endif %}">
+                            {{ template.status }}
+                        </span>
+                    </td>
+                    <td>{{ "Sí" if template.is_system else "No" }}</td>
+                    <td>{{ "Sí" if template.is_default else "No" }}</td>
+                    <td>{{ template.version }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-xs btn-outline-info" title="Preview">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if not template.is_system %}
+                            <a href="{{ url_for('printing_admin.edit_template', template_id=template.id) }}" class="btn btn-xs btn-outline-primary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% endif %}
+                            <form action="{{ url_for('printing_admin.duplicate_template', template_id=template.id) }}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-xs btn-outline-secondary" title="Duplicar">
+                                    <i class="bi bi-files"></i>
+                                </button>
+                            </form>
+                            {% if template.status == 'draft' %}
+                            <form action="{{ url_for('printing_admin.publish_template', template_id=template.id) }}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-xs btn-outline-success" title="Publicar">
+                                    <i class="bi bi-cloud-upload"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if template.status == 'published' and not template.is_default %}
+                            <form action="{{ url_for('printing_admin.set_default_template', template_id=template.id) }}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-xs btn-outline-warning" title="Marcar default">
+                                    <i class="bi bi-star"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if template.status != 'archived' and not template.is_system %}
+                            <form action="{{ url_for('printing_admin.archive_template', template_id=template.id) }}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Archivar">
+                                    <i class="bi bi-archive"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

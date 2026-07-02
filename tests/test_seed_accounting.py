@@ -1,0 +1,253 @@
+# SPDX-License-Identifier: Apache-2.0
+import pytest
+import json
+from decimal import Decimal
+from cacao_accounting import create_app
+from cacao_accounting.database import (
+    Book,
+    BankAccount,
+    ComprobanteContable,
+    CostCenter,
+    ExternalCounter,
+    ExchangeRate,
+    GLEntry,
+    NamingSeries,
+    Project,
+    SeriesExternalCounterMap,
+    Unit,
+    database,
+)
+from cacao_accounting.datos import base_data, dev_data
+from cacao_accounting.reportes.services import (
+    FinancialReportFilters,
+    get_balance_sheet_report,
+    get_income_statement_report,
+    get_trial_balance_report,
+)
+
+
+@pytest.fixture(scope="function")
+def app():
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SECRET_KEY": "test_key"})
+    with app.app_context():
+        database.create_all()
+        base_data("admin", "admin", carga_rapida=True)
+        dev_data()
+        yield app
+        database.session.remove()
+        database.drop_all()
+
+
+def test_libros_contables(app):
+    with app.app_context():
+        # La empresa cacao debe tener 3 libros
+        libros = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        codigos_libros = [libro.code for libro in libros]
+        assert "LOCAL" in codigos_libros
+        assert "FIN" in codigos_libros
+        assert "MGMT" in codigos_libros
+
+        # Verificar monedas de los libros
+        libro_local = database.session.execute(database.select(Book).filter_by(entity="cacao", code="LOCAL")).scalar_one()
+        assert libro_local.currency == "NIO"
+        libro_fin = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FIN")).scalar_one()
+        assert libro_fin.currency == "USD"
+        libro_mgmt = database.session.execute(database.select(Book).filter_by(entity="cacao", code="MGMT")).scalar_one()
+        assert libro_mgmt.currency == "EUR"
+
+
+def test_unidades_centros_proyectos(app):
+    with app.app_context():
+        # Unidades
+        u = database.session.execute(database.select(Unit).filter_by(entity="cacao", code="logistica")).scalar_one_or_none()
+        assert u is not None
+
+        # Centros de Costos
+        cc_adm = database.session.execute(
+            database.select(CostCenter).filter_by(entity="cacao", code="ADM")
+        ).scalar_one_or_none()
+        assert cc_adm is not None
+
+        # Proyectos
+        p = database.session.execute(database.select(Project).filter_by(entity="cacao", code="EXPANSION")).scalar_one_or_none()
+        assert p is not None
+
+
+def test_tasas_de_cambio(app):
+    with app.app_context():
+        # Deben existir tasas expresadas en NIO por unidad de moneda extranjera.
+        tasa_usd = (
+            database.session.execute(database.select(ExchangeRate).filter_by(origin="USD", destination="NIO"))
+            .scalars()
+            .first()
+        )
+        assert tasa_usd is not None
+        tasa_eur = (
+            database.session.execute(database.select(ExchangeRate).filter_by(origin="EUR", destination="NIO"))
+            .scalars()
+            .first()
+        )
+        assert tasa_eur is not None
+
+
+def test_seed_bank_accounts_share_payment_series_with_separate_checkbooks(app):
+    with app.app_context():
+        bank_accounts = (
+            database.session.execute(
+                database.select(BankAccount)
+                .filter(BankAccount.company == "cacao", BankAccount.currency.in_(("NIO", "USD")))
+                .order_by(BankAccount.currency)
+            )
+            .scalars()
+            .all()
+        )
+        by_currency = {account.currency: account for account in bank_accounts}
+        assert {"NIO", "USD"}.issubset(by_currency)
+
+        nio_account = by_currency["NIO"]
+        usd_account = by_currency["USD"]
+        assert nio_account.default_naming_series_id == usd_account.default_naming_series_id
+        assert nio_account.default_external_counter_id != usd_account.default_external_counter_id
+
+        series = database.session.get(NamingSeries, nio_account.default_naming_series_id)
+        assert series is not None
+        assert series.entity_type == "payment_entry"
+
+        counters = {
+            counter.id: counter
+            for counter in database.session.execute(
+                database.select(ExternalCounter).filter(
+                    ExternalCounter.id.in_(
+                        [
+                            nio_account.default_external_counter_id,
+                            usd_account.default_external_counter_id,
+                        ]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert {counter.counter_type for counter in counters.values()} == {"checkbook"}
+
+        mappings = (
+            database.session.execute(database.select(SeriesExternalCounterMap).filter_by(naming_series_id=series.id))
+            .scalars()
+            .all()
+        )
+        conditions_by_counter = {
+            mapping.external_counter_id: json.loads(mapping.condition_json or "{}") for mapping in mappings
+        }
+        assert conditions_by_counter[nio_account.default_external_counter_id] == {"bank_account_id": nio_account.id}
+        assert conditions_by_counter[usd_account.default_external_counter_id] == {"bank_account_id": usd_account.id}
+
+
+def test_ledger_multimoneda(app):
+    with app.app_context():
+        # Obtener IDs de libros
+        local_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="LOCAL")).scalar_one()
+        fin_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="FIN")).scalar_one()
+        mgmt_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="MGMT")).scalar_one()
+
+        # Verificar que existen entradas en el ledger para los diferentes libros
+        # Libro LOCAL (NIO)
+        entries_fisc = (
+            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=local_id)).scalars().all()
+        )
+        assert len(entries_fisc) > 0
+        for entry in entries_fisc:
+            assert entry.company_currency == "NIO"
+
+        # Libro FIN (USD)
+        entries_fin = (
+            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=fin_id)).scalars().all()
+        )
+        assert len(entries_fin) > 0
+        for entry in entries_fin:
+            assert entry.company_currency == "USD"
+        assert {"USD", "NIO"}.issubset({entry.account_currency for entry in entries_fin})
+
+        # Libro MGMT (EUR)
+        entries_mgmt = (
+            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=mgmt_id)).scalars().all()
+        )
+        assert len(entries_mgmt) > 0
+        for entry in entries_mgmt:
+            assert entry.company_currency == "EUR"
+        assert {"EUR", "NIO"}.issubset({entry.account_currency for entry in entries_mgmt})
+
+
+def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(app):
+    with app.app_context():
+        journal = database.session.execute(
+            database.select(ComprobanteContable).filter_by(reference="MULTI-BOOK-NIO")
+        ).scalar_one()
+        entries = (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_type="journal_entry", voucher_id=journal.id))
+            .scalars()
+            .all()
+        )
+        books = {
+            book.code: book
+            for book in database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        }
+
+        assert journal.transaction_currency == "NIO"
+        assert set(books) >= {"LOCAL", "FIN", "MGMT"}
+        assert len(entries) == 6
+
+        by_book = {
+            code: [entry for entry in entries if entry.ledger_id == book.id]
+            for code, book in books.items()
+            if code in {"LOCAL", "FIN", "MGMT"}
+        }
+        assert {code: len(book_entries) for code, book_entries in by_book.items()} == {
+            "LOCAL": 2,
+            "FIN": 2,
+            "MGMT": 2,
+        }
+
+        fisc_debit = next(entry for entry in by_book["LOCAL"] if entry.debit > 0)
+        fin_debit = next(entry for entry in by_book["FIN"] if entry.debit > 0)
+        mgmt_debit = next(entry for entry in by_book["MGMT"] if entry.debit > 0)
+
+        assert fisc_debit.company_currency == "NIO"
+        assert fisc_debit.account_currency == "NIO"
+        assert fisc_debit.debit == Decimal("10.0000")
+        assert fisc_debit.debit_in_account_currency == Decimal("10.0000")
+        assert fisc_debit.exchange_rate is None
+
+        assert fin_debit.company_currency == "USD"
+        assert fin_debit.account_currency == "NIO"
+        assert fin_debit.debit == Decimal("0.2730")
+        assert fin_debit.debit_in_account_currency == Decimal("10.0000")
+        assert fin_debit.exchange_rate.quantize(Decimal("0.000000001")) == Decimal("0.027304276")
+
+        assert mgmt_debit.company_currency == "EUR"
+        assert mgmt_debit.account_currency == "NIO"
+        assert mgmt_debit.debit == Decimal("0.2492")
+        assert mgmt_debit.debit_in_account_currency == Decimal("10.0000")
+        assert mgmt_debit.exchange_rate.quantize(Decimal("0.000000001")) == Decimal("0.024923112")
+
+
+def test_reportes_financieros(app):
+    with app.app_context():
+        # Filtros base para reportes
+        filters = FinancialReportFilters(company="cacao", ledger="LOCAL")
+
+        # 1. Balanza de Comprobación
+        trial_balance = get_trial_balance_report(filters)
+        assert trial_balance.totals["difference"] == 0
+        assert trial_balance.totals["debit"] > 0
+
+        # 2. Balance General
+        balance_sheet = get_balance_sheet_report(filters)
+        # Activos = Pasivos + Patrimonio (la diferencia debe ser 0)
+        assert abs(balance_sheet.totals["difference"]) < Decimal("0.0001")
+        assert balance_sheet.totals["assets"] > 0
+
+        # 3. Estado de Resultados
+        income_statement = get_income_statement_report(filters)
+        # En el seed actual solo hay saldos iniciales en cuentas de activo y patrimonio
+        # pero validamos que el reporte se ejecute sin errores y balancee.
+        assert "net_profit" in income_statement.totals
