@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Codigos legibles para terceros e items (2026-07-03):** Clientes, proveedores e items ahora usan codigos secuenciales legibles en lugar de ULIDs.
+  - `generate_party_code()` y `create_item_with_uoms()` resuelven la naming series global antes de generar el identificador.
+  - Las series globales `CUSTM-`, `SUPLR-`, `ITEM-` se crean automaticamente durante el setup y el seed de desarrollo.
+  - Padding: 5 para clientes/proveedores (CUSTM-00001), 6 para items (ITEM-000001), sin reinicio de secuencia.
+  - Commit: `9b6f80d`
+
 - **Inventario / cuenta contable por almacen+compañia (2026-07-03):** La cuenta de inventario ya quedó alineada a una sola fuente de verdad.
   - `WarehouseCompanyAccount` define la cuenta de inventario por `warehouse_code + company`.
   - `stock_entry`, `purchase_receipt` y `delivery_note` resuelven inventario desde la bodega de la línea o del movimiento.
