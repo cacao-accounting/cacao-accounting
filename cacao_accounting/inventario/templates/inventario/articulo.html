@@ -55,7 +55,6 @@
       <div class="ca-kv-item"><label>{{ _('Control por serie') }}</label><p>{{ _('Si') if registro.has_serial_no else _('No') }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Maneja vencimiento') }}</label><p>{{ _('Si') if registro.has_expiry_date else _('No') }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Permitir stock negativo') }}</label><p>{{ _('Si') if registro.allow_negative_stock else _('No') }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Metodo de valuacion') }}</label><p>{{ registro.valuation_method or '-' }}</p></div>
     </div>
   </div>
 </div>
