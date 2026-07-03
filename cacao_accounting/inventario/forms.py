@@ -52,8 +52,6 @@ class FormularioBodega(FlaskForm):
 
     code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
-    company = SelectField("Compañía", choices=[])
-    inventory_account_id = StringField("Cuenta de inventario")
 
 
 class FormularioEntradaAlmacen(FlaskForm):
