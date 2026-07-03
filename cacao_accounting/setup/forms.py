@@ -8,29 +8,20 @@ from wtforms import HiddenField, RadioField, SelectField, StringField
 from wtforms.fields import DateField
 from wtforms.validators import DataRequired, Optional
 
-from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
 from cacao_accounting.database import Entity
+from cacao_accounting.setup.catalogs import (
+    LANGUAGE_CHOICES,
+    catalog_choices,
+    country_choices,
+    setup_texts,
+)
 from cacao_accounting.setup.service import available_catalog_files
-
-LANGUAGE_CHOICES = [
-    ("es", "Español"),
-    ("en", "English"),
-    ("pt", "Português"),
-]
-
-COUNTRY_CHOICES = [
-    ("NI", "Nicaragua"),
-    ("US", "Estados Unidos"),
-    ("MX", "México"),
-    ("ES", "España"),
-    ("CO", "Colombia"),
-    ("PA", "Panamá"),
-]
 
 CATALOG_CHOICES = [
     ("preexistente", "Usar catálogo contable preexistente"),
     ("en_cero", "Crear catálogo contable en cero"),
 ]
+COUNTRY_CHOICES = country_choices("es")
 
 
 class SetupLanguageForm(FlaskForm):
@@ -49,8 +40,14 @@ class SetupRegionalForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         """Inicializa el formulario regional con las monedas disponibles."""
+        language = kwargs.pop("language", "es")
+        currencies = kwargs.pop("currencies", None)
         super().__init__(*args, **kwargs)
-        self.moneda.choices = obtener_lista_monedas()
+        texts = setup_texts(language)
+        self.pais.label.text = texts["country"]
+        self.moneda.label.text = texts["currency"]
+        self.pais.choices = country_choices(language)
+        self.moneda.choices = currencies or []
 
 
 class SetupCompanyForm(FlaskForm):
@@ -74,8 +71,22 @@ class SetupCompanyForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         """Inicializa el formulario de empresa con las opciones de catálogo disponibles."""
+        language = kwargs.pop("language", "es")
         super().__init__(*args, **kwargs)
-        self.catalogo_origen.choices = [("", "Seleccione un catálogo existente")] + available_catalog_files()
+        texts = setup_texts(language)
+        self.id.label.text = texts["company_code"]
+        self.razon_social.label.text = texts["legal_name"]
+        self.nombre_comercial.label.text = texts["trade_name"]
+        self.id_fiscal.label.text = texts["tax_id"]
+        self.tipo_entidad.label.text = texts["entity_type"]
+        self.inicio_anio_fiscal.label.text = texts["fiscal_year_start"]
+        self.fin_anio_fiscal.label.text = texts["fiscal_year_end"]
+        self.catalogo.label.text = texts["catalog_title"]
+        self.catalogo.choices = catalog_choices(language)
+        self.catalogo_origen.label.text = texts["existing_catalog"]
+        self.catalogo_origen.choices = [("", texts["select_catalog"])] + available_catalog_files()
+        if self.catalogo.data == "en_cero":
+            self.catalogo_origen.data = ""
 
 
 class SetupConfirmationForm(FlaskForm):

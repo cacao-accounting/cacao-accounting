@@ -1,4 +1,24 @@
-# Estado Actual del Proyecto - 2026-07-02
+# Estado Actual del Proyecto - 2026-07-03
+
+- **Setup inicial / idioma, region y catalogo contable (2026-07-03):** El wizard inicial ya respeta el idioma seleccionado desde la primera pantalla.
+  - Los textos del setup se renderizan desde un catalogo ES/EN centralizado.
+  - El paso regional lista paises soberanos de America y solo permite monedas activas existentes en el seed/base.
+  - Al seleccionar "Crear catalogo contable en cero", el selector de catalogo origen queda deshabilitado y se limpia.
+  - La pantalla adopta una composicion visual renovada con hero, stepper y tarjetas.
+
+- **Terceros / configuracion por compania editable (2026-07-03):** Cliente y Proveedor ya no quedan fijos a una sola compania.
+  - La tabla por compania permite agregar y remover filas con `smart-select`.
+  - El POST usa un unico formato repetible; no se mantiene fallback al formato viejo.
+  - Las filas removidas se eliminan de `CompanyParty` y `PartyAccount` para evitar configuraciones fantasma.
+
+- **Inventario / Item y Bodega con Smart Select (2026-07-03):** Los formularios maestros de inventario quedan alineados al framework de seleccion.
+  - Item usa `smart-select` para UOM en conversiones y para compania/cuenta/centro de costo en configuracion contable.
+  - Bodega incorpora configuracion por compania con cuenta de inventario mediante `warehouse_company_account`.
+  - El posting de stock reconciliation resuelve la cuenta de inventario por bodega+compania sin fallback legacy en `Warehouse`.
+
+- **Importador de lineas / Alpine (2026-07-03):** Los modales de importacion ya no fallan si el esquema aun no ha cargado.
+  - Las iteraciones de columnas usan una lista segura cuando `importModal.schema` es `null`.
+  - La correccion aplica al macro transaccional compartido y al formulario de comprobante contable.
 
 - **Inventario / cuenta de inventario solo en bodega (2026-07-02):** La cuenta de inventario se configura unicamente a nivel de bodega.
   - `ItemAccount.inventory_account_id` removido del modelo, dataclass, validacion y templates.
