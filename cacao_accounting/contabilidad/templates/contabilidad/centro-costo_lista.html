@@ -11,43 +11,49 @@
 </nav>
 
 <div class="ca-card">
-  <div class="ca-card-header d-flex justify-content-between align-items-center">
+  <div class="ca-card-header ca-tree-page-header">
     <h5 class="ca-card-title"><i class="bi bi-diagram-2"></i> Catálogo de Centros de Costos.</h5>
-    <a href="{{ url_for('contabilidad.nuevo_centro_costo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Nuevo Centro</a>
+    <a href="{{ url_for('contabilidad.nuevo_centro_costo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nuevo Centro</a>
   </div>
 
   {% if entidades_creadas %}
+  {% set current_entity_code = entidad[0].code %}
 
-  <form class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-      <label class="form-label" for="entidad">Entidad</label>
-      <select class="form-select form-select-sm" id="entidad" name="entidad" style="min-width:200px;">
-        {%- for entidad in entidades -%}
-        <option value="{{ entidad[0].code }}">{{ entidad[0].company_name }}</option>
-        {%- endfor -%}
-      </select>
+  <div class="ca-tree-layout">
+    <div class="ca-tree-toolbar">
+      <div class="ca-tree-toolbar-main">
+        <form class="ca-tree-entity-form" method="get">
+          <div class="ca-tree-entity-field">
+            <label class="form-label" for="entidad">Entidad</label>
+            <select class="form-select form-select-sm" id="entidad" name="entidad">
+              {%- for item_entidad in entidades -%}
+              <option value="{{ item_entidad[0].code }}" {% if item_entidad[0].code == current_entity_code %}selected{% endif %}>{{ item_entidad[0].company_name }}</option>
+              {%- endfor -%}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+          </button>
+        </form>
+        <div class="ca-tree-context">
+          <i class="bi bi-building" aria-hidden="true"></i>
+          <span><strong>Entidad:</strong> {{ entidad[0].company_name }}</span>
+        </div>
+      </div>
+      <div class="ca-tree-action-group">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+          @click.prevent="$dispatch('tree-toggle', { open: true })" x-data>
+          <i class="bi bi-arrows-expand me-1"></i>{{ _('Expandir todos') }}
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+          @click.prevent="$dispatch('tree-toggle', { open: false })" x-data>
+          <i class="bi bi-arrows-collapse me-1"></i>{{ _('Colapsar todos') }}
+        </button>
+      </div>
     </div>
-    <div class="col-auto">
-      <button type="submit" class="btn btn-primary btn-sm">
-        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-      </button>
-    </div>
-  </form>
 
-  <p class="mb-2" style="font-size:.8rem;color:#64748b;"><strong>Entidad:</strong> {{ entidad[0].company_name }}</p>
-
-  <div class="d-flex gap-2 mb-2">
-    <button type="button" class="btn btn-sm btn-outline-secondary"
-      @click.prevent="$dispatch('tree-toggle', { open: true })" x-data>
-      <i class="bi bi-arrows-expand"></i> {{ _('Expandir todos') }}
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-secondary"
-      @click.prevent="$dispatch('tree-toggle', { open: false })" x-data>
-      <i class="bi bi-arrows-collapse"></i> {{ _('Colapsar todos') }}
-    </button>
-  </div>
-
-  <ul class="ca-tree">
+    <div class="ca-tree-panel">
+      <ul class="ca-tree">
     {%- for centrocostobase in base_centro_costos -%}
     <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
       <span @click="open = !open" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
@@ -153,7 +159,9 @@
       {% endif %}
     </li>
     {%- endfor -%}
-  </ul>
+      </ul>
+    </div>
+  </div>
 
   {% else %}
   {% import "macros.html" as macros %}

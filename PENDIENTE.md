@@ -1,5 +1,8 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Arboles contables)
+- [x] Ajustar el patron visual compartido del arbol de cuentas contables y del arbol de centros de costos, con comportamiento usable en mobile.
+
 ## Seguimiento 2026-07-03 (Setup inicial)
 - [x] Ajustar visualmente el wizard inicial para reducir el hero sobredimensionado, compactar el stepper y usar marca desde `static/media`.
 
