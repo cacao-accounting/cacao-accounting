@@ -24,11 +24,33 @@
     <dd class="col-sm-9">{{ registro.code }}</dd>
     <dt class="col-sm-3">Nombre</dt>
     <dd class="col-sm-9">{{ registro.name }}</dd>
-    <dt class="col-sm-3">Compañía</dt>
-    <dd class="col-sm-9">{{ registro.company or "" }}</dd>
-    <dt class="col-sm-3">Cuenta de inventario</dt>
-    <dd class="col-sm-9">{{ registro.inventory_account_id or "" }}</dd>
   </dl>
+  <div class="px-3 pb-3">
+    <h6 class="fw-bold">{{ _('Configuración por compañía') }}</h6>
+    <div class="table-responsive">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _('Configuración de cuenta de inventario por compañía') }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _('Compañía') }}</th>
+            <th>{{ _('Cuenta de inventario') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in company_accounts %}
+          <tr>
+            <td>{{ row.company }}</td>
+            <td>{{ row.inventory_account_id or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="2" class="text-muted">{{ _('No hay configuración por compañía.') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 {% endblock %}
