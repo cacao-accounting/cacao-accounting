@@ -58,9 +58,9 @@ from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifi
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
-    build_party_company_settings,
-    draft_party_company_settings,
-    upsert_party_company_settings,
+    draft_party_company_settings_rows,
+    party_company_settings_rows,
+    upsert_party_company_settings_rows,
 )
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
@@ -738,7 +738,7 @@ def _handle_supplier_create(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings: Any,
+    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -757,38 +757,12 @@ def _handle_supplier_create(
         apply_party_profile(proveedor, form)
         database.session.flush()
         proveedor.code = generate_party_code(proveedor.id, selected_company, "supplier")
-        company = form.get("company") or None
-        if company:
-            upsert_party_company_settings(
-                proveedor.id,
-                "supplier",
-                company,
-                is_active=form.get("company_is_active") is not None,
-                receivable_account_id=None,
-                payable_account_id=form.get("payable_account_id") or None,
-                tax_template_id=form.get("tax_template_id") or None,
-                default_tax_rule_id=form.get("default_tax_rule_id") or None,
-                default_price_list_id=form.get("default_price_list_id") or None,
-                allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
-                allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
-                default_currency=form.get("default_currency") or None,
-                default_income_account_id=form.get("default_income_account_id") or None,
-                default_expense_account_id=form.get("default_expense_account_id") or None,
-                default_purchase_account_id=form.get("default_purchase_account_id") or None,
-                default_advance_account_id=form.get("default_advance_account_id") or None,
-                default_cost_center=form.get("default_cost_center") or None,
-                default_business_unit=form.get("default_business_unit") or None,
-                default_bank_name=form.get("default_bank_name") or None,
-                default_bank_account_no=form.get("default_bank_account_no") or None,
-                default_bank_iban=form.get("default_bank_iban") or None,
-                block_overdue=form.get("block_overdue") is not None,
-            )
+        upsert_party_company_settings_rows(proveedor.id, "supplier", form)
         database.session.commit()
         return redirect("/buying/supplier/list")
     except ValueError as exc:
         database.session.rollback()
-        if selected_company:
-            company_settings = draft_party_company_settings("supplier", selected_company, form)
+        company_settings_rows = draft_party_company_settings_rows("supplier", form)
         flash(str(exc), "danger")
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -796,7 +770,7 @@ def _handle_supplier_create(
         titulo=titulo,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -806,7 +780,7 @@ def _handle_supplier_update(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings: Any,
+    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -818,39 +792,13 @@ def _handle_supplier_update(
         proveedor.is_active = form.get("is_active") is not None
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
-        company = form.get("company") or None
-        if company:
-            upsert_party_company_settings(
-                proveedor.id,
-                "supplier",
-                company,
-                is_active=form.get("company_is_active") is not None,
-                receivable_account_id=None,
-                payable_account_id=form.get("payable_account_id") or None,
-                tax_template_id=form.get("tax_template_id") or None,
-                default_tax_rule_id=form.get("default_tax_rule_id") or None,
-                default_price_list_id=form.get("default_price_list_id") or None,
-                allow_purchase_invoice_without_order=form.get("allow_purchase_invoice_without_order") is not None,
-                allow_purchase_invoice_without_receipt=(form.get("allow_purchase_invoice_without_receipt") is not None),
-                default_currency=form.get("default_currency") or None,
-                default_income_account_id=form.get("default_income_account_id") or None,
-                default_expense_account_id=form.get("default_expense_account_id") or None,
-                default_purchase_account_id=form.get("default_purchase_account_id") or None,
-                default_advance_account_id=form.get("default_advance_account_id") or None,
-                default_cost_center=form.get("default_cost_center") or None,
-                default_business_unit=form.get("default_business_unit") or None,
-                default_bank_name=form.get("default_bank_name") or None,
-                default_bank_account_no=form.get("default_bank_account_no") or None,
-                default_bank_iban=form.get("default_bank_iban") or None,
-                block_overdue=form.get("block_overdue") is not None,
-            )
+        upsert_party_company_settings_rows(proveedor.id, "supplier", form)
         database.session.commit()
         flash(_("Proveedor actualizado correctamente."), "success")
         return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=proveedor.id))
     except ValueError as exc:
         database.session.rollback()
-        if selected_company:
-            company_settings = draft_party_company_settings("supplier", selected_company, form)
+        company_settings_rows = draft_party_company_settings_rows("supplier", form)
         flash(str(exc), "danger")
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -860,7 +808,7 @@ def _handle_supplier_update(
         registro=proveedor,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(proveedor.party_group_id),
     )
 
@@ -1167,16 +1115,18 @@ def compras_proveedor_nuevo():
     company_choices = obtener_lista_entidades_por_id_razonsocial()
 
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = build_party_company_settings(None, selected_company, role="supplier") if selected_company else None
+    company_settings_rows = party_company_settings_rows(None, selected_company, role="supplier")
     if request.method == "POST":
-        return _handle_supplier_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
+        return _handle_supplier_create(
+            request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+        )
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
@@ -1211,12 +1161,10 @@ def compras_proveedor_editar(supplier_id: str):
     titulo = f"Editar Proveedor - {APPNAME}"
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = (
-        build_party_company_settings(proveedor.id, selected_company, role="supplier") if selected_company else None
-    )
+    company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
     if request.method == "POST":
         return _handle_supplier_update(
-            proveedor, request.form, selected_company, company_choices, company_settings, formulario, titulo
+            proveedor, request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
         )
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1226,7 +1174,7 @@ def compras_proveedor_editar(supplier_id: str):
         registro=proveedor,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(proveedor.party_group_id),
     )
 
