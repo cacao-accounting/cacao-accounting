@@ -1,5 +1,8 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Valuacion de inventarios)
+- [x] Agregar una entrada en configuracion global para administrar el metodo de valuacion por compañia fuera del wizard inicial.
+
 ## Seguimiento 2026-07-03 (Arboles contables)
 - [x] Ajustar el patron visual compartido del arbol de cuentas contables y del arbol de centros de costos, con comportamiento usable en mobile.
 

@@ -30,6 +30,7 @@
       <li><a href="{{ url_for('admin.lista_usuarios') }}">Usuarios</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       <li><a href="{{ url_for('admin.lista_roles') }}">Roles y Permisos</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       <li><a href="{{ url_for('admin.cuentas_predeterminadas') }}">{{ _("Cuentas por defecto") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.configuracion_valuacion_inventario') }}">{{ _("Valuación de inventarios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       <li><a href="{{ url_for('admin.external_document_validation_settings') }}">External Document Validation</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>

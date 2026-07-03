@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Inventario: valuacion global por compania en configuracion)
+- **Solicitud:** Implementar una entrada administrativa para establecer el metodo de valuacion de inventarios, fuera del wizard inicial, como configuracion global de la compañia y con costo promedio por defecto.
+- **Diagnostico:** El motor contable ya consumia `Entity.valuation_method`, pero no existia ninguna entrada en `/settings` para administrarlo ni una regla de bloqueo cuando la compañia ya habia operado inventario.
+- **Implementacion:** Se agrego `/settings/inventory-valuation` dentro de `Administracion > Configuracion General`, con selector de compañia, selector de metodo (`Costo promedio`/`FIFO`) y persistencia directa sobre `Entity.valuation_method`.
+- **Bloqueo de negocio:** El cambio queda bloqueado cuando la compañia ya tiene `StockLedgerEntry` o `StockValuationLayer`, evitando alterar la semantica de costo despues de operar inventario.
+- **Mobile:** La pantalla usa un formulario admin simple, apilado en mobile, sin `smart-select` ni overlays.
+
 ## 2026-07-03 (Contabilidad: arboles de cuentas y centros de costo)
 - **Solicitud:** Corregir el mismo patron visual del setup en el arbol de cuentas contables y el arbol de centros de costos, incluyendo comportamiento usable en dispositivos mobiles.
 - **Diagnostico:** Ambas vistas compartian el patron `.ca-tree`, pero estaban montadas sobre una tarjeta demasiado amplia con toolbar dispersa, demasiado espacio en blanco y un arbol visualmente estrecho y poco tactil en pantallas pequenas.
