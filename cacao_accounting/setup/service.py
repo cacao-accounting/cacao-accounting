@@ -29,6 +29,7 @@ from cacao_accounting.setup.repository import (
     create_default_accounting_period,
     create_default_book,
     create_default_cost_center,
+    create_default_party_groups,
     create_default_price_lists,
     create_default_uoms,
     create_default_entity,
@@ -192,6 +193,7 @@ def finalize_setup(
         default=True,
     )
     _activate_and_set_default_currency(company_data.get("moneda", ""))
+    create_default_party_groups(idioma)
     save_company_details(company_data)
     mark_setup_complete()
     database.session.commit()
