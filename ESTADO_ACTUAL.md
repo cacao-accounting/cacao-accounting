@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Setup inicial / ajuste visual del wizard (2026-07-03):** La pantalla inicial del setup ya usa una composicion mas compacta y operativa.
+  - El contenedor principal reduce el ancho maximo y elimina el aspecto de hero sobredimensionado.
+  - La cabecera usa la marca real desde `static/media/brand.svg`.
+  - El stepper queda como barra horizontal compacta y el selector de idioma ya no queda perdido dentro de una tarjeta pequena.
+  - En mobile el stepper y las acciones se ajustan al ancho disponible sin romper el flujo.
+
 - **Smart Select / overlay en formularios maestros (2026-07-03):** Los menues de busqueda ya no quedan recortados dentro de tablas responsivas.
   - `smart-select.js` posiciona el menu abierto con `position: fixed` y coordenadas calculadas desde el campo visible.
   - La posicion se recalcula en scroll/resize, se limpia al cerrar y se ajusta al viewport para mobile.

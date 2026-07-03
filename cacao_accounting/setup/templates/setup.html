@@ -9,10 +9,11 @@
     :root {
       --setup-green: #6fbd2c;
       --setup-green-dark: #287a3e;
+      --setup-green-soft: #e8f5df;
       --setup-ink: #102033;
       --setup-muted: #64748b;
       --setup-line: #d8e5dc;
-      --setup-surface: rgba(255, 255, 255, .92);
+      --setup-surface: #ffffff;
     }
 
     html,
@@ -24,100 +25,106 @@
     body {
       color: var(--setup-ink);
       background:
-        radial-gradient(circle at top left, rgba(111, 189, 44, .28), transparent 34rem),
-        linear-gradient(135deg, #f4f9ef 0%, #eef5f8 52%, #e7eee8 100%);
+        radial-gradient(circle at 12% 0%, rgba(111, 189, 44, .16), transparent 24rem),
+        linear-gradient(135deg, #f7faf6 0%, #eef5f8 58%, #edf3ed 100%);
     }
 
     .setup-shell {
       min-height: 100vh;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: clamp(1rem, 2vw, 2rem);
+      padding: clamp(1rem, 4vh, 3rem) clamp(1rem, 2vw, 2rem);
     }
 
     .setup-card {
-      width: min(100%, 1180px);
+      width: min(100%, 940px);
       overflow: hidden;
       border: 1px solid rgba(40, 122, 62, .16);
-      border-radius: 26px;
+      border-radius: 18px;
       background: var(--setup-surface);
-      box-shadow: 0 24px 60px rgba(16, 32, 51, .13);
-      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 42px rgba(16, 32, 51, .11);
     }
 
     .setup-hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
-      gap: clamp(1.25rem, 3vw, 2.5rem);
-      align-items: center;
-      padding: clamp(1.4rem, 3vw, 2.35rem);
+      gap: 1rem;
+      padding: clamp(1.2rem, 2.5vw, 1.7rem);
       color: #061625;
       background:
-        radial-gradient(circle at right top, rgba(255, 255, 255, .45), transparent 18rem),
-        linear-gradient(115deg, rgba(111, 189, 44, .98), rgba(151, 211, 92, .9));
+        linear-gradient(90deg, rgba(232, 245, 223, .92), rgba(255, 255, 255, .96));
+      border-top: 5px solid var(--setup-green);
+      border-bottom: 1px solid var(--setup-line);
     }
 
     .setup-eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: .5rem;
-      margin-bottom: .75rem;
-      padding: .35rem .7rem;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, .36);
-      font-size: .8rem;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      margin-bottom: .65rem;
+      padding: .2rem 0;
+    }
+
+    .setup-brand {
+      display: block;
+      width: min(13.5rem, 58vw);
+      height: auto;
     }
 
     .setup-title {
-      max-width: 42rem;
+      max-width: 34rem;
       margin: 0;
-      font-size: clamp(2rem, 4vw, 3.35rem);
+      font-size: clamp(1.75rem, 2.8vw, 2.35rem);
       font-weight: 800;
-      line-height: 1.03;
+      line-height: 1.12;
     }
 
     .setup-subtitle {
-      max-width: 39rem;
-      margin: .85rem 0 0;
+      max-width: 42rem;
+      margin: .45rem 0 0;
       color: rgba(6, 22, 37, .76);
-      font-size: 1rem;
+      font-size: .98rem;
     }
 
     .setup-progress-card {
-      padding: .85rem;
-      border: 1px solid rgba(255, 255, 255, .42);
-      border-radius: 20px;
-      background: rgba(255, 255, 255, .32);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .5rem;
+      padding: .35rem;
+      border: 1px solid rgba(40, 122, 62, .14);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .72);
     }
 
     .setup-step {
       display: flex;
       align-items: center;
-      gap: .75rem;
-      padding: .55rem .6rem;
-      border-radius: 14px;
+      gap: .55rem;
+      min-width: 0;
+      padding: .5rem .55rem;
+      border-radius: 9px;
       color: rgba(6, 22, 37, .68);
       font-weight: 700;
-      font-size: .95rem;
+      font-size: .86rem;
+      line-height: 1.2;
     }
 
     .setup-step.is-active {
       color: #061625;
-      background: rgba(255, 255, 255, .55);
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(16, 32, 51, .06);
     }
 
     .setup-step-number {
+      flex: 0 0 auto;
       display: inline-grid;
-      width: 2rem;
-      height: 2rem;
+      width: 1.75rem;
+      height: 1.75rem;
       place-items: center;
       border-radius: 50%;
-      background: rgba(255, 255, 255, .46);
+      background: var(--setup-green-soft);
+      color: var(--setup-green-dark);
+      font-size: .85rem;
+      font-weight: 800;
     }
 
     .setup-step.is-active .setup-step-number,
@@ -127,7 +134,7 @@
     }
 
     .setup-body {
-      padding: clamp(1.4rem, 3vw, 2.25rem);
+      padding: clamp(1.25rem, 2.5vw, 1.85rem);
       background:
         linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%);
     }
@@ -143,12 +150,16 @@
     }
 
     .setup-panel {
-      margin-top: 1.1rem;
-      padding: clamp(1rem, 2vw, 1.5rem);
+      margin-top: .95rem;
+      padding: clamp(1rem, 2vw, 1.35rem);
       border: 1px solid var(--setup-line);
-      border-radius: 22px;
+      border-radius: 14px;
       background: #fff;
-      box-shadow: 0 12px 30px rgba(16, 32, 51, .055);
+      box-shadow: 0 8px 22px rgba(16, 32, 51, .045);
+    }
+
+    .setup-language-panel {
+      max-width: 34rem;
     }
 
     .setup-panel-soft {
@@ -158,7 +169,7 @@
     .setup-catalog-option {
       padding: .85rem 1rem;
       border: 1px solid var(--setup-line);
-      border-radius: 16px;
+      border-radius: 12px;
       background: #fff;
     }
 
@@ -170,8 +181,9 @@
       display: flex;
       justify-content: space-between;
       gap: 1rem;
-      margin-top: 1.25rem;
-      padding-top: 1.15rem;
+      align-items: center;
+      margin-top: 1.15rem;
+      padding-top: 1rem;
       border-top: 1px solid var(--setup-line);
     }
 
@@ -190,24 +202,11 @@
     }
 
     @media (max-width: 900px) {
-      .setup-shell {
-        align-items: flex-start;
-      }
-
-      .setup-hero {
-        grid-template-columns: 1fr;
-      }
-
-      .setup-progress-card {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: .5rem;
-      }
-
       .setup-step {
-        align-items: flex-start;
+        align-items: center;
         flex-direction: column;
-        gap: .4rem;
+        text-align: center;
+        gap: .35rem;
       }
 
       .setup-actions {
@@ -219,6 +218,39 @@
         background: rgba(255, 255, 255, .94);
       }
     }
+
+    @media (max-width: 560px) {
+      .setup-shell {
+        padding: .75rem;
+      }
+
+      .setup-card {
+        border-radius: 14px;
+      }
+
+      .setup-hero,
+      .setup-body {
+        padding: 1rem;
+      }
+
+      .setup-progress-card {
+        grid-template-columns: 1fr;
+      }
+
+      .setup-step {
+        flex-direction: row;
+        justify-content: flex-start;
+        text-align: left;
+      }
+
+      .setup-actions {
+        gap: .75rem;
+      }
+
+      .setup-actions .btn {
+        flex: 1 1 0;
+      }
+    }
   </style>
 </head>
 
@@ -228,8 +260,7 @@
       <header class="setup-hero">
         <div>
           <div class="setup-eyebrow">
-            <i class="bi bi-flower1"></i>
-            {{ texts.eyebrow }}
+            <img class="setup-brand" src="{{ url_for('static', filename='media/brand.svg') }}" alt="{{ texts.eyebrow }}">
           </div>
           <h1 class="setup-title">{{ texts.title }}</h1>
           <p class="setup-subtitle">{{ texts.subtitle }}</p>
@@ -263,7 +294,7 @@
           <section>
             <h2 class="setup-section-title">{{ texts.language_title }}</h2>
             <p class="setup-help">{{ texts.language_help }}</p>
-            <div class="setup-panel col-lg-5">
+            <div class="setup-panel setup-language-panel">
               <label class="form-label" for="idioma">{{ texts.language }}</label>
               {{ form.idioma(class="form-select form-select-lg", id="idioma") }}
               <button type="submit" class="visually-hidden" id="apply-language-action" name="action" value="apply_language" aria-hidden="true" tabindex="-1"></button>
@@ -389,8 +420,12 @@
           {% endif %}
 
           <div class="setup-actions">
-            <button type="submit" name="action" value="back" class="btn btn-outline-secondary btn-lg" {% if step == 1 %}disabled{% endif %}>{{ texts.back }}</button>
-            <button type="submit" name="action" value="next" class="btn btn-setup-primary btn-lg px-5">{% if step == 3 %}{{ texts.finish }}{% else %}{{ texts.next }}{% endif %}</button>
+            <button type="submit" name="action" value="back" class="btn btn-outline-secondary btn-lg" {% if step == 1 %}disabled{% endif %}>
+              <i class="bi bi-arrow-left-short me-1" aria-hidden="true"></i>{{ texts.back }}
+            </button>
+            <button type="submit" name="action" value="next" class="btn btn-setup-primary btn-lg px-5">
+              {% if step == 3 %}<i class="bi bi-check2-circle me-1" aria-hidden="true"></i>{{ texts.finish }}{% else %}{{ texts.next }}<i class="bi bi-arrow-right-short ms-1" aria-hidden="true"></i>{% endif %}
+            </button>
           </div>
         </form>
       </main>
