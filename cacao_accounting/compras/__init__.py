@@ -54,7 +54,7 @@ from cacao_accounting.document_flow import (
     revert_relations_for_target,
 )
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
@@ -72,6 +72,9 @@ from cacao_accounting.party_management import (
     deactivate_party_contact,
     generate_party_code,
     party_group_label,
+    toggle_party_customer_role,
+    toggle_party_supplier_role as toggle_party_supplier_role,
+    PartyRoleToggleError,
     update_party_address,
     update_party_contact,
 )
@@ -2959,3 +2962,33 @@ def compras_factura_compra_cancel(invoice_id: str):
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     flash(_("Factura de compra cancelada con reverso contable."), "warning")
     return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+
+
+@compras.route("/supplier/<supplier_id>/habilitar-cliente", methods=["POST"])
+@modulo_activo("sales")
+@login_required
+def compras_proveedor_habilitar_cliente(supplier_id: str):
+    """Habilita un proveedor como cliente."""
+    try:
+        toggle_party_customer_role(supplier_id, enable=True, user_id=current_user.id)
+        database.session.commit()
+        flash(_("Proveedor habilitado como cliente exitosamente."), "success")
+    except PartyRoleToggleError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+
+
+@compras.route("/supplier/<supplier_id>/deshabilitar-cliente", methods=["POST"])
+@modulo_activo("sales")
+@login_required
+def compras_proveedor_deshabilitar_cliente(supplier_id: str):
+    """Deshabilita el rol de cliente de un proveedor."""
+    try:
+        toggle_party_customer_role(supplier_id, enable=False, user_id=current_user.id)
+        database.session.commit()
+        flash(_("Rol de cliente deshabilitado exitosamente."), "success")
+    except PartyRoleToggleError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
