@@ -514,7 +514,7 @@ def ventas_cliente_nuevo():
     company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
     if request.method == "POST":
         return _handle_cliente_create(
-            request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+            request.form, selected_company, company_choices, formulario, titulo
         )
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -531,7 +531,6 @@ def _handle_cliente_create(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -604,7 +603,7 @@ def ventas_cliente_editar(customer_id: str):
     company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
     if request.method == "POST":
         return _handle_cliente_update(
-            cliente, request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+            cliente, request.form, selected_company, company_choices, formulario, titulo
         )
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -624,7 +623,6 @@ def _handle_cliente_update(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
