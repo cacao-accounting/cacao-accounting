@@ -113,6 +113,7 @@ class FinancialReportFilters:
     party_id: str | None = None
     voucher_type: str | None = None
     status: str | None = None
+    include_cancellations: bool = False
     include_running_balance: bool = False
     include_closing: bool = False
     page: int = 1
@@ -834,6 +835,7 @@ def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start:
     query = _apply_base_filters(query, filters)
     query = _apply_account_filters(query, filters)
     query = _apply_party_filters(query, filters)
+    query = _apply_cancellation_scope(query, filters)
     query = _apply_status_filter(query, filters)
     query = _apply_period_filter(query, period_start, period_end)
     return query
@@ -875,11 +877,17 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
+def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
+    if filters.include_cancellations:
+        return query
+    return query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+
+
 def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.status == "cancelled":
         query = query.where(GLEntry.is_cancelled.is_(True))
     elif filters.status in {"submitted", "posted"}:
-        query = query.where(GLEntry.is_cancelled.is_(False))
+        query = query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
     return query
 
 
@@ -1041,7 +1049,7 @@ def _movement_detail_row_values(
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
-        "voucher_status": "cancelled" if entry.is_cancelled else "submitted",
+        "voucher_status": "reversal" if entry.is_reversal else ("cancelled" if entry.is_cancelled else "submitted"),
     }
     if include_running_balance and running_balance is not None:
         row_values["running_balance"] = running_balance

@@ -168,7 +168,12 @@
     while (header.endsWith('*')) {
       header = header.slice(0, -1).trimEnd();
     }
-    return header;
+    return header
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function findImportColumnIndex(headers, column) {
@@ -182,14 +187,17 @@
     if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
 
     const headers = (rawRows[0] || []).map((value) => normalizeImportHeader(value));
+    const matchedIndexes = schema.columns.map((col) => findImportColumnIndex(headers, col));
+    const hasHeaderMatches = matchedIndexes.some((index) => index >= 0);
     return rawRows
       .slice(1)
       .map((row) => {
         const obj = {};
-        schema.columns.forEach((col) => {
-          const foundIndex = findImportColumnIndex(headers, col);
-          if (foundIndex >= 0) {
-            obj[col.key] = row[foundIndex] === undefined ? '' : String(row[foundIndex]).trim();
+        schema.columns.forEach((col, columnIndex) => {
+          const foundIndex = matchedIndexes[columnIndex];
+          const effectiveIndex = foundIndex >= 0 ? foundIndex : (!hasHeaderMatches ? columnIndex : -1);
+          if (effectiveIndex >= 0) {
+            obj[col.key] = row[effectiveIndex] === undefined ? '' : String(row[effectiveIndex]).trim();
           }
         });
         return obj;
