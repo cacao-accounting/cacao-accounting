@@ -1021,13 +1021,20 @@
               `/api/line-import/schema?doctype=${this.importModal.doctype}`,
               { credentials: "same-origin" }
             );
+            const payload = await response.json();
             if (response.ok) {
-              this.importModal.schema = await response.json();
-              const modalEl = document.getElementById("modalImportLines");
-              if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+              this.importModal.schema = payload;
+            } else {
+              this.importModal.schema = { columns: [] };
+              this.importModal.errors = [{ message: payload.error || "No se pudo cargar la plantilla de importación." }];
             }
           } catch (err) {
             console.error("Error fetching import schema:", err);
+            this.importModal.schema = { columns: [] };
+            this.importModal.errors = [{ message: "No se pudo cargar la plantilla de importación." }];
+          } finally {
+            const modalEl = document.getElementById("modalImportLines");
+            if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
           }
         },
 
@@ -1074,11 +1081,11 @@
             });
 
             const data = await response.json();
-            if (data.valid) {
+            if (response.ok && data.valid) {
               this.importModal.isValidated = true;
               this.importModal.parsedRows = data.rows;
             } else {
-              this.importModal.errors = data.errors || [];
+              this.importModal.errors = data.errors || [{ message: data.error || "No se pudo validar." }];
               this.importModal.isValidated = false;
             }
           } catch (err) {
