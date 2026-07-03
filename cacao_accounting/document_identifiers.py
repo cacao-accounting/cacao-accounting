@@ -217,12 +217,13 @@ def _create_default_series(entity_type: str, company: str) -> NamingSeries:
     ya que es la primera y unica para esta combinacion.
     """
     code = _default_entity_code(entity_type)
+    prefix_template = f"*COMP*-{code}-*YYYY*-*MM*-"
     sequence = Sequence(
         name=f"{company} {entity_type} sequence",
         current_value=0,
         increment=1,
         padding=5,
-        reset_policy="yearly",
+        reset_policy="monthly" if "*MM*" in prefix_template or "*MMM*" in prefix_template else "yearly",
     )
     database.session.add(sequence)
     database.session.flush()
@@ -231,7 +232,7 @@ def _create_default_series(entity_type: str, company: str) -> NamingSeries:
         name=f"{company}-{code}",
         entity_type=entity_type,
         company=company,
-        prefix_template=f"*COMP*-{code}-*YYYY*-*MM*-",
+        prefix_template=prefix_template,
         is_active=True,
         is_default=True,
     )

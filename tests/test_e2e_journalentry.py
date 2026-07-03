@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Any
 
 import pytest
@@ -192,7 +193,7 @@ def test_e2e_journalentry_cancel_submitted_creates_reversal_entries(app_ctx):
 
     payload = {
         "company": "cacao",
-        "posting_date": "2026-05-09",
+        "posting_date": date.today().isoformat(),
         "books": ["FISC"],
         "memo": "E2E submitted cancel",
         "lines": [
@@ -278,9 +279,30 @@ def test_e2e_journalentry_duplicate_from_allowed_statuses_creates_draft(app_ctx,
 
 
 def test_e2e_journalentry_revert_creates_editable_reversed_draft(app_ctx):
-    from cacao_accounting.database import ComprobanteContable, ComprobanteContableDetalle, database
+    from cacao_accounting.database import AccountingPeriod, ComprobanteContable, ComprobanteContableDetalle, database
 
     seeded = _seed_journal_catalog()
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name="2026-05",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+            ),
+            AccountingPeriod(
+                entity="cacao",
+                name="2026-06",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 6, 1),
+                end=date(2026, 6, 30),
+            ),
+        ]
+    )
+    database.session.commit()
     client = app_ctx.test_client()
     _login(client, seeded["user_id"])
 
@@ -300,7 +322,11 @@ def test_e2e_journalentry_revert_creates_editable_reversed_draft(app_ctx):
     submit_response = client.post(f"/accounting/journal/{journal.id}/submit", follow_redirects=False)
     assert submit_response.status_code == 302
 
-    revert_response = client.post(f"/accounting/journal/{journal.id}/revert", follow_redirects=False)
+    revert_response = client.post(
+        f"/accounting/journal/{journal.id}/revert",
+        data={"reversal_date": "2026-06-03"},
+        follow_redirects=False,
+    )
     reversed_journal = (
         database.session.execute(database.select(ComprobanteContable).filter(ComprobanteContable.memo.like("Reversión de%")))
         .scalars()
@@ -320,9 +346,21 @@ def test_e2e_journalentry_revert_creates_editable_reversed_draft(app_ctx):
     assert "/accounting/journal/edit/" in revert_response.headers.get("Location", "")
     assert reversed_journal is not None
     assert reversed_journal.status == "draft"
-    assert reversed_journal.document_no is None
+    assert reversed_journal.document_no is not None
+    assert reversed_journal.date == date(2026, 6, 3)
+    assert reversed_journal.naming_series_id == journal.naming_series_id
+    assert "-06-" in reversed_journal.document_no
+    assert reversed_journal.document_no.endswith("00001")
     assert reversed_lines[0].value == -120
     assert reversed_lines[1].value == 120
+
+    submit_reversal_response = client.post(f"/accounting/journal/{reversed_journal.id}/submit", follow_redirects=False)
+    refreshed_reversal = database.session.get(ComprobanteContable, reversed_journal.id)
+
+    assert submit_reversal_response.status_code == 302
+    assert refreshed_reversal.document_no is not None
+    assert "-06-" in refreshed_reversal.document_no
+    assert refreshed_reversal.document_no.endswith("00001")
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,14 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Reportes contables: anulaciones/reversas y reversión de comprobantes con fecha)
+- **Solicitud:** Corregir los 5 reportes contables para que el filtro de anulaciones excluya también las reversas GL cuando no se desea ver anulaciones, y ajustar `Revertir comprobante` para pedir fecha y respetar la `naming_series` del comprobante origen.
+- **Reportes contables:** `FinancialReportFilters` ahora separa explícitamente `include_cancellations` del `status`, y `_apply_gl_filters()` excluye `GLEntry.is_cancelled` e `GLEntry.is_reversal` por defecto en `account-movement`, `account-summary`, `trial-balance`, `balance-sheet` e `income-statement`.
+- **UI de reportes:** El checkbox del patrón financiero ahora representa la semántica real del dataset (`Mostrar anulaciones y reversas`) y el estado mostrado en el resumen contextual deja de confundir reversas con movimientos contabilizados normales.
+- **Detalle de movimiento:** Las filas GL reversadas se renderizan con `voucher_status = reversal`, manteniendo visibles las reversas solo cuando el usuario decide incluir anulaciones.
+- **Reversión de comprobantes:** La acción `Revertir` en el detalle del comprobante abre un modal con fecha de reversión, recomendación de uso (`Anular` en el mismo período, `Revertir` en otro) y creación del borrador con la misma `naming_series_id` y la `posting_date` elegida.
+- **Numeración:** El borrador de reversión sigue naciendo sin `document_no`, pero al asignar identificador usa la serie heredada y resuelve prefijos dinámicos (`YYYY`, `MM`) con la fecha de reversión.
+- **Validación:** Se ampliaron pruebas de reportes, formularios de comprobante, cobertura de rutas y E2E para cubrir exclusión de anulados/reversas, fecha obligatoria de reversión, herencia de serie y numeración en otro mes.
+
 ## 2026-07-03 (Setup inicial, Smart Select en maestros, bodega por compania e importador de lineas)
 - **Solicitud:** Corregir el setup inicial para respetar idioma, completar paises/monedas de America, bloquear el selector de catalogo al crear catalogo en cero y mejorar visualmente el wizard; estandarizar Cliente, Proveedor, Item y Bodega con `smart-select`; agregar configuracion de bodega por compania; corregir el error Alpine del importador de lineas.
 - **Setup inicial:** Se centralizaron catalogos de idioma, paises de America y monedas reconciliadas con el seed; el wizard renderiza textos segun idioma seleccionado y el paso de catalogo deshabilita/limpia el selector cuando se elige crear desde cero.
@@ -485,6 +494,19 @@
   - Mejorada la robustez de ejecución con bloqueos de base de datos (`with_for_update`) e hilos daemon.
   - Soporte para auto-detección de delimitadores en CSV y extracción de tipos avanzada en ODS.
   - Implementada generación de plantillas en formatos CSV, XLSX y ODS con descarga vía UI.
+
+# 2026-07-03 (Reversión contable, anulación estricta y numeración mensual)
+- **Solicitud:** Corregir el naming/numeración de reversión contable, endurecer la regla operativa para `Anular` y `Revertir`, y evitar que el listado de comprobantes muestre ULIDs como nombre visible cuando el borrador aún no tiene documento contable definitivo.
+- **Hallazgo en desarrollo:** El comprobante `01KWK1HFDXZ3QPDM6BXDTM75GB` quedó con fecha `2026-08-01` pero referencia/numeración visible de julio, y la serie `BMO-JOU` estaba vinculada a una secuencia con política `yearly` aunque su prefijo usa `*YYYY*-*MM*`, lo que provocaba números como `...-00004` en agosto en lugar de reiniciar a `...-00001`.
+- **Implementación:** La reversión ahora exige otro período contable, asigna número desde la fecha de reversión y conserva la serie del origen; los borradores de comprobante se renumeran si cambia `posting_date` o `naming_series_id`; la anulación solo se permite en la misma fecha del comprobante; y el listado usa un nombre visible amigable para borradores de reversión sin `document_no`.
+- **Series dinámicas:** La política efectiva de reset de secuencia ahora sube a `monthly` cuando la serie usa tokens mensuales en el prefijo, incluso si la secuencia heredada estaba configurada como `yearly`. Las series nuevas con prefijo mensual también nacen con reset mensual.
+- **Validación:** Pruebas focales en `tests/test_09_journal_entry_form.py`, `tests/test_e2e_journalentry.py`, `tests/test_11_contabilidad_coverage.py` y `tests/test_audit_trail_journal.py` quedaron en verde (`9 passed`).
+
+# 2026-07-03 (Asistente de importación de líneas en comprobantes)
+- **Solicitud:** Hacer más intuitivo el auxiliar de `Importar líneas` en comprobantes contables, agregando descarga de plantilla, carga local de XLSX y tolerancia real a encabezados en inglés o español sin depender del título exacto.
+- **Implementación:** El modal de `journal_nuevo.html` ahora separa pegar/subir en pestañas, permite descargar una plantilla XLSX en navegador con `ExcelJS` y leer archivos locales sin enviar el archivo al servidor. El mapeo de columnas quedó normalizado sin acentos ni guiones bajos y con fallback por posición cuando no hay coincidencias de encabezado.
+- **Esquemas compartidos:** `LineImportSchemaRegistry` expone aliases explícitos ES/EN para columnas de todos los doctypes soportados por line import, de modo que el asistente compartido y el comprobante manual acepten los mismos encabezados bilingües.
+- **Validación:** Se agregaron pruebas de render del modal en comprobantes y pruebas API para aliases bilingües; la suite focal `tests/test_09_journal_entry_form.py` + `tests/test_line_import_api.py` quedó en verde (`48 passed`).
 
 ## 2026-05-23 (Conciliacion masiva AR/AP y Stock Reconciliation con valuacion)
 - **Solicitud:** Implementar la conciliacion masiva de facturas contra pagos existentes y extender Stock Reconciliation para ajustar cantidad y valor.

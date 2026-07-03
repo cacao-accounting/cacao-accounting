@@ -100,12 +100,10 @@
                     <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
                 </button>
             </form>
-            <form method="post" action="{{ url_for('contabilidad.revertir_comprobante', identifier=registro.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-warning" type="submit">
+            <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="modal"
+                data-bs-target="#reversalModal">
                     <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
-                </button>
-            </form>
+            </button>
             {% endif %}
             {% if registro.status == "submitted" %}
             <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
@@ -152,12 +150,10 @@
                         <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
                     </button>
                 </form>
-                <form method="post" action="{{ url_for('contabilidad.revertir_comprobante', identifier=registro.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="btn btn-sm btn-outline-warning" type="submit">
+                <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="modal"
+                    data-bs-target="#reversalModal">
                         <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
-                    </button>
-                </form>
+                </button>
                 {% endif %}
                 {% if registro.status == "submitted" %}
                 <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
@@ -209,6 +205,39 @@
                     <p>{{ currency_label or '-' }}</p>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reversalModal" tabindex="-1" aria-labelledby="reversalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('contabilidad.revertir_comprobante', identifier=registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reversalModalLabel">{{ _('Revertir comprobante') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="reversal_date">{{ _('Fecha de reversión') }}</label>
+                        <input class="form-control" id="reversal_date" name="reversal_date" type="date"
+                            value="{{ registro.date.isoformat() if registro.date else '' }}" required>
+                    </div>
+                    <p class="text-muted small mb-2">
+                        {{ _('Anular solo aplica el mismo día del comprobante. Para registrar el ajuste en otro período use Revertir.') }}
+                    </p>
+                    <div class="alert alert-light border mb-0" id="reversal-period-guidance">
+                        {{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
+                    <button class="btn btn-outline-warning" type="submit">
+                        <i class="bi bi-arrow-left-right me-1"></i>{{ _('Crear reversión') }}
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -448,6 +477,28 @@
         });
 
         setActiveRow(rows[0]);
+    })();
+
+    (function () {
+        var reversalDateInput = document.getElementById('reversal_date');
+        var guidance = document.getElementById('reversal-period-guidance');
+        var originalPostingDate = '{{ registro.date.isoformat() if registro.date else '' }}';
+        if (!reversalDateInput || !guidance || !originalPostingDate) return;
+
+        function updateReversalGuidance() {
+            var selectedDate = reversalDateInput.value || '';
+            if (!selectedDate) {
+                guidance.textContent = '{{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') }}';
+                return;
+            }
+            var samePeriod = selectedDate.slice(0, 7) === originalPostingDate.slice(0, 7);
+            guidance.textContent = samePeriod
+                ? '{{ _('La fecha elegida cae en el mismo período. Debe usar una fecha de otro período para revertir este comprobante.') }}'
+                : '{{ _('La fecha elegida cae en un período distinto. Se puede crear el borrador de reversión para el nuevo período contable.') }}';
+        }
+
+        reversalDateInput.addEventListener('input', updateReversalGuidance);
+        updateReversalGuidance();
     })();
 </script>
 
