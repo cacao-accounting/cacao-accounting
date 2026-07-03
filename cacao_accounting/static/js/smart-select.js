@@ -59,6 +59,10 @@
     return undefined;
   }
 
+  function clampNumber(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('smartSelect', (config) => {
       return {
@@ -94,6 +98,7 @@
         invalid: false,
         lastFilterSignature: '',
         onSelect: config.onSelect || null,
+        _positionHandler: null,
 
         init() {
           this.lastFilterSignature = this.filterSignature();
@@ -181,13 +186,13 @@
           if (this.preloadOnFocus) {
             this.handlePreloadOnFocus();
           } else if (this.options.length > 0) {
-            this.open = true;
+            this.openMenu();
           }
         },
 
         handlePreloadOnFocus() {
           if (this.loading) {
-            this.open = true;
+            this.openMenu();
           } else if (!this.open) {
             this.openWhenNotOpen();
           }
@@ -195,7 +200,7 @@
 
         openWhenNotOpen() {
           if (this.options.length > 0) {
-            this.open = true;
+            this.openMenu();
           } else if (this.requiredFiltersPresent()) {
             this.preloadOptions({ openMenu: true });
           }
@@ -229,7 +234,7 @@
           const params = this.buildSearchParams('');
           this.loading = true;
           if (loadSettings.openMenu) {
-            this.open = true;
+            this.openMenu();
           }
           try {
             const response = await this.fetchOptionsResponse(params);
@@ -276,7 +281,7 @@
           this.error = '';
           if (!this.hasValidFilters()) {
             this.options = [];
-            this.open = false;
+            this.closeMenu();
             this.loading = false;
             return;
           }
@@ -287,12 +292,12 @@
 
           const params = this.buildSearchParams(query);
           this.loading = true;
-          this.open = true;
+          this.openMenu();
           try {
             const data = await this.fetchOptionsResponse(params);
             this.options = data.results || [];
             this.loading = false;
-            this.open = true;
+            this.openMenu();
           } catch (err) {
             this.handleFetchError(err, { keepOpen: true });
           }
@@ -304,7 +309,11 @@
           this.options = [];
           this.loading = false;
           this.error = this.messages.error;
-          this.open = Boolean(errorSettings.keepOpen);
+          if (errorSettings.keepOpen) {
+            this.openMenu();
+          } else {
+            this.closeMenu();
+          }
         },
 
         hasValidFilters() {
@@ -313,11 +322,11 @@
 
         handleShortQuery() {
           if (this.hasPreloadedOptions()) {
-            this.open = true;
+            this.openMenu();
             return;
           }
           this.options = [];
-          this.open = false;
+          this.closeMenu();
           this.loading = false;
         },
 
@@ -338,7 +347,7 @@
           this.selectedValue = normalizeValue(value) || '';
           this.selectedLabel = label || '';
           this.search = this.selectedLabel;
-          this.open = false;
+          this.closeMenu();
           this.invalid = false;
           this.error = '';
           this.notifyValueChange();
@@ -360,7 +369,7 @@
           this.selectedValue = normalizeValue(optionValue) || '';
           this.selectedLabel = option.display_name || option.label || '';
           this.search = this.selectedLabel;
-          this.open = false;
+          this.closeMenu();
           this.invalid = false;
           this.error = '';
           if (typeof this.onSelect === 'function') {
@@ -395,7 +404,7 @@
           this.selectedLabel = '';
           this.search = '';
           this.options = [];
-          this.open = false;
+          this.closeMenu();
           this.invalid = false;
           this.error = '';
           this.notifyValueChange();
@@ -406,9 +415,94 @@
         },
 
         _closeSoonHandler() {
-          this.open = false;
+          this.closeMenu();
           const restoredInitialLabel = this.selectedLabel && this.search === this.selectedLabel;
           this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
+        },
+
+        openMenu() {
+          this.open = true;
+          this.bindMenuPositionListeners();
+          this.scheduleMenuPositionUpdate();
+        },
+
+        closeMenu() {
+          this.open = false;
+          this.unbindMenuPositionListeners();
+          this.clearMenuPosition();
+        },
+
+        scheduleMenuPositionUpdate() {
+          if (typeof window === 'undefined') return;
+          const defer = typeof window.setTimeout === 'function' ? window.setTimeout.bind(window) : setTimeout;
+          defer(this.updateMenuPosition.bind(this), 0);
+        },
+
+        bindMenuPositionListeners() {
+          if (this._positionHandler || typeof window === 'undefined') return;
+          if (typeof window.addEventListener !== 'function') return;
+          this._positionHandler = this.updateMenuPosition.bind(this);
+          window.addEventListener('resize', this._positionHandler);
+          window.addEventListener('scroll', this._positionHandler, true);
+        },
+
+        unbindMenuPositionListeners() {
+          if (!this._positionHandler || typeof window === 'undefined') return;
+          if (typeof window.removeEventListener !== 'function') return;
+          window.removeEventListener('resize', this._positionHandler);
+          window.removeEventListener('scroll', this._positionHandler, true);
+          this._positionHandler = null;
+        },
+
+        menuElements() {
+          if (!this.$root?.querySelector) return {};
+          const menu = this.$root.querySelector('.ca-smart-select-menu');
+          const anchor = this.$root.querySelector('.ca-smart-select-input-wrap') || this.$root.querySelector('.ca-smart-select-input');
+          return { menu, anchor };
+        },
+
+        updateMenuPosition() {
+          if (!this.open || typeof window === 'undefined') return;
+          const { menu, anchor } = this.menuElements();
+          if (!menu || !anchor?.getBoundingClientRect) return;
+
+          const rect = anchor.getBoundingClientRect();
+          const margin = 8;
+          const gap = 4;
+          const minWidth = 160;
+          const maxHeight = 256;
+          const viewportWidth = window.innerWidth || document.documentElement.clientWidth || rect.right;
+          const viewportHeight = window.innerHeight || document.documentElement.clientHeight || rect.bottom;
+          const availableBelow = viewportHeight - rect.bottom - margin;
+          const availableAbove = rect.top - margin;
+          const openAbove = availableBelow < 120 && availableAbove > availableBelow;
+          const availableHeight = Math.max(72, (openAbove ? availableAbove : availableBelow) - gap);
+          const menuHeight = Math.min(maxHeight, availableHeight);
+          const menuWidth = Math.max(rect.width, minWidth);
+          const maxLeft = Math.max(margin, viewportWidth - menuWidth - margin);
+          const left = clampNumber(rect.left, margin, maxLeft);
+          const maxTop = Math.max(margin, viewportHeight - margin - menuHeight);
+          const top = openAbove ? Math.max(margin, rect.top - gap - menuHeight) : Math.min(rect.bottom + gap, maxTop);
+
+          menu.style.position = 'fixed';
+          menu.style.left = `${left}px`;
+          menu.style.right = 'auto';
+          menu.style.top = `${top}px`;
+          menu.style.width = `${menuWidth}px`;
+          menu.style.maxHeight = `${menuHeight}px`;
+          menu.style.zIndex = '2000';
+        },
+
+        clearMenuPosition() {
+          const { menu } = this.menuElements();
+          if (!menu) return;
+          menu.style.position = '';
+          menu.style.left = '';
+          menu.style.right = '';
+          menu.style.top = '';
+          menu.style.width = '';
+          menu.style.maxHeight = '';
+          menu.style.zIndex = '';
         }
       };
     });

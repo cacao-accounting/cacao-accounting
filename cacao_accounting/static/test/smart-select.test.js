@@ -9,7 +9,15 @@ function loadSmartSelect(overrides = {}) {
   const fetchImpl = overrides.fetch || (() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) }));
   let smartSelectFactory = null;
 
+  if (overrides.window) {
+    globalThis.window = overrides.window;
+  }
+
   globalThis.document = {
+    documentElement: {
+      clientWidth: overrides.clientWidth || 1024,
+      clientHeight: overrides.clientHeight || 768,
+    },
     addEventListener: (event, callback) => {
       listeners[event] = callback;
     },
@@ -43,6 +51,7 @@ describe('smart-select', function () {
     delete globalThis.document;
     delete globalThis.Alpine;
     delete globalThis.fetch;
+    delete globalThis.window;
   });
 
   it('does not preload on focus when preloadOnFocus is disabled', async function () {
@@ -336,6 +345,147 @@ describe('smart-select', function () {
 
     assert.strictEqual(component.search, 'cacao');
     assert.ok(decodeURIComponent(requestUrl).includes('q=cacao'));
+  });
+
+  it('positions the open menu with fixed viewport coordinates', function () {
+    const addedListeners = [];
+    const removedListeners = [];
+    const create = loadSmartSelect({
+      window: {
+        innerWidth: 1024,
+        innerHeight: 768,
+        setTimeout: function (callback) {
+          callback();
+          return 1;
+        },
+        addEventListener: function (name, callback, options) {
+          addedListeners.push({ name, callback, options });
+        },
+        removeEventListener: function (name, callback, options) {
+          removedListeners.push({ name, callback, options });
+        },
+      },
+    });
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+    const menu = { style: {} };
+    const anchor = {
+      getBoundingClientRect: function () {
+        return { left: 100, top: 200, right: 340, bottom: 230, width: 240 };
+      },
+    };
+
+    component.$root = {
+      querySelector: function (selector) {
+        if (selector === '.ca-smart-select-menu') return menu;
+        if (selector === '.ca-smart-select-input-wrap') return anchor;
+        return null;
+      },
+    };
+
+    component.openMenu();
+
+    assert.strictEqual(component.open, true);
+    assert.strictEqual(menu.style.position, 'fixed');
+    assert.strictEqual(menu.style.left, '100px');
+    assert.strictEqual(menu.style.top, '234px');
+    assert.strictEqual(menu.style.width, '240px');
+    assert.strictEqual(menu.style.maxHeight, '256px');
+    assert.strictEqual(menu.style.zIndex, '2000');
+    assert.strictEqual(addedListeners.length, 2);
+
+    component.closeMenu();
+
+    assert.strictEqual(component.open, false);
+    assert.strictEqual(menu.style.position, '');
+    assert.strictEqual(menu.style.left, '');
+    assert.strictEqual(menu.style.top, '');
+    assert.strictEqual(menu.style.width, '');
+    assert.strictEqual(menu.style.maxHeight, '');
+    assert.strictEqual(menu.style.zIndex, '');
+    assert.strictEqual(removedListeners.length, 2);
+  });
+
+  it('opens the menu above the field when there is no space below', function () {
+    const create = loadSmartSelect({
+      window: {
+        innerWidth: 1024,
+        innerHeight: 360,
+        setTimeout: function (callback) {
+          callback();
+          return 1;
+        },
+        addEventListener: function () {},
+        removeEventListener: function () {},
+      },
+    });
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+    const menu = { style: {} };
+    const anchor = {
+      getBoundingClientRect: function () {
+        return { left: 100, top: 250, right: 340, bottom: 280, width: 240 };
+      },
+    };
+
+    component.$root = {
+      querySelector: function (selector) {
+        if (selector === '.ca-smart-select-menu') return menu;
+        if (selector === '.ca-smart-select-input-wrap') return anchor;
+        return null;
+      },
+    };
+
+    component.openMenu();
+
+    assert.strictEqual(menu.style.position, 'fixed');
+    assert.strictEqual(menu.style.top, '8px');
+    assert.strictEqual(menu.style.maxHeight, '238px');
+  });
+
+  it('keeps the fixed menu inside a narrow mobile viewport', function () {
+    const create = loadSmartSelect({
+      window: {
+        innerWidth: 360,
+        innerHeight: 640,
+        setTimeout: function (callback) {
+          callback();
+          return 1;
+        },
+        addEventListener: function () {},
+        removeEventListener: function () {},
+      },
+    });
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      minChars: 1,
+    });
+    const menu = { style: {} };
+    const anchor = {
+      getBoundingClientRect: function () {
+        return { left: 260, top: 120, right: 340, bottom: 150, width: 160 };
+      },
+    };
+
+    component.$root = {
+      querySelector: function (selector) {
+        if (selector === '.ca-smart-select-menu') return menu;
+        if (selector === '.ca-smart-select-input-wrap') return anchor;
+        return null;
+      },
+    };
+
+    component.openMenu();
+
+    assert.strictEqual(menu.style.left, '192px');
+    assert.strictEqual(menu.style.width, '160px');
   });
 
   it('company selection stores scalar value in hidden input when option value is object', function () {

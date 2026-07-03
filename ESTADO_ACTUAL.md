@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Smart Select / overlay en formularios maestros (2026-07-03):** Los menues de busqueda ya no quedan recortados dentro de tablas responsivas.
+  - `smart-select.js` posiciona el menu abierto con `position: fixed` y coordenadas calculadas desde el campo visible.
+  - La posicion se recalcula en scroll/resize, se limpia al cerrar y se ajusta al viewport para mobile.
+  - Aplica al patron compartido usado en Articulo, Cliente y Proveedor sin cambiar endpoints, nombres de campos ni payloads de formulario.
+  - La cobertura JS valida posicion inferior, apertura superior por falta de espacio y clamp lateral en viewport movil.
+
 - **Reportes contables / anulaciones y reversas (2026-07-03):** Los 5 reportes contables principales ya comparten una regla única de visibilidad sobre `GLEntry`.
   - `account-movement`, `account-summary`, `trial-balance`, `balance-sheet` e `income-statement` excluyen por defecto tanto `is_cancelled=True` como `is_reversal=True`.
   - Al activar el checkbox de anulaciones, el dataset vuelve a incluir movimientos anulados y reversas GL, sin depender del módulo origen del comprobante.
