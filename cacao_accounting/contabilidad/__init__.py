@@ -369,12 +369,15 @@ def entidad(entidad_id):
     """Entidad individual."""
     from cacao_accounting.database import Entity
 
-    registro = database.session.execute(database.select(Entity).filter_by(code=entidad_id)).first()
+    registro = database.session.execute(database.select(Entity).filter_by(code=entidad_id)).scalar_one_or_none()
+    if registro is None:
+        flash(_("La entidad indicada no existe."), "warning")
+        return redirect(url_for("contabilidad.entidades"))
 
     return render_template(
         "contabilidad/entidad.html",
-        registro=registro[0],
-        titulo=f"Contabilidad | Entidad {registro[0].code} - {APPNAME}",
+        registro=registro,
+        titulo=f"Contabilidad | Entidad {registro.code} - {APPNAME}",
     )
 
 
@@ -977,13 +980,16 @@ def cuenta(entity, id_cta):
 
     registro = database.session.execute(
         database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
-    ).first()
+    ).scalar_one_or_none()
+    if registro is None:
+        flash(_("La cuenta contable no existe"), "warning")
+        return redirect(url_for("contabilidad.cuentas"))
 
     return render_template(
         "contabilidad/cuenta.html",
-        registro=registro[0],
+        registro=registro,
         statusweb=STATUS,
-        titulo=f"Contabilidad | Cuenta {registro[0].code} - {APPNAME}",
+        titulo=f"Contabilidad | Cuenta {registro.code} - {APPNAME}",
     )
 
 
