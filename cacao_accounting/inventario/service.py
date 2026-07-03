@@ -66,7 +66,6 @@ class ItemAccountRow:
     cost_center_code: str | None = None
     income_account_id: str | None = None
     cogs_account_id: str | None = None
-    inventory_account_id: str | None = None
     stock_adjustment_account_id: str | None = None
 
 
@@ -210,7 +209,6 @@ def update_item_with_uoms(
     default_uom: str,
     purchase_uom: str | None = None,
     sale_uom: str | None = None,
-    valuation_method: str | None = None,
     default_warehouse_id: str | None = None,
     default_supplier_id: str | None = None,
     allow_negative_stock: bool = False,
@@ -254,7 +252,6 @@ def update_item_with_uoms(
     item.default_uom = default_uom
     item.purchase_uom = purchase_uom
     item.sale_uom = sale_uom
-    item.valuation_method = valuation_method
     item.default_warehouse_id = default_warehouse_id
     item.default_supplier_id = default_supplier_id
     item.allow_negative_stock = allow_negative_stock
@@ -292,7 +289,6 @@ def update_item_with_uoms(
                 expense_account_id=account_row.expense_account_id,
                 income_account_id=account_row.income_account_id,
                 cogs_account_id=account_row.cogs_account_id,
-                inventory_account_id=account_row.inventory_account_id,
                 stock_adjustment_account_id=account_row.stock_adjustment_account_id,
                 cost_center_code=account_row.cost_center_code,
             )
@@ -355,7 +351,6 @@ def create_item_with_uoms(
     default_uom: str,
     purchase_uom: str | None = None,
     sale_uom: str | None = None,
-    valuation_method: str | None = None,
     default_warehouse_id: str | None = None,
     default_supplier_id: str | None = None,
     allow_negative_stock: bool = False,
@@ -405,7 +400,6 @@ def create_item_with_uoms(
         default_uom=default_uom,
         purchase_uom=purchase_uom,
         sale_uom=sale_uom,
-        valuation_method=valuation_method,
         default_warehouse_id=default_warehouse_id,
         default_supplier_id=default_supplier_id,
         allow_negative_stock=allow_negative_stock,
@@ -441,7 +435,6 @@ def create_item_with_uoms(
                 expense_account_id=account_row.expense_account_id,
                 income_account_id=account_row.income_account_id,
                 cogs_account_id=account_row.cogs_account_id,
-                inventory_account_id=account_row.inventory_account_id,
                 stock_adjustment_account_id=account_row.stock_adjustment_account_id,
                 cost_center_code=account_row.cost_center_code,
             )
@@ -461,7 +454,6 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     expense_accounts = _request_values(form, "expense_account_id")
     income_accounts = _request_values(form, "income_account_id")
     cogs_accounts = _request_values(form, "cogs_account_id")
-    inventory_accounts = _request_values(form, "inventory_account_id")
     stock_adjustment_accounts = _request_values(form, "stock_adjustment_account_id")
     cost_centers = _request_values(form, "cost_center_code")
     rows: list[ItemAccountRow] = []
@@ -469,14 +461,12 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
         expense_account_id = expense_accounts[index] if index < len(expense_accounts) else ""
         income_account_id = income_accounts[index] if index < len(income_accounts) else ""
         cogs_account_id = cogs_accounts[index] if index < len(cogs_accounts) else ""
-        inventory_account_id = inventory_accounts[index] if index < len(inventory_accounts) else ""
         stock_adjustment_account_id = stock_adjustment_accounts[index] if index < len(stock_adjustment_accounts) else ""
         cost_center_code = cost_centers[index] if index < len(cost_centers) else ""
         cleaned_company = str(company or "").strip()
         cleaned_expense = str(expense_account_id or "").strip() or None
         cleaned_income = str(income_account_id or "").strip() or None
         cleaned_cogs = str(cogs_account_id or "").strip() or None
-        cleaned_inventory = str(inventory_account_id or "").strip() or None
         cleaned_stock_adjustment = str(stock_adjustment_account_id or "").strip() or None
         cleaned_cost_center = str(cost_center_code or "").strip() or None
         if not cleaned_company and not cleaned_expense and not cleaned_cost_center:
@@ -487,7 +477,6 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
                 expense_account_id=cleaned_expense,
                 income_account_id=cleaned_income,
                 cogs_account_id=cleaned_cogs,
-                inventory_account_id=cleaned_inventory,
                 stock_adjustment_account_id=cleaned_stock_adjustment,
                 cost_center_code=cleaned_cost_center,
             )
@@ -519,7 +508,6 @@ def validate_item_account_rows(
         _validate_item_account(row.company, row.expense_account_id, "expense", "gasto")
         _validate_item_account(row.company, row.income_account_id, "income", "ingreso")
         _validate_item_account(row.company, row.cogs_account_id, "cogs", "costo de venta")
-        _validate_item_account(row.company, row.inventory_account_id, "inventory", "inventario")
         _validate_item_account(row.company, row.stock_adjustment_account_id, "stock_adjustment", "ajuste de inventario")
         _validate_cost_center(row.company, row.cost_center_code)
         if requires_expense_by_company and not row.expense_account_id:
