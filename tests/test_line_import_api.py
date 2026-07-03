@@ -85,6 +85,27 @@ def test_get_line_import_schema(logged_in_client):
     assert any(col["key"] == "item_code" for col in data["columns"])
 
 
+@pytest.mark.parametrize(
+    ("doctype", "column_key", "expected_aliases"),
+    [
+        ("purchase_request", "item_code", {"producto", "product", "item code"}),
+        ("purchase_request", "quantity", {"cantidad", "qty", "quantity"}),
+        ("journal_entry", "account", {"cuenta contable", "account", "account code"}),
+        ("journal_entry", "debit", {"debe", "debit"}),
+        ("journal_entry", "credit", {"haber", "credit"}),
+    ],
+)
+def test_get_line_import_schema_exposes_spanish_and_english_aliases(logged_in_client, doctype, column_key, expected_aliases):
+    response = logged_in_client.get(f"/api/line-import/schema?doctype={doctype}")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    column = next(col for col in data["columns"] if col["key"] == column_key)
+    aliases = set(column.get("aliases", []))
+
+    assert expected_aliases.issubset(aliases)
+
+
 def test_get_operational_line_import_schemas(logged_in_client):
     doctypes = [
         "purchase_request",

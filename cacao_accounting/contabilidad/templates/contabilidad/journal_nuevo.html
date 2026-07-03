@@ -101,7 +101,12 @@
     while (header.endsWith('*')) {
       header = header.slice(0, -1).trimEnd();
     }
-    return header;
+    return header
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function findJournalImportColumnIndex(headers, column) {
@@ -117,14 +122,19 @@
   function mapJournalImportedRows(rawRows, schema) {
     if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
     var headers = (rawRows[0] || []).map(normalizeJournalImportHeader);
+    var matchedIndexes = schema.columns.map(function (column) {
+      return findJournalImportColumnIndex(headers, column);
+    });
+    var hasHeaderMatches = matchedIndexes.some(function (index) { return index >= 0; });
     return rawRows
       .slice(1)
       .map(function (row) {
         var obj = {};
-        schema.columns.forEach(function (column) {
-          var foundIndex = findJournalImportColumnIndex(headers, column);
-          if (foundIndex >= 0) {
-            var cellValue = row[foundIndex];
+        schema.columns.forEach(function (column, columnIndex) {
+          var foundIndex = matchedIndexes[columnIndex];
+          var effectiveIndex = foundIndex >= 0 ? foundIndex : (!hasHeaderMatches ? columnIndex : -1);
+          if (effectiveIndex >= 0) {
+            var cellValue = row[effectiveIndex];
             obj[column.key] = cellValue === undefined ? '' : String(cellValue).trim();
           }
         });
@@ -135,6 +145,33 @@
           return value !== null && value !== undefined && String(value).trim() !== '';
         });
       });
+  }
+
+  function normalizeJournalWorksheetValue(value) {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (typeof value === 'object') {
+      if (Array.isArray(value.richText)) {
+        return value.richText.map(function (part) { return part.text || ''; }).join('');
+      }
+      if (value.text !== undefined) return String(value.text);
+      if (value.result !== undefined) return normalizeJournalWorksheetValue(value.result);
+      if (value.hyperlink !== undefined) return String(value.text || value.hyperlink);
+    }
+    return String(value);
+  }
+
+  function journalWorksheetToRows(worksheet) {
+    if (!worksheet) return [];
+    var rows = [];
+    worksheet.eachRow({ includeEmpty: false }, function (row) {
+      var values = [];
+      for (var index = 1; index <= row.cellCount; index += 1) {
+        values.push(normalizeJournalWorksheetValue(row.getCell(index).value));
+      }
+      rows.push(values);
+    });
+    return rows;
   }
 
   function syncJournalBooksFromCompany(context, companyValue) {
@@ -187,7 +224,8 @@
         parsedRows: [],
         errors: [],
         validating: false,
-        isValidated: false
+        isValidated: false,
+        fileLoading: false
       },
       payload: '',
 
@@ -367,6 +405,7 @@
         this.importModal.parsedRows = [];
         this.importModal.errors = [];
         this.importModal.isValidated = false;
+        this.importModal.fileLoading = false;
         fetch('/api/line-import/schema?doctype=journal_entry', {
           credentials: 'same-origin'
         })
@@ -397,6 +436,68 @@
         }
         var rows = text.split(/\r?\n/).map(function (line) { return line.split('\t'); });
         this.importModal.parsedRows = mapJournalImportedRows(rows, this.importModal.schema);
+      },
+
+      onPasteAreaInput: function () {
+        this.parseImportedText();
+      },
+
+      downloadTemplate: async function () {
+        if (!this.importModal.schema || !Array.isArray(this.importModal.schema.columns) || !globalThis.ExcelJS) {
+          this.importModal.errors = [{ message: '{{ _("No se pudo generar la plantilla.") }}' }];
+          return;
+        }
+        try {
+          var workbook = new ExcelJS.Workbook();
+          var worksheet = workbook.addWorksheet('Plantilla');
+          worksheet.addRow(this.importModal.schema.columns.map(function (column) { return column.label; }));
+          worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+          var headerRow = worksheet.getRow(1);
+          headerRow.font = { bold: true };
+          worksheet.columns = this.importModal.schema.columns.map(function (column) {
+            return { width: Math.max(String(column.label || '').length + 4, 18) };
+          });
+          var buffer = await workbook.xlsx.writeBuffer();
+          var blob = new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          });
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'journal-entry-template.xlsx';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        } catch (error) {
+          this.importModal.errors = [{ message: '{{ _("No se pudo generar la plantilla.") }}' }];
+        }
+      },
+
+      handleFileUpload: async function (event) {
+        var file = event && event.target && event.target.files ? event.target.files[0] : null;
+        this.importModal.isValidated = false;
+        this.importModal.errors = [];
+        if (!file) return;
+        if (!globalThis.ExcelJS) {
+          this.importModal.errors = [{ message: '{{ _("No se pudo leer el archivo seleccionado.") }}' }];
+          return;
+        }
+        this.importModal.fileLoading = true;
+        try {
+          var workbook = new ExcelJS.Workbook();
+          var buffer = await file.arrayBuffer();
+          await workbook.xlsx.load(buffer);
+          var worksheet = workbook.worksheets[0];
+          var rows = journalWorksheetToRows(worksheet);
+          this.importModal.parsedRows = mapJournalImportedRows(rows, this.importModal.schema);
+          this.importModal.pastedText = '';
+        } catch (error) {
+          this.importModal.parsedRows = [];
+          this.importModal.errors = [{ message: '{{ _("No se pudo leer el archivo seleccionado.") }}' }];
+        } finally {
+          this.importModal.fileLoading = false;
+          if (event && event.target) event.target.value = '';
+        }
       },
 
       validateImport: function () {
@@ -440,6 +541,8 @@
 
       insertImportedLines: function () {
         if (!this.importModal.isValidated) return;
+        // La importacion usa todas las columnas definidas por el esquema, independientemente
+        // de cuales columnas del grid esten visibles en la tabla interactiva.
         this.lines = this.lines.filter(function (line) {
           return line.account || line.debit || line.credit || line.remarks;
         });
@@ -1292,16 +1395,42 @@
                 </span>
               </template>
             </div>
-            <div class="alert alert-info py-2 small mb-0">
-              <i class="bi bi-info-circle me-2"></i>
-              {{ _('Pegue líneas desde una hoja de cálculo incluyendo encabezados. Las líneas importadas se agregarán al detalle actual.') }}
-            </div>
+            <p class="small text-muted mb-0">{{ _('Puede pegar datos o cargar un archivo XLSX.') }}</p>
           </div>
 
-          <div class="mb-3">
-            <label class="form-label">{{ _('Pegar líneas') }}</label>
-            <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText"
-              @input="parseImportedText()" placeholder="Cuenta	Descripción	Débito	Crédito"></textarea>
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#journal-import-paste" type="button" role="tab">
+                <i class="bi bi-clipboard me-1"></i>{{ _('Pegar') }}
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#journal-import-upload" type="button" role="tab">
+                <i class="bi bi-upload me-1"></i>{{ _('Subir XLSX') }}
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="journal-import-paste" role="tabpanel">
+              <div class="mb-3">
+                <label class="form-label">{{ _('Pegar líneas') }}</label>
+                <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText"
+                  @input="onPasteAreaInput()" placeholder="Cuenta	Descripción	Débito	Crédito"></textarea>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="journal-import-upload" role="tabpanel">
+              <div class="mb-3">
+                <label class="form-label">{{ _('Seleccione archivo XLSX') }}</label>
+                <input type="file" class="form-control" accept=".xlsx" @change="handleFileUpload($event)">
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" @click="downloadTemplate()">
+                <i class="bi bi-download me-1"></i>{{ _('Descargar plantilla') }}
+              </button>
+              <div class="small text-muted mt-2" x-show="importModal.fileLoading">
+                {{ _('Procesando archivo...') }}
+              </div>
+            </div>
           </div>
 
           <div class="mt-4" x-show="importModal.parsedRows.length > 0">

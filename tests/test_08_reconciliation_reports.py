@@ -529,6 +529,170 @@ def test_financial_reports_framework_uses_gl_and_supports_export(app_ctx):
     assert any(str(row[1]) == "cacao" for row in filter_rows)
 
 
+def test_financial_reports_exclude_cancelled_entries_and_reversals_by_default(app_ctx):
+    from cacao_accounting.database import AccountingPeriod, Accounts, Book, FiscalYear, GLEntry, Modules, User, database
+    from cacao_accounting.reportes.services import (
+        FinancialReportFilters,
+        get_account_movement_detail,
+        get_account_summary_report,
+        get_balance_sheet_report,
+        get_income_statement_report,
+        get_trial_balance_report,
+    )
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(
+        user="report-cancel-user", name="Report Cancel User", password=b"x", classification="admin", active=True
+    )
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-2026-C",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", is_primary=True, default=True)
+    cash = Accounts(entity="cacao", code="1.01.01", name="Caja", active=True, enabled=True, classification="activo")
+    receivable = Accounts(entity="cacao", code="1.01.02", name="CxC", active=True, enabled=True, classification="activo")
+    equity = Accounts(entity="cacao", code="3.01.01", name="Capital", active=True, enabled=True, classification="patrimonio")
+    income = Accounts(entity="cacao", code="4.01.01", name="Ventas", active=True, enabled=True, classification="ingreso")
+    database.session.add_all([accounting_module, report_user, fiscal_year, book, cash, receivable, equity, income])
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 8),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=cash.id,
+                account_code=cash.code,
+                debit=Decimal("100.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="JE-ACT",
+                document_no="JE-ACT",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 8),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=equity.id,
+                account_code=equity.code,
+                debit=Decimal("0"),
+                credit=Decimal("100.00"),
+                voucher_type="journal_entry",
+                voucher_id="JE-ACT",
+                document_no="JE-ACT",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 10),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("40.00"),
+                credit=Decimal("0"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-CAN",
+                document_no="SI-CAN",
+                is_cancelled=True,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 10),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=income.id,
+                account_code=income.code,
+                debit=Decimal("0"),
+                credit=Decimal("40.00"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-CAN",
+                document_no="SI-CAN",
+                is_cancelled=True,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 11),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=income.id,
+                account_code=income.code,
+                debit=Decimal("25.00"),
+                credit=Decimal("0"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-REV",
+                document_no="SI-REV",
+                is_reversal=True,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 11),
+                company="cacao",
+                ledger_id=book.id,
+                accounting_period_id=period.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("0"),
+                credit=Decimal("25.00"),
+                voucher_type="sales_invoice",
+                voucher_id="SI-REV",
+                document_no="SI-REV",
+                is_reversal=True,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    base_filters = FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05", status="submitted")
+    inclusive_filters = FinancialReportFilters(
+        company="cacao",
+        ledger="FISC",
+        accounting_period="2026-05",
+        status=None,
+        include_cancellations=True,
+    )
+
+    movement_report = get_account_movement_detail(base_filters)
+    summary_report = get_account_summary_report(base_filters)
+    trial_balance_report = get_trial_balance_report(base_filters)
+    balance_sheet_report = get_balance_sheet_report(base_filters)
+    income_statement_report = get_income_statement_report(base_filters)
+
+    assert movement_report.total_rows == 2
+    assert summary_report.totals["debit"] == Decimal("100.00")
+    assert summary_report.totals["credit"] == Decimal("100.00")
+    assert trial_balance_report.totals["debit"] == Decimal("100.00")
+    assert trial_balance_report.totals["credit"] == Decimal("100.00")
+    assert balance_sheet_report.totals["assets"] == Decimal("100.00")
+    assert balance_sheet_report.totals["equity"] == Decimal("100.00")
+    assert income_statement_report.totals["net_profit"] == Decimal("0.00")
+
+    movement_report_with_cancellations = get_account_movement_detail(inclusive_filters)
+    trial_balance_with_cancellations = get_trial_balance_report(inclusive_filters)
+    balance_sheet_with_cancellations = get_balance_sheet_report(inclusive_filters)
+    income_statement_with_cancellations = get_income_statement_report(inclusive_filters)
+
+    assert movement_report_with_cancellations.total_rows == 6
+    assert trial_balance_with_cancellations.totals["debit"] == Decimal("165.00")
+    assert trial_balance_with_cancellations.totals["credit"] == Decimal("165.00")
+    assert balance_sheet_with_cancellations.totals["assets"] == Decimal("115.00")
+    assert balance_sheet_with_cancellations.totals["equity"] == Decimal("115.00")
+    assert income_statement_with_cancellations.totals["net_profit"] == Decimal("15.00")
+
+
 def test_financial_report_view_persistence_and_column_selection(app_ctx):
     from cacao_accounting.database import Modules, User, UserFormPreference, database
 

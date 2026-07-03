@@ -10,9 +10,38 @@ LABEL_DESCRIPTION = "Descripción"
 LABEL_REQUIRED_DATE = "Fecha requerida"
 LABEL_COST_CENTER = "Centro de costo"
 LABEL_DELIVERY_DATE = "Fecha de entrega"
-ALIASES_ITEM_CODE = ["producto", "item", "codigo", "código"]
-ALIASES_DESCRIPTION = ["nombre"]
-ALIASES_REQUIRED_DATE = ["fecha"]
+LABEL_QUANTITY = "Cantidad"
+LABEL_UOM = "Unidad"
+LABEL_RATE = "Precio"
+LABEL_WAREHOUSE = "Bodega"
+LABEL_PROJECT = "Proyecto"
+LABEL_REFERENCE = "Referencia"
+LABEL_DEBIT = "Débito"
+LABEL_CREDIT = "Crédito"
+LABEL_ACCOUNT = "Cuenta"
+LABEL_DATE = "Fecha"
+LABEL_DISCOUNT = "Descuento"
+LABEL_SOURCE_WAREHOUSE = "Bodega origen"
+LABEL_TARGET_WAREHOUSE = "Bodega destino"
+
+ALIASES_ITEM_CODE = ["producto", "item", "codigo", "código", "article", "product", "item code", "item_code", "code"]
+ALIASES_DESCRIPTION = ["nombre", "description", "item name", "item_name", "name"]
+ALIASES_REQUIRED_DATE = ["fecha", "required date", "required_date"]
+ALIASES_QUANTITY = ["cantidad", "cant", "qty", "quantity"]
+ALIASES_UOM = ["uom", "unidad de medida", "unit", "unit of measure"]
+ALIASES_RATE = ["costo", "precio unitario", "rate", "price", "unit price", "unit cost"]
+ALIASES_WAREHOUSE = ["warehouse", "bodega", "almacen", "almacén"]
+ALIASES_COST_CENTER = ["cost center", "cost_center"]
+ALIASES_PROJECT = ["project"]
+ALIASES_REFERENCE = ["reference", "ref"]
+ALIASES_DEBIT = ["debe", "debit"]
+ALIASES_CREDIT = ["haber", "credit"]
+ALIASES_ACCOUNT = ["cuenta contable", "codigo cuenta", "código cuenta", "account", "account code", "account_code"]
+ALIASES_DATE = ["date", "posting date", "posting_date"]
+ALIASES_DISCOUNT = ["discount"]
+ALIASES_DELIVERY_DATE = ["delivery date", "delivery_date"]
+ALIASES_SOURCE_WAREHOUSE = ["source warehouse", "source_warehouse", "from warehouse", "bodega salida"]
+ALIASES_TARGET_WAREHOUSE = ["target warehouse", "target_warehouse", "to warehouse", "bodega entrada"]
 
 
 class LineImportSchemaRegistry:
@@ -37,13 +66,13 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ALIASES_DESCRIPTION,
                 },
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal", "aliases": ["cant", "qty"]},
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
                 {
                     "key": "uom",
-                    "label": "Unidad",
+                    "label": LABEL_UOM,
                     "required": True,
                     "type": "string",
-                    "aliases": ["uom", "unidad de medida"],
+                    "aliases": ALIASES_UOM,
                 },
                 {
                     "key": "required_date",
@@ -52,8 +81,14 @@ class LineImportSchemaRegistry:
                     "type": "date",
                     "aliases": ALIASES_REQUIRED_DATE,
                 },
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
             ],
         },
         "purchase_order": {
@@ -67,19 +102,37 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
                 {
                     "key": "rate",
-                    "label": "Precio",
+                    "label": LABEL_RATE,
                     "required": True,
                     "type": "decimal",
-                    "aliases": ["costo", "precio unitario"],
+                    "aliases": ALIASES_RATE,
                 },
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
-                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
+                {
+                    "key": "required_date",
+                    "label": LABEL_REQUIRED_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_REQUIRED_DATE,
+                },
             ],
         },
         "purchase_quotation": {
@@ -93,13 +146,31 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio estimado", "required": False, "type": "decimal"},
-                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": "Precio estimado", "required": False, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "required_date",
+                    "label": LABEL_REQUIRED_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_REQUIRED_DATE,
+                },
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
             ],
         },
         "supplier_quotation": {
@@ -113,79 +184,181 @@ class LineImportSchemaRegistry:
                     "type": "string",
                     "aliases": ALIASES_ITEM_CODE,
                 },
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "required_date", "label": LABEL_REQUIRED_DATE, "required": False, "type": "date"},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "required_date",
+                    "label": LABEL_REQUIRED_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_REQUIRED_DATE,
+                },
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
             ],
         },
         "purchase_receipt": {
             "doctype": "purchase_receipt",
             "label": "Recibo de compra",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
-                {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": False, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "warehouse",
+                    "label": LABEL_WAREHOUSE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_WAREHOUSE,
+                },
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
             ],
         },
         "sales_request": {
             "doctype": "sales_request",
             "label": "Pedido de venta",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
-                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": False, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "delivery_date",
+                    "label": LABEL_DELIVERY_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_DELIVERY_DATE,
+                },
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
             ],
         },
         "sales_quotation": {
             "doctype": "sales_quotation",
             "label": "Cotización de venta",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "discount", "label": "Descuento", "required": False, "type": "decimal"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "discount",
+                    "label": LABEL_DISCOUNT,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_DISCOUNT,
+                },
             ],
         },
         "sales_order": {
             "doctype": "sales_order",
             "label": "Orden de venta",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "warehouse",
+                    "label": LABEL_WAREHOUSE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_WAREHOUSE,
+                },
+                {
+                    "key": "delivery_date",
+                    "label": LABEL_DELIVERY_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_DELIVERY_DATE,
+                },
             ],
         },
         "delivery_note": {
             "doctype": "delivery_note",
             "label": "Nota de entrega",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": False, "type": "decimal"},
-                {"key": "warehouse", "label": "Bodega", "required": False, "type": "string"},
-                {"key": "delivery_date", "label": LABEL_DELIVERY_DATE, "required": False, "type": "date"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": False, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "warehouse",
+                    "label": LABEL_WAREHOUSE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_WAREHOUSE,
+                },
+                {
+                    "key": "delivery_date",
+                    "label": LABEL_DELIVERY_DATE,
+                    "required": False,
+                    "type": "date",
+                    "aliases": ALIASES_DELIVERY_DATE,
+                },
             ],
         },
         "journal_entry": {
@@ -194,63 +367,129 @@ class LineImportSchemaRegistry:
             "columns": [
                 {
                     "key": "account",
-                    "label": "Cuenta",
+                    "label": LABEL_ACCOUNT,
                     "required": True,
                     "type": "string",
-                    "aliases": ["cuenta contable", "codigo cuenta"],
+                    "aliases": ALIASES_ACCOUNT,
                 },
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "debit", "label": "Débito", "required": False, "type": "decimal", "aliases": ["debe"]},
-                {"key": "credit", "label": "Crédito", "required": False, "type": "decimal", "aliases": ["haber"]},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
-                {"key": "project", "label": "Proyecto", "required": False, "type": "string"},
-                {"key": "reference", "label": "Referencia", "required": False, "type": "string"},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "debit", "label": LABEL_DEBIT, "required": False, "type": "decimal", "aliases": ALIASES_DEBIT},
+                {"key": "credit", "label": LABEL_CREDIT, "required": False, "type": "decimal", "aliases": ALIASES_CREDIT},
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
+                {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
+                {
+                    "key": "reference",
+                    "label": LABEL_REFERENCE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE,
+                },
             ],
         },
         "purchase_invoice": {
             "doctype": "purchase_invoice",
             "label": "Factura de compra",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
-                {"key": "cost_center", "label": LABEL_COST_CENTER, "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
+                {
+                    "key": "cost_center",
+                    "label": LABEL_COST_CENTER,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_COST_CENTER,
+                },
             ],
         },
         "sales_invoice": {
             "doctype": "sales_invoice",
             "label": "Factura de venta",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "rate", "label": "Precio", "required": True, "type": "decimal"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
             ],
         },
         "bank_transaction": {
             "doctype": "bank_transaction",
             "label": "Transacción bancaria",
             "columns": [
-                {"key": "date", "label": "Fecha", "required": True, "type": "date"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": True, "type": "string"},
-                {"key": "debit", "label": "Débito", "required": False, "type": "decimal"},
-                {"key": "credit", "label": "Crédito", "required": False, "type": "decimal"},
-                {"key": "reference", "label": "Referencia", "required": False, "type": "string"},
+                {"key": "date", "label": LABEL_DATE, "required": True, "type": "date", "aliases": ALIASES_DATE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": True,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "debit", "label": LABEL_DEBIT, "required": False, "type": "decimal", "aliases": ALIASES_DEBIT},
+                {"key": "credit", "label": LABEL_CREDIT, "required": False, "type": "decimal", "aliases": ALIASES_CREDIT},
+                {
+                    "key": "reference",
+                    "label": LABEL_REFERENCE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE,
+                },
             ],
         },
         "stock_entry": {
             "doctype": "stock_entry",
             "label": "Movimiento de inventario",
             "columns": [
-                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string"},
-                {"key": "description", "label": LABEL_DESCRIPTION, "required": False, "type": "string"},
-                {"key": "quantity", "label": "Cantidad", "required": True, "type": "decimal"},
-                {"key": "uom", "label": "Unidad", "required": True, "type": "string"},
-                {"key": "source_warehouse", "label": "Bodega origen", "required": False, "type": "string"},
-                {"key": "target_warehouse", "label": "Bodega destino", "required": False, "type": "string"},
+                {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
+                {
+                    "key": "description",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+                {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
+                {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
+                {
+                    "key": "source_warehouse",
+                    "label": LABEL_SOURCE_WAREHOUSE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_SOURCE_WAREHOUSE,
+                },
+                {
+                    "key": "target_warehouse",
+                    "label": LABEL_TARGET_WAREHOUSE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_TARGET_WAREHOUSE,
+                },
             ],
         },
     }
