@@ -513,9 +513,7 @@ def ventas_cliente_nuevo():
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
     if request.method == "POST":
-        return _handle_cliente_create(
-            request.form, selected_company, company_choices, formulario, titulo
-        )
+        return _handle_cliente_create(request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
@@ -602,9 +600,7 @@ def ventas_cliente_editar(customer_id: str):
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
     if request.method == "POST":
-        return _handle_cliente_update(
-            cliente, request.form, selected_company, company_choices, formulario, titulo
-        )
+        return _handle_cliente_update(cliente, request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
