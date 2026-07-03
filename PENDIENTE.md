@@ -21,6 +21,7 @@
 - [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).
 - [ ] Drill-down universal en el 100% de los reportes operativos.
 - [ ] Exportacion consistente a Excel con formato financiero en todos los reportes.
+- [ ] Revisar si la plantilla recurrente debe compartir aún más markup/base CSS con `journal_nuevo.html` para evitar divergencias futuras de layout.
 
 ## Motores de Cálculo y Contabilidad
 - [ ] Añadir soporte transaccional persistido para documentos específicos de importación cuando exista un doctype dedicado para `import_landed_cost_confirmed`.
