@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Inventario / valuacion global por compañia (2026-07-03):** Ya existe una entrada administrativa dedicada para definir el metodo de valuacion por compañia.
+  - `/settings` muestra el acceso `Valuación de inventarios` dentro de `Configuración General`.
+  - La pantalla `/settings/inventory-valuation` permite seleccionar compañia y guardar `Costo promedio` o `FIFO`.
+  - La persistencia se realiza sobre `Entity.valuation_method`, manteniendo `moving_average` como default funcional.
+  - Si la compañia ya tiene `StockLedgerEntry` o `StockValuationLayer`, el cambio queda bloqueado en UI y backend.
+
 - **Contabilidad / arboles maestros responsive (2026-07-03):** Los listados de Catalogo de Cuentas y Centros de Costos ahora comparten una presentacion mas util y consistente.
   - Ambos usan un toolbar comun con selector de entidad, actualizacion y acciones de expandir/colapsar.
   - El arbol se renderiza dentro de un panel con mejor legibilidad, menos espacio muerto y scroll controlado para codigos largos.
