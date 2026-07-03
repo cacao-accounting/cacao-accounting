@@ -1,5 +1,11 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Inventario / cuenta contable por almacen+compañia (2026-07-03):** La cuenta de inventario ya quedó alineada a una sola fuente de verdad.
+  - `WarehouseCompanyAccount` define la cuenta de inventario por `warehouse_code + company`.
+  - `stock_entry`, `purchase_receipt` y `delivery_note` resuelven inventario desde la bodega de la línea o del movimiento.
+  - `CompanyDefaultAccount` ya no expone ni usa `default_inventory`.
+  - La ficha de bodega muestra la cuenta configurada con código y nombre; la ficha de item ya no sugiere cuenta de inventario por item.
+
 - **Inventario / valuacion global por compañia (2026-07-03):** Ya existe una entrada administrativa dedicada para definir el metodo de valuacion por compañia.
   - `/settings` muestra el acceso `Valuación de inventarios` dentro de `Configuración General`.
   - La pantalla `/settings/inventory-valuation` permite seleccionar compañia y guardar `Costo promedio` o `FIFO`.
@@ -61,7 +67,7 @@
   - `ItemAccount.inventory_account_id` removido del modelo, dataclass, validacion y templates.
   - `Warehouse.inventory_account_id` es la unica fuente de la cuenta de inventario para stock entries.
   - Stock entries resuelven la cuenta via `_warehouse_inventory_account_id()` sin fallback a ItemAccount.
-  - Purchase receipts y delivery notes usan `CompanyDefaultAccount.default_inventory` como fallback.
+  - Purchase receipts y delivery notes usaban `CompanyDefaultAccount.default_inventory` como fallback temporal; esa divergencia ya fue eliminada el 2026-07-03.
   - Test fixtures actualizados para no usar `inventory_account_id` en ItemAccount.
 
 - **Inventario / valuacion a nivel de entidad (2026-07-02):** El metodo de valuacion de inventario ahora es un atributo de la entidad.

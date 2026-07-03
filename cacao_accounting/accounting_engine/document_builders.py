@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_payment_unallocated_amount
+from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
@@ -135,7 +136,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     for item in items:
         amount = _line_amount(item)
         inventory_account_id = _require_account_id(
-            _item_account_id(item.item_code, company, "inventory"),
+            inventory_account_id_for_document_line(document, item, company),
             "Falta la cuenta de inventario para una línea de recepción de compra.",
         )
         description = getattr(item, "item_name", None) or item.item_code
@@ -679,7 +680,6 @@ def _build_references(
     custom["account_lines"] = [line.__dict__ for line in account_lines]
     custom["default_purchase_tax_account_id"] = getattr(defaults, "default_purchase_tax_account_id", None)
     custom["default_sales_tax_account_id"] = getattr(defaults, "default_sales_tax_account_id", None)
-    custom["default_inventory_account_id"] = getattr(defaults, "default_inventory", None)
     custom["default_income_account_id"] = getattr(defaults, "default_income", None)
     custom["default_bank_account_id"] = getattr(defaults, "default_bank", None)
     custom["default_rounding_account_id"] = getattr(defaults, "default_rounding_account_id", None)
@@ -897,7 +897,6 @@ def _item_account_id(item_code: str | None, company: str, account_type: str) -> 
     return {
         "income": defaults.default_income,
         "expense": defaults.default_expense,
-        "inventory": defaults.default_inventory,
         "bridge": defaults.bridge_account_id,
     }.get(account_type)
 

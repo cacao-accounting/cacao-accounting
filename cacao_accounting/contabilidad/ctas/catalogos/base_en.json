@@ -7,7 +7,6 @@
     "default_payable": "21.01.001.001",
     "default_income": "41.01",
     "default_expense": "52.02.037",
-    "default_inventory": "11.03.001",
     "default_cogs": "51.01",
     "inventory_adjustment_account_id": "51.03",
     "bridge_account_id": "21.01.001.002",

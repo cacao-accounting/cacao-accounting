@@ -36,7 +36,7 @@
 - **Audit:** All generated IDs recorded in `GeneratedIdentifierLog`.
 
 ## 7. Account Mapping & Tax Structure
-- **Mapping:** Resolution hierarchy: `ItemAccount` -> `PartyAccount` -> `CompanyDefaultAccount`.
+- **Mapping:** Resolution hierarchy depends on the domain: `PartyAccount` -> `CompanyDefaultAccount` for AR/AP, `ItemAccount` -> `CompanyDefaultAccount` for ingreso/gasto/COGS, and `WarehouseCompanyAccount` for inventory accounts.
 - **Tax Engine:** Tax templates associated with documents and lines. Linked to GL via `account_id`.
 - **Pricing:** `PriceList` and `ItemPrice` support multi-currency suggested pricing.
 
