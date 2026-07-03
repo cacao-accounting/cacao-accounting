@@ -338,7 +338,6 @@ def inventario_articulo_nuevo():
                     default_uom=str(request.form.get("default_uom") or "").strip(),
                     purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
                     sale_uom=(request.form.get("sale_uom") or "").strip() or None,
-                    valuation_method=(request.form.get("valuation_method") or "").strip() or None,
                     default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
                     default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
                     allow_negative_stock=request.form.get("allow_negative_stock") is not None,
@@ -410,7 +409,6 @@ def inventario_articulo_editar(item_id):
             "expense_account_id": a.expense_account_id or "",
             "income_account_id": a.income_account_id or "",
             "cogs_account_id": a.cogs_account_id or "",
-            "inventory_account_id": a.inventory_account_id or "",
             "stock_adjustment_account_id": a.stock_adjustment_account_id or "",
             "cost_center_code": a.cost_center_code or "",
         }
@@ -421,7 +419,6 @@ def inventario_articulo_editar(item_id):
             "expense_account_id": "",
             "income_account_id": "",
             "cogs_account_id": "",
-            "inventory_account_id": "",
             "stock_adjustment_account_id": "",
             "cost_center_code": "",
         }
@@ -447,7 +444,6 @@ def inventario_articulo_editar(item_id):
                     default_uom=str(request.form.get("default_uom") or "").strip(),
                     purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
                     sale_uom=(request.form.get("sale_uom") or "").strip() or None,
-                    valuation_method=(request.form.get("valuation_method") or "").strip() or None,
                     default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
                     default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
                     allow_negative_stock=request.form.get("allow_negative_stock") is not None,
@@ -613,7 +609,6 @@ def _item_account_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[s
                 "expense_account_id": "",
                 "income_account_id": "",
                 "cogs_account_id": "",
-                "inventory_account_id": "",
                 "stock_adjustment_account_id": "",
                 "cost_center_code": "",
             }
@@ -624,7 +619,6 @@ def _item_account_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[s
             "expense_account_id": row.expense_account_id or "",
             "income_account_id": row.income_account_id or "",
             "cogs_account_id": row.cogs_account_id or "",
-            "inventory_account_id": row.inventory_account_id or "",
             "stock_adjustment_account_id": row.stock_adjustment_account_id or "",
             "cost_center_code": row.cost_center_code or "",
         }

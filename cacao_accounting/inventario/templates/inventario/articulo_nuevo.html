@@ -32,10 +32,6 @@
           <h6 class="ca-card-title mb-0">{{ _('Datos basicos') }}</h6>
         </div>
         <div class="row g-3 p-3">
-          <div class="col-md-3">
-            <label class="form-label">{{ _('Codigo') }}</label>
-            <p class="form-control-plaintext form-control-sm">{{ registro.code if edit else _('(Se generara automaticamente)') }}</p>
-          </div>
           <div class="col-md-6">
             <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
             {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
@@ -415,9 +411,9 @@
     <div class="col-12">
       <div class="ca-card shadow-sm" x-data='{
         rows: {{ account_rows|tojson }},
-        addRow() { this.rows.push({company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", inventory_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}); },
+        addRow() { this.rows.push({company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}); },
         removeRow(index) {
-          if (this.rows.length <= 1) { this.rows[0] = {company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", inventory_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}; return; }
+          if (this.rows.length <= 1) { this.rows[0] = {company: "", expense_account_id: "", income_account_id: "", cogs_account_id: "", stock_adjustment_account_id: "", cost_center_code: ""}; return; }
           this.rows.splice(index, 1);
         }
       }'>
@@ -428,7 +424,7 @@
           </button>
         </div>
         <div class="p-3">
-          <p class="text-muted small mb-3">{{ _('Si el item es servicio o no es de inventario, la cuenta de gasto por compania es obligatoria.') }}</p>
+          <p class="text-muted small mb-3">{{ _('Si el item es servicio o no es de inventario, la cuenta de gasto por compania es obligatoria. La cuenta de inventario se configura a nivel de almacen.') }}</p>
           <div class="table-responsive">
             <table class="ca-table">
               <caption style="display:none;">{{ _('Configuracion contable del item por compania') }}</caption>
@@ -438,7 +434,6 @@
                   <th>{{ _('Cuenta de gasto') }}</th>
                   <th>{{ _('Cuenta de ingresos') }}</th>
                   <th>{{ _('Cuenta COGS') }}</th>
-                  <th>{{ _('Cuenta de inventario') }}</th>
                   <th>{{ _('Centro de costo') }}</th>
                   <th>{{ _('Acciones') }}</th>
                 </tr>
@@ -455,36 +450,100 @@
                       </select>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="expense_account_id" x-model="row.expense_account_id">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "account",
+                        name: "expense_account_id",
+                        minChars: 2,
+                        initialValue: row.expense_account_id,
+                        filters: { company: row.company, account_type: ["expense"], is_active: true },
+                        requiredFilters: ["company"],
+                        messages: {
+                          placeholder: {{ _('Buscar cuenta de gasto')|tojson }},
+                          loading: {{ _('Buscando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="expense_account_id" x-model="row.expense_account_id">
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                          <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="income_account_id" x-model="row.income_account_id">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "account",
+                        name: "income_account_id",
+                        minChars: 2,
+                        initialValue: row.income_account_id,
+                        filters: { company: row.company, account_type: ["income"], is_active: true },
+                        requiredFilters: ["company"],
+                        messages: {
+                          placeholder: {{ _('Buscar cuenta de ingresos')|tojson }},
+                          loading: {{ _('Buscando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="income_account_id" x-model="row.income_account_id">
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                          <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="cogs_account_id" x-model="row.cogs_account_id">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
-                        {% endfor %}
-                      </select>
-                    </td>
-                    <td>
-                      <select class="form-select form-select-sm" name="inventory_account_id" x-model="row.inventory_account_id">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for account in account_choices %}
-                        <option value="{{ account.id }}">{{ account.label }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "account",
+                        name: "cogs_account_id",
+                        minChars: 2,
+                        initialValue: row.cogs_account_id,
+                        filters: { company: row.company, account_type: ["cost_of_goods_sold"], is_active: true },
+                        requiredFilters: ["company"],
+                        messages: {
+                          placeholder: {{ _('Buscar cuenta COGS')|tojson }},
+                          loading: {{ _('Buscando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="cogs_account_id" x-model="row.cogs_account_id">
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                          <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <select class="form-select form-select-sm" name="cost_center_code" x-model="row.cost_center_code">
