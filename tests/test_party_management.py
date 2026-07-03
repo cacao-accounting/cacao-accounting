@@ -158,6 +158,70 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     assert "IVA Cliente".encode() in response.data
 
 
+def test_customer_company_settings_removed_rows_are_deleted(app_ctx, client):
+    """Editar la tabla por compania elimina filas persistidas que ya no se enviaron."""
+    from cacao_accounting.database import CompanyParty, Entity, Party, PartyGroup, database
+
+    database.session.add(
+        Entity(
+            code="cacao-2",
+            company_name="Cacao 2",
+            name="Cacao 2",
+            tax_id="J0310000000002",
+            entity_type="company",
+            enabled=True,
+        )
+    )
+    group = PartyGroup(group_type="customer", name="Retail", is_active=True)
+    database.session.add(group)
+    database.session.commit()
+
+    response = client.post(
+        "/sales/customer/new",
+        data={
+            "name": "Cliente Multiempresa",
+            "tax_id": "C-002",
+            "party_group_id": group.id,
+            "is_active": "on",
+            "company": ["cacao", "cacao-2"],
+            "company_is_active": ["1", "1"],
+            "default_price_list_id": ["", ""],
+            "default_tax_rule_id": ["", ""],
+            "tax_template_id": ["", ""],
+            "receivable_account_id": ["", ""],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    customer = database.session.execute(database.select(Party).filter_by(name="Cliente Multiempresa")).scalar_one()
+    companies = database.session.execute(
+        database.select(CompanyParty.company).filter_by(party_id=customer.id).order_by(CompanyParty.company)
+    ).scalars()
+    assert list(companies) == ["cacao", "cacao-2"]
+
+    response = client.post(
+        f"/sales/customer/{customer.id}/edit",
+        data={
+            "name": "Cliente Multiempresa",
+            "tax_id": "C-002",
+            "party_group_id": group.id,
+            "is_active": "on",
+            "company": ["cacao"],
+            "company_is_active": ["1"],
+            "default_price_list_id": [""],
+            "default_tax_rule_id": [""],
+            "tax_template_id": [""],
+            "receivable_account_id": [""],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    companies = database.session.execute(
+        database.select(CompanyParty.company).filter_by(party_id=customer.id).order_by(CompanyParty.company)
+    ).scalars()
+    assert list(companies) == ["cacao"]
+
+
 def test_supplier_edit_and_address_deactivation(app_ctx, client):
     """Proveedor permite tipo, edicion y desactivacion de direcciones."""
     from cacao_accounting.database import Address, Party, PartyAddress, PartyGroup, PriceList, TaxRule, database
