@@ -621,9 +621,9 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="ITEM-PR", company="cacao", inventory_account_id=inventory_account.id),
+            ItemAccount(item_code="ITEM-PR", company="cacao"),
             CompanyDefaultAccount(
-                company="cacao", bridge_account_id=bridge_account.id, default_inventory=inventory_account.id
+                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
             ),
             PartyAccount(party_id="SUPP-PR", company="cacao", payable_account_id=None),
         ]
@@ -735,12 +735,12 @@ def test_purchase_receipt_lands_import_costs_into_initial_valuation_layers(app_c
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="IMP-A", company="cacao", inventory_account_id=inventory_account.id),
-            ItemAccount(item_code="IMP-B", company="cacao", inventory_account_id=inventory_account.id),
+            ItemAccount(item_code="IMP-A", company="cacao"),
+            ItemAccount(item_code="IMP-B", company="cacao"),
             CompanyDefaultAccount(
                 company="cacao",
-                bridge_account_id=bridge_account.id,
                 default_inventory=inventory_account.id,
+                bridge_account_id=bridge_account.id,
             ),
             TaxRule(
                 company="cacao",
@@ -882,7 +882,7 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="ITEM-DN", company="cacao", inventory_account_id=inventory_account.id),
+            ItemAccount(item_code="ITEM-DN", company="cacao"),
             CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, default_expense=expense_account.id),
         ]
     )
@@ -1024,8 +1024,8 @@ def test_delivery_note_without_stock_rejects_posting(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="ITEM-NS", company="cacao", inventory_account_id=inventory_account.id),
-            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, default_expense=expense_account.id),
+            ItemAccount(item_code="ITEM-NS", company="cacao"),
+            CompanyDefaultAccount(company="cacao", default_expense=expense_account.id),
         ]
     )
     note = DeliveryNote(company="cacao", posting_date=date(2026, 5, 4), customer_id="CUST-NS", docstatus=1)
@@ -1108,8 +1108,8 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="ITEM-GR", company="cacao", inventory_account_id=inventory_account.id),
-            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            ItemAccount(item_code="ITEM-GR", company="cacao"),
+            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id),
             PartyAccount(party_id="SUPP-GR", company="cacao", payable_account_id=payable_account.id),
         ]
     )
@@ -1241,8 +1241,8 @@ def test_purchase_invoice_with_unposted_receipt_rejects_unposted(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
-            ItemAccount(item_code="ITEM-UP", company="cacao", inventory_account_id=inventory_account.id),
+            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id),
+            ItemAccount(item_code="ITEM-UP", company="cacao"),
             PartyAccount(party_id="SUPP-UP", company="cacao", payable_account_id=payable_account.id),
         ]
     )
@@ -2298,14 +2298,16 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         classification="liability",
         account_type="liability",
     )
+    database.session.add_all([inventory_account, bridge_account])
+    database.session.flush()
     uom = UOM(code="UND", name="Unidad")
     item = Item(code="ITEM-ST", name="Item stock", item_type="goods", is_stock_item=True, default_uom="UND")
-    warehouse = Warehouse(code="WH-ST", name="Bodega stock", company="cacao")
-    database.session.add_all([inventory_account, bridge_account, uom, item, warehouse])
+    warehouse = Warehouse(code="WH-ST", name="Bodega stock", company="cacao", inventory_account_id=inventory_account.id)
+    database.session.add_all([uom, item, warehouse])
     database.session.flush()
     database.session.add_all(
         [
-            ItemAccount(item_code="ITEM-ST", company="cacao", inventory_account_id=inventory_account.id),
+            ItemAccount(item_code="ITEM-ST", company="cacao"),
             CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
         ]
     )
@@ -2530,7 +2532,6 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
     database.session.add(
         CompanyDefaultAccount(
             company="cacao",
-            default_inventory=item_inventory.id,
             inventory_adjustment_account_id=adjustment_account.id,
             default_expense=adjustment_account.id,
         )
