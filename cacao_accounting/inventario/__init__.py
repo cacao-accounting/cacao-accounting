@@ -742,7 +742,7 @@ def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
 
 
 def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]) -> None:
-    """Persiste la configuración contable de bodega por compañía."""
+    """Persist warehouse company accounting configuration."""
     for row in rows:
         database.session.add(
             WarehouseCompanyAccount(
