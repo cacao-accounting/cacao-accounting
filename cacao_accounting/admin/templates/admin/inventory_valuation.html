@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Valuación de inventarios") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-box-seam me-2" style="color:#78BF30"></i>{{ _("Valuación de inventarios") }}</h4>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _('Cerrar') }}"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="ca-card">
+  <div class="p-3 p-md-4">
+    <form method="get" class="row g-3 align-items-end mb-4">
+      <div class="col-12 col-md-6">
+        <label class="form-label fw-semibold" for="company">{{ _("Compañía") }}</label>
+        <select class="form-select" id="company" name="company">
+          {% for company in companies %}
+          <option value="{{ company.code }}" {% if company.code == selected_company %}selected{% endif %}>
+            {{ company.code }} - {{ company.name or company.company_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-auto">
+        <button class="btn btn-outline-primary w-100" type="submit">
+          <i class="bi bi-arrow-clockwise me-1"></i>{{ _("Actualizar") }}
+        </button>
+      </div>
+    </form>
+
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="company" value="{{ selected_company }}">
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-7">
+          <label class="form-label fw-semibold" for="valuation_method">{{ _("Método de valuación") }}</label>
+          <select class="form-select" id="valuation_method" name="valuation_method" {% if locked %}disabled{% endif %}>
+            {% for method, label in valuation_choices %}
+            <option value="{{ method }}" {% if method == current_method %}selected{% endif %}>{{ _(label) }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">
+            {{ _("Costo promedio recalcula el costo unitario global; FIFO consume las capas más antiguas primero.") }}
+          </div>
+          {% if locked %}
+          <div class="alert alert-warning mt-3 mb-0" role="alert">
+            {{ _("La valuación está bloqueada porque la compañía ya tiene operación de inventario contabilizada.") }}
+          </div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-lg-5">
+          <div class="border rounded-3 p-3 h-100 bg-light">
+            <div class="small text-muted text-uppercase fw-semibold mb-2">{{ _("Estado actual") }}</div>
+            <div class="fs-5 fw-semibold">{{ _(current_method_label) }}</div>
+            <div class="small text-muted mt-2">
+              {% if locked %}
+              {{ _("Cambio no disponible para esta compañía.") }}
+              {% else %}
+              {{ _("Puede modificarlo mientras no existan movimientos ni capas de inventario para la compañía.") }}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4 pt-3 border-top">
+        <button class="btn btn-primary" type="submit" {% if not selected_company or locked %}disabled{% endif %}>
+          <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ca-card mt-4">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-list-ul me-1"></i>{{ _("Compañías configuradas") }}</h6>
+  </div>
+  <div class="p-2">
+    {% if company_rows %}
+    <div class="table-responsive">
+      <table class="ca-table">
+        <caption style="display:none;">{{ _("Listado de valuación por compañía") }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _("Compañía") }}</th>
+            <th>{{ _("Método") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in company_rows %}
+          <tr>
+            <td><a href="{{ url_for('admin.configuracion_valuacion_inventario', company=row.code) }}">{{ row.label }}</a></td>
+            <td>{{ _(row.valuation_label) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-3 text-muted text-center">{{ _("No hay compañías configuradas.") }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

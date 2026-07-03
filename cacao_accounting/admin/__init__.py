@@ -63,6 +63,14 @@ from cacao_accounting.printing.settings import (
     external_validation_enabled,
     save_external_validation_settings,
 )
+from cacao_accounting.inventario.valuation_settings import (
+    company_has_inventory_activity,
+    get_company_valuation_method,
+    list_companies_with_valuation,
+    update_company_valuation_method,
+    valuation_method_choices,
+    valuation_method_label,
+)
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
@@ -83,6 +91,7 @@ LISTA_USUARIOS = "admin.lista_usuarios"
 LISTA_ROLES = "admin.lista_roles"
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
+LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
 
 
 def _require_system_admin() -> None:
@@ -197,6 +206,45 @@ def external_document_validation_settings():
         enabled=external_validation_enabled(),
         base_url=external_validation_base_url(),
         fallback_url=DEFAULT_VALIDATION_BASE_URL,
+    )
+
+
+@admin.route("/settings/inventory-valuation", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def configuracion_valuacion_inventario():
+    """Administra el metodo global de valuacion de inventario por compania."""
+    _require_system_admin()
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.form.get("company") or request.args.get("company") or (companies[0].code if companies else "")
+
+    if request.method == "POST":
+        if not selected_company:
+            flash(_("Debe seleccionar una compania."), "danger")
+            return redirect(url_for(LISTA_VALUACION_INVENTARIO))
+        try:
+            update_company_valuation_method(selected_company, request.form.get("valuation_method") or "")
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+        else:
+            database.session.commit()
+            flash(_("Metodo de valuacion guardado correctamente."), "success")
+        return redirect(url_for(LISTA_VALUACION_INVENTARIO, company=selected_company))
+
+    current_method = get_company_valuation_method(selected_company) if selected_company else "moving_average"
+    locked = company_has_inventory_activity(selected_company) if selected_company else False
+
+    return render_template(
+        "admin/inventory_valuation.html",
+        companies=companies,
+        company_rows=list_companies_with_valuation(),
+        selected_company=selected_company,
+        valuation_choices=valuation_method_choices(),
+        current_method=current_method,
+        current_method_label=valuation_method_label(current_method),
+        locked=locked,
+        titulo=_("Valuacion de inventarios"),
     )
 
 
