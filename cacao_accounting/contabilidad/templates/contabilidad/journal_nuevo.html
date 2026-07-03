@@ -370,13 +370,20 @@
         fetch('/api/line-import/schema?doctype=journal_entry', {
           credentials: 'same-origin'
         })
-          .then((response) => response.json())
-          .then((schema) => {
-            this.importModal.schema = schema;
+          .then((response) => response.json().then((payload) => ({ ok: response.ok, payload: payload })))
+          .then((result) => {
+            if (result.ok) {
+              this.importModal.schema = result.payload;
+            } else {
+              this.importModal.schema = { columns: [] };
+              this.importModal.errors = [{ message: result.payload.error || '{{ _("No se pudo cargar la plantilla de importación.") }}' }];
+            }
             bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).show();
           })
           .catch(() => {
+            this.importModal.schema = { columns: [] };
             this.importModal.errors = [{ message: '{{ _("No se pudo cargar la plantilla de importación.") }}' }];
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).show();
           });
       },
 
@@ -411,9 +418,10 @@
             rows: this.importModal.parsedRows
           })
         })
-          .then((response) => response.json())
-          .then((payload) => {
-            if (payload.valid) {
+          .then((response) => response.json().then((payload) => ({ ok: response.ok, payload: payload })))
+          .then((result) => {
+            var payload = result.payload;
+            if (result.ok && payload.valid) {
               this.importModal.parsedRows = payload.rows || [];
               this.importModal.isValidated = true;
               return;
@@ -1277,7 +1285,7 @@
           <div class="mb-3" x-show="importModal.schema">
             <h6>{{ _('Columnas aceptadas') }}</h6>
             <div class="d-flex flex-wrap gap-2 mb-2">
-              <template x-for="column in importModal.schema.columns" :key="column.key">
+              <template x-for="column in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="column.key">
                 <span class="badge" :class="column.required ? 'bg-primary' : 'bg-secondary'">
                   <span x-text="column.label"></span>
                   <template x-if="column.required"><span class="ms-1">*</span></template>
@@ -1304,7 +1312,7 @@
                 <caption>{{ _("Vista previa de líneas importadas") }}</caption>
                 <thead>
                   <tr>
-                    <template x-for="column in importModal.schema.columns" :key="column.key">
+                    <template x-for="column in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="column.key">
                       <th x-text="column.label"></th>
                     </template>
                   </tr>
@@ -1312,7 +1320,7 @@
                 <tbody>
                   <template x-for="(row, index) in importModal.parsedRows.slice(0, 50)" :key="index">
                     <tr>
-                      <template x-for="column in importModal.schema.columns" :key="column.key">
+                      <template x-for="column in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="column.key">
                         <td x-text="row[column.key] || ''"></td>
                       </template>
                     </tr>

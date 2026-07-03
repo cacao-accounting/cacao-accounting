@@ -41,7 +41,6 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
-    Warehouse,
     Entity,
     database,
 )
@@ -293,6 +292,8 @@ def _account_id_for_item(item: Any, company: str, account_type: str) -> str | No
 
 def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> str | None:
     """Resuelve la cuenta de inventario asignada a la bodega de una conciliacion."""
+    from cacao_accounting.database import WarehouseCompanyAccount
+
     warehouse_code = (
         getattr(line, "target_warehouse", None)
         or getattr(line, "source_warehouse", None)
@@ -300,11 +301,19 @@ def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> s
         or getattr(document, "from_warehouse", None)
     )
     if warehouse_code:
-        warehouse = (
-            database.session.execute(select(Warehouse).filter_by(company=company, code=warehouse_code)).scalars().first()
+        settings = (
+            database.session.execute(
+                select(WarehouseCompanyAccount).filter_by(
+                    warehouse_code=warehouse_code,
+                    company=company,
+                    is_active=True,
+                )
+            )
+            .scalars()
+            .first()
         )
-        if warehouse and warehouse.inventory_account_id:
-            return str(warehouse.inventory_account_id)
+        if settings and settings.inventory_account_id:
+            return str(settings.inventory_account_id)
     return None
 
 

@@ -935,9 +935,24 @@ class Warehouse(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(20), index=True, nullable=False)
     name = database.Column(database.String(150), nullable=False)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
-    inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     parent_warehouse = database.Column(database.String(20), nullable=True)
     is_group = database.Column(database.Boolean(), default=False, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+
+
+class WarehouseCompanyAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Configuración contable de una bodega por compañía."""
+
+    __tablename__ = "warehouse_company_account"
+    __table_args__ = (
+        UniqueConstraint("warehouse_code", "company", name="uq_warehouse_company_account"),
+        ForeignKeyConstraint(["warehouse_code"], ["warehouse.code"]),
+        ForeignKeyConstraint(["company"], ["entity.code"]),
+        ForeignKeyConstraint(["inventory_account_id"], ["accounts.id"]),
+    )
+    warehouse_code = database.Column(database.String(20), nullable=False, index=True)
+    company = database.Column(database.String(10), nullable=False, index=True)
+    inventory_account_id = database.Column(database.String(26), nullable=True, index=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 

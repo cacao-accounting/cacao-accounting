@@ -151,6 +151,22 @@ def test_validate_lines_success(logged_in_client):
     assert data["rows"][0]["item_name"] == "Test Item"
 
 
+def test_validate_lines_accepts_company_code_when_entity_id_differs(logged_in_client):
+    entity = Entity(id="entity_internal_id", code="company-code", company_name="Company Code", tax_id="67890")
+    database.session.add(entity)
+    database.session.commit()
+
+    payload = {
+        "doctype": "purchase_request",
+        "context": {"company_id": "company-code"},
+        "rows": [{"item_code": "ITEM01", "quantity": "10", "uom": "UND"}],
+    }
+    response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
+
+    assert response.status_code == 200
+    assert response.get_json()["valid"] is True
+
+
 def test_validate_lines_invalid_item(logged_in_client):
     payload = {
         "doctype": "purchase_request",
