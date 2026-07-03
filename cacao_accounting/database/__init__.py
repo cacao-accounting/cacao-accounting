@@ -361,6 +361,7 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     fax = database.Column(database.String(50))
     enabled = database.Column(database.Boolean(), default=True, nullable=False)
     default = database.Column(database.Boolean())
+    valuation_method = database.Column(database.String(20), default="moving_average")
 
     @property
     def is_active(self) -> bool:
@@ -500,6 +501,17 @@ class CostCenter(database.Model, BaseTabla):  # type: ignore[name-defined]
     name = database.Column(database.String(100))
     group = database.Column(database.Boolean())
     parent = database.Column(database.String(100), nullable=True)
+
+
+class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Unidad de Negocio — dimension organizacional para segmentar operaciones."""
+
+    __tablename__ = "business_unit"
+    __table_args__ = (database.UniqueConstraint("entity", "code", name="bu_unico"),)
+    active = database.Column(database.Boolean(), index=True)
+    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
+    code = database.Column(database.String(10), index=True)
+    name = database.Column(database.String(100))
 
 
 class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -886,8 +898,6 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     default_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=False)
     purchase_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=True)
     sale_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE), nullable=True)
-    # FIFO, moving_average — inmutable una vez hay transacciones
-    valuation_method = database.Column(database.String(20), nullable=True)
     default_warehouse_id = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True, index=True)
     default_supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
     allow_negative_stock = database.Column(database.Boolean(), default=False, nullable=False)
@@ -1996,7 +2006,6 @@ class ItemAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     cogs_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
-    inventory_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     stock_adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     cost_center_code = database.Column(database.String(10), nullable=True)
 
