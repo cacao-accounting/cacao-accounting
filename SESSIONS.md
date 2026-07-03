@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Smart Select: overlay visible en tablas responsivas)
+- **Solicitud:** Corregir el layout de los `smart-select` agregados en Articulo, Cliente y Proveedor porque al buscar las opciones quedaban atrapadas dentro del contenedor.
+- **Diagnostico:** El problema se producia cuando el menu estaba dentro de `.table-responsive` u otros contenedores con overflow; el dropdown absoluto quedaba recortado aunque la busqueda y el endpoint funcionaran correctamente.
+- **Implementacion:** `smart-select.js` ahora posiciona el menu abierto con coordenadas fijas de viewport, recalcula en scroll/resize y limpia estilos al cerrar; el CSS compartido eleva el `z-index` del menu sin cambiar contratos HTML ni payloads de formularios.
+- **Mobile:** La posicion se limita contra `innerWidth`/`innerHeight`, abre hacia arriba si no hay espacio inferior y evita desbordes laterales en viewports angostos.
+- **Validacion:** `tests/test_10_smart_select_js.py` paso en verde y `npm test` en `cacao_accounting/static` paso con 33 pruebas.
+
 ## 2026-07-03 (Reportes contables: anulaciones/reversas y reversión de comprobantes con fecha)
 - **Solicitud:** Corregir los 5 reportes contables para que el filtro de anulaciones excluya también las reversas GL cuando no se desea ver anulaciones, y ajustar `Revertir comprobante` para pedir fecha y respetar la `naming_series` del comprobante origen.
 - **Reportes contables:** `FinancialReportFilters` ahora separa explícitamente `include_cancellations` del `status`, y `_apply_gl_filters()` excluye `GLEntry.is_cancelled` e `GLEntry.is_reversal` por defecto en `account-movement`, `account-summary`, `trial-balance`, `balance-sheet` e `income-statement`.
