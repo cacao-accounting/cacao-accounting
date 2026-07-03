@@ -11,6 +11,7 @@ from typing import Any, cast
 from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_required
+from sqlalchemy import or_
 
 from cacao_accounting.api.line_import_registry import LineImportSchemaRegistry
 from cacao_accounting.auth.permisos import Permisos
@@ -148,10 +149,10 @@ def _validate_company_context(context: dict[str, Any]) -> tuple[str | None, Resp
     company_id = context.get("company_id")
     if not company_id:
         return None, _invalid_payload_response("company_id", _("Compañía no especificada en el contexto."), 400)
-    company = database.session.query(Entity).filter_by(id=company_id).first()
+    company = database.session.query(Entity).filter(or_(Entity.id == company_id, Entity.code == company_id)).first()
     if not company:
         return None, _error_response(_("La compañía seleccionada no existe."), 400)
-    return str(company_id), None
+    return str(company.code), None
 
 
 def _validate_import_permission(doctype: str) -> ResponseReturnValue | None:

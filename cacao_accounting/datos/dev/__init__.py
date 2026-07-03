@@ -301,17 +301,24 @@ def cargar_articulos():
 
 def cargar_bodegas():
     """Bodegas de demostración."""
-    from cacao_accounting.database import Accounts
+    from cacao_accounting.database import Accounts, WarehouseCompanyAccount
 
     inv_account = (
         database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="11.03.001")).scalars().first()
     )
     warehouses = []
     for b in _make_bodegas():
-        if inv_account:
-            b.inventory_account_id = inv_account.id
         warehouses.append(b)
         database.session.add(b)
+        if inv_account:
+            database.session.add(
+                WarehouseCompanyAccount(
+                    warehouse_code=b.code,
+                    company=b.company,
+                    inventory_account_id=inv_account.id,
+                    is_active=True,
+                )
+            )
     database.session.commit()
     return warehouses
 
