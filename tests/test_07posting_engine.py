@@ -1109,7 +1109,9 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
     database.session.add_all(
         [
             ItemAccount(item_code="ITEM-GR", company="cacao"),
-            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id),
+            CompanyDefaultAccount(
+                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
+            ),
             PartyAccount(party_id="SUPP-GR", company="cacao", payable_account_id=payable_account.id),
         ]
     )
@@ -1241,7 +1243,9 @@ def test_purchase_invoice_with_unposted_receipt_rejects_unposted(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id),
+            CompanyDefaultAccount(
+                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
+            ),
             ItemAccount(item_code="ITEM-UP", company="cacao"),
             PartyAccount(party_id="SUPP-UP", company="cacao", payable_account_id=payable_account.id),
         ]
@@ -2277,6 +2281,7 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         StockValuationLayer,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -2302,11 +2307,14 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
     database.session.flush()
     uom = UOM(code="UND", name="Unidad")
     item = Item(code="ITEM-ST", name="Item stock", item_type="goods", is_stock_item=True, default_uom="UND")
-    warehouse = Warehouse(code="WH-ST", name="Bodega stock", company="cacao", inventory_account_id=inventory_account.id)
+    warehouse = Warehouse(code="WH-ST", name="Bodega stock", company="cacao")
     database.session.add_all([uom, item, warehouse])
     database.session.flush()
     database.session.add_all(
         [
+            WarehouseCompanyAccount(
+                warehouse_code="WH-ST", company="cacao", inventory_account_id=inventory_account.id, is_active=True
+            ),
             ItemAccount(item_code="ITEM-ST", company="cacao"),
             CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
         ]
@@ -2478,6 +2486,7 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
         UOM,
         Unit,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -2521,20 +2530,18 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
         ]
     )
     database.session.flush()
-    database.session.add(
-        Warehouse(
-            code="WH-REC",
-            name="Bodega reconciliacion",
-            company="cacao",
-            inventory_account_id=warehouse_inventory.id,
-        )
-    )
-    database.session.add(
-        CompanyDefaultAccount(
-            company="cacao",
-            inventory_adjustment_account_id=adjustment_account.id,
-            default_expense=adjustment_account.id,
-        )
+    database.session.add(Warehouse(code="WH-REC", name="Bodega reconciliacion", company="cacao"))
+    database.session.add_all(
+        [
+            WarehouseCompanyAccount(
+                warehouse_code="WH-REC", company="cacao", inventory_account_id=warehouse_inventory.id, is_active=True
+            ),
+            CompanyDefaultAccount(
+                company="cacao",
+                inventory_adjustment_account_id=adjustment_account.id,
+                default_expense=adjustment_account.id,
+            ),
+        ]
     )
     database.session.add(
         StockBin(
