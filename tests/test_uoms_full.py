@@ -357,7 +357,6 @@ def test_average_cost(app_ctx):
         item_type="goods",
         is_stock_item=True,
         default_uom="UND",
-        valuation_method="moving_average",
     )
     database.session.add(item_avg)
     database.session.commit()
