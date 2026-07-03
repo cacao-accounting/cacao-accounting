@@ -4,6 +4,7 @@
 <style>
   .ca-journal-form { display: flex; flex-direction: column; gap: 1rem; }
   .ca-journal-toolbar { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
+  .ca-journal-header-grid { display: grid; gap: 1rem; grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .ca-journal-grid { overflow-x: auto; }
   .ca-journal-table { min-width: 1120px; table-layout: fixed; }
   .ca-journal-table th, .ca-journal-table td { vertical-align: middle; }
@@ -11,9 +12,16 @@
   .ca-journal-actions { display: flex; gap: .25rem; justify-content: center; white-space: nowrap; }
   .ca-journal-balance { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
   .ca-journal-modal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ca-span-12 { grid-column: span 12; }
+  .ca-span-8 { grid-column: span 8; }
+  .ca-span-6 { grid-column: span 6; }
+  .ca-span-4 { grid-column: span 4; }
+  .ca-span-3 { grid-column: span 3; }
   @media (max-width: 768px) {
     .ca-journal-modal-grid { grid-template-columns: 1fr; }
     .ca-journal-toolbar { align-items: stretch; flex-direction: column; }
+    .ca-journal-header-grid { grid-template-columns: 1fr; }
+    .ca-span-12, .ca-span-8, .ca-span-6, .ca-span-4, .ca-span-3 { grid-column: span 1; }
   }
 </style>
 
@@ -155,16 +163,21 @@
       <p class="text-muted mb-0">{{ _('Borrador') }}</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
-      <div class="col-md-4">
+      <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
+    </div>
+  </div>
+
+  <section class="border rounded-2 p-3">
+    <div class="ca-journal-header-grid">
+      <div class="ca-span-4">
         <label class="form-label">{{ form.code.label }} <span class="text-danger">*</span></label>
         {{ form.code(class="form-control form-control-sm", **{"x-model": "header.code"}) }}
       </div>
-      <div class="col-md-8">
+      <div class="ca-span-8">
         <label class="form-label">{{ form.name.label }} <span class="text-danger">*</span></label>
         {{ form.name(class="form-control form-control-sm", **{"x-model": "header.name"}) }}
       </div>
-      <div class="col-md-6">
+      <div class="ca-span-6">
         <label class="form-label">{{ form.company.label }} <span class="text-danger">*</span></label>
         <div class="ca-smart-select" x-data='smartSelect({
           doctype: "company",
@@ -186,7 +199,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="ca-span-6">
         <label class="form-label" for="naming_series_id">{{ _('Secuencia') }}</label>
         <div class="ca-smart-select" x-data='smartSelect({
           doctype: "naming_series",
@@ -230,7 +243,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-12">
+      <div class="ca-span-12">
         <label class="form-label">{{ _('Libros contables') }}</label>
         <div class="ca-book-selector">
           <template x-if="!books.length">
@@ -251,19 +264,19 @@
           {{ _('Todos los libros activos se seleccionan automáticamente. Desmarque los que no deban afectarse; si quedan todos marcados se aplicará a todos.') }}
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="ca-span-3">
         <label class="form-label">{{ form.start_date.label }}</label>
         {{ form.start_date(class="form-control form-control-sm", type="date", **{"x-model": "header.start_date"}) }}
       </div>
-      <div class="col-md-3">
+      <div class="ca-span-3">
         <label class="form-label">{{ form.end_date.label }}</label>
         {{ form.end_date(class="form-control form-control-sm", type="date", **{"x-model": "header.end_date"}) }}
       </div>
-      <div class="col-md-3">
+      <div class="ca-span-3">
         <label class="form-label">{{ form.frequency.label }}</label>
         {{ form.frequency(class="form-select form-select-sm", **{"x-model": "header.frequency"}) }}
       </div>
-      <div class="col-md-3">
+      <div class="ca-span-3">
         <label class="form-label">{{ form.currency.label }}</label>
         <div class="ca-smart-select" x-data='smartSelect({
           doctype: "currency",

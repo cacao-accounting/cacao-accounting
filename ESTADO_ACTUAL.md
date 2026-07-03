@@ -257,6 +257,8 @@
 - **Smart Select en Grids:** Los formularios transaccionales usan hidden inputs escalares como fuente de verdad; items filtran por compania y cargan descripcion, UOM predeterminada y UOMs permitidas.
 - **Cabecera de Detalle:** Solicitud de Compra usa la misma estructura visual del comprobante manual: documento como titulo, tipo bajo el titulo, estado junto al numero, acciones a la derecha y datos dentro de la misma tarjeta.
 - **Comprobante Manual:** El comprobante contable muestra `Comprobante manual` debajo del numero para mantener paridad visual con los documentos operativos.
+- **Contabilidad / Plantillas recurrentes:** La pantalla de nueva plantilla recurrente volvió a separar toolbar, cabecera y tabla de asientos. El layout ya no colapsa todos los campos en una sola fila.
+
 - **Contabilidad / Reversión y Anulación:** `Revertir` ahora solo permite fechas en otro período contable; `Anular` solo permite anular comprobantes con fecha igual al día del comprobante.
 - **Contabilidad / Naming Series mensual:** Los comprobantes manuales renumeran borradores cuando cambia fecha o serie, y las secuencias asociadas a prefijos con `*MM*` o `*MMM*` resetean por mes aunque provengan de configuración heredada con política anual.
 - **Contabilidad / Listado de comprobantes:** El listado ya no depende del ULID como texto visible para borradores de reversión sin número definitivo; muestra un nombre amigable basado en el contexto contable del comprobante.
