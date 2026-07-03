@@ -47,11 +47,11 @@
         {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         <label class="form-check">
-          <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if request.args.get('show_cancellations') in ('1','true','on','yes') %}checked{% endif %}>
-          <span class="form-check-label">{{ _("Mostrar anulaciones") }}</span>
+          <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if report_filters.include_cancellations %}checked{% endif %}>
+          <span class="form-check-label">{{ _("Mostrar anulaciones y reversas") }}</span>
         </label>
         <label class="form-check">
-          <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if request.args.get('include_closing') in ('1','true','on','yes') %}checked{% endif %}>
+          <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if report_filters.include_closing %}checked{% endif %}>
           <span class="form-check-label">{{ _("Incluir Registro de Cierre") }}</span>
         </label>
         <button

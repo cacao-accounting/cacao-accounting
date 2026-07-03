@@ -188,6 +188,7 @@ _FINANCIAL_FILTER_FIELDS = (
     "party_id",
     "voucher_type",
     "status",
+    "show_cancellations",
     "include_running_balance",
     "page_size",
     "sort_by",
@@ -227,7 +228,12 @@ def _format_cell(column: str, value: object, ledger_currency: str | None) -> str
     if column == "posting_date" and isinstance(value, date):
         return value.isoformat()
     if column == "voucher_status":
-        return _("Cancelado") if str(value).lower() == "cancelled" else _("Contabilizado")
+        status_value = str(value).lower()
+        if status_value == "cancelled":
+            return _("Cancelado")
+        if status_value == "reversal":
+            return _("Reversión")
+        return _("Contabilizado")
     if column == "section":
         section_labels = {
             "assets": _("ACTIVOS"),
@@ -247,8 +253,12 @@ def _build_context_summary(report, report_filters: FinancialReportFilters) -> di
     ledger_label = report_filters.ledger or "—"
     if report_filters.ledger and report.ledger_currency:
         ledger_label = f"{report_filters.ledger} ({report.ledger_currency})"
-    status_value = report_filters.status or "submitted"
-    status_label = _("Cancelado") if status_value == "cancelled" else _("Contabilizado")
+    if report_filters.status == "cancelled":
+        status_label = _("Cancelado")
+    elif report_filters.include_cancellations:
+        status_label = _("Todos")
+    else:
+        status_label = _("Contabilizado")
     return {
         "company": report_filters.company,
         "ledger": ledger_label,
@@ -322,7 +332,8 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
             party_type=_str_or_none(payload.get("party_type")),
             party_id=_str_or_none(payload.get("party_id")),
             voucher_type=_str_or_none(payload.get("voucher_type")),
-            status=str(payload.get("status") or filters.status or "submitted"),
+            status=_str_or_none(payload.get("status")) or filters.status or "submitted",
+            include_cancellations=str(payload.get("show_cancellations") or "").lower() in {"1", "true", "yes", "on"},
             include_running_balance=str(payload.get("include_running_balance") or "").lower() in {"1", "true", "yes", "on"},
             page_size=page_size,
             sort_by=str(payload.get("sort_by") or filters.sort_by),
@@ -710,6 +721,7 @@ def _financial_filters() -> FinancialReportFilters:
         party_id=request.args.get("party_id") or None,
         voucher_type=request.args.get("voucher_type") or None,
         status=(request.args.get("status") or "submitted") if not show_cancellations else None,
+        include_cancellations=show_cancellations,
         include_running_balance=_bool_arg("include_running_balance"),
         page=max(_int_arg("page", 1), 1),
         page_size=max(_int_arg("page_size", 100), 1),
