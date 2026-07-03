@@ -2205,6 +2205,8 @@ def periodo_contable():
 @verifica_acceso("accounting")
 def listar_comprobantes():
     """Lista comprobantes contables manuales."""
+    from cacao_accounting.contabilidad.journal_service import journal_display_document_name
+
     query = (
         database.select(ComprobanteContable)
         .where(ComprobanteContable.is_fiscal_year_closing.is_(False))
@@ -2221,14 +2223,18 @@ def listar_comprobantes():
         ),
     )
 
+    consulta = database.paginate(
+        query,
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    for registro in consulta.items:
+        setattr(registro, "display_document_name", journal_display_document_name(registro))
+
     return render_template(
         "contabilidad/journal_lista.html",
-        consulta=database.paginate(
-            query,
-            page=request.args.get("page", default=1, type=int),
-            max_per_page=10,
-            count=True,
-        ),
+        consulta=consulta,
         titulo="Comprobantes Contables - " + APPNAME,
     )
 
@@ -3189,8 +3195,17 @@ def revertir_comprobante(identifier: str):
     """Crea borrador de reversión invirtiendo débitos y créditos del comprobante origen."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_reversal_draft
 
+    reversal_date = request.form.get("reversal_date")
+    if not reversal_date:
+        flash(_("Debe seleccionar la fecha de reversión."), "danger")
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+
     try:
-        reversed_draft = duplicate_journal_as_reversal_draft(identifier, user_id=str(current_user.id))
+        reversed_draft = duplicate_journal_as_reversal_draft(
+            identifier,
+            user_id=str(current_user.id),
+            reversal_date_raw=reversal_date,
+        )
     except JournalValidationError as exc:
         flash(str(exc), "danger")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))

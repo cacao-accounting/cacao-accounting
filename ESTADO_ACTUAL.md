@@ -1,5 +1,17 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Reportes contables / anulaciones y reversas (2026-07-03):** Los 5 reportes contables principales ya comparten una regla única de visibilidad sobre `GLEntry`.
+  - `account-movement`, `account-summary`, `trial-balance`, `balance-sheet` e `income-statement` excluyen por defecto tanto `is_cancelled=True` como `is_reversal=True`.
+  - Al activar el checkbox de anulaciones, el dataset vuelve a incluir movimientos anulados y reversas GL, sin depender del módulo origen del comprobante.
+  - La semántica aplica igual a comprobantes manuales y a postings originados desde Compras, Ventas, Bancos e Inventario porque el filtro opera directamente en GL.
+  - El detalle de movimiento ya distingue reversas con estado visible propio en la fila (`Reversión`).
+
+- **Comprobante contable / revertir con fecha (2026-07-03):** La reversión manual ya no se dispara con POST ciego.
+  - La vista detalle abre un modal para capturar `Fecha de reversión`.
+  - El borrador de reversión hereda la `naming_series_id` del comprobante origen y usa la fecha seleccionada como `posting_date`.
+  - La recomendación en UI diferencia el caso de mismo período (`Anular`) contra período distinto (`Revertir`).
+  - La asignación posterior del `document_no` usa la misma serie y resuelve el prefijo dinámico con la nueva fecha, evitando numeraciones fuera de período.
+
 - **Setup inicial / idioma, region y catalogo contable (2026-07-03):** El wizard inicial ya respeta el idioma seleccionado desde la primera pantalla.
   - Los textos del setup se renderizan desde un catalogo ES/EN centralizado.
   - El paso regional lista paises soberanos de America y solo permite monedas activas existentes en el seed/base.
@@ -245,6 +257,13 @@
 - **Smart Select en Grids:** Los formularios transaccionales usan hidden inputs escalares como fuente de verdad; items filtran por compania y cargan descripcion, UOM predeterminada y UOMs permitidas.
 - **Cabecera de Detalle:** Solicitud de Compra usa la misma estructura visual del comprobante manual: documento como titulo, tipo bajo el titulo, estado junto al numero, acciones a la derecha y datos dentro de la misma tarjeta.
 - **Comprobante Manual:** El comprobante contable muestra `Comprobante manual` debajo del numero para mantener paridad visual con los documentos operativos.
+- **Contabilidad / Reversión y Anulación:** `Revertir` ahora solo permite fechas en otro período contable; `Anular` solo permite anular comprobantes con fecha igual al día del comprobante.
+- **Contabilidad / Naming Series mensual:** Los comprobantes manuales renumeran borradores cuando cambia fecha o serie, y las secuencias asociadas a prefijos con `*MM*` o `*MMM*` resetean por mes aunque provengan de configuración heredada con política anual.
+- **Contabilidad / Listado de comprobantes:** El listado ya no depende del ULID como texto visible para borradores de reversión sin número definitivo; muestra un nombre amigable basado en el contexto contable del comprobante.
+
+- **Contabilidad / Importar líneas en comprobantes:** El comprobante manual ya ofrece un asistente más usable para `Importar líneas`, con pestañas para pegar o subir XLSX, descarga local de plantilla y previsualización antes de validar/inserar.
+- **Importación tabular / Encabezados bilingües:** El mapeo de columnas de line import ahora tolera encabezados en español o inglés, ignora acentos/guiones bajos y puede caer por posición cuando el título no coincide, tanto en el asistente compartido como en el formulario manual de comprobantes.
+
 - **Acciones en Borrador:** Solicitud de Compra en borrador muestra `Editar`, `Duplicar`, `Aprobar`, `Listado` y `Nuevo`; `Crear` permanece reservado para documentos aprobados.
 - **Paridad Funcional Transaccional:** Compras, Ventas e Inventario incorporan rutas y acciones de `Editar` y `Duplicar` en documentos transaccionales, con edición restringida a borrador y duplicado disponible en borrador/aprobado.
 - **Compras RFQ/SQ:** Se habilitaron rutas faltantes de `submit` y `cancel` para Solicitud de Cotización y Cotización de Proveedor; los botones del detalle ya no apuntan a endpoints inexistentes.

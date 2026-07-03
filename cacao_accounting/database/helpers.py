@@ -426,7 +426,11 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
 
     seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
-    if seq is None or seq.reset_policy == "never":
+    if seq is None:
+        return False
+
+    effective_policy = _effective_sequence_reset_policy(sequence_id, seq.reset_policy)
+    if effective_policy == "never":
         return False
 
     last_log = (
@@ -442,13 +446,40 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
     if last_log is None or last_log.posting_date is None:
         return False
 
-    if seq.reset_policy == "yearly":
+    if effective_policy == "yearly":
         return posting_date.year != last_log.posting_date.year
 
-    if seq.reset_policy == "monthly":
+    if effective_policy == "monthly":
         return posting_date.year != last_log.posting_date.year or posting_date.month != last_log.posting_date.month
 
     return False
+
+
+def _effective_sequence_reset_policy(sequence_id: str, configured_policy: str | None) -> str:
+    """Deriva la política efectiva considerando el prefijo de la serie asociada."""
+    from cacao_accounting.database import NamingSeries, SeriesSequenceMap
+
+    configured = str(configured_policy or "never")
+    if configured == "monthly":
+        return configured
+
+    prefix_templates = (
+        database.session.execute(
+            database.select(NamingSeries.prefix_template)
+            .join(SeriesSequenceMap, SeriesSequenceMap.naming_series_id == NamingSeries.id)
+            .filter(SeriesSequenceMap.sequence_id == sequence_id)
+        )
+        .scalars()
+        .all()
+    )
+
+    if any("*MM*" in template or "*MMM*" in template for template in prefix_templates if template):
+        return "monthly"
+    if configured == "yearly":
+        return configured
+    if any("*YYYY*" in template or "*YY*" in template for template in prefix_templates if template):
+        return "yearly"
+    return configured
 
 
 def reset_sequence(sequence_id: str) -> None:

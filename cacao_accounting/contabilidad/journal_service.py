@@ -30,6 +30,7 @@ from cacao_accounting.audit_trail_service import (
     log_update,
 )
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
     ComprobanteContable,
     ComprobanteContableDetalle,
@@ -38,9 +39,10 @@ from cacao_accounting.database import (
     DocumentRelation,
     Entity,
     FiscalYear,
+    NamingSeries,
     database,
 )
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier, parse_posting_date
 from cacao_accounting.document_flow import DocumentFlowError, create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 
@@ -192,6 +194,8 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
+    if journal.date != date.today():
+        raise JournalValidationError("Solo se puede anular un comprobante en la misma fecha de contabilizacion.")
     setattr(journal, "docstatus", 1)
     try:
         entries = cancel_document(journal)
@@ -281,7 +285,7 @@ def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteCont
     return duplicated
 
 
-def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str) -> ComprobanteContable:
+def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_date_raw: date | str) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
     source = get_journal(journal_id)
     if source is None:
@@ -289,15 +293,20 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str) -> Compro
     if source.status not in JOURNAL_DUPLICABLE_STATUSES:
         raise JournalValidationError("Solo se puede revertir un comprobante en borrador, rechazado o contabilizado.")
 
+    reversal_date = parse_posting_date(reversal_date_raw)
+    source_period = _accounting_period_for_date(source.entity, source.date)
+    reversal_period = _accounting_period_for_date(source.entity, reversal_date)
+    if source_period.id == reversal_period.id:
+        raise JournalValidationError("La reversión debe registrarse en un periodo contable distinto al comprobante origen.")
     payload = serialize_journal_for_form(source)
+    payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
     payload["memo"] = f"Reversión de {source.document_no or source.id}"
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
     reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
     reversed_draft.status = JOURNAL_STATUS_DRAFT
-    reversed_draft.document_no = None
-    reversed_draft.serie = None
+    _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
     database.session.add(reversed_draft)
     log_reversal_draft_created(reversed_draft)
     database.session.commit()
@@ -313,6 +322,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         raise JournalValidationError("Solo se puede editar un comprobante en borrador.")
 
     before = serialize_journal_for_form(journal)
+    previous_posting_date = journal.date
+    previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
     _validate_balanced_lines(data.company, data.lines)
     primary_book = data.books[0] if data.books else None
@@ -335,6 +346,12 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         _line_model(data.company, data.posting_date, primary_book, data.transaction_currency, line) for line in data.lines
     ]
     journal = replace_journal_lines(journal, lines)
+    should_renumber = bool(journal.document_no) and (
+        previous_posting_date != data.posting_date or previous_naming_series_id != data.naming_series_id
+    )
+    if should_renumber:
+        journal.document_no = None
+        journal.serie = None
     if not journal.document_no:
         _assign_identifier_if_needed(journal, data.naming_series_id)
     after = serialize_journal_for_form(journal)
@@ -357,7 +374,7 @@ def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
         "posting_date": journal.date.isoformat() if journal.date else None,
         "books": selected_books or [],
         "naming_series_id": journal.naming_series_id,
-        "naming_series_label": journal.document_no or journal.serie or "",
+        "naming_series_label": _naming_series_label(journal.naming_series_id),
         "reference": journal.reference or "",
         "memo": journal.memo or "",
         "transaction_currency": journal.transaction_currency,
@@ -368,6 +385,45 @@ def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
         "fiscal_year_id": getattr(journal, "fiscal_year_id", None),
         "lines": [_serialize_journal_line(line, account_labels, cost_center_labels) for line in lines],
     }
+
+
+def journal_display_document_name(journal: ComprobanteContable) -> str:
+    """Devuelve el nombre visible del comprobante para listados."""
+    if journal.document_no:
+        return str(journal.document_no)
+    if journal.serie:
+        return str(journal.serie)
+    if journal.reference and (
+        str(journal.memo or "").startswith("Reversión de ") or str(journal.memo or "").startswith("Duplicado de ")
+    ):
+        return str(journal.reference)
+    return "Borrador sin numerar"
+
+
+def _naming_series_label(naming_series_id: str | None) -> str:
+    if not naming_series_id:
+        return ""
+    naming_series = database.session.get(NamingSeries, naming_series_id)
+    if naming_series is None:
+        return ""
+    return f"{naming_series.name} ({naming_series.prefix_template})"
+
+
+def _accounting_period_for_date(company: str, posting_date: date) -> AccountingPeriod:
+    period = (
+        database.session.execute(
+            select(AccountingPeriod)
+            .filter(AccountingPeriod.entity == company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if period is None:
+        raise JournalValidationError("No existe un periodo contable configurado para la fecha indicada.")
+    return period
 
 
 def parse_journal_form(form_data: Any) -> dict[str, Any]:
