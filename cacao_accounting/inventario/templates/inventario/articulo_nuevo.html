@@ -381,12 +381,38 @@
                 <template x-for="(row, index) in rows" :key="index">
                   <tr>
                     <td>
-                      <select class="form-select form-select-sm" name="uom_code" x-model="row.uom_code">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for code, name in uom_choices %}
-                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "uom",
+                        name: "uom_code",
+                        minChars: 1,
+                        preload: true,
+                        initialValue: row.uom_code,
+                        initialLabel: row.uom_code,
+                        onSelect(option) { row.uom_code = option.value || option.id || ""; },
+                        messages: {
+                          placeholder: {{ _('Buscar UOM')|tojson }},
+                          loading: {{ _('Cargando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="uom_code" x-model="row.uom_code">
+                        <div x-effect="if (!selectedValue) row.uom_code = ''"></div>
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <template x-for="option in options" :key="option.value">
+                            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                          </template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <input class="form-control form-control-sm" type="number" min="0.000000001" step="0.000000001" name="uom_conversion_factor" x-model="row.conversion_factor">
@@ -438,12 +464,38 @@
                 <template x-for="(row, index) in rows" :key="index">
                   <tr>
                     <td>
-                      <select class="form-select form-select-sm" name="account_company" x-model="row.company">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for code, name in company_choices %}
-                        <option value="{{ code }}">{{ code }} - {{ name }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "company",
+                        name: "account_company",
+                        minChars: 1,
+                        preload: true,
+                        initialValue: row.company,
+                        initialLabel: row.company,
+                        onSelect(option) { row.company = option.value || option.id || ""; },
+                        messages: {
+                          placeholder: {{ _('Buscar compania')|tojson }},
+                          loading: {{ _('Cargando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="account_company" x-model="row.company">
+                        <div x-effect="if (!selectedValue) row.company = ''"></div>
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <template x-for="option in options" :key="option.value">
+                            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                          </template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <div class="ca-smart-select" x-data='smartSelect({
@@ -542,12 +594,42 @@
                       </div>
                     </td>
                     <td>
-                      <select class="form-select form-select-sm" name="cost_center_code" x-model="row.cost_center_code">
-                        <option value="">{{ _('Seleccione') }}</option>
-                        {% for cost_center in cost_center_choices %}
-                        <option value="{{ cost_center.code }}">{{ cost_center.label }}</option>
-                        {% endfor %}
-                      </select>
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "cost_center",
+                        name: "cost_center_code",
+                        minChars: 1,
+                        initialValue: row.cost_center_code,
+                        initialLabel: row.cost_center_code,
+                        filters: {
+                          company: function () { return row.company; },
+                          is_active: true
+                        },
+                        requiredFilters: ["company"],
+                        onSelect(option) { row.cost_center_code = option.value || option.id || ""; },
+                        messages: {
+                          placeholder: {{ _('Buscar centro de costo')|tojson }},
+                          loading: {{ _('Buscando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opcion valida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="cost_center_code" x-model="row.cost_center_code">
+                        <div x-effect="if (!selectedValue) row.cost_center_code = ''"></div>
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                          <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
                     </td>
                     <td class="text-nowrap">
                       <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>

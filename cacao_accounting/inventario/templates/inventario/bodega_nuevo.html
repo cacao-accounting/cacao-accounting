@@ -1,54 +1,169 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/bodega_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_bodega_lista') }}" class="link-dark">Bodegas</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nueva Bodega</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _('Inventario') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_bodega_lista') }}" class="link-dark">{{ _('Bodegas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nueva Bodega') }}</li>
   </ol>
 </nav>
 
-<div class="ca-card" style="max-width:860px;">
+<div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i> Nueva Bodega</h5>
-    <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>Guardar</button>
-      <a href="{{ url_for('inventario.inventario_bodega_lista') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+    <h5 class="ca-card-title"><i class="bi bi-building-add"></i>{{ _('Nueva Bodega') }}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('inventario.inventario_bodega_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
     </div>
   </div>
-  <form method="post" id="form-main">
+
+  <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
-    <div class="mb-3">
-      {{ form.code.label(class="form-label") }}
-      {{ form.code(class="form-control") }}
+
+    <div class="col-12">
+      <div class="ca-card shadow-sm">
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Datos basicos') }}</h6>
+        </div>
+        <div class="row g-3 p-3">
+          <div class="col-md-4">
+            <label class="form-label" for="code">{{ _('Codigo') }} <span class="text-danger">*</span></label>
+            {{ form.code(class="form-control form-control-sm", id="code", required=True) }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+            {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="mb-3">
-      {{ form.name.label(class="form-label") }}
-      {{ form.name(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ form.company.label(class="form-label") }}
-      {{ form.company(class="form-select", id="company") }}
-    </div>
-    <div class="mb-3">
-      {{ form.inventory_account_id.label(class="form-label") }}
-      {{ tf_macros.smart_select(
-          doctype="account",
-          name="inventory_account_id",
-          label="Cuenta de inventario",
-          filters={"company": {"selector": "#company"}, "account_type": "inventory"},
-          filter_sources=["#company"],
-          required_filters=["company"],
-          preload=True
-      ) }}
+
+    <div class="col-12">
+      <div class="ca-card shadow-sm" x-data='{
+        rows: {{ warehouse_company_rows|tojson }},
+        blankRow() { return {company: "", company_label: "", inventory_account_id: "", inventory_account_label: ""}; },
+        addRow() { this.rows.push(this.blankRow()); },
+        removeRow(index) {
+          if (this.rows.length <= 1) { this.rows[0] = this.blankRow(); return; }
+          this.rows.splice(index, 1);
+        }
+      }'>
+        <div class="ca-card-header">
+          <h6 class="ca-card-title mb-0">{{ _('Configuración por compañía') }}</h6>
+          <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+            <i class="bi bi-plus-lg me-1"></i>{{ _('Agregar compañía') }}
+          </button>
+        </div>
+        <div class="p-3">
+          <p class="text-muted small mb-3">{{ _('Seleccione la compañía de la bodega y su cuenta de inventario. El modelo actual permite una compañía por bodega.') }}</p>
+          <div class="table-responsive">
+            <table class="ca-table">
+              <caption style="display:none;">{{ _('Configuración de bodega por compañía') }}</caption>
+              <thead>
+                <tr>
+                  <th>{{ _('Compañía') }}</th>
+                  <th>{{ _('Cuenta de inventario') }}</th>
+                  <th>{{ _('Acciones') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, index) in rows" :key="index">
+                  <tr>
+                    <td style="min-width: 16rem;">
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "company",
+                        name: "warehouse_company",
+                        minChars: 1,
+                        preload: true,
+                        initialValue: row.company,
+                        initialLabel: row.company_label,
+                        onSelect(option) {
+                          row.company = option.value || option.id || "";
+                          row.company_label = option.display_name || option.label || row.company;
+                        },
+                        messages: {
+                          placeholder: {{ _('Buscar compañía')|tojson }},
+                          loading: {{ _('Cargando...')|tojson }},
+                          noResults: {{ _('Sin resultados')|tojson }},
+                          minChars: {{ _('Escriba para buscar')|tojson }},
+                          clear: {{ _('Limpiar')|tojson }},
+                          invalid: {{ _('Seleccione una opción válida')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="warehouse_company" x-model="row.company">
+                        <div x-effect="if (!selectedValue) { row.company = ''; row.company_label = ''; }"></div>
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <template x-for="option in options" :key="option.value">
+                            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                          </template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="min-width: 18rem;">
+                      <div class="ca-smart-select" x-data='smartSelect({
+                        doctype: "account",
+                        name: "warehouse_inventory_account_id",
+                        minChars: 2,
+                        initialValue: row.inventory_account_id,
+                        initialLabel: row.inventory_account_label,
+                        filters: {
+                          company: function () { return row.company; },
+                          account_type: ["inventory"],
+                          is_active: true
+                        },
+                        requiredFilters: ["company"],
+                        onSelect(option) {
+                          row.inventory_account_id = option.value || option.id || "";
+                          row.inventory_account_label = option.display_name || option.label || row.inventory_account_id;
+                        },
+                        messages: {
+                          placeholder: {{ _('Buscar cuenta de inventario')|tojson }},
+                          loading: {{ _('Buscando opciones...')|tojson }},
+                          noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                          minChars: {{ _('Escriba al menos 2 caracteres para buscar.')|tojson }},
+                          clear: {{ _('Limpiar selección')|tojson }},
+                          invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                          error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                        }
+                      })'>
+                        <input type="hidden" name="warehouse_inventory_account_id" x-model="row.inventory_account_id">
+                        <div x-effect="if (!selectedValue) { row.inventory_account_id = ''; row.inventory_account_label = ''; }"></div>
+                        <div class="ca-smart-select-input-wrap">
+                          <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                          <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                          <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                          <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-nowrap">
+                      <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </form>
 </div>

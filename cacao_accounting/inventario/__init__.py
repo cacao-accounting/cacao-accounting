@@ -14,6 +14,7 @@ from flask_login import current_user, login_required
 from cacao_accounting.database import (
     Accounts,
     CostCenter,
+    Entity,
     Item,
     ItemCategory,
     StockBin,
@@ -21,6 +22,7 @@ from cacao_accounting.database import (
     StockEntryItem,
     UOM,
     Warehouse,
+    WarehouseCompanyAccount,
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
@@ -662,23 +664,94 @@ def inventario_uom(uom_id):
 @login_required
 def inventario_bodega_nuevo():
     """Formulario para crear una nueva bodega."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.inventario.forms import FormularioBodega
 
     formulario = FormularioBodega()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     titulo = "Nueva Bodega - " + APPNAME
+    warehouse_company_rows = [{"company": "", "company_label": "", "inventory_account_id": "", "inventory_account_label": ""}]
     if formulario.validate_on_submit() or request.method == "POST":
+        warehouse_company_rows = _warehouse_company_rows_for_template(request.form)
+        company_rows = [row for row in warehouse_company_rows if row["company"]]
+        try:
+            _validate_warehouse_company_rows(company_rows)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template(
+                "inventario/bodega_nuevo.html",
+                form=formulario,
+                titulo=titulo,
+                warehouse_company_rows=warehouse_company_rows,
+            )
         bodega = Warehouse(
             code=request.form.get("code"),
             name=request.form.get("name"),
-            company=request.form.get("company"),
-            inventory_account_id=request.form.get("inventory_account_id") or None,
+            company=company_rows[0]["company"],
         )
         database.session.add(bodega)
+        database.session.flush()
+        _save_warehouse_company_rows(bodega.code, company_rows)
         database.session.commit()
         return redirect("/inventory/warehouse/list")
-    return render_template("inventario/bodega_nuevo.html", form=formulario, titulo=titulo)
+    return render_template(
+        "inventario/bodega_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        warehouse_company_rows=warehouse_company_rows,
+    )
+
+
+def _warehouse_company_rows_for_template(form_data: Any) -> list[dict[str, str]]:
+    """Reconstruye filas de configuracion de bodega por compañia desde el formulario."""
+    companies = form_data.getlist("warehouse_company")
+    accounts = form_data.getlist("warehouse_inventory_account_id")
+    rows: list[dict[str, str]] = []
+    for index, company in enumerate(companies):
+        account_id = accounts[index] if index < len(accounts) else ""
+        rows.append(
+            {
+                "company": str(company or "").strip(),
+                "company_label": str(company or "").strip(),
+                "inventory_account_id": str(account_id or "").strip(),
+                "inventory_account_label": str(account_id or "").strip(),
+            }
+        )
+    return rows or [{"company": "", "company_label": "", "inventory_account_id": "", "inventory_account_label": ""}]
+
+
+def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
+    """Valida filas contables de bodega por compañía."""
+    if not rows:
+        raise ValueError(_("La bodega requiere al menos una configuración por compañía."))
+    seen: set[str] = set()
+    for row in rows:
+        company = row["company"]
+        if company in seen:
+            raise ValueError(_("No se puede repetir la misma compañía en la bodega."))
+        seen.add(company)
+        company_exists = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
+        if company_exists is None:
+            raise ValueError(_("La compañía seleccionada no existe."))
+        account_id = row["inventory_account_id"]
+        if not account_id:
+            continue
+        account = database.session.get(Accounts, account_id)
+        if account is None or account.entity != company:
+            raise ValueError(_("La cuenta de inventario debe pertenecer a la compañía seleccionada."))
+        if (account.account_type or "").strip().lower() != "inventory":
+            raise ValueError(_("La cuenta seleccionada debe ser de tipo inventario."))
+
+
+def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]) -> None:
+    """Persiste la configuración contable de bodega por compañía."""
+    for row in rows:
+        database.session.add(
+            WarehouseCompanyAccount(
+                warehouse_code=warehouse_code,
+                company=row["company"],
+                inventory_account_id=row["inventory_account_id"] or None,
+                is_active=True,
+            )
+        )
 
 
 @inventario.route("/warehouse/<warehouse_id>")
@@ -692,7 +765,21 @@ def inventario_bodega(warehouse_id):
     if not registro:
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
-    return render_template("inventario/bodega.html", registro=registro[0], titulo=titulo)
+    company_accounts = (
+        database.session.execute(
+            database.select(WarehouseCompanyAccount)
+            .filter_by(warehouse_code=registro[0].code)
+            .order_by(WarehouseCompanyAccount.company)
+        )
+        .scalars()
+        .all()
+    )
+    return render_template(
+        "inventario/bodega.html",
+        registro=registro[0],
+        company_accounts=company_accounts,
+        titulo=titulo,
+    )
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
