@@ -1,5 +1,8 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Smart Select)
+- [x] Corregir el overlay de resultados de `smart-select` dentro de tablas responsivas en Articulo, Cliente y Proveedor.
+
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
