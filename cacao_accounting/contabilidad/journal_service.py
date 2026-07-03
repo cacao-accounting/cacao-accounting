@@ -187,14 +187,22 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     return journal
 
 
-def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> list[Any]:
-    """Anula un comprobante contabilizado mediante reversa GL append-only."""
+def cancel_submitted_journal(journal_id: str, user_id: str | None = None, posting_date: date | None = None) -> list[Any]:
+    """Anula un comprobante contabilizado mediante reversa GL append-only.
+
+    Args:
+        journal_id: ID del comprobante a anular.
+        user_id: ID del usuario que ejecuta la anulacion.
+        posting_date: Fecha de anulacion (opcional). Si no se provee, se usa
+                      ``date.today()``. Debe coincidir con ``journal.date``.
+    """
     journal = get_journal(journal_id)
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
-    if journal.date != date.today():
+    cancel_date = posting_date or date.today()
+    if journal.date != cancel_date:
         raise JournalValidationError("Solo se puede anular un comprobante en la misma fecha de contabilizacion.")
     setattr(journal, "docstatus", 1)
     try:
