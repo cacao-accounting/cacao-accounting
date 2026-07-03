@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
@@ -34,7 +33,6 @@ from cacao_accounting.database import (
     UOM,
     obtiene_texto_unico,
 )
-from cacao_accounting.database.helpers import generate_identifier
 
 
 class InventoryServiceError(ValueError):
@@ -386,7 +384,9 @@ def create_item_with_uoms(
     )
     item_id = obtiene_texto_unico()
     if code is None:
-        code = generate_identifier("item", item_id, posting_date=date.today(), company=None)
+        from cacao_accounting.document_identifiers import generate_entity_code
+
+        code = generate_entity_code(entity_type="item", entity_id=item_id)
     item = Item(
         id=item_id,
         code=code,
