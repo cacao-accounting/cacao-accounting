@@ -16,6 +16,7 @@ from cacao_accounting.database import (
     CostCenter,
     Entity,
     FiscalYear,
+    PartyGroup,
     PriceList,
     UOM,
     database,
@@ -348,3 +349,56 @@ def create_default_accounting_period(entity: Entity, fiscal_year: "FiscalYear") 
 def get_default_entity() -> Entity | None:
     """Recupera la entidad predeterminada si existe."""
     return database.session.execute(database.select(Entity).filter_by(status="default")).scalar_one_or_none()
+
+
+_PARTY_GROUP_CATALOG: dict[str, dict[str, list[dict[str, str]]]] = {
+    "es": {
+        "customer": [
+            {"name": "Mayorista", "description": "Cliente mayorista"},
+            {"name": "Minorista", "description": "Cliente minorista"},
+            {"name": "Distribuidor", "description": "Cliente distribuidor"},
+        ],
+        "supplier": [
+            {"name": "Bienes", "description": "Proveedor de bienes"},
+            {"name": "Servicios", "description": "Proveedor de servicios"},
+            {"name": "Servicios Básicos", "description": "Proveedor de servicios básicos"},
+            {"name": "Materia Prima", "description": "Proveedor de materia prima"},
+        ],
+    },
+    "en": {
+        "customer": [
+            {"name": "Wholesale", "description": "Wholesale customer"},
+            {"name": "Retail", "description": "Retail customer"},
+            {"name": "Distributor", "description": "Distributor customer"},
+        ],
+        "supplier": [
+            {"name": "Goods", "description": "Goods supplier"},
+            {"name": "Services", "description": "Services supplier"},
+            {"name": "Basic Services", "description": "Basic services supplier"},
+            {"name": "Raw Material", "description": "Raw material supplier"},
+        ],
+    },
+}
+
+
+def create_default_party_groups(language: str | None = None) -> list[PartyGroup]:
+    """Crea los grupos de terceros predeterminados según el idioma del setup."""
+    lang_key = "en" if (language or "").lower().startswith("en") else "es"
+    groups_catalog = _PARTY_GROUP_CATALOG.get(lang_key, _PARTY_GROUP_CATALOG["es"])
+    created: list[PartyGroup] = []
+    for group_type, items in groups_catalog.items():
+        for item in items:
+            existing = database.session.execute(
+                database.select(PartyGroup).filter_by(group_type=group_type, name=item["name"])
+            ).scalar_one_or_none()
+            if existing is not None:
+                continue
+            group = PartyGroup(
+                group_type=group_type,
+                name=item["name"],
+                description=item["description"],
+                is_active=True,
+            )
+            database.session.add(group)
+            created.append(group)
+    return created
