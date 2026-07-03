@@ -593,6 +593,7 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
         StockLedgerEntry,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -622,8 +623,9 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
     database.session.add_all(
         [
             ItemAccount(item_code="ITEM-PR", company="cacao"),
-            CompanyDefaultAccount(
-                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-PR", company="cacao", inventory_account_id=inventory_account.id, is_active=True
             ),
             PartyAccount(party_id="SUPP-PR", company="cacao", payable_account_id=None),
         ]
@@ -701,6 +703,7 @@ def test_purchase_receipt_lands_import_costs_into_initial_valuation_layers(app_c
         TaxRule,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -737,10 +740,9 @@ def test_purchase_receipt_lands_import_costs_into_initial_valuation_layers(app_c
         [
             ItemAccount(item_code="IMP-A", company="cacao"),
             ItemAccount(item_code="IMP-B", company="cacao"),
-            CompanyDefaultAccount(
-                company="cacao",
-                default_inventory=inventory_account.id,
-                bridge_account_id=bridge_account.id,
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-IMP", company="cacao", inventory_account_id=inventory_account.id, is_active=True
             ),
             TaxRule(
                 company="cacao",
@@ -854,6 +856,7 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
         StockValuationLayer,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -883,7 +886,10 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
     database.session.add_all(
         [
             ItemAccount(item_code="ITEM-DN", company="cacao"),
-            CompanyDefaultAccount(company="cacao", default_inventory=inventory_account.id, default_expense=expense_account.id),
+            CompanyDefaultAccount(company="cacao", default_expense=expense_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-DN", company="cacao", inventory_account_id=inventory_account.id, is_active=True
+            ),
         ]
     )
     database.session.add_all(
@@ -1071,6 +1077,7 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
         PurchaseReceiptItem,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -1109,8 +1116,9 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
     database.session.add_all(
         [
             ItemAccount(item_code="ITEM-GR", company="cacao"),
-            CompanyDefaultAccount(
-                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-GR", company="cacao", inventory_account_id=inventory_account.id, is_active=True
             ),
             PartyAccount(party_id="SUPP-GR", company="cacao", payable_account_id=payable_account.id),
         ]
@@ -1200,6 +1208,7 @@ def test_purchase_invoice_with_unposted_receipt_rejects_unposted(app_ctx):
         PurchaseReceiptItem,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
@@ -1243,8 +1252,9 @@ def test_purchase_invoice_with_unposted_receipt_rejects_unposted(app_ctx):
     database.session.flush()
     database.session.add_all(
         [
-            CompanyDefaultAccount(
-                company="cacao", default_inventory=inventory_account.id, bridge_account_id=bridge_account.id
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-UP", company="cacao", inventory_account_id=inventory_account.id, is_active=True
             ),
             ItemAccount(item_code="ITEM-UP", company="cacao"),
             PartyAccount(party_id="SUPP-UP", company="cacao", payable_account_id=payable_account.id),
