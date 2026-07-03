@@ -1,5 +1,12 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Codigos legibles para clientes, proveedores e items)
+- [x] Reemplazar ULIDs visibles en clientes, proveedores e items por codigos secuenciales CUSTM-00001, SUPLR-00001, ITEM-000001.
+- [x] Crear series globales de naming para customer/supplier/item con prefijo fijo y sin reinicio.
+- [x] Modificar `generate_party_code()` y `create_item_with_uoms()` para usar `generate_entity_code()`.
+- [x] Sembrar series globales durante setup inicial y seed de desarrollo.
+- [ ] Migrar registros existentes con codigos ULID a codigos secuenciales (opcional, pendiente de priorizar).
+
 ## Seguimiento 2026-07-03 (Cuenta de inventario por almacen/compania)
 - [x] Alinear purchase receipts y delivery notes para usar solo `WarehouseCompanyAccount` y eliminar el fallback global `default_inventory`.
 

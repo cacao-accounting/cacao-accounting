@@ -580,3 +580,15 @@
   - En `cacao_accounting/reportes/services.py`: Se reescribió `_process_payment_entry` para manejar correctamente las transferencias internas en el reporte de movimientos bancarios y se corrigió el cálculo de totales en `get_bank_movement_detail`. Esto corrigió `test_get_bank_movement_detail_supports_bank_filter`.
   - En `tests/test_transaction_update_elements.py`: Se corrigió una regresión en las aserciones de etiquetas de UI que usaban constantes internas en lugar de los valores esperados.
 - **Verificación:** Se ejecutó la suite completa de pruebas unitarias (`1015 passed`).
+
+## 2026-07-03 (Códigos legibles para clientes, proveedores e items)
+- **Solicitud:** Reemplazar los códigos ULID visibles en clientes, proveedores e items por códigos secuenciales legibles (CUSTM-00001, SUPLR-00001, ITEM-000001) usando el sistema de naming-series existente.
+- **Diagnóstico:** `generate_party_code()` en `party_management.py` y `create_item_with_uoms()` en `inventario/service.py` llamaban a `generate_identifier()` sin `naming_series_id`/`sequence_id`, cayendo al fallback `full_identifier = entity_id` (ULID).
+- **Implementación:**
+  - `document_identifiers.py`: Se agregaron códigos `customer→CUSTM`, `supplier→SUPLR`, `item→ITEM` en `_default_entity_code()`. Nueva función `ensure_global_naming_series()` que crea series globales (`company=None`) con prefijo fijo, padding 5 (cliente/proveedor) o 6 (item), y `reset_policy="never"`. Nueva función `generate_entity_code()` como helper público que encapsula la resolución de naming-series + secuencia + generación.
+  - `party_management.py`: `generate_party_code()` ahora usa `generate_entity_code()`.
+  - `inventario/service.py`: `create_item_with_uoms()` ahora usa `generate_entity_code()` para items.
+  - `setup/service.py`: Llama a `ensure_global_naming_series()` durante la creación de compañía.
+  - `datos/dev/__init__.py`: Llama a `ensure_global_naming_series()` antes de crear datos demo.
+- **Calidad:** Black, ruff, mypy en verde. 254 tests de cobertura contable + 874 tests generales pasan (fallo preexistente en `test_fiscal_year_closing_cycle`).
+- **Commit:** `9b6f80d` — `feat: human-readable codes for customers, suppliers, and items`
