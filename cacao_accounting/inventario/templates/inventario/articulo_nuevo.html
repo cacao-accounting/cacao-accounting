@@ -98,10 +98,6 @@
               {{ form.item_type(class="form-select form-select-sm", id="item_type") }}
               {% if form.item_type.errors %}<div class="text-danger small">{{ form.item_type.errors[0] }}</div>{% endif %}
             </div>
-            <div class="col-md-6">
-              <label class="form-label" for="valuation_method">{{ _('Metodo de valuacion') }}</label>
-              {{ form.valuation_method(class="form-select form-select-sm", id="valuation_method") }}
-            </div>
             <div class="col-12">
               <div class="form-check">
                 {{ form.is_stock_item(class="form-check-input", id="is_stock_item") }}
