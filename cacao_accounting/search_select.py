@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     BankAccount,
     Book,
     Budget,
+    BusinessUnit,
     CompanyParty,
     CostCenter,
     Currency,
@@ -105,6 +106,10 @@ def _accounting_period_label(period: AccountingPeriod) -> str:
 
 def _cost_center_label(cost_center: CostCenter) -> str:
     return f"{cost_center.code} - {cost_center.name}"
+
+
+def _business_unit_label(unit: BusinessUnit) -> str:
+    return f"{unit.code} - {unit.name}"
 
 
 def _unit_label(unit: Unit) -> str:
@@ -315,6 +320,24 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         label_builder=_cost_center_label,
         allowed_filters={"company": "entity", "is_active": "active", "is_group": "group"},
         default_filters={"group": False, "active": True, "enabled": True},
+    ),
+    "business_unit": SearchSelectSpec(
+        doctype="business_unit",
+        model=BusinessUnit,
+        search_fields=("code", "name"),
+        value_field="code",
+        label_builder=_business_unit_label,
+        allowed_filters={"company": "entity", "is_active": "active"},
+        default_filters={"active": True},
+    ),
+    "business_unit_id": SearchSelectSpec(
+        doctype="business_unit_id",
+        model=BusinessUnit,
+        search_fields=("code", "name"),
+        value_field="id",
+        label_builder=_business_unit_label,
+        allowed_filters={"company": "entity", "is_active": "active"},
+        default_filters={"active": True},
     ),
     "unit": SearchSelectSpec(
         doctype="unit",
