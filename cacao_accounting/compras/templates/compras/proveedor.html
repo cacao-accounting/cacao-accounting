@@ -24,6 +24,12 @@
       <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
       <a href="{{ url_for('compras.compras_proveedor_editar', supplier_id=registro.id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
       <a href="{{ url_for('compras.compras_proveedor_nuevo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}</a>
+      {% if not registro.is_customer %}
+      <form method="POST" action="{{ url_for('compras.compras_proveedor_habilitar_cliente', supplier_id=registro.id) }}" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-info btn-sm"><i class="bi bi-person-plus me-1"></i>{{ _('Habilitar como Cliente') }}</button>
+      </form>
+      {% endif %}
     </div>
   </div>
   <div class="p-3">
