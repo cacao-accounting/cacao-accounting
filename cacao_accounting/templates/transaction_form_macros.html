@@ -792,7 +792,7 @@
         <div class="mb-3" x-show="importModal.schema">
           <h6>{{ _('Columnas aceptadas:') }}</h6>
           <div class="d-flex flex-wrap gap-2 mb-2">
-            <template x-for="col in importModal.schema.columns" :key="col.key">
+            <template x-for="col in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="col.key">
               <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title="col.required ? '{{ _('Requerido') }}' : '{{ _('Opcional') }}'">
                 <span x-text="col.label"></span>
                 <template x-if="col.required"><span class="ms-1">*</span></template>
@@ -846,7 +846,7 @@
               <caption class="visually-hidden">{{ _('Vista previa de datos importados') }}</caption>
               <thead>
                 <tr>
-                  <template x-for="col in importModal.schema.columns" :key="col.key">
+                  <template x-for="col in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="col.key">
                     <th x-text="col.label"></th>
                   </template>
                 </tr>
@@ -854,7 +854,7 @@
               <tbody>
                 <template x-for="(row, idx) in importModal.parsedRows.slice(0, 50)" :key="idx">
                   <tr>
-                    <template x-for="col in importModal.schema.columns" :key="col.key">
+                    <template x-for="col in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="col.key">
                       <td x-text="row[col.key] || ''"></td>
                     </template>
                   </tr>
