@@ -495,6 +495,12 @@
   - Soporte para auto-detección de delimitadores en CSV y extracción de tipos avanzada en ODS.
   - Implementada generación de plantillas en formatos CSV, XLSX y ODS con descarga vía UI.
 
+# 2026-07-03 (Reparación de layout en plantilla de comprobante recurrente)
+- **Solicitud:** Corregir el layout roto de `/accounting/journal/recurring/new`, donde la cabecera del formulario y la tabla de asientos quedaban comprimidas en una sola línea.
+- **Hallazgo:** El template `recurring_journal_nuevo.html` tenía los campos de cabecera incrustados dentro de `.ca-journal-toolbar` junto al botón `Cancelar`, usando clases `col-md-*` sin una grilla real, lo que rompía el flujo visual.
+- **Implementación:** Se separó el toolbar del bloque de metadatos y se añadió una grilla explícita `ca-journal-header-grid` para `code`, `name`, `company`, `naming_series`, libros y fechas. La sección `Asientos contables` volvió a quedar debajo de la cabecera, con ancho normal.
+- **Validación:** Se amplió la prueba de render HTML del formulario recurrente y se ejecutó junto al flujo E2E de plantilla recurrente (`2 passed`).
+
 # 2026-07-03 (Reversión contable, anulación estricta y numeración mensual)
 - **Solicitud:** Corregir el naming/numeración de reversión contable, endurecer la regla operativa para `Anular` y `Revertir`, y evitar que el listado de comprobantes muestre ULIDs como nombre visible cuando el borrador aún no tiene documento contable definitivo.
 - **Hallazgo en desarrollo:** El comprobante `01KWK1HFDXZ3QPDM6BXDTM75GB` quedó con fecha `2026-08-01` pero referencia/numeración visible de julio, y la serie `BMO-JOU` estaba vinculada a una secuencia con política `yearly` aunque su prefijo usa `*YYYY*-*MM*`, lo que provocaba números como `...-00004` en agosto en lugar de reiniciar a `...-00001`.

@@ -1992,6 +1992,9 @@ def test_route_nuevo_comprobante_recurrente_uses_journal_patterns(app_ctx):
     assert "Tipo de referencia" not in html
     assert "Nombre de referencia" not in html
     assert "Es anticipo" not in html
+    assert "ca-journal-header-grid" in html
+    assert '<div class="ca-journal-header-grid">' in html
+    assert html.index('<div class="ca-journal-header-grid">') < html.index("Asientos contables")
 
 
 def test_route_asistente_cierre_mensual(app_ctx):
