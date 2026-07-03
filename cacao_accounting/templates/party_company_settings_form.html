@@ -1,0 +1,293 @@
+<div class="col-12">
+  <div class="ca-card shadow-sm" x-data='{
+    rows: {{ company_settings_rows|tojson }},
+    blankRow() {
+      return {
+        company: "",
+        company_label: "",
+        is_active: true,
+        receivable_account_id: "",
+        receivable_account_label: "",
+        payable_account_id: "",
+        payable_account_label: "",
+        default_price_list_id: "",
+        default_price_list_label: "",
+        default_tax_rule_id: "",
+        default_tax_rule_label: "",
+        tax_template_id: "",
+        tax_template_label: "",
+        allow_purchase_invoice_without_order: false,
+        allow_purchase_invoice_without_receipt: false
+      };
+    },
+    addRow() { this.rows.push(this.blankRow()); },
+    removeRow(index) {
+      if (this.rows.length <= 1) { this.rows[0] = this.blankRow(); return; }
+      this.rows.splice(index, 1);
+    }
+  }'>
+    <div class="ca-card-header">
+      <h6 class="ca-card-title mb-0">{{ _('Configuración por compañía') }}</h6>
+      <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+        <i class="bi bi-plus-lg me-1"></i>{{ _('Agregar compañía') }}
+      </button>
+    </div>
+    <div class="p-3">
+      <p class="text-muted small mb-3">{{ _('Agregue una fila por cada compañía donde el tercero estará activo.') }}</p>
+      <div class="table-responsive">
+        <table class="ca-table">
+          <caption style="display:none;">{{ _('Configuración de activación del tercero por compañía') }}</caption>
+          <thead>
+            <tr>
+              <th>{{ _('Compañía') }}</th>
+              <th>{{ _('Activo') }}</th>
+              <th>{% if party_role == "customer" %}{{ _('Cuenta por cobrar') }}{% else %}{{ _('Cuenta por pagar') }}{% endif %}</th>
+              <th>{{ _('Lista de Precio') }}</th>
+              <th>{{ _('Regla Fiscal') }}</th>
+              <th>{{ _('Plantilla de impuestos') }}</th>
+              {% if party_role == "supplier" %}
+              <th>{{ _('Sin OC') }}</th>
+              <th>{{ _('Sin recibo') }}</th>
+              {% endif %}
+              <th>{{ _('Acciones') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(row, index) in rows" :key="index">
+              <tr>
+                <td style="min-width: 15rem;">
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "company",
+                    name: "company",
+                    minChars: 1,
+                    preload: true,
+                    initialValue: row.company,
+                    initialLabel: row.company_label,
+                    onSelect(option) {
+                      row.company = option.value || option.id || "";
+                      row.company_label = option.display_name || option.label || row.company;
+                    },
+                    messages: {
+                      placeholder: {{ _('Buscar compañía')|tojson }},
+                      loading: {{ _('Cargando...')|tojson }},
+                      noResults: {{ _('Sin resultados')|tojson }},
+                      minChars: {{ _('Escriba para buscar')|tojson }},
+                      clear: {{ _('Limpiar')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="company" x-model="row.company">
+                    <div x-effect="if (!selectedValue) { row.company = ''; row.company_label = ''; }"></div>
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <template x-for="option in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                      </template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="align-middle">
+                  <input type="hidden" name="company_is_active" :value="row.is_active ? '1' : '0'">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" x-model="row.is_active" :id="'company_is_active_' + index">
+                    <label class="form-check-label" :for="'company_is_active_' + index">{{ _('Sí') }}</label>
+                  </div>
+                </td>
+                <td style="min-width: 17rem;">
+                  {% set account_field = "receivable_account_id" if party_role == "customer" else "payable_account_id" %}
+                  {% set account_label_field = "receivable_account_label" if party_role == "customer" else "payable_account_label" %}
+                  {% set account_type = "receivable" if party_role == "customer" else "payable" %}
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "account",
+                    name: {{ account_field|tojson }},
+                    minChars: 2,
+                    initialValue: row[{{ account_field|tojson }}],
+                    initialLabel: row[{{ account_label_field|tojson }}],
+                    filters: {
+                      company: function () { return row.company; },
+                      account_type: [{{ account_type|tojson }}],
+                      is_active: true
+                    },
+                    requiredFilters: ["company"],
+                    onSelect(option) {
+                      row[{{ account_field|tojson }}] = option.value || option.id || "";
+                      row[{{ account_label_field|tojson }}] = option.display_name || option.label || row[{{ account_field|tojson }}];
+                    },
+                    messages: {
+                      placeholder: {% if party_role == "customer" %}{{ _('Buscar cuenta por cobrar')|tojson }}{% else %}{{ _('Buscar cuenta por pagar')|tojson }}{% endif %},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba al menos 2 caracteres para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="{{ account_field }}" x-model="row[{{ account_field|tojson }}]">
+                    <div x-effect="if (!selectedValue) { row[{{ account_field|tojson }}] = ''; row[{{ account_label_field|tojson }}] = ''; }"></div>
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td style="min-width: 16rem;">
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "price_list",
+                    name: "default_price_list_id",
+                    minChars: 1,
+                    initialValue: row.default_price_list_id,
+                    initialLabel: row.default_price_list_label,
+                    filters: {
+                      company: function () { return row.company; },
+                      {% if party_role == "customer" %}is_selling: true,{% else %}is_buying: true,{% endif %}
+                      is_active: true
+                    },
+                    requiredFilters: ["company"],
+                    onSelect(option) {
+                      row.default_price_list_id = option.value || option.id || "";
+                      row.default_price_list_label = option.display_name || option.label || row.default_price_list_id;
+                    },
+                    messages: {
+                      placeholder: {{ _('Buscar lista de precio')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="default_price_list_id" x-model="row.default_price_list_id">
+                    <div x-effect="if (!selectedValue) { row.default_price_list_id = ''; row.default_price_list_label = ''; }"></div>
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td style="min-width: 16rem;">
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "tax_rule",
+                    name: "default_tax_rule_id",
+                    minChars: 1,
+                    initialValue: row.default_tax_rule_id,
+                    initialLabel: row.default_tax_rule_label,
+                    filters: {
+                      company: function () { return row.company; },
+                      applies_to: [{% if party_role == "customer" %}"sales"{% else %}"purchase"{% endif %}, "both"],
+                      is_active: true
+                    },
+                    requiredFilters: ["company"],
+                    onSelect(option) {
+                      row.default_tax_rule_id = option.value || option.id || "";
+                      row.default_tax_rule_label = option.display_name || option.label || row.default_tax_rule_id;
+                    },
+                    messages: {
+                      placeholder: {{ _('Buscar regla fiscal')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="default_tax_rule_id" x-model="row.default_tax_rule_id">
+                    <div x-effect="if (!selectedValue) { row.default_tax_rule_id = ''; row.default_tax_rule_label = ''; }"></div>
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                <td style="min-width: 16rem;">
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "tax_template",
+                    name: "tax_template_id",
+                    minChars: 1,
+                    initialValue: row.tax_template_id,
+                    initialLabel: row.tax_template_label,
+                    filters: {
+                      company: function () { return row.company; },
+                      template_type: [{% if party_role == "customer" %}"selling"{% else %}"buying"{% endif %}],
+                      is_active: true
+                    },
+                    requiredFilters: ["company"],
+                    onSelect(option) {
+                      row.tax_template_id = option.value || option.id || "";
+                      row.tax_template_label = option.display_name || option.label || row.tax_template_id;
+                    },
+                    messages: {
+                      placeholder: {{ _('Buscar plantilla de impuestos')|tojson }},
+                      loading: {{ _('Buscando opciones...')|tojson }},
+                      noResults: {{ _('No hay resultados compatibles.')|tojson }},
+                      minChars: {{ _('Escriba para buscar.')|tojson }},
+                      clear: {{ _('Limpiar selección')|tojson }},
+                      invalid: {{ _('Seleccione una opción válida de la lista.')|tojson }},
+                      error: {{ _('No se pudieron cargar las opciones.')|tojson }}
+                    }
+                  })'>
+                    <input type="hidden" name="tax_template_id" x-model="row.tax_template_id">
+                    <div x-effect="if (!selectedValue) { row.tax_template_id = ''; row.tax_template_label = ''; }"></div>
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
+                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
+                      <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </td>
+                {% if party_role == "supplier" %}
+                <td class="align-middle text-center">
+                  <input type="hidden" name="allow_purchase_invoice_without_order" :value="row.allow_purchase_invoice_without_order ? '1' : '0'">
+                  <input class="form-check-input" type="checkbox" x-model="row.allow_purchase_invoice_without_order">
+                </td>
+                <td class="align-middle text-center">
+                  <input type="hidden" name="allow_purchase_invoice_without_receipt" :value="row.allow_purchase_invoice_without_receipt ? '1' : '0'">
+                  <input class="form-check-input" type="checkbox" x-model="row.allow_purchase_invoice_without_receipt">
+                </td>
+                {% endif %}
+                <td class="text-nowrap">
+                  <button class="btn btn-outline-danger btn-sm" type="button" @click="removeRow(index)">{{ _('Quitar') }}</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
