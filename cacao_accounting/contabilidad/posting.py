@@ -265,7 +265,6 @@ def _resolve_item_account_id(item_code: str | None, company: str, account_type: 
             mapped = {
                 "income": mapping.income_account_id,
                 "expense": mapping.expense_account_id,
-                "inventory": mapping.inventory_account_id,
             }.get(account_type)
             if mapped:
                 return mapped
@@ -306,7 +305,7 @@ def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> s
         )
         if warehouse and warehouse.inventory_account_id:
             return str(warehouse.inventory_account_id)
-    return _account_id_for_item(line, company, "inventory")
+    return None
 
 
 def _account_id_for_comprobante_line(line: Any, company: str) -> str:
@@ -1187,13 +1186,13 @@ def _stock_qty_after(company: str, item_code: str, warehouse: str, qty_change: D
     return _decimal_value(current) + qty_change
 
 
-def _valuation_method_for_item(item_code: str) -> str:
-    item = database.session.get(Item, item_code)
-    if item is None:
-        item = database.session.execute(select(Item).filter_by(code=item_code)).scalars().first()
-    if not item:
-        raise PostingError("El item de inventario no existe.")
-    return (getattr(item, "valuation_method", None) or "fifo").lower()
+def _valuation_method_for_company(company_code: str) -> str:
+    entity = database.session.get(Entity, company_code)
+    if entity is None:
+        entity = database.session.execute(select(Entity).filter_by(code=company_code)).scalars().first()
+    if not entity:
+        raise PostingError("La compañía no existe.")
+    return (entity.valuation_method or "moving_average").lower()
 
 
 def _consume_valuation_layer(queue: list, remaining: Decimal) -> Decimal:
@@ -1270,7 +1269,7 @@ def _consume_stock_valuation_layers(
     if total_available < quantity:
         raise PostingError("No hay suficiente inventario para calcular el costo real.")
 
-    valuation_method = _valuation_method_for_item(item_code)
+    valuation_method = _valuation_method_for_company(company)
     if valuation_method == "moving_average":
         return _moving_average_valuation(available, total_available, quantity)
 
@@ -2369,10 +2368,7 @@ def _get_stock_entry_line_amount(line: StockEntryItem, purpose: str) -> Decimal:
 
 def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
     """Get the inventory account for a stock entry line."""
-    if purpose == "stock_reconciliation":
-        account = _warehouse_inventory_account_id(document, line, company)
-    else:
-        account = _account_id_for_item(line, company, "inventory")
+    account = _warehouse_inventory_account_id(document, line, company)
     return _require_account(account, "Falta la cuenta de inventario para la linea de stock.")
 
 
