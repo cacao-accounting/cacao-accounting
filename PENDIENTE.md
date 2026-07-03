@@ -1,5 +1,8 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Setup inicial)
+- [x] Ajustar visualmente el wizard inicial para reducir el hero sobredimensionado, compactar el stepper y usar marca desde `static/media`.
+
 ## Seguimiento 2026-07-03 (Smart Select)
 - [x] Corregir el overlay de resultados de `smart-select` dentro de tablas responsivas en Articulo, Cliente y Proveedor.
 
