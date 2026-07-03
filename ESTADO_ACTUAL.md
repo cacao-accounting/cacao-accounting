@@ -1,4 +1,17 @@
-# Estado Actual del Proyecto - 2026-06-30
+# Estado Actual del Proyecto - 2026-07-02
+
+- **Inventario / cuenta de inventario solo en bodega (2026-07-02):** La cuenta de inventario se configura unicamente a nivel de bodega.
+  - `ItemAccount.inventory_account_id` removido del modelo, dataclass, validacion y templates.
+  - `Warehouse.inventory_account_id` es la unica fuente de la cuenta de inventario para stock entries.
+  - Stock entries resuelven la cuenta via `_warehouse_inventory_account_id()` sin fallback a ItemAccount.
+  - Purchase receipts y delivery notes usan `CompanyDefaultAccount.default_inventory` como fallback.
+  - Test fixtures actualizados para no usar `inventory_account_id` en ItemAccount.
+
+- **Inventario / valuacion a nivel de entidad (2026-07-02):** El metodo de valuacion de inventario ahora es un atributo de la entidad.
+  - `Item.valuation_method` removido; `Entity.valuation_method` agregado con default "moving_average".
+  - `posting.py` usa `_valuation_method_for_company()` que consulta `Entity.valuation_method` primero.
+  - Servicios de inventario y formularios de item actualizados para no exponer el campo.
+  - Seed de desarrollo y tests corregidos.
 
 - **Cliente/Proveedor / perfil basico y cumplimiento legal (2026-07-01):** Los terceros ya incluyen los campos basicos y legales que faltaban.
   - `Party` guarda nacionalidad, tipo de persona, telefono y correo principales, pagina web y direccion principal.

@@ -1,5 +1,16 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-02 (Inventario: cuenta de inventario solo en bodega, valuacion en entidad)
+- **Solicitud:** Separar cuenta de inventario de ItemAccount y mover metodo de valuacion a Entity.
+- **Cambios aplicados:**
+  - `ItemAccount.inventory_account_id` removido del modelo y codigo; la cuenta de inventario solo existe en `Warehouse.inventory_account_id`.
+  - `Item.valuation_method` removido; `Entity.valuation_method` agregado con default "moving_average" (Costo Promedio).
+  - `posting.py`: `_warehouse_inventory_account_id()` retorna `None` (sin fallback a ItemAccount); stock entries usan cuenta de inventario de bodega.
+  - `document_builders.py`: `_item_account_id()` remueve "inventory" del mapping de ItemAccount y usa `CompanyDefaultAccount.default_inventory` como fallback para purchase receipts y delivery notes.
+  - `datos/dev/__init__.py`: `cargar_bodegas()` asigna `inventory_account_id` a warehouses PRINCIPAL/SUCURSAL desde cuenta `11.03.001`.
+- **Tests corregidos:** 9 fixtures de `ItemAccount` en `test_07posting_engine.py` y 1 en `test_08_reconciliation_reports.py` sin `inventory_account_id`; fixtures de purchase receipts y delivery notes con `default_inventory` en `CompanyDefaultAccount`.
+- **Validacion:** `test_07posting_engine.py` + `test_08_reconciliation_reports.py` en verde (73 tests); mypy sin errores.
+
 ## 2026-07-01 (Cliente/Proveedor: perfil basico y cumplimiento legal)
 - **Solicitud:** Completar Cliente y Proveedor con los datos basicos que faltaban: nacional/extranjero, telefono y correo predeterminados, pagina web, direccion principal, tipo de persona natural/juridica y un bloque final de cumplimiento legal con datos de representación para notificacion formal.
 - **Implementacion:** `Party` ahora guarda nacionalidad, tipo de persona, telefono/correo principales, pagina web, direccion principal y un paquete de datos legales de representacion/constitucion/notificacion.
