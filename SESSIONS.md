@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Setup inicial: ajuste visual del wizard)
+- **Solicitud:** Revisar la pantalla del wizard inicial porque la captura mostraba una composicion desbalanceada y poco cuidada visualmente.
+- **Diagnostico:** El layout anterior se leia como una landing page: contenedor demasiado ancho, hero verde dominante, selector de idioma pequeno y aislado, stepper lateral pesado y acciones muy separadas.
+- **Implementacion:** El wizard se compacto a un ancho operativo, el hero se redujo a una cabecera sobria, el stepper paso a una barra horizontal, el selector de idioma gano ancho coherente y la marca usa `static/media/brand.svg`.
+- **Responsive:** En mobile el stepper se apila en filas legibles, el contenedor usa mejor el ancho disponible y los botones se mantienen accesibles sin dominar la pantalla.
+
 ## 2026-07-03 (Smart Select: overlay visible en tablas responsivas)
 - **Solicitud:** Corregir el layout de los `smart-select` agregados en Articulo, Cliente y Proveedor porque al buscar las opciones quedaban atrapadas dentro del contenedor.
 - **Diagnostico:** El problema se producia cuando el menu estaba dentro de `.table-responsive` u otros contenedores con overflow; el dropdown absoluto quedaba recortado aunque la busqueda y el endpoint funcionaran correctamente.
