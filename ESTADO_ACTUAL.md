@@ -19,6 +19,8 @@
 - **Importador de lineas / Alpine (2026-07-03):** Los modales de importacion ya no fallan si el esquema aun no ha cargado.
   - Las iteraciones de columnas usan una lista segura cuando `importModal.schema` es `null`.
   - La correccion aplica al macro transaccional compartido y al formulario de comprobante contable.
+  - La validacion acepta compania por codigo o id para alinearse con `smart-select`.
+  - Los errores de carga de esquema y validacion se muestran dentro del modal en lugar de fallar silenciosamente.
 
 - **Inventario / cuenta de inventario solo en bodega (2026-07-02):** La cuenta de inventario se configura unicamente a nivel de bodega.
   - `ItemAccount.inventory_account_id` removido del modelo, dataclass, validacion y templates.

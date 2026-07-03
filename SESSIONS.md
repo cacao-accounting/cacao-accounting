@@ -5,7 +5,7 @@
 - **Setup inicial:** Se centralizaron catalogos de idioma, paises de America y monedas reconciliadas con el seed; el wizard renderiza textos segun idioma seleccionado y el paso de catalogo deshabilita/limpia el selector cuando se elige crear desde cero.
 - **Cliente/Proveedor:** La configuracion por compania ahora es una tabla dinamica con `smart-select`, permite agregar/remover companias y sincroniza el borrado de filas persistidas sin mantener soporte de formato legacy en el POST.
 - **Item/Bodega:** Item usa `smart-select` para UOM en conversiones y para compania/centro de costo en configuracion contable. Bodega incorpora una tabla `warehouse_company_account` para definir cuenta de inventario por compania y el posting resuelve inventario desde esa configuracion.
-- **Importador de lineas:** Los modales de importacion ya no evaluan `schema.columns` cuando el esquema aun es `null`, evitando errores Alpine al abrir formularios.
+- **Importador de lineas:** Los modales de importacion ya no evaluan `schema.columns` cuando el esquema aun es `null`, aceptan compania por `Entity.code` o `Entity.id` al validar y muestran errores visibles cuando falla la carga de esquema o la validacion.
 - **Validacion:** Se agregaron/regeneraron pruebas focales de setup, terceros, bodega/stock reconciliation e inventario. Queda pendiente ejecutar la suite completa por costo de tiempo.
 
 ## 2026-07-02 (Inventario: cuenta de inventario solo en bodega, valuacion en entidad)
