@@ -360,3 +360,75 @@ def generate_party_code(party_id: str, company: str | None, role: str) -> str:
 def build_party_code(party_id: str, company: str | None, role: str) -> str:
     """Obtiene o genera el codigo para un tercero."""
     return generate_party_code(party_id, company, role)
+
+
+class PartyRoleToggleError(ValueError):
+    """Error al togglear rol de tercero."""
+
+
+def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
+    """Habilita o deshabilita el rol de proveedor para un tercero.
+
+    Args:
+        party_id: ID del tercero.
+        enable: True para habilitar como proveedor, False para deshabilitar.
+        user_id: ID del usuario que ejecuta la accion (para auditoria).
+
+    Returns:
+        El tercero actualizado.
+
+    Raises:
+        PartyRoleToggleError: Si el tercero no existe o la operacion no es valida.
+    """
+    party = database.session.get(Party, party_id)
+    if party is None:
+        raise PartyRoleToggleError("El tercero no existe.")
+
+    if enable and party.is_supplier:
+        raise PartyRoleToggleError("El tercero ya es proveedor.")
+
+    if not enable and not party.is_supplier:
+        raise PartyRoleToggleError("El tercero no es proveedor.")
+
+    if enable:
+        party.is_supplier = True
+    else:
+        party.is_supplier = False
+
+    database.session.add(party)
+    database.session.flush()
+    return party
+
+
+def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
+    """Habilita o deshabilita el rol de cliente para un tercero.
+
+    Args:
+        party_id: ID del tercero.
+        enable: True para habilitar como cliente, False para deshabilitar.
+        user_id: ID del usuario que ejecuta la accion (para auditoria).
+
+    Returns:
+        El tercero actualizado.
+
+    Raises:
+        PartyRoleToggleError: Si el tercero no existe o la operacion no es valida.
+    """
+    party = database.session.get(Party, party_id)
+    if party is None:
+        raise PartyRoleToggleError("El tercero no existe.")
+
+    if enable and party.is_customer:
+        raise PartyRoleToggleError("El tercero ya es cliente.")
+
+    if not enable and not party.is_customer:
+        raise PartyRoleToggleError("El tercero no es cliente.")
+
+    if enable:
+        party.is_customer = True
+    else:
+        party.is_customer = False
+
+    database.session.add(party)
+    database.session.flush()
+    return party
