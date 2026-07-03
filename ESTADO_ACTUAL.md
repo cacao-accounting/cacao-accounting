@@ -1,5 +1,10 @@
 # Estado Actual del Proyecto - 2026-07-03
 
+- **Contabilidad / arboles maestros responsive (2026-07-03):** Los listados de Catalogo de Cuentas y Centros de Costos ahora comparten una presentacion mas util y consistente.
+  - Ambos usan un toolbar comun con selector de entidad, actualizacion y acciones de expandir/colapsar.
+  - El arbol se renderiza dentro de un panel con mejor legibilidad, menos espacio muerto y scroll controlado para codigos largos.
+  - En mobile los controles se apilan y los nodos del arbol aumentan su area tactil sin cambiar la logica Alpine ni los enlaces existentes.
+
 - **Setup inicial / ajuste visual del wizard (2026-07-03):** La pantalla inicial del setup ya usa una composicion mas compacta y operativa.
   - El contenedor principal reduce el ancho maximo y elimina el aspecto de hero sobredimensionado.
   - La cabecera usa la marca real desde `static/media/brand.svg`.

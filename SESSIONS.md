@@ -1,5 +1,11 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Contabilidad: arboles de cuentas y centros de costo)
+- **Solicitud:** Corregir el mismo patron visual del setup en el arbol de cuentas contables y el arbol de centros de costos, incluyendo comportamiento usable en dispositivos mobiles.
+- **Diagnostico:** Ambas vistas compartian el patron `.ca-tree`, pero estaban montadas sobre una tarjeta demasiado amplia con toolbar dispersa, demasiado espacio en blanco y un arbol visualmente estrecho y poco tactil en pantallas pequenas.
+- **Implementacion:** Se introdujo un layout comun para arboles maestros con toolbar responsive, contexto de entidad, panel de arbol con scroll controlado y ajustes compartidos de espaciado/hover/area tactil en `.ca-tree`.
+- **Mobile:** Filtros y acciones se apilan a ancho completo, el panel del arbol conserva scroll horizontal cuando hace falta y los nodos ganan altura tactil para evitar errores de pulsacion.
+
 ## 2026-07-03 (Setup inicial: ajuste visual del wizard)
 - **Solicitud:** Revisar la pantalla del wizard inicial porque la captura mostraba una composicion desbalanceada y poco cuidada visualmente.
 - **Diagnostico:** El layout anterior se leia como una landing page: contenedor demasiado ancho, hero verde dominante, selector de idioma pequeno y aislado, stepper lateral pesado y acciones muy separadas.
