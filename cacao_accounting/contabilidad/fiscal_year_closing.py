@@ -223,4 +223,4 @@ def reverse_fiscal_year_closing(fiscal_year_id: str, user_id: str) -> None:
     # Anular el comprobante. Esto disparará el hook en journal_service para actualizar el año fiscal.
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
-    cancel_submitted_journal(journal.id, user_id=user_id)
+    cancel_submitted_journal(journal.id, user_id=user_id, posting_date=journal.date)
