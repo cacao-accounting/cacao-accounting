@@ -22,7 +22,7 @@ from cacao_accounting.contabilidad.ctas import (
 )
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.database import Entity, database
-from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
+from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.catalogs import normalize_language
 from cacao_accounting.setup.repository import (
@@ -103,6 +103,7 @@ def create_company(
     )
     create_default_accounting_period(entity, fiscal_year)
     ensure_default_naming_series_for_company(entity.code)
+    ensure_global_naming_series()
 
     if catalogo_tipo == "preexistente":
         if country is None or idioma is None:

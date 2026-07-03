@@ -125,7 +125,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
 # -------------------------------------------------------------------------------------
 
 
-def _pick_naming_series(entity_type: str, company: str, naming_series_id: str | None) -> NamingSeries:
+def _pick_naming_series(entity_type: str, company: str | None, naming_series_id: str | None) -> NamingSeries:
     """Selecciona la serie activa por doctype y compania.
 
     Orden de preferencia:
@@ -189,6 +189,88 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
         _pick_naming_series(entity_type=entity_type, company=company, naming_series_id=None)
 
 
+def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
+    """Crea las series globales (company=None) para terceros e items.
+
+    Estas series no pertenecen a ninguna compania en particular y se usan
+    para entidades que no estan vinculadas a un documento con fecha contable
+    (clientes, proveedores, articulos).
+    """
+    if entity_types is None:
+        entity_types = ["customer", "supplier", "item"]
+    for entity_type in entity_types:
+        existing = database.session.execute(
+            database.select(NamingSeries).filter_by(entity_type=entity_type, company=None, is_default=True)
+        ).scalar_one_or_none()
+        if existing:
+            continue
+
+        code = _default_entity_code(entity_type)
+        padding = 6 if entity_type == "item" else 5
+        prefix_template = f"{code}-"
+
+        sequence = Sequence(
+            name=f"Global {entity_type} sequence",
+            current_value=0,
+            increment=1,
+            padding=padding,
+            reset_policy="never",
+        )
+        database.session.add(sequence)
+        database.session.flush()
+
+        naming_series = NamingSeries(
+            name=f"Global-{code}",
+            entity_type=entity_type,
+            company=None,
+            prefix_template=prefix_template,
+            is_active=True,
+            is_default=True,
+        )
+        database.session.add(naming_series)
+        database.session.flush()
+
+        database.session.add(
+            SeriesSequenceMap(
+                naming_series_id=naming_series.id,
+                sequence_id=sequence.id,
+                priority=0,
+                condition=None,
+            )
+        )
+        database.session.flush()
+
+
+def generate_entity_code(entity_type: str, entity_id: str, company: str | None = None) -> str:
+    """Genera un codigo secuencial para una entidad usando la naming series global o de compania.
+
+    Resuelve automaticamente la naming series activa y su secuencia asociada,
+    luego delega en :func:`generate_identifier` para producir el codigo final.
+
+    Args:
+        entity_type: Tipo de entidad (ej: 'customer', 'supplier', 'item')
+        entity_id: ID del registro que recibira el codigo
+        company: Codigo de compania (opcional, para series por compania)
+
+    Returns:
+        Codigo generado. Ejemplo: 'CUSTM-00001'
+    """
+    naming_series = _pick_naming_series(
+        entity_type=entity_type,
+        company=company,
+        naming_series_id=None,
+    )
+    sequence_id = _pick_sequence_id(naming_series.id)
+    return generate_identifier(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        posting_date=date.today(),
+        company=company,
+        naming_series_id=naming_series.id,
+        sequence_id=sequence_id,
+    )
+
+
 def _default_entity_code(entity_type: str) -> str:
     """Devuelve abreviacion de doctype para prefijos de series."""
     map_codes = {
@@ -206,11 +288,14 @@ def _default_entity_code(entity_type: str) -> str:
         "payment_entry": "PAY",
         "exchange_revaluation": "EXR",
         "stock_entry": "STE",
+        "customer": "CUSTM",
+        "supplier": "SUPLR",
+        "item": "ITEM",
     }
     return map_codes.get(entity_type, entity_type[:3].upper())
 
 
-def _create_default_series(entity_type: str, company: str) -> NamingSeries:
+def _create_default_series(entity_type: str, company: str | None) -> NamingSeries:
     """Crea una serie y secuencia por defecto para compania + doctype.
 
     La serie creada automaticamente se marca como predeterminada (is_default=True)

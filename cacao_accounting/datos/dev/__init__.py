@@ -195,12 +195,13 @@ def cargar_bancos():
         NamingSeries,
         SeriesExternalCounterMap,
     )
-    from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
+    from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 
     for b in _make_bancos():
         database.session.add(b)
     database.session.flush()
 
+    ensure_global_naming_series()
     ensure_default_naming_series_for_company("cacao", ["payment_entry"])
     payment_series = (
         database.session.execute(
