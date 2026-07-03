@@ -15,6 +15,9 @@
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
 - [ ] Auditar formularios maestros restantes para detectar selectores que todavia deban migrarse al Smart Select Framework despues de Cliente, Proveedor, Item y Bodega.
 - [ ] Ampliar pruebas de interfaz para nuevos formularios bancarios (`pago_nuevo`, `nota_nueva`, `transferencia_nueva`) incluyendo escenarios multimoneda y contador externo.
+- [ ] Extender el mismo flujo intuitivo de importación local de XLSX y plantilla descargable a cualquier formulario legacy que todavía conserve un modal de importación propio fuera del asistente compartido.
+- [ ] Evaluar si el filtro avanzado `Estado` en reportes contables debe desdoblarse para distinguir explícitamente `Cancelado` versus `Reversión`, ahora que el dataset ya soporta ambas clases GL por separado.
+- [ ] Evaluar si el detalle del comprobante también debe ocultar el ULID como nombre visible cuando un borrador de reversión todavía no tiene numeración definitiva, para mantener la misma regla visual del listado.
 - [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).
 - [ ] Drill-down universal en el 100% de los reportes operativos.
 - [ ] Exportacion consistente a Excel con formato financiero en todos los reportes.

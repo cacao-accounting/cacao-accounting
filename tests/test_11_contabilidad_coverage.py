@@ -473,16 +473,18 @@ def test_journal_service_cancel_submitted(app_ctx):
     )
     from cacao_accounting.database import Accounts, AccountingPeriod, Book, database
 
+    today = date.today()
+
     debit = Accounts(entity="cacao", code="EXP-CA", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-CA", name="Caja", active=True, enabled=True)
     book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
     period = AccountingPeriod(
         entity="cacao",
-        name="2026-05",
+        name=today.strftime("%Y-%m"),
         enabled=True,
         is_closed=False,
-        start=date(2026, 5, 1),
-        end=date(2026, 5, 31),
+        start=today.replace(day=1),
+        end=today,
     )
     database.session.add_all([debit, credit, book, period])
     database.session.commit()
@@ -490,7 +492,7 @@ def test_journal_service_cancel_submitted(app_ctx):
     journal = create_journal_draft(
         {
             "company": "cacao",
-            "posting_date": "2026-05-01",
+            "posting_date": today.isoformat(),
             "books": ["FISC"],
             "lines": [
                 {"account": debit.id, "debit": "8.00", "credit": "0"},
@@ -547,7 +549,7 @@ def test_journal_service_reversal_nonexistent(app_ctx):
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_reversal_draft
 
     with pytest.raises(JournalValidationError, match="no existe"):
-        duplicate_journal_as_reversal_draft("nonexistent-id", user_id="admin")
+        duplicate_journal_as_reversal_draft("nonexistent-id", user_id="admin", reversal_date_raw="2026-05-01")
 
 
 def test_journal_service_reversal_cancelled_status(app_ctx):
@@ -579,7 +581,7 @@ def test_journal_service_reversal_cancelled_status(app_ctx):
     database.session.commit()
 
     with pytest.raises(JournalValidationError, match="revertir"):
-        duplicate_journal_as_reversal_draft(journal.id, user_id="admin")
+        duplicate_journal_as_reversal_draft(journal.id, user_id="admin", reversal_date_raw="2026-05-01")
 
 
 def test_journal_service_update_nonexistent(app_ctx):
@@ -2416,6 +2418,38 @@ def test_route_revertir_comprobante_error(app_ctx):
     _login(client, user.id)
     response = client.post(f"/accounting/journal/{journal.id}/revert", follow_redirects=False)
     assert response.status_code in (200, 302)
+
+
+def test_route_revertir_comprobante_requires_reversal_date(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft
+    from cacao_accounting.database import Accounts, Book, User, database
+
+    debit = Accounts(entity="cacao", code="EXP-RD", name="Gasto", active=True, enabled=True)
+    credit = Accounts(entity="cacao", code="CAJ-RD", name="Caja", active=True, enabled=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit, credit, book])
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-01",
+            "books": ["FISC"],
+            "lines": [
+                {"account": debit.id, "debit": "5.00", "credit": "0"},
+                {"account": credit.id, "debit": "0", "credit": "5.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(f"/accounting/journal/{journal.id}/revert", data={}, follow_redirects=False)
+
+    assert response.status_code in (302, 303)
 
 
 def test_route_editar_comprobante_not_found(app_ctx):

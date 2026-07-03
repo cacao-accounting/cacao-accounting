@@ -44,6 +44,25 @@ def _login(client, user_id: str) -> None:
         session["_fresh"] = True
 
 
+def _seed_accounting_periods(periods: list[tuple[str, date, date]]) -> None:
+    from cacao_accounting.database import AccountingPeriod, database
+
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao",
+                name=name,
+                enabled=True,
+                is_closed=False,
+                start=start,
+                end=end,
+            )
+            for name, start, end in periods
+        ]
+    )
+    database.session.commit()
+
+
 def test_create_journal_draft_preserves_lines_and_does_not_post_gl(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
     from cacao_accounting.database import (
@@ -230,6 +249,9 @@ def test_journal_new_route_renders_new_backend_form(app_ctx):
     assert "Importar líneas" in html
     assert "journalImportLinesModal" in html
     assert "/api/line-import/schema?doctype=journal_entry" in html
+    assert "Subir XLSX" in html
+    assert "Descargar plantilla" in html
+    assert 'accept=".xlsx"' in html
     assert "Actualizar Elementos" not in html
     assert 'name="csrf_token"' in html
     assert "Buscar cuenta bancaria" not in html
@@ -983,6 +1005,12 @@ def test_revert_journal_creates_reversed_draft_and_redirects_to_edit(app_ctx):
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
+    _seed_accounting_periods(
+        [
+            ("2026-05", date(2026, 5, 1), date(2026, 5, 31)),
+            ("2026-06", date(2026, 6, 1), date(2026, 6, 30)),
+        ]
+    )
 
     journal = create_journal_draft(
         {
@@ -1003,7 +1031,11 @@ def test_revert_journal_creates_reversed_draft_and_redirects_to_edit(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
 
-    response = client.post(f"/accounting/journal/{journal.id}/revert", follow_redirects=False)
+    response = client.post(
+        f"/accounting/journal/{journal.id}/revert",
+        data={"reversal_date": "2026-06-02"},
+        follow_redirects=False,
+    )
     reversed_journal = (
         database.session.execute(database.select(ComprobanteContable).filter(ComprobanteContable.memo.like("Reversión de%")))
         .scalars()
@@ -1022,7 +1054,194 @@ def test_revert_journal_creates_reversed_draft_and_redirects_to_edit(app_ctx):
     assert response.status_code == 302
     assert reversed_journal is not None
     assert reversed_journal.status == "draft"
-    assert reversed_journal.document_no is None
+    assert reversed_journal.document_no is not None
+    assert reversed_journal.date == date(2026, 6, 2)
+    assert reversed_journal.naming_series_id == journal.naming_series_id
+    assert "-06-" in reversed_journal.document_no
+    assert reversed_journal.document_no.endswith("00001")
     assert f"/accounting/journal/edit/{reversed_journal.id}" in response.headers.get("Location", "")
     assert reversed_lines[0].value == -90
     assert reversed_lines[1].value == 90
+
+
+def test_revert_journal_rejects_same_accounting_period(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, ComprobanteContable, User, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-RSP", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-RSP", name="Caja", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit_account, credit_account, fiscal_book])
+    database.session.commit()
+    _seed_accounting_periods([("2026-05", date(2026, 5, 1), date(2026, 5, 31))])
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-08",
+            "books": ["FISC"],
+            "memo": "Original mismo periodo",
+            "lines": [
+                {"account": debit_account.id, "debit": "50.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "50.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+    submit_journal(journal.id)
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        f"/accounting/journal/{journal.id}/revert",
+        data={"reversal_date": "2026-05-20"},
+        follow_redirects=True,
+    )
+    html = response.get_data(as_text=True)
+    reversed_rows = (
+        database.session.execute(database.select(ComprobanteContable).filter(ComprobanteContable.memo.like("Reversión de%")))
+        .scalars()
+        .all()
+    )
+
+    assert response.status_code == 200
+    assert "periodo contable distinto" in html
+    assert reversed_rows == []
+
+
+def test_cancel_journal_requires_same_posting_date(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, ComprobanteContable, User, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-CAN", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-CAN", name="Caja", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit_account, credit_account, fiscal_book])
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-08",
+            "books": ["FISC"],
+            "memo": "No se puede anular hoy",
+            "lines": [
+                {"account": debit_account.id, "debit": "40.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "40.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+    submit_journal(journal.id)
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(f"/accounting/journal/{journal.id}/cancel", follow_redirects=True)
+    html = response.get_data(as_text=True)
+    refreshed = database.session.get(ComprobanteContable, journal.id)
+
+    assert response.status_code == 200
+    assert "misma fecha de contabilizacion" in html
+    assert refreshed.status == "submitted"
+
+
+def test_update_journal_draft_renumbers_when_posting_date_changes(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, update_journal_draft
+    from cacao_accounting.database import Accounts, Book, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-RNM", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-RNM", name="Caja", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit_account, credit_account, fiscal_book])
+    database.session.commit()
+    _seed_accounting_periods(
+        [
+            ("2026-07", date(2026, 7, 1), date(2026, 7, 31)),
+            ("2026-08", date(2026, 8, 1), date(2026, 8, 31)),
+        ]
+    )
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-07-03",
+            "books": ["FISC"],
+            "memo": "Draft renumerable",
+            "lines": [
+                {"account": debit_account.id, "debit": "25.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "25.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+    original_document_no = journal.document_no
+
+    updated = update_journal_draft(
+        journal.id,
+        {
+            "company": "cacao",
+            "posting_date": "2026-08-01",
+            "books": ["FISC"],
+            "naming_series_id": journal.naming_series_id,
+            "memo": "Draft renumerable agosto",
+            "lines": [
+                {"account": debit_account.id, "debit": "25.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "25.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    assert original_document_no is not None
+    assert "-07-" in original_document_no
+    assert original_document_no.endswith("00001")
+    assert updated.document_no is not None
+    assert updated.document_no != original_document_no
+    assert "-08-" in updated.document_no
+    assert updated.document_no.endswith("00001")
+
+
+def test_journal_list_uses_friendly_document_name_for_reversal_drafts(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft
+    from cacao_accounting.database import Accounts, Book, User, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-LST", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-LST", name="Caja", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit_account, credit_account, fiscal_book])
+    database.session.commit()
+
+    reversal_draft = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-08-01",
+            "books": ["FISC"],
+            "reference": "CACAO-JOU-2026-07-00001",
+            "memo": "Reversión de CACAO-JOU-2026-07-00001",
+            "lines": [
+                {"account": debit_account.id, "debit": "30.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "30.00"},
+            ],
+        },
+        user_id="user-1",
+        assign_identifier=False,
+    )
+    reversal_draft.document_no = None
+    reversal_draft.serie = None
+    database.session.add(reversal_draft)
+    database.session.commit()
+
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.get("/accounting/journal/list")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert f">{reversal_draft.reference}<" in html
+    assert f">{reversal_draft.id}<" not in html

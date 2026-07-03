@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import pytest
 
@@ -49,7 +50,7 @@ def _seed_accounts():
 def _journal_payload(debit_account_id: str, credit_account_id: str, memo: str = "Registro inicial") -> dict:
     return {
         "company": "cacao",
-        "posting_date": "2026-05-06",
+        "posting_date": date.today().isoformat(),
         "memo": memo,
         "lines": [
             {"account": debit_account_id, "debit": "100.00", "credit": "0"},
