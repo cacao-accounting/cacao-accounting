@@ -1165,6 +1165,41 @@ def test_setup_seeds_uoms_using_selected_language():
         assert purchase_price_list.name == "Default Purchase Price List"
 
 
+def test_setup_america_country_catalog_and_fast_currency_seed():
+    from cacao_accounting import create_app
+    from cacao_accounting.datos.base import registra_monedas
+    from cacao_accounting.database import Currency, database
+    from cacao_accounting.setup.catalogs import AMERICA_CURRENCY_CODES, country_choices, country_currency_map
+    from cacao_accounting.setup.service import available_currencies
+
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+        }
+    )
+    with app.app_context():
+        database.create_all()
+        registra_monedas(carga_rapida=True)
+
+        country_codes = {code for code, _label in country_choices("en")}
+        currency_codes = {
+            currency.code
+            for currency in database.session.execute(database.select(Currency).filter(Currency.active.is_(True))).scalars()
+        }
+        available_codes = {code for code, _label in available_currencies()}
+
+        assert len(country_codes) == 35
+        assert {"CA", "US", "MX", "NI", "AR", "BR", "VE"}.issubset(country_codes)
+        assert set(AMERICA_CURRENCY_CODES).issubset(currency_codes)
+        assert set(country_currency_map().values()).issubset(currency_codes)
+        assert "USD" in available_codes
+        assert available_codes.issubset(currency_codes)
+
+
 def test_example_seed_creates_company_default_accounts(app_ctx):
     from cacao_accounting.contabilidad.default_accounts import DEFAULT_ACCOUNT_FIELDS
     from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -1666,6 +1701,7 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
         StockEntryItem,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
     from cacao_accounting.inventario.service import convert_item_qty, rebuild_stock_bins
@@ -1689,12 +1725,13 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
                 has_serial_no=True,
                 default_uom="EA",
             ),
-            Warehouse(code="WH-S", name="Bodega", company="cacao", inventory_account_id=inventory.id),
+            Warehouse(code="WH-S", name="Bodega", company="cacao"),
         ]
     )
     database.session.flush()
     database.session.add_all(
         [
+            WarehouseCompanyAccount(warehouse_code="WH-S", company="cacao", inventory_account_id=inventory.id, is_active=True),
             CompanyDefaultAccount(company="cacao", bridge_account_id=bridge.id),
             ItemAccount(item_code="ITEM-S", company="cacao"),
             ItemUOMConversion(item_code="ITEM-S", from_uom="BOX", to_uom="EA", conversion_factor=Decimal("10")),

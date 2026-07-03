@@ -13,7 +13,7 @@
 - [ ] Seguir afinando el bloque legal de Cliente y Proveedor si en el futuro se requieren campos adicionales de notificación o representación por jurisdicción.
 - [ ] Agregar edicion del item para mantener y ajustar la configuracion contable por compañia despues de la creacion, respetando bloqueos de negocio donde aplique.
 - [ ] Evaluar y definir alcance de acciones equivalentes para registros maestros (cliente, proveedor, item, bodega, uom) sin forzar flujo documental donde no aplica.
-- [ ] Migrar formularios operativos restantes al Smart Select Framework; el framework transaccional compartido de Compras, Ventas e Inventario ya inicializa correctamente sus selectores.
+- [ ] Auditar formularios maestros restantes para detectar selectores que todavia deban migrarse al Smart Select Framework despues de Cliente, Proveedor, Item y Bodega.
 - [ ] Ampliar pruebas de interfaz para nuevos formularios bancarios (`pago_nuevo`, `nota_nueva`, `transferencia_nueva`) incluyendo escenarios multimoneda y contador externo.
 - [ ] Implementar arbol grafico de trazabilidad (Diagrama de Flujo).
 - [ ] Drill-down universal en el 100% de los reportes operativos.

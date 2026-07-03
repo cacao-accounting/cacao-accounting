@@ -21,10 +21,10 @@ from cacao_accounting.contabilidad.ctas import (
     cargar_catalogos,
 )
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
 from cacao_accounting.database import Entity, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.runtime_mode import force_single_entity
+from cacao_accounting.setup.catalogs import normalize_language
 from cacao_accounting.setup.repository import (
     create_default_accounting_period,
     create_default_book,
@@ -121,13 +121,22 @@ def create_company(
 
 def save_language(language: str) -> None:
     """Guarda el idioma de configuración seleccionado."""
-    set_setup_value(SETUP_LANGUAGE, language)
+    set_setup_value(SETUP_LANGUAGE, normalize_language(language))
+    database.session.commit()
 
 
 def save_regional_settings(country: str, currency: str) -> None:
     """Guarda los valores regionales de país y moneda."""
+    from cacao_accounting.database import Currency
+
+    selected_currency = database.session.execute(
+        database.select(Currency).filter_by(code=currency, active=True)
+    ).scalar_one_or_none()
+    if selected_currency is None:
+        raise ValueError("La moneda seleccionada no existe o no está activa.")
     set_setup_value(SETUP_COUNTRY, country)
     set_setup_value(SETUP_CURRENCY, currency)
+    database.session.commit()
 
 
 def save_company_details(company_data: dict) -> None:
@@ -143,7 +152,7 @@ def mark_setup_complete() -> None:
 def get_setup_configuration() -> dict[str, Any]:
     """Recupera la configuración guardada del asistente de instalación."""
     return {
-        "idioma": get_setup_value(SETUP_LANGUAGE, "es"),
+        "idioma": normalize_language(get_setup_value(SETUP_LANGUAGE, "es")),
         "pais": get_setup_value(SETUP_COUNTRY, "NI"),
         "moneda": get_setup_value(SETUP_CURRENCY, "NIO"),
     }
@@ -151,7 +160,12 @@ def get_setup_configuration() -> dict[str, Any]:
 
 def available_currencies() -> list[tuple[str, str]]:
     """Devuelve las monedas disponibles para el formulario de configuración."""
-    return obtener_lista_monedas()
+    from cacao_accounting.database import Currency
+
+    currencies = database.session.execute(
+        database.select(Currency).filter(Currency.active.is_(True)).order_by(Currency.code)
+    ).scalars()
+    return [(currency.code, f"{currency.code} - {currency.name}") for currency in currencies]
 
 
 def _activate_and_set_default_currency(currency_code: str) -> None:

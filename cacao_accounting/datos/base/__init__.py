@@ -27,17 +27,25 @@ def registra_monedas(carga_rapida):
     from teritorio import Currencies
 
     from cacao_accounting.database import Currency, database
+    from cacao_accounting.setup.catalogs import SETUP_SEED_CURRENCY_CODES
 
     log.trace("Iniciando carga de base monedas a la base de datos.")
 
     if carga_rapida:
-        MONEDAS = (
-            Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
-            Currency(code="USD", name="Dolares", decimals=2, active=True, default=False),
-            Currency(code="EUR", name="Euros", decimals=2, active=True, default=False),
-        )
-        for m in MONEDAS:
-            database.session.add(m)
+        currencies_by_code = {currency.code: currency for currency in Currencies()}
+        for code in SETUP_SEED_CURRENCY_CODES:
+            currency = currencies_by_code.get(code)
+            if currency is None:
+                continue
+            database.session.add(
+                Currency(
+                    code=currency.code,
+                    name=currency.name,
+                    decimals=currency.minor_units,
+                    active=True,
+                    default=currency.code == "NIO",
+                )
+            )
             database.session.commit()
     else:
         for currency in Currencies():

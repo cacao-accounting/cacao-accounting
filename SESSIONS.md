@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Setup inicial, Smart Select en maestros, bodega por compania e importador de lineas)
+- **Solicitud:** Corregir el setup inicial para respetar idioma, completar paises/monedas de America, bloquear el selector de catalogo al crear catalogo en cero y mejorar visualmente el wizard; estandarizar Cliente, Proveedor, Item y Bodega con `smart-select`; agregar configuracion de bodega por compania; corregir el error Alpine del importador de lineas.
+- **Setup inicial:** Se centralizaron catalogos de idioma, paises de America y monedas reconciliadas con el seed; el wizard renderiza textos segun idioma seleccionado y el paso de catalogo deshabilita/limpia el selector cuando se elige crear desde cero.
+- **Cliente/Proveedor:** La configuracion por compania ahora es una tabla dinamica con `smart-select`, permite agregar/remover companias y sincroniza el borrado de filas persistidas sin mantener soporte de formato legacy en el POST.
+- **Item/Bodega:** Item usa `smart-select` para UOM en conversiones y para compania/centro de costo en configuracion contable. Bodega incorpora una tabla `warehouse_company_account` para definir cuenta de inventario por compania y el posting resuelve inventario desde esa configuracion.
+- **Importador de lineas:** Los modales de importacion ya no evaluan `schema.columns` cuando el esquema aun es `null`, evitando errores Alpine al abrir formularios.
+- **Validacion:** Se agregaron/regeneraron pruebas focales de setup, terceros, bodega/stock reconciliation e inventario. Queda pendiente ejecutar la suite completa por costo de tiempo.
+
 ## 2026-07-02 (Inventario: cuenta de inventario solo en bodega, valuacion en entidad)
 - **Solicitud:** Separar cuenta de inventario de ItemAccount y mover metodo de valuacion a Entity.
 - **Cambios aplicados:**

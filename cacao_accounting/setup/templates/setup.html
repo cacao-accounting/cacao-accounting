@@ -1,66 +1,251 @@
 {% import "macros.html" as macros %}
 <!doctype html>
-<html lang="es">
+<html lang="{{ language }}">
 
 <head>
   {{ macros.headertags() }}
-  <title>Asistente de configuración inicial</title>
+  <title>{{ texts.title }}</title>
   <style>
+    :root {
+      --setup-green: #6fbd2c;
+      --setup-green-dark: #287a3e;
+      --setup-ink: #102033;
+      --setup-muted: #64748b;
+      --setup-line: #d8e5dc;
+      --setup-surface: rgba(255, 255, 255, .92);
+    }
+
     html,
     body {
-      height: 100%;
+      min-height: 100%;
       margin: 0;
     }
 
     body {
-      background: linear-gradient(135deg, #f8fbff 0%, #eef3f9 100%);
+      color: var(--setup-ink);
+      background:
+        radial-gradient(circle at top left, rgba(111, 189, 44, .28), transparent 34rem),
+        linear-gradient(135deg, #f4f9ef 0%, #eef5f8 52%, #e7eee8 100%);
     }
 
-    .wizard-shell {
+    .setup-shell {
       min-height: 100vh;
-      width: 100%;
       display: flex;
-      padding: 1rem;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1rem, 2vw, 2rem);
     }
 
-    .wizard-card {
-      width: 100%;
-      min-height: calc(100vh - 2rem);
+    .setup-card {
+      width: min(100%, 1180px);
+      overflow: hidden;
+      border: 1px solid rgba(40, 122, 62, .16);
+      border-radius: 26px;
+      background: var(--setup-surface);
+      box-shadow: 0 24px 60px rgba(16, 32, 51, .13);
+      backdrop-filter: blur(14px);
+    }
+
+    .setup-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
+      gap: clamp(1.25rem, 3vw, 2.5rem);
+      align-items: center;
+      padding: clamp(1.4rem, 3vw, 2.35rem);
+      color: #061625;
+      background:
+        radial-gradient(circle at right top, rgba(255, 255, 255, .45), transparent 18rem),
+        linear-gradient(115deg, rgba(111, 189, 44, .98), rgba(151, 211, 92, .9));
+    }
+
+    .setup-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .75rem;
+      padding: .35rem .7rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .36);
+      font-size: .8rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .setup-title {
+      max-width: 42rem;
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      font-weight: 800;
+      line-height: 1.03;
+    }
+
+    .setup-subtitle {
+      max-width: 39rem;
+      margin: .85rem 0 0;
+      color: rgba(6, 22, 37, .76);
+      font-size: 1rem;
+    }
+
+    .setup-progress-card {
+      padding: .85rem;
+      border: 1px solid rgba(255, 255, 255, .42);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, .32);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+    }
+
+    .setup-step {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .55rem .6rem;
       border-radius: 14px;
-      border: 1px solid #d9e2ec;
-      background-color: #fff;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-      display: flex;
-      flex-direction: column;
+      color: rgba(6, 22, 37, .68);
+      font-weight: 700;
+      font-size: .95rem;
     }
 
-    .wizard-content {
-      flex: 1;
-      overflow: auto;
+    .setup-step.is-active {
+      color: #061625;
+      background: rgba(255, 255, 255, .55);
+    }
+
+    .setup-step-number {
+      display: inline-grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .46);
+    }
+
+    .setup-step.is-active .setup-step-number,
+    .setup-step.is-complete .setup-step-number {
+      color: #fff;
+      background: var(--setup-green-dark);
+    }
+
+    .setup-body {
+      padding: clamp(1.4rem, 3vw, 2.25rem);
+      background:
+        linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%);
+    }
+
+    .setup-section-title {
+      margin-bottom: .25rem;
+      font-weight: 800;
+    }
+
+    .setup-help {
+      max-width: 48rem;
+      color: var(--setup-muted);
+    }
+
+    .setup-panel {
+      margin-top: 1.1rem;
+      padding: clamp(1rem, 2vw, 1.5rem);
+      border: 1px solid var(--setup-line);
+      border-radius: 22px;
+      background: #fff;
+      box-shadow: 0 12px 30px rgba(16, 32, 51, .055);
+    }
+
+    .setup-panel-soft {
+      background: linear-gradient(135deg, #ffffff 0%, #f7fbf5 100%);
+    }
+
+    .setup-catalog-option {
+      padding: .85rem 1rem;
+      border: 1px solid var(--setup-line);
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .setup-catalog-disabled {
+      opacity: .56;
+    }
+
+    .setup-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1.25rem;
+      padding-top: 1.15rem;
+      border-top: 1px solid var(--setup-line);
+    }
+
+    .btn-setup-primary {
+      border-color: var(--setup-green-dark);
+      background: var(--setup-green-dark);
+      box-shadow: 0 12px 24px rgba(40, 122, 62, .24);
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .btn-setup-primary:hover {
+      border-color: #1f6332;
+      background: #1f6332;
+      color: #fff;
+    }
+
+    @media (max-width: 900px) {
+      .setup-shell {
+        align-items: flex-start;
+      }
+
+      .setup-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .setup-progress-card {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .5rem;
+      }
+
+      .setup-step {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: .4rem;
+      }
+
+      .setup-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        margin-inline: -1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, .94);
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="wizard-shell">
-    <div class="wizard-card">
-      <div class="card-header p-4" style="background:#78BF30;color:#1a1a1a;">
-        <h2 class="mb-1">Asistente de configuración inicial</h2>
-        <p class="mb-0 small">Complete los pasos para crear la empresa predeterminada y configurar el sistema.</p>
-      </div>
-
-      <div class="wizard-content p-4 p-lg-5">
-        <div class="mb-4">
-          <div class="progress" style="height: .6rem;">
-            <div class="progress-bar" role="progressbar" style="width: {{ step * 33 }}%;background:#78BF30;" aria-valuenow="{{ step * 33 }}" aria-valuemin="0" aria-valuemax="100"></div>
+  <div class="setup-shell">
+    <div class="setup-card">
+      <header class="setup-hero">
+        <div>
+          <div class="setup-eyebrow">
+            <i class="bi bi-flower1"></i>
+            {{ texts.eyebrow }}
           </div>
-          <div class="d-flex justify-content-between mt-2">
-            <small class="text-muted">Paso 1: Idioma</small>
-            <small class="text-muted">Paso 2: Regional</small>
-            <small class="text-muted">Paso 3: Empresa</small>
-          </div>
+          <h1 class="setup-title">{{ texts.title }}</h1>
+          <p class="setup-subtitle">{{ texts.subtitle }}</p>
         </div>
 
+        <aside class="setup-progress-card" aria-label="{{ texts.visual_note }}">
+          {% for item_step, item_label in [(1, texts.step_1), (2, texts.step_2), (3, texts.step_3)] %}
+          <div class="setup-step {% if step == item_step %}is-active{% elif step > item_step %}is-complete{% endif %}">
+            <span class="setup-step-number">{% if step > item_step %}<i class="bi bi-check-lg"></i>{% else %}{{ item_step }}{% endif %}</span>
+            <span>{{ texts.step_label.format(step=item_step) }}: {{ item_label }}</span>
+          </div>
+          {% endfor %}
+        </aside>
+      </header>
+
+      <main class="setup-body">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
@@ -73,114 +258,194 @@
 
         <form method="post" novalidate>
           {{ form.csrf_token }}
+
           {% if step == 1 %}
-          <div class="mb-3 col-lg-5">
-            <label class="form-label" for="idioma">Idioma predeterminado</label>
-            {{ form.idioma(class="form-select", id="idioma") }}
-            {% if form.idioma.errors %}
-            <div class="text-danger small">{{ form.idioma.errors[0] }}</div>
-            {% endif %}
-          </div>
+          <section>
+            <h2 class="setup-section-title">{{ texts.language_title }}</h2>
+            <p class="setup-help">{{ texts.language_help }}</p>
+            <div class="setup-panel col-lg-5">
+              <label class="form-label" for="idioma">{{ texts.language }}</label>
+              {{ form.idioma(class="form-select form-select-lg", id="idioma") }}
+              <button type="submit" class="visually-hidden" id="apply-language-action" name="action" value="apply_language" aria-hidden="true" tabindex="-1"></button>
+              {% if form.idioma.errors %}
+              <div class="text-danger small mt-1">{{ form.idioma.errors[0] }}</div>
+              {% endif %}
+            </div>
+          </section>
           {% elif step == 2 %}
-          <div class="row g-3">
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="pais">País predeterminado</label>
-              {{ form.pais(class="form-select", id="pais") }}
-              {% if form.pais.errors %}
-              <div class="text-danger small">{{ form.pais.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="moneda">Moneda predeterminada</label>
-              {{ form.moneda(class="form-select", id="moneda") }}
-              {% if form.moneda.errors %}
-              <div class="text-danger small">{{ form.moneda.errors[0] }}</div>
-              {% endif %}
-            </div>
-          </div>
-          {% elif step == 3 %}
-          <div class="row g-3">
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="id">Código de empresa</label>
-              {{ form.id(class="form-control", id="id") }}
-              {% if form.id.errors %}
-              <div class="text-danger small">{{ form.id.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="tipo_entidad">Tipo de entidad</label>
-              {{ form.tipo_entidad(class="form-select", id="tipo_entidad") }}
-              {% if form.tipo_entidad.errors %}
-              <div class="text-danger small">{{ form.tipo_entidad.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="id_fiscal">Identificación fiscal</label>
-              {{ form.id_fiscal(class="form-control", id="id_fiscal") }}
-              {% if form.id_fiscal.errors %}
-              <div class="text-danger small">{{ form.id_fiscal.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="inicio_anio_fiscal">Inicio Año Fiscal</label>
-              {{ form.inicio_anio_fiscal(class="form-control", id="inicio_anio_fiscal") }}
-              {% if form.inicio_anio_fiscal.errors %}
-              <div class="text-danger small">{{ form.inicio_anio_fiscal.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <label class="form-label" for="fin_anio_fiscal">Fin Año Fiscal</label>
-              {{ form.fin_anio_fiscal(class="form-control", id="fin_anio_fiscal") }}
-              {% if form.fin_anio_fiscal.errors %}
-              <div class="text-danger small">{{ form.fin_anio_fiscal.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-6">
-              <label class="form-label" for="razon_social">Razón social</label>
-              {{ form.razon_social(class="form-control", id="razon_social") }}
-              {% if form.razon_social.errors %}
-              <div class="text-danger small">{{ form.razon_social.errors[0] }}</div>
-              {% endif %}
-            </div>
-            <div class="col-md-6 col-lg-6">
-              <label class="form-label" for="nombre_comercial">Nombre comercial</label>
-              {{ form.nombre_comercial(class="form-control", id="nombre_comercial") }}
-            </div>
-          </div>
-
-          <fieldset class="mt-4" x-data="{ catalogo: '{{ form.catalogo.data or "preexistente" }}' }">
-            <legend class="fs-6">Catálogo contable</legend>
-            {% for option in form.catalogo %}
-            <div class="form-check mb-2">
-              {{ option(class="form-check-input", **{"x-model": "catalogo"}) }}
-              <label class="form-check-label" for="{{ option.id }}">{{ option.label.text }}</label>
-            </div>
-            {% endfor %}
-            {% if form.catalogo.errors %}
-            <div class="text-danger small">{{ form.catalogo.errors[0] }}</div>
-            {% endif %}
-
-            <div class="mt-3">
-              <label class="form-label" for="catalogo_origen">Catálogo existente</label>
-              {{ form.catalogo_origen(class="form-select", id="catalogo_origen", **{"x-bind:disabled": "catalogo === 'en_cero'"}) }}
-              {% if form.catalogo_origen.errors %}
-              <div class="text-danger small">{{ form.catalogo_origen.errors[0] }}</div>
-              {% endif %}
-              <div class="form-text">
-                Seleccione un catálogo de cuentas disponible en el sistema para usarlo como base.
+          <section>
+            <h2 class="setup-section-title">{{ texts.regional_title }}</h2>
+            <p class="setup-help">{{ texts.regional_help }}</p>
+            <div class="setup-panel">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label" for="pais">{{ texts.country }}</label>
+                  {{ form.pais(class="form-select form-select-lg", id="pais") }}
+                  {% if form.pais.errors %}
+                  <div class="text-danger small mt-1">{{ form.pais.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="moneda">{{ texts.currency }}</label>
+                  {{ form.moneda(class="form-select form-select-lg", id="moneda") }}
+                  {% if form.moneda.errors %}
+                  <div class="text-danger small mt-1">{{ form.moneda.errors[0] }}</div>
+                  {% endif %}
+                </div>
               </div>
             </div>
-          </fieldset>
+          </section>
+          {% elif step == 3 %}
+          <section>
+            <h2 class="setup-section-title">{{ texts.company_title }}</h2>
+            <p class="setup-help">{{ texts.company_help }}</p>
+
+            <div class="setup-panel">
+              <div class="row g-3">
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="id">{{ texts.company_code }}</label>
+                  {{ form.id(class="form-control form-control-lg", id="id") }}
+                  {% if form.id.errors %}
+                  <div class="text-danger small mt-1">{{ form.id.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="tipo_entidad">{{ texts.entity_type }}</label>
+                  {{ form.tipo_entidad(class="form-select form-select-lg", id="tipo_entidad") }}
+                  {% if form.tipo_entidad.errors %}
+                  <div class="text-danger small mt-1">{{ form.tipo_entidad.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="id_fiscal">{{ texts.tax_id }}</label>
+                  {{ form.id_fiscal(class="form-control form-control-lg", id="id_fiscal") }}
+                  {% if form.id_fiscal.errors %}
+                  <div class="text-danger small mt-1">{{ form.id_fiscal.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="razon_social">{{ texts.legal_name }}</label>
+                  {{ form.razon_social(class="form-control form-control-lg", id="razon_social") }}
+                  {% if form.razon_social.errors %}
+                  <div class="text-danger small mt-1">{{ form.razon_social.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="nombre_comercial">{{ texts.trade_name }}</label>
+                  {{ form.nombre_comercial(class="form-control form-control-lg", id="nombre_comercial") }}
+                </div>
+              </div>
+            </div>
+
+            <div class="setup-panel setup-panel-soft">
+              <h3 class="h5 fw-bold mb-3">{{ texts.fiscal_year }}</h3>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label" for="inicio_anio_fiscal">{{ texts.fiscal_year_start }}</label>
+                  {{ form.inicio_anio_fiscal(class="form-control form-control-lg", id="inicio_anio_fiscal") }}
+                  {% if form.inicio_anio_fiscal.errors %}
+                  <div class="text-danger small mt-1">{{ form.inicio_anio_fiscal.errors[0] }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="fin_anio_fiscal">{{ texts.fiscal_year_end }}</label>
+                  {{ form.fin_anio_fiscal(class="form-control form-control-lg", id="fin_anio_fiscal") }}
+                  {% if form.fin_anio_fiscal.errors %}
+                  <div class="text-danger small mt-1">{{ form.fin_anio_fiscal.errors[0] }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <fieldset class="setup-panel" id="setup-catalog-panel">
+              <legend class="h5 fw-bold mb-3">{{ texts.catalog_title }}</legend>
+              <div class="row g-3">
+                {% for option in form.catalogo %}
+                <div class="col-lg-6">
+                  <div class="setup-catalog-option">
+                    {{ option(class="form-check-input me-2 setup-catalog-radio") }}
+                    <label class="form-check-label fw-semibold" for="{{ option.id }}">{{ option.label.text }}</label>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+              {% if form.catalogo.errors %}
+              <div class="text-danger small mt-2">{{ form.catalogo.errors[0] }}</div>
+              {% endif %}
+
+              {% set catalog_disabled = form.catalogo.data == "en_cero" %}
+              <div class="mt-4 {% if catalog_disabled %}setup-catalog-disabled{% endif %}" id="catalog-origin-wrapper">
+                <label class="form-label" for="catalogo_origen">{{ texts.existing_catalog }}</label>
+                {{ form.catalogo_origen(class="form-select form-select-lg", id="catalogo_origen", disabled=catalog_disabled) }}
+                {% if form.catalogo_origen.errors %}
+                <div class="text-danger small mt-1">{{ form.catalogo_origen.errors[0] }}</div>
+                {% endif %}
+                <div class="form-text" id="catalog-help" data-existing-help="{{ texts.existing_catalog_help }}" data-empty-help="{{ texts.empty_catalog_help }}">
+                  {{ texts.empty_catalog_help if catalog_disabled else texts.existing_catalog_help }}
+                </div>
+              </div>
+            </fieldset>
+          </section>
           {% endif %}
 
-          <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-            <button type="submit" name="action" value="back" class="btn btn-outline-secondary" {% if step == 1 %}disabled{% endif %}>Atrás</button>
-            <button type="submit" name="action" value="next" class="btn btn-primary px-4">{% if step == 3 %}Finalizar{% else %}Siguiente{% endif %}</button>
+          <div class="setup-actions">
+            <button type="submit" name="action" value="back" class="btn btn-outline-secondary btn-lg" {% if step == 1 %}disabled{% endif %}>{{ texts.back }}</button>
+            <button type="submit" name="action" value="next" class="btn btn-setup-primary btn-lg px-5">{% if step == 3 %}{{ texts.finish }}{% else %}{{ texts.next }}{% endif %}</button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   </div>
+
+  <script>
+    (function () {
+      var countryCurrencyMap = {{ country_currency_map | tojson }};
+      var country = document.getElementById('pais');
+      var currency = document.getElementById('moneda');
+      if (country && currency) {
+        country.addEventListener('change', function () {
+          var suggested = countryCurrencyMap[country.value];
+          if (suggested && currency.querySelector('option[value="' + suggested + '"]')) {
+            currency.value = suggested;
+          }
+        });
+      }
+
+      var catalogRadios = document.querySelectorAll('input[name="catalogo"]');
+      var catalogOrigin = document.getElementById('catalogo_origen');
+      var catalogWrapper = document.getElementById('catalog-origin-wrapper');
+      var catalogHelp = document.getElementById('catalog-help');
+      var languageSelect = document.getElementById('idioma');
+      var applyLanguageAction = document.getElementById('apply-language-action');
+
+      if (languageSelect && applyLanguageAction) {
+        languageSelect.addEventListener('change', function () {
+          if (languageSelect.form.requestSubmit) {
+            languageSelect.form.requestSubmit(applyLanguageAction);
+          } else {
+            applyLanguageAction.click();
+          }
+        });
+      }
+
+      function syncCatalogOrigin() {
+        var selected = document.querySelector('input[name="catalogo"]:checked');
+        var disabled = selected && selected.value === 'en_cero';
+        if (!catalogOrigin) return;
+        catalogOrigin.disabled = Boolean(disabled);
+        if (disabled) catalogOrigin.value = '';
+        if (catalogWrapper) catalogWrapper.classList.toggle('setup-catalog-disabled', Boolean(disabled));
+        if (catalogHelp) {
+          catalogHelp.textContent = disabled ? catalogHelp.dataset.emptyHelp : catalogHelp.dataset.existingHelp;
+        }
+      }
+
+      catalogRadios.forEach(function (radio) {
+        radio.addEventListener('change', syncCatalogOrigin);
+      });
+      syncCatalogOrigin();
+    })();
+  </script>
 </body>
 
 </html>

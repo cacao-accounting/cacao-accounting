@@ -111,6 +111,121 @@ def test_setup_wizard_flow(request):
             database.session.commit()
 
 
+def test_setup_wizard_renders_selected_english_language(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.database import CacaoConfig as Config, database
+
+        with app.app_context():
+            originals = {}
+            for key, value in {"SETUP_LANGUAGE": "en", "SETUP_COUNTRY": "US", "SETUP_CURRENCY": "USD"}.items():
+                existing = database.session.execute(database.select(Config).filter_by(key=key)).scalar_one_or_none()
+                originals[key] = existing.value if existing else None
+                if existing is None:
+                    database.session.add(Config(key=key, value=value))
+                else:
+                    existing.value = value
+            database.session.commit()
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                with client.session_transaction() as session_:
+                    session_["setup_step"] = 2
+
+                response = client.get("/setup/")
+                html = response.get_data(as_text=True)
+
+                assert response.status_code == 200
+                assert '<html lang="en">' in html
+                assert "Initial setup wizard" in html
+                assert "Default country" in html
+                assert "United States" in html
+                assert "País predeterminado" not in html
+
+            for key, original_value in originals.items():
+                record = database.session.execute(database.select(Config).filter_by(key=key)).scalar_one_or_none()
+                if original_value is None and record is not None:
+                    database.session.delete(record)
+                elif record is not None:
+                    record.value = original_value
+            database.session.commit()
+
+
+def test_setup_language_selector_applies_language_without_advancing(request):
+    if request.config.getoption("--slow") == "True":
+
+        from cacao_accounting.database import CacaoConfig as Config, database
+
+        with app.app_context():
+            original = database.session.execute(database.select(Config).filter_by(key="SETUP_LANGUAGE")).scalar_one_or_none()
+            original_value = original.value if original else None
+            if original is None:
+                database.session.add(Config(key="SETUP_LANGUAGE", value="es"))
+            else:
+                original.value = "es"
+            database.session.commit()
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                with client.session_transaction() as session_:
+                    session_["setup_step"] = 1
+
+                response = client.post(
+                    "/setup/",
+                    data={"idioma": "en", "action": "apply_language"},
+                    follow_redirects=True,
+                )
+                html = response.get_data(as_text=True)
+
+                assert response.status_code == 200
+                assert '<html lang="en">' in html
+                assert "Choose the setup language" in html
+                assert 'option selected value="en"' in html
+
+                with client.session_transaction() as session_:
+                    assert session_["setup_step"] == 1
+
+                saved = database.session.execute(database.select(Config).filter_by(key="SETUP_LANGUAGE")).scalar_one()
+                assert saved.value == "en"
+
+            saved = database.session.execute(database.select(Config).filter_by(key="SETUP_LANGUAGE")).scalar_one_or_none()
+            if original_value is None and saved is not None:
+                database.session.delete(saved)
+            elif saved is not None:
+                saved.value = original_value
+            database.session.commit()
+
+
+def test_setup_wizard_disables_catalog_selector_for_empty_chart(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                with client.session_transaction() as session_:
+                    session_["setup_step"] = 3
+
+                response = client.post(
+                    "/setup/",
+                    data={
+                        "id": "",
+                        "razon_social": "",
+                        "id_fiscal": "",
+                        "tipo_entidad": "Asociación",
+                        "catalogo": "en_cero",
+                        "catalogo_origen": "base_es.csv",
+                    },
+                )
+                html = response.get_data(as_text=True)
+
+                assert response.status_code == 200
+                assert 'disabled id="catalogo_origen"' in html
+                assert '<option selected value="base_es.csv">' not in html
+                assert "Se creará una estructura contable vacía" in html
+
+
 def test_set_entity_inactive(request):
 
     if request.config.getoption("--slow") == "True":
@@ -373,12 +488,18 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
         class _DummyLanguageForm:
             idioma = _DummyField("en")
 
+            def __init__(self, *args, **kwargs):
+                pass
+
             def validate_on_submit(self):
                 return True
 
         class _DummyRegionalForm:
             pais = _DummyField("NI")
             moneda = _DummyField("NIO")
+
+            def __init__(self, *args, **kwargs):
+                pass
 
             def validate_on_submit(self):
                 return True
@@ -394,10 +515,14 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
             catalogo = _DummyField("en_cero")
             catalogo_origen = _DummyField("")
 
+            def __init__(self, *args, **kwargs):
+                pass
+
             def validate_on_submit(self):
                 return True
 
         captured: dict[str, object] = {}
+        setup_configuration = {"idioma": "es", "pais": "NI", "moneda": "NIO"}
 
         monkeypatch.setattr(setup_module, "SetupLanguageForm", _DummyLanguageForm)
         monkeypatch.setattr(setup_module, "SetupRegionalForm", _DummyRegionalForm)
@@ -405,10 +530,14 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
         monkeypatch.setattr(
             setup_module,
             "get_setup_configuration",
-            lambda: {"idioma": "es", "pais": "NI", "moneda": "NIO"},
+            lambda: setup_configuration,
         )
         monkeypatch.setattr(setup_module, "available_currencies", lambda: [("NIO", "Córdoba")])
-        monkeypatch.setattr(setup_module, "save_language", lambda language: captured.setdefault("language", language))
+        monkeypatch.setattr(
+            setup_module,
+            "save_language",
+            lambda language: (captured.setdefault("language", language), setup_configuration.update({"idioma": language})),
+        )
         monkeypatch.setattr(
             setup_module,
             "save_regional_settings",
@@ -472,7 +601,7 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
                 assert session_.get("setup_step") is None
             assert captured["finalize"]["catalogo_tipo"] == "en_cero"
             assert captured["finalize"]["country"] == "NI"
-            assert captured["finalize"]["idioma"] == "es"
+            assert captured["finalize"]["idioma"] == "en"
 
 
 def test_transaccional_edit_duplicate_actions_routes(request):
