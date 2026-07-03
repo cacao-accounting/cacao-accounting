@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
 
 from sqlalchemy import or_, select
 
@@ -18,6 +18,14 @@ from cacao_accounting.database import (
     TaxTemplate,
     database,
 )
+
+
+def _request_values(form: Mapping[str, Any], key: str) -> list[str]:
+    """Devuelve los valores de una clave repetible de formulario."""
+    getter = getattr(form, "getlist", None)
+    if callable(getter):
+        return [str(value or "") for value in getter(key)]
+    return []
 
 
 @dataclass(frozen=True)
@@ -234,98 +242,164 @@ def build_party_company_settings(
     return _build_settings(company, company_party, receivable_account, payable_account, resolved_price_list)
 
 
-def draft_party_company_settings(
-    role: str,
-    company: str,
-    values: Mapping[str, str | None],
+def party_company_settings_rows(
+    party_id: str | None,
+    selected_company: str | None,
     *,
-    base: PartyCompanySettings | None = None,
-) -> PartyCompanySettings:
-    """Construye un estado temporal a partir del formulario enviado."""
-    if base is None:
-        base = PartyCompanySettings(
-            company=company,
-            company_label=_company_label(company),
-            is_active=True,
-            receivable_account_id=None,
-            receivable_account_label="",
-            payable_account_id=None,
-            payable_account_label="",
-            tax_template_id=None,
-            tax_template_label="",
-            default_tax_rule_id=None,
-            default_tax_rule_label="",
-            default_price_list_id=None,
-            default_price_list_label="",
-            allow_purchase_invoice_without_order=False,
-            allow_purchase_invoice_without_receipt=False,
-            default_currency=None,
-            default_income_account_id=None,
-            default_income_account_label="",
-            default_expense_account_id=None,
-            default_expense_account_label="",
-            default_purchase_account_id=None,
-            default_purchase_account_label="",
-            default_advance_account_id=None,
-            default_advance_account_label="",
-            default_cost_center=None,
-            default_business_unit=None,
-            default_bank_name=None,
-            default_bank_account_no=None,
-            default_bank_iban=None,
-            block_overdue=False,
-        )
+    role: str,
+) -> list[dict[str, Any]]:
+    """Devuelve filas editables de configuracion por compania para Cliente/Proveedor."""
+    companies: list[str] = []
+    if party_id:
+        query = select(CompanyParty.company).filter_by(party_id=party_id).order_by(CompanyParty.company)
+        companies = [str(company) for company in database.session.execute(query).scalars()]
+    if not companies and selected_company:
+        companies = [selected_company]
+    return [
+        _party_company_settings_row(build_party_company_settings(party_id or "", company, role=role)) for company in companies
+    ]
 
-    receivable_account_id = values.get("receivable_account_id") if role == "customer" else None
-    receivable_account = _account_for_company(company, receivable_account_id) if receivable_account_id else None
-    payable_account_id = values.get("payable_account_id") if role == "supplier" else None
-    payable_account = _account_for_company(company, payable_account_id) if payable_account_id else None
-    tax_template_id = values.get("tax_template_id") or base.tax_template_id
-    default_tax_rule_id = values.get("default_tax_rule_id") or base.default_tax_rule_id
-    default_price_list_id = values.get("default_price_list_id") or base.default_price_list_id
-    default_price_list = _price_list_for_company(company, default_price_list_id)
 
-    inc_id, inc_label = _settings_for_account_labels(company, values.get("default_income_account_id"))
-    exp_id, exp_label = _settings_for_account_labels(company, values.get("default_expense_account_id"))
-    pur_id, pur_label = _settings_for_account_labels(company, values.get("default_purchase_account_id"))
-    adv_id, adv_label = _settings_for_account_labels(company, values.get("default_advance_account_id"))
+def _party_company_settings_row(settings: PartyCompanySettings) -> dict[str, Any]:
+    """Convierte una configuracion por compania en payload JSON para Alpine."""
+    return {
+        "company": settings.company or "",
+        "company_label": settings.company_label or settings.company or "",
+        "is_active": bool(settings.is_active),
+        "receivable_account_id": settings.receivable_account_id or "",
+        "receivable_account_label": settings.receivable_account_label or "",
+        "payable_account_id": settings.payable_account_id or "",
+        "payable_account_label": settings.payable_account_label or "",
+        "default_price_list_id": settings.default_price_list_id or "",
+        "default_price_list_label": settings.default_price_list_label or "",
+        "default_tax_rule_id": settings.default_tax_rule_id or "",
+        "default_tax_rule_label": settings.default_tax_rule_label or "",
+        "tax_template_id": settings.tax_template_id or "",
+        "tax_template_label": settings.tax_template_label or "",
+        "allow_purchase_invoice_without_order": bool(settings.allow_purchase_invoice_without_order),
+        "allow_purchase_invoice_without_receipt": bool(settings.allow_purchase_invoice_without_receipt),
+    }
 
-    return PartyCompanySettings(
-        company=company,
-        company_label=base.company_label,
-        is_active=values.get("company_is_active") is not None,
-        receivable_account_id=receivable_account.id if receivable_account else base.receivable_account_id,
-        receivable_account_label=account_label(receivable_account) if receivable_account else base.receivable_account_label,
-        payable_account_id=payable_account.id if payable_account else base.payable_account_id,
-        payable_account_label=account_label(payable_account) if payable_account else base.payable_account_label,
-        tax_template_id=tax_template_id,
-        tax_template_label=_tax_template_label(tax_template_id),
-        default_tax_rule_id=default_tax_rule_id,
-        default_tax_rule_label=_tax_rule_label(default_tax_rule_id),
-        default_price_list_id=default_price_list.id if default_price_list else None,
-        default_price_list_label=default_price_list.name if default_price_list else "",
-        allow_purchase_invoice_without_order=(
-            values.get("allow_purchase_invoice_without_order") is not None if role == "supplier" else False
-        ),
-        allow_purchase_invoice_without_receipt=(
-            values.get("allow_purchase_invoice_without_receipt") is not None if role == "supplier" else False
-        ),
-        default_currency=values.get("default_currency") or base.default_currency,
-        default_income_account_id=inc_id or base.default_income_account_id,
-        default_income_account_label=inc_label or base.default_income_account_label,
-        default_expense_account_id=exp_id or base.default_expense_account_id,
-        default_expense_account_label=exp_label or base.default_expense_account_label,
-        default_purchase_account_id=pur_id or base.default_purchase_account_id,
-        default_purchase_account_label=pur_label or base.default_purchase_account_label,
-        default_advance_account_id=adv_id or base.default_advance_account_id,
-        default_advance_account_label=adv_label or base.default_advance_account_label,
-        default_cost_center=values.get("default_cost_center") or base.default_cost_center,
-        default_business_unit=values.get("default_business_unit") or base.default_business_unit,
-        default_bank_name=values.get("default_bank_name") or base.default_bank_name,
-        default_bank_account_no=values.get("default_bank_account_no") or base.default_bank_account_no,
-        default_bank_iban=values.get("default_bank_iban") or base.default_bank_iban,
-        block_overdue=values.get("block_overdue") is not None,
+
+def draft_party_company_settings_rows(role: str, values: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Reconstruye filas de configuracion por compania desde un POST fallido."""
+    companies = _request_values(values, "company")
+    rows: list[dict[str, Any]] = []
+    field_names = (
+        "receivable_account_id",
+        "payable_account_id",
+        "default_price_list_id",
+        "default_tax_rule_id",
+        "tax_template_id",
+        "company_is_active",
+        "allow_purchase_invoice_without_order",
+        "allow_purchase_invoice_without_receipt",
     )
+    fields = {field: _request_values(values, field) for field in field_names}
+    for index, company in enumerate(companies):
+        if not str(company or "").strip():
+            continue
+        rows.append(
+            {
+                "company": company,
+                "company_label": company,
+                "is_active": _truthy_row_value(fields["company_is_active"], index, default=True),
+                "receivable_account_id": _row_value(fields["receivable_account_id"], index) if role == "customer" else "",
+                "receivable_account_label": _row_value(fields["receivable_account_id"], index) if role == "customer" else "",
+                "payable_account_id": _row_value(fields["payable_account_id"], index) if role == "supplier" else "",
+                "payable_account_label": _row_value(fields["payable_account_id"], index) if role == "supplier" else "",
+                "default_price_list_id": _row_value(fields["default_price_list_id"], index),
+                "default_price_list_label": _row_value(fields["default_price_list_id"], index),
+                "default_tax_rule_id": _row_value(fields["default_tax_rule_id"], index),
+                "default_tax_rule_label": _row_value(fields["default_tax_rule_id"], index),
+                "tax_template_id": _row_value(fields["tax_template_id"], index),
+                "tax_template_label": _row_value(fields["tax_template_id"], index),
+                "allow_purchase_invoice_without_order": _truthy_row_value(
+                    fields["allow_purchase_invoice_without_order"], index
+                ),
+                "allow_purchase_invoice_without_receipt": _truthy_row_value(
+                    fields["allow_purchase_invoice_without_receipt"], index
+                ),
+            }
+        )
+    return rows or [
+        {
+            "company": "",
+            "company_label": "",
+            "is_active": True,
+            "receivable_account_id": "",
+            "receivable_account_label": "",
+            "payable_account_id": "",
+            "payable_account_label": "",
+            "default_price_list_id": "",
+            "default_price_list_label": "",
+            "default_tax_rule_id": "",
+            "default_tax_rule_label": "",
+            "tax_template_id": "",
+            "tax_template_label": "",
+            "allow_purchase_invoice_without_order": False,
+            "allow_purchase_invoice_without_receipt": False,
+        }
+    ]
+
+
+def _row_value(values: list[str], index: int) -> str:
+    return values[index].strip() if index < len(values) else ""
+
+
+def _truthy_row_value(values: list[str], index: int, *, default: bool = False) -> bool:
+    if index >= len(values):
+        return default
+    return values[index].strip().lower() in {"1", "true", "yes", "on"}
+
+
+def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping[str, Any]) -> None:
+    """Crea o actualiza multiples filas de configuracion por compania para un tercero."""
+    companies = _request_values(values, "company")
+    fields = {
+        "company_is_active": _request_values(values, "company_is_active"),
+        "receivable_account_id": _request_values(values, "receivable_account_id"),
+        "payable_account_id": _request_values(values, "payable_account_id"),
+        "tax_template_id": _request_values(values, "tax_template_id"),
+        "default_tax_rule_id": _request_values(values, "default_tax_rule_id"),
+        "default_price_list_id": _request_values(values, "default_price_list_id"),
+        "allow_purchase_invoice_without_order": _request_values(values, "allow_purchase_invoice_without_order"),
+        "allow_purchase_invoice_without_receipt": _request_values(values, "allow_purchase_invoice_without_receipt"),
+    }
+    seen: set[str] = set()
+    for index, raw_company in enumerate(companies):
+        company = str(raw_company or "").strip()
+        if not company:
+            continue
+        if company in seen:
+            raise ValueError("No se puede repetir la misma compañía en la configuración.")
+        seen.add(company)
+        upsert_party_company_settings(
+            party_id,
+            role,
+            company,
+            is_active=_truthy_row_value(fields["company_is_active"], index, default=True),
+            receivable_account_id=_row_value(fields["receivable_account_id"], index) or None,
+            payable_account_id=_row_value(fields["payable_account_id"], index) or None,
+            tax_template_id=_row_value(fields["tax_template_id"], index) or None,
+            default_tax_rule_id=_row_value(fields["default_tax_rule_id"], index) or None,
+            default_price_list_id=_row_value(fields["default_price_list_id"], index) or None,
+            allow_purchase_invoice_without_order=_truthy_row_value(fields["allow_purchase_invoice_without_order"], index),
+            allow_purchase_invoice_without_receipt=_truthy_row_value(fields["allow_purchase_invoice_without_receipt"], index),
+        )
+    _delete_removed_company_settings(party_id, seen)
+
+
+def _delete_removed_company_settings(party_id: str, submitted_companies: set[str]) -> None:
+    """Elimina configuraciones por compania removidas de la tabla editable."""
+    existing = database.session.execute(select(CompanyParty).filter_by(party_id=party_id)).scalars().all()
+    for company_party in existing:
+        if company_party.company in submitted_companies:
+            continue
+        party_account = _party_account_record(party_id, company_party.company)
+        if party_account is not None:
+            database.session.delete(party_account)
+        database.session.delete(company_party)
 
 
 def _validate_account(company: str, account_id: str | None, expected_type: str) -> None:
