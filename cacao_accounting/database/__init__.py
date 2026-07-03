@@ -2048,7 +2048,6 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     default_bank = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     default_income = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     default_expense = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
-    default_inventory = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     default_cogs = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     inventory_adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     # Cuenta puente para conciliacion de recepciones con facturas de compra

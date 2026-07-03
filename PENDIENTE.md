@@ -1,5 +1,8 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-03 (Cuenta de inventario por almacen/compania)
+- [x] Alinear purchase receipts y delivery notes para usar solo `WarehouseCompanyAccount` y eliminar el fallback global `default_inventory`.
+
 ## Seguimiento 2026-07-03 (Valuacion de inventarios)
 - [x] Agregar una entrada en configuracion global para administrar el metodo de valuacion por compañia fuera del wizard inicial.
 

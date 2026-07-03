@@ -129,7 +129,6 @@
           <th>{{ _('Gasto') }}</th>
           <th>{{ _('Ingresos') }}</th>
           <th>{{ _('COGS') }}</th>
-          <th>{{ _('Inventario') }}</th>
           <th>{{ _('Ajuste') }}</th>
           <th>{{ _('Centro costo') }}</th>
         </tr>
@@ -141,12 +140,11 @@
           <td>{{ row.expense_account_id or '-' }}</td>
           <td>{{ row.income_account_id or '-' }}</td>
           <td>{{ row.cogs_account_id or '-' }}</td>
-          <td>{{ row.inventory_account_id or '-' }}</td>
           <td>{{ row.stock_adjustment_account_id or '-' }}</td>
           <td>{{ row.cost_center_code or '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7">{{ _('No hay configuracion contable por compania.') }}</td></tr>
+        <tr><td colspan="6">{{ _('No hay configuracion contable por compania.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

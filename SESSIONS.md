@@ -1,5 +1,12 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-03 (Inventario: cuenta de inventario unificada por almacen/compania)
+- **Solicitud:** Alinear toda la contabilidad de inventario para que la cuenta se configure solo por `Almacen/Compañia` y no queden fallbacks globales en recepción, entrega ni cálculo contable.
+- **Diagnostico:** `stock_entry` ya resolvia inventario desde `WarehouseCompanyAccount`, pero `post_purchase_receipt`, `post_delivery_note`, `document_builders` y `CompanyDefaultAccount.default_inventory` seguian manteniendo un camino alterno por compañía.
+- **Implementacion:** Se introdujo un helper compartido para resolver la cuenta de inventario desde `warehouse + company`, `purchase_receipt` y `delivery_note` lo usan en posting y cálculo, y se eliminó `default_inventory` de `CompanyDefaultAccount`, `/settings/default-accounts` y de los mappings base de catálogo.
+- **UI:** La ficha de bodega ahora muestra código y nombre de la cuenta configurada por compañía, y la ficha de item deja de insinuar una cuenta de inventario por item.
+- **Validacion:** Las pruebas focales de posting, schema y configuración administrativa se ajustan para crear `WarehouseCompanyAccount` en lugar de `default_inventory`.
+
 ## 2026-07-03 (Inventario: valuacion global por compania en configuracion)
 - **Solicitud:** Implementar una entrada administrativa para establecer el metodo de valuacion de inventarios, fuera del wizard inicial, como configuracion global de la compañia y con costo promedio por defecto.
 - **Diagnostico:** El motor contable ya consumia `Entity.valuation_method`, pero no existia ninguna entrada en `/settings` para administrarlo ni una regla de bloqueo cuando la compañia ya habia operado inventario.
@@ -49,9 +56,9 @@
   - `ItemAccount.inventory_account_id` removido del modelo y codigo; la cuenta de inventario solo existe en `Warehouse.inventory_account_id`.
   - `Item.valuation_method` removido; `Entity.valuation_method` agregado con default "moving_average" (Costo Promedio).
   - `posting.py`: `_warehouse_inventory_account_id()` retorna `None` (sin fallback a ItemAccount); stock entries usan cuenta de inventario de bodega.
-  - `document_builders.py`: `_item_account_id()` remueve "inventory" del mapping de ItemAccount y usa `CompanyDefaultAccount.default_inventory` como fallback para purchase receipts y delivery notes.
+  - `document_builders.py`: `_item_account_id()` remueve "inventory" del mapping de ItemAccount; en ese momento purchase receipts y delivery notes quedaron usando `CompanyDefaultAccount.default_inventory` como fallback temporal.
   - `datos/dev/__init__.py`: `cargar_bodegas()` asigna `inventory_account_id` a warehouses PRINCIPAL/SUCURSAL desde cuenta `11.03.001`.
-- **Tests corregidos:** 9 fixtures de `ItemAccount` en `test_07posting_engine.py` y 1 en `test_08_reconciliation_reports.py` sin `inventory_account_id`; fixtures de purchase receipts y delivery notes con `default_inventory` en `CompanyDefaultAccount`.
+- **Tests corregidos:** 9 fixtures de `ItemAccount` en `test_07posting_engine.py` y 1 en `test_08_reconciliation_reports.py` sin `inventory_account_id`; el fallback temporal de purchase receipts y delivery notes quedó cubierto por fixtures en `CompanyDefaultAccount`.
 - **Validacion:** `test_07posting_engine.py` + `test_08_reconciliation_reports.py` en verde (73 tests); mypy sin errores.
 
 ## 2026-07-01 (Cliente/Proveedor: perfil basico y cumplimiento legal)

@@ -481,8 +481,9 @@ class AccountingMapper:
         """Resolve the goods account with sensible fallbacks."""
         if context.references.goods_account:
             return context.references.goods_account
-        key = "default_inventory_account_id" if context.transaction_direction == "purchase" else "default_income_account_id"
-        return context.references.get(key)
+        if context.transaction_direction == "sales":
+            return context.references.get("default_income_account_id")
+        return None
 
     def _resolve_cash_account(self, context: CalculationContext) -> Optional[str]:
         """Resolve the cash/bank account."""

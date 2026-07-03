@@ -44,6 +44,7 @@ from cacao_accounting.database import (
     Entity,
     database,
 )
+from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
@@ -274,7 +275,6 @@ def _resolve_item_account_id(item_code: str | None, company: str, account_type: 
     return {
         "income": defaults.default_income,
         "expense": defaults.default_expense,
-        "inventory": defaults.default_inventory,
         "cogs": defaults.default_cogs or defaults.default_expense,
         "inventory_adjustment": defaults.inventory_adjustment_account_id or defaults.default_expense,
         "bridge": defaults.bridge_account_id,
@@ -292,29 +292,7 @@ def _account_id_for_item(item: Any, company: str, account_type: str) -> str | No
 
 def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> str | None:
     """Resuelve la cuenta de inventario asignada a la bodega de una conciliacion."""
-    from cacao_accounting.database import WarehouseCompanyAccount
-
-    warehouse_code = (
-        getattr(line, "target_warehouse", None)
-        or getattr(line, "source_warehouse", None)
-        or getattr(document, "to_warehouse", None)
-        or getattr(document, "from_warehouse", None)
-    )
-    if warehouse_code:
-        settings = (
-            database.session.execute(
-                select(WarehouseCompanyAccount).filter_by(
-                    warehouse_code=warehouse_code,
-                    company=company,
-                    is_active=True,
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if settings and settings.inventory_account_id:
-            return str(settings.inventory_account_id)
-    return None
+    return inventory_account_id_for_document_line(document, line, company)
 
 
 def _account_id_for_comprobante_line(line: Any, company: str) -> str:
@@ -2072,7 +2050,7 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
             amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
             value = _signed_amount(document, amount)
             inventory_account_id = _require_account(
-                _account_id_for_item(line, company, "inventory"),
+                _warehouse_inventory_account_id(document, line, company),
                 "Falta la cuenta de inventario para una linea de recepcion de compra.",
             )
             entries.extend(
@@ -2158,7 +2136,7 @@ def _create_delivery_note_gl_entries(
         for line in _document_items(document):
             value = _get_delivery_note_line_value(document, line)
             inventory_account_id = _require_account(
-                _account_id_for_item(line, company, "inventory"),
+                _warehouse_inventory_account_id(document, line, company),
                 "Falta la cuenta de inventario para una linea de nota de entrega.",
             )
             expense_account_id = _require_account(

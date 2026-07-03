@@ -35,7 +35,6 @@ DEFAULT_ACCOUNT_DEFINITIONS: tuple[DefaultAccountDefinition, ...] = (
     DefaultAccountDefinition("default_payable", "Cuenta por pagar por defecto", ("payable",)),
     DefaultAccountDefinition("default_income", "Cuenta de ingresos por defecto", ("income",)),
     DefaultAccountDefinition("default_expense", "Cuenta de gastos por defecto", ("expense",)),
-    DefaultAccountDefinition("default_inventory", "Cuenta de inventario por defecto", ("inventory",)),
     DefaultAccountDefinition("default_cogs", "Cuenta de costo de ventas por defecto", ("cost_of_goods_sold", "expense")),
     DefaultAccountDefinition(
         "inventory_adjustment_account_id",

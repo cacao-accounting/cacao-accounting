@@ -666,7 +666,6 @@ class TestCompanyDefaultAccountExtendedSchema(unittest.TestCase):
             "default_payable",
             "default_income",
             "default_expense",
-            "default_inventory",
             "default_cogs",
             "inventory_adjustment_account_id",
             "bridge_account_id",

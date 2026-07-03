@@ -774,10 +774,18 @@ def inventario_bodega(warehouse_id):
         .scalars()
         .all()
     )
+    account_ids = [row.inventory_account_id for row in company_accounts if row.inventory_account_id]
+    account_map: dict[str, Accounts] = {}
+    if account_ids:
+        account_map = {
+            account.id: account
+            for account in database.session.execute(database.select(Accounts).filter(Accounts.id.in_(account_ids))).scalars()
+        }
     return render_template(
         "inventario/bodega.html",
         registro=registro[0],
         company_accounts=company_accounts,
+        account_map=account_map,
         titulo=titulo,
     )
 

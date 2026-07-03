@@ -9,6 +9,7 @@ Rol: Control de existencia física y valoración de ítems, puente ente S2P y O2
 
 ## Modelos Principales
 - **Maestros:** `Item`, `UOM`, `Warehouse`.
+- **Configuración Contable:** `WarehouseCompanyAccount` define la cuenta de inventario por Almacen/Compañia.
 - **Trazabilidad:** `Batch`, `SerialNumber` opcionales.
 - **Transaccional:** `StockEntry`, `StockLedgerEntry`, `StockValuationLayer`.
 

@@ -40,7 +40,10 @@
           {% for row in company_accounts %}
           <tr>
             <td>{{ row.company }}</td>
-            <td>{{ row.inventory_account_id or '-' }}</td>
+            <td>
+              {% set account = account_map.get(row.inventory_account_id) if row.inventory_account_id else none %}
+              {{ account.code ~ ' - ' ~ account.name if account else '-' }}
+            </td>
           </tr>
           {% else %}
           <tr>
