@@ -41,9 +41,9 @@ from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifi
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
-    build_party_company_settings,
-    draft_party_company_settings,
-    upsert_party_company_settings,
+    draft_party_company_settings_rows,
+    party_company_settings_rows,
+    upsert_party_company_settings_rows,
 )
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
@@ -116,33 +116,7 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
 
 def _upsert_customer_company_settings_from_request(customer_id: str, form: dict) -> None:
     """Actualiza la configuracion de compania para un cliente desde el formulario."""
-    company = form.get("company") or None
-    if not company:
-        return
-    upsert_party_company_settings(
-        customer_id,
-        "customer",
-        company,
-        is_active=form.get("company_is_active") is not None,
-        receivable_account_id=form.get("receivable_account_id") or None,
-        payable_account_id=None,
-        tax_template_id=form.get("tax_template_id") or None,
-        default_tax_rule_id=form.get("default_tax_rule_id") or None,
-        default_price_list_id=form.get("default_price_list_id") or None,
-        allow_purchase_invoice_without_order=False,
-        allow_purchase_invoice_without_receipt=False,
-        default_currency=form.get("default_currency"),
-        default_income_account_id=form.get("default_income_account_id") or None,
-        default_expense_account_id=form.get("default_expense_account_id") or None,
-        default_purchase_account_id=form.get("default_purchase_account_id") or None,
-        default_advance_account_id=form.get("default_advance_account_id") or None,
-        default_cost_center=form.get("default_cost_center"),
-        default_business_unit=form.get("default_business_unit"),
-        default_bank_name=form.get("default_bank_name"),
-        default_bank_account_no=form.get("default_bank_account_no"),
-        default_bank_iban=form.get("default_bank_iban"),
-        block_overdue=form.get("block_overdue") is not None,
-    )
+    upsert_party_company_settings_rows(customer_id, "customer", form)
 
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
@@ -537,16 +511,18 @@ def ventas_cliente_nuevo():
     titulo = "Nuevo Cliente - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = build_party_company_settings(None, selected_company, role="customer") if selected_company else None
+    company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
     if request.method == "POST":
-        return _handle_cliente_create(request.form, selected_company, company_choices, company_settings, formulario, titulo)
+        return _handle_cliente_create(
+            request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+        )
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
         titulo=titulo,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
@@ -555,7 +531,7 @@ def _handle_cliente_create(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings: Any,
+    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -580,8 +556,7 @@ def _handle_cliente_create(
         return redirect("/sales/customer/list")
     except ValueError as exc:
         database.session.rollback()
-        if selected_company:
-            company_settings = draft_party_company_settings("customer", selected_company, form)
+        company_settings_rows = draft_party_company_settings_rows("customer", form)
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -589,7 +564,7 @@ def _handle_cliente_create(
         titulo=titulo,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -626,12 +601,10 @@ def ventas_cliente_editar(customer_id: str):
     titulo = f"Editar Cliente - {APPNAME}"
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings = (
-        build_party_company_settings(cliente.id, selected_company, role="customer") if selected_company else None
-    )
+    company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
     if request.method == "POST":
         return _handle_cliente_update(
-            cliente, request.form, selected_company, company_choices, company_settings, formulario, titulo
+            cliente, request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
         )
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -641,7 +614,7 @@ def ventas_cliente_editar(customer_id: str):
         registro=cliente,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(cliente.party_group_id),
     )
 
@@ -651,7 +624,7 @@ def _handle_cliente_update(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings: Any,
+    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -670,8 +643,7 @@ def _handle_cliente_update(
         return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=cliente.id))
     except ValueError as exc:
         database.session.rollback()
-        if selected_company:
-            company_settings = draft_party_company_settings("customer", selected_company, form)
+        company_settings_rows = draft_party_company_settings_rows("customer", form)
         flash(str(exc), "danger")
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -681,7 +653,7 @@ def _handle_cliente_update(
         registro=cliente,
         company_choices=company_choices,
         selected_company=selected_company,
-        company_settings=company_settings,
+        company_settings_rows=company_settings_rows,
         group_label=party_group_label(cliente.party_group_id),
     )
 
