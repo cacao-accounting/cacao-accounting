@@ -738,7 +738,6 @@ def _handle_supplier_create(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -780,7 +779,6 @@ def _handle_supplier_update(
     form: dict,
     selected_company: str | None,
     company_choices: list,
-    company_settings_rows: list[dict[str, Any]],
     formulario: Any,
     titulo: str,
 ):
@@ -1118,7 +1116,7 @@ def compras_proveedor_nuevo():
     company_settings_rows = party_company_settings_rows(None, selected_company, role="supplier")
     if request.method == "POST":
         return _handle_supplier_create(
-            request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+            request.form, selected_company, company_choices, formulario, titulo
         )
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1164,7 +1162,7 @@ def compras_proveedor_editar(supplier_id: str):
     company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
     if request.method == "POST":
         return _handle_supplier_update(
-            proveedor, request.form, selected_company, company_choices, company_settings_rows, formulario, titulo
+            proveedor, request.form, selected_company, company_choices, formulario, titulo
         )
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
