@@ -37,7 +37,7 @@ dependencies = {file = ["requirements.txt"]}
 version = {attr = "cacao_accounting.version.VERSION"}
 
 [tool.setuptools.packages.find]
-include = ["cacao_accounting"]
+include = ["cacao_accounting", "cacao_accounting.*"]
 namespaces = false
 
 [build-system]
