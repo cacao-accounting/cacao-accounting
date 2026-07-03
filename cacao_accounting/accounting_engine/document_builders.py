@@ -887,7 +887,6 @@ def _item_account_id(item_code: str | None, company: str, account_type: str) -> 
             value = {
                 "income": mapping.income_account_id,
                 "expense": mapping.expense_account_id,
-                "inventory": mapping.inventory_account_id,
                 "bridge": getattr(_company_defaults(company), "bridge_account_id", None),
             }.get(account_type)
             if value:
