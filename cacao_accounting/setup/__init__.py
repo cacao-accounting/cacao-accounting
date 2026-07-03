@@ -17,6 +17,10 @@ from cacao_accounting.setup.forms import (
     SetupLanguageForm,
     SetupRegionalForm,
 )
+from cacao_accounting.setup.catalogs import (
+    setup_template_context,
+    setup_texts,
+)
 from cacao_accounting.setup.service import (
     available_currencies,
     finalize_setup,
@@ -42,6 +46,7 @@ def setup():
     """Configuración inicial."""
     step = int(session.get("setup_step", 1))
     setup_data = get_setup_configuration()
+    language = setup_data.get("idioma", "es")
 
     if request.method == "POST":
         handled_response = _handle_setup_post(step, setup_data)
@@ -49,6 +54,7 @@ def setup():
             return handled_response
 
     form = _setup_form(step, setup_data)
+    template_context = setup_template_context(language)
 
     return render_template(
         "setup.html",
@@ -56,12 +62,14 @@ def setup():
         step=step,
         setup_data=setup_data,
         currencies=available_currencies(),
+        **template_context,
     )
 
 
 def _handle_setup_post(step: int, setup_data: dict[str, str]) -> object | None:
     """Process the current setup step and return a redirect when completed."""
     action = request.form.get("action")
+    texts = setup_texts(setup_data.get("idioma"))
 
     if action == "back" and step > 1:
         session["setup_step"] = step - 1
@@ -74,7 +82,7 @@ def _handle_setup_post(step: int, setup_data: dict[str, str]) -> object | None:
     if step == 3:
         return _handle_setup_company_step(setup_data)
 
-    flash("Paso inválido del asistente.", "danger")
+    flash(texts["invalid_step"], "danger")
     return None
 
 
@@ -83,35 +91,43 @@ def _handle_setup_language_step() -> object | None:
     form = SetupLanguageForm()
     if form.validate_on_submit():
         save_language(form.idioma.data)
-        session["setup_step"] = 2
+        session["setup_step"] = 1 if request.form.get("action") == "apply_language" else 2
         return redirect(url_for(SETUP_ROUTE))
-    flash("Seleccione un idioma válido.", "danger")
+    flash(setup_texts("es")["invalid_language"], "danger")
     return None
 
 
 def _handle_setup_regional_step() -> object | None:
     """Handle the regional settings step."""
-    form = SetupRegionalForm()
+    setup_data = get_setup_configuration()
+    texts = setup_texts(setup_data.get("idioma"))
+    form = SetupRegionalForm(language=setup_data.get("idioma"), currencies=available_currencies())
     if form.validate_on_submit():
-        save_regional_settings(form.pais.data, form.moneda.data)
-        session["setup_step"] = 3
-        return redirect(url_for(SETUP_ROUTE))
-    flash("Complete los datos regionales correctamente.", "danger")
+        try:
+            save_regional_settings(form.pais.data, form.moneda.data)
+        except ValueError as exc:
+            flash(texts["invalid_currency"] if str(exc) else texts["invalid_regional"], "danger")
+            return None
+        else:
+            session["setup_step"] = 3
+            return redirect(url_for(SETUP_ROUTE))
+    flash(texts["invalid_regional"], "danger")
     return None
 
 
 def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
     """Handle the company setup step."""
-    form = SetupCompanyForm()
+    texts = setup_texts(setup_data.get("idioma"))
+    form = SetupCompanyForm(language=setup_data.get("idioma"))
     if not form.validate_on_submit():
-        flash("Complete los datos de la empresa correctamente.", "danger")
+        flash(texts["invalid_company"], "danger")
         return None
 
     company_data = _build_company_data(form, setup_data)
     catalogo_tipo = form.catalogo.data
     catalogo_archivo = form.catalogo_origen.data if catalogo_tipo == "preexistente" else None
     if catalogo_tipo == "preexistente" and not catalogo_archivo:
-        flash("Seleccione un catálogo de cuentas existente.", "danger")
+        flash(texts["catalog_required"], "danger")
         return None
 
     finalize_setup(
@@ -122,7 +138,7 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         catalogo_archivo,
     )
     session.pop("setup_step", None)
-    flash("Configuración inicial completada.", "success")
+    flash(texts["setup_complete"], "success")
     return redirect(url_for("cacao_app.pagina_inicio"))
 
 
@@ -143,7 +159,11 @@ def _build_company_data(form: SetupCompanyForm, setup_data: dict[str, str]) -> d
 def _setup_form(step: int, setup_data: dict[str, str]) -> SetupLanguageForm | SetupRegionalForm | SetupCompanyForm:
     """Return the form instance for the current setup step."""
     if step == 1:
-        return SetupLanguageForm()
+        return SetupLanguageForm(data={"idioma": setup_data.get("idioma")})
     if step == 2:
-        return SetupRegionalForm(data={"moneda": setup_data.get("moneda")})
-    return SetupCompanyForm()
+        return SetupRegionalForm(
+            data={"pais": setup_data.get("pais"), "moneda": setup_data.get("moneda")},
+            language=setup_data.get("idioma"),
+            currencies=available_currencies(),
+        )
+    return SetupCompanyForm(language=setup_data.get("idioma"))
