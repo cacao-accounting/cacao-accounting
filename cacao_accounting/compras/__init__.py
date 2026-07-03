@@ -1115,9 +1115,7 @@ def compras_proveedor_nuevo():
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="supplier")
     if request.method == "POST":
-        return _handle_supplier_create(
-            request.form, selected_company, company_choices, formulario, titulo
-        )
+        return _handle_supplier_create(request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
@@ -1161,9 +1159,7 @@ def compras_proveedor_editar(supplier_id: str):
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
     if request.method == "POST":
-        return _handle_supplier_update(
-            proveedor, request.form, selected_company, company_choices, formulario, titulo
-        )
+        return _handle_supplier_update(proveedor, request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
