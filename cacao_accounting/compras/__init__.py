@@ -2640,7 +2640,7 @@ def _create_purchase_invoice_from_request():
             document_type=document_type,
             purchase_order_id=request.form.get("from_order") or None,
             purchase_receipt_id=request.form.get("from_receipt") or None,
-            is_return=document_type == PURCHASE_RETURN,
+            is_return=document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
             reversal_of=(
                 (request.form.get("from_invoice") or request.form.get("from_return"))
                 if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
