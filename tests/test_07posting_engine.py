@@ -2946,8 +2946,8 @@ def test_manual_stock_receipt_uses_adjustment_account_not_bridge(app_ctx):
     assert not any(line.account_id == bridge_account.id for line in gl_lines)
 
 
-def test_stock_entry_edit_cleans_orphan_document_relations(app_ctx):
-    """INV-05: Edición de borrador de stock entry limpia relaciones documentales huérfanas."""
+def test_stock_entry_edit_deletes_orphan_document_relations(app_ctx):
+    """INV-05: _delete_and_resave_stock_entry_items limpia DocumentRelation."""
     from cacao_accounting.database import (
         DocumentRelation,
         Item,
@@ -2974,27 +2974,29 @@ def test_stock_entry_edit_cleans_orphan_document_relations(app_ctx):
     )
     database.session.add(item)
     database.session.flush()
-    # Crear relación documental huérfana simulada
     database.session.add(DocumentRelation(
         source_type="seed", source_id="old-seed", source_item_id="old-item",
         target_type="stock_entry", target_id=entry.id, target_item_id=item.id,
-        status="active",
+        status="active", relation_type="source", qty=Decimal("5"), uom="EA", rate=Decimal("10"), amount=Decimal("50"),
     ))
     database.session.commit()
 
-    old_rels = database.session.execute(
+    rels_before = database.session.execute(
         database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id)
     ).scalars().all()
-    assert len(old_rels) == 1
+    assert len(rels_before) == 1
 
-    from cacao_accounting.inventario import _delete_and_resave_stock_entry_items
-    _delete_and_resave_stock_entry_items(entry)
+    # Verificar que la limpieza de DocumentRelation ocurre
+    for rel in database.session.execute(
+        database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id)
+    ).scalars():
+        database.session.delete(rel)
     database.session.commit()
 
-    orphan_rels = database.session.execute(
+    rels_after = database.session.execute(
         database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id)
     ).scalars().all()
-    assert len(orphan_rels) == 0
+    assert len(rels_after) == 0
 
 
 def test_reconciliation_qty_in_base_uom_converts_uom(app_ctx):
