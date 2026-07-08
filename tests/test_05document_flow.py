@@ -860,11 +860,13 @@ def test_receipt_edit_cleans_old_relations(app_ctx):
         amount=Decimal("20"),
     )
 
-    old_relations = database.session.execute(
-        database.select(DocumentRelation).filter_by(
-            target_type="purchase_receipt", target_id="PR-EDIT-01"
+    old_relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id="PR-EDIT-01")
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for rel in old_relations:
         database.session.delete(rel)
 

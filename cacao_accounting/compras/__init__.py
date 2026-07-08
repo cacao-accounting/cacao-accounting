@@ -2406,9 +2406,7 @@ def _handle_purchase_receipt_edit_post(registro):
     registro.remarks = request.form.get("remarks")
 
     for rel in database.session.execute(
-        database.select(DocumentRelation).filter_by(
-            target_type="purchase_receipt", target_id=registro.id
-        )
+        database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id=registro.id)
     ).scalars():
         database.session.delete(rel)
 
@@ -2489,9 +2487,7 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
         po_item = database.session.get(PurchaseOrderItem, rel.source_item_id)
         if not po_item:
             continue
-        consumed = consumed_qty_for_source(
-            "purchase_order", rel.source_id, rel.source_item_id, "purchase_receipt"
-        )
+        consumed = consumed_qty_for_source("purchase_order", rel.source_id, rel.source_item_id, "purchase_receipt")
         ordered = Decimal(str(po_item.qty or 0))
         if consumed > ordered:
             raise ValueError(
