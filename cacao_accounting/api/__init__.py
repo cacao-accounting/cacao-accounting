@@ -459,6 +459,7 @@ def api_inventory_stock_bin_snapshot():
             "warehouse": warehouse,
             "company": company,
             "actual_qty": float(bin_row.actual_qty or 0) if bin_row else 0,
+            "reserved_qty": float(bin_row.reserved_qty or 0) if bin_row else 0,
             "valuation_rate": float(bin_row.valuation_rate or 0) if bin_row else 0,
             "stock_value": float(bin_row.stock_value or 0) if bin_row else 0,
         }

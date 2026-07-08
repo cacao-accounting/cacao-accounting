@@ -863,10 +863,12 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     return total
 
 
-def _stock_bin_snapshot(company: str | None, item_code: str, warehouse: str | None) -> tuple[Decimal, Decimal, Decimal]:
-    """Devuelve cantidad, tasa y valor actual para item/bodega."""
+def _stock_bin_snapshot(
+    company: str | None, item_code: str, warehouse: str | None
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Devuelve cantidad, tasa, valor y reserva actual para item/bodega."""
     if not company or not warehouse:
-        return Decimal("0"), Decimal("0"), Decimal("0")
+        return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
     bin_row = (
         database.session.execute(
             database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
@@ -875,11 +877,12 @@ def _stock_bin_snapshot(company: str | None, item_code: str, warehouse: str | No
         .first()
     )
     if not bin_row:
-        return Decimal("0"), Decimal("0"), Decimal("0")
+        return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
     return (
         Decimal(str(bin_row.actual_qty or "0")),
         Decimal(str(bin_row.valuation_rate or "0")),
         Decimal(str(bin_row.stock_value or "0")),
+        Decimal(str(bin_row.reserved_qty or "0")),
     )
 
 
@@ -897,7 +900,7 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
         item_code = request.form.get(f"item_code_{i}", "").strip()
         warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
-            current_qty, current_rate, current_value = _stock_bin_snapshot(entry.company, item_code, warehouse)
+            current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
             counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
             target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
             target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
