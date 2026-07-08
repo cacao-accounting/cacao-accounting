@@ -27,6 +27,7 @@ VALIDATION_STATUS_REVERTED = "reverted"
 VALIDATABLE_TYPES = {
     "sales_invoice",
     "sales_credit_note",
+    "sales_return",
     "sales_debit_note",
     "purchase_invoice",
     "purchase_credit_note",
@@ -251,6 +252,7 @@ def _model_for_type(document_type: str) -> Any | None:
         "journal_entry": ComprobanteContable,
         "sales_invoice": SalesInvoice,
         "sales_credit_note": SalesInvoice,
+        "sales_return": SalesInvoice,
         "sales_debit_note": SalesInvoice,
         "purchase_invoice": PurchaseInvoice,
         "purchase_credit_note": PurchaseInvoice,
@@ -285,6 +287,7 @@ def _document_line_summary(document_type: str, document_id: str) -> tuple[int, f
         "journal_entry": (ComprobanteContableDetalle, "transaction_id", "value"),
         "sales_invoice": (SalesInvoiceItem, "sales_invoice_id", "amount"),
         "sales_credit_note": (SalesInvoiceItem, "sales_invoice_id", "amount"),
+        "sales_return": (SalesInvoiceItem, "sales_invoice_id", "amount"),
         "sales_debit_note": (SalesInvoiceItem, "sales_invoice_id", "amount"),
         "purchase_invoice": (PurchaseInvoiceItem, "purchase_invoice_id", "amount"),
         "purchase_credit_note": (PurchaseInvoiceItem, "purchase_invoice_id", "amount"),

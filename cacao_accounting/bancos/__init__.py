@@ -846,8 +846,9 @@ def _payment_reference_model(reference_type: str) -> type[Any]:
     """Resuelve el modelo real para una referencia de pago."""
     if reference_type in ("purchase_invoice", "purchase_order", "purchase_credit_note", "purchase_debit_note"):
         return PurchaseInvoice if "invoice" in reference_type or "note" in reference_type else PurchaseOrder
-    if reference_type in ("sales_invoice", "sales_order", "sales_credit_note", "sales_debit_note"):
-        return SalesInvoice if "invoice" in reference_type or "note" in reference_type else SalesOrder
+    if reference_type in ("sales_invoice", "sales_order", "sales_credit_note", "sales_return", "sales_debit_note"):
+        is_invoice_like = "invoice" in reference_type or "note" in reference_type or "return" in reference_type
+        return SalesInvoice if is_invoice_like else SalesOrder
     raise ValueError(_("Tipo de referencia inválido: {0}").format(reference_type))
 
 
@@ -857,6 +858,7 @@ def _payment_reference_expected_payment_type(flow_source_type: str) -> str | Non
         "purchase_credit_note": "receive",
         "purchase_debit_note": "pay",
         "sales_credit_note": "pay",
+        "sales_return": "pay",
         "sales_debit_note": "receive",
     }.get(flow_source_type)
 
@@ -1111,6 +1113,16 @@ def _payment_source_descriptor(reference_type: str, reference_id: str) -> dict[s
                 "flow_source_type": "sales_credit_note",
                 "document_type": "sales_credit_note",
             }
+        case "sales_return":
+            return {
+                "document": database.session.get(SalesInvoice, reference_id),
+                "reference_type": "sales_invoice",
+                "label": _("Devolución de Venta"),
+                "url_route": VENTAS_FACTURA_VENTA_ROUTE,
+                "url_param_name": "invoice_id",
+                "flow_source_type": "sales_return",
+                "document_type": "sales_return",
+            }
         case "sales_debit_note":
             return {
                 "document": database.session.get(SalesInvoice, reference_id),
@@ -1134,7 +1146,7 @@ def _payment_profile_from_source_type(flow_source_type: str) -> tuple[str, str]:
             return "supplier", "receive"
         case "sales_invoice" | "sales_order" | "sales_debit_note":
             return "customer", "receive"
-        case "sales_credit_note":
+        case "sales_credit_note" | "sales_return":
             return "customer", "pay"
         case _:
             return "customer", "receive"
@@ -1401,7 +1413,7 @@ def _refresh_payment_reference_document(reference_type: str, reference_id: str) 
     match reference_type:
         case "purchase_invoice" | "purchase_credit_note" | "purchase_debit_note":
             model = PurchaseInvoice
-        case "sales_invoice" | "sales_credit_note" | "sales_debit_note":
+        case "sales_invoice" | "sales_credit_note" | "sales_return" | "sales_debit_note":
             model = SalesInvoice
         case "purchase_order":
             model = PurchaseOrder
