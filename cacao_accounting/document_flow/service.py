@@ -736,7 +736,7 @@ def _validate_payment(payment: Any, company: str, party_type: str, party_id: str
 
 def _get_reference_document(flow_source_type: str, reference_id: str, company: str, party_type: str, party_id: str) -> Any:
     model = _payment_reference_model(flow_source_type)
-    document = database.session.get(model, reference_id)
+    document = database.session.query(model).with_for_update().get(reference_id)
     if not document or getattr(document, "docstatus", 0) != 1:
         raise DocumentFlowError("El documento referenciado debe existir y estar aprobado.", 404)
     if getattr(document, "company", None) != company:
