@@ -71,6 +71,7 @@ exclude = [
 	"dist",
 	".mypy_cache",
 	".ruff_cache",
+	"tests/*",
 ]
 
 [tool.pylint.format]
