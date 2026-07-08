@@ -52,6 +52,7 @@
       (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
       (_('Saldo Pendiente'), format_money_with_currency(registro.outstanding_amount, currency_code)),
       (_('Moneda'), currency_code),
+      (_('Actualizar inventario'), _('Sí') if registro.update_inventory else _('No')),
       (_('Observaciones'), registro.remarks)
     ],
     'bi-receipt'
