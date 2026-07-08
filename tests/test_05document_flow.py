@@ -743,3 +743,21 @@ def test_allowed_flows_include_order_advances_and_receipt_notes():
     assert is_allowed_flow("purchase_debit_note", "payment_entry")
     assert is_allowed_flow("sales_credit_note", "payment_entry")
     assert is_allowed_flow("sales_debit_note", "payment_entry")
+
+
+def test_purchase_return_document_type_registered():
+    """Verifica que purchase_return existe como DocumentType en el registro."""
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    assert "purchase_return" in DOCUMENT_TYPES
+    spec = DOCUMENT_TYPES["purchase_return"]
+    assert spec.label == "Devolución de Compra"
+    assert spec.module == "purchases"
+    assert spec.list_endpoint == "compras.compras_factura_compra_devolucion_lista"
+
+
+def test_purchase_return_flow_is_allowed():
+    """Verifica que purchase_receipt -> purchase_return esta permitido."""
+    from cacao_accounting.document_flow.registry import is_allowed_flow
+
+    assert is_allowed_flow("purchase_receipt", "purchase_return")
