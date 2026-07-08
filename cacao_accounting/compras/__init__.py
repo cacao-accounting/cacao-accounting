@@ -82,7 +82,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     update_party_contact,
 )
 from cacao_accounting.version import APPNAME
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 # < --------------------------------------------------------------------------------------------- >
 compras = Blueprint("compras", __name__, template_folder="templates")
@@ -2017,6 +2017,7 @@ def compras_solicitud_cotizacion(quotation_id: str):
 def _handle_purchase_quotation_edit_post(registro):
     from cacao_accounting.database import Party
 
+    before_state = _capture_purchase_state(registro)
     supplier_id = request.form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -2032,6 +2033,8 @@ def _handle_purchase_quotation_edit_post(registro):
     registro.total = total
     registro.base_total = total
     registro.grand_total = total
+    after_state = _capture_purchase_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
@@ -2448,6 +2451,7 @@ def compras_recepcion_editar(receipt_id: str):
 
 
 def _handle_purchase_receipt_edit_post(registro):
+    before_state = _capture_purchase_state(registro)
     registro.supplier_id = request.form.get("supplier_id") or None
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
@@ -2465,6 +2469,8 @@ def _handle_purchase_receipt_edit_post(registro):
     _total_qty, total = _save_purchase_receipt_items(registro.id)
     registro.total = total
     registro.grand_total = total
+    after_state = _capture_purchase_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Recepcion de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
@@ -2780,6 +2786,17 @@ def _purchase_exchange_rate(
         return None
 
 
+def _capture_purchase_state(registro: Any) -> dict[str, Any]:
+    """CROSS-01: Captura estado de documento de compras para auditoría."""
+    return {
+        "supplier_id": getattr(registro, "supplier_id", None),
+        "company": getattr(registro, "company", None),
+        "posting_date": str(getattr(registro, "posting_date", "")),
+        "total": str(getattr(registro, "total", "")),
+        "remarks": getattr(registro, "remarks", None),
+    }
+
+
 def _validate_supplier_invoice_flags(supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None) -> None:
     """S2P-08: Valida flags del proveedor antes de crear/aprobar factura."""
     if not supplier_id or not company:
@@ -2961,6 +2978,7 @@ def compras_factura_compra_editar(invoice_id: str):
 
 def _handle_purchase_invoice_edit_post(registro):
     try:
+        before_state = _capture_purchase_state(registro)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
         _validate_supplier_invoice_flags(
@@ -2987,6 +3005,8 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.outstanding_amount = total
         registro.base_outstanding_amount = total
         _persist_purchase_invoice_fiscal_snapshot(registro)
+        after_state = _capture_purchase_state(registro)
+        log_update(registro, before=before_state, after=after_state)
         database.session.commit()
         flash(_("Factura de compra actualizada correctamente."), "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
