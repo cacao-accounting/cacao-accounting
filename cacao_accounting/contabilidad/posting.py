@@ -44,7 +44,10 @@ from cacao_accounting.database import (
     Entity,
     database,
 )
-from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
+from cacao_accounting.warehouse_accounting import (
+    inventory_account_id_for_document_line,
+    warehouse_inventory_account_id,
+)
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
@@ -2267,16 +2270,32 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
 
     movements = _create_stock_ledger(document)
     purpose = getattr(document, "purpose", "").lower()
-    if purpose == "material_transfer":
+    company = _company_for(document)
+
+    # In Material Transfer, we only generate GL if source and target warehouses
+    # use different GL accounts. Otherwise, it's just a stock movement.
+    if purpose == "material_transfer" and not _is_cross_account_transfer(document, company):
         return []
 
-    company = _company_for(document)
     entries = _create_stock_entry_gl_entries(document, company, purpose, ledger_code)
 
     _add_entries(entries)
     if not movements and not entries:
         raise PostingError("No se generan movimientos para este documento de inventario.")
     return entries
+
+
+def _is_cross_account_transfer(document: StockEntry, company: str) -> bool:
+    """Check if any line in a transfer moves goods between warehouses with different GL accounts."""
+    if document.purpose != "material_transfer":
+        return False
+    items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
+    for line in items:
+        source_acc = warehouse_inventory_account_id(line.source_warehouse or document.from_warehouse, company)
+        target_acc = warehouse_inventory_account_id(line.target_warehouse or document.to_warehouse, company)
+        if source_acc and target_acc and source_acc != target_acc:
+            return True
+    return False
 
 
 def _create_stock_entry_gl_entries(
@@ -2314,9 +2333,27 @@ def _add_stock_entry_line_gl_entries(
     if amount <= 0:
         return
 
+    dimension_kwargs = _get_dimension_kwargs(document)
+
+    if purpose == "material_transfer":
+        source_acc = warehouse_inventory_account_id(line.source_warehouse or document.from_warehouse, company)
+        target_acc = warehouse_inventory_account_id(line.target_warehouse or document.to_warehouse, company)
+        if source_acc and target_acc and source_acc != target_acc:
+            entries.extend(
+                _normal_entries_for_amount(
+                    context=context,
+                    debit_account_id=target_acc,
+                    credit_account_id=source_acc,
+                    amount=amount,
+                    **dimension_kwargs,
+                    debit_remarks="Transferencia inventario (Entrada)",
+                    credit_remarks="Transferencia inventario (Salida)",
+                )
+            )
+        return
+
     inventory_account_id = _get_inventory_account_for_line(document, line, company, purpose)
     offset_account_id = _get_offset_account_for_line(document, line, company, purpose)
-    dimension_kwargs = _get_dimension_kwargs(document)
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
@@ -2350,6 +2387,13 @@ def _get_stock_entry_line_amount(line: StockEntryItem, purpose: str) -> Decimal:
     """Get the amount for a stock entry line based on its purpose."""
     if purpose == "stock_reconciliation":
         return abs(_decimal_value(line.stock_value_difference))
+
+    # Actual stock cost should always take precedence for GL posting to keep it in sync
+    # with the Stock Ledger (Kardex), specially for FIFO/Moving Average outflows.
+    cost_amount = getattr(line, "_inventory_cost_amount", None)
+    if cost_amount is not None:
+        return _decimal_value(cost_amount)
+
     return _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
 
 
