@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 from flask_login import current_user
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.database import (
     AuditLog,
@@ -164,24 +164,48 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
 
 
 def compute_outstanding_amount(document: Any, as_of_date: date | None = None) -> Decimal:
-    """Calcula el saldo vivo de una factura usando las referencias de pago."""
+    """Calcula el saldo vivo de una factura usando las referencias de pago y notas de credito/debito."""
     if as_of_date is None:
         as_of_date = date.today()
     grand_total = decimal_or_zero(getattr(document, "grand_total", None))
-    allocated = sum(
+    allocated_payments = sum(
         decimal_or_zero(reference.allocated_amount)
         for reference in _document_payment_references(document, as_of_date=as_of_date)
     )
-    outstanding = grand_total - allocated
+    allocated_notes = _compute_allocated_notes_amount(document)
+    outstanding = grand_total - allocated_payments - allocated_notes
     return outstanding if outstanding > 0 else Decimal("0")
+
+
+def _compute_allocated_notes_amount(document: Any) -> Decimal:
+    """Suma el monto de notas de credito/debito aplicadas al documento."""
+    raw_document_type = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
+    document_type = normalize_doctype(str(raw_document_type or ""))
+    document_id = getattr(document, "id", "")
+
+    query = select(func.sum(DocumentRelation.amount)).where(
+        DocumentRelation.source_type == document_type,
+        DocumentRelation.source_id == document_id,
+        DocumentRelation.status == "active",
+        DocumentRelation.target_type.in_(("sales_credit_note", "purchase_credit_note")),
+    )
+    res_credit = database.session.execute(query).scalar() or Decimal("0")
+
+    query_debit = select(func.sum(DocumentRelation.amount)).where(
+        DocumentRelation.source_type == document_type,
+        DocumentRelation.source_id == document_id,
+        DocumentRelation.status == "active",
+        DocumentRelation.target_type.in_(("sales_debit_note", "purchase_debit_note")),
+    )
+    res_debit = database.session.execute(query_debit).scalar() or Decimal("0")
+
+    return decimal_or_zero(res_credit) - decimal_or_zero(res_debit)
 
 
 def _compute_cash_consumed_from_reference(
     reference_id, reference_type, flow_source_type, allocated_amount, discount_amount, gain_loss_amount, relation_status
 ):
-    source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
-    if source_type in {"purchase_order", "sales_order"}:
-        return Decimal("0"), None
+    """Calcula el efectivo consumido por una referencia de pago."""
     cash_consumed = decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
     if cash_consumed < 0:
         cash_consumed = Decimal("0")
@@ -957,6 +981,62 @@ def _update_source_cache(source_type: str, source_id: str, source_item_id: str |
         source_item.delivered_qty = consumed
     elif source_key == "sales_order" and target_key == "sales_invoice":
         source_item.billed_qty = consumed
+
+    # Trazabilidad transitiva: Si el source_key es un documento intermedio,
+    # debemos actualizar tambien el documento padre original si existe.
+    _update_transitive_source_cache(source_key, source_id, source_item_id, target_key)
+
+
+def _update_transitive_source_cache(source_key: str, source_id: str, source_item_id: str | None, target_key: str) -> None:
+    """Propaga la actualizacion de cache a documentos padre (p.ej de Nota Entrega a Orden de Venta)."""
+    if source_key == "delivery_note" and target_key == "sales_invoice":
+        _propagate_billed_qty(source_key, source_id, source_item_id, "sales_order")
+    elif source_key == "purchase_receipt" and target_key == "purchase_invoice":
+        _propagate_billed_qty(source_key, source_id, source_item_id, "purchase_order")
+
+
+def _propagate_billed_qty(source_type: str, source_id: str, source_item_id: str | None, parent_type: str) -> None:
+    """Suma facturacion de documentos intermedios y la asigna al campo billed_qty del padre."""
+    relations = database.session.execute(
+        select(DocumentRelation).where(
+            DocumentRelation.target_type == source_type,
+            DocumentRelation.target_id == source_id,
+            DocumentRelation.target_item_id == source_item_id,
+            DocumentRelation.source_type == parent_type,
+            DocumentRelation.status == "active",
+        )
+    ).scalars()
+    for rel in relations:
+        if not rel.source_item_id:
+            continue
+        parent_item = get_document_item(parent_type, rel.source_item_id)
+        if parent_item and hasattr(parent_item, "billed_qty"):
+            # El billed_qty del padre es la suma de lo facturado desde el padre directamente
+            # MAS lo facturado desde sus documentos derivados (recepciones/entregas).
+            invoice_type = "sales_invoice" if parent_type == "sales_order" else "purchase_invoice"
+            direct_billed = consumed_qty_for_source(parent_type, rel.source_id, rel.source_item_id, invoice_type)
+
+            # Sumar lo facturado a traves de intermediarios (Nota Entrega / Recepcion)
+            intermediary_type = "delivery_note" if parent_type == "sales_order" else "purchase_receipt"
+
+            indirect_billed = Decimal("0")
+            # Buscar todos los intermediarios vinculados a este item padre
+            intermediaries = database.session.execute(
+                select(DocumentRelation).where(
+                    DocumentRelation.source_type == parent_type,
+                    DocumentRelation.source_id == rel.source_id,
+                    DocumentRelation.source_item_id == rel.source_item_id,
+                    DocumentRelation.target_type == intermediary_type,
+                    DocumentRelation.status == "active",
+                )
+            ).scalars()
+
+            for inter_rel in intermediaries:
+                indirect_billed += consumed_qty_for_source(
+                    intermediary_type, inter_rel.target_id, inter_rel.target_item_id, invoice_type
+                )
+
+            parent_item.billed_qty = direct_billed + indirect_billed
 
 
 def refresh_source_caches_for_target(target_type: str, target_id: str) -> None:
