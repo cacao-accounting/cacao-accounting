@@ -359,3 +359,11 @@
   - `_handle_purchase_invoice_edit_post` limpia relaciones viejas para evitar doble conteo en ediciones.
   - `compras_factura_compra_submit` captura `(PostingError, ValueError, DocumentFlowError)` en lugar de solo `PostingError`.
   - Commit: `f920176`
+
+- **S2P-06 y O2C-05 corregidos (2026-07-08):** Se implementaron validaciones pre-submit para los 12 endpoints transaccionales.
+  - Nueva funcion `validate_submit_prerequisites()` en `document_flow/validation.py` que valida compania, fecha, tercero, lineas y cantidades.
+  - 6 endpoints de compras, 5 de ventas y 1 de inventario ahora tienen validacion en el limite del submit.
+  - Endpoints sin manejo de error previo ahora capturan `ValueError` con flash message.
+  - `ventas_entrega_submit` e `inventario_entrada_submit` ampliaron captura a `(PostingError, ValueError)`.
+  - 12 tests unitarios en `tests/test_validation.py`.
+  - Commits: `b149b09`, `3fa36a6`, `a774532`, `faf08a4`.
