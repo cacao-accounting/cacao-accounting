@@ -14,6 +14,7 @@ from flask_login import current_user, login_required
 from cacao_accounting.database import (
     Accounts,
     CostCenter,
+    DocumentRelation,
     Entity,
     Item,
     ItemCategory,
@@ -36,6 +37,7 @@ from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.inventario.service import (
     InventoryServiceError,
+    convert_item_qty,
     create_item_with_uoms,
     list_item_account_rows,
     list_item_uom_conversions,
@@ -907,6 +909,10 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             qty_difference = counted_qty - current_qty
             value_difference = target_value - current_value
             uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
+            try:
+                base_qty = convert_item_qty(item_code, abs(qty_difference), uom, _item_default_uom(item_code))
+            except InventoryServiceError:
+                base_qty = abs(qty_difference)
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
@@ -914,7 +920,7 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
                 target_warehouse=warehouse,
                 qty=abs(qty_difference),
                 uom=uom,
-                qty_in_base_uom=abs(qty_difference),
+                qty_in_base_uom=base_qty,
                 basic_rate=target_rate,
                 amount=abs(value_difference),
                 valuation_rate=target_rate,
@@ -956,8 +962,12 @@ def inventario_entrada_nuevo():
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
     formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
+    # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
-        (w[0].code, w[0].name) for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True)).all()
+        (w[0].code, w[0].name)
+        for w in database.session.execute(
+            database.select(Warehouse).filter_by(is_active=True, company=selected_company)
+        ).all()
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
@@ -1160,8 +1170,12 @@ def inventario_entrada_editar(entry_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
+    # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
-        (w[0].code, w[0].name) for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True)).all()
+        (w[0].code, w[0].name)
+        for w in database.session.execute(
+            database.select(Warehouse).filter_by(is_active=True, company=selected_company)
+        ).all()
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
@@ -1211,6 +1225,11 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
 
 def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
     """Elimina y recrea los items de la entrada de inventario."""
+    # INV-05: Limpiar relaciones documentales huérfanas antes de recrear items
+    for rel in database.session.execute(
+        database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=registro.id)
+    ).scalars():
+        database.session.delete(rel)
     for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
         database.session.delete(item)
     registro.total_amount = _save_stock_entry_items(registro)
