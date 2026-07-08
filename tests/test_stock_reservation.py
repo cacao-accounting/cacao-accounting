@@ -186,7 +186,7 @@ def _make_so(
     company: str = "cacao",
     docstatus: int = 0,
 ) -> SalesOrder:
-    so = SalesOrder(id=so_id, company=company, posting_date=date(2026, 6, 15), docstatus=docstatus)
+    so = SalesOrder(id=so_id, company=company, posting_date=date(2026, 6, 15), docstatus=docstatus, customer_id="CUST-RESERVE")
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(
