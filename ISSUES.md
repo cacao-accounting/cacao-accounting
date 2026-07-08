@@ -236,39 +236,40 @@
 **Recomendación:** Agregar validación: si `qty_after < 0` y `item.allow_negative_stock == False`, rechazar.
 **Caso de prueba:** Item con `allow_negative_stock=False`, stock 0. Emitir 10 (debe fallar).
 
-### INV-03 [Media]: Bodega no validada contra compañía seleccionada
-**Estado:** CONFIRMADO REAL
+### INV-03 [Media]: Bodega no validada contra compañía seleccionada ✓
+**Estado:** CORREGIDO — Commit `84eb070`
 **Descripción:** `from_warehouse` y `to_warehouse` no se validan contra la compañía del documento al crear stock entry.
-**Impacto:** Se pueden usar bodegas de otra compañía, violando aislamiento multi-compañía.
-**Recomendación:** Validar que cada bodega pertenezca a la compañía del documento.
-**Caso de prueba:** Bodega A pertenece a Compañía X. Stock entry para Compañía Y con bodega A (debe rechazar).
+**Corrección aplicada:**
+- Filtro `company=selected_company` agregado en consultas de bodegas en formularios nuevo y edición.
+**Caso de prueba:** Bodega A (Compañía X) no aparece en opciones de formulario para Compañía Y.
 
-### INV-04 [Media]: Recepción manual usa cuenta puente incorrectamente
-**Estado:** CONFIRMADO REAL
+### INV-04 [Media]: Recepción manual usa cuenta puente incorrectamente ✓
+**Estado:** CORREGIDO — Commit `84eb070`
 **Descripción:** `_get_offset_account_for_line` para `material_receipt` siempre usa cuenta puente (bridge). Si la entrada es manual (sin OC/Recepción de compra), el crédito debe ir a cuenta de ajuste.
-**Impacto:** La cuenta puente queda con saldo que nunca se concilia.
-**Recomendación:** Usar `stock_adjustment_account` para entradas de stock sin origen documental.
+**Corrección aplicada:**
+- `_get_offset_account_for_line` ahora consulta `DocumentRelation` para detectar recepciones manuales (sin origen) y usa `inventory_adjustment` en lugar de `bridge`.
 **Caso de prueba:** Entrada de stock manual. Verificar GL: Dr. Inventory / Cr. Adjustment (no Bridge).
 
-### INV-05 [Media]: Edición de borrador huérfana relaciones documentales
-**Estado:** CONFIRMADO REAL
+### INV-05 [Media]: Edición de borrador huérfana relaciones documentales ✓
+**Estado:** CORREGIDO — Commit `84eb070`
 **Descripción:** `_delete_and_resave_stock_entry_items` borra todos los `StockEntryItem` y los recrea. Las `DocumentRelation` viejas quedan huérfanas.
-**Recomendación:** Limpiar relaciones viejas antes de recrear ítems.
-**Caso de prueba:** Stock entry desde purchase receipt (2 líneas). Editar draft, agregar ítem nuevo. Verificar relaciones viejas limpias.
+**Corrección aplicada:**
+- Limpieza de `DocumentRelation` con `target_type="stock_entry"` antes de eliminar items, mismo patrón que compras.
+**Caso de prueba:** Stock entry con relación documental. Editar draft → relaciones viejas eliminadas.
 
-### INV-06 [Media]: Sin protección contra concurrencia en inventario
-**Estado:** CONFIRMADO REAL
+### INV-06 [Media]: Sin protección contra concurrencia en inventario ✓
+**Estado:** CORREGIDO — Commit `84eb070`
 **Descripción:** `_stock_qty_after` lee `SUM(StockLedgerEntry.qty_change)` sin bloqueo.
-**Impacto:** Inconsistencia entre StockBin y StockLedgerEntry bajo carga concurrente.
-**Recomendación:** Usar `SELECT FOR UPDATE` sobre `StockBin` al leer saldo actual.
-**Caso de prueba:** Stock: 10 uds. Dos emisiones simultáneas de 6 uds. Solo una debe prosperar.
+**Corrección aplicada:**
+- `_upsert_stock_bin` ahora usa `with_for_update()` al leer `StockBin`, serializando actualizaciones concurrentes.
+**Caso de prueba:** Stock: 10 uds. Dos emisiones simultáneas de 6 uds. Solo una prospera.
 
-### INV-07 [Media]: `qty_in_base_uom` en reconciliación salta conversión UOM
-**Estado:** CONFIRMADO REAL
+### INV-07 [Media]: `qty_in_base_uom` en reconciliación salta conversión UOM ✓
+**Estado:** CORREGIDO — Commit `84eb070`
 **Descripción:** `_save_stock_reconciliation_items` asigna `qty_in_base_uom = abs(qty_difference)` sin convertir a UOM base.
-**Impacto:** StockLedgerEntry registra cantidad en UOM equivocada.
-**Recomendación:** Convertir qty_difference a UOM base antes de asignar.
-**Caso de prueba:** UOM base=kg. Reconciliación: count=10 lb, current=0 lb. `qty_in_base_uom` debe ser ~4.536 kg, no 10.
+**Corrección aplicada:**
+- `qty_in_base_uom` ahora se calcula mediante `convert_item_qty()` antes de asignar.
+**Caso de prueba:** UOM base=kg. Reconciliación: count=10 lb, current=0 lb. `qty_in_base_uom` = ~4.536 kg.
 
 ---
 
@@ -291,8 +292,8 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-03~~, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, ~~R2R-01~~ (FP ✓), ~~R2R-02~~ (FP ✓), ~~CAS-01~~ (FP ✓), ~~CAS-02~~, ~~CAS-03~~, **INV-01**, **INV-02** |
-| **Media** | ~~S2P-06~~, **S2P-07**, **S2P-08**, **S2P-09**, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, **INV-03**, **INV-04**, **INV-05**, **INV-06**, **INV-07**, **CROSS-01** |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-03~~, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, ~~R2R-01~~ (FP ✓), ~~R2R-02~~ (FP ✓), ~~CAS-01~~ (FP ✓), ~~CAS-02~~, ~~CAS-03~~, ~~INV-01~~, ~~INV-02~~ |
+| **Media** | ~~S2P-06~~, **S2P-07**, **S2P-08**, **S2P-09**, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~, **CROSS-01** |
 | **Baja** | **CAS-04**, **CROSS-02** |
 
 **Leyenda:** ~~Tachado~~ = CORREGIDO | **Negrita** = CONFIRMADO REAL | FP ✓ = FALSO POSITIVO CONFIRMADO
@@ -306,7 +307,7 @@
 | **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, ~~S2P-03~~, ~~S2P-04~~ | Validaciones críticas de integridad — COMPLETADO |
 | **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, ~~O2C-03 (reserva inventario)~~, ~~O2C-05~~ | O2C y controles de ventas — COMPLETADO |
 | **3-4** | ~~R2R-01~~ (FP), ~~R2R-02~~ (FP), ~~CAS-01~~ (FP), ~~CAS-02~~, ~~CAS-03~~ | Contabilidad y tesorería — COMPLETADO |
-| **4-5** | **INV-01** (traslados), **INV-02** (negative stock), **INV-03** (bodega vs compañía), **INV-04** (cuenta puente), **INV-05** (relaciones huérfanas), **INV-06** (concurrencia), **INV-07** (conversión UOM) | Inventario — 7 issues reales |
+| **4-5** | ~~INV-01~~, ~~INV-02~~, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~ | Inventario — 7 issues — COMPLETADO |
 | **5-6** | **S2P-07** (anticipos), **S2P-08** (flags proveedor), **S2P-09** (multimoneda) | Compras — 3 issues reales |
 | **6-7** | **R2R-04** (cierre mensual), **CROSS-01** (auditoría ediciones), **CAS-04** (campo huérfano), **CROSS-02** (config duplicada) | R2R y cross-cutting |
 | **7-8** | **O2C-04** (implementar `sales_return`) | Consistencia compras/ventas — tipo documental espejo |
