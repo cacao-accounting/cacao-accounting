@@ -449,6 +449,8 @@ def compras_solicitud_compra_cancel(request_id: str):
         abort(400)
     registro.docstatus = 2
     log_cancel(registro)
+    revert_relations_for_target("purchase_request", request_id)
+    refresh_source_caches_for_target("purchase_request", request_id)
     database.session.commit()
     flash("Solicitud de compra cancelada.", "warning")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
@@ -894,6 +896,7 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("supplier_quotation", quotation_id)
+    refresh_source_caches_for_target("supplier_quotation", quotation_id)
     database.session.commit()
     flash(_("Cotizacion de proveedor cancelada."), "warning")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
@@ -2163,6 +2166,7 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_quotation", quotation_id)
+    refresh_source_caches_for_target("purchase_quotation", quotation_id)
     database.session.commit()
     flash(_("Solicitud de cotizacion cancelada."), "warning")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
@@ -2198,6 +2202,7 @@ def compras_orden_compra_cancel(order_id: str):
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_order", order_id)
+    refresh_source_caches_for_target("purchase_order", order_id)
     database.session.commit()
     flash("Orden de compra cancelada.", "warning")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
