@@ -95,6 +95,7 @@ class FormularioFacturaVenta(FlaskForm):
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField(_LABEL_POSTING_DATE)
     is_return = BooleanField("Es devolución")
+    update_inventory = BooleanField("Actualizar inventario")
     remarks = TextAreaField("Observaciones")
 
 

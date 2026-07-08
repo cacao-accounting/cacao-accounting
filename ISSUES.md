@@ -36,7 +36,7 @@
 **Nota:** Las validaciones contra sobre-pago ya existen (8 capas de validación en `bancos/__init__.py` y `document_flow/service.py`). El riesgo real es la condición de carrera (TOCTOU) por falta de `SELECT FOR UPDATE`, pero es bajo en uso manual típico.
 
 ### S2P-04 [Alta]: Cancelación de OC con documentos descendientes activos ✓
-**Estado:** CORREGIDO
+**Estado:** CORREGIDO — Commit `22cfa69f`
 **Descripción:** Se puede cancelar una OC aunque tenga Recepciones o Facturas activas. Las relaciones se marcan "reverted" pero los hijos siguen activos.
 **Impacto:** Documentos huérfanos, inventario revertido pero factura por pagar permanece.
 **Recomendación:** Verificar que no existan Recepciones/Facturas con `docstatus=1` vinculadas antes de cancelar. Bloquear anular si hay decendientes que afecter ledger, verificar misma logica para orden de venta.
@@ -82,11 +82,19 @@
 
 ## 2. ORDER TO CASH (O2C) — Ventas
 
-### O2C-01 [Alta]: COGS no se genera al facturar (feature request)
+### O2C-01 [Alta]: COGS no se genera al facturar (feature request) ✓
+**Estado:** CORREGIDO — Commit `de38207`
 **Descripción:** Actualmente el COGS se genera al crear la Nota de Entrega (Delivery Note). Si se requiere facturar antes de entregar, no hay COGS asociado. Se propone agregar una bandera booleana `update_inventory` en la Factura de Venta.
 **Impacto:** Sin la bandera, empresas que facturan antes de entregar no pueden generar COGS simultáneo.
 **Recomendación:** Agregar campo booleano `update_inventory` (default `False`) en `SalesInvoice`. Si está activo, `post_sales_invoice` genera asiento Dr. COGS / Cr. Inventory calculando el costo desde `StockValuationLayer`. Si hay Delivery Note previa, la bandera debe omitirse para no duplicar.
 **Caso de prueba:** Factura sin DN y `update_inventory=True`: GL con Dr. COGS $100 / Cr. Inventory $100. Factura ya entregada con `update_inventory=True`: no duplicar COGS.
+**Corrección aplicada:**
+- Campo `update_inventory` (Boolean) en `SalesInvoice`.
+- `_save_sales_invoice_items()` ahora guarda `warehouse` por línea.
+- `ventas_factura_venta_submit()` auto-crea y aprueba una Delivery Note cuando `update_inventory=True` y no hay DN previa, usando la bodega predeterminada del ítem.
+- `ventas_factura_venta_cancel()` cancela la DN vinculada cuando `update_inventory=True`.
+- Flash message: "Se ha creado y aprobado la Nota de Entrega {doc_no} asociada a esta factura."
+- Checkbox en formulario de factura de venta (visible cuando no hay DN vinculada).
 
 ### O2C-02 [Alta]: Sin validación de precio entre Orden de Venta y Factura
 **Descripción:** La factura puede usar precios diferentes a la SO sin advertencia.
@@ -228,7 +236,7 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, O2C-01 al O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, O2C-02, O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
 | **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
@@ -241,7 +249,7 @@
 | Semana | Hallazgos | Enfoque |
 |--------|-----------|---------|
 | **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados — revisión futura), ~~S2P-04 (cancelaciones)~~ | Validaciones críticas de integridad |
-| **2-3** | O2C-01 (COGS), O2C-02 (precios), O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
+| **2-3** | ~~O2C-01 (COGS)~~, O2C-02 (precios), O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
 | **3-4** | R2R-01 (períodos), R2R-02 (balanceo GL), CAS-01 (saldo bancario), CAS-02 (exchange rate), CAS-03 (concurrencia) | Contabilidad y tesorería |
 | **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |
 | **5-6** | S2P-09 (multimoneda), S2P-08 (flags proveedor), INV-04 (cuenta puente), CROSS-01 (auditoría) | Multimoneda y cross-cutting |

@@ -970,6 +970,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                warehouse=request.form.get(f"warehouse_{i}") or None,
             )
             database.session.add(linea)
             database.session.flush()
@@ -978,6 +979,72 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             total += amount
         i += 1
     return total_qty, total
+
+
+def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
+    """Crea y aprueba una Nota de Entrega desde una factura de venta.
+
+    Se utiliza cuando ``update_inventory=True`` y la factura no tiene una
+    Nota de Entrega previa vinculada. La DN se crea con los mismos ítems
+    de la factura, usando la bodega predeterminada de cada ítem.
+    """
+    from cacao_accounting.database import Item as ItemModel
+
+    items = database.session.execute(
+        database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
+    ).scalars().all()
+    if not items:
+        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
+
+    dn = DeliveryNote(
+        customer_id=invoice.customer_id,
+        customer_name=invoice.customer_name,
+        company=invoice.company,
+        posting_date=invoice.posting_date,
+        remarks=f"Nota de Entrega auto-generada desde factura {invoice.document_no or invoice.id}",
+        docstatus=0,
+    )
+    database.session.add(dn)
+    database.session.flush()
+
+    assign_document_identifier(
+        document=dn,
+        entity_type="delivery_note",
+        posting_date_raw=invoice.posting_date,
+        naming_series_id=None,
+    )
+
+    total = Decimal("0")
+    for si_item in items:
+        item_obj = database.session.get(ItemModel, si_item.item_code)
+        warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
+        if not warehouse:
+            raise PostingError(
+                f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
+                "Configure la bodega del ítem o cree la nota de entrega manualmente."
+            )
+        dn_item = DeliveryNoteItem(
+            delivery_note_id=dn.id,
+            item_code=si_item.item_code,
+            item_name=si_item.item_name,
+            qty=si_item.qty,
+            uom=si_item.uom,
+            qty_in_base_uom=si_item.qty_in_base_uom,
+            rate=si_item.rate,
+            amount=si_item.amount,
+            warehouse=warehouse,
+        )
+        database.session.add(dn_item)
+        total += si_item.amount or Decimal("0")
+
+    dn.total = total
+    dn.grand_total = total
+
+    submit_document(dn)
+    log_submit(dn)
+
+    invoice.delivery_note_id = dn.id
+    return dn
 
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
@@ -1936,6 +2003,7 @@ def ventas_factura_venta_nuevo():
                 document_type=document_type,
                 sales_order_id=request.form.get("from_order") or None,
                 delivery_note_id=request.form.get("from_note") or None,
+                update_inventory=bool(request.form.get("update_inventory")),
                 is_return=document_type == "sales_credit_note",
                 reversal_of=(
                     (request.form.get("from_invoice") or request.form.get("from_return"))
@@ -1982,6 +2050,7 @@ def ventas_factura_venta_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        update_inventory_checked=formulario.update_inventory.data,
     )
 
 
@@ -2080,6 +2149,7 @@ def ventas_factura_venta_editar(invoice_id: str):
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        update_inventory_checked=registro.update_inventory,
     )
 
 
@@ -2089,6 +2159,7 @@ def _handle_sales_invoice_edit_post(registro):
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
+        registro.update_inventory = bool(request.form.get("update_inventory"))
         for item in database.session.execute(
             database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
         ).scalars():
@@ -2174,9 +2245,15 @@ def ventas_factura_venta_submit(invoice_id: str):
         abort(400)
     try:
         submit_document(registro)
+        if registro.update_inventory and not registro.delivery_note_id:
+            dn = _create_delivery_note_from_invoice(registro)
+            flash(
+                _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),
+                "info",
+            )
         log_submit(registro)
         database.session.commit()
-    except PostingError as exc:
+    except (PostingError, ValueError) as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
@@ -2195,6 +2272,15 @@ def ventas_factura_venta_cancel(invoice_id: str):
     if registro.docstatus != 1:
         abort(400)
     try:
+        if registro.update_inventory and registro.delivery_note_id:
+            dn = database.session.get(DeliveryNote, registro.delivery_note_id)
+            if dn and dn.docstatus == 1:
+                cancel_document(dn)
+                log_cancel(dn)
+                flash(
+                    _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
+                    "info",
+                )
         cancel_document(registro)
         log_cancel(registro)
         revert_relations_for_target("sales_invoice", invoice_id)

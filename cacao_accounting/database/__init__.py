@@ -1501,6 +1501,7 @@ class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     sales_order_id = database.Column(database.String(26), database.ForeignKey(SALES_ORDER_ID), nullable=True, index=True)
     delivery_note_id = database.Column(database.String(26), database.ForeignKey("delivery_note.id"), nullable=True, index=True)
+    update_inventory = database.Column(database.Boolean(), default=False, nullable=False)
     tax_template_id = database.Column(database.String(26), database.ForeignKey(TAX_TEMPLATE_ID), nullable=True, index=True)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
