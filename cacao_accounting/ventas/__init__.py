@@ -1619,8 +1619,11 @@ def ventas_entrega_nuevo():
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
+            customer_id = request.form.get("customer_id") or None
+            customer = database.session.get(Party, customer_id) if customer_id else None
             entrega = DeliveryNote(
-                customer_id=request.form.get("customer_id") or None,
+                customer_id=customer_id,
+                customer_name=customer.name if customer else None,
                 company=request.form.get("company") or None,
                 posting_date=posting_date,
                 sales_order_id=request.form.get("from_order") or None,
@@ -1758,7 +1761,10 @@ def ventas_entrega_editar(note_id: str):
 
 
 def _handle_delivery_note_edit_post(registro):
-    registro.customer_id = request.form.get("customer_id") or None
+    customer_id = request.form.get("customer_id") or None
+    customer = database.session.get(Party, customer_id) if customer_id else None
+    registro.customer_id = customer_id
+    registro.customer_name = customer.name if customer else None
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
