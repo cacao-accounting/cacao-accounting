@@ -321,6 +321,11 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
         bank_transaction = database.session.get(BankTransaction, bank_transaction_id)
         if bank_transaction is not None and _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
             bank_transaction.is_reconciled = True
+        # CAS-04: Poblar payment_entry_id si la transacción se concilia contra un pago
+        for match in request.matches:
+            if match.bank_transaction_id == bank_transaction_id and match.target_type == "payment_entry":
+                if bank_transaction and not bank_transaction.payment_entry_id:
+                    bank_transaction.payment_entry_id = match.target_id
 
     return reconciliation
 
