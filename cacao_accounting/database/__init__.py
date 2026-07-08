@@ -1071,7 +1071,7 @@ class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
     warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=False, index=True)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, index=True)
     actual_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=False)
-    reserved_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=True)
+    reserved_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=False)
     ordered_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
