@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     SalesQuotationItem,
     SalesRequest,
     SalesRequestItem,
+    StockBin,
     UOM,
     database,
 )
@@ -115,6 +116,105 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
     if not party:
         abort(404)
     return party
+
+
+# ─── Reserva de inventario para Ordenes de Venta ──────────────────────────────
+
+
+def _stock_bin_or_create(company: str, item_code: str, warehouse: str) -> StockBin:
+    """Obtiene o crea un StockBin para item/almacen/compania."""
+    bin_row = database.session.execute(
+        database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+    ).scalar_one_or_none()
+    if not bin_row:
+        bin_row = StockBin(
+            company=company,
+            item_code=item_code,
+            warehouse=warehouse,
+            actual_qty=Decimal("0"),
+            reserved_qty=Decimal("0"),
+            stock_value=Decimal("0"),
+        )
+        database.session.add(bin_row)
+        database.session.flush()
+    return bin_row
+
+
+def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
+    """Valida disponibilidad y reserva inventario al aprobar una Orden de Venta.
+
+    Para cada linea de la OV con almacen definido, verifica que
+    ``actual_qty - reserved_qty >= qty``. Si hay stock suficiente,
+    incrementa ``reserved_qty`` en el StockBin correspondiente.
+    """
+    items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
+
+    for item in items:
+        warehouse = item.warehouse
+        if not warehouse:
+            raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
+
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
+        actual = Decimal(str(bin_row.actual_qty or 0))
+        reserved = Decimal(str(bin_row.reserved_qty or 0))
+        available = actual - reserved
+
+        if available < item.qty:
+            raise ValueError(
+                f"Stock insuficiente para {item.item_code} en {warehouse}: " f"disponible {available}, requerido {item.qty}."
+            )
+
+        bin_row.reserved_qty = reserved + item.qty
+
+
+def _release_reservation_for_sales_order(so: SalesOrder) -> None:
+    """Libera la reserva de inventario al cancelar una Orden de Venta."""
+    items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
+
+    for item in items:
+        warehouse = item.warehouse
+        if not warehouse:
+            continue
+
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
+        reserved = Decimal(str(bin_row.reserved_qty or 0))
+        new_reserved = max(Decimal("0"), reserved - item.qty)
+        bin_row.reserved_qty = new_reserved
+
+
+def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
+    """Libera reserva al aprobar una Nota de Entrega vinculada a una OV."""
+    if not dn.sales_order_id:
+        return
+
+    items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
+
+    for item in items:
+        warehouse = item.warehouse
+        if not warehouse:
+            continue
+
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        reserved = Decimal(str(bin_row.reserved_qty or 0))
+        new_reserved = max(Decimal("0"), reserved - item.qty)
+        bin_row.reserved_qty = new_reserved
+
+
+def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
+    """Restaura reserva al cancelar una Nota de Entrega vinculada a una OV."""
+    if not dn.sales_order_id:
+        return
+
+    items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
+
+    for item in items:
+        warehouse = item.warehouse
+        if not warehouse:
+            continue
+
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        reserved = Decimal(str(bin_row.reserved_qty or 0))
+        bin_row.reserved_qty = reserved + item.qty
 
 
 def _upsert_customer_company_settings_from_request(customer_id: str, form: dict) -> None:
@@ -992,9 +1092,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     """
     from cacao_accounting.database import Item as ItemModel
 
-    items = database.session.execute(
-        database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
-    ).scalars().all()
+    items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
     if not items:
         raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
 
@@ -1003,6 +1101,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         customer_name=invoice.customer_name,
         company=invoice.company,
         posting_date=invoice.posting_date,
+        sales_order_id=invoice.sales_order_id,
         remarks=f"Nota de Entrega auto-generada desde factura {invoice.document_no or invoice.id}",
         docstatus=0,
     )
@@ -1069,20 +1168,24 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice) -> list[str]:
         tolerance_value = config.price_tolerance_value or Decimal("0")
         allow_diff = config.allow_price_difference
 
-    invoice_items = database.session.execute(
-        database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
-    ).scalars().all()
+    invoice_items = (
+        database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
+    )
 
     warnings: list[str] = []
     for si_item in invoice_items:
-        relation = database.session.execute(
-            database.select(DocumentRelation).filter_by(
-                target_type="sales_invoice",
-                target_id=invoice.id,
-                target_item_id=si_item.id,
-                status="active",
+        relation = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    target_type="sales_invoice",
+                    target_id=invoice.id,
+                    target_item_id=si_item.id,
+                    status="active",
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if not relation or not relation.source_item_id:
             continue
         if relation.source_type != "sales_order":
@@ -1682,16 +1785,21 @@ def ventas_cotizacion_cancel(quotation_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_orden_venta_submit(order_id: str):
-    """Aprueba una orden de venta."""
+    """Aprueba una orden de venta y reserva inventario."""
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
-    flash("Orden de venta aprobada.", "success")
+    try:
+        _validate_and_reserve_stock_for_sales_order(registro)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+        flash("Orden de venta aprobada con reserva de inventario.", "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
@@ -1699,7 +1807,7 @@ def ventas_orden_venta_submit(order_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_orden_venta_cancel(order_id: str):
-    """Cancela una orden de venta."""
+    """Cancela una orden de venta y libera la reserva de inventario."""
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
@@ -1708,12 +1816,13 @@ def ventas_orden_venta_cancel(order_id: str):
     if has_active_source_relations("sales_order", order_id):
         flash("No se puede cancelar la orden de venta porque tiene notas de entrega o facturas activas.", "danger")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+    _release_reservation_for_sales_order(registro)
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("sales_order", order_id)
     refresh_source_caches_for_target("sales_order", order_id)
     database.session.commit()
-    flash("Orden de venta cancelada.", "warning")
+    flash("Orden de venta cancelada y reserva liberada.", "warning")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
@@ -1971,7 +2080,7 @@ def ventas_entrega_duplicar(note_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_entrega_submit(note_id: str):
-    """Aprueba una nota de entrega."""
+    """Aprueba una nota de entrega y libera la reserva de inventario."""
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
@@ -1979,6 +2088,7 @@ def ventas_entrega_submit(note_id: str):
         abort(400)
     try:
         submit_document(registro)
+        _release_reservation_for_delivery_note(registro)
         log_submit(registro)
         database.session.commit()
         flash("Nota de entrega aprobada.", "success")
@@ -1992,7 +2102,7 @@ def ventas_entrega_submit(note_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_entrega_cancel(note_id: str):
-    """Cancela una nota de entrega."""
+    """Cancela una nota de entrega y restaura la reserva de inventario."""
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
@@ -2000,6 +2110,7 @@ def ventas_entrega_cancel(note_id: str):
         abort(400)
     try:
         cancel_document(registro)
+        _restore_reservation_for_delivery_note(registro)
         revert_relations_for_target("delivery_note", note_id)
         refresh_source_caches_for_target("delivery_note", note_id)
         log_cancel(registro)
