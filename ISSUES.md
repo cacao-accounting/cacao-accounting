@@ -73,15 +73,15 @@
 **Recomendación:** Agregar tanto en la configuración global de coompras y ventas una opción "Aplicar automaticamente anticipos a facturas de la misma OCImplementar settlement de anticipos: Dr. Payable / Cr. Advance al pagar factura con anticipo.
 **Caso de prueba:** OC $1,000. Anticipo $500. Factura $1,000. Pago $500. Verificar cuenta de anticipo en cero.
 
-### S2P-08 [Media]: Flags de proveedor no validados
-**Estado:** CONFIRMADO REAL
+### S2P-08 [Media]: Flags de proveedor no validados ✓
+**Estado:** CORREGIDO — Commit `6b03524`
 **Descripción:** `allow_purchase_invoice_without_order` y `allow_purchase_invoice_without_receipt` existen en el formulario de proveedor pero no se validan al crear facturas.
 **Impacto:** Configuración existe en UI pero no se respeta.
 **Recomendación:** Validar estos flags en la creación de factura de compra.
 **Caso de prueba:** Proveedor con `allow_invoice_without_order=False`. Crear factura sin OC (debe rechazar).
 
 ### S2P-09 [Media]: Multimoneda no implementada en compras
-**Estado:** CONFIRMADO REAL
+**Estado:** CORREGIDO PARCIALMENTE — Commit `778a1b7`
 **Descripción:** `transaction_currency`, `exchange_rate` y montos base en OC/Recepción/Factura siempre se establecen como 1:1.
 **Impacto:** Transacciones en moneda extranjera se registran incorrectamente en contabilidad.
 **Recomendación:** Agregar selección de moneda en formularios y calcular `base_total = total * exchange_rate`.
@@ -211,8 +211,8 @@
 - El bloqueo de fila serializa lecturas concurrentes del saldo pendiente antes de crear `PaymentReference`.
 - Prueba funcional verifica flujo normal no se rompe.
 
-### CAS-04 [Baja]: `BankTransaction.payment_entry_id` nunca se puebla
-**Estado:** CONFIRMADO REAL
+### CAS-04 [Baja]: `BankTransaction.payment_entry_id` nunca se puebla ✓
+**Estado:** CORREGIDO — Commit `ca4aca8`
 **Descripción:** El campo `payment_entry_id` en `BankTransaction` existe en el modelo pero nunca se asigna durante la reconciliación. El flujo de reconciliación bancaria (`reconciliation_service.py`) solo marca `is_reconciled=True` pero nunca vincula el `PaymentEntry`.
 **Recomendación:** Poblar el campo al reconciliar contra un payment_entry, o eliminar la columna.
 
@@ -275,14 +275,14 @@
 
 ## 6. CROSS-CUTTING
 
-### CROSS-01 [Media]: Sin logging de auditoría para ediciones en borrador
-**Estado:** CONFIRMADO REAL PARCIAL
+### CROSS-01 [Media]: Sin logging de auditoría para ediciones en borrador ✓
+**Estado:** CORREGIDO — Commit `3c42857`
 **Descripción:** El issue es correcto para compras y ventas (ninguna ruta de edición en borrador llama a `log_update`). Sin embargo, inventario (`_handle_stock_entry_edit_post`) y diarios contables (`journal_service.py`) SÍ tienen `log_update`. El sistema de auditoría usa `AuditTrail` (no `AuditLog`).
 **Impacto:** Ediciones en borrador de OC, facturas, recepciones, órdenes de venta, notas de entrega, etc. en compras y ventas no quedan registradas en auditoría.
 **Recomendación:** Agregar `log_update` en las rutas `*_edit_post` de compras (6 rutas) y ventas (5 rutas).
 
-### CROSS-02 [Baja]: Configuraciones duplicadas en `setup.cfg` y `pyproject.toml`
-**Estado:** CONFIRMADO REAL
+### CROSS-02 [Baja]: Configuraciones duplicadas en `setup.cfg` y `pyproject.toml` ✓
+**Estado:** CORREGIDO — Commit `6c31402`
 **Descripción:** `[flake8]` en `setup.cfg` tiene prioridad sobre `[tool.flake8]` en `pyproject.toml` según la cadena de precedencia de flake8. Esto deja como código muerta la configuración más completa de `pyproject.toml` (con `extend-ignore = ["E203", "W503"]` y exclude más robusto). pytest y coverage no tienen duplicación conflictiva.
 **Recomendación:** Eliminar la sección `[flake8]` de `setup.cfg` y consolidar en `pyproject.toml` bajo `[tool.flake8]`.
 
@@ -293,8 +293,8 @@
 | Prioridad | Hallazgos |
 |-----------|-----------|
 | **Alta** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-03~~, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, ~~R2R-01~~ (FP ✓), ~~R2R-02~~ (FP ✓), ~~CAS-01~~ (FP ✓), ~~CAS-02~~, ~~CAS-03~~, ~~INV-01~~, ~~INV-02~~ |
-| **Media** | ~~S2P-06~~, **S2P-07**, **S2P-08**, **S2P-09**, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~, **CROSS-01** |
-| **Baja** | **CAS-04**, **CROSS-02** |
+| **Media** | ~~S2P-06~~, **S2P-07**, ~~S2P-08~~, ~~S2P-09~~, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~, ~~CROSS-01~~ |
+| **Baja** | ~~CAS-04~~, ~~CROSS-02~~ |
 
 **Leyenda:** ~~Tachado~~ = CORREGIDO | **Negrita** = CONFIRMADO REAL | FP ✓ = FALSO POSITIVO CONFIRMADO
 
@@ -308,6 +308,7 @@
 | **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, ~~O2C-03 (reserva inventario)~~, ~~O2C-05~~ | O2C y controles de ventas — COMPLETADO |
 | **3-4** | ~~R2R-01~~ (FP), ~~R2R-02~~ (FP), ~~CAS-01~~ (FP), ~~CAS-02~~, ~~CAS-03~~ | Contabilidad y tesorería — COMPLETADO |
 | **4-5** | ~~INV-01~~, ~~INV-02~~, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~ | Inventario — 7 issues — COMPLETADO |
-| **5-6** | **S2P-07** (anticipos), **S2P-08** (flags proveedor), **S2P-09** (multimoneda) | Compras — 3 issues reales |
-| **6-7** | **R2R-04** (cierre mensual), **CROSS-01** (auditoría ediciones), **CAS-04** (campo huérfano), **CROSS-02** (config duplicada) | R2R y cross-cutting |
+| **5-6** | **S2P-07** (anticipos), ~~S2P-08~~ (flags proveedor), ~~S2P-09~~ (multimoneda — helper infra.) | Compras — 3 issues |
+| **6-7** | **R2R-04** (cierre mensual), ~~CROSS-01~~ (auditoría ediciones), ~~CAS-04~~ (campo huérfano), ~~CROSS-02~~ (config duplicada) | R2R y cross-cutting — PENDIENTE: R2R-04 |
 | **7-8** | **O2C-04** (implementar `sales_return`) | Consistencia compras/ventas — tipo documental espejo |
+| **8-9** | **S2P-07** (anticipos), **R2R-04** (cierre), **O2C-04** (sales_return), S2P-09 (templates moneda) | Features pendientes |
