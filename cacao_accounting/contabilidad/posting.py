@@ -2387,6 +2387,13 @@ def _get_stock_entry_line_amount(line: StockEntryItem, purpose: str) -> Decimal:
     """Get the amount for a stock entry line based on its purpose."""
     if purpose == "stock_reconciliation":
         return abs(_decimal_value(line.stock_value_difference))
+
+    # Actual stock cost should always take precedence for GL posting to keep it in sync
+    # with the Stock Ledger (Kardex), specially for FIFO/Moving Average outflows.
+    cost_amount = getattr(line, "_inventory_cost_amount", None)
+    if cost_amount is not None:
+        return _decimal_value(cost_amount)
+
     return _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
 
 
