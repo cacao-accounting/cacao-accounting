@@ -38,6 +38,7 @@ from cacao_accounting.document_flow import (
     create_document_relation,
     refresh_source_caches_for_target,
     revert_relations_for_target,
+    validate_submit_prerequisites,
 )
 from cacao_accounting.document_flow.repository import has_active_source_relations
 from cacao_accounting.document_flow.status import _
@@ -486,9 +487,18 @@ def ventas_pedido_venta_submit(request_id: str):
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
+    try:
+        items = (
+            database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars().all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=False)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
     flash("Pedido de venta aprobado.", "success")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
@@ -1749,16 +1759,27 @@ def ventas_cotizacion_duplicar(quotation_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_cotizacion_submit(quotation_id: str):
-    """Aprueba una cotización de venta."""
+    """Aprueba una cotizacion de venta."""
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
-    flash("Cotización de venta aprobada.", "success")
+    try:
+        items = (
+            database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
+    flash("Cotizacion de venta aprobada.", "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
 
@@ -1792,6 +1813,8 @@ def ventas_orden_venta_submit(order_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars().all()
+        validate_submit_prerequisites(registro, items=items, require_party=True)
         _validate_and_reserve_stock_for_sales_order(registro)
         registro.docstatus = 1
         log_submit(registro)
@@ -2087,12 +2110,16 @@ def ventas_entrega_submit(note_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = (
+            database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars().all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
         submit_document(registro)
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
         database.session.commit()
         flash("Nota de entrega aprobada.", "success")
-    except PostingError as exc:
+    except (PostingError, ValueError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
@@ -2428,6 +2455,10 @@ def ventas_factura_venta_submit(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = (
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
         if registro.update_inventory and not registro.delivery_note_id:
