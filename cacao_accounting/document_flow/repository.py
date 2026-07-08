@@ -163,6 +163,27 @@ def recompute_line_flow_state(
     return state
 
 
+def has_active_source_relations(source_type: str, source_id: str) -> bool:
+    """Verifica si un documento fuente tiene relaciones activas con hijos no cancelados.
+
+    Utilizada para evitar cancelar un documento cuando tiene documentos
+    descendientes activos (ej. cancelar una OC que tiene Recepciones activas).
+    """
+    source_key = normalize_doctype(source_type)
+    relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            source_type=source_key,
+            source_id=source_id,
+            status="active",
+        )
+    ).scalars().all()
+    for relation in relations:
+        target = get_document(relation.target_type, relation.target_id)
+        if target and getattr(target, "docstatus", 0) != 2:
+            return True
+    return False
+
+
 def recompute_states_for_source(
     source_type: str,
     source_id: str,
