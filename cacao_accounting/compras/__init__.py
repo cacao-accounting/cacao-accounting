@@ -1743,12 +1743,14 @@ def _create_purchase_order_from_request(form: dict):
     supplier_id = form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
+    transaction_currency = form.get("transaction_currency") or None
     orden = PurchaseOrder(
         supplier_id=supplier_id,
         supplier_name=supplier.name if supplier else None,
         company=form.get("company") or None,
         posting_date=posting_date,
         remarks=form.get("remarks"),
+        transaction_currency=transaction_currency,
         docstatus=0,
     )
     try:
@@ -1765,7 +1767,8 @@ def _create_purchase_order_from_request(form: dict):
         orden.total = total
         orden.net_total = total
         orden.grand_total = total
-        orden.base_total = total
+        orden.exchange_rate = _purchase_exchange_rate(form.get("company"), posting_date, transaction_currency)
+        orden.base_total = (total * orden.exchange_rate).quantize(Decimal("0.0001"))
         database.session.commit()
         flash("Orden de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
@@ -1784,6 +1787,7 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
+    registro.transaction_currency = request.form.get("transaction_currency") or None
     for item in database.session.execute(
         database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
     ).scalars():
@@ -1793,7 +1797,8 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     registro.total = total
     registro.net_total = total
     registro.grand_total = total
-    registro.base_total = total
+    registro.exchange_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
+    registro.base_total = (total * registro.exchange_rate).quantize(Decimal("0.0001"))
     database.session.commit()
     flash(_("Orden de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
@@ -2310,6 +2315,7 @@ def compras_recepcion_nuevo():
                 posting_date=posting_date,
                 purchase_order_id=request.form.get("from_order") or None,
                 remarks=request.form.get("remarks"),
+                transaction_currency=request.form.get("transaction_currency") or None,
                 docstatus=0,
             )
             database.session.add(recepcion)
@@ -2323,6 +2329,10 @@ def compras_recepcion_nuevo():
             _total_qty, total = _save_purchase_receipt_items(recepcion.id)
             recepcion.total = total
             recepcion.grand_total = total
+            recepcion.exchange_rate = _purchase_exchange_rate(
+                request.form.get("company"), posting_date, request.form.get("transaction_currency")
+            )
+            recepcion.base_total = (total * recepcion.exchange_rate).quantize(Decimal("0.0001"))
             log_create(recepcion)
             database.session.commit()
             flash("Recepción de compra creada correctamente.", "success")
@@ -2759,31 +2769,34 @@ def _purchase_invoice_transaction_config(
     }
 
 
-def _compute_base_amounts(
-    amount: Decimal, exchange_rate: Decimal | None = None
-) -> tuple[Decimal, Decimal]:
+def _compute_base_amounts(amount: Decimal, exchange_rate: Decimal | None = None) -> tuple[Decimal, Decimal]:
     """S2P-09: Calcula monto base aplicando tipo de cambio. Retorna (base_amount, effective_rate)."""
     rate = exchange_rate if exchange_rate and exchange_rate > 0 else Decimal("1")
     return (amount * rate).quantize(Decimal("0.0001")), rate
 
 
-def _purchase_exchange_rate(
-    company: str | None, posting_date: Any, transaction_currency: str | None
-) -> Decimal | None:
-    """S2P-09: Resuelve tipo de cambio para documento de compra."""
+def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_currency: str | None) -> Decimal:
+    """S2P-09: Resuelve tipo de cambio para documento de compra.
+
+    Devuelve ``Decimal("1")`` (tasa 1:1) cuando no se puede determinar la
+    moneda base de la compania o no existe una tasa registrada, asumiendo la
+    moneda de transaccion equivalente a la moneda local.
+    """
     if not company or not transaction_currency:
-        return None
+        return Decimal("1")
     from cacao_accounting.database import Entity
-    entity = database.session.get(Entity, company)
+
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
     if not entity or not entity.currency:
-        return None
+        return Decimal("1")
     if transaction_currency == entity.currency:
         return Decimal("1")
     from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+
     try:
         return _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
     except Exception:
-        return None
+        return Decimal("1")
 
 
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
@@ -2797,11 +2810,14 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     }
 
 
-def _validate_supplier_invoice_flags(supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None) -> None:
+def _validate_supplier_invoice_flags(
+    supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None
+) -> None:
     """S2P-08: Valida flags del proveedor antes de crear/aprobar factura."""
     if not supplier_id or not company:
         return
     from cacao_accounting.database import CompanyParty
+
     settings = database.session.execute(
         database.select(CompanyParty).filter_by(party_id=supplier_id, company=company)
     ).scalar_one_or_none()
@@ -2840,6 +2856,7 @@ def _create_purchase_invoice_from_request():
                 else None
             ),
             remarks=request.form.get("remarks"),
+            transaction_currency=request.form.get("transaction_currency") or None,
             docstatus=0,
         )
         database.session.add(factura)
@@ -2854,6 +2871,7 @@ def _create_purchase_invoice_from_request():
         factura.total = total
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
         fx_rate = _purchase_exchange_rate(company, posting_date, request.form.get("transaction_currency"))
+        factura.exchange_rate = fx_rate
         base_total, _ = _compute_base_amounts(total, fx_rate)
         base_grand_total, _ = _compute_base_amounts(total, fx_rate)
         factura.base_total = base_total
@@ -2982,7 +3000,8 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
         _validate_supplier_invoice_flags(
-            registro.supplier_id, registro.company,
+            registro.supplier_id,
+            registro.company,
             request.form.get("from_order") or None,
             request.form.get("from_receipt") or None,
         )

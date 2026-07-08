@@ -771,3 +771,39 @@ def test_partial_and_over_deliveries(app_ctx):
     assert_no_danger(response, "OVER DN3 ERROR")
     database.session.refresh(dn3)
     assert dn3.docstatus == 1  # If it submitted, then over-delivery is technically allowed by engine
+
+
+def test_s2p09_purchase_order_foreign_currency_base_total(app_ctx):
+    from cacao_accounting.database import Party
+
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+
+    # Asegurar moneda base de la compania para resolver tipo de cambio.
+    entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalars().first()
+    if entity and not entity.currency:
+        entity.currency = "NIO"
+        database.session.commit()
+
+    po_data = {
+        "company": "cacao",
+        "supplier_id": supplier.id,
+        "posting_date": date.today().isoformat(),
+        "transaction_currency": "EUR",
+        "item_code_0": "ART-001",
+        "qty_0": "10",
+        "rate_0": "45",
+        "amount_0": "450",
+    }
+    response = client.post("/buying/purchase-order/new", data=po_data, follow_redirects=True)
+    assert response.status_code == 200
+    po = database.session.execute(database.select(PurchaseOrder).order_by(PurchaseOrder.created.desc())).scalars().first()
+    database.session.refresh(po)
+
+    # EUR -> NIO: el tipo de cambio se resuelve desde ExchangeRate (rate > 1)
+    assert po.transaction_currency == "EUR"
+    assert po.exchange_rate is not None
+    assert po.exchange_rate > Decimal("1")
+    assert po.total == Decimal("450")
+    assert po.base_total == (Decimal("450") * po.exchange_rate).quantize(Decimal("0.0001"))
