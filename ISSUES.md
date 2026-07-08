@@ -18,10 +18,13 @@
 - `compras_recepcion_submit` ahora captura `ValueError` además de `PostingError`.
 **Caso de prueba:** Crear OC por 10 uds. Recibir 10 (éxito). Recibir 1 más (debe rechazar).
 
-### S2P-02 [Alta]: Sin prevención de sobre-facturación contra recepción
+### S2P-02 [Alta]: Sin prevención de sobre-facturación contra recepción ✓
+**Estado:** CORREGIDO — Commit `f920176`
 **Descripción:** No se valida que `cantidad_facturada_acumulada <= cantidad_recibida` al crear Factura desde Recepción (3-way match).
-**Impacto:** Se pueden facturar bienes no recibidos, creando pasivos inexistentes.
-**Recomendación:** Validar `invoice_qty <= (receipt_qty - total_billed)` usando `consumed_qty_for_source`.
+**Corrección aplicada:**
+- Se agregó `_validate_invoice_quantities_against_receipt()` que valida en submit que `consumed_qty_for_source(Receipt) <= Receipt.qty` para cada línea vinculada.
+- Se corrigió `_handle_purchase_invoice_edit_post` para eliminar `DocumentRelation` viejas antes de recrear ítems, evitando doble conteo en ediciones.
+- `compras_factura_compra_submit` ahora captura `(PostingError, ValueError, DocumentFlowError)` en lugar de solo `PostingError`.
 **Caso de prueba:** OC 10 uds, Recepción 10 uds. Facturar 10 (éxito). Facturar 1 más (debe rechazar).
 
 ### S2P-03 [Alta]: Sin prevención de pagos duplicados o en exceso
@@ -33,13 +36,15 @@
 ### S2P-04 [Alta]: Cancelación de OC con documentos descendientes activos
 **Descripción:** Se puede cancelar una OC aunque tenga Recepciones o Facturas activas. Las relaciones se marcan "reverted" pero los hijos siguen activos.
 **Impacto:** Documentos huérfanos, inventario revertido pero factura por pagar permanece.
-**Recomendación:** Verificar que no existan Recepciones/Facturas con `docstatus=1` vinculadas antes de cancelar. Forzar cancelación en cascada o bloquear.
+**Recomendación:** Verificar que no existan Recepciones/Facturas con `docstatus=1` vinculadas antes de cancelar. Bloquear anular si hay decendientes que afecter ledger, verificar misma logica para orden de venta.
 **Caso de prueba:** Crear OC, Recepción contra OC. Cancelar OC (debe fallar).
 
-### S2P-05 [Alta]: `PurchaseReconciliationError` causa error 500 no manejado
+### S2P-05 [Alta]: `PurchaseReconciliationError` causa error 500 no manejado ✓
+**Estado:** CORREGIDO — Commit `f920176`
 **Descripción:** `_record_purchase_reconciliation` lanza `PurchaseReconciliationError` (hereda de `ValueError`), pero `compras_factura_compra_submit` solo captura `PostingError`.
-**Impacto:** Error 500 en lugar de mensaje amigable al fallar conciliación 3-way.
-**Recomendación:** Capturar `PurchaseReconciliationError` explícitamente o hacerla heredar de `PostingError`.
+**Corrección aplicada:**
+- `compras_factura_compra_submit` ahora captura `(PostingError, ValueError, DocumentFlowError)`, cubriendo `PurchaseReconciliationError` que hereda de `ValueError`.
+- El error se muestra como mensaje flash `danger` en lugar de crash 500.
 **Caso de prueba:** OC ítem X a $10, Recibir, Facturar a $12 con tolerancia 0%. Submit → debe mostrar error amigable, no 500.
 
 ### S2P-06 [Media]: Validaciones pre-submit insuficientes
@@ -216,7 +221,7 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | S2P-01 al S2P-05, O2C-01 al O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03, S2P-04, ~~S2P-05~~, O2C-01 al O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
 | **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
@@ -226,7 +231,7 @@
 
 | Semana | Hallazgos | Enfoque |
 |--------|-----------|---------|
-| **1-2** | S2P-05 (crash), S2P-01, S2P-02 (sobre-recepción/facturación), S2P-03 (pagos duplicados), S2P-04 (cancelaciones) | Validaciones críticas de integridad |
+| **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados), S2P-04 (cancelaciones) | Validaciones críticas de integridad |
 | **2-3** | O2C-01 (COGS), O2C-02 (precios), O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
 | **3-4** | R2R-01 (períodos), R2R-02 (balanceo GL), CAS-01 (saldo bancario), CAS-02 (exchange rate), CAS-03 (concurrencia) | Contabilidad y tesorería |
 | **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |
