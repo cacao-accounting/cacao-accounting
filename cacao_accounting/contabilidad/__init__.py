@@ -8,7 +8,8 @@
 # --------------------------------------------------------------------------------------
 from collections.abc import Sequence
 from typing import Any
-from datetime import date
+from datetime import date, datetime
+from datetime import timezone
 from decimal import Decimal
 
 # ---------------------------------------------------------------------------------------
@@ -2706,6 +2707,42 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
         if run.status == "completed_no_changes":
             flash("No se generaron diferencias cambiarias.", "info")
 
+    return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+
+@contabilidad.route("/period-close/monthly/<identifier>/close", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def finalizar_cierre_mensual(identifier: str) -> "Any":
+    """Finaliza el asistente de cierre mensual marcando el periodo como cerrado.
+
+    Marca ``PeriodCloseRun.run_status="closed"`` (con ``closed_by`` y ``closed_at``)
+    y ``AccountingPeriod.is_closed=True`` para bloquear nuevas transacciones en el
+    periodo mediante ``validate_accounting_period``.
+    """
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash(CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE, "danger")
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
+
+    period = database.session.get(AccountingPeriod, close_run.period_id)
+    if not period:
+        flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    if period.is_closed:
+        flash("El periodo ya se encuentra cerrado.", "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    close_run.run_status = "closed"
+    close_run.closed_by = str(current_user.id)
+    close_run.closed_at = datetime.now(timezone.utc)
+    period.is_closed = True
+    database.session.commit()
+    flash("El cierre mensual ha finalizado y el periodo ha sido cerrado.", "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 

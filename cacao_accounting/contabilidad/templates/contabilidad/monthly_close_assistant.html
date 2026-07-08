@@ -240,6 +240,21 @@
 </section>
 
 <section class="ca-card">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0">{{ _('Paso 3: finalizar cierre y cerrar periodo') }}</h5>
+    <form action="{{ url_for('contabilidad.finalizar_cierre_mensual', identifier=close_run.id) }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-danger">
+        <i class="bi bi-lock-fill"></i> {{ _('Finalizar y cerrar periodo') }}
+      </button>
+    </form>
+  </div>
+  <div class="p-3 text-muted">
+    {{ _('Marca el periodo como cerrado e impide el registro de nuevas transacciones. Esta accion no se puede deshacer desde el asistente.') }}
+  </div>
+</section>
+
+<section class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title mb-0">{{ _('Historial de pasos') }}</h5>
   </div>
