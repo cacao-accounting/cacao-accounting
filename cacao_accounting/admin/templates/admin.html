@@ -64,6 +64,16 @@
   </div>
 
   <div class="ca-module-card">
+    <h5><i class="bi bi-arrow-left-right"></i> {{ _("Configuración de Conciliación de Ventas") }}</h5>
+    <ul class="ca-module-links">
+      <li>
+        <a href="{{ url_for('admin.config_conciliacion_ventas') }}">{{ _("Configuración de Matching de Ventas") }}</a>
+        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
+      </li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
     <h5><i class="bi bi-card-list"></i> Registros</h5>
     <ul class="ca-module-links">
       <li><a href="#">Auditoría del Sistema</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
