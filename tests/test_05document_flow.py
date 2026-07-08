@@ -900,3 +900,223 @@ def test_receipt_edit_cleans_old_relations(app_ctx):
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
     assert items[0]["pending_qty"] == Decimal("7"), f"Esperado 7, obtenido {items[0]['pending_qty']}"
+
+
+def test_invoice_submit_validates_against_receipt(app_ctx):
+    """El submit de factura debe rechazar si la cantidad excede la recepción (3-way match)."""
+    from cacao_accounting.database import PurchaseInvoice, PurchaseInvoiceItem, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+    from cacao_accounting.compras import _validate_invoice_quantities_against_receipt
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-INV-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-INV-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("5"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("25"),
+    )
+    invoice = PurchaseInvoice(id="PI-INV-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    invoice_item = PurchaseInvoiceItem(
+        purchase_invoice_id="PI-INV-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("5"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("25"),
+    )
+    database.session.add_all([receipt, receipt_item, invoice, invoice_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_receipt",
+        source_id="PR-INV-01",
+        source_item_id=receipt_item.id,
+        target_type="purchase_invoice",
+        target_id="PI-INV-01",
+        target_item_id=invoice_item.id,
+        qty=Decimal("5"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("25"),
+    )
+
+    _validate_invoice_quantities_against_receipt("PI-INV-01")
+
+    invoice2 = PurchaseInvoice(id="PI-INV-02", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    invoice2_item = PurchaseInvoiceItem(
+        purchase_invoice_id="PI-INV-02",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("5"),
+    )
+    database.session.add_all([invoice2, invoice2_item])
+    database.session.flush()
+
+    with pytest.raises((ValueError, DocumentFlowError)):
+        create_document_relation(
+            source_type="purchase_receipt",
+            source_id="PR-INV-01",
+            source_item_id=receipt_item.id,
+            target_type="purchase_invoice",
+            target_id="PI-INV-02",
+            target_item_id=invoice2_item.id,
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("5"),
+            amount=Decimal("5"),
+        )
+
+
+def test_invoice_edit_cleans_old_relations(app_ctx):
+    """Editar un borrador de factura no debe acumular relaciones viejas (doble conteo)."""
+    from cacao_accounting.database import DocumentRelation, PurchaseInvoice, PurchaseInvoiceItem, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+    from cacao_accounting.document_flow.repository import consumed_qty_for_source
+    from cacao_accounting.document_flow.service import get_source_items
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-INV-EDIT", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-INV-EDIT",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("5"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("25"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    invoice = PurchaseInvoice(id="PI-EDIT-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    invoice_item = PurchaseInvoiceItem(
+        purchase_invoice_id="PI-EDIT-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("3"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("15"),
+    )
+    database.session.add_all([invoice, invoice_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_receipt",
+        source_id="PR-INV-EDIT",
+        source_item_id=receipt_item.id,
+        target_type="purchase_invoice",
+        target_id="PI-EDIT-01",
+        target_item_id=invoice_item.id,
+        qty=Decimal("3"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("15"),
+    )
+
+    old_relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id="PI-EDIT-01")
+        )
+        .scalars()
+        .all()
+    )
+    for rel in old_relations:
+        database.session.delete(rel)
+
+    invoice_item2 = PurchaseInvoiceItem(
+        purchase_invoice_id="PI-EDIT-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("10"),
+    )
+    database.session.add(invoice_item2)
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_receipt",
+        source_id="PR-INV-EDIT",
+        source_item_id=receipt_item.id,
+        target_type="purchase_invoice",
+        target_id="PI-EDIT-01",
+        target_item_id=invoice_item2.id,
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("10"),
+    )
+
+    consumed = consumed_qty_for_source("purchase_receipt", "PR-INV-EDIT", receipt_item.id, "purchase_invoice")
+    assert consumed == Decimal("2"), f"Esperado 2, obtenido {consumed}"
+
+    items = get_source_items("purchase_receipt", "PR-INV-EDIT", "purchase_invoice")
+    assert items[0]["pending_qty"] == Decimal("3"), f"Esperado 3, obtenido {items[0]['pending_qty']}"
+
+
+def test_invoice_submit_rejects_over_invoice(app_ctx):
+    """El submit de factura debe rechazar via _validate_invoice_quantities_against_receipt si excede recepción."""
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        database,
+    )
+    from cacao_accounting.compras import _validate_invoice_quantities_against_receipt
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-OVR-INV", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-OVR-INV",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("5"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("25"),
+    )
+    invoice = PurchaseInvoice(id="PI-OVR-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    invoice_item = PurchaseInvoiceItem(
+        purchase_invoice_id="PI-OVR-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("6"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("30"),
+    )
+    database.session.add_all([receipt, receipt_item, invoice, invoice_item])
+    database.session.flush()
+
+    relation = DocumentRelation(
+        source_type="purchase_receipt",
+        source_id="PR-OVR-INV",
+        source_item_id=receipt_item.id,
+        target_type="purchase_invoice",
+        target_id="PI-OVR-01",
+        target_item_id=invoice_item.id,
+        company="cacao",
+        qty=Decimal("6"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("30"),
+        relation_type="billing",
+        status="active",
+    )
+    database.session.add(relation)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="Sobre-facturación"):
+        _validate_invoice_quantities_against_receipt("PI-OVR-01")
