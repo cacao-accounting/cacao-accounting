@@ -367,3 +367,19 @@
   - `ventas_entrega_submit` e `inventario_entrada_submit` ampliaron captura a `(PostingError, ValueError)`.
   - 12 tests unitarios en `tests/test_validation.py`.
   - Commits: `b149b09`, `3fa36a6`, `a774532`, `faf08a4`.
+
+- **CAS-02 corregido (2026-07-08):** Se implementó auto-poblado de exchange_rate en pagos.
+  - `_create_payment_entry` acepta parámetro `exchange_rate` en lugar de hardcodear `None`.
+  - `_build_payment_from_payload` resuelve rate vía `_lookup_exchange_rate()` cuando difiere la moneda.
+  - `_update_payment_amounts` aplica exchange_rate a montos base.
+  - Commits: `bb40f22`, `61e15a4`.
+
+- **CAS-03 corregido (2026-07-08):** Se implementó bloqueo FOR UPDATE en lectura de saldo pendiente.
+  - `_load_payment_reference_document` en bancos usa `with_for_update()`.
+  - `_get_reference_document` en document_flow/service.py usa `with_for_update()`.
+  - Commits: `74079bf`, `61e15a4`.
+
+- **R2R-01, R2R-02, CAS-01 marcados como REQUIERE REVISION:** Verificados como falsos positivos.
+  - R2R-01: `validate_accounting_period` ya se llama desde `_document_contexts()` en todos los postings.
+  - R2R-02: `_assert_entries_balance()` en `_add_entries()` ya verifica balance antes de persistir.
+  - CAS-01: El balance bancario ya se deriva de GLEntry en dashboard, reportes y revaluación.

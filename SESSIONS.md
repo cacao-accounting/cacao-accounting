@@ -631,3 +631,12 @@
   - `datos/dev/__init__.py`: Llama a `ensure_global_naming_series()` antes de crear datos demo.
 - **Calidad:** Black, ruff, mypy en verde. 254 tests de cobertura contable + 874 tests generales pasan (fallo preexistente en `test_fiscal_year_closing_cycle`).
 - **Commit:** `9b6f80d` — `feat: human-readable codes for customers, suppliers, and items`
+
+## 2026-07-08 (CAS-02 y CAS-03: exchange_rate en pagos y bloqueo FOR UPDATE)
+- **Solicitud:** Analizar 5 issues de prioridad alta (R2R-01, R2R-02, CAS-01, CAS-02, CAS-03) e implementar los reales.
+- **Falsos positivos (3):** R2R-01 (period validation ya existe via _document_contexts), R2R-02 (balance check ya existe via _assert_entries_balance), CAS-01 (saldo bancario ya se deriva de GLEntry). Marcados como REQUIERE REVISION.
+- **CAS-02 (implementado):** `_create_payment_entry` ya no hardcodea `exchange_rate=None`. Ahora recibe el rate resuelto desde `_lookup_exchange_rate()` cuando la moneda del pago difiere de la moneda base. `_update_payment_amounts` aplica el rate a `base_paid_amount`/`base_received_amount`.
+- **CAS-03 (implementado):** `_load_payment_reference_document` y `_get_reference_document` ahora usan `with_for_update()` para bloquear la fila del documento antes de leer el saldo pendiente, previniendo condición TOCTOU.
+- **Pruebas:** 3 tests nuevos, 1 existente ajustado. 337 tests en verde.
+- **Calidad:** black, ruff, flake8 OK.
+- **Commits:** `bb40f22` (CAS-02), `74079bf` (CAS-03), `61e15a4` (tests).
