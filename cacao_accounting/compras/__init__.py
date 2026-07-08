@@ -53,6 +53,7 @@ from cacao_accounting.document_flow import (
     document_flow_summary,
     refresh_source_caches_for_target,
     revert_relations_for_target,
+    validate_submit_prerequisites,
 )
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
@@ -432,9 +433,20 @@ def compras_solicitud_compra_submit(request_id: str):
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
+    try:
+        items = (
+            database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=False)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     flash("Solicitud de compra aprobada.", "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
@@ -878,9 +890,20 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
+    try:
+        items = (
+            database.session.execute(database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     flash(_("Cotizacion de proveedor aprobada."), "success")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
@@ -2148,9 +2171,20 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
+    try:
+        items = (
+            database.session.execute(database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=False)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     flash(_("Solicitud de cotizacion aprobada."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
 
@@ -2184,9 +2218,20 @@ def compras_orden_compra_submit(order_id: str):
         abort(404)
     if registro.docstatus != 0:
         abort(400)
-    registro.docstatus = 1
-    log_submit(registro)
-    database.session.commit()
+    try:
+        items = (
+            database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
+        registro.docstatus = 1
+        log_submit(registro)
+        database.session.commit()
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     flash("Orden de compra aprobada.", "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
@@ -2536,11 +2581,17 @@ def compras_recepcion_submit(receipt_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = (
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
         _validate_receipt_quantities_against_po(receipt_id)
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
-        flash("Recepción de compra aprobada.", "success")
+        flash("Recepcion de compra aprobada.", "success")
     except (PostingError, ValueError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
@@ -2952,6 +3003,12 @@ def compras_factura_compra_submit(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id))
+            .scalars()
+            .all()
+        )
+        validate_submit_prerequisites(registro, items=items, require_party=True)
         _validate_invoice_quantities_against_receipt(invoice_id)
         submit_document(registro)
         log_submit(registro)

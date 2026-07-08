@@ -27,7 +27,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
-from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
+from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import modulo_activo
@@ -1329,10 +1329,12 @@ def inventario_entrada_submit(entry_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
+        validate_submit_prerequisites(registro, items=items, require_party=False)
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
-    except PostingError as exc:
+    except (PostingError, ValueError) as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
