@@ -342,6 +342,18 @@
 - **Bancos / Hotspots de complejidad:** `bancos_pago_nuevo`, `_crear_nota_bancaria`, `_payment_source_rows`, `_validate_payment_header`, `find_bank_reconciliation_candidates`, `reconcile_bank_items` e `import_bank_statement` fueron refactorizados con helpers y `match/case` en los puntos de dispatch. Las pruebas focales de Bancos, Conciliación e Importación quedaron en verde (`116 passed`).
 - **Compras / Cotización de proveedor:** `compras_cotizacion_proveedor_nueva` y `compras_cotizacion_proveedor_editar` comparten helpers de catálogo, fuentes y configuración transaccional para reducir duplicación sin alterar el contrato de la vista.
 
+- **O2C-03: Reserva de inventario en Orden de Venta (2026-07-08):** Se implementó reserva de inventario al aprobar Orden de Venta y liberación al cancelar OV o al aprobar Nota de Entrega vinculada.
+  - `StockBin.reserved_qty` es ahora non-nullable con default 0.
+  - SO submit valida `actual_qty - reserved_qty >= qty`, rechaza si insuficiente.
+  - SO cancel libera la reserva (`reserved_qty -= qty`).
+  - DN submit libera reserva si tiene `sales_order_id`.
+  - DN cancel restaura reserva si tiene `sales_order_id`.
+  - `_create_delivery_note_from_invoice` propaga `sales_order_id`.
+  - `rebuild_stock_bins` preserva `reserved_qty`.
+  - API `stock-bin-snapshot` expone `reserved_qty`.
+  - 8 tests nuevos en `test_stock_reservation.py`.
+  - Commits: `7c6c85f`, `fc336fc`, `8868cec`, `35e220c`.
+
 - **S2P-02 y S2P-05 corregidos (2026-07-08):** Se implementó prevención de sobre-facturación contra recepción (3-way match) y manejo amigable de `PurchaseReconciliationError`.
   - `_validate_invoice_quantities_against_receipt()` rechaza submit si `consumed_qty > receipt.qty`.
   - `_handle_purchase_invoice_edit_post` limpia relaciones viejas para evitar doble conteo en ediciones.
