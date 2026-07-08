@@ -1322,6 +1322,20 @@ def _consume_stock_valuation_layers(
     return _fifo_valuation(available, quantity)
 
 
+def _consume_available_layers_for_negative_stock(
+    company: str, item_code: str, warehouse: str, total_qty: Decimal, fallback_rate: Decimal
+) -> Decimal:
+    """Consume las capas disponibles para stock negativo, retorna la tasa promedio."""
+    available = _valuation_queue(company, item_code, warehouse)
+    total_available = sum((qty for qty, _ in available), Decimal("0"))
+    if total_available > 0:
+        consumed, avg_rate = _consume_stock_valuation_layers(
+            company=company, item_code=item_code, warehouse=warehouse, quantity=total_available,
+        )
+        return avg_rate
+    return fallback_rate
+
+
 def _company_for(document: Any) -> str:
     company = getattr(document, "company", None) or getattr(document, "entity", None)
     if not company and isinstance(document, BankTransaction):
@@ -1621,6 +1635,7 @@ def _create_stock_movement(
     qty_change: Decimal,
     valuation_rate: Decimal,
     value_change: Decimal,
+    _skip_layer_consumption: bool = False,
 ) -> StockLedgerEntry:
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
@@ -1630,18 +1645,45 @@ def _create_stock_movement(
         validate_batch_serial(line, outgoing=qty_change < 0)
     except InventoryServiceError as exc:
         raise PostingError(str(exc)) from exc
-    if qty_change < 0:
-        cost_amount, cost_rate = _consume_stock_valuation_layers(
-            company=document.company,
-            item_code=line.item_code,
-            warehouse=warehouse,
-            quantity=abs(qty_change),
-        )
-        valuation_rate = cost_rate
-        value_change = -cost_amount
-        line._inventory_cost_amount = cost_amount
+    if qty_change < 0 and not _skip_layer_consumption:
+        item = _stock_item_for(line)
+        try:
+            cost_amount, cost_rate = _consume_stock_valuation_layers(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                quantity=abs(qty_change),
+            )
+            valuation_rate = cost_rate
+            value_change = -cost_amount
+            line._inventory_cost_amount = cost_amount
+        except PostingError:
+            if not item.allow_negative_stock:
+                raise PostingError(
+                    f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."
+                )
+            cost_rate = _consume_available_layers_for_negative_stock(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                total_qty=abs(qty_change),
+                fallback_rate=_line_rate(line),
+            )
+            cost_amount = cost_rate * abs(qty_change)
+            line._inventory_cost_amount = cost_amount
+            valuation_rate = cost_rate
+            value_change = -cost_amount
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
     qty_after = _stock_qty_after(document.company, line.item_code, warehouse, qty_change)
+    if qty_after < 0:
+        if not _skip_layer_consumption:
+            item = _stock_item_for(line)
+        else:
+            item = _stock_item_for(line)
+        if not item.allow_negative_stock:
+            raise PostingError(
+                f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."
+            )
     _upsert_stock_bin(
         company=document.company,
         item_code=line.item_code,
@@ -1823,22 +1865,32 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
             )
         ]
     if purpose == "material_transfer":
+        source_warehouse = line.source_warehouse or document.from_warehouse
+        target_warehouse = line.target_warehouse or document.to_warehouse
+        cost_amount, cost_rate = _consume_stock_valuation_layers(
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=source_warehouse,
+            quantity=qty,
+        )
+        line._inventory_cost_amount = cost_amount
         return [
             _create_stock_movement(
                 document=document,
                 line=line,
-                warehouse=line.source_warehouse or document.from_warehouse,
+                warehouse=source_warehouse,
                 qty_change=-qty,
-                valuation_rate=valuation_rate,
-                value_change=-value,
+                valuation_rate=cost_rate,
+                value_change=-cost_amount,
+                _skip_layer_consumption=True,
             ),
             _create_stock_movement(
                 document=document,
                 line=line,
-                warehouse=line.target_warehouse or document.to_warehouse,
+                warehouse=target_warehouse,
                 qty_change=qty,
-                valuation_rate=valuation_rate,
-                value_change=value,
+                valuation_rate=cost_rate,
+                value_change=cost_amount,
             ),
         ]
     raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
