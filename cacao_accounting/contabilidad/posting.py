@@ -990,6 +990,10 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
             entries.extend(_create_payment_receive_entries(context, document, company, amount))
         elif payment_type == "internal_transfer":
             entries.extend(_create_payment_transfer_entries(context, document, amount))
+        elif payment_type == "debit_note":
+            entries.extend(_create_bank_debit_note_entries(context, document, company, amount))
+        elif payment_type == "credit_note":
+            entries.extend(_create_bank_credit_note_entries(context, document, company, amount))
         else:
             raise PostingError("Tipo de pago no soportado para contabilizacion.")
 
@@ -1091,6 +1095,58 @@ def _create_payment_transfer_entries(
         amount=amount,
         debit_remarks="Transferencia interna entrada",
         credit_remarks="Transferencia interna salida",
+    )
+
+
+def _create_bank_debit_note_entries(
+    context: LedgerContext,
+    document: PaymentEntry,
+    company: str,
+    amount: Decimal,
+) -> list[GLEntry]:
+    """Crea entradas GL para nota de debito bancaria (retiro manual)."""
+    defaults = _company_defaults(company)
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=False),
+        "La nota de debito bancaria requiere una cuenta bancaria de origen.",
+    )
+    expense_account_id = _require_account(
+        defaults.default_expense if defaults else None,
+        "No existe cuenta de gasto predeterminada para la compania.",
+    )
+    return _normal_entries_for_amount(
+        context=context,
+        debit_account_id=expense_account_id,
+        credit_account_id=bank_account_id,
+        amount=amount,
+        debit_remarks="Nota de debito bancaria",
+        credit_remarks="Retiro bancario",
+    )
+
+
+def _create_bank_credit_note_entries(
+    context: LedgerContext,
+    document: PaymentEntry,
+    company: str,
+    amount: Decimal,
+) -> list[GLEntry]:
+    """Crea entradas GL para nota de credito bancaria (deposito manual)."""
+    defaults = _company_defaults(company)
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=True),
+        "La nota de credito bancaria requiere una cuenta bancaria de destino.",
+    )
+    income_account_id = _require_account(
+        defaults.default_income if defaults else None,
+        "No existe cuenta de ingreso predeterminada para la compania.",
+    )
+    return _normal_entries_for_amount(
+        context=context,
+        debit_account_id=bank_account_id,
+        credit_account_id=income_account_id,
+        amount=amount,
+        debit_remarks="Deposito bancario",
+        credit_remarks="Nota de credito bancaria",
     )
 
 

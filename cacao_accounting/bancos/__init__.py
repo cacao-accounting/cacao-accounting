@@ -55,7 +55,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_bank_transaction, submit_document
+from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.registry import normalize_doctype
@@ -398,58 +398,6 @@ def bancos_transaccion_lista():
     )
     titulo = "Listado de Transacciones Bancarias - " + APPNAME
     return render_template(BANCOS_TRANSACCION_LISTA_HTML, consulta=consulta, titulo=titulo)
-
-
-def _crear_nota_bancaria(note_kind: str):
-    """Crea una transacción bancaria manual como nota de débito/crédito."""
-    company = request.form.get("company") or request.args.get("company") or None
-    if request.method == "POST":
-        return _handle_nota_bancaria_post(note_kind, company)
-    return _render_nota_bancaria_form(note_kind, company)
-
-
-def _handle_nota_bancaria_post(note_kind: str, company: str | None):
-    """Procesa el POST para crear nota bancaria."""
-    amount = _form_decimal("amount")
-    bank_account_id = request.form.get("bank_account_id", "")
-    _bank_account_for_note(bank_account_id, company, amount)
-    transaction = BankTransaction(
-        bank_account_id=bank_account_id,
-        posting_date=request.form.get("posting_date") or None,
-        description=request.form.get("description") or None,
-        reference_number=request.form.get("reference_number") or None,
-        deposit=amount if note_kind == "credit" else None,
-        withdrawal=amount if note_kind == "debit" else None,
-    )
-    database.session.add(transaction)
-    database.session.flush()
-    try:
-        post_bank_transaction(transaction)
-        database.session.commit()
-        flash(_("Nota bancaria registrada correctamente y registrada en el libro mayor."), "success")
-    except PostingError as exc:
-        database.session.rollback()
-        flash(_(str(exc)), "danger")
-        redirect_url = "bancos.bancos_nota_credito_nueva" if note_kind == "credit" else "bancos.bancos_nota_debito_nueva"
-        return redirect(url_for(redirect_url))
-    list_view = "bancos.bancos_nota_credito_lista" if note_kind == "credit" else "bancos.bancos_nota_debito_lista"
-    return redirect(url_for(list_view))
-
-
-def _render_nota_bancaria_form(note_kind: str, company: str | None):
-    """Renderiza el formulario de nota bancaria."""
-    cuentas_query = database.select(BankAccount).filter_by(is_active=True)
-    if company:
-        cuentas_query = cuentas_query.filter_by(company=company)
-    cuentas = database.session.execute(cuentas_query).scalars().all()
-    titulo = ("Nueva Nota de Crédito Bancario - " if note_kind == "credit" else "Nueva Nota de Débito Bancario - ") + APPNAME
-    return render_template(
-        "bancos/transaccion_nueva.html",
-        titulo=titulo,
-        note_kind=note_kind,
-        cuentas=cuentas,
-        company=company,
-    )
 
 
 def _bank_account_for_note(bank_account_id: str, company: str | None, amount: Decimal) -> BankAccount:
