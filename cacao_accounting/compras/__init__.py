@@ -2753,6 +2753,33 @@ def _purchase_invoice_transaction_config(
     }
 
 
+def _compute_base_amounts(
+    amount: Decimal, exchange_rate: Decimal | None = None
+) -> tuple[Decimal, Decimal]:
+    """S2P-09: Calcula monto base aplicando tipo de cambio. Retorna (base_amount, effective_rate)."""
+    rate = exchange_rate if exchange_rate and exchange_rate > 0 else Decimal("1")
+    return (amount * rate).quantize(Decimal("0.0001")), rate
+
+
+def _purchase_exchange_rate(
+    company: str | None, posting_date: Any, transaction_currency: str | None
+) -> Decimal | None:
+    """S2P-09: Resuelve tipo de cambio para documento de compra."""
+    if not company or not transaction_currency:
+        return None
+    from cacao_accounting.database import Entity
+    entity = database.session.get(Entity, company)
+    if not entity or not entity.currency:
+        return None
+    if transaction_currency == entity.currency:
+        return Decimal("1")
+    from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+    try:
+        return _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
+    except Exception:
+        return None
+
+
 def _validate_supplier_invoice_flags(supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None) -> None:
     """S2P-08: Valida flags del proveedor antes de crear/aprobar factura."""
     if not supplier_id or not company:
@@ -2808,11 +2835,15 @@ def _create_purchase_invoice_from_request():
         )
         _total_qty, total = _save_purchase_invoice_items(factura.id)
         factura.total = total
-        factura.base_total = total
+        # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
+        fx_rate = _purchase_exchange_rate(company, posting_date, request.form.get("transaction_currency"))
+        base_total, _ = _compute_base_amounts(total, fx_rate)
+        base_grand_total, _ = _compute_base_amounts(total, fx_rate)
+        factura.base_total = base_total
         factura.grand_total = total
-        factura.base_grand_total = total
+        factura.base_grand_total = base_grand_total
         factura.outstanding_amount = total
-        factura.base_outstanding_amount = total
+        factura.base_outstanding_amount = base_grand_total
         _persist_purchase_invoice_fiscal_snapshot(factura)
         database.session.commit()
         flash("Factura de compra creada correctamente.", "success")
