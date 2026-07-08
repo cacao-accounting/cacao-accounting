@@ -586,21 +586,21 @@ def ventas_factura_venta_nota_debito_lista():
 @modulo_activo("sales")
 @login_required
 def ventas_factura_venta_devolucion_lista():
-    """Listado de notas de crédito de venta."""
+    """Listado de devoluciones y notas de crédito de venta."""
     consulta = _paginate_list(
         SalesInvoice,
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
-        database.select(SalesInvoice).filter_by(document_type="sales_credit_note"),
+        database.select(SalesInvoice).filter(SalesInvoice.document_type.in_(["sales_credit_note", "sales_return"])),
     )
-    titulo = "Listado de Notas de Crédito de Venta - " + APPNAME
+    titulo = "Listado de Devoluciones de Venta - " + APPNAME
     return render_template(
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Crédito de Venta",
-        new_button_label="Nueva Nota de Crédito",
-        page_caption="Listado de notas de crédito de venta.",
-        new_document_type="sales_credit_note",
+        page_heading="Listado de Devoluciones de Venta",
+        new_button_label="Nueva Devolución",
+        page_caption="Listado de devoluciones y notas de crédito de venta.",
+        new_document_type="sales_return",
     )
 
 
@@ -610,6 +610,14 @@ def ventas_factura_venta_devolucion_lista():
 def ventas_factura_venta_nota_credito_lista():
     """Alias explicito para listado de notas de crédito de venta."""
     return ventas_factura_venta_devolucion_lista()
+
+
+@ventas.route("/sales-invoice/return/new")
+@modulo_activo("sales")
+@login_required
+def ventas_factura_venta_devolucion_nueva():
+    """Redirige al formulario de factura de venta como devolucion (sales_return)."""
+    return redirect(url_for("ventas.ventas_factura_venta_nuevo", document_type="sales_return"))
 
 
 @ventas.route("/customer/list")
@@ -1914,6 +1922,7 @@ def ventas_entrega_nuevo():
                 company=request.form.get("company") or None,
                 posting_date=posting_date,
                 sales_order_id=request.form.get("from_order") or None,
+                is_return=bool(request.form.get("is_return")),
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -2195,7 +2204,7 @@ def ventas_factura_venta_nuevo():
         or request.form.get("document_type")
         or ("sales_invoice" if not from_invoice_id else "sales_credit_note")
     )
-    formulario.is_return.data = document_type == "sales_credit_note"
+    formulario.is_return.data = document_type in ("sales_credit_note", "sales_return")
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     entrega_origen = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
     factura_origen = database.session.get(SalesInvoice, from_invoice_id) if from_invoice_id else None
@@ -2229,7 +2238,7 @@ def ventas_factura_venta_nuevo():
                 sales_order_id=request.form.get("from_order") or None,
                 delivery_note_id=request.form.get("from_note") or None,
                 update_inventory=bool(request.form.get("update_inventory")),
-                is_return=document_type == "sales_credit_note",
+                is_return=document_type in ("sales_credit_note", "sales_return"),
                 reversal_of=(
                     (request.form.get("from_invoice") or request.form.get("from_return"))
                     if document_type in ("sales_credit_note", "sales_debit_note")

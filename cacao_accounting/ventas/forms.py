@@ -84,6 +84,7 @@ class FormularioEntregaVenta(FlaskForm):
     company = SelectField(_LABEL_COMPANY, choices=[])
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField(_LABEL_POSTING_DATE)
+    is_return = BooleanField("Es devolución")
     remarks = TextAreaField("Observaciones")
 
 

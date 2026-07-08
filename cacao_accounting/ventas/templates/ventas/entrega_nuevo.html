@@ -44,6 +44,12 @@
         <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
         <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
       </div>
+      <div class="col-md-12">
+        <div class="form-check">
+          {{ form.is_return(class="form-check-input", id="is_return") }}
+          <label class="form-check-label" for="is_return">{{ _('Es devolución (entrada de mercancía devuelta por el cliente)') }}</label>
+        </div>
+      </div>
     </div>
   </div>
 

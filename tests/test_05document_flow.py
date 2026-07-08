@@ -756,6 +756,25 @@ def test_purchase_return_document_type_registered():
     assert spec.list_endpoint == "compras.compras_factura_compra_devolucion_lista"
 
 
+def test_sales_return_document_type_registered():
+    """Verifica que sales_return existe como DocumentType en el registro (O2C-04)."""
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    assert "sales_return" in DOCUMENT_TYPES
+    spec = DOCUMENT_TYPES["sales_return"]
+    assert spec.label == "Devolución de Venta"
+    assert spec.module == "sales"
+    assert spec.list_endpoint == "ventas.ventas_factura_venta_devolucion_lista"
+
+
+def test_sales_return_flow_is_allowed():
+    """Verifica que delivery_note/sales_invoice -> sales_return esta permitido (O2C-04)."""
+    from cacao_accounting.document_flow.registry import is_allowed_flow
+
+    assert is_allowed_flow("delivery_note", "sales_return")
+    assert is_allowed_flow("sales_invoice", "sales_return")
+
+
 def test_purchase_return_flow_is_allowed():
     """Verifica que purchase_receipt -> purchase_return esta permitido."""
     from cacao_accounting.document_flow.registry import is_allowed_flow

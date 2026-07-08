@@ -30,7 +30,7 @@
   <input type="hidden" name="document_type" value="{{ document_type or 'sales_invoice' }}">
   {% if document_type == 'sales_invoice' %}
   <input type="hidden" name="is_return" value="0">
-  {% elif document_type == 'sales_credit_note' %}
+  {% elif document_type in ('sales_credit_note', 'sales_return') %}
   <input type="hidden" name="is_return" value="1">
   {% endif %}
   {{ tf_macros.transaction_form_header(

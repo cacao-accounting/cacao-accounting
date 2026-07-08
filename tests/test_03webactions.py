@@ -389,6 +389,25 @@ def test_sales_credit_note_list_route(request):
                 assert "Listado de Notas de Débito de Venta" in response.get_data(as_text=True)
 
 
+def test_sales_return_list_route(request):
+
+    if request.config.getoption("--slow") == "True":
+
+        with app.app_context():
+            from flask_login import current_user
+
+            with app.test_client() as client:
+                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert current_user.is_authenticated
+
+                response = client.get("/sales/sales-invoice/return/list")
+                assert response.status_code == 200
+                assert "Listado de Devoluciones de Venta" in response.get_data(as_text=True)
+
+                response = client.get("/sales/sales-invoice/return/new")
+                assert response.status_code == 302
+
+
 def test_sales_order_initial_source_type_helper_prefers_request_then_quotation(request):
 
     if request.config.getoption("--slow") == "True":

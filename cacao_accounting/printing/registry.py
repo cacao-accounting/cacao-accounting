@@ -121,6 +121,17 @@ def init_printing_registry() -> None:
         snippets,
     )
     _register(
+        "sales_return",
+        "Devolucion de venta",
+        "sales",
+        "invoice",
+        _PERM_SALES_VIEW,
+        build_sales_invoice_print_context,
+        build_sales_invoice_sample_context,
+        SALES_INVOICE_PRINT_SCHEMA,
+        snippets,
+    )
+    _register(
         "purchase_invoice",
         "Factura de compra",
         "purchases",
