@@ -181,13 +181,17 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
         bin_row = database.session.execute(
             select(StockBin).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
         ).scalar_one_or_none()
+        reserved_qty = Decimal("0")
         if not bin_row:
             bin_row = StockBin(company=group_company, item_code=group_item, warehouse=group_warehouse)
             database.session.add(bin_row)
+        else:
+            reserved_qty = _decimal_value(bin_row.reserved_qty)
         old_qty = _decimal_value(bin_row.actual_qty)
         if old_qty != qty:
             inconsistencies.append(f"{group_item}/{group_warehouse}: {old_qty} -> {qty}")
         bin_row.actual_qty = qty
+        bin_row.reserved_qty = reserved_qty
         bin_row.stock_value = value
         bin_row.valuation_rate = valuation_rate
         rebuilt += 1
