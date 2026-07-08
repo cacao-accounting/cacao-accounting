@@ -2803,3 +2803,33 @@ def test_payment_credit_note_creates_balanced_gl_entries(app_ctx):
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
     assert any(entry.account_id == bank_gl.id and entry.debit == Decimal("60.00") for entry in entries)
     assert any(entry.account_id == income_acct.id and entry.credit == Decimal("60.00") for entry in entries)
+
+
+def test_base_outstanding_amount_converts_exchange_rate(app_ctx):
+    """Verifica que base_outstanding_amount se convierte usando exchange_rate."""
+    from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache, _update_document_outstanding
+    from cacao_accounting.database import PurchaseInvoice, database
+    from decimal import Decimal
+
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-BASE",
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+        exchange_rate=Decimal("36.50"),
+        outstanding_amount=Decimal("100.00"),
+        base_outstanding_amount=Decimal("100.00"),
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    refresh_outstanding_amount_cache(invoice)
+    assert invoice.outstanding_amount == Decimal("100.00")
+    assert invoice.base_outstanding_amount == Decimal("3650.00")
+
+    invoice.outstanding_amount = Decimal("80.00")
+    invoice.base_outstanding_amount = Decimal("80.00")
+    _update_document_outstanding(invoice, Decimal("80.00"), Decimal("30.00"))
+    assert invoice.outstanding_amount == Decimal("50.00")
+    assert invoice.base_outstanding_amount == Decimal("1825.00")
