@@ -27,13 +27,13 @@
 - `compras_factura_compra_submit` ahora captura `(PostingError, ValueError, DocumentFlowError)` en lugar de solo `PostingError`.
 **Caso de prueba:** OC 10 uds, Recepción 10 uds. Facturar 10 (éxito). Facturar 1 más (debe rechazar).
 
-### S2P-03 [Alta]: Sin prevención de pagos duplicados o en exceso
-**Estado:** REQUIERE MÁS REVISIÓN — atender después
+### S2P-03 [Alta]: Sin prevención de pagos duplicados o en exceso ✓
+**Estado:** CORREGIDO — CAS-03 (Commit `74079bf`)
 **Descripción:** No se valida `sum(payments) <= outstanding_amount` de la factura. Sin bloqueo de concurrencia (`SELECT FOR UPDATE`) al leer saldo pendiente.
 **Impacto:** Pagos duplicados o en exceso con pérdida financiera directa.
 **Recomendación:** Validar `paid_amount <= outstanding_amount` antes de crear `PaymentReference`. Implementar `SELECT FOR UPDATE` en la lectura de saldo.
 **Caso de prueba:** Factura $1,000. Pago 1 $1,000 (éxito). Pago 2 $500 (debe fallar).
-**Nota:** Las validaciones contra sobre-pago ya existen (8 capas de validación en `bancos/__init__.py` y `document_flow/service.py`). El riesgo real es la condición de carrera (TOCTOU) por falta de `SELECT FOR UPDATE`, pero es bajo en uso manual típico.
+**Nota:** Las validaciones contra sobre-pago ya existen (8 capas de validación). CAS-03 agregó `with_for_update()` en `_load_payment_reference_document` (bancos/__init__.py:867) y `_get_reference_document` (document_flow/service.py:739), cerrando la ventana TOCTOU.
 
 ### S2P-04 [Alta]: Cancelación de OC con documentos descendientes activos ✓
 **Estado:** CORREGIDO — Commit `22cfa69f`
@@ -67,18 +67,21 @@
 - Pruebas unitarias en `tests/test_validation.py` cubren todos los casos de validación.
 
 ### S2P-07 [Media]: Anticipos no reconciliados contra facturas
+**Estado:** CONFIRMADO REAL
 **Descripción:** Pagos anticipados desde OC usan `supplier_advance_account_id`. Al pagar la factura posterior, no hay neteo del anticipo contra la cuenta por pagar.
 **Impacto:** El anticipo queda permanentemente en cuenta de anticipos, sobreestimando activos y pasivos.
 **Recomendación:** Agregar tanto en la configuración global de coompras y ventas una opción "Aplicar automaticamente anticipos a facturas de la misma OCImplementar settlement de anticipos: Dr. Payable / Cr. Advance al pagar factura con anticipo.
 **Caso de prueba:** OC $1,000. Anticipo $500. Factura $1,000. Pago $500. Verificar cuenta de anticipo en cero.
 
 ### S2P-08 [Media]: Flags de proveedor no validados
+**Estado:** CONFIRMADO REAL
 **Descripción:** `allow_purchase_invoice_without_order` y `allow_purchase_invoice_without_receipt` existen en el formulario de proveedor pero no se validan al crear facturas.
 **Impacto:** Configuración existe en UI pero no se respeta.
 **Recomendación:** Validar estos flags en la creación de factura de compra.
 **Caso de prueba:** Proveedor con `allow_invoice_without_order=False`. Crear factura sin OC (debe rechazar).
 
 ### S2P-09 [Media]: Multimoneda no implementada en compras
+**Estado:** CONFIRMADO REAL
 **Descripción:** `transaction_currency`, `exchange_rate` y montos base en OC/Recepción/Factura siempre se establecen como 1:1.
 **Impacto:** Transacciones en moneda extranjera se registran incorrectamente en contabilidad.
 **Recomendación:** Agregar selección de moneda en formularios y calcular `base_total = total * exchange_rate`.
@@ -132,11 +135,10 @@
 - `_create_delivery_note_from_invoice()` propaga `sales_order_id` para liberar reserva cuando se factura con `update_inventory=True`.
 **Caso de prueba:** Stock: 10 uds. SO-1: 10 uds (reserva 10, éxito). SO-2: 5 uds (debe fallar). DN desde SO-1: libera 10 uds reservadas.
 
-### O2C-04 [Media]: Notas de Crédito y Devolución — dos transacciones separadas (diseño correcto)
-**Descripción:** El diseño actual separa correctamente la NC (ajuste financiero: descuentos, diferencias de precio) de la Devolución física (movimiento de inventario vía `stock_entry`). Esto es correcto.
-**Recomendación:** No requiere cambio. Solo documentar explícitamente en la UI que:
-- Nota de Crédito = ajuste financiero (no afecta inventario)
-- Devolución = movimiento físico de inventario (requiere stock entry aparte)
+### O2C-04 [Media]: Notas de Crédito y Devolución — dos transacciones separadas (falta `sales_return`)
+**Estado:** CONFIRMADO REAL
+**Descripción:** El diseño actual separa la NC (ajuste financiero) de la Devolución física, lo cual es correcto. Sin embargo, existe una asimetría: compras tiene `purchase_return` como tipo documental separado de `purchase_credit_note`, mientras que ventas no tiene `sales_return` — la ruta `/sales-invoice/return/list` es un alias de notas de crédito. El campo `DeliveryNote.is_return` existe pero no se expone en UI. Se requiere implementación espejo para mantener consistencia entre módulos.
+**Recomendación:** Implementar `sales_return` como tipo documental dedicado, análogo a `purchase_return` en compras.
 
 ### O2C-05 [Alta]: Validaciones pre-submit insuficientes en ventas
 **Estado:** CORREGIDO — Commit `b149b09`
@@ -149,37 +151,37 @@
 ## 3. RECORD TO REPORT (R2R) — Contabilidad
 
 ### R2R-01 [Alta]: Periodos contables no validados al postear
-**Estado:** REQUIERE REVISIÓN — `validate_accounting_period` ya se llama desde `_document_contexts()` en `posting.py`, punto único por el que pasan todos los postings. Falso positivo.
+**Estado:** FALSO POSITIVO CONFIRMADO ✓
 **Descripción:** `validate_period` no se llama consistentemente en todos los puntos de posting.
 **Impacto:** Transacciones en períodos cerrados comprometen la integridad de los estados financieros.
 **Recomendación:** Centralizar la validación de período abierto en un decorador o middleware que se ejecute antes de cualquier posting.
 **Caso de prueba:** Cerrar período Ene-2026. Postear factura con fecha 15-Ene-2026 (debe rechazar).
 
 ### R2R-02 [Alta]: Asientos GL sin verificación de balance débito/crédito
-**Estado:** REQUIERE REVISIÓN — `_assert_entries_balance()` en `_add_entries()` (posting.py:407) verifica `sum(debits) == sum(credits)` por ledger antes de persistir. Falso positivo.
+**Estado:** FALSO POSITIVO CONFIRMADO ✓
 **Descripción:** No hay validación explícita de `sum(debits) == sum(credits)` antes de persistir un lote de asientos GL.
 **Impacto:** Libro mayor desbalanceado si una regla de mapeo falla.
 **Recomendación:** Agregar validación en el motor de posting: `abs(total_debits - total_credits) < rounding_tolerance`, con rechazo si no se cumple.
 **Caso de prueba:** Manipular regla de mapeo para que genere débitos sin crédito. Postear (debe fallar).
 
 ### R2R-03 [Media]: Trazabilidad incompleta entre documentos operativos y GL
-**Descripción:** `GLEntry` tiene `voucher_type` y `voucher_id`, pero algunos postings no establecen estos campos correctamente o usan convenciones inconsistentes.
-**Impacto:** Dificultad para auditar desde un asiento GL al documento origen y viceversa.
-**Recomendación:** Estandarizar `voucher_type` en todas las fuentes de posting y verificar que cada `GLEntry` tenga ambos campos poblados.
-**Caso de prueba:** Consultar `GLEntry` filtrando por `voucher_type='purchase_receipt'`. Verificar que todas las recepciones posteadas aparecen.
+**Estado:** FALSO POSITIVO CONFIRMADO ✓
+**Descripción:** `GLEntry` tiene `voucher_type` y `voucher_id`. Todos los paths de posting establecen estos campos consistentemente vía `_get_voucher_type()` en posting.py:139, que usa `__tablename__` como fallback. La convención es uniforme: `sales_invoice`, `purchase_invoice`, `purchase_receipt`, `delivery_note`, `payment_entry`, `stock_entry`, `bank_transaction`, `journal_entry`, `exchange_revaluation`. Ambos campos son `nullable=False` en BD.
+**Impacto:** No hay impacto real — la trazabilidad es completa y consistente.
+**Recomendación:** Ninguna. Cerrar como falso positivo.
 
 ### R2R-04 [Media]: Cierre mensual no bloquea posting efectivamente
-**Descripción:** `PeriodCloseRun` existe pero no integra todos los pasos de cierre ni bloquea posting en períodos cerrados.
-**Impacto:** Cierres contables manuales y riesgo de omitir pasos.
-**Recomendación:** Completar el asistente de cierre mensual como orquestador: recurrentes → revaluación → ajustes → bloqueo de período.
-**Caso de prueba:** Ejecutar cierre mensual. Verificar que todos los pasos se ejecutan y el período queda bloqueado.
+**Estado:** CONFIRMADO REAL (parcial)
+**Descripción:** La validación de períodos (`validate_accounting_period`) SÍ funciona correctamente y bloquea postings en períodos cerrados (se llama desde `_document_contexts()` en todos los paths). El problema real es que el asistente de cierre mensual (`PeriodCloseRun`) está incompleto: solo implementa los pasos de recurrentes y revaluación, pero nunca marca `AccountingPeriod.is_closed=True` ni `PeriodCloseRun.run_status="closed"`. El cierre del período debe hacerse manualmente vía formulario de edición de período.
+**Impacto:** El cierre mensual requiere intervención manual para marcar el período como cerrado. El asistente no completa el ciclo.
+**Recomendación:** Agregar paso final en el asistente de cierre mensual que marque `AccountingPeriod.is_closed=True` y `PeriodCloseRun.run_status="closed"`.
 
 ---
 
 ## 4. TESORERÍA (Cash Management)
 
 ### CAS-01 [Alta]: Sin saldo de cuenta bancaria en tiempo real
-**Estado:** REQUIERE REVISIÓN — El balance bancario ya se deriva de `GLEntry` en dashboard API, reporte de resumen de saldos y revaluación. Falso positivo.
+**Estado:** FALSO POSITIVO CONFIRMADO ✓
 **Descripción:** `BankAccount` no tiene campo `current_balance`. El saldo debe derivarse consultando `GLEntry`.
 **Impacto:** Sin visibilidad de posición de efectivo. No se previenen pagos que exceden el saldo disponible.
 **Recomendación:** Agregar `current_balance` actualizado automáticamente en cada posting de pago/cobro.
@@ -210,49 +212,59 @@
 - Prueba funcional verifica flujo normal no se rompe.
 
 ### CAS-04 [Baja]: `BankTransaction.payment_entry_id` nunca se puebla
-**Descripción:** El campo `payment_entry_id` en `BankTransaction` existe en el modelo pero nunca se asigna durante la reconciliación.
+**Estado:** CONFIRMADO REAL
+**Descripción:** El campo `payment_entry_id` en `BankTransaction` existe en el modelo pero nunca se asigna durante la reconciliación. El flujo de reconciliación bancaria (`reconciliation_service.py`) solo marca `is_reconciled=True` pero nunca vincula el `PaymentEntry`.
 **Recomendación:** Poblar el campo al reconciliar contra un payment_entry, o eliminar la columna.
 
 ---
 
 ## 5. INVENTARIO (Inventory Management)
 
-### INV-01 [Alta]: Diferencia de valoración en traslados entre bodegas
+### INV-01 [Alta]: Diferencia de valoración en traslados entre bodegas ✓
+**Estado:** CORREGIDO — Commit `89afd34`
 **Descripción:** En `_create_movement_for_purpose` para `material_transfer`, la salida de bodega origen consume capas FIFO/MA (costo real), pero la entrada a bodega destino usa la tasa del usuario (no el costo real de salida).
-**Impacto:** Valor de inventario en bodega destino incorrecto. El valor total del inventario no se conserva.
-**Recomendación:** Calcular el costo real de salida primero, luego usar ese mismo costo para la entrada en destino.
-**Caso de prueba:** Bodega A: 10 uds a $100. Transferir 5 uds a Bodega B. Verificar B: qty=5, value=$500.
+**Corrección aplicada:**
+- `_create_movement_for_purpose` consume capas FIFO/MA antes de crear el movimiento destino, usando el costo real para ambas bodegas.
+- `_create_stock_movement` acepta `_skip_layer_consumption` para evitar doble consumo en transferencias.
+- Nueva función `_consume_available_layers_for_negative_stock`.
+**Caso de prueba:** Bodega A: 10 uds a $10. Transferir 5 uds a Bodega B con rate $15. Verificar B: valuation_rate=$10, stock_value=$50.
 
-### INV-02 [Alta]: `allow_negative_stock` no se valida al postear
+### INV-02 [Alta]: `allow_negative_stock` no se valida al postear ✓
+**Estado:** CORREGIDO — Commit `89afd34`
 **Descripción:** El campo `Item.allow_negative_stock` existe pero nunca se consulta en `_create_stock_movement`.
 **Impacto:** Ítems marcados como "no permitir stock negativo" pueden quedar en negativo.
 **Recomendación:** Agregar validación: si `qty_after < 0` y `item.allow_negative_stock == False`, rechazar.
 **Caso de prueba:** Item con `allow_negative_stock=False`, stock 0. Emitir 10 (debe fallar).
 
 ### INV-03 [Media]: Bodega no validada contra compañía seleccionada
+**Estado:** CONFIRMADO REAL
 **Descripción:** `from_warehouse` y `to_warehouse` no se validan contra la compañía del documento al crear stock entry.
 **Impacto:** Se pueden usar bodegas de otra compañía, violando aislamiento multi-compañía.
 **Recomendación:** Validar que cada bodega pertenezca a la compañía del documento.
 **Caso de prueba:** Bodega A pertenece a Compañía X. Stock entry para Compañía Y con bodega A (debe rechazar).
 
 ### INV-04 [Media]: Recepción manual usa cuenta puente incorrectamente
+**Estado:** CONFIRMADO REAL
 **Descripción:** `_get_offset_account_for_line` para `material_receipt` siempre usa cuenta puente (bridge). Si la entrada es manual (sin OC/Recepción de compra), el crédito debe ir a cuenta de ajuste.
 **Impacto:** La cuenta puente queda con saldo que nunca se concilia.
 **Recomendación:** Usar `stock_adjustment_account` para entradas de stock sin origen documental.
 **Caso de prueba:** Entrada de stock manual. Verificar GL: Dr. Inventory / Cr. Adjustment (no Bridge).
 
 ### INV-05 [Media]: Edición de borrador huérfana relaciones documentales
+**Estado:** CONFIRMADO REAL
 **Descripción:** `_delete_and_resave_stock_entry_items` borra todos los `StockEntryItem` y los recrea. Las `DocumentRelation` viejas quedan huérfanas.
 **Recomendación:** Limpiar relaciones viejas antes de recrear ítems.
 **Caso de prueba:** Stock entry desde purchase receipt (2 líneas). Editar draft, agregar ítem nuevo. Verificar relaciones viejas limpias.
 
 ### INV-06 [Media]: Sin protección contra concurrencia en inventario
+**Estado:** CONFIRMADO REAL
 **Descripción:** `_stock_qty_after` lee `SUM(StockLedgerEntry.qty_change)` sin bloqueo.
 **Impacto:** Inconsistencia entre StockBin y StockLedgerEntry bajo carga concurrente.
 **Recomendación:** Usar `SELECT FOR UPDATE` sobre `StockBin` al leer saldo actual.
 **Caso de prueba:** Stock: 10 uds. Dos emisiones simultáneas de 6 uds. Solo una debe prosperar.
 
 ### INV-07 [Media]: `qty_in_base_uom` en reconciliación salta conversión UOM
+**Estado:** CONFIRMADO REAL
 **Descripción:** `_save_stock_reconciliation_items` asigna `qty_in_base_uom = abs(qty_difference)` sin convertir a UOM base.
 **Impacto:** StockLedgerEntry registra cantidad en UOM equivocada.
 **Recomendación:** Convertir qty_difference a UOM base antes de asignar.
@@ -263,34 +275,38 @@
 ## 6. CROSS-CUTTING
 
 ### CROSS-01 [Media]: Sin logging de auditoría para ediciones en borrador
-**Descripción:** Solo submit y cancel tienen registro en `AuditLog`. Las ediciones de draft no generan entrada.
-**Recomendación:** Agregar `log_update` en todas las rutas `edit` de documentos transaccionales.
-**Caso de prueba:** Editar borrador de OC. Verificar entrada en `AuditLog` con acción "updated".
+**Estado:** CONFIRMADO REAL PARCIAL
+**Descripción:** El issue es correcto para compras y ventas (ninguna ruta de edición en borrador llama a `log_update`). Sin embargo, inventario (`_handle_stock_entry_edit_post`) y diarios contables (`journal_service.py`) SÍ tienen `log_update`. El sistema de auditoría usa `AuditTrail` (no `AuditLog`).
+**Impacto:** Ediciones en borrador de OC, facturas, recepciones, órdenes de venta, notas de entrega, etc. en compras y ventas no quedan registradas en auditoría.
+**Recomendación:** Agregar `log_update` en las rutas `*_edit_post` de compras (6 rutas) y ventas (5 rutas).
 
 ### CROSS-02 [Baja]: Configuraciones duplicadas en `setup.cfg` y `pyproject.toml`
-**Descripción:** Ambos archivos definen configuraciones para flake8, pytest, coverage que pueden solaparse.
-**Recomendación:** Unificar toda configuración en `pyproject.toml` y eliminar duplicados de `setup.cfg`.
+**Estado:** CONFIRMADO REAL
+**Descripción:** `[flake8]` en `setup.cfg` tiene prioridad sobre `[tool.flake8]` en `pyproject.toml` según la cadena de precedencia de flake8. Esto deja como código muerta la configuración más completa de `pyproject.toml` (con `extend-ignore = ["E203", "W503"]` y exclude más robusto). pytest y coverage no tienen duplicación conflictiva.
+**Recomendación:** Eliminar la sección `[flake8]` de `setup.cfg` y consolidar en `pyproject.toml` bajo `[tool.flake8]`.
 
 ---
 
-## RESUMEN DE PRIORIDADES
+## RESUMEN DE PRIORIDADES (ACTUALIZADO)
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, R2R-01*, R2R-02*, CAS-01*, ~~CAS-02~~, ~~CAS-03~~, INV-01, INV-02 |
-| **Media** | ~~S2P-06~~, S2P-07 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
-| **Baja** | CAS-04, CROSS-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-03~~, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, ~~R2R-01~~ (FP ✓), ~~R2R-02~~ (FP ✓), ~~CAS-01~~ (FP ✓), ~~CAS-02~~, ~~CAS-03~~, **INV-01**, **INV-02** |
+| **Media** | ~~S2P-06~~, **S2P-07**, **S2P-08**, **S2P-09**, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, **INV-03**, **INV-04**, **INV-05**, **INV-06**, **INV-07**, **CROSS-01** |
+| **Baja** | **CAS-04**, **CROSS-02** |
 
-\* S2P-03: Las validaciones contra sobre-pago ya existen. Solo falta `SELECT FOR UPDATE` para concurrencia. Requiere más revisión.
+**Leyenda:** ~~Tachado~~ = CORREGIDO | **Negrita** = CONFIRMADO REAL | FP ✓ = FALSO POSITIVO CONFIRMADO
 
 ---
 
-## PLAN DE ACCIÓN RECOMENDADO
+## PLAN DE ACCIÓN RECOMENDADO (ACTUALIZADO)
 
 | Semana | Hallazgos | Enfoque |
 |--------|-----------|---------|
-| **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados — revisión futura), ~~S2P-04 (cancelaciones)~~ | Validaciones críticas de integridad |
-| **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
-| **3-4** | R2R-01* (períodos — falso positivo), R2R-02* (balanceo GL — falso positivo), CAS-01* (saldo bancario — falso positivo), ~~CAS-02~~ (exchange rate), ~~CAS-03~~ (concurrencia) | Contabilidad y tesorería |
-| **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |
-| **5-6** | S2P-09 (multimoneda), S2P-08 (flags proveedor), INV-04 (cuenta puente), CROSS-01 (auditoría) | Multimoneda y cross-cutting |
+| **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, ~~S2P-03~~, ~~S2P-04~~ | Validaciones críticas de integridad — COMPLETADO |
+| **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, ~~O2C-03 (reserva inventario)~~, ~~O2C-05~~ | O2C y controles de ventas — COMPLETADO |
+| **3-4** | ~~R2R-01~~ (FP), ~~R2R-02~~ (FP), ~~CAS-01~~ (FP), ~~CAS-02~~, ~~CAS-03~~ | Contabilidad y tesorería — COMPLETADO |
+| **4-5** | **INV-01** (traslados), **INV-02** (negative stock), **INV-03** (bodega vs compañía), **INV-04** (cuenta puente), **INV-05** (relaciones huérfanas), **INV-06** (concurrencia), **INV-07** (conversión UOM) | Inventario — 7 issues reales |
+| **5-6** | **S2P-07** (anticipos), **S2P-08** (flags proveedor), **S2P-09** (multimoneda) | Compras — 3 issues reales |
+| **6-7** | **R2R-04** (cierre mensual), **CROSS-01** (auditoría ediciones), **CAS-04** (campo huérfano), **CROSS-02** (config duplicada) | R2R y cross-cutting |
+| **7-8** | **O2C-04** (implementar `sales_return`) | Consistencia compras/ventas — tipo documental espejo |
