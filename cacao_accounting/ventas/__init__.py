@@ -67,7 +67,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     update_party_contact,
 )
 from cacao_accounting.version import APPNAME
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -221,6 +221,17 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
 def _upsert_customer_company_settings_from_request(customer_id: str, form: dict) -> None:
     """Actualiza la configuracion de compania para un cliente desde el formulario."""
     upsert_party_company_settings_rows(customer_id, "customer", form)
+
+
+def _capture_sales_state(registro: Any) -> dict[str, Any]:
+    """CROSS-01: Captura estado de documento de ventas para auditoría."""
+    return {
+        "customer_id": getattr(registro, "customer_id", None),
+        "company": getattr(registro, "company", None),
+        "posting_date": str(getattr(registro, "posting_date", "")),
+        "total": str(getattr(registro, "total", "")),
+        "remarks": getattr(registro, "remarks", None),
+    }
 
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
@@ -1685,6 +1696,7 @@ def ventas_cotizacion_editar(quotation_id: str):
 
 
 def _handle_sales_quotation_edit_post(registro):
+    before_state = _capture_sales_state(registro)
     customer_id = request.form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -1700,6 +1712,8 @@ def _handle_sales_quotation_edit_post(registro):
     registro.total = total
     registro.base_total = total
     registro.grand_total = total
+    after_state = _capture_sales_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Cotización de venta actualizada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
@@ -2034,6 +2048,7 @@ def ventas_entrega_editar(note_id: str):
 
 
 def _handle_delivery_note_edit_post(registro):
+    before_state = _capture_sales_state(registro)
     customer_id = request.form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -2046,6 +2061,8 @@ def _handle_delivery_note_edit_post(registro):
     _total_qty, total = _save_delivery_note_items(registro.id)
     registro.total = total
     registro.grand_total = total
+    after_state = _capture_sales_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Nota de entrega actualizada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
@@ -2363,6 +2380,7 @@ def ventas_factura_venta_editar(invoice_id: str):
 
 def _handle_sales_invoice_edit_post(registro):
     try:
+        before_state = _capture_sales_state(registro)
         registro.customer_id = request.form.get("customer_id") or None
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
@@ -2381,6 +2399,8 @@ def _handle_sales_invoice_edit_post(registro):
         registro.base_outstanding_amount = total
         warnings = _validate_invoice_prices_against_source(registro)
         _persist_sales_invoice_fiscal_snapshot(registro)
+        after_state = _capture_sales_state(registro)
+        log_update(registro, before=before_state, after=after_state)
         database.session.commit()
         for w in warnings:
             flash(_(w), "warning")
