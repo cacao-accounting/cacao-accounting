@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     ComprobanteContableDetalle,
     DeliveryNote,
     DeliveryNoteItem,
+    DocumentRelation,
     ExchangeRate,
     GLEntry,
     Item,
@@ -1429,11 +1430,10 @@ def _upsert_stock_bin(
     valuation_rate: Decimal,
     value_change: Decimal,
 ) -> None:
-    bin_row = (
-        database.session.execute(select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse))
-        .scalars()
-        .first()
-    )
+    # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
+    bin_row = database.session.query(StockBin).with_for_update().filter_by(
+        company=company, item_code=item_code, warehouse=warehouse
+    ).first()
     if not bin_row:
         bin_row = StockBin(
             company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"), stock_value=Decimal("0")
@@ -2513,7 +2513,16 @@ def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, 
 
 def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
     """Get the offset account for a stock entry line."""
-    offset_type = "bridge" if purpose == "material_receipt" else "inventory_adjustment"
+    # INV-04: Recepción manual sin origen documental debe usar cuenta de ajuste
+    if purpose == "material_receipt":
+        has_source = database.session.execute(
+            select(DocumentRelation.id).filter_by(
+                target_type="stock_entry", target_id=document.id, status="active"
+            ).limit(1)
+        ).scalar_one_or_none()
+        offset_type = "inventory_adjustment" if not has_source else "bridge"
+    else:
+        offset_type = "inventory_adjustment"
     if purpose == "stock_reconciliation":
         account = getattr(document, "adjustment_account_id", None)
     else:
