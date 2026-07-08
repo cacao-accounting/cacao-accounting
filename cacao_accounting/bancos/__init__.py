@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     BankMatchingRule,
     BankTransaction,
     DocumentRelation,
+    Entity,
     ExternalCounter,
     GLEntry,
     NamingSeries,
@@ -55,7 +56,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.registry import normalize_doctype
@@ -861,9 +862,9 @@ def _payment_reference_expected_payment_type(flow_source_type: str) -> str | Non
 
 
 def _load_payment_reference_document(reference_type: str, reference_id: str, flow_source_type: str) -> Any:
-    """Obtiene el documento real referenciado para el pago."""
+    """Obtiene el documento real referenciado para el pago con bloqueo de fila."""
     model = _payment_reference_model(reference_type)
-    document = database.session.get(model, reference_id)
+    document = database.session.query(model).with_for_update().get(reference_id)
     if not document:
         raise ValueError(_("Documento referenciado no existe."))
     return document
@@ -1584,6 +1585,14 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     payment_currency = _get_payment_currency(bank_account_id)
     mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
 
+    company_entity = database.session.get(Entity, company) if company else None
+    company_currency = company_entity.currency if company_entity else None
+    posting_date_raw = payload.get("posting_date")
+    if company_currency and payment_currency != company_currency and posting_date_raw:
+        exchange_rate = _lookup_exchange_rate(payment_currency, company_currency, posting_date_raw)
+    else:
+        exchange_rate = Decimal("1")
+
     payment = _create_payment_entry(
         payload=payload,
         payment_type=payment_type,
@@ -1596,6 +1605,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         mode_of_payment=mode_of_payment,
         paid_from_account_id=paid_from_account_id,
         paid_to_account_id=paid_to_account_id,
+        exchange_rate=exchange_rate,
     )
     _update_payment_amounts(payment, payment_type, amount)
     database.session.add(payment)
@@ -1652,6 +1662,7 @@ def _create_payment_entry(
     mode_of_payment: str,
     paid_from_account_id: str | None,
     paid_to_account_id: str | None,
+    exchange_rate: Decimal | None = None,
 ) -> PaymentEntry:
     """Create a PaymentEntry object from payload data."""
     return PaymentEntry(
@@ -1661,7 +1672,7 @@ def _create_payment_entry(
         target_bank_account_id=target_bank_account_id,
         currency=payment_currency,
         transaction_currency=payment_currency,
-        exchange_rate=None,
+        exchange_rate=exchange_rate,
         paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
         received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
         party_type=cast(str | None, payload.get("party_type")),
@@ -1681,13 +1692,14 @@ def _create_payment_entry(
 
 
 def _update_payment_amounts(payment: PaymentEntry, payment_type: str, amount: Decimal) -> None:
-    """Update payment amounts based on payment type."""
+    """Update payment amounts based on payment type and exchange rate."""
+    rate = payment.exchange_rate if payment.exchange_rate else Decimal("1")
     if payment_type in ("pay", "debit_note", "internal_transfer"):
         payment.paid_amount = amount
-        payment.base_paid_amount = amount
+        payment.base_paid_amount = (amount * rate).quantize(Decimal("0.0001"))
     if payment_type in ("receive", "credit_note", "internal_transfer"):
         payment.received_amount = amount
-        payment.base_received_amount = amount
+        payment.base_received_amount = (amount * rate).quantize(Decimal("0.0001"))
 
 
 def _payment_identifier_inputs(
