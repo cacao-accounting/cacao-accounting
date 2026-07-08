@@ -2753,19 +2753,42 @@ def _purchase_invoice_transaction_config(
     }
 
 
+def _validate_supplier_invoice_flags(supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None) -> None:
+    """S2P-08: Valida flags del proveedor antes de crear/aprobar factura."""
+    if not supplier_id or not company:
+        return
+    from cacao_accounting.database import CompanyParty
+    settings = database.session.execute(
+        database.select(CompanyParty).filter_by(party_id=supplier_id, company=company)
+    ).scalar_one_or_none()
+    if settings is None:
+        return
+    has_order = bool(purchase_order_id)
+    has_receipt = bool(purchase_receipt_id)
+    if not has_order and not settings.allow_purchase_invoice_without_order:
+        raise ValueError("El proveedor no permite crear facturas de compra sin orden de compra.")
+    if not has_receipt and not settings.allow_purchase_invoice_without_receipt:
+        raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
+
+
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
         document_type = request.form.get("document_type") or PURCHASE_INVOICE
         posting_date = _parse_date(request.form.get("posting_date"))
+        supplier_id = request.form.get("supplier_id") or None
+        company = request.form.get("company") or None
+        from_order = request.form.get("from_order") or None
+        from_receipt = request.form.get("from_receipt") or None
+        _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
         factura = PurchaseInvoice(
-            supplier_id=request.form.get("supplier_id") or None,
-            company=request.form.get("company") or None,
+            supplier_id=supplier_id,
+            company=company,
             posting_date=posting_date,
             supplier_invoice_no=request.form.get("supplier_invoice_no"),
             document_type=document_type,
-            purchase_order_id=request.form.get("from_order") or None,
-            purchase_receipt_id=request.form.get("from_receipt") or None,
+            purchase_order_id=from_order,
+            purchase_receipt_id=from_receipt,
             is_return=document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
             reversal_of=(
                 (request.form.get("from_invoice") or request.form.get("from_return"))
@@ -2909,6 +2932,11 @@ def _handle_purchase_invoice_edit_post(registro):
     try:
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
+        _validate_supplier_invoice_flags(
+            registro.supplier_id, registro.company,
+            request.form.get("from_order") or None,
+            request.form.get("from_receipt") or None,
+        )
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
         registro.remarks = request.form.get("remarks")
@@ -3010,6 +3038,12 @@ def compras_factura_compra_submit(invoice_id: str):
         )
         validate_submit_prerequisites(registro, items=items, require_party=True)
         _validate_invoice_quantities_against_receipt(invoice_id)
+        _validate_supplier_invoice_flags(
+            getattr(registro, "supplier_id", None),
+            getattr(registro, "company", None),
+            getattr(registro, "purchase_order_id", None),
+            getattr(registro, "purchase_receipt_id", None),
+        )
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
