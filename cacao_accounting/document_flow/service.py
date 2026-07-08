@@ -51,6 +51,17 @@ _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 _MSG_LINEA_ORIGEN = "Linea origen no encontrada."
 
 
+def _document_exchange_rate(document: Any) -> Decimal:
+    """Resuelve el tipo de cambio del documento, default 1 si no aplica."""
+    rate = getattr(document, "exchange_rate", None)
+    return decimal_or_zero(rate) if rate else Decimal("1")
+
+
+def _base_amount(amount: Decimal, document: Any) -> Decimal:
+    """Convierte un monto en moneda del documento a moneda base."""
+    return amount * _document_exchange_rate(document)
+
+
 @dataclass
 class PaymentAllocationContext:
     """Contexto de asignación de pago para crear referencias y relaciones."""
@@ -815,7 +826,7 @@ def _create_payment_reference_and_relation(
 def _update_document_outstanding(document: Any, outstanding: Decimal, allocated: Decimal) -> None:
     outstanding_after = outstanding - allocated
     setattr(document, "outstanding_amount", outstanding_after)
-    setattr(document, "base_outstanding_amount", outstanding_after)
+    setattr(document, "base_outstanding_amount", _base_amount(outstanding_after, document))
 
 
 def _create_reconciliation_item(
@@ -848,7 +859,7 @@ def refresh_outstanding_amount_cache(document: Any, as_of_date: date | None = No
     if hasattr(document, "outstanding_amount"):
         document.outstanding_amount = outstanding
     if hasattr(document, "base_outstanding_amount"):
-        document.base_outstanding_amount = outstanding
+        document.base_outstanding_amount = _base_amount(outstanding, document)
     return outstanding
 
 
@@ -1586,7 +1597,7 @@ def _persist_payment_target_allocation(
         amount=allocated,
     )
     setattr(invoice, "outstanding_amount", outstanding - allocated)
-    setattr(invoice, "base_outstanding_amount", outstanding - allocated)
+    setattr(invoice, "base_outstanding_amount", _base_amount(outstanding - allocated, invoice))
 
 
 def _update_payment_target_amounts(payment: PaymentEntry, total: Decimal) -> None:
