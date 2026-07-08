@@ -2497,6 +2497,31 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
             )
 
 
+def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
+    """Valida que las cantidades facturadas no excedan las recibidas en la recepción (3-way match)."""
+    relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="purchase_invoice",
+            target_id=invoice_id,
+            status="active",
+        )
+    ).scalars()
+    for rel in relations:
+        if rel.source_type != "purchase_receipt" or not rel.source_item_id:
+            continue
+        receipt_item = database.session.get(PurchaseReceiptItem, rel.source_item_id)
+        if not receipt_item:
+            continue
+        consumed = consumed_qty_for_source("purchase_receipt", rel.source_id, rel.source_item_id, "purchase_invoice")
+        received = Decimal(str(receipt_item.qty or 0))
+        if consumed > received:
+            raise ValueError(
+                _("Sobre-facturación: cantidad facturada {} excede la recibida {} para el artículo {}.").format(
+                    consumed, received, receipt_item.item_code
+                )
+            )
+
+
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2833,6 +2858,10 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
         registro.remarks = request.form.get("remarks")
+        for rel in database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=registro.id)
+        ).scalars():
+            database.session.delete(rel)
         for item in database.session.execute(
             database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
         ).scalars():
@@ -2920,10 +2949,11 @@ def compras_factura_compra_submit(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        _validate_invoice_quantities_against_receipt(invoice_id)
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
-    except PostingError as exc:
+    except (PostingError, ValueError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
