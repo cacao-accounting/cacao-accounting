@@ -55,10 +55,16 @@
 **Caso de prueba:** OC ítem X a $10, Recibir, Facturar a $12 con tolerancia 0%. Submit → debe mostrar error amigable, no 500.
 
 ### S2P-06 [Media]: Validaciones pre-submit insuficientes
+**Estado:** CORREGIDO — Commit `b149b09`
 **Descripción:** Los endpoints `submit` solo verifican `docstatus != 0`. No validan que el documento tenga líneas, cantidades positivas, proveedor, compañía, fecha.
 **Impacto:** Se pueden aprobar documentos vacíos o inválidos.
 **Recomendación:** Validar al menos una línea con `qty > 0` y campos obligatorios del header.
 **Caso de prueba:** Enviar OC sin líneas (debe rechazar).
+**Corrección aplicada:**
+- Nueva función `validate_submit_prerequisites()` en `document_flow/validation.py` que valida compañía, fecha, tercero, líneas y cantidades.
+- Aplicada en 12 endpoints `*_submit`: 6 de compras, 5 de ventas, 1 de inventario.
+- Los endpoints sin try/except previo ahora capturan `ValueError` y muestran flash message `danger`.
+- Pruebas unitarias en `tests/test_validation.py` cubren todos los casos de validación.
 
 ### S2P-07 [Media]: Anticipos no reconciliados contra facturas
 **Descripción:** Pagos anticipados desde OC usan `supplier_advance_account_id`. Al pagar la factura posterior, no hay neteo del anticipo contra la cuenta por pagar.
@@ -133,8 +139,10 @@
 - Devolución = movimiento físico de inventario (requiere stock entry aparte)
 
 ### O2C-05 [Alta]: Validaciones pre-submit insuficientes en ventas
+**Estado:** CORREGIDO — Commit `b149b09`
 **Descripción:** Ídem S2P-06 para documentos de venta.
 **Recomendación:** Ídem S2P-06.
+**Corrección aplicada:** Misma que S2P-06: `validate_submit_prerequisites()` aplicada en los 5 endpoints de ventas.
 
 ---
 
@@ -254,8 +262,8 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
-| **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Media** | ~~S2P-06~~, S2P-07 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
 \* S2P-03: Las validaciones contra sobre-pago ya existen. Solo falta `SELECT FOR UPDATE` para concurrencia. Requiere más revisión.
