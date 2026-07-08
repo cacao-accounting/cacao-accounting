@@ -187,7 +187,10 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
     def _sum_notes(target_types: tuple[str, ...]) -> Decimal:
         query = (
             select(func.sum(DocumentRelation.amount))
-            .join(SalesInvoice, (DocumentRelation.target_id == SalesInvoice.id) & (DocumentRelation.target_type.startswith("sales_")))
+            .join(
+                SalesInvoice,
+                (DocumentRelation.target_id == SalesInvoice.id) & (DocumentRelation.target_type.startswith("sales_")),
+            )
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
@@ -202,7 +205,10 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
         # Tambien buscar en PurchaseInvoice si aplica
         query_purchase = (
             select(func.sum(DocumentRelation.amount))
-            .join(PurchaseInvoice, (DocumentRelation.target_id == PurchaseInvoice.id) & (DocumentRelation.target_type.startswith("purchase_")))
+            .join(
+                PurchaseInvoice,
+                (DocumentRelation.target_id == PurchaseInvoice.id) & (DocumentRelation.target_type.startswith("purchase_")),
+            )
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
