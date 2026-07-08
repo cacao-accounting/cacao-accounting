@@ -25,6 +25,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_purchase_reconciliation_pending,
 )
 from cacao_accounting.database import (
+    DocumentRelation,
     Item,
     Party,
     PurchaseInvoice,
@@ -53,6 +54,7 @@ from cacao_accounting.document_flow import (
     refresh_source_caches_for_target,
     revert_relations_for_target,
 )
+from cacao_accounting.document_flow.repository import consumed_qty_for_source
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
@@ -2402,6 +2404,14 @@ def _handle_purchase_receipt_edit_post(registro):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
+
+    for rel in database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="purchase_receipt", target_id=registro.id
+        )
+    ).scalars():
+        database.session.delete(rel)
+
     for item in database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
     ).scalars():
@@ -2464,6 +2474,33 @@ def compras_recepcion_duplicar(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
+def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
+    """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
+    relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="purchase_receipt",
+            target_id=receipt_id,
+            status="active",
+        )
+    ).scalars()
+    for rel in relations:
+        if rel.source_type != "purchase_order" or not rel.source_item_id:
+            continue
+        po_item = database.session.get(PurchaseOrderItem, rel.source_item_id)
+        if not po_item:
+            continue
+        consumed = consumed_qty_for_source(
+            "purchase_order", rel.source_id, rel.source_item_id, "purchase_receipt"
+        )
+        ordered = Decimal(str(po_item.qty or 0))
+        if consumed > ordered:
+            raise ValueError(
+                _("Sobre-recepción: cantidad recibida {} excede la ordenada {} para el artículo {}.").format(
+                    consumed, ordered, po_item.item_code
+                )
+            )
+
+
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2475,11 +2512,12 @@ def compras_recepcion_submit(receipt_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        _validate_receipt_quantities_against_po(receipt_id)
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
         flash("Recepción de compra aprobada.", "success")
-    except PostingError as exc:
+    except (PostingError, ValueError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))

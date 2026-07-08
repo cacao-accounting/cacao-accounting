@@ -761,3 +761,140 @@ def test_purchase_return_flow_is_allowed():
     from cacao_accounting.document_flow.registry import is_allowed_flow
 
     assert is_allowed_flow("purchase_receipt", "purchase_return")
+
+
+def test_receipt_submit_validates_against_po(app_ctx):
+    """El submit de recepción debe rechazar si la cantidad excede la OC."""
+    from cacao_accounting.database import DocumentRelation, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+    from cacao_accounting.compras import _validate_receipt_quantities_against_po
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-OVR-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-OVR-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("50"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-OVR-01",
+        target_item_id=receipt_item.id,
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("50"),
+    )
+
+    _validate_receipt_quantities_against_po("PR-OVR-01")
+
+    receipt2 = PurchaseReceipt(id="PR-OVR-02", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt2_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-OVR-02",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("5"),
+    )
+    database.session.add_all([receipt2, receipt2_item])
+    database.session.flush()
+
+    with pytest.raises((ValueError, DocumentFlowError)):
+        create_document_relation(
+            source_type="purchase_order",
+            source_id="PO-001",
+            source_item_id=order_item.id,
+            target_type="purchase_receipt",
+            target_id="PR-OVR-02",
+            target_item_id=receipt2_item.id,
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("5"),
+            amount=Decimal("5"),
+        )
+
+
+def test_receipt_edit_cleans_old_relations(app_ctx):
+    """Editar un borrador no debe acumular relaciones viejas (doble conteo)."""
+    from cacao_accounting.database import DocumentRelation, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.repository import consumed_qty_for_source
+    from cacao_accounting.document_flow.service import get_source_items
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-EDIT-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-EDIT-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-EDIT-01",
+        target_item_id=receipt_item.id,
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+
+    old_relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="purchase_receipt", target_id="PR-EDIT-01"
+        )
+    ).scalars().all()
+    for rel in old_relations:
+        database.session.delete(rel)
+
+    receipt_item2 = PurchaseReceiptItem(
+        purchase_receipt_id="PR-EDIT-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("3"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("15"),
+    )
+    database.session.add(receipt_item2)
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-EDIT-01",
+        target_item_id=receipt_item2.id,
+        qty=Decimal("3"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("15"),
+    )
+
+    consumed = consumed_qty_for_source("purchase_order", "PO-001", order_item.id, "purchase_receipt")
+    assert consumed == Decimal("3"), f"Esperado 3, obtenido {consumed}"
+
+    items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
+    assert items[0]["pending_qty"] == Decimal("7"), f"Esperado 7, obtenido {items[0]['pending_qty']}"
