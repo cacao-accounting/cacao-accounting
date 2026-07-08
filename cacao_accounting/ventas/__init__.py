@@ -402,6 +402,8 @@ def ventas_pedido_venta_cancel(request_id: str):
         abort(400)
     registro.docstatus = 2
     log_cancel(registro)
+    revert_relations_for_target("sales_request", request_id)
+    refresh_source_caches_for_target("sales_request", request_id)
     database.session.commit()
     flash("Pedido de venta cancelado.", "warning")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
@@ -1532,6 +1534,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("sales_quotation", quotation_id)
+    refresh_source_caches_for_target("sales_quotation", quotation_id)
     database.session.commit()
     flash("Cotización de venta cancelada.", "warning")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
@@ -1567,6 +1570,7 @@ def ventas_orden_venta_cancel(order_id: str):
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("sales_order", order_id)
+    refresh_source_caches_for_target("sales_order", order_id)
     database.session.commit()
     flash("Orden de venta cancelada.", "warning")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
