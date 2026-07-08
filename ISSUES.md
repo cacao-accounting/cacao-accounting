@@ -109,11 +109,22 @@
 - Default: tolerancia 0%, rechazo estricto de diferencias.
 - Si `allow_price_difference=True`: flash warning pero permite continuar.
 
-### O2C-03 [Alta]: Sin reserva de inventario al confirmar Orden de Venta
+### O2C-03 [Alta]: Sin reserva de inventario al confirmar Orden de Venta ✓
+**Estado:** CORREGIDO — Commit `8868cec`
 **Descripción:** La SO no reserva existencias. No hay campo `reserved_qty` en `StockBin`.
 **Impacto:** Se puede sobregirar inventario (overselling): aceptar más órdenes de las que se pueden entregar.
-**Recomendación:** Implementar reserva de inventario al aprobar SO: decrementar `actual_qty` e incrementar `reserved_qty` en `StockBin`. Liberar al cancelar SO o al crear Delivery Note.
-**Caso de prueba:** Stock: 10 uds. SO-1: 10 uds (reserva 10). SO-2: 5 uds (debe fallar).
+**Recomendación:** Implementar reserva de inventario al aprobar SO: incrementar `reserved_qty` en `StockBin`. Liberar al cancelar SO o al crear Delivery Note.
+**Corrección aplicada:**
+- `reserved_qty` cambió de nullable a non-nullable con default 0.
+- `_validate_and_reserve_stock_for_sales_order()`: valida `actual_qty - reserved_qty >= qty` e incrementa `reserved_qty` en submit SO.
+- `_release_reservation_for_sales_order()`: libera reserva al cancelar SO.
+- `_release_reservation_for_delivery_note()`: libera reserva al aprobar DN con SO origen.
+- `_restore_reservation_for_delivery_note()`: restaura reserva al cancelar DN con SO origen.
+- `SalesOrderItem.warehouse` ahora es obligatorio al aprobar para poder reservar.
+- `StockBin` ahora expone `reserved_qty` en API y snapshot.
+- `rebuild_stock_bins` preserva `reserved_qty` existente.
+- `_create_delivery_note_from_invoice()` propaga `sales_order_id` para liberar reserva cuando se factura con `update_inventory=True`.
+**Caso de prueba:** Stock: 10 uds. SO-1: 10 uds (reserva 10, éxito). SO-2: 5 uds (debe fallar). DN desde SO-1: libera 10 uds reservadas.
 
 ### O2C-04 [Media]: Notas de Crédito y Devolución — dos transacciones separadas (diseño correcto)
 **Descripción:** El diseño actual separa correctamente la NC (ajuste financiero: descuentos, diferencias de precio) de la Devolución física (movimiento de inventario vía `stock_entry`). Esto es correcto.
@@ -243,7 +254,7 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
 | **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
