@@ -1,5 +1,16 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-08 (S2P-02 + S2P-05: sobre-facturación y crash 500)
+- **Solicitud:** Analizar ISSUES.md, validar el siguiente issue pendiente y proponer plan de cierre.
+- **Diagnóstico:** S2P-02 (sobre-facturación contra recepción) es real: no había validación submit-time de `consumed_qty <= receipt.qty`, y `_handle_purchase_invoice_edit_post` no limpiaba relaciones viejas (doble conteo). S2P-05 (crash 500) es real: `except PostingError` no capturaba `PurchaseReconciliationError` (hereda de `ValueError`).
+- **Implementación:**
+  - `_validate_invoice_quantities_against_receipt()`: itera `DocumentRelation` activas, consulta `consumed_qty_for_source(receipt, invoice)` y rechaza si excede `receipt_item.qty`.
+  - `_handle_purchase_invoice_edit_post`: elimina `DocumentRelation` viejas antes de recrear ítems.
+  - `compras_factura_compra_submit`: llama a la validación y captura `(PostingError, ValueError, DocumentFlowError)`.
+- **Pruebas:** `test_invoice_submit_validates_against_receipt`, `test_invoice_edit_cleans_old_relations`, `test_invoice_submit_rejects_over_invoice` en `test_05document_flow.py`.
+- **Validación:** 26/26 tests en verde, black OK, mypy OK.
+- **Commits:** `f920176` (código), `f74b0f7` (ISSUES.md).
+
 ## 2026-07-03 (Inventario: cuenta de inventario unificada por almacen/compania)
 - **Solicitud:** Alinear toda la contabilidad de inventario para que la cuenta se configure solo por `Almacen/Compañia` y no queden fallbacks globales en recepción, entrega ni cálculo contable.
 - **Diagnostico:** `stock_entry` ya resolvia inventario desde `WarehouseCompanyAccount`, pero `post_purchase_receipt`, `post_delivery_note`, `document_builders` y `CompanyDefaultAccount.default_inventory` seguian manteniendo un camino alterno por compañía.

@@ -1,4 +1,4 @@
-# Estado Actual del Proyecto - 2026-07-03
+# Estado Actual del Proyecto - 2026-07-08
 
 - **Codigos legibles para terceros e items (2026-07-03):** Clientes, proveedores e items ahora usan codigos secuenciales legibles en lugar de ULIDs.
   - `generate_party_code()` y `create_item_with_uoms()` resuelven la naming series global antes de generar el identificador.
@@ -341,3 +341,9 @@
 - **Bancos / Referencias de pago:** `_save_payment_references` quedó descompuesta en helpers para lectura de formulario, carga de documento, validación de negocio y construcción de `PaymentReference`. La lógica funcional se mantuvo y la suite focal de referencias de pago quedó en verde (`5 passed`).
 - **Bancos / Hotspots de complejidad:** `bancos_pago_nuevo`, `_crear_nota_bancaria`, `_payment_source_rows`, `_validate_payment_header`, `find_bank_reconciliation_candidates`, `reconcile_bank_items` e `import_bank_statement` fueron refactorizados con helpers y `match/case` en los puntos de dispatch. Las pruebas focales de Bancos, Conciliación e Importación quedaron en verde (`116 passed`).
 - **Compras / Cotización de proveedor:** `compras_cotizacion_proveedor_nueva` y `compras_cotizacion_proveedor_editar` comparten helpers de catálogo, fuentes y configuración transaccional para reducir duplicación sin alterar el contrato de la vista.
+
+- **S2P-02 y S2P-05 corregidos (2026-07-08):** Se implementó prevención de sobre-facturación contra recepción (3-way match) y manejo amigable de `PurchaseReconciliationError`.
+  - `_validate_invoice_quantities_against_receipt()` rechaza submit si `consumed_qty > receipt.qty`.
+  - `_handle_purchase_invoice_edit_post` limpia relaciones viejas para evitar doble conteo en ediciones.
+  - `compras_factura_compra_submit` captura `(PostingError, ValueError, DocumentFlowError)` en lugar de solo `PostingError`.
+  - Commit: `f920176`
