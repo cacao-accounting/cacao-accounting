@@ -172,40 +172,63 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
         decimal_or_zero(reference.allocated_amount)
         for reference in _document_payment_references(document, as_of_date=as_of_date)
     )
-    allocated_notes = _compute_allocated_notes_amount(document)
+    allocated_notes = _compute_allocated_notes_amount(document, as_of_date=as_of_date)
     outstanding = grand_total - allocated_payments - allocated_notes
     return outstanding if outstanding > 0 else Decimal("0")
 
 
-def _compute_allocated_notes_amount(document: Any) -> Decimal:
-    """Suma el monto de notas de credito/debito aplicadas al documento."""
+def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
+    """Suma el monto de notas de credito/debito aplicadas y posteadas al documento."""
     raw_document_type = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
     document_type = normalize_doctype(str(raw_document_type or ""))
     document_id = getattr(document, "id", "")
 
-    query = select(func.sum(DocumentRelation.amount)).where(
-        DocumentRelation.source_type == document_type,
-        DocumentRelation.source_id == document_id,
-        DocumentRelation.status == "active",
-        DocumentRelation.target_type.in_(("sales_credit_note", "purchase_credit_note")),
-    )
-    res_credit = database.session.execute(query).scalar() or Decimal("0")
+    # Helper para sumar notas filtrando por tipo, estatus (posteadas) y fecha.
+    def _sum_notes(target_types: tuple[str, ...]) -> Decimal:
+        query = (
+            select(func.sum(DocumentRelation.amount))
+            .join(SalesInvoice, (DocumentRelation.target_id == SalesInvoice.id) & (DocumentRelation.target_type.startswith("sales_")))
+            .where(
+                DocumentRelation.source_type == document_type,
+                DocumentRelation.source_id == document_id,
+                DocumentRelation.status == "active",
+                DocumentRelation.target_type.in_(target_types),
+                SalesInvoice.docstatus == 1,
+                SalesInvoice.posting_date <= as_of_date,
+            )
+        )
+        res = database.session.execute(query).scalar() or Decimal("0")
 
-    query_debit = select(func.sum(DocumentRelation.amount)).where(
-        DocumentRelation.source_type == document_type,
-        DocumentRelation.source_id == document_id,
-        DocumentRelation.status == "active",
-        DocumentRelation.target_type.in_(("sales_debit_note", "purchase_debit_note")),
-    )
-    res_debit = database.session.execute(query_debit).scalar() or Decimal("0")
+        # Tambien buscar en PurchaseInvoice si aplica
+        query_purchase = (
+            select(func.sum(DocumentRelation.amount))
+            .join(PurchaseInvoice, (DocumentRelation.target_id == PurchaseInvoice.id) & (DocumentRelation.target_type.startswith("purchase_")))
+            .where(
+                DocumentRelation.source_type == document_type,
+                DocumentRelation.source_id == document_id,
+                DocumentRelation.status == "active",
+                DocumentRelation.target_type.in_(target_types),
+                PurchaseInvoice.docstatus == 1,
+                PurchaseInvoice.posting_date <= as_of_date,
+            )
+        )
+        res_p = database.session.execute(query_purchase).scalar() or Decimal("0")
 
-    return decimal_or_zero(res_credit) - decimal_or_zero(res_debit)
+        return decimal_or_zero(res) + decimal_or_zero(res_p)
+
+    res_credit = _sum_notes(("sales_credit_note", "purchase_credit_note"))
+    res_debit = _sum_notes(("sales_debit_note", "purchase_debit_note"))
+
+    return res_credit - res_debit
 
 
 def _compute_cash_consumed_from_reference(
     reference_id, reference_type, flow_source_type, allocated_amount, discount_amount, gain_loss_amount, relation_status
 ):
     """Calcula el efectivo consumido por una referencia de pago."""
+    source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
+    if source_type in {"purchase_order", "sales_order"}:
+        return Decimal("0"), None
     cash_consumed = decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
     if cash_consumed < 0:
         cash_consumed = Decimal("0")
