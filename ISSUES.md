@@ -63,7 +63,7 @@
 ### S2P-07 [Media]: Anticipos no reconciliados contra facturas
 **Descripción:** Pagos anticipados desde OC usan `supplier_advance_account_id`. Al pagar la factura posterior, no hay neteo del anticipo contra la cuenta por pagar.
 **Impacto:** El anticipo queda permanentemente en cuenta de anticipos, sobreestimando activos y pasivos.
-**Recomendación:** Implementar settlement de anticipos: Dr. Payable / Cr. Advance al pagar factura con anticipo.
+**Recomendación:** Agregar tanto en la configuración global de coompras y ventas una opción "Aplicar automaticamente anticipos a facturas de la misma OCImplementar settlement de anticipos: Dr. Payable / Cr. Advance al pagar factura con anticipo.
 **Caso de prueba:** OC $1,000. Anticipo $500. Factura $1,000. Pago $500. Verificar cuenta de anticipo en cero.
 
 ### S2P-08 [Media]: Flags de proveedor no validados
@@ -96,11 +96,18 @@
 - Flash message: "Se ha creado y aprobado la Nota de Entrega {doc_no} asociada a esta factura."
 - Checkbox en formulario de factura de venta (visible cuando no hay DN vinculada).
 
-### O2C-02 [Alta]: Sin validación de precio entre Orden de Venta y Factura
+### O2C-02 [Alta]: Sin validación de precio entre Orden de Venta y Factura ✓
+**Estado:** CORREGIDO — Commit `0ab8b9d`
 **Descripción:** La factura puede usar precios diferentes a la SO sin advertencia.
 **Impacto:** Riesgo de facturar a precio incorrecto (mayor o menor al autorizado).
 **Recomendación:** Agregar validación de tolerancia de precio configurable. Si el precio de factura difiere de la SO en más del X%, bloquear o requerir aprobación.
 **Caso de prueba:** SO: $100/unidad. Facturar a $80/unidad (debe advertir o rechazar según tolerancia).
+**Corrección aplicada:**
+- Modelo `SalesMatchingConfig` por compañía: tolerancia de precio (porcentaje/absoluto), matching type (3-way), allow_price_difference, require_sales_order.
+- Admin UI en `/settings/sales-matching` para configurar tolerancias por compañía.
+- `_validate_invoice_prices_against_source()` en `ventas/__init__.py` valida precios al aprobar/editar factura.
+- Default: tolerancia 0%, rechazo estricto de diferencias.
+- Si `allow_price_difference=True`: flash warning pero permite continuar.
 
 ### O2C-03 [Alta]: Sin reserva de inventario al confirmar Orden de Venta
 **Descripción:** La SO no reserva existencias. No hay campo `reserved_qty` en `StockBin`.
@@ -236,7 +243,7 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, O2C-02, O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
 | **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
@@ -249,7 +256,7 @@
 | Semana | Hallazgos | Enfoque |
 |--------|-----------|---------|
 | **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados — revisión futura), ~~S2P-04 (cancelaciones)~~ | Validaciones críticas de integridad |
-| **2-3** | ~~O2C-01 (COGS)~~, O2C-02 (precios), O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
+| **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
 | **3-4** | R2R-01 (períodos), R2R-02 (balanceo GL), CAS-01 (saldo bancario), CAS-02 (exchange rate), CAS-03 (concurrencia) | Contabilidad y tesorería |
 | **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |
 | **5-6** | S2P-09 (multimoneda), S2P-08 (flags proveedor), INV-04 (cuenta puente), CROSS-01 (auditoría) | Multimoneda y cross-cutting |

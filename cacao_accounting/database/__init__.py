@@ -2312,6 +2312,27 @@ class PurchaseMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-de
     allow_price_difference = database.Column(database.Boolean(), default=False, nullable=False)
 
 
+class SalesMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Configuracion de matching de ventas por compania.
+
+    Controla la validacion de precios entre Orden de Venta y Factura.
+    El modo 3-way (OV + Nota de Entrega + Factura) es el predeterminado.
+    """
+
+    __tablename__ = "sales_matching_config"
+    __table_args__ = (UniqueConstraint("company", name="uq_sales_matching_config"),)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False, unique=True)
+    # 3-way: OV + DN + Factura | 2-way: OV + Factura
+    matching_type = database.Column(database.String(10), default="3-way", nullable=False)
+    # percentage | absolute
+    price_tolerance_type = database.Column(database.String(10), default="percentage", nullable=False)
+    price_tolerance_value = database.Column(database.Numeric(precision=10, scale=4), default=0, nullable=False)
+    # Si True, toda factura debe referenciar una OV
+    require_sales_order = database.Column(database.Boolean(), default=True, nullable=False)
+    # Si False, diferencias de precio fuera de tolerancia rechazan; True -> permiten con warning
+    allow_price_difference = database.Column(database.Boolean(), default=False, nullable=False)
+
+
 class PurchaseEconomicEvent(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Evento economico inmutable generado por documentos de compra.
 

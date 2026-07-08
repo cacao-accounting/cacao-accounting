@@ -13,10 +13,12 @@ from flask_login import current_user, login_required
 from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
+    DocumentRelation,
     Item,
     Party,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesMatchingConfig,
     SalesOrder,
     SalesOrderItem,
     SalesQuotation,
@@ -1045,6 +1047,74 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     invoice.delivery_note_id = dn.id
     return dn
+
+
+def _validate_invoice_prices_against_source(invoice: SalesInvoice) -> list[str]:
+    """Valida precios de factura contra la Orden de Venta origen.
+
+    Retorna una lista de mensajes de advertencia si ``allow_price_difference``
+    es ``True`` y el precio excede la tolerancia. Si ``allow_price_difference``
+    es ``False`` y el precio excede la tolerancia, lanza ``ValueError``.
+    """
+    config = database.session.execute(
+        database.select(SalesMatchingConfig).filter_by(company=invoice.company)
+    ).scalar_one_or_none()
+
+    if config is None:
+        tolerance_type = "percentage"
+        tolerance_value = Decimal("0")
+        allow_diff = False
+    else:
+        tolerance_type = config.price_tolerance_type or "percentage"
+        tolerance_value = config.price_tolerance_value or Decimal("0")
+        allow_diff = config.allow_price_difference
+
+    invoice_items = database.session.execute(
+        database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
+    ).scalars().all()
+
+    warnings: list[str] = []
+    for si_item in invoice_items:
+        relation = database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="sales_invoice",
+                target_id=invoice.id,
+                target_item_id=si_item.id,
+                status="active",
+            )
+        ).scalars().first()
+        if not relation or not relation.source_item_id:
+            continue
+        if relation.source_type != "sales_order":
+            continue
+
+        so_item = database.session.get(SalesOrderItem, relation.source_item_id)
+        if not so_item:
+            continue
+
+        so_rate = Decimal(str(so_item.rate or 0))
+        si_rate = Decimal(str(si_item.rate or 0))
+
+        if so_rate <= 0:
+            continue
+
+        if tolerance_type == "absolute":
+            variance = abs(si_rate - so_rate)
+        else:
+            variance = abs(si_rate - so_rate) / so_rate * Decimal("100")
+
+        if variance > tolerance_value:
+            msg = (
+                f"El precio del ítem {si_item.item_code} (${si_rate}) "
+                f"difiere del precio en la Orden de Venta (${so_rate}) "
+                f"en {variance:.2f}{'%' if tolerance_type == 'percentage' else ''}. "
+                f"Tolerancia permitida: {tolerance_value}{'%' if tolerance_type == 'percentage' else ''}."
+            )
+            if allow_diff:
+                warnings.append(msg)
+            else:
+                raise ValueError(msg)
+    return warnings
 
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
@@ -2171,8 +2241,11 @@ def _handle_sales_invoice_edit_post(registro):
         registro.base_grand_total = total
         registro.outstanding_amount = total
         registro.base_outstanding_amount = total
+        warnings = _validate_invoice_prices_against_source(registro)
         _persist_sales_invoice_fiscal_snapshot(registro)
         database.session.commit()
+        for w in warnings:
+            flash(_(w), "warning")
         flash(_("Factura de venta actualizada correctamente."), "success")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
     except ValueError as exc:
@@ -2244,6 +2317,7 @@ def ventas_factura_venta_submit(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
         if registro.update_inventory and not registro.delivery_note_id:
             dn = _create_delivery_note_from_invoice(registro)
@@ -2257,6 +2331,8 @@ def ventas_factura_venta_submit(invoice_id: str):
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+    for w in warnings:
+        flash(_(w), "warning")
     flash(_("Factura de venta aprobada y contabilizada."), "success")
     return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 

@@ -41,6 +41,7 @@ from cacao_accounting.database import (
     Roles,
     RolesAccess,
     RolesUser,
+    SalesMatchingConfig,
     Tax,
     TaxTemplate,
     TaxTemplateItem,
@@ -564,6 +565,52 @@ def config_conciliacion_compras():
         configs=configs,
         companies=companies,
         titulo=_("Configuracion de Conciliacion de Compras"),
+    )
+
+
+@admin.route("/settings/sales-matching", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def config_conciliacion_ventas():
+    """Administra la configuracion de matching de ventas por compania."""
+    _require_system_admin()
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+
+    if request.method == "POST":
+        company = request.form.get("company") or ""
+        if not company:
+            flash(_("Debe seleccionar una compania."), "danger")
+            return redirect(url_for("admin.config_conciliacion_ventas"))
+
+        config = database.session.execute(
+            database.select(SalesMatchingConfig).filter_by(company=company)
+        ).scalar_one_or_none()
+        if config is None:
+            config = SalesMatchingConfig(company=company)
+            database.session.add(config)
+            database.session.flush()
+
+        config.matching_type = request.form.get("matching_type") or "3-way"
+        config.price_tolerance_type = request.form.get("price_tolerance_type") or "percentage"
+        config.price_tolerance_value = _decimal_form("price_tolerance_value")
+        config.require_sales_order = bool(request.form.get("require_sales_order"))
+        config.allow_price_difference = bool(request.form.get("allow_price_difference"))
+        database.session.commit()
+        flash(_("Configuracion de conciliacion de ventas guardada correctamente."), "success")
+        return redirect(url_for("admin.config_conciliacion_ventas"))
+
+    configs = (
+        database.session.execute(database.select(SalesMatchingConfig).order_by(SalesMatchingConfig.company))
+        .scalars()
+        .all()
+    )
+
+    return render_template(
+        "admin/sales_matching_config.html",
+        configs=configs,
+        companies=companies,
+        titulo=_("Configuracion de Conciliacion de Ventas"),
     )
 
 
