@@ -83,7 +83,7 @@
 ## 2. ORDER TO CASH (O2C) — Ventas
 
 ### O2C-01 [Alta]: COGS no se genera al facturar (feature request) ✓
-**Estado:** CORREGIDO — Commit `de38207`
+**Estado:** CORREGIDO — Commit `1e6fced`
 **Descripción:** Actualmente el COGS se genera al crear la Nota de Entrega (Delivery Note). Si se requiere facturar antes de entregar, no hay COGS asociado. Se propone agregar una bandera booleana `update_inventory` en la Factura de Venta.
 **Impacto:** Sin la bandera, empresas que facturan antes de entregar no pueden generar COGS simultáneo.
 **Recomendación:** Agregar campo booleano `update_inventory` (default `False`) en `SalesInvoice`. Si está activo, `post_sales_invoice` genera asiento Dr. COGS / Cr. Inventory calculando el costo desde `StockValuationLayer`. Si hay Delivery Note previa, la bandera debe omitirse para no duplicar.
