@@ -1650,7 +1650,7 @@ def test_payment_ignores_exchange_rate_and_external_counter_for_transfer(app_ctx
     payment = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
     assert payment.currency == bank.currency
     assert payment.transaction_currency == bank.currency
-    assert payment.exchange_rate is None
+    assert payment.exchange_rate == Decimal("1")
     assert payment.external_counter_id is None
     assert payment.external_number is None
 
@@ -1975,3 +1975,139 @@ def test_stock_reconciliation_screen_exposes_global_accounting_dimension_fields(
     assert b"Proyecto" in response.data
     assert warehouse_response.status_code == 200
     assert b"Cuenta de inventario" in warehouse_response.data
+
+
+def test_payment_auto_populates_exchange_rate_same_currency(app_ctx):
+    """Pago en misma moneda de la compania debe tener exchange_rate=1."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    bank = database.session.execute(
+        database.select(BankAccount).filter_by(company="cacao", currency="NIO")
+    ).scalars().first()
+
+    payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 500,
+        "party_id": customer.id,
+        "party_type": "customer",
+        "mode_of_payment": "transfer",
+        "lines": [],
+    }
+
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" in response.data
+    payment = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
+    assert payment.exchange_rate == Decimal("1")
+    assert payment.currency == "NIO"
+    assert payment.base_paid_amount == Decimal("500.0000") or payment.base_received_amount == Decimal("500.0000")
+
+
+def test_payment_auto_populates_exchange_rate_different_currency(app_ctx):
+    """Pago en USD (moneda distinta a NIO de la compania) debe auto-poblar exchange_rate."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    bank = database.session.execute(
+        database.select(BankAccount).filter_by(company="cacao", currency="USD")
+    ).scalars().first()
+    assert bank is not None, "Se necesita una cuenta bancaria en USD en los datos de prueba"
+
+    payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 100,
+        "party_id": customer.id,
+        "party_type": "customer",
+        "mode_of_payment": "transfer",
+        "lines": [],
+    }
+
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" in response.data
+    payment = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
+    assert payment.exchange_rate is not None
+    assert payment.exchange_rate != Decimal("0")
+    assert payment.transaction_currency == "USD"
+    assert payment.currency == "USD"
+
+
+def test_payment_reference_loads_with_row_lock(app_ctx):
+    """Verifica que _load_payment_reference_document usa FOR UPDATE (no debe romper flujo normal)."""
+    from cacao_accounting.database import PurchaseInvoice
+
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+
+    invoice = database.session.execute(
+        database.select(PurchaseInvoice).filter_by(company="cacao", docstatus=1).filter(PurchaseInvoice.supplier_id.isnot(None))
+    ).scalars().first()
+    if not invoice:
+        invoice = PurchaseInvoice(
+            id="PI-LOCK-TEST",
+            company="cacao",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            posting_date=date.today(),
+            grand_total=Decimal("1000"),
+            outstanding_amount=Decimal("1000"),
+            docstatus=1,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        database.session.commit()
+
+    payload = {
+        "payment_type": "pay",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 100,
+        "party_id": supplier.id,
+        "party_type": "supplier",
+        "mode_of_payment": "transfer",
+        "lines": [
+            {
+                "reference_type": "purchase_invoice",
+                "reference_id": invoice.id,
+                "reference_doctype": "purchase_invoice",
+                "allocated_amount": 100,
+                "discount_amount": 0,
+                "gain_loss_amount": 0,
+            }
+        ],
+    }
+
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" in response.data
+
+    ref = database.session.execute(
+        database.select(PaymentReference).order_by(PaymentReference.created.desc())
+    ).scalars().first()
+    assert ref is not None
+    assert ref.allocated_amount == Decimal("100")
+
+    database.session.refresh(invoice)
+    assert invoice.outstanding_amount == Decimal("900")
