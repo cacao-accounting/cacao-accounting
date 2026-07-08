@@ -149,12 +149,14 @@
 ## 3. RECORD TO REPORT (R2R) — Contabilidad
 
 ### R2R-01 [Alta]: Periodos contables no validados al postear
+**Estado:** REQUIERE REVISIÓN — `validate_accounting_period` ya se llama desde `_document_contexts()` en `posting.py`, punto único por el que pasan todos los postings. Falso positivo.
 **Descripción:** `validate_period` no se llama consistentemente en todos los puntos de posting.
 **Impacto:** Transacciones en períodos cerrados comprometen la integridad de los estados financieros.
 **Recomendación:** Centralizar la validación de período abierto en un decorador o middleware que se ejecute antes de cualquier posting.
 **Caso de prueba:** Cerrar período Ene-2026. Postear factura con fecha 15-Ene-2026 (debe rechazar).
 
 ### R2R-02 [Alta]: Asientos GL sin verificación de balance débito/crédito
+**Estado:** REQUIERE REVISIÓN — `_assert_entries_balance()` en `_add_entries()` (posting.py:407) verifica `sum(debits) == sum(credits)` por ledger antes de persistir. Falso positivo.
 **Descripción:** No hay validación explícita de `sum(debits) == sum(credits)` antes de persistir un lote de asientos GL.
 **Impacto:** Libro mayor desbalanceado si una regla de mapeo falla.
 **Recomendación:** Agregar validación en el motor de posting: `abs(total_debits - total_credits) < rounding_tolerance`, con rechazo si no se cumple.
@@ -177,22 +179,35 @@
 ## 4. TESORERÍA (Cash Management)
 
 ### CAS-01 [Alta]: Sin saldo de cuenta bancaria en tiempo real
+**Estado:** REQUIERE REVISIÓN — El balance bancario ya se deriva de `GLEntry` en dashboard API, reporte de resumen de saldos y revaluación. Falso positivo.
 **Descripción:** `BankAccount` no tiene campo `current_balance`. El saldo debe derivarse consultando `GLEntry`.
 **Impacto:** Sin visibilidad de posición de efectivo. No se previenen pagos que exceden el saldo disponible.
 **Recomendación:** Agregar `current_balance` actualizado automáticamente en cada posting de pago/cobro.
 **Caso de prueba:** Cuenta con saldo 0. Recibir $5,000. Verificar `current_balance = $5,000`.
 
 ### CAS-02 [Alta]: `exchange_rate` hardcodeado a `None` en pagos
+**Estado:** CORREGIDO — Commit `bb40f22`
 **Descripción:** `_create_payment_entry` en `bancos/__init__.py` asigna `exchange_rate=None`.
 **Impacto:** Diferencias cambiarias no registradas en pagos multi-moneda.
 **Recomendación:** Auto-poblar `exchange_rate` desde `ExchangeRate` usando moneda de cuenta bancaria vs moneda base de compañía.
 **Caso de prueba:** Cuenta en EUR, empresa en USD, tasa 1.10. Pagar 1,000 EUR. Verificar `exchange_rate = 1.10`.
+**Corrección aplicada:**
+- `_create_payment_entry` ahora acepta parámetro `exchange_rate` en lugar de hardcodear `None`.
+- `_build_payment_from_payload` resuelve `exchange_rate` vía `_lookup_exchange_rate()` cuando la moneda del pago difiere de la moneda de la compañía.
+- `_update_payment_amounts` aplica exchange_rate al calcular `base_paid_amount` y `base_received_amount`.
+- Pruebas unitarias para mismo moneda (rate=1) y moneda diferente (rate desde BD).
 
 ### CAS-03 [Alta]: Condición de carrera en saldo pendiente de facturas
+**Estado:** CORREGIDO — Commit `74079bf`
 **Descripción:** `compute_outstanding_amount` lee `PaymentReference.allocated_amount` sin bloqueo de fila.
 **Impacto:** Dos pagos concurrentes por la misma factura pueden sobrescribir el saldo (doble pago/cobro).
 **Recomendación:** Usar `SELECT FOR UPDATE` en la transacción que lee outstanding_amount.
 **Caso de prueba:** Factura $1,000. Dos cobros simultáneos de $1,000. Solo uno debe prosperar.
+**Corrección aplicada:**
+- `_load_payment_reference_document` en `bancos/__init__.py` usa `with_for_update()` al cargar el documento.
+- `_get_reference_document` en `document_flow/service.py` usa `with_for_update()` al cargar el documento.
+- El bloqueo de fila serializa lecturas concurrentes del saldo pendiente antes de crear `PaymentReference`.
+- Prueba funcional verifica flujo normal no se rompe.
 
 ### CAS-04 [Baja]: `BankTransaction.payment_entry_id` nunca se puebla
 **Descripción:** El campo `payment_entry_id` en `BankTransaction` existe en el modelo pero nunca se asigna durante la reconciliación.
@@ -262,7 +277,7 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, R2R-01*, R2R-02*, CAS-01*, ~~CAS-02~~, ~~CAS-03~~, INV-01, INV-02 |
 | **Media** | ~~S2P-06~~, S2P-07 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
 
@@ -276,6 +291,6 @@
 |--------|-----------|---------|
 | **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados — revisión futura), ~~S2P-04 (cancelaciones)~~ | Validaciones críticas de integridad |
 | **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
-| **3-4** | R2R-01 (períodos), R2R-02 (balanceo GL), CAS-01 (saldo bancario), CAS-02 (exchange rate), CAS-03 (concurrencia) | Contabilidad y tesorería |
+| **3-4** | R2R-01* (períodos — falso positivo), R2R-02* (balanceo GL — falso positivo), CAS-01* (saldo bancario — falso positivo), ~~CAS-02~~ (exchange rate), ~~CAS-03~~ (concurrencia) | Contabilidad y tesorería |
 | **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |
 | **5-6** | S2P-09 (multimoneda), S2P-08 (flags proveedor), INV-04 (cuenta puente), CROSS-01 (auditoría) | Multimoneda y cross-cutting |
