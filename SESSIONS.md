@@ -1,5 +1,17 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-08 (S2P-06 y O2C-05: validaciones pre-submit en 12 endpoints)
+- **Solicitud:** Analizar ISSUES.md, identificar siguiente issue (S2P-06/O2C-05: validaciones pre-submit insuficientes) e implementar validación centralizada.
+- **Diagnóstico:** 6 endpoints con cero validación (solo `docstatus != 0`) y 6 con validación solo en capa de posting. Ninguno validaba compañía, fecha, tercero ni existencia de líneas en el límite del submit.
+- **Implementación:**
+  - `document_flow/validation.py`: nueva función `validate_submit_prerequisites()` que valida compañía, fecha, tercero (supplier/customer), al menos una línea y qty > 0.
+  - Aplicada en 12 endpoints de compras (6), ventas (5) e inventario (1).
+  - Endpoints sin try/except previo ahora capturan `ValueError` y muestran flash `danger`.
+  - `ventas_entrega_submit` e `inventario_entrada_submit` ampliaron captura a `ValueError`.
+- **Pruebas:** 12 tests unitarios en `tests/test_validation.py` cubren todos los casos. 290 tests en verde (sin regresión).
+- **Calidad:** Black, ruff, mypy, flake8 en verde.
+- **Commits:** `b149b09` (código), `3fa36a6` (tests), `a774532` (fix fixture), `faf08a4` (ISSUES.md).
+
 ## 2026-07-08 (O2C-03: reserva de inventario en Orden de Venta)
 - **Solicitud:** Analizar ISSUES.md, identificar el siguiente issue a atender (O2C-03) e implementar reserva de inventario al aprobar Orden de Venta.
 - **Semántica:** `actual_qty` = stock físico, `reserved_qty` = comprometido en OV, `available_qty` = `actual_qty - reserved_qty`.
