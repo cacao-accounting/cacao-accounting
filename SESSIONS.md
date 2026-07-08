@@ -1,5 +1,21 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-08 (O2C-03: reserva de inventario en Orden de Venta)
+- **Solicitud:** Analizar ISSUES.md, identificar el siguiente issue a atender (O2C-03) e implementar reserva de inventario al aprobar Orden de Venta.
+- **Semántica:** `actual_qty` = stock físico, `reserved_qty` = comprometido en OV, `available_qty` = `actual_qty - reserved_qty`.
+- **Implementación:**
+  - `reserved_qty` cambió a non-nullable con default 0.
+  - SO submit: valida `actual_qty - reserved_qty >= qty`, incrementa `reserved_qty`.
+  - SO cancel: decrementa `reserved_qty`.
+  - DN submit: libera reserva solo si tiene `sales_order_id`.
+  - DN cancel: restaura reserva solo si tiene `sales_order_id`.
+  - `_create_delivery_note_from_invoice` propaga `sales_order_id` para facturas con `update_inventory=True`.
+  - `rebuild_stock_bins` preserva `reserved_qty` existente.
+  - API `/api/inventory/stock-bin-snapshot` expone `reserved_qty`.
+- **Pruebas:** 8 tests nuevos en `test_stock_reservation.py`, todos en verde.
+- **Validación:** Black OK, flake8 OK, mypy OK. 36 tests existentes no regresionados.
+- **Commits:** `7c6c85f`, `fc336fc`, `8868cec`, `35e220c`.
+
 ## 2026-07-08 (S2P-02 + S2P-05: sobre-facturación y crash 500)
 - **Solicitud:** Analizar ISSUES.md, validar el siguiente issue pendiente y proponer plan de cierre.
 - **Diagnóstico:** S2P-02 (sobre-facturación contra recepción) es real: no había validación submit-time de `consumed_qty <= receipt.qty`, y `_handle_purchase_invoice_edit_post` no limpiaba relaciones viejas (doble conteo). S2P-05 (crash 500) es real: `except PostingError` no capturaba `PurchaseReconciliationError` (hereda de `ValueError`).
