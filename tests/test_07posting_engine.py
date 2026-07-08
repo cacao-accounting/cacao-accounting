@@ -1061,6 +1061,47 @@ def test_delivery_note_without_stock_rejects_posting(app_ctx):
     assert stock_entries == []
 
 
+def test_supplier_invoice_flags_reject_without_order_when_disallowed(app_ctx):
+    """S2P-08: Verifica que el flag allow_purchase_invoice_without_order sea respetado."""
+    from cacao_accounting.database import CompanyParty, database
+    from cacao_accounting.compras import _validate_supplier_invoice_flags
+
+    company_party = CompanyParty(
+        party_id="PROV-FLAG",
+        company="cacao",
+        allow_purchase_invoice_without_order=False,
+        allow_purchase_invoice_without_receipt=False,
+    )
+    database.session.add(company_party)
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="no permite crear facturas de compra sin orden de compra"):
+        _validate_supplier_invoice_flags("PROV-FLAG", "cacao", None, "REC-001")
+
+    with pytest.raises(ValueError, match="no permite crear facturas de compra sin recepción"):
+        _validate_supplier_invoice_flags("PROV-FLAG", "cacao", "PO-001", None)
+
+    # Con ambos documentos no debe fallar
+    _validate_supplier_invoice_flags("PROV-FLAG", "cacao", "PO-001", "REC-001")
+
+
+def test_supplier_invoice_flags_allow_without_order_when_enabled(app_ctx):
+    """S2P-08: Verifica que permitir sin OC/recepción no bloquee la creación."""
+    from cacao_accounting.database import CompanyParty, database
+    from cacao_accounting.compras import _validate_supplier_invoice_flags
+
+    company_party = CompanyParty(
+        party_id="PROV-FLAG-ALLOW",
+        company="cacao",
+        allow_purchase_invoice_without_order=True,
+        allow_purchase_invoice_without_receipt=True,
+    )
+    database.session.add(company_party)
+    database.session.commit()
+
+    _validate_supplier_invoice_flags("PROV-FLAG-ALLOW", "cacao", None, None)
+
+
 def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
