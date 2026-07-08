@@ -2659,3 +2659,147 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
     assert refreshed_bin.stock_value == Decimal("100.0000")
     assert len(all_stock_entries) == 2
     assert sum(line.stock_value_difference for line in all_stock_entries) == Decimal("0.0000")
+
+
+def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
+    """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        CompanyDefaultAccount,
+        GLEntry,
+        PaymentEntry,
+        database,
+    )
+
+    bank_gl = Accounts(
+        entity="cacao",
+        code="BANK-DN",
+        name="Banco DN",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    expense_acct = Accounts(
+        entity="cacao",
+        code="EXP-DN",
+        name="Gasto DN",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    bank = Bank(name="Banco DN")
+    database.session.add_all([bank_gl, expense_acct, bank])
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta DN",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add_all(
+        [
+            bank_account,
+            CompanyDefaultAccount(company="cacao", default_expense=expense_acct.id),
+        ]
+    )
+    database.session.flush()
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        payment_type="debit_note",
+        bank_account_id=bank_account.id,
+        paid_amount=Decimal("40.00"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 2
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == bank_gl.id and entry.credit == Decimal("40.00") for entry in entries)
+    assert any(entry.account_id == expense_acct.id and entry.debit == Decimal("40.00") for entry in entries)
+
+
+def test_payment_credit_note_creates_balanced_gl_entries(app_ctx):
+    """Verifica que una nota de credito bancaria (PaymentEntry) genera GL balanceado."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        CompanyDefaultAccount,
+        GLEntry,
+        PaymentEntry,
+        database,
+    )
+
+    bank_gl = Accounts(
+        entity="cacao",
+        code="BANK-CN",
+        name="Banco CN",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    income_acct = Accounts(
+        entity="cacao",
+        code="INC-CN",
+        name="Ingreso CN",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    bank = Bank(name="Banco CN")
+    database.session.add_all([bank_gl, income_acct, bank])
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta CN",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add_all(
+        [
+            bank_account,
+            CompanyDefaultAccount(company="cacao", default_income=income_acct.id),
+        ]
+    )
+    database.session.flush()
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        payment_type="credit_note",
+        bank_account_id=bank_account.id,
+        received_amount=Decimal("60.00"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 2
+    assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    assert any(entry.account_id == bank_gl.id and entry.debit == Decimal("60.00") for entry in entries)
+    assert any(entry.account_id == income_acct.id and entry.credit == Decimal("60.00") for entry in entries)
