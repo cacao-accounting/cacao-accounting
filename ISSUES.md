@@ -28,16 +28,23 @@
 **Caso de prueba:** OC 10 uds, Recepción 10 uds. Facturar 10 (éxito). Facturar 1 más (debe rechazar).
 
 ### S2P-03 [Alta]: Sin prevención de pagos duplicados o en exceso
+**Estado:** REQUIERE MÁS REVISIÓN — atender después
 **Descripción:** No se valida `sum(payments) <= outstanding_amount` de la factura. Sin bloqueo de concurrencia (`SELECT FOR UPDATE`) al leer saldo pendiente.
 **Impacto:** Pagos duplicados o en exceso con pérdida financiera directa.
 **Recomendación:** Validar `paid_amount <= outstanding_amount` antes de crear `PaymentReference`. Implementar `SELECT FOR UPDATE` en la lectura de saldo.
 **Caso de prueba:** Factura $1,000. Pago 1 $1,000 (éxito). Pago 2 $500 (debe fallar).
+**Nota:** Las validaciones contra sobre-pago ya existen (8 capas de validación en `bancos/__init__.py` y `document_flow/service.py`). El riesgo real es la condición de carrera (TOCTOU) por falta de `SELECT FOR UPDATE`, pero es bajo en uso manual típico.
 
-### S2P-04 [Alta]: Cancelación de OC con documentos descendientes activos
+### S2P-04 [Alta]: Cancelación de OC con documentos descendientes activos ✓
+**Estado:** CORREGIDO
 **Descripción:** Se puede cancelar una OC aunque tenga Recepciones o Facturas activas. Las relaciones se marcan "reverted" pero los hijos siguen activos.
 **Impacto:** Documentos huérfanos, inventario revertido pero factura por pagar permanece.
 **Recomendación:** Verificar que no existan Recepciones/Facturas con `docstatus=1` vinculadas antes de cancelar. Bloquear anular si hay decendientes que afecter ledger, verificar misma logica para orden de venta.
 **Caso de prueba:** Crear OC, Recepción contra OC. Cancelar OC (debe fallar).
+**Corrección aplicada:**
+- Nueva función `has_active_source_relations()` en `document_flow/repository.py` que verifica si un documento tiene hijos activos no cancelados.
+- `compras_orden_compra_cancel()` ahora valida hijos activos antes de cancelar y aborta con mensaje flash si existen Recepciones/Facturas activas.
+- `ventas_orden_venta_cancel()` aplica la misma validación para Notas de Entrega/Facturas de Venta activas.
 
 ### S2P-05 [Alta]: `PurchaseReconciliationError` causa error 500 no manejado ✓
 **Estado:** CORREGIDO — Commit `f920176`
@@ -221,9 +228,11 @@
 
 | Prioridad | Hallazgos |
 |-----------|-----------|
-| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03, S2P-04, ~~S2P-05~~, O2C-01 al O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
+| **Alta** | ~~S2P-01~~, ~~S2P-02~~, S2P-03*, ~~S2P-04~~, ~~S2P-05~~, O2C-01 al O2C-03, O2C-05, R2R-01, R2R-02, CAS-01 al CAS-03, INV-01, INV-02 |
 | **Media** | S2P-06 al S2P-09, R2R-03, R2R-04, INV-03 al INV-07, CROSS-01 |
 | **Baja** | CAS-04, CROSS-02 |
+
+\* S2P-03: Las validaciones contra sobre-pago ya existen. Solo falta `SELECT FOR UPDATE` para concurrencia. Requiere más revisión.
 
 ---
 
@@ -231,7 +240,7 @@
 
 | Semana | Hallazgos | Enfoque |
 |--------|-----------|---------|
-| **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados), S2P-04 (cancelaciones) | Validaciones críticas de integridad |
+| **1-2** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-05~~, S2P-03 (pagos duplicados — revisión futura), ~~S2P-04 (cancelaciones)~~ | Validaciones críticas de integridad |
 | **2-3** | O2C-01 (COGS), O2C-02 (precios), O2C-03 (reserva inventario), O2C-05 (validaciones pre-submit) | O2C y controles de ventas |
 | **3-4** | R2R-01 (períodos), R2R-02 (balanceo GL), CAS-01 (saldo bancario), CAS-02 (exchange rate), CAS-03 (concurrencia) | Contabilidad y tesorería |
 | **4-5** | INV-01 (traslados), INV-02 (negative stock), S2P-07 (anticipos), resto hallazgos medios | Inventario y anticipos |

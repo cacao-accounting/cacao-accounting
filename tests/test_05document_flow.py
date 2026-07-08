@@ -763,6 +763,87 @@ def test_purchase_return_flow_is_allowed():
     assert is_allowed_flow("purchase_receipt", "purchase_return")
 
 
+def test_has_active_source_relations_true_when_children_exist(app_ctx):
+    """has_active_source_relations retorna True si hay hijos activos no cancelados."""
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.repository import has_active_source_relations
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-HAS-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-HAS-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-HAS-01",
+        target_item_id=receipt_item.id,
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+
+    assert has_active_source_relations("purchase_order", "PO-001") is True
+
+
+def test_has_active_source_relations_false_when_no_children(app_ctx):
+    """has_active_source_relations retorna False si no hay hijos activos."""
+    from cacao_accounting.document_flow.repository import has_active_source_relations
+
+    _seed_purchase_order(app_ctx)
+
+    assert has_active_source_relations("purchase_order", "PO-001") is False
+
+
+def test_has_active_source_relations_false_when_children_cancelled(app_ctx):
+    """has_active_source_relations retorna False si los hijos estan cancelados."""
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.repository import has_active_source_relations
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-HAS-CAN", company="cacao", posting_date=date(2026, 5, 4), docstatus=2)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-HAS-CAN",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-HAS-CAN",
+        target_item_id=receipt_item.id,
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+
+    assert has_active_source_relations("purchase_order", "PO-001") is False
+
+
 def test_receipt_submit_validates_against_po(app_ctx):
     """El submit de recepción debe rechazar si la cantidad excede la OC."""
     from cacao_accounting.database import DocumentRelation, PurchaseReceipt, PurchaseReceiptItem, database

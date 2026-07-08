@@ -54,7 +54,7 @@ from cacao_accounting.document_flow import (
     refresh_source_caches_for_target,
     revert_relations_for_target,
 )
-from cacao_accounting.document_flow.repository import consumed_qty_for_source
+from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
@@ -2201,6 +2201,9 @@ def compras_orden_compra_cancel(order_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("purchase_order", order_id):
+        flash("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas.", "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_order", order_id)
