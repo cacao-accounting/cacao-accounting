@@ -19,8 +19,10 @@ class MockRegistro:
 
 
 class MockItem:
-    def __init__(self, qty=1):
+    def __init__(self, qty=1, warehouse=None, item_code=None):
         self.qty = qty
+        self.warehouse = warehouse
+        self.item_code = item_code
 
 
 class TestValidateSubmitPrerequisites:
@@ -87,3 +89,28 @@ class TestValidateSubmitPrerequisites:
         items = [MockItem(qty=0)]
         registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
         validate_submit_prerequisites(registro, items=items, require_qty_positive=False)
+
+    def test_rejects_missing_warehouse_when_required(self):
+        items = [MockItem(qty=1, warehouse=None, item_code="ITEM-001")]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="almacen"):
+            validate_submit_prerequisites(registro, items=items, require_warehouse=True)
+
+    def test_passes_with_warehouse_when_required(self):
+        items = [MockItem(qty=1, warehouse="WH-001", item_code="ITEM-001")]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(registro, items=items, require_warehouse=True)
+
+    def test_skips_warehouse_validation_when_disabled(self):
+        items = [MockItem(qty=1, warehouse=None, item_code="ITEM-001")]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(registro, items=items, require_warehouse=False)
+
+    def test_rejects_one_item_without_warehouse_among_many(self):
+        items = [
+            MockItem(qty=1, warehouse="WH-001", item_code="ITEM-001"),
+            MockItem(qty=1, warehouse=None, item_code="ITEM-002"),
+        ]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="ITEM-002"):
+            validate_submit_prerequisites(registro, items=items, require_warehouse=True)

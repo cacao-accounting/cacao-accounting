@@ -4,7 +4,15 @@
 """Validaciones pre-submit para documentos transaccionales."""
 
 
-def validate_submit_prerequisites(registro, items=None, *, require_party=True, require_lines=True, require_qty_positive=True):
+def validate_submit_prerequisites(
+    registro,
+    items=None,
+    *,
+    require_party=True,
+    require_lines=True,
+    require_qty_positive=True,
+    require_warehouse=False,
+):
     """Valida requisitos comunes antes de aprobar un documento.
 
     Args:
@@ -13,6 +21,7 @@ def validate_submit_prerequisites(registro, items=None, *, require_party=True, r
         require_party: Si se requiere proveedor o cliente.
         require_lines: Si se requiere al menos una linea.
         require_qty_positive: Si las cantidades deben ser > 0.
+        require_warehouse: Si se requiere que todas las lineas tengan almacen asignado.
 
     Raises:
         ValueError: Si alguna validacion falla.
@@ -32,3 +41,8 @@ def validate_submit_prerequisites(registro, items=None, *, require_party=True, r
             for item in items:
                 if getattr(item, "qty", 0) <= 0:
                     raise ValueError("Todas las cantidades deben ser mayores a cero.")
+    if require_warehouse and items:
+        for item in items:
+            if not getattr(item, "warehouse", None):
+                item_code = getattr(item, "item_code", "desconocido")
+                raise ValueError(f"La linea del articulo {item_code} requiere un almacen asignado.")

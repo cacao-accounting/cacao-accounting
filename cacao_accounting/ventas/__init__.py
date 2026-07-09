@@ -1398,6 +1398,7 @@ def ventas_orden_venta_nuevo():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     from cacao_accounting.database import Warehouse
+
     bodegas_disponibles = [
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
@@ -1471,6 +1472,7 @@ def ventas_orden_venta_editar(order_id: str):
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     from cacao_accounting.database import Warehouse
+
     bodegas_disponibles = [
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
@@ -2198,7 +2200,7 @@ def ventas_entrega_submit(note_id: str):
         items = (
             database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars().all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(registro, items=items, require_party=True, require_warehouse=True)
         submit_document(registro)
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
@@ -2551,7 +2553,9 @@ def ventas_factura_venta_submit(invoice_id: str):
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(
+            registro, items=items, require_party=True, require_warehouse=bool(registro.update_inventory)
+        )
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
         if registro.update_inventory and not registro.delivery_note_id:
