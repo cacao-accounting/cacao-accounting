@@ -124,7 +124,7 @@
 
 | ID | Hallazgo Original | Veredicto | Confianza | GitHub |
 |----|-------------------|-----------|-----------|--------|
-| INV-01 | Verificación stock negativo después de upsert | **FALSO POSITIVO** — Check ocurre ANTES de _upsert_stock_bin | Muy Alto | — |
+| INV-01 | Verificación stock negativo después de upsert | **FALSO POSITIVO (CERRADO)** — Check ocurre ANTES de _upsert_stock_bin; comentario explicativo en código | Muy Alto | [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) |
 | INV-02 | Check stock negativo traslados con mensaje genérico | **VERIFICADO** — Error no incluye item_code/warehouse | Bajo | [#170](https://github.com/cacao-accounting/cacao-accounting/issues/170) |
 | INV-03 | Filtro compañía almacén inconsistente | **VERIFICADO** — Compras/Ventas no filtran por company | Alto | [#156](https://github.com/cacao-accounting/cacao-accounting/issues/156) |
 | INV-04 | Conversión UOM reconciliación falla silenciosamente | **VERIFICADO** — except InventoryServiceError silencia sin log | Alto | [#157](https://github.com/cacao-accounting/cacao-accounting/issues/157) |

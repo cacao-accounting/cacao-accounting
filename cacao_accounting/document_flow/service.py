@@ -696,6 +696,7 @@ def _process_reconciliation_line(
         raise DocumentFlowError("El monto aplicado excede el saldo disponible del pago.", 409)
 
     document = _get_reference_document(flow_source_type, reference_id, company, party_type, party_id)
+    _validate_payment_currency_match(payment, document)
     _check_duplicate_application(payment.id, flow_source_type, reference_id)
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
     allocation_ctx = PaymentAllocationContext(
@@ -748,6 +749,21 @@ def _get_reference_document(flow_source_type: str, reference_id: str, company: s
     if expected_party_type != party_type or expected_party_id != party_id:
         raise DocumentFlowError("El documento referenciado no coincide con el tercero.", 409)
     return document
+
+
+def _validate_payment_currency_match(payment: Any, document: Any) -> None:
+    """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado.
+
+    Evita inconsistencias contables al aplicar pagos a documentos con moneda diferente.
+    """
+    payment_currency = getattr(payment, "currency", None)
+    document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    if payment_currency and document_currency and payment_currency != document_currency:
+        raise DocumentFlowError(
+            "La moneda del pago ({0}) no coincide con la moneda del documento referenciado ({1}). "
+            "No se permiten aplicaciones cruzadas de moneda.".format(payment_currency, document_currency),
+            409,
+        )
 
 
 def _check_duplicate_application(payment_id: str, flow_source_type: str, reference_id: str) -> None:
@@ -1651,7 +1667,11 @@ def _apply_payment_target_line(
         raise DocumentFlowError("No se puede repetir la misma factura en un solo pago.", 409)
     processed_reference_keys.add(reference_key)
 
-    invoice = get_document(reference_type, reference_id)
+    # S2P-10: Usa with_for_update() para prevenir condiciones de carrera
+    # al asignar pagos directamente. Sin bloqueo, otro proceso podria
+    # modificar la factura entre la lectura y la persistencia.
+    model = _payment_reference_model(reference_type)
+    invoice = database.session.query(model).with_for_update().get(reference_id)
     if not invoice:
         raise DocumentFlowError("Factura origen no encontrada.", 404)
     if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:

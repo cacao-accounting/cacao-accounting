@@ -1679,6 +1679,9 @@ def _create_stock_movement(
         validate_batch_serial(line, outgoing=qty_change < 0)
     except InventoryServiceError as exc:
         raise PostingError(str(exc)) from exc
+    # INV-01: Falso positivo - La verificacion de stock negativo (allow_negative_stock)
+    # ocurre ANTES de _upsert_stock_bin. Este check protege el consumo de capas FIFO,
+    # no la actualizacion de StockBin. Ver docstring de _upsert_stock_bin.
     if qty_change < 0 and not _skip_layer_consumption:
         item = _stock_item_for(line)
         try:
