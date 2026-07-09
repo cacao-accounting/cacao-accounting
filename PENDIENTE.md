@@ -49,7 +49,7 @@
 - [ ] **CAS-01 [#150]:** Agregar `UniqueConstraint` en `PaymentReference` sobre `(payment_id, reference_type, reference_id)`.
 - [ ] **CAS-02 [#169]:** Agregar `with_for_update()` en `reconcile_bank_items` para BankTransaction.
 - [ ] **CAS-03 [#168]:** Agregar validación de moneda y FX en `_validate_payment_reference_document`.
-- [ ] **CAS-04 [#151]:** Resetear `is_reconciled` y `payment_entry_id` en `BankTransaction` al cancelar pago.
+- [x] **CAS-04 [#151]:** Resetear `is_reconciled` y `payment_entry_id` en `BankTransaction` al cancelar pago.
 - [ ] **CAS-06 [#152]:** Agregar `with_for_update()` en lectura de `PaymentEntry` durante reconciliación.
 - [ ] **CAS-07 [#153]:** Agregar validación de tamaño máximo de lote en reconciliación.
 - [ ] **CAS-10 [#133]:** Copiar lógica de `_build_payment_reference` al path masivo de pago.
