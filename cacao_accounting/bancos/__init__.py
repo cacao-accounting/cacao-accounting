@@ -878,7 +878,11 @@ def _validate_payment_reference_document(
     document: Any,
     flow_source_type: str,
 ) -> None:
-    """Valida compañía, tercero y estado del documento referenciado."""
+    """Valida compañía, tercero, estado y moneda del documento referenciado.
+
+    CAS-03: Se valida que la moneda del pago coincida con la moneda del documento
+    referenciado para evitar inconsistencias contables en pagos multimoneda.
+    """
     if getattr(document, "docstatus", 0) != 1:
         raise ValueError(_("El documento referenciado debe estar aprobado."))
     if payment.company and document.company and payment.company != document.company:
@@ -897,6 +901,18 @@ def _validate_payment_reference_document(
     expected_payment_type = _payment_reference_expected_payment_type(flow_source_type)
     if expected_payment_type and payment.payment_type != expected_payment_type:
         raise ValueError(_("El tipo de pago no corresponde con el tipo de nota referenciada."))
+    # CAS-03: Validación cruzada de moneda entre pago y documento referenciado.
+    payment_currency = getattr(payment, "currency", None)
+    document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    if payment_currency and document_currency and payment_currency != document_currency:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(
+            _(
+                "La moneda del pago ({0}) no coincide con la moneda del documento referenciado ({1}). "
+                "No se permiten aplicaciones cruzadas de moneda."
+            ).format(payment_currency, document_currency)
+        )
 
 
 def _build_payment_reference(
@@ -1854,6 +1870,19 @@ def bancos_pago_cancel(payment_id: str):
     try:
         cancel_document(registro)
         revert_relations_for_target("payment_entry", registro.id, reason="payment_cancelled")
+        # CAS-04: Resetear conciliación bancaria vinculada al pago cancelado.
+        # Las BankTransaction que apuntaban a este pago deben perder su enlace
+        # y marcar no reconciliadas para que puedan reasignarse.
+        linked_transactions = (
+            database.session.execute(
+                database.select(BankTransaction).filter_by(payment_entry_id=registro.id)
+            )
+            .scalars()
+            .all()
+        )
+        for bt in linked_transactions:
+            bt.is_reconciled = False
+            bt.payment_entry_id = None
         references = (
             database.session.execute(database.select(PaymentReference).filter_by(payment_id=registro.id)).scalars().all()
         )
