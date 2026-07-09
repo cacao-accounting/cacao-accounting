@@ -1,5 +1,12 @@
 # PENDIENTE - Cacao Accounting
 
+## Seguimiento 2026-07-08 (Cierre de hallazgos ISSUES.md)
+- [x] **R2R-04:** Asistente de cierre mensual finaliza y marca `AccountingPeriod.is_closed=True` (Commit `4610fdd`).
+- [x] **S2P-09:** Selector de moneda en UI de compras + `base_total` multimoneda (Commit `bb2ac5d`).
+- [x] **O2C-04:** Tipo documental `sales_return` espejo de `purchase_return` + exposición de `DeliveryNote.is_return` (Commit `b31ce72`).
+- [x] **S2P-07:** Neteo automático de anticipos contra factura con flag `apply_advances_automatically` (Commit `3f72f1a`).
+- [x] Todos los 30 hallazgos de ISSUES.md corregidos o falsos positivos. No quedan pendientes del informe.
+
 ## Seguimiento 2026-07-03 (Codigos legibles para clientes, proveedores e items)
 - [x] Reemplazar ULIDs visibles en clientes, proveedores e items por codigos secuenciales CUSTM-00001, SUPLR-00001, ITEM-000001.
 - [x] Crear series globales de naming para customer/supplier/item con prefijo fijo y sin reinicio.
