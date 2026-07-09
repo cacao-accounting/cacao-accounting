@@ -15,6 +15,9 @@ from sqlalchemy import func, or_, select
 from cacao_accounting.database import (
     AuditLog,
     BankAccount,
+    Book,
+    ComprobanteContable,
+    ComprobanteContableDetalle,
     DocumentRelation,
     PaymentEntry,
     PaymentReference,
@@ -905,7 +908,111 @@ def apply_advance_to_invoice(
         amount=amount,
     )
     refresh_outstanding_amount_cache(invoice, as_of_date=allocation_date)
+    _maybe_settle_advance_against_invoice(payment, invoice, reference_type, amount, allocation_date)
     return reference
+
+
+def _maybe_settle_advance_against_invoice(
+    payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
+    reference_type: str,
+    amount: Decimal,
+    allocation_date: date,
+) -> None:
+    """S2P-07: netea el anticipo contra la cuenta por pagar/cobrar.
+
+    Si la configuracion de la compania tiene ``apply_advances_automatically``
+    activo, genera un comprobante contable de neteo:
+    compras -> Dr Cuenta por Pagar / Cr Cuenta de Anticipo a Proveedores;
+    ventas  -> Dr Cuenta de Anticipo a Clientes / Cr Cuenta por Cobrar.
+    """
+    from cacao_accounting.contabilidad.default_accounts import get_company_default_accounts
+    from cacao_accounting.contabilidad.posting import post_comprobante_contable
+    from cacao_accounting.document_identifiers import assign_document_identifier
+
+    company = invoice.company
+    defaults = get_company_default_accounts(company)
+    if not defaults or not defaults.apply_advances_automatically:
+        return
+    if amount <= 0:
+        return
+
+    is_purchase = reference_type == "purchase_invoice"
+    party_account_id = defaults.default_payable if is_purchase else defaults.default_receivable
+    advance_account_id = defaults.supplier_advance_account_id if is_purchase else defaults.customer_advance_account_id
+    if not party_account_id or not advance_account_id:
+        return
+
+    book = (
+        database.session.execute(select(Book).filter_by(entity=company).order_by(Book.is_primary.desc(), Book.code))
+        .scalars()
+        .first()
+    )
+    user_id = getattr(payment, "created_by", None) or "system"
+    journal = ComprobanteContable(
+        entity=company,
+        book=book.code if book else None,
+        user_id=str(user_id),
+        date=allocation_date,
+        reference=payment.document_no or payment.id,
+        memo="Neteo de anticipo contra factura",
+        status="submitted",
+        voucher_type="journal_entry",
+        book_codes=book.code if book else None,
+        transaction_currency=None,
+    )
+    database.session.add(journal)
+    database.session.flush()
+    try:
+        assign_document_identifier(
+            document=journal,
+            entity_type="journal_entry",
+            posting_date_raw=allocation_date,
+            allow_closing=True,
+        )
+    except Exception:
+        journal.document_no = f"{company}-ADV-{journal.id[-8:]}"
+    if is_purchase:
+        debit_account, credit_account = party_account_id, advance_account_id
+    else:
+        debit_account, credit_account = advance_account_id, party_account_id
+    from cacao_accounting.database import Accounts as _Accounts
+
+    _debit_code = database.session.execute(select(_Accounts).filter_by(id=debit_account)).scalars().first()
+    _credit_code = database.session.execute(select(_Accounts).filter_by(id=credit_account)).scalars().first()
+    debit_code = _debit_code.code if _debit_code else debit_account
+    credit_code = _credit_code.code if _credit_code else credit_account
+    database.session.add(
+        ComprobanteContableDetalle(
+            entity=company,
+            account=debit_code,
+            book=book.code if book else None,
+            date=allocation_date,
+            transaction="journal_entry",
+            transaction_id=journal.id,
+            value=amount,
+            value_default=amount,
+            memo="Neteo de anticipo",
+            voucher_type="journal_entry",
+        )
+    )
+    database.session.add(
+        ComprobanteContableDetalle(
+            entity=company,
+            account=credit_code,
+            book=book.code if book else None,
+            date=allocation_date,
+            transaction="journal_entry",
+            transaction_id=journal.id,
+            value=-amount,
+            value_default=-amount,
+            memo="Neteo de anticipo",
+            voucher_type="journal_entry",
+        )
+    )
+    post_comprobante_contable(journal)
+    journal.status = "submitted"
+    database.session.add(journal)
 
 
 def _state_quantities(
