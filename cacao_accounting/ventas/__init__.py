@@ -980,6 +980,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                warehouse=request.form.get(f"warehouse_{i}") or None,
             )
             database.session.add(linea)
             database.session.flush()
