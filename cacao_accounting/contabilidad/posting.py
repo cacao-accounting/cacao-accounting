@@ -1697,10 +1697,9 @@ def _create_stock_movement(
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
     qty_after = _stock_qty_after(document.company, line.item_code, warehouse, qty_change)
     if qty_after < 0:
-        if not _skip_layer_consumption:
-            item = _stock_item_for(line)
-        else:
-            item = _stock_item_for(line)
+        # NOTE: _skip_layer_consumption is irrelevant for negative stock validation;
+        # both branches resolve the same item to check allow_negative_stock.
+        item = _stock_item_for(line)
         if not item.allow_negative_stock:
             raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
     _upsert_stock_bin(
