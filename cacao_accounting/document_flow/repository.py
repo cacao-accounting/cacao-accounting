@@ -170,13 +170,17 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
     descendientes activos (ej. cancelar una OC que tiene Recepciones activas).
     """
     source_key = normalize_doctype(source_type)
-    relations = database.session.execute(
-        database.select(DocumentRelation).filter_by(
-            source_type=source_key,
-            source_id=source_id,
-            status="active",
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type=source_key,
+                source_id=source_id,
+                status="active",
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for relation in relations:
         target = get_document(relation.target_type, relation.target_id)
         if target and getattr(target, "docstatus", 0) != 2:

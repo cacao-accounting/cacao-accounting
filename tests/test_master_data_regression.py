@@ -7,6 +7,7 @@ for accounts and cost centers, edit form prefills and roundtrip, detail view edi
 buttons and page title consistency.
 
 """
+
 from __future__ import annotations
 
 import re
@@ -73,7 +74,9 @@ def test_entity_search_select_active_and_include_inactive(app_ctx):
     from cacao_accounting.database import Entity, User, database
 
     # add an inactive entity
-    database.session.add(Entity(code="ina_test", name="INA", company_name="INA SA", tax_id="J999", currency="NIO", enabled=False))
+    database.session.add(
+        Entity(code="ina_test", name="INA", company_name="INA SA", tax_id="J999", currency="NIO", enabled=False)
+    )
     database.session.commit()
 
     client = app_ctx.test_client()
@@ -99,8 +102,12 @@ def test_account_parent_roundtrip_and_cross_entity_rejection(app_ctx):
     from cacao_accounting.database import Accounts, Entity, User, database
 
     # create another entity
-    database.session.add(Entity(code="entA", name="A", company_name="A SA", tax_id="J100", currency="NIO", enabled=True, status="activo"))
-    database.session.add(Entity(code="entB", name="B", company_name="B SA", tax_id="J101", currency="NIO", enabled=True, status="activo"))
+    database.session.add(
+        Entity(code="entA", name="A", company_name="A SA", tax_id="J100", currency="NIO", enabled=True, status="activo")
+    )
+    database.session.add(
+        Entity(code="entB", name="B", company_name="B SA", tax_id="J101", currency="NIO", enabled=True, status="activo")
+    )
     parent = Accounts(entity="entA", code="P", name="Parent", active=True, enabled=True, group=True)
     database.session.add(parent)
     database.session.commit()
@@ -144,8 +151,12 @@ def test_account_parent_roundtrip_and_cross_entity_rejection(app_ctx):
 def test_cost_center_parent_roundtrip_and_cross_entity_rejection(app_ctx):
     from cacao_accounting.database import CostCenter, Entity, User, database
 
-    database.session.add(Entity(code="ent1", name="E1", company_name="E1 SA", tax_id="J200", currency="NIO", enabled=True, status="activo"))
-    database.session.add(Entity(code="ent2", name="E2", company_name="E2 SA", tax_id="J201", currency="NIO", enabled=True, status="activo"))
+    database.session.add(
+        Entity(code="ent1", name="E1", company_name="E1 SA", tax_id="J200", currency="NIO", enabled=True, status="activo")
+    )
+    database.session.add(
+        Entity(code="ent2", name="E2", company_name="E2 SA", tax_id="J201", currency="NIO", enabled=True, status="activo")
+    )
     parent = CostCenter(entity="ent1", code="CCP", name="CC Parent", active=True, enabled=True, group=True)
     database.session.add(parent)
     database.session.commit()

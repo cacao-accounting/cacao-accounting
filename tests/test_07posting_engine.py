@@ -2376,7 +2376,9 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
                 warehouse_code="WH-ST", company="cacao", inventory_account_id=inventory_account.id, is_active=True
             ),
             ItemAccount(item_code="ITEM-ST", company="cacao"),
-            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id, inventory_adjustment_account_id=adjustment_account.id),
+            CompanyDefaultAccount(
+                company="cacao", bridge_account_id=bridge_account.id, inventory_adjustment_account_id=adjustment_account.id
+            ),
         ]
     )
     entry = StockEntry(
@@ -2631,9 +2633,7 @@ def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
     ).scalar_one()
 
     stock_entries = (
-        database.session.execute(
-            database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id)
-        )
+        database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
         .scalars()
         .all()
     )
@@ -2785,7 +2785,9 @@ def test_negative_stock_allowed_when_item_allows(app_ctx):
                 warehouse_code="WH-NEG-ALLOW", company="cacao", inventory_account_id=inv_account.id, is_active=True
             ),
             ItemAccount(item_code="ITEM-NEG-ALLOW", company="cacao"),
-            CompanyDefaultAccount(company="cacao", bridge_account_id=inv_account.id, inventory_adjustment_account_id=inv_account.id),
+            CompanyDefaultAccount(
+                company="cacao", bridge_account_id=inv_account.id, inventory_adjustment_account_id=inv_account.id
+            ),
             StockLedgerEntry(
                 posting_date=date(2026, 6, 1),
                 item_code="ITEM-NEG-ALLOW",
@@ -2865,18 +2867,10 @@ def test_stock_entry_warehouse_filtered_by_company_on_creation(app_ctx):
     database.session.commit()
 
     choices_cacao = (
-        database.session.execute(
-            database.select(Warehouse).filter_by(is_active=True, company="cacao")
-        )
-        .scalars()
-        .all()
+        database.session.execute(database.select(Warehouse).filter_by(is_active=True, company="cacao")).scalars().all()
     )
     choices_otra = (
-        database.session.execute(
-            database.select(Warehouse).filter_by(is_active=True, company="otra")
-        )
-        .scalars()
-        .all()
+        database.session.execute(database.select(Warehouse).filter_by(is_active=True, company="otra")).scalars().all()
     )
     assert any(w.code == "WH-CO1" for w in choices_cacao)
     assert not any(w.code == "WH-CO2" for w in choices_cacao)
@@ -2904,43 +2898,83 @@ def test_manual_stock_receipt_uses_adjustment_account_not_bridge(app_ctx):
     )
 
     bridge_account = Accounts(
-        entity="cacao", code="BRIDGE-MAN", name="Puente", active=True, enabled=True,
-        classification="liability", account_type="liability",
+        entity="cacao",
+        code="BRIDGE-MAN",
+        name="Puente",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="liability",
     )
     adj_account = Accounts(
-        entity="cacao", code="ADJ-MAN", name="Ajuste", active=True, enabled=True,
-        classification="expense", account_type="expense",
+        entity="cacao",
+        code="ADJ-MAN",
+        name="Ajuste",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
     )
     inv_account = Accounts(
-        entity="cacao", code="INV-MAN", name="Inventario", active=True, enabled=True,
-        classification="asset", account_type="inventory",
+        entity="cacao",
+        code="INV-MAN",
+        name="Inventario",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
     )
     database.session.add_all([bridge_account, adj_account, inv_account])
     database.session.flush()
-    database.session.add_all([
-        UOM(code="EA", name="Each"),
-        Item(code="ITEM-MAN", name="Item manual", item_type="goods", is_stock_item=True, default_uom="EA", allow_negative_stock=True),
-        Warehouse(code="WH-MAN", name="Bodega manual", company="cacao"),
-        WarehouseCompanyAccount(warehouse_code="WH-MAN", company="cacao", inventory_account_id=inv_account.id, is_active=True),
-        ItemAccount(item_code="ITEM-MAN", company="cacao"),
-        CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id, inventory_adjustment_account_id=adj_account.id),
-    ])
-    entry = StockEntry(company="cacao", posting_date=date(2026, 7, 1), purpose="material_receipt", to_warehouse="WH-MAN", docstatus=1)
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(
+                code="ITEM-MAN",
+                name="Item manual",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA",
+                allow_negative_stock=True,
+            ),
+            Warehouse(code="WH-MAN", name="Bodega manual", company="cacao"),
+            WarehouseCompanyAccount(
+                warehouse_code="WH-MAN", company="cacao", inventory_account_id=inv_account.id, is_active=True
+            ),
+            ItemAccount(item_code="ITEM-MAN", company="cacao"),
+            CompanyDefaultAccount(
+                company="cacao", bridge_account_id=bridge_account.id, inventory_adjustment_account_id=adj_account.id
+            ),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao", posting_date=date(2026, 7, 1), purpose="material_receipt", to_warehouse="WH-MAN", docstatus=1
+    )
     database.session.add(entry)
     database.session.flush()
-    database.session.add(StockEntryItem(
-        stock_entry_id=entry.id, item_code="ITEM-MAN", target_warehouse="WH-MAN",
-        qty=Decimal("5"), qty_in_base_uom=Decimal("5"), uom="EA",
-        basic_rate=Decimal("10"), valuation_rate=Decimal("10"), amount=Decimal("50"),
-    ))
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ITEM-MAN",
+            target_warehouse="WH-MAN",
+            qty=Decimal("5"),
+            qty_in_base_uom=Decimal("5"),
+            uom="EA",
+            basic_rate=Decimal("10"),
+            valuation_rate=Decimal("10"),
+            amount=Decimal("50"),
+        )
+    )
     database.session.commit()
 
     post_document_to_gl(entry)
     database.session.commit()
 
-    gl_lines = database.session.execute(
-        database.select(GLEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id)
-    ).scalars().all()
+    gl_lines = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
+        .scalars()
+        .all()
+    )
     assert len(gl_lines) == 2
     assert any(line.account_id == adj_account.id for line in gl_lines)
     assert not any(line.account_id == bridge_account.id for line in gl_lines)
@@ -2958,32 +2992,55 @@ def test_stock_entry_edit_deletes_orphan_document_relations(app_ctx):
         database,
     )
 
-    database.session.add_all([
-        UOM(code="EA", name="Each"),
-        Item(code="ITEM-ORPHAN", name="Item test", item_type="goods", is_stock_item=True, default_uom="EA"),
-        Warehouse(code="WH-ORPHAN", name="Bodega test", company="cacao"),
-    ])
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(code="ITEM-ORPHAN", name="Item test", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-ORPHAN", name="Bodega test", company="cacao"),
+        ]
+    )
     database.session.flush()
-    entry = StockEntry(company="cacao", posting_date=date(2026, 7, 1), purpose="material_receipt", to_warehouse="WH-ORPHAN", docstatus=0)
+    entry = StockEntry(
+        company="cacao", posting_date=date(2026, 7, 1), purpose="material_receipt", to_warehouse="WH-ORPHAN", docstatus=0
+    )
     database.session.add(entry)
     database.session.flush()
     item = StockEntryItem(
-        stock_entry_id=entry.id, item_code="ITEM-ORPHAN", target_warehouse="WH-ORPHAN",
-        qty=Decimal("5"), qty_in_base_uom=Decimal("5"), uom="EA",
-        basic_rate=Decimal("10"), valuation_rate=Decimal("10"), amount=Decimal("50"),
+        stock_entry_id=entry.id,
+        item_code="ITEM-ORPHAN",
+        target_warehouse="WH-ORPHAN",
+        qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
+        uom="EA",
+        basic_rate=Decimal("10"),
+        valuation_rate=Decimal("10"),
+        amount=Decimal("50"),
     )
     database.session.add(item)
     database.session.flush()
-    database.session.add(DocumentRelation(
-        source_type="seed", source_id="old-seed", source_item_id="old-item",
-        target_type="stock_entry", target_id=entry.id, target_item_id=item.id,
-        status="active", relation_type="source", qty=Decimal("5"), uom="EA", rate=Decimal("10"), amount=Decimal("50"),
-    ))
+    database.session.add(
+        DocumentRelation(
+            source_type="seed",
+            source_id="old-seed",
+            source_item_id="old-item",
+            target_type="stock_entry",
+            target_id=entry.id,
+            target_item_id=item.id,
+            status="active",
+            relation_type="source",
+            qty=Decimal("5"),
+            uom="EA",
+            rate=Decimal("10"),
+            amount=Decimal("50"),
+        )
+    )
     database.session.commit()
 
-    rels_before = database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id)
-    ).scalars().all()
+    rels_before = (
+        database.session.execute(database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id))
+        .scalars()
+        .all()
+    )
     assert len(rels_before) == 1
 
     # Verificar que la limpieza de DocumentRelation ocurre
@@ -2993,9 +3050,11 @@ def test_stock_entry_edit_deletes_orphan_document_relations(app_ctx):
         database.session.delete(rel)
     database.session.commit()
 
-    rels_after = database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id)
-    ).scalars().all()
+    rels_after = (
+        database.session.execute(database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=entry.id))
+        .scalars()
+        .all()
+    )
     assert len(rels_after) == 0
 
 
@@ -3014,14 +3073,22 @@ def test_reconciliation_qty_in_base_uom_converts_uom(app_ctx):
     database.session.add_all([base_uom, other_uom])
     database.session.flush()
     item = Item(
-        code="ITEM-UOM-REC", name="Item UOM reconcil", item_type="goods",
-        is_stock_item=True, default_uom="KG",
+        code="ITEM-UOM-REC",
+        name="Item UOM reconcil",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="KG",
     )
     database.session.add(item)
     database.session.flush()
-    database.session.add(ItemUOMConversion(
-        item_code="ITEM-UOM-REC", from_uom="LB", to_uom="KG", conversion_factor=Decimal("0.453592"),
-    ))
+    database.session.add(
+        ItemUOMConversion(
+            item_code="ITEM-UOM-REC",
+            from_uom="LB",
+            to_uom="KG",
+            conversion_factor=Decimal("0.453592"),
+        )
+    )
     database.session.commit()
 
     converted = convert_item_qty("ITEM-UOM-REC", Decimal("10"), "LB", "KG")
