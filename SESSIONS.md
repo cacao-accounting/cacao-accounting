@@ -18,6 +18,11 @@
 - **Pruebas:** Suite completa de cancelación pasó (31 tests). Patrón consistente con PO y SO existentes.
 - **Cierre del issues:** #119 (S2P-01) cerrado, #145 (O2C-09) cerrado con comentario explicativo del fix completo en O2C.
 
+## 2026-07-09 (S2P-09: Validación estricta cuando CompanyParty es None en _validate_supplier_invoice_flags)
+- **Solicitud:** Ejecutar corrección del issue #138 (S2P-09): `_validate_supplier_invoice_flags` omitía validación cuando `CompanyParty` es None.
+- **Implementación:** Se modificó `_validate_supplier_invoice_flags` en `cacao_accounting/compras/__init__.py:2846-2848` para lanzar `PostingError("No se encontró configuración de flags para el proveedor en la compañía.")` en lugar de retornar silenciosamente. Se agregó comentario con referencia al issue.
+- **Cierre del issue:** #138 cerrado con comentario explicativo. Commit `13f77a4`.
+
 ## 2026-07-09 (O2C-22: Validación de almacén en validate_submit_prerequisites)
 - **Solicitud:** Analizar issue #147 (O2C-22: validate_submit_prerequisites no valida almacén para ítems de stock) y corregir si es un error real.
 - **Diagnóstico:** El issue es un error real verificado. La función `validate_submit_prerequisites` no validaba que ítems con `is_stock_item=True` tengan un almacén asignado antes de aprobar el documento. La validación de almacén solo ocurría después en `posting.py` durante la creación de `StockLedgerEntry`, causando errores después de la aprobación.

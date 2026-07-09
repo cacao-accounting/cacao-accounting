@@ -9,7 +9,7 @@
 - [ ] **S2P-06 [#160]:** Agregar `supplier_name=supplier.name` en creación de Purchase Receipt.
 - [ ] **S2P-07 [#122]:** Recalcular FX rate y montos base en edit handler de Purchase Invoice.
 - [ ] **S2P-08 [#141]:** Copiar transaction_currency y computar FX en handlers de duplicado PO/Invoice.
-- [ ] **S2P-09 [#138]:** Si CompanyParty es None, asumir configuración restrictiva (denegar factura sin OC).
+- [x] **S2P-09 [#138]:** Si CompanyParty es None, asumir configuración restrictiva (denegar factura sin OC).
 - [ ] **S2P-10 [#161]:** Agregar `with_for_update()` en `_apply_payment_target_line`.
 - [ ] **S2P-11 [#123]:** Reemplazar `except Exception` por captura específica + logging en `_purchase_exchange_rate`.
 - [ ] **S2P-12 [#124]:** Verificar pagos activos antes de cancelar Invoice (compras y ventas).
