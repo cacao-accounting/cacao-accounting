@@ -232,6 +232,7 @@ def apply_recurring_template(
         template.status = "completed"
         template.docstatus = 3
 
+    log_submit(application)
     database.session.commit()
     return application
 
