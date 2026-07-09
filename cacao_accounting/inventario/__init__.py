@@ -927,6 +927,13 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
                 try:
                     base_qty = convert_item_qty(item_code, abs(qty_difference), uom, default_uom)
                 except InventoryServiceError:
+                    logger.warning(
+                        "UOM conversion failed for item %s: qty=%s uom=%s default_uom=%s",
+                        item_code,
+                        qty_difference,
+                        uom,
+                        default_uom,
+                    )
                     base_qty = abs(qty_difference)
             else:
                 base_qty = abs(qty_difference)
