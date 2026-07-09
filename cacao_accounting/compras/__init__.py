@@ -466,6 +466,9 @@ def compras_solicitud_compra_cancel(request_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("purchase_request", request_id):
+        flash("No se puede cancelar la solicitud de compra porque tiene órdenes de compra o cotizaciones activas.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_request", request_id)
@@ -923,6 +926,9 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("supplier_quotation", quotation_id):
+        flash("No se puede cancelar la cotización de proveedor porque tiene solicitudes de cotización activas.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("supplier_quotation", quotation_id)
@@ -2217,6 +2223,9 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("purchase_quotation", quotation_id):
+        flash("No se puede cancelar la solicitud de cotización porque tiene órdenes de compra activas.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_quotation", quotation_id)
@@ -2634,6 +2643,9 @@ def compras_recepcion_cancel(receipt_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("purchase_receipt", receipt_id):
+        flash("No se puede cancelar la recepción de compra porque tiene facturas de compra activas.", "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     try:
         cancel_document(registro)
         revert_relations_for_target("purchase_receipt", receipt_id)
