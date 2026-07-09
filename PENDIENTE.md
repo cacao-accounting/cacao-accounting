@@ -59,7 +59,7 @@
 - [ ] **INV-02 [#170]:** Incluir item_code y warehouse en mensaje de error de capas.
 - [ ] **INV-03 [#156]:** Filtrar bodegas por compañía en compras y ventas.
 - [ ] **INV-04 [#157]:** Re-lanzar error o flash warning en conversión UOM de reconciliación.
-- [ ] **INV-05 [#171]:** Calcular `qty_in_base_uom` con `convert_item_qty` en `_save_stock_entry_items`.
+- [x] **INV-05 [#171]:** Calcular `qty_in_base_uom` con `convert_item_qty` en `_save_stock_entry_items` (Commit pendiente).
 - [ ] **INV-06 [#136]:** Derivar `qty_after` de `bin_row.actual_qty + qty_change` dentro de `_upsert_stock_bin`.
 - [ ] **INV-07 [#158]:** Agregar método para reconstruir `StockValuationLayer` desde `StockLedgerEntry`.
 - [ ] **INV-10 [#159]:** Considerar `reserved_qty` en movimientos manuales de inventario.
