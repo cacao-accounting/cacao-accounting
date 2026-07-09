@@ -187,6 +187,7 @@ def apply_recurring_template(
     from cacao_accounting.contabilidad.journal_service import _assign_identifier_if_needed
 
     _assign_identifier_if_needed(journal, template.naming_series_id)
+    log_create(journal)
 
     # Generar líneas
     for idx, item in enumerate(items, start=1):
