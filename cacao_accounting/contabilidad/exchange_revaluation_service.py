@@ -659,23 +659,66 @@ class ExchangeRevaluationService:
     def _closing_rate(self, origin: str, destination: str, closing_date: date) -> Decimal:
         if origin == destination:
             return Decimal("1")
-        rate = (
-            database.session.execute(select(ExchangeRate).filter_by(origin=origin, destination=destination, date=closing_date))
-            .scalars()
-            .first()
-        )
-        if rate is not None:
-            return self._decimal(rate.rate)
-        inverse = (
-            database.session.execute(select(ExchangeRate).filter_by(origin=destination, destination=origin, date=closing_date))
-            .scalars()
-            .first()
-        )
-        if inverse is not None:
-            inverse_rate = self._decimal(inverse.rate)
-            if inverse_rate == 0:
+
+        def _rate(pair_origin: str, pair_destination: str, target_date: date) -> Decimal | None:
+            rate = (
+                database.session.execute(
+                    select(ExchangeRate).filter_by(origin=pair_origin, destination=pair_destination, date=target_date)
+                )
+                .scalars()
+                .first()
+            )
+            if rate is not None:
+                return self._decimal(rate.rate)
+            return None
+
+        def _nearest_rate(origin: str, destination: str, target_date: date) -> Decimal | None:
+            before = (
+                database.session.execute(
+                    select(ExchangeRate)
+                    .filter_by(origin=origin, destination=destination)
+                    .where(ExchangeRate.date <= target_date)
+                    .order_by(ExchangeRate.date.desc())
+                )
+                .scalars()
+                .first()
+            )
+            if before is not None:
+                return self._decimal(before.rate)
+            after = (
+                database.session.execute(
+                    select(ExchangeRate)
+                    .filter_by(origin=origin, destination=destination)
+                    .where(ExchangeRate.date >= target_date)
+                    .order_by(ExchangeRate.date.asc())
+                )
+                .scalars()
+                .first()
+            )
+            if after is not None:
+                return self._decimal(after.rate)
+            return None
+
+        rate_val = _rate(origin, destination, closing_date)
+        if rate_val is not None:
+            return rate_val
+
+        rate_val = _nearest_rate(origin, destination, closing_date)
+        if rate_val is not None:
+            return rate_val
+
+        rate_val = _rate(destination, origin, closing_date)
+        if rate_val is not None:
+            if rate_val == 0:
                 raise ExchangeRevaluationError("El tipo de cambio no puede ser cero.")
-            return (Decimal("1") / inverse_rate).quantize(Decimal("0.000000001"))
+            return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
+
+        rate_val = _nearest_rate(destination, origin, closing_date)
+        if rate_val is not None:
+            if rate_val == 0:
+                raise ExchangeRevaluationError("El tipo de cambio no puede ser cero.")
+            return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
+
         raise ExchangeRevaluationError(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}.")
 
     def _party_account(self, party_id: str | None, company: str, *, receivable: bool) -> str | None:
