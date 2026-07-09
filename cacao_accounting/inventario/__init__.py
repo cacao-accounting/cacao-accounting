@@ -4,6 +4,7 @@
 
 """Modulo de Inventarios."""
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Mapping
@@ -45,6 +46,8 @@ from cacao_accounting.inventario.service import (
     parse_item_uom_rows,
     update_item_with_uoms,
 )
+
+logger = logging.getLogger(__name__)
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
 
