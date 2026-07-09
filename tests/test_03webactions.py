@@ -1058,27 +1058,54 @@ def test_transaccional_full_transition_routes_get_post(request):
                     database.session.add(item)
                     database.session.flush()
 
-                def _add_line(model, item_model, fk_field):
-                    database.session.add(
-                        item_model(
-                            **{
-                                fk_field: model.id,
-                                "item_code": item.code,
-                                "item_name": item.name,
-                                "qty": Decimal("1"),
-                                "uom": uom.code,
-                                "rate": Decimal("10"),
-                                "amount": Decimal("10"),
-                            }
-                        )
-                    )
+                def _add_line(model, item_model, fk_field, warehouse=None):
+                    params = {
+                        fk_field: model.id,
+                        "item_code": item.code,
+                        "item_name": item.name,
+                        "qty": Decimal("1"),
+                        "uom": uom.code,
+                        "rate": Decimal("10"),
+                        "amount": Decimal("10"),
+                    }
+                    if warehouse:
+                        params["warehouse"] = warehouse
+                    database.session.add(item_model(**params))
 
                 _add_line(purchase_quotation, PurchaseQuotationItem, "purchase_quotation_id")
                 _add_line(supplier_quotation, SupplierQuotationItem, "supplier_quotation_id")
                 _add_line(purchase_order, PurchaseOrderItem, "purchase_order_id")
                 _add_line(sales_request, SalesRequestItem, "sales_request_id")
                 _add_line(sales_quotation, SalesQuotationItem, "sales_quotation_id")
-                _add_line(sales_order, SalesOrderItem, "sales_order_id")
+                _add_line(sales_order, SalesOrderItem, "sales_order_id", warehouse="PRINCIPAL")
+                database.session.commit()
+
+                # Add stock to warehouse PRINCIPAL for ART-TEST so that O2C-03 reservation succeeds during sales order submit
+                from cacao_accounting.database import StockEntryItem
+                se_stock = StockEntry(
+                    purpose="material_receipt",
+                    company="cacao",
+                    posting_date=date(2026, 5, 16),
+                    to_warehouse="PRINCIPAL",
+                    docstatus=0,
+                )
+                database.session.add(se_stock)
+                database.session.flush()
+                database.session.add(
+                    StockEntryItem(
+                        stock_entry_id=se_stock.id,
+                        item_code=item.code,
+                        target_warehouse="PRINCIPAL",
+                        qty=Decimal("100"),
+                        uom=uom.code,
+                        qty_in_base_uom=Decimal("100"),
+                        basic_rate=Decimal("10"),
+                        amount=Decimal("1000"),
+                    )
+                )
+                database.session.flush()
+                from cacao_accounting.contabilidad.posting import submit_document
+                submit_document(se_stock)
                 database.session.commit()
 
                 strict_transition_docs = [

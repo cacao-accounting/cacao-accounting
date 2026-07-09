@@ -87,6 +87,17 @@ def app_ctx():
             if not exists:
                 database.session.add(r)
 
+        # Configure supplier settings to allow direct invoices for tests
+        from cacao_accounting.database import CompanyParty, Party
+        supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
+        if supplier:
+            cp = database.session.execute(
+                database.select(CompanyParty).filter_by(party_id=supplier.id, company="cacao")
+            ).scalar_one_or_none()
+            if cp:
+                cp.allow_purchase_invoice_without_order = True
+                cp.allow_purchase_invoice_without_receipt = True
+
         database.session.commit()
         yield app
 
@@ -399,6 +410,7 @@ def test_sales_happy_path(app_ctx):
         "qty_0": "5",
         "rate_0": "85",  # Price adjustment
         "amount_0": "425",
+        "warehouse_0": "PRINCIPAL",
         "source_type_0": "sales_quotation",
         "source_id_0": sq.id,
         "source_item_id_0": database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=sq.id))
@@ -409,6 +421,32 @@ def test_sales_happy_path(app_ctx):
     response = client.post("/sales/sales-order/new", data=so_data, follow_redirects=True)
     assert response.status_code == 200
     so = database.session.execute(database.select(SalesOrder).order_by(SalesOrder.created.desc())).scalars().first()
+
+    # We need stock to deliver and reserve. Let's create a manual stock entry to receive some stock first.
+    se = StockEntry(
+        purpose="material_receipt", company="cacao", posting_date=date.today(), to_warehouse="PRINCIPAL", docstatus=0
+    )
+    database.session.add(se)
+    database.session.flush()
+    sei = StockEntryItem(
+        stock_entry_id=se.id,
+        item_code="ART-001",
+        target_warehouse="PRINCIPAL",
+        qty=100,
+        uom="UND",
+        qty_in_base_uom=100,
+        basic_rate=50,
+        amount=5000,
+    )
+    database.session.add(sei)
+    database.session.commit()
+
+    from cacao_accounting.contabilidad.posting import submit_document
+
+    submit_document(se)
+    database.session.commit()
+
+    # Submit sales order (requires stock to reserve)
     client.post(f"/sales/sales-order/{so.id}/submit", follow_redirects=True)
     database.session.refresh(so)
     assert so.docstatus == 1
@@ -436,30 +474,6 @@ def test_sales_happy_path(app_ctx):
     response = client.post("/sales/delivery-note/new", data=dn_data, follow_redirects=True)
     assert response.status_code == 200
     dn = database.session.execute(database.select(DeliveryNote).order_by(DeliveryNote.created.desc())).scalars().first()
-
-    # We need stock to deliver. Let's create a manual stock entry to receive some stock first.
-    se = StockEntry(
-        purpose="material_receipt", company="cacao", posting_date=date.today(), to_warehouse="PRINCIPAL", docstatus=0
-    )
-    database.session.add(se)
-    database.session.flush()
-    sei = StockEntryItem(
-        stock_entry_id=se.id,
-        item_code="ART-001",
-        target_warehouse="PRINCIPAL",
-        qty=100,
-        uom="UND",
-        qty_in_base_uom=100,
-        basic_rate=50,
-        amount=5000,
-    )
-    database.session.add(sei)
-    database.session.commit()
-
-    from cacao_accounting.contabilidad.posting import submit_document
-
-    submit_document(se)
-    database.session.commit()
 
     client.post(f"/sales/delivery-note/{dn.id}/submit", follow_redirects=True)
     database.session.refresh(dn)

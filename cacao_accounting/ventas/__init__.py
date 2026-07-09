@@ -154,7 +154,18 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
+        item_obj = database.session.get(Item, item.item_code)
+        if item_obj and not item_obj.is_stock_item:
+            continue
+
         warehouse = item.warehouse
+        if not warehouse:
+            warehouse = item_obj.default_warehouse_id if item_obj else None
+            if warehouse:
+                item.warehouse = warehouse
+                database.session.add(item)
+                database.session.flush()
+
         if not warehouse:
             raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
 
@@ -176,6 +187,10 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
+        item_obj = database.session.get(Item, item.item_code)
+        if item_obj and not item_obj.is_stock_item:
+            continue
+
         warehouse = item.warehouse
         if not warehouse:
             continue
@@ -194,6 +209,10 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
     for item in items:
+        item_obj = database.session.get(Item, item.item_code)
+        if item_obj and not item_obj.is_stock_item:
+            continue
+
         warehouse = item.warehouse
         if not warehouse:
             continue
@@ -216,6 +235,10 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
     for item in items:
+        item_obj = database.session.get(Item, item.item_code)
+        if item_obj and not item_obj.is_stock_item:
+            continue
+
         warehouse = item.warehouse
         if not warehouse:
             continue
@@ -992,6 +1015,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                warehouse=request.form.get(f"warehouse_{i}") or None,
             )
             database.session.add(linea)
             database.session.flush()
@@ -1282,7 +1306,9 @@ def _sales_order_initial_source_type(from_request_id: str | None, from_quotation
     return ""
 
 
-def _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type):
+def _build_sales_order_transaction_config(
+    items_disponibles, uoms_disponibles, bodegas_disponibles, source_origen, initial_source_type
+):
     from cacao_accounting.form_preferences import get_column_preferences
 
     transaction_config = {
@@ -1290,6 +1316,7 @@ def _build_sales_order_transaction_config(items_disponibles, uoms_disponibles, s
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
         "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
             {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
@@ -1370,11 +1397,16 @@ def ventas_orden_venta_nuevo():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    from cacao_accounting.database import Warehouse
+    bodegas_disponibles = [
+        {"code": w[0].code, "name": w[0].name}
+        for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
+    ]
     titulo = "Nueva Orden de Venta - " + APPNAME
     initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
     source_origen = solicitud_origen or cotizacion_origen
     transaction_config = _build_sales_order_transaction_config(
-        items_disponibles, uoms_disponibles, source_origen, initial_source_type
+        items_disponibles, uoms_disponibles, bodegas_disponibles, source_origen, initial_source_type
     )
     if request.method == "POST":
         result = _handle_sales_order_new_post(from_quotation_id, from_request_id)
@@ -1392,6 +1424,7 @@ def ventas_orden_venta_nuevo():
         from_quotation_id=from_quotation_id,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        bodegas_disponibles=bodegas_disponibles,
         transaction_config=transaction_config,
     )
 
@@ -1437,6 +1470,11 @@ def ventas_orden_venta_editar(order_id: str):
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    from cacao_accounting.database import Warehouse
+    bodegas_disponibles = [
+        {"code": w[0].code, "name": w[0].name}
+        for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
+    ]
 
     if request.method == "POST":
         return _handle_sales_order_update(registro, request.form, _ENDPOINT_ORDEN_VENTA, order_id)
@@ -1447,6 +1485,7 @@ def ventas_orden_venta_editar(order_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
         "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
             {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
@@ -1467,6 +1506,7 @@ def ventas_orden_venta_editar(order_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                "warehouse": item.warehouse or "",
             }
             for item in lineas
         ],
@@ -1483,6 +1523,7 @@ def ventas_orden_venta_editar(order_id: str):
         from_quotation_id=None,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
+        bodegas_disponibles=bodegas_disponibles,
         transaction_config=transaction_config,
     )
 
