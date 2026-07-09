@@ -317,6 +317,7 @@ def compras_solicitud_compra_editar(request_id: str):
 
     if request.method == "POST":
         try:
+            before_state = _capture_purchase_state(registro)
             registro.requested_by = request.form.get("requested_by")
             registro.department = request.form.get("department")
             registro.company = request.form.get("company") or None
@@ -330,6 +331,8 @@ def compras_solicitud_compra_editar(request_id: str):
             registro.total = total
             registro.base_total = total
             registro.grand_total = total
+            after_state = _capture_purchase_state(registro)
+            log_update(registro, before=before_state, after=after_state)
             database.session.commit()
             flash("Solicitud de compra actualizada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
@@ -740,6 +743,7 @@ def _supplier_quotation_sources(
 
 def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, quotation_id: str):
     """Maneja la actualizacion de una cotizacion de proveedor desde el formulario POST."""
+    before_state = _capture_purchase_state(registro)
     supplier_id = form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -755,6 +759,8 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     registro.total = total
     registro.base_total = total
     registro.grand_total = total
+    after_state = _capture_purchase_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
@@ -1477,6 +1483,15 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
+            warehouse_code = request.form.get(f"warehouse_{i}") or None
+            if warehouse_code:
+                from cacao_accounting.database import Warehouse
+
+                wh = database.session.get(Warehouse, warehouse_code)
+                if wh is None:
+                    raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
+                if not wh.is_active:
+                    raise DocumentFlowError(f"Almacén '{warehouse_code}' está inactivo.", 409)
             linea = PurchaseReceiptItem(
                 purchase_receipt_id=receipt_id,
                 item_code=item_code,
@@ -1485,7 +1500,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
-                warehouse=request.form.get(f"warehouse_{i}") or None,
+                warehouse=warehouse_code,
             )
             database.session.add(linea)
             database.session.flush()
@@ -1791,6 +1806,7 @@ def _create_purchase_order_from_request(form: dict):
 
 def _update_purchase_order_from_request(registro: PurchaseOrder):
     """Actualiza una orden de compra desde el formulario enviado."""
+    before_state = _capture_purchase_state(registro)
     supplier_id = request.form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -1810,6 +1826,8 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     registro.grand_total = total
     registro.exchange_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
     registro.base_total = (total * registro.exchange_rate).quantize(Decimal("0.0001"))
+    after_state = _capture_purchase_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Orden de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
@@ -1832,6 +1850,8 @@ def compras_orden_compra_duplicar(order_id: str):
         company=origen.company,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
+        transaction_currency=origen.transaction_currency,
+        exchange_rate=origen.exchange_rate,
         docstatus=0,
     )
     database.session.add(duplicada)
@@ -2330,8 +2350,11 @@ def compras_recepcion_nuevo():
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
+            supplier_id = request.form.get("supplier_id") or None
+            supplier = database.session.get(Party, supplier_id) if supplier_id else None
             recepcion = PurchaseReceipt(
-                supplier_id=request.form.get("supplier_id") or None,
+                supplier_id=supplier_id,
+                supplier_name=supplier.name if supplier else None,
                 company=request.form.get("company") or None,
                 posting_date=posting_date,
                 purchase_order_id=request.form.get("from_order") or None,
@@ -3081,6 +3104,8 @@ def compras_factura_compra_duplicar(invoice_id: str):
         supplier_invoice_no=origen.supplier_invoice_no,
         document_type=origen.document_type,
         is_return=origen.is_return,
+        transaction_currency=origen.transaction_currency,
+        exchange_rate=origen.exchange_rate,
         remarks=origen.remarks,
         docstatus=0,
     )

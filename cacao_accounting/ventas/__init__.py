@@ -844,6 +844,7 @@ def ventas_cliente_contacto_crear(customer_id: str):
 
 def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: str, request_id: str):
     """Maneja la actualizacion de un pedido de venta desde el formulario POST."""
+    before_state = _capture_sales_state(registro)
     customer_id = form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -857,6 +858,8 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     registro.total = total
     registro.base_total = total
     registro.grand_total = total
+    after_state = _capture_sales_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Pedido de venta actualizado correctamente."), "success")
     return redirect(url_for(endpoint, request_id=request_id))
@@ -864,6 +867,7 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
 
 def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, order_id: str):
     """Maneja la actualizacion de una orden de venta desde el formulario POST."""
+    before_state = _capture_sales_state(registro)
     customer_id = form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -877,6 +881,8 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     registro.total = total
     registro.base_total = total
     registro.grand_total = total
+    after_state = _capture_sales_state(registro)
+    log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Orden de venta actualizada correctamente."), "success")
     return redirect(url_for(endpoint, order_id=order_id))

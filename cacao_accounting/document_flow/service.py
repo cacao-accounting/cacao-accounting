@@ -1275,6 +1275,13 @@ def create_document_relation(
         status="active",
     )
     save_relation(relation)
+    _audit(
+        "document_relation",
+        relation.id,
+        "create",
+        None,
+        {"status": relation.status, "qty": str(relation.qty)},
+    )
     if source_item_id:
         recompute_line_flow_state(source_key, source_id, source_item_id, target_key, relation.company)
         _update_source_cache(source_key, source_id, source_item_id, target_key)
