@@ -2721,7 +2721,7 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
     y ``AccountingPeriod.is_closed=True`` para bloquear nuevas transacciones en el
     periodo mediante ``validate_accounting_period``.
     """
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, PeriodCloseRun
 
     close_run = database.session.get(PeriodCloseRun, identifier)
     if not close_run:
@@ -2735,6 +2735,17 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
 
     if period.is_closed:
         flash("El periodo ya se encuentra cerrado.", "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    checks = (
+        database.session.execute(
+            database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)
+        )
+        .scalars()
+        .all()
+    )
+    if checks and any(check.check_status != "passed" for check in checks):
+        flash("No se puede cerrar el periodo: existen verificaciones pendientes o fallidas.", "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     close_run.run_status = "closed"
