@@ -559,6 +559,9 @@ def ventas_pedido_venta_cancel(request_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("sales_request", request_id):
+        flash("No se puede cancelar el pedido de venta porque tiene cotizaciones u órdenes de venta activas.", "danger")
+        return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("sales_request", request_id)
@@ -1870,6 +1873,9 @@ def ventas_cotizacion_cancel(quotation_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("sales_quotation", quotation_id):
+        flash("No se puede cancelar la cotización de venta porque tiene órdenes de venta activas.", "danger")
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("sales_quotation", quotation_id)
@@ -2222,6 +2228,9 @@ def ventas_entrega_cancel(note_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("delivery_note", note_id):
+        flash("No se puede cancelar la nota de entrega porque tiene facturas de venta activas.", "danger")
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
     try:
         cancel_document(registro)
         _restore_reservation_for_delivery_note(registro)
@@ -2586,6 +2595,9 @@ def ventas_factura_venta_cancel(invoice_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    if has_active_source_relations("sales_invoice", invoice_id):
+        flash("No se puede cancelar la factura de venta porque tiene documentos financieros activos.", "danger")
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     try:
         if registro.update_inventory and registro.delivery_note_id:
             dn = database.session.get(DeliveryNote, registro.delivery_note_id)

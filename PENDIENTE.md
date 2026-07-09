@@ -32,7 +32,7 @@
 - [ ] **O2C-14 [#183]:** Agregar validación de rate > 0 y amount > 0 en `validate_submit_prerequisites`.
 - [ ] **O2C-18 [#126]:** Validar `reversal_of` (existencia, docstatus, compañía, tercero) en NC/ND.
 - [ ] **O2C-20 [#127]:** Agregar `with_for_update()` en reserva de stock para SalesOrder.
-- [ ] **O2C-22 [#147]:** Agregar parámetro `require_warehouse` a `validate_submit_prerequisites`.
+- [x] **O2C-22 [#147]:** Agregar parámetro `require_warehouse` a `validate_submit_prerequisites` (Commit `e30c173`).
 - [ ] **O2C-28 [#148]:** Agregar `default=0` a `delivered_qty`, `billed_qty`, `received_qty`.
 - [ ] **R2R-03 [#128]:** Eliminar restricción de misma fecha en cancelación de comprobante. Validar solo período abierto.
 - [ ] **R2R-05 [#129]:** Auto-aprobar voucher de cierre de año fiscal o agregar indicador de pendiente.
