@@ -744,6 +744,8 @@ def test_search_select_supports_journal_doctypes_and_filters(app_ctx):
     )
     assert client.get("/api/search-select?doctype=report_status&q=conta").json["results"][0]["value"] == "submitted"
     assert client.get("/api/search-select?doctype=book&q=Fiscal&bad_filter=x").status_code == 400
+    assert client.get("/api/search-select?doctype=party&party_type=employee").status_code == 400
+    assert client.get("/api/search-select?doctype=party&role=employee").status_code == 400
 
 
 def test_form_preferences_are_persisted_per_user(app_ctx):
