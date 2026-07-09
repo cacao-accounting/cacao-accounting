@@ -122,24 +122,17 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         fy.is_closed = True
         database.session.commit()
 
-        # 2. Create Closing Voucher (Draft)
+        # 2. Create Closing Voucher (auto-submitted)
         closing_journal = create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
-        assert closing_journal.status == "draft"
-        assert closing_journal.is_fiscal_year_closing is True
-
-        fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
-        assert fy.financial_closed is False  # Still draft
-
-        # 3. Submit Closing Voucher
-        submit_journal(closing_journal.id)
         assert closing_journal.status == "submitted"
+        assert closing_journal.is_fiscal_year_closing is True
 
         fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
         assert fy.financial_closed is True
         assert fy.closing_voucher_id == closing_journal.id
 
-        # 4. Cancel Closing Voucher
-        cancel_submitted_journal(closing_journal.id, user_id=setup_data["admin_user_id"], posting_date=closing_journal.date)
+        # 3. Cancel Closing Voucher
+        cancel_submitted_journal(closing_journal.id, user_id=setup_data["admin_user_id"])
         assert closing_journal.status == "cancelled"
 
         fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
