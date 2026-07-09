@@ -1334,11 +1334,15 @@ def _consume_stock_valuation_layers(
     company: str, item_code: str, warehouse: str, quantity: Decimal
 ) -> tuple[Decimal, Decimal]:
     if quantity <= 0:
-        raise PostingError("La cantidad de consumo debe ser mayor que cero.")
+        raise PostingError(
+            f"La cantidad de consumo debe ser mayor que cero para el artículo {item_code} en la bodega {warehouse}."
+        )
     available = _valuation_queue(company, item_code, warehouse)
     total_available: Decimal = sum((qty for qty, _ in available), Decimal("0"))
     if total_available < quantity:
-        raise PostingError("No hay suficiente inventario para calcular el costo real.")
+        raise PostingError(
+            f"No hay suficiente inventario para calcular el costo real para el artículo {item_code} en la bodega {warehouse}."
+        )
 
     valuation_method = _valuation_method_for_company(company)
     if valuation_method == "moving_average":
