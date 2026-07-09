@@ -427,7 +427,12 @@ def compras_solicitud_compra_duplicar(request_id: str):
 @modulo_activo("purchases")
 @login_required
 def compras_solicitud_compra_submit(request_id: str):
-    """Aprueba una solicitud de compra."""
+    """Aprueba una solicitud de compra.
+
+    ``require_party=False`` es intencional: una solicitud de compra interna
+    puede aprobarse sin proveedor asignado. El proveedor se asigna al
+    convertir en cotización u orden de compra.
+    """
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
@@ -2173,7 +2178,12 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
 @modulo_activo("purchases")
 @login_required
 def compras_solicitud_cotizacion_submit(quotation_id: str):
-    """Aprueba una solicitud de cotizacion."""
+    """Aprueba una solicitud de cotizacion.
+
+    ``require_party=False`` es intencional: una solicitud de cotización interna
+    puede aprobarse sin proveedor asignado. El proveedor se asigna al
+    convertir en orden de compra.
+    """
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
