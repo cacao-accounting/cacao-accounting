@@ -55,13 +55,15 @@
     {% if from_quotation_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=sales_quotation&target_type=sales_order&source_id=" ~ from_quotation_id,
-         source_label="Cotización") }}
+         source_label="Cotización",
+         warehouses_disponibles=bodegas_disponibles) }}
     {% elif from_request_id %}
     {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
       source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_order&source_id=" ~ from_request_id,
-      source_label="Pedido de Venta") }}
+      source_label="Pedido de Venta",
+      warehouses_disponibles=bodegas_disponibles) }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, warehouses_disponibles=bodegas_disponibles) }}
   {% endif %}
 </form>
 

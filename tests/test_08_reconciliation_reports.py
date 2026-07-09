@@ -1874,7 +1874,10 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
     bridge = Accounts(
         entity="cacao", code="BRIDGE-S", name="Cuenta Puente Compras", active=True, enabled=True, account_type="liability"
     )
-    database.session.add_all([inventory, bridge])
+    adjustment = Accounts(
+        entity="cacao", code="ADJ-S", name="Ajuste Inventario", active=True, enabled=True, account_type="expense"
+    )
+    database.session.add_all([inventory, bridge, adjustment])
     database.session.flush()
     database.session.add_all(
         [
@@ -1896,7 +1899,7 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
     database.session.add_all(
         [
             WarehouseCompanyAccount(warehouse_code="WH-S", company="cacao", inventory_account_id=inventory.id, is_active=True),
-            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge.id),
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge.id, inventory_adjustment_account_id=adjustment.id),
             ItemAccount(item_code="ITEM-S", company="cacao"),
             ItemUOMConversion(item_code="ITEM-S", from_uom="BOX", to_uom="EA", conversion_factor=Decimal("10")),
             Batch(item_code="ITEM-S", batch_no="B-1"),
