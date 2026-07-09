@@ -909,9 +909,13 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             qty_difference = counted_qty - current_qty
             value_difference = target_value - current_value
             uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
-            try:
-                base_qty = convert_item_qty(item_code, abs(qty_difference), uom, _item_default_uom(item_code))
-            except InventoryServiceError:
+            default_uom = _item_default_uom(item_code)
+            if uom and default_uom:
+                try:
+                    base_qty = convert_item_qty(item_code, abs(qty_difference), uom, default_uom)
+                except InventoryServiceError:
+                    base_qty = abs(qty_difference)
+            else:
                 base_qty = abs(qty_difference)
             line = StockEntryItem(
                 stock_entry_id=entry.id,
@@ -965,9 +969,7 @@ def inventario_entrada_nuevo():
     # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
         (w[0].code, w[0].name)
-        for w in database.session.execute(
-            database.select(Warehouse).filter_by(is_active=True, company=selected_company)
-        ).all()
+        for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True, company=selected_company)).all()
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
@@ -1173,9 +1175,7 @@ def inventario_entrada_editar(entry_id: str):
     # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
         (w[0].code, w[0].name)
-        for w in database.session.execute(
-            database.select(Warehouse).filter_by(is_active=True, company=selected_company)
-        ).all()
+        for w in database.session.execute(database.select(Warehouse).filter_by(is_active=True, company=selected_company)).all()
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
