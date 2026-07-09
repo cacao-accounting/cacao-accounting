@@ -622,10 +622,7 @@ def _payment_type_matches_source(payment_type: str, source_type: str) -> bool:
 def _cash_consumed(allocated: Decimal, discount: Decimal, gain_loss: Decimal) -> Decimal:
     """Calcula el efectivo consumido por una aplicacion de pago."""
     consumed = allocated - discount - gain_loss
-    return consumed if consumed > 0 else allocated
-
-
-MAX_RECONCILIATION_LINES = 100
+    return consumed if consumed > 0 else Decimal("0")
 
 
 def apply_payment_reconciliation(
@@ -639,10 +636,6 @@ def apply_payment_reconciliation(
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
         raise DocumentFlowError("La conciliacion requiere al menos una linea.")
-    if len(lines) > MAX_RECONCILIATION_LINES:
-        raise DocumentFlowError(
-            "El numero de lineas excede el maximo permitido ({0}).".format(MAX_RECONCILIATION_LINES), 400,
-        )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise DocumentFlowError("Debe indicar compania, tipo de tercero y tercero.", 400)
 
@@ -1724,10 +1717,6 @@ def _persist_payment_target_allocation(
         outstanding_amount=outstanding,
         allocated_amount=allocated,
         allocation_date=payment.posting_date,
-        exchange_rate=getattr(payment, "exchange_rate", None),
-        discount_amount=getattr(payment, "discount_amount", None),
-        gain_loss_amount=getattr(payment, "gain_loss_amount", None),
-        difference_amount=None,
     )
     database.session.add(reference)
     database.session.flush()
