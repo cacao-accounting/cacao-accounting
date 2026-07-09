@@ -3032,6 +3032,7 @@ def _handle_purchase_invoice_edit_post(registro):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
 
 
 @compras.route("/purchase-invoice/<invoice_id>/duplicate", methods=["POST"])
