@@ -2660,8 +2660,7 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
 
 
 def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: str | None) -> None:
-    """Valida que la factura referenciada en ``reversal_of`` exista, este aprobada
-    y pertenezca al mismo cliente y compania."""
+    """Valida que la factura referenciada exista, este aprobada y pertenezca al mismo cliente y compania."""
     source = database.session.get(SalesInvoice, reversal_of)
     if not source:
         raise ValueError(f"La factura origen '{reversal_of}' no existe.")

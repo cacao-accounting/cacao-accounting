@@ -45,11 +45,14 @@ from cacao_accounting.database import (
     database,
 )
 
-logger = getLogger(__name__)
+# Librerias de terceros
 from ulid import ULID
-from cacao_accounting.database.helpers import get_active_naming_series
+
+# Recursos locales
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
@@ -60,14 +63,9 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
+from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
-from cacao_accounting.party_settings import (
-    draft_party_company_settings_rows,
-    party_company_settings_rows,
-    upsert_party_company_settings_rows,
-)
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
     apply_party_profile,
@@ -84,8 +82,14 @@ from cacao_accounting.party_management import (  # noqa: F401
     update_party_address,
     update_party_contact,
 )
+from cacao_accounting.party_settings import (
+    draft_party_company_settings_rows,
+    party_company_settings_rows,
+    upsert_party_company_settings_rows,
+)
 from cacao_accounting.version import APPNAME
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
+
+logger = getLogger(__name__)
 
 # < --------------------------------------------------------------------------------------------- >
 compras = Blueprint("compras", __name__, template_folder="templates")
