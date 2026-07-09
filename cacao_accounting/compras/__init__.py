@@ -440,11 +440,11 @@ def compras_solicitud_compra_submit(request_id: str):
         abort(400)
     try:
         items = (
-            database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id))
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id))
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_warehouse=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
