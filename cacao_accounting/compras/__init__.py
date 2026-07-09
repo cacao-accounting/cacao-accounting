@@ -44,6 +44,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+
 logger = getLogger(__name__)
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
@@ -446,11 +447,11 @@ def compras_solicitud_compra_submit(request_id: str):
         abort(400)
     try:
         items = (
-            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id))
+            database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id))
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False, require_warehouse=True)
+        validate_submit_prerequisites(registro, items=items, require_party=False)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -1491,7 +1492,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             if warehouse_code:
                 from cacao_accounting.database import Warehouse
 
-                wh = database.session.get(Warehouse, warehouse_code)
+                wh = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
                 if wh is None:
                     raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
                 if not wh.is_active:
@@ -3219,9 +3220,14 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(400)
     from cacao_accounting.database import PaymentReference
 
-    if database.session.execute(
-        database.select(PaymentReference.id).filter_by(reference_type="purchase_invoice", reference_id=invoice_id)
-    ).scalars().first() is not None:
+    if (
+        database.session.execute(
+            database.select(PaymentReference.id).filter_by(reference_type="purchase_invoice", reference_id=invoice_id)
+        )
+        .scalars()
+        .first()
+        is not None
+    ):
         flash(_("No se puede cancelar la factura de compra porque tiene pagos activos."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     try:

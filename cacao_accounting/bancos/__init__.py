@@ -542,9 +542,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     transaction_ids = request.form.getlist("bank_transaction_id")
     if transaction_ids:
         transactions = (
-            database.session.execute(
-                database.select(BankTransaction).filter(BankTransaction.id.in_(transaction_ids))
-            )
+            database.session.execute(database.select(BankTransaction).filter(BankTransaction.id.in_(transaction_ids)))
             .scalars()
             .all()
         )
@@ -1888,11 +1886,7 @@ def bancos_pago_cancel(payment_id: str):
         # Las BankTransaction que apuntaban a este pago deben perder su enlace
         # y marcar no reconciliadas para que puedan reasignarse.
         linked_transactions = (
-            database.session.execute(
-                database.select(BankTransaction).filter_by(payment_entry_id=registro.id)
-            )
-            .scalars()
-            .all()
+            database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=registro.id)).scalars().all()
         )
         for bt in linked_transactions:
             bt.is_reconciled = False
