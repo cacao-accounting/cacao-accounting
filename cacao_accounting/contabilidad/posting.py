@@ -411,7 +411,7 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
         ledger_entries = [entry for entry in entries if entry.ledger_id == ledger_id]
         debit_total = sum((_decimal_value(entry.debit) for entry in ledger_entries), Decimal("0"))
         credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
-        if debit_total != credit_total:
+        if abs(debit_total - credit_total) > Decimal("0.01"):
             raise PostingError("Las entradas GL generadas no balancean por libro contable.")
 
 
@@ -763,6 +763,8 @@ def _append_purchase_tax_entries(
 
 def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de venta aprobada."""
+    if _has_active_gl_entries(document):
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una factura de venta aprobada.")
 
@@ -852,6 +854,8 @@ def _add_sales_income_entries(
 
 def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de compra aprobada."""
+    if _has_active_gl_entries(document):
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una factura de compra aprobada.")
 
@@ -977,6 +981,8 @@ def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> Non
 
 def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para cobros, pagos y transferencias internas."""
+    if _has_active_gl_entries(document):
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar un pago aprobado.")
 
@@ -1406,6 +1412,8 @@ def _bank_transaction_offset_account_id(document: BankTransaction, credit: bool)
 
 def post_bank_transaction(document: BankTransaction, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una nota bancaria manual."""
+    if _has_active_gl_entries(document):
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     amount = _decimal_value(document.deposit if document.deposit is not None else document.withdrawal)
     if amount <= 0:
         raise PostingError("La nota bancaria no tiene un monto valido.")
@@ -1450,7 +1458,7 @@ def _upsert_stock_bin(
     qty_change: Decimal,
     valuation_rate: Decimal,
     value_change: Decimal,
-) -> None:
+) -> tuple[Decimal, Decimal]:
     """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
 
     La validacion de stock negativo (``allow_negative_stock``) se ejecuta
@@ -1460,6 +1468,8 @@ def _upsert_stock_bin(
     establece en 0 intencionalmente: sin stock no hay tasa de valuacion
     significativa. El ``stock_value`` acumulado se preserva para recalcular
     la tasa cuando el stock vuelva a ser positivo.
+
+    Retorna ``(qty_after, stock_value_after)``.
     """
     # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
     bin_row = (
@@ -1481,6 +1491,8 @@ def _upsert_stock_bin(
         bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
     else:
         bin_row.valuation_rate = Decimal("0")
+
+    return bin_row.actual_qty, bin_row.stock_value
 
 
 def _has_landed_cost_allocations(document: Any) -> bool:
