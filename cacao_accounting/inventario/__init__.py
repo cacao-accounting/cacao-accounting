@@ -1224,7 +1224,14 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
 
 
 def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
-    """Elimina y recrea los items de la entrada de inventario."""
+    """Elimina y recrea los items de la entrada de inventario.
+
+    Primero elimina las relaciones documentales existentes (lineas 1229-1232),
+    luego los items (linea 1233-1234), y finalmente recrea todo via
+    ``_save_stock_entry_items`` que tambien recrea las relaciones.
+    Este patron de delete-then-resave es intencional para mantener
+    consistencia entre items y relaciones documentales en ediciones.
+    """
     # INV-05: Limpiar relaciones documentales huérfanas antes de recrear items
     for rel in database.session.execute(
         database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=registro.id)

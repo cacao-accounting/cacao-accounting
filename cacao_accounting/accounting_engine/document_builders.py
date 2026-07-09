@@ -747,7 +747,13 @@ def _eligible_discount_amount(
     payment_date: Any,
     references: list[PaymentReference],
 ) -> Decimal:
-    """Compute the maximum early payment discount allowed for the payment references."""
+    """Compute the maximum early payment discount allowed for the payment references.
+
+    La ventana de descuento se calcula desde ``invoice.posting_date``
+    (fecha de la factura), no desde ``payment_date`` (fecha del pago).
+    Esto es correcto: el plazo de descuento comienza cuando se emite
+    la factura, y se verifica si el pago llega dentro de ese plazo.
+    """
     if not party_id or not references:
         return Decimal("0")
     company_party = (

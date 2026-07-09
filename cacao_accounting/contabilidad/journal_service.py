@@ -304,6 +304,8 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_
     reversal_date = parse_posting_date(reversal_date_raw)
     source_period = _accounting_period_for_date(source.entity, source.date)
     reversal_period = _accounting_period_for_date(source.entity, reversal_date)
+    # La reversión debe ser en periodo distinto al origen (lineas 307-308).
+    # Esto es intencional: para corregir en el mismo periodo usar cancel_submitted_journal.
     if source_period.id == reversal_period.id:
         raise JournalValidationError("La reversión debe registrarse en un periodo contable distinto al comprobante origen.")
     payload = serialize_journal_for_form(source)
