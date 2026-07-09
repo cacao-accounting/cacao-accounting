@@ -1607,6 +1607,7 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Aplicacion de pagos a documentos — soporta pagos parciales."""
 
     __tablename__ = "payment_reference"
+    __table_args__ = (UniqueConstraint("payment_id", "reference_type", "reference_id", name="uq_payment_reference"),)
     payment_id = database.Column(database.String(26), database.ForeignKey("payment_entry.id"), nullable=False, index=True)
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     flow_source_type = database.Column(database.String(50), nullable=True, index=True)
