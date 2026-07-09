@@ -685,7 +685,8 @@ def _process_reconciliation_line(
         raise DocumentFlowError("No se puede aplicar la misma factura dos veces en un pago.", 409)
     processed.add(key)
 
-    payment = database.session.get(PaymentEntry, payment_id)
+    # CAS-06: FOR UPDATE para prevenir sobre-aplicación concurrente
+    payment = database.session.query(PaymentEntry).with_for_update().get(payment_id)
     _validate_payment(payment, company, party_type, party_id, flow_source_type)
     assert payment is not None
 
