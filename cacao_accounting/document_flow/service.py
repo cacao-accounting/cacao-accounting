@@ -1724,6 +1724,10 @@ def _persist_payment_target_allocation(
         outstanding_amount=outstanding,
         allocated_amount=allocated,
         allocation_date=payment.posting_date,
+        exchange_rate=getattr(payment, "exchange_rate", None),
+        discount_amount=getattr(payment, "discount_amount", None),
+        gain_loss_amount=getattr(payment, "gain_loss_amount", None),
+        difference_amount=None,
     )
     database.session.add(reference)
     database.session.flush()
