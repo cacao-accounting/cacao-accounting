@@ -583,9 +583,7 @@ def config_conciliacion_ventas():
             flash(_("Debe seleccionar una compania."), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas"))
 
-        config = database.session.execute(
-            database.select(SalesMatchingConfig).filter_by(company=company)
-        ).scalar_one_or_none()
+        config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company=company)).scalar_one_or_none()
         if config is None:
             config = SalesMatchingConfig(company=company)
             database.session.add(config)
@@ -601,9 +599,7 @@ def config_conciliacion_ventas():
         return redirect(url_for("admin.config_conciliacion_ventas"))
 
     configs = (
-        database.session.execute(database.select(SalesMatchingConfig).order_by(SalesMatchingConfig.company))
-        .scalars()
-        .all()
+        database.session.execute(database.select(SalesMatchingConfig).order_by(SalesMatchingConfig.company)).scalars().all()
     )
 
     return render_template(
@@ -639,11 +635,12 @@ def cuentas_predeterminadas():
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}
         try:
-            upsert_company_default_accounts(selected_company, values)
+            config = upsert_company_default_accounts(selected_company, values)
         except DefaultAccountError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
             return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
+        config.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
         flash(_("Cuentas predeterminadas guardadas correctamente."), "success")
         return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
