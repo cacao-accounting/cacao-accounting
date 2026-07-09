@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-07-09
 
+- **Fix issue #177 - Redundant if-else en posting.py (2026-07-09):** Se simplificó el if-else redundante en `_create_stock_movement` que ejecutaba el mismo código en ambas ramas. Se agregó comment explicativo para prevenir falsos positivos futuros. Commit `f359e57`.
+
+- **Auditoría Funcional / Verificación Independiente (2026-07-09):** Revisión de 89 hallazgos reportados por DeepSeek V4, verificados por MiMo-V2.5 (3 rondas).
+  - **54 ISSUE VERIFICADO** con evidencia funcional — issues abiertos en GitHub: [#119](https://github.com/cacao-accounting/cacao-accounting/issues/119) a [#185](https://github.com/cacao-accounting/cacao-accounting/issues/185).
+  - **14 FALSO POSITIVO** descartados: O2C-01 (require_party by design), O2C-02 (cosmetic), O2C-03 (posting chain actualiza), O2C-05 (incrementa correctamente), O2C-12 (naming), O2C-15 (campos preservados), O2C-16 (stock_value actualizado), O2C-17 (is_return funciona), O2C-21 (design choice), R2R-01 (rounding simétrico), R2R-02 (período validado), R2R-04 (validación existe), R2R-08 (caller layers audit), CAS-05 (GL-derived balance), CAS-08 (fecha correcta), CAS-09 (descuento accesible), CAS-11 (outstanding guard), CAS-12 (GL validado), CAS-16 (append-only by design), CAS-17 (upstream validado), INV-01 (check antes de upsert), INV-21 (weighted-average by design), INV-22 (relaciones recreadas).
+  - **21 issues pendientes** de verificación (mayoría mejoras cosméticas/código).
+  - Reporte completo: `REVIEW_AUDITORIA.md`.
+
 - **Cierre de hallazgos ISSUES.md (2026-07-09):** Los 4 hallazgos confirmados reales restantes fueron corregidos. Todos los 30 hallazgos del informe están CORREGIDOS o son FALSOS POSITIVOS.
   - **R2R-04 (cierre mensual):** Nuevo endpoint `POST /period-close/monthly/<id>/close` que marca `PeriodCloseRun.run_status="closed"` y `AccountingPeriod.is_closed=True`. Commit `4610fdd`.
   - **S2P-09 (multimoneda compras):** Selector de moneda en templates de OC/Recepción/Factura de compra; el backend persiste `transaction_currency`/`exchange_rate` y calcula `base_total = total * rate`. Commit `bb2ac5d`.
