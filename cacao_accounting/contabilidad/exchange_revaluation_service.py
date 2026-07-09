@@ -626,7 +626,11 @@ class ExchangeRevaluationService:
             .scalars()
             .all()
         )
-        return self._normal_balance(entries, candidate.normal_balance)
+        balance = self._normal_balance(entries, candidate.normal_balance)
+        if candidate.total_amount_original > 0 and candidate.open_amount_original < candidate.total_amount_original:
+            proportion = candidate.open_amount_original / candidate.total_amount_original
+            return (balance * proportion).quantize(Decimal("0.0001"))
+        return balance
 
     def _normal_balance(self, entries: Sequence[GLEntry], normal_balance: str) -> Decimal:
         debit = sum((self._decimal(entry.debit) for entry in entries), Decimal("0"))
