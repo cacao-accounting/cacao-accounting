@@ -968,6 +968,7 @@ def _maybe_settle_advance_against_invoice(
             document=journal,
             entity_type="journal_entry",
             posting_date_raw=allocation_date,
+            naming_series_id=None,
             allow_closing=True,
         )
     except Exception:

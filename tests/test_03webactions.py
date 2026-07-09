@@ -382,7 +382,7 @@ def test_sales_credit_note_list_route(request):
 
                 response = client.get("/sales/sales-invoice/return/list")
                 assert response.status_code == 200
-                assert "Listado de Notas de Crédito de Venta" in response.get_data(as_text=True)
+                assert "Listado de Devoluciones de Venta" in response.get_data(as_text=True)
 
                 response = client.get("/sales/sales-invoice/debit-note/list")
                 assert response.status_code == 200
