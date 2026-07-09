@@ -1,5 +1,39 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-09 (S2P-01/O2C-09: Verificación de relaciones activas al cancelar documentos)
+- **Solicitud:** Analizar issue #119 (S2P-01: Sin verificación de relaciones activas al cancelar documentos no financieros) y #145 (O2C-09: SalesQuotation cancel no verifica relaciones descendientes).
+- **Diagnóstico:** Los issues son errores reales verificados. Solo `compras_orden_compra_cancel` (PO) y `ventas_orden_venta_cancel` (SO) llamaban a `has_active_source_relations()` antes de cancelar. Los demás handlers de cancelación en Compras (PR, SQ, PQ, Receipt) y Ventas (SR, SQ, DN, Invoice) permitían cancelar documentos con hijos activos, violando integridad referencial.
+- **Implementación:**
+  1. **Compras** — Se agregó `has_active_source_relations()` a:
+     - `compras_solicitud_compra_cancel` (PurchaseRequest)
+     - `compras_cotizacion_proveedor_cancel` (SupplierQuotation)
+     - `compras_solicitud_cotizacion_cancel` (PurchaseQuotation)
+     - `compras_recepcion_cancel` (PurchaseReceipt)
+  2. **Ventas** — Se agregó `has_active_source_relations()` a:
+     - `ventas_pedido_venta_cancel` (SalesRequest)
+     - `ventas_cotizacion_cancel` (SalesQuotation)
+     - `ventas_entrega_cancel` (DeliveryNote)
+     - `ventas_factura_venta_cancel` (SalesInvoice)
+  3. Cada handler ahora bloquea la cancelación con flash message descriptivo si hay hijos activos.
+- **Pruebas:** Suite completa de cancelación pasó (31 tests). Patrón consistente con PO y SO existentes.
+- **Cierre del issues:** #119 (S2P-01) cerrado, #145 (O2C-09) cerrado con comentario explicativo del fix completo en O2C.
+
+## 2026-07-09 (O2C-22: Validación de almacén en validate_submit_prerequisites)
+- **Solicitud:** Analizar issue #147 (O2C-22: validate_submit_prerequisites no valida almacén para ítems de stock) y corregir si es un error real.
+- **Diagnóstico:** El issue es un error real verificado. La función `validate_submit_prerequisites` no validaba que ítems con `is_stock_item=True` tengan un almacén asignado antes de aprobar el documento. La validación de almacén solo ocurría después en `posting.py` durante la creación de `StockLedgerEntry`, causando errores después de la aprobación.
+- **Implementación:**
+  1. Se agregó parámetro `require_warehouse` a `validate_submit_prerequisites()` en `document_flow/validation.py`
+  2. Cuando `require_warehouse=True`, valida que todas las líneas tengan `warehouse` asignado
+  3. Se actualizaron handlers de submit:
+     - Purchase Receipt: `require_warehouse=True` (siempre)
+     - Delivery Note: `require_warehouse=True` (siempre)
+     - Stock Entry: `require_warehouse=True` (siempre)
+     - Sales Invoice: `require_warehouse=True` solo cuando `update_inventory=True`
+  4. Se agregaron 4 tests en `tests/test_validation.py` para la validación de almacén
+- **Pruebas:** Todos los tests pasaron (16 tests en test_validation.py). Black, ruff y mypy en verde.
+- **Commits:** `e30c173` (fix(validation): add require_warehouse parameter to validate_submit_prerequisites)
+- **Cierre del issue:** Issue #147 cerrado con comentario explicativo.
+
 ## 2026-07-09 (CAS-04: Corrección de conciliación bancaria al cancelar pago)
 - **Solicitud:** Analizar issue #151 (CAS-04: Cancelación de pago no limpia enlace de conciliación bancaria) y corregir si es un error real.
 - **Diagnóstico:** El issue es un error real verificado. Al cancelar un pago, el handler `bancos_pago_cancel` no reseteaba `is_reconciled` ni `payment_entry_id` en las `BankTransaction` vinculadas, dejando referencias huérfanas y estado de conciliación inconsistente.
