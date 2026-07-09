@@ -122,11 +122,12 @@ def _party_or_404(party_id: str, party_type: str) -> Party:
 # ─── Reserva de inventario para Ordenes de Venta ──────────────────────────────
 
 
-def _stock_bin_or_create(company: str, item_code: str, warehouse: str) -> StockBin:
+def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_update: bool = False) -> StockBin:
     """Obtiene o crea un StockBin para item/almacen/compania."""
-    bin_row = database.session.execute(
-        database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
-    ).scalar_one_or_none()
+    query = database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+    if for_update:
+        query = query.with_for_update()
+    bin_row = database.session.execute(query).scalar_one_or_none()
     if not bin_row:
         bin_row = StockBin(
             company=company,
@@ -169,7 +170,7 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         if not warehouse:
             raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
 
-        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         actual = Decimal(str(bin_row.actual_qty or 0))
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         available = actual - reserved
@@ -203,6 +204,8 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
 
 def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     """Libera reserva al aprobar una Nota de Entrega vinculada a una OV."""
+    if dn.docstatus != 1:
+        return
     if not dn.sales_order_id:
         return
 
@@ -1216,6 +1219,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     dn.grand_total = total
 
     submit_document(dn)
+    _release_reservation_for_delivery_note(dn)
     log_submit(dn)
 
     invoice.delivery_note_id = dn.id
@@ -2310,6 +2314,17 @@ def ventas_factura_venta_nuevo():
         try:
             document_type = request.form.get("document_type") or "sales_invoice"
             posting_date = _parse_date(request.form.get("posting_date"))
+            reversal_of = (
+                (request.form.get("from_invoice") or request.form.get("from_return"))
+                if document_type in ("sales_credit_note", "sales_debit_note")
+                else None
+            )
+            if reversal_of:
+                _validate_reversal_of(
+                    reversal_of,
+                    request.form.get("customer_id"),
+                    request.form.get("company"),
+                )
             factura = SalesInvoice(
                 customer_id=request.form.get("customer_id") or None,
                 company=request.form.get("company") or None,
@@ -2319,11 +2334,7 @@ def ventas_factura_venta_nuevo():
                 delivery_note_id=request.form.get("from_note") or None,
                 update_inventory=bool(request.form.get("update_inventory")),
                 is_return=document_type in ("sales_credit_note", "sales_return"),
-                reversal_of=(
-                    (request.form.get("from_invoice") or request.form.get("from_return"))
-                    if document_type in ("sales_credit_note", "sales_debit_note")
-                    else None
-                ),
+                reversal_of=reversal_of,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -2646,6 +2657,24 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
         database.session.rollback()
         flash(_(str(exc)), "danger")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
+
+
+def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: str | None) -> None:
+    """Valida que la factura referenciada en ``reversal_of`` exista, este aprobada
+    y pertenezca al mismo cliente y compania."""
+    source = database.session.get(SalesInvoice, reversal_of)
+    if not source:
+        raise ValueError(f"La factura origen '{reversal_of}' no existe.")
+    if source.docstatus != 1:
+        raise ValueError(f"La factura origen '{reversal_of}' no esta aprobada.")
+    if customer_id and source.customer_id != customer_id:
+        raise ValueError(
+            f"La factura origen '{reversal_of}' no pertenece al mismo cliente."
+        )
+    if company and source.company != company:
+        raise ValueError(
+            f"La factura origen '{reversal_of}' no pertenece a la misma compania."
+        )
 
 
 @ventas.route("/cliente/<customer_id>/deshabilitar-proveedor", methods=["POST"])
