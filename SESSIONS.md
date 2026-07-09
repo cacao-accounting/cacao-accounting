@@ -1,5 +1,15 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-09 (CAS-04: Corrección de conciliación bancaria al cancelar pago)
+- **Solicitud:** Analizar issue #151 (CAS-04: Cancelación de pago no limpia enlace de conciliación bancaria) y corregir si es un error real.
+- **Diagnóstico:** El issue es un error real verificado. Al cancelar un pago, el handler `bancos_pago_cancel` no reseteaba `is_reconciled` ni `payment_entry_id` en las `BankTransaction` vinculadas, dejando referencias huérfanas y estado de conciliación inconsistente.
+- **Implementación:**
+  1. Se agregó lógica en `bancos_pago_cancel` para buscar `BankTransaction` con `payment_entry_id` igual al pago cancelado
+  2. Se resetea `is_reconciled = False` y `payment_entry_id = None` en cada transacción encontrada
+  3. Se agregó comentario explicativo con referencia al issue CAS-04/#151 para prevenir falsos positivos futuros
+- **Pruebas:** Todos los tests existentes de pagos y cancelación pasaron (51 tests). La corrección es consistente con el patrón de conciliación existente en `reconciliation_service.py`.
+- **Cierre del issue:** Se cerrará con comentario explicativo indicando que el error fue corregido.
+
 ## 2026-07-09 (INV-05: Corrección de qty_in_base_uom en entradas de stock)
 - **Solicitud:** Analizar issue #171 (INV-05: qty_in_base_uom no persiste al guardar entrada de stock) y corregir si es un error real.
 - **Diagnóstico:** El issue es un error real. La función `_save_stock_entry_items` no calculaba `qty_in_base_uom` al crear líneas de `StockEntryItem`, mientras que `_save_stock_reconciliation_items` sí lo hacía correctamente usando `convert_item_qty`.

@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-07-09
 
+- **Fix issue #151 - CAS-04: Cancelación de pago no limpia conciliación bancaria (2026-07-09):** Se corrigió el handler `bancos_pago_cancel` en `cacao_accounting/bancos/__init__.py` para resetear `is_reconciled` y `payment_entry_id` en `BankTransaction` al cancelar un pago. Antes de esta corrección, las transacciones bancarias vinculadas a un pago cancelado mantenían su estado de conciliación y referencia huérfana, impidiendo reasignación y causando datos inconsistentes. Se agregó comentario explicativo con referencia al issue para prevenir falsos positivos futuros.
+
+- **Fix issue #171 - INV-05: qty_in_base_uom no persiste en entradas de stock (2026-07-09):** Se corrigió la función `_save_stock_entry_items` en `cacao_accounting/inventario/__init__.py` para calcular `qty_in_base_uom` usando `convert_item_qty`. Anteriormente, este campo no se calculaba al crear líneas de `StockEntryItem`, mientras que `_save_stock_reconciliation_items` sí lo hacía correctamente. Se agregó comentario explicativo para prevenir falsos positivos futuros. Commit `2c4bfd5`.
+
 - **Cierre issue #173 - O2C-01 FALSO POSITIVO (2026-07-09):** Se confirmó que `require_party=False` en SalesRequest es intencional para documentos internos/preliminares. Se agregaron docstrings explicativos a PurchaseRequest, PurchaseQuotation y StockEntry para mantener consistencia y prevenir falsos positivos futuros. Issue cerrado formalmente en GitHub.
 
 - **Fix issue #172 - INV-11: item_code en error de valuación (2026-07-09):** Los mensajes de error en `_line_rate` y `_line_rate_generic` ahora incluyen `item_code` para facilitar la depuración cuando hay múltiples líneas de inventario. Se agregaron docstrings a ambas funciones. Commit `64179e5`.
