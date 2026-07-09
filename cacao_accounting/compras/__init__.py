@@ -2844,7 +2844,8 @@ def _validate_supplier_invoice_flags(
         database.select(CompanyParty).filter_by(party_id=supplier_id, company=company)
     ).scalar_one_or_none()
     if settings is None:
-        return
+        # S2P-09: Validar strictamente cuando CompanyParty es None
+        raise PostingError("No se encontró configuración de flags para el proveedor en la compañía.")
     has_order = bool(purchase_order_id)
     has_receipt = bool(purchase_receipt_id)
     if not has_order and not settings.allow_purchase_invoice_without_order:
