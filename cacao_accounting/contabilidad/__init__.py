@@ -2741,6 +2741,7 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
     close_run.closed_by = str(current_user.id)
     close_run.closed_at = datetime.now(timezone.utc)
     period.is_closed = True
+    log_submit(close_run)
     database.session.commit()
     flash("El cierre mensual ha finalizado y el periodo ha sido cerrado.", "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))

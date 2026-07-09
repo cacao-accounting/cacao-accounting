@@ -7,6 +7,7 @@ from datetime import date
 import json
 from typing import Any, Dict, List, Sequence
 from sqlalchemy import or_, select
+from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
     Accounts,
     database,
@@ -66,6 +67,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
         )
         database.session.add(line)
 
+    log_create(template)
     database.session.commit()
     return template
 
@@ -97,6 +99,7 @@ def approve_recurring_template(template_id: str, user_id: str):
     template.docstatus = 1
     template.approved_by = user_id
     template.approved_at = database.func.now()
+    log_submit(template)
     database.session.commit()
 
 
