@@ -2055,6 +2055,7 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     bridge_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     customer_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     supplier_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
+    apply_advances_automatically = database.Column(database.Boolean(), default=False, nullable=False)
     bank_difference_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     default_sales_tax_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)
     default_purchase_tax_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID), nullable=True)

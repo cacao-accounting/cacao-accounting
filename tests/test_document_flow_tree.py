@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -656,3 +657,94 @@ def test_vista_comprobante_contable_renderiza_flujo_documental(app):
     assert resp.status_code == 200
     assert "Flujo documental".encode("utf-8") in resp.data
     assert b"/api/document-flow/tree" in resp.data
+
+
+def test_s2p07_settle_advance_generates_netting_journal(app):
+    """S2P-07: al aplicar anticipo con flag activo se netea la cuenta de anticipo.
+
+    Compras: Dr Cuenta por Pagar / Cr Cuenta de Anticipo a Proveedores.
+    """
+    from cacao_accounting.database import (
+        Accounts,
+        AccountingPeriod,
+        Book,
+        CompanyDefaultAccount,
+        FiscalYear,
+        GLEntry,
+        PaymentEntry,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        database,
+    )
+    from cacao_accounting.document_flow.service import apply_advance_to_invoice
+
+    entity = _seed_entity(database)
+    entity.currency = "NIO"
+    payable = Accounts(entity="TEST", code="21.01", name="Cuentas por Pagar", account_type="payable", active=True, enabled=True)
+    advance = Accounts(
+        entity="TEST", code="21.02", name="Anticipos a Proveedores", account_type="supplier_advance", active=True, enabled=True
+    )
+    book = Book(entity="TEST", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
+    fy = FiscalYear(
+        entity="TEST", name="FY2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
+    )
+    database.session.add_all([payable, advance, book, fy])
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="TEST",
+        fiscal_year_id=fy.id,
+        name="2026-05",
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    defaults = CompanyDefaultAccount(
+        company="TEST",
+        default_payable=payable.id,
+        supplier_advance_account_id=advance.id,
+        apply_advances_automatically=True,
+    )
+    database.session.add(defaults)
+    database.session.flush()
+
+    invoice = PurchaseInvoice(
+        id="PINV-ADV-001",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        grand_total=Decimal("1000"),
+        outstanding_amount=Decimal("1000"),
+    )
+    inv_item = PurchaseInvoiceItem(
+        purchase_invoice_id="PINV-ADV-001", item_code="ITEM-1", item_name="Item", qty=Decimal("1"), rate=Decimal("1000"), amount=Decimal("1000")
+    )
+    advance_pay = PaymentEntry(
+        id="ADV-P-001",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        payment_type="pay",
+        paid_amount=Decimal("500"),
+        currency="NIO",
+    )
+    database.session.add_all([invoice, inv_item, advance_pay])
+    database.session.flush()
+
+    apply_advance_to_invoice("ADV-P-001", "PINV-ADV-001", Decimal("500"), date(2026, 5, 8))
+
+    entries = (
+        database.session.execute(select(GLEntry).filter_by(company="TEST", voucher_type="journal_entry"))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 2
+    debits = [e for e in entries if e.debit > 0]
+    credits = [e for e in entries if e.credit > 0]
+    assert len(debits) == 1 and len(credits) == 1
+    assert debits[0].account_id == payable.id
+    assert credits[0].account_id == advance.id
+    assert debits[0].debit == Decimal("500")
+    assert credits[0].credit == Decimal("500")
+
