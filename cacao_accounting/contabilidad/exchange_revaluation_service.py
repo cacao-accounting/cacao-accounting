@@ -218,6 +218,7 @@ class ExchangeRevaluationService:
         run.voided_by = user_id
         run.voided_at = datetime.now(UTC).replace(tzinfo=None)
         run.void_reason = reason
+        log_cancel(run)
         database.session.commit()
         return run
 
