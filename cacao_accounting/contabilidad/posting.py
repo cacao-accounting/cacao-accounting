@@ -1778,7 +1778,35 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
 
-    valuation_rate = target_value / counted_qty if counted_qty > 0 else Decimal("0")
+    # INV-25: Consumir capas FIFO en reconciliación de inventario
+    if qty_change < 0:
+        item = _stock_item_for(line)
+        try:
+            cost_amount, cost_rate = _consume_stock_valuation_layers(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                quantity=abs(qty_change),
+            )
+            valuation_rate = cost_rate
+            value_change = -cost_amount
+            line._inventory_cost_amount = cost_amount
+        except PostingError:
+            if not item.allow_negative_stock:
+                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+            cost_rate = _consume_available_layers_for_negative_stock(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                total_qty=abs(qty_change),
+                fallback_rate=target_value / counted_qty if counted_qty > 0 else Decimal("0"),
+            )
+            cost_amount = cost_rate * abs(qty_change)
+            line._inventory_cost_amount = cost_amount
+            valuation_rate = cost_rate
+            value_change = -cost_amount
+    else:
+        valuation_rate = target_value / counted_qty if counted_qty > 0 else Decimal("0")
     line.current_qty = current_qty
     line.counted_qty = counted_qty
     line.qty_difference = qty_change
