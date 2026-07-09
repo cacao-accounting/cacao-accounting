@@ -50,7 +50,7 @@
 | CAS-06 | **ISSUE VERIFICADO** | Alto | [#152](https://github.com/cacao-accounting/cacao-accounting/issues/152) |
 | CAS-07 | **ISSUE VERIFICADO** | Alto | [#153](https://github.com/cacao-accounting/cacao-accounting/issues/153) |
 | CAS-15 | **ISSUE VERIFICADO** | Alto | [#154](https://github.com/cacao-accounting/cacao-accounting/issues/154) |
-| INV-01 | **FALSO POSITIVO** | Muy Alto | — |
+| INV-01 | **FALSO POSITIVO (CERRADO)** | Muy Alto | [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) |
 | INV-03 | **ISSUE VERIFICADO** | Alto | [#156](https://github.com/cacao-accounting/cacao-accounting/issues/156) |
 | INV-04 | **ISSUE VERIFICADO** | Alto | [#157](https://github.com/cacao-accounting/cacao-accounting/issues/157) |
 | INV-07 | **ISSUE VERIFICADO** | Alto | [#158](https://github.com/cacao-accounting/cacao-accounting/issues/158) |
@@ -92,7 +92,7 @@
 | CAS-12 | **FALSO POSITIVO** | Medio | — |
 | CAS-16 | **FALSO POSITIVO** | Medio | — |
 | CAS-17 | **FALSO POSITIVO** | Bajo | — |
-| INV-01 | **FALSO POSITIVO** | Muy Alto | — |
+| INV-01 | **FALSO POSITIVO (CERRADO)** | Muy Alto | [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) |
 | INV-02 | **ISSUE VERIFICADO** | Bajo | [#170](https://github.com/cacao-accounting/cacao-accounting/issues/170) |
 | INV-05 | **ISSUE VERIFICADO** | Bajo | [#171](https://github.com/cacao-accounting/cacao-accounting/issues/171) |
 | INV-11 | **ISSUE VERIFICADO** | Bajo | [#172](https://github.com/cacao-accounting/cacao-accounting/issues/172) |
@@ -602,7 +602,9 @@
 
 **Evidencia:** `cacao_accounting/contabilidad/posting.py:1681-1696`
 
-> **❌ FALSO POSITIVO** (verificado por MiMo-V2.5) — El check ocurre ANTES de _upsert_stock_bin. `_stock_qty_after` es read-only.
+> **❌ FALSO POSITIVO (CERRADO)** (verificado por MiMo-V2.5) — El check ocurre ANTES de _upsert_stock_bin. `_stock_qty_after` es read-only. Comentario explicativo agregado en código fuente.
+>
+> **GitHub:** [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) — Cerrado 2026-07-09
 
 ### INV-02 [BAJO] — Check de stock negativo en traslados funciona pero mensaje no específico
 
