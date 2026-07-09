@@ -1,4 +1,10 @@
-# Estado Actual del Proyecto - 2026-07-08
+# Estado Actual del Proyecto - 2026-07-09
+
+- **Cierre de hallazgos ISSUES.md (2026-07-09):** Los 4 hallazgos confirmados reales restantes fueron corregidos. Todos los 30 hallazgos del informe están CORREGIDOS o son FALSOS POSITIVOS.
+  - **R2R-04 (cierre mensual):** Nuevo endpoint `POST /period-close/monthly/<id>/close` que marca `PeriodCloseRun.run_status="closed"` y `AccountingPeriod.is_closed=True`. Commit `4610fdd`.
+  - **S2P-09 (multimoneda compras):** Selector de moneda en templates de OC/Recepción/Factura de compra; el backend persiste `transaction_currency`/`exchange_rate` y calcula `base_total = total * rate`. Commit `bb2ac5d`.
+  - **O2C-04 (sales_return):** Tipo documental `sales_return` registrado con flujos desde `delivery_note`/`sales_invoice`; ruta `/sales-invoice/return/new`; `DeliveryNote.is_return` expuesto en UI; registrado en printing y bancos como reembolso. Commit `b31ce72`.
+  - **S2P-07 (neteo de anticipos):** Flag `apply_advances_automatically` en `CompanyDefaultAccount` + UI; al aplicar anticipo a factura genera comprobante de neteo Dr Payable / Cr Advance (compras) o Dr Advance / Cr Receivable (ventas). Commit `3f72f1a`.
 
 - **Codigos legibles para terceros e items (2026-07-03):** Clientes, proveedores e items ahora usan codigos secuenciales legibles en lugar de ULIDs.
   - `generate_party_code()` y `create_item_with_uoms()` resuelven la naming series global antes de generar el identificador.

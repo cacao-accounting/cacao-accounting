@@ -67,7 +67,7 @@
 - Pruebas unitarias en `tests/test_validation.py` cubren todos los casos de validación.
 
 ### S2P-07 [Media]: Anticipos no reconciliados contra facturas
-**Estado:** CONFIRMADO REAL
+**Estado:** CORREGIDO — Commit `3f72f1a`
 **Descripción:** Pagos anticipados desde OC usan `supplier_advance_account_id`. Al pagar la factura posterior, no hay neteo del anticipo contra la cuenta por pagar.
 **Impacto:** El anticipo queda permanentemente en cuenta de anticipos, sobreestimando activos y pasivos.
 **Recomendación:** Agregar tanto en la configuración global de coompras y ventas una opción "Aplicar automaticamente anticipos a facturas de la misma OCImplementar settlement de anticipos: Dr. Payable / Cr. Advance al pagar factura con anticipo.
@@ -81,7 +81,7 @@
 **Caso de prueba:** Proveedor con `allow_invoice_without_order=False`. Crear factura sin OC (debe rechazar).
 
 ### S2P-09 [Media]: Multimoneda no implementada en compras
-**Estado:** CORREGIDO PARCIALMENTE — Commit `778a1b7`
+**Estado:** CORREGIDO — Commit `bb2ac5d` (parcial previo `778a1b7`)
 **Descripción:** `transaction_currency`, `exchange_rate` y montos base en OC/Recepción/Factura siempre se establecen como 1:1.
 **Impacto:** Transacciones en moneda extranjera se registran incorrectamente en contabilidad.
 **Recomendación:** Agregar selección de moneda en formularios y calcular `base_total = total * exchange_rate`.
@@ -136,7 +136,7 @@
 **Caso de prueba:** Stock: 10 uds. SO-1: 10 uds (reserva 10, éxito). SO-2: 5 uds (debe fallar). DN desde SO-1: libera 10 uds reservadas.
 
 ### O2C-04 [Media]: Notas de Crédito y Devolución — dos transacciones separadas (falta `sales_return`)
-**Estado:** CONFIRMADO REAL
+**Estado:** CORREGIDO — Commit `b31ce72`
 **Descripción:** El diseño actual separa la NC (ajuste financiero) de la Devolución física, lo cual es correcto. Sin embargo, existe una asimetría: compras tiene `purchase_return` como tipo documental separado de `purchase_credit_note`, mientras que ventas no tiene `sales_return` — la ruta `/sales-invoice/return/list` es un alias de notas de crédito. El campo `DeliveryNote.is_return` existe pero no se expone en UI. Se requiere implementación espejo para mantener consistencia entre módulos.
 **Recomendación:** Implementar `sales_return` como tipo documental dedicado, análogo a `purchase_return` en compras.
 
@@ -293,10 +293,12 @@
 | Prioridad | Hallazgos |
 |-----------|-----------|
 | **Alta** | ~~S2P-01~~, ~~S2P-02~~, ~~S2P-03~~, ~~S2P-04~~, ~~S2P-05~~, ~~O2C-01~~, ~~O2C-02~~, ~~O2C-03~~, ~~O2C-05~~, ~~R2R-01~~ (FP ✓), ~~R2R-02~~ (FP ✓), ~~CAS-01~~ (FP ✓), ~~CAS-02~~, ~~CAS-03~~, ~~INV-01~~, ~~INV-02~~ |
-| **Media** | ~~S2P-06~~, **S2P-07**, ~~S2P-08~~, ~~S2P-09~~, ~~R2R-03~~ (FP ✓), **R2R-04**, **O2C-04**, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~, ~~CROSS-01~~ |
+| **Media** | ~~S2P-06~~, ~~S2P-07~~, ~~S2P-08~~, ~~S2P-09~~, ~~R2R-03~~ (FP ✓), ~~R2R-04~~, ~~O2C-04~~, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~, ~~CROSS-01~~ |
 | **Baja** | ~~CAS-04~~, ~~CROSS-02~~ |
 
 **Leyenda:** ~~Tachado~~ = CORREGIDO | **Negrita** = CONFIRMADO REAL | FP ✓ = FALSO POSITIVO CONFIRMADO
+
+**ESTADO FINAL:** Todos los 30 hallazgos del informe están CORREGIDOS o son FALSOS POSITIVOS. No quedan issues pendientes.
 
 ---
 
@@ -308,7 +310,7 @@
 | **2-3** | ~~O2C-01 (COGS)~~, ~~O2C-02 (precios)~~, ~~O2C-03 (reserva inventario)~~, ~~O2C-05~~ | O2C y controles de ventas — COMPLETADO |
 | **3-4** | ~~R2R-01~~ (FP), ~~R2R-02~~ (FP), ~~CAS-01~~ (FP), ~~CAS-02~~, ~~CAS-03~~ | Contabilidad y tesorería — COMPLETADO |
 | **4-5** | ~~INV-01~~, ~~INV-02~~, ~~INV-03~~, ~~INV-04~~, ~~INV-05~~, ~~INV-06~~, ~~INV-07~~ | Inventario — 7 issues — COMPLETADO |
-| **5-6** | **S2P-07** (anticipos), ~~S2P-08~~ (flags proveedor), ~~S2P-09~~ (multimoneda — helper infra.) | Compras — 3 issues |
-| **6-7** | **R2R-04** (cierre mensual), ~~CROSS-01~~ (auditoría ediciones), ~~CAS-04~~ (campo huérfano), ~~CROSS-02~~ (config duplicada) | R2R y cross-cutting — PENDIENTE: R2R-04 |
-| **7-8** | **O2C-04** (implementar `sales_return`) | Consistencia compras/ventas — tipo documental espejo |
-| **8-9** | **S2P-07** (anticipos), **R2R-04** (cierre), **O2C-04** (sales_return), S2P-09 (templates moneda) | Features pendientes |
+| **5-6** | ~~S2P-07~~ (anticipos), ~~S2P-08~~ (flags proveedor), ~~S2P-09~~ (multimoneda) | Compras — 3 issues — COMPLETADO |
+| **6-7** | ~~R2R-04~~ (cierre mensual), ~~CROSS-01~~ (auditoría ediciones), ~~CAS-04~~ (campo huérfano), ~~CROSS-02~~ (config duplicada) | R2R y cross-cutting — COMPLETADO |
+| **7-8** | ~~O2C-04~~ (implementar `sales_return`) | Consistencia compras/ventas — tipo documental espejo — COMPLETADO |
+| **8-9** | ~~S2P-07~~ (anticipos), ~~R2R-04~~ (cierre), ~~O2C-04~~ (sales_return), ~~S2P-09~~ (templates moneda) | Features pendientes — COMPLETADO |

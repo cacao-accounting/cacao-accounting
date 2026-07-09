@@ -1,5 +1,16 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-09 (Cierre de los 4 hallazgos reales pendientes de ISSUES.md)
+- **Solicitud:** Preparar y ejecutar el plan para corregir los issues pendientes R2R-04, O2C-04, S2P-09 y S2P-07, con commits semánticos firmados (sign-off) como williamjmorenor@gmail.com.
+- **Decisiones de diseño:**
+  - **R2R-04:** El asistente de cierre ya ejecutaba recurrentes y revaluación pero no cerraba el período. Se agregó `finalizar_cierre_mensual` que fija `run_status="closed"`, `closed_by`, `closed_at` y `AccountingPeriod.is_closed=True`; Paso 3 expuesto en UI.
+  - **S2P-09:** La infra de multimoneda ya existía (DocBase + `_lookup_exchange_rate`). Solo faltaba UI: se agregó smart_select de moneda en OC/Recepción/Factura de compra y el backend persistió `transaction_currency`/`exchange_rate` calculando `base_total`. `_purchase_exchange_rate` corregido para buscar la entidad por `code` (no `id`) y devolver tasa 1:1 como fallback seguro.
+  - **O2C-04:** `sales_return` implementado como espejo de `purchase_return` (registry, flujos, ruta `/sales-invoice/return/new`, template, `DeliveryNote.is_return` en UI). El posting engine ya trata `is_return` igual a `sales_credit_note`, sin cambios en accounting_engine.
+  - **S2P-07 (flag + neteo automático, según decisión del usuario):** Flag `apply_advances_automatically` en `CompanyDefaultAccount` + UI. Al aplicar anticipo a factura se genera un `ComprobanteContable` de neteo (Dr Payable / Cr Advance en compras; Dr Advance / Cr Receivable en ventas) y se postea vía `post_comprobante_contable`.
+- **Pruebas agregadas:** `test_e2e_monthly_close_finalizes_and_closes_period` (R2R-04), `test_s2p09_purchase_order_foreign_currency_base_total` (S2P-09), `test_sales_return_*` (O2C-04), `test_s2p07_settle_advance_generates_netting_journal` (S2P-07).
+- **Calidad:** Black, ruff, mypy en verde en archivos modificados. Nota: `test_purchase_happy_path` (test_e2e_modules) es preexistente y falla por flag de proveedor S2P-08, independiente de estos cambios.
+- **Commits:** `4610fdd` (R2R-04), `bb2ac5d` (S2P-09), `b31ce72` (O2C-04), `3f72f1a` (S2P-07). ISSUES.md marcado con todos los hallazgos CORREGIDOS.
+
 ## 2026-07-08 (S2P-06 y O2C-05: validaciones pre-submit en 12 endpoints)
 - **Solicitud:** Analizar ISSUES.md, identificar siguiente issue (S2P-06/O2C-05: validaciones pre-submit insuficientes) e implementar validación centralizada.
 - **Diagnóstico:** 6 endpoints con cero validación (solo `docstatus != 0`) y 6 con validación solo en capa de posting. Ninguno validaba compañía, fecha, tercero ni existencia de líneas en el límite del submit.
