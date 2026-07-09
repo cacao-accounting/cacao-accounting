@@ -381,7 +381,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
+        allowed_filters={"company": "company", "role": "role", "party_type": "role", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "party_group": SearchSelectSpec(
@@ -417,7 +417,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
+        allowed_filters={"company": "company", "role": "role", "party_type": "role", "is_active": "is_active"},
         default_filters={"role": "customer", "is_active": True},
     ),
     "supplier": SearchSelectSpec(
@@ -426,7 +426,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "name", "comercial_name", "tax_id"),
         value_field="id",
         label_builder=_party_label,
-        allowed_filters={"company": "company", "role": "role", "is_active": "is_active"},
+        allowed_filters={"company": "company", "role": "role", "party_type": "role", "is_active": "is_active"},
         default_filters={"role": "supplier", "is_active": True},
     ),
     "item": SearchSelectSpec(
@@ -721,7 +721,7 @@ def _apply_request_filters(
         if spec.model is Party and filter_name == "company":
             statement = statement.where(CompanyParty.company.in_(clean_values))
             continue
-        if spec.model is Party and filter_name == "role":
+        if spec.model is Party and filter_name in ("role", "party_type"):
             statement = _apply_role_filter(statement, clean_values)
             continue
         column = _column_for(spec.model, spec.allowed_filters[filter_name])
@@ -737,6 +737,8 @@ def _apply_role_filter(statement: Select[tuple[Any]], values: Sequence[str | boo
             conditions.append(Party.is_customer.is_(True))
         elif sv == "supplier":
             conditions.append(Party.is_supplier.is_(True))
+        else:
+            raise SearchSelectError(f"Tipo de tercero o rol no soportado: {sv}")
     if conditions:
         statement = statement.where(or_(*conditions))
     return statement

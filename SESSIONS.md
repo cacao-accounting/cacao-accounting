@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-09 (Corrección de fallos en filtros del buscador asistido 'search-select' para terceros)
+- **Solicitud:** Investigar y corregir los fallos en las pruebas automatizadas (específicamente la prueba E2E de autocompletado con múltiples fuentes: `test_transaction_form_multi_source_autofill`).
+- **Diagnóstico:** El frontend enviaba el filtro `party_type` al buscar terceros vía `/api/search-select?doctype=party&q=Demo&company=cacao&party_type=customer`. Sin embargo, la especificación de búsqueda de `Party` (`party`, `customer`, `supplier`) en `cacao_accounting/search_select.py` sólo admitía el filtro `role`. Al recibir el parámetro desconocido `party_type`, el backend devolvía error HTTP 400 ("Filtros no permitidos: party_type"), lo que causaba que la búsqueda de Cliente Demo fallara y la prueba E2E fallara por timeout.
+- **Implementación:**
+  - Se modificaron las especificaciones de búsqueda para `party`, `customer` y `supplier` en `_SEARCH_SELECT_REGISTRY` en `cacao_accounting/search_select.py` para admitir `"party_type"` como un filtro válido, mapeándolo al campo de validación de rol de base de datos (`"role"`).
+  - Se actualizó `_apply_request_filters` para capturar tanto `"role"` como `"party_type"` para los modelos de terceros (`Party`) y aplicar la lógica unificada de `_apply_role_filter`.
+- **Pruebas:** Se verificaron con éxito la prueba E2E (`tests/test_e2e_transactional_ui.py`) y la prueba de conciliación (`tests/test_08_reconciliation_reports.py`).
+
 ## 2026-07-09 (Cierre de los 4 hallazgos reales pendientes de ISSUES.md)
 - **Solicitud:** Preparar y ejecutar el plan para corregir los issues pendientes R2R-04, O2C-04, S2P-09 y S2P-07, con commits semánticos firmados (sign-off) como williamjmorenor@gmail.com.
 - **Decisiones de diseño:**
