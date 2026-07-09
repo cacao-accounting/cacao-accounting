@@ -416,6 +416,13 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
+    """Convierte monto a moneda de compania usando ROUND_HALF_EVEN.
+
+    La conversion por linea es simetrica: si linea A tiene +V y linea B
+    tiene -V, ambas se redondean con la misma tasa, por lo que la suma
+    de debitos siempre iguala la suma de creditos. No se requiere
+    tolerancia adicional en la validacion de balance.
+    """
     if exchange_rate == 0:
         raise PostingError("El tipo de cambio no puede ser cero.")
     return (amount * exchange_rate).quantize(Decimal("0.0001"))
@@ -1433,6 +1440,16 @@ def _upsert_stock_bin(
     valuation_rate: Decimal,
     value_change: Decimal,
 ) -> None:
+    """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
+
+    La validacion de stock negativo (``allow_negative_stock``) se ejecuta
+    en los callers **antes** de llamar a esta funcion, no aqui.
+
+    Cuando ``actual_qty`` llega a cero o negativo, ``valuation_rate`` se
+    establece en 0 intencionalmente: sin stock no hay tasa de valuacion
+    significativa. El ``stock_value`` acumulado se preserva para recalcular
+    la tasa cuando el stock vuelva a ser positivo.
+    """
     # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
     bin_row = (
         database.session.query(StockBin)
@@ -2603,7 +2620,14 @@ def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[G
 
 
 def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEntry]:
-    """Aprueba y contabiliza un documento operativo de forma idempotente."""
+    """Aprueba y contabiliza un documento operativo de forma idempotente.
+
+    Esta funcion es un primitiva de posting: genera GL entries y
+    actualiza docstatus. No registra eventos de auditoria.
+    ``log_submit()`` / ``log_cancel()`` son llamados por los handlers
+    de ruta que invocan esta funcion (ej. ``ventas_entrega_submit``,
+    ``bancos_pago_submit``).
+    """
     if getattr(document, "docstatus", 0) != 0:
         raise PostingError("Solo se puede aprobar un documento en borrador.")
     if _has_active_gl_entries(document):

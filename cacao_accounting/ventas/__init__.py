@@ -147,6 +147,9 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
     Para cada linea de la OV con almacen definido, verifica que
     ``actual_qty - reserved_qty >= qty``. Si hay stock suficiente,
     incrementa ``reserved_qty`` en el StockBin correspondiente.
+
+    Nota: ``stock_value`` se actualiza por ``_upsert_stock_bin`` en posting.py,
+    no aqui. Esta funcion solo gestiona ``reserved_qty``.
     """
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
@@ -202,7 +205,11 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
 
 
 def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
-    """Restaura reserva al cancelar una Nota de Entrega vinculada a una OV."""
+    """Restaura reserva al cancelar una Nota de Entrega vinculada a una OV.
+
+    Incrementa ``reserved_qty`` sumando ``item.qty`` al valor actual.
+    No sobrescribe: lee el valor vigente y le suma la cantidad liberada.
+    """
     if not dn.sales_order_id:
         return
 
@@ -492,7 +499,12 @@ def ventas_pedido_venta_duplicar(request_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_pedido_venta_submit(request_id: str):
-    """Aprueba un pedido de venta."""
+    """Aprueba un pedido de venta.
+
+    ``require_party=False`` es intencional: un pedido de venta interno
+    puede aprobarse sin cliente asignado. El cliente se asigna al
+    convertir en cotizacion u orden de venta.
+    """
     registro = database.session.get(SalesRequest, request_id)
     if not registro:
         abort(404)
@@ -2129,7 +2141,13 @@ def ventas_entrega_duplicar(note_id: str):
 @modulo_activo("sales")
 @login_required
 def ventas_entrega_submit(note_id: str):
-    """Aprueba una nota de entrega y libera la reserva de inventario."""
+    """Aprueba una nota de entrega y libera la reserva de inventario.
+
+    ``submit_document(registro)`` ejecuta la cadena de posting que
+    decrementa ``actual_qty`` en StockBin via ``_upsert_stock_bin``
+    en posting.py. La reduccion de ``actual_qty`` no ocurre aqui
+    directamente, sino dentro del motor de posting.
+    """
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
@@ -2388,6 +2406,11 @@ def ventas_factura_venta_editar(invoice_id: str):
 
 
 def _handle_sales_invoice_edit_post(registro):
+    """Maneja edicion de factura de venta.
+
+    ``is_return`` y ``reversal_of`` no se modifican aqui. Son campos
+    inmutables despues de la creacion; se preservan del registro existente.
+    """
     try:
         before_state = _capture_sales_state(registro)
         registro.customer_id = request.form.get("customer_id") or None
