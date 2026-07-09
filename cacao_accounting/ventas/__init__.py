@@ -1959,8 +1959,10 @@ def ventas_entrega_nuevo():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    # INV-03: Filtrar almacenes por compañía usando WarehouseCompanyAccount
     bodegas_disponibles = [
-        {"code": w[0].code, "name": w[0].name} for w in database.session.execute(database.select(Warehouse)).all()
+        {"code": w[0].code, "name": w[0].name}
+        for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
     titulo = "Nueva Nota de Entrega - " + APPNAME
     transaction_config = {
@@ -2066,8 +2068,10 @@ def ventas_entrega_editar(note_id: str):
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    # INV-03: Filtrar almacenes por compañía usando WarehouseCompanyAccount
     bodegas_disponibles = [
-        {"code": w[0].code, "name": w[0].name} for w in database.session.execute(database.select(Warehouse)).all()
+        {"code": w[0].code, "name": w[0].name}
+        for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
 
     if request.method == "POST":
