@@ -33,10 +33,10 @@ Siempre considera los siguientes controles de calidad:
 
 Los tests unitarios se ejecutan con este comando:
 
-CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -v -s --slow=True
+CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --tb=line --quiet --disable-warnings --slow=True
 
-Dado que los tests toman mucho tiempo en ejecutarse se deben ejecutar en segundo plano y guardar los logs en un archivo de texto, luego de aprox 4 minutos
-los test finalizan.
+Dado que los tests toman mucho tiempo en ejecutarse se deben ejecutar en segundo plano y guardar los resultados de las pruebas en un archivo de texto
+para luego analizar si hubo regresiones o todas las pruebas pasaron correctamente.
 
 Usa siempre venv o .venv para ejecutar las pruebas de calidad.
 
