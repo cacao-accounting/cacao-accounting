@@ -58,7 +58,7 @@ from cacao_accounting.setup.service import (
 )
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.contabilidad.gl import gl
-from cacao_accounting.audit_trail_service import format_document_timeline
+from cacao_accounting.audit_trail_service import format_document_timeline, log_submit
 from cacao_accounting.database import STATUS, ComprobanteContable, ExchangeRevaluation, RecurringJournalTemplate, database
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.list_filters import apply_list_filters
