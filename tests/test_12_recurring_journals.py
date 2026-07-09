@@ -380,9 +380,7 @@ def test_e2e_monthly_close_finalizes_and_closes_period(app_ctx):
         data={"period_id": period.id},
         follow_redirects=False,
     )
-    close_run = database.session.execute(
-        database.select(PeriodCloseRun).filter_by(period_id=period.id)
-    ).scalar_one()
+    close_run = database.session.execute(database.select(PeriodCloseRun).filter_by(period_id=period.id)).scalar_one()
 
     assert create_response.status_code == 302
     assert close_run.run_status == "open"

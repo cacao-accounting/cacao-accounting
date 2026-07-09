@@ -71,9 +71,7 @@ def _create_so_with_item(company="cacao"):
 
 def _create_invoice_from_so(so, so_item, rate, company="cacao"):
     """Crea una SalesInvoice vinculada a la SO con el rate indicado."""
-    customer = database.session.execute(
-        database.select(Party).filter(Party.is_customer.is_(True))
-    ).scalars().first()
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
 
     invoice = SalesInvoice(
         id="SI-PRICE-01",

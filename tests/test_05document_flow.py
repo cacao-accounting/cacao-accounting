@@ -1077,7 +1077,14 @@ def test_invoice_submit_validates_against_receipt(app_ctx):
 
 def test_invoice_edit_cleans_old_relations(app_ctx):
     """Editar un borrador de factura no debe acumular relaciones viejas (doble conteo)."""
-    from cacao_accounting.database import DocumentRelation, PurchaseInvoice, PurchaseInvoiceItem, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        database,
+    )
     from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
     from cacao_accounting.document_flow.repository import consumed_qty_for_source
     from cacao_accounting.document_flow.service import get_source_items

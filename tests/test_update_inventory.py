@@ -50,28 +50,28 @@ def login(client, username, password):
 
 def _setup_inventory_context(company="cacao"):
     """Configura el contexto de inventario necesario para DN posting."""
-    warehouse = database.session.execute(
-        database.select(Warehouse).filter_by(company=company)
-    ).scalars().first()
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company=company)).scalars().first()
     if not warehouse:
         warehouse = Warehouse(code="BOD-TEST", name="Bodega Test", company=company, is_active=True)
         database.session.add(warehouse)
         database.session.flush()
 
-    item = database.session.execute(
-        database.select(Item).filter_by(is_stock_item=True)
-    ).scalars().first()
+    item = database.session.execute(database.select(Item).filter_by(is_stock_item=True)).scalars().first()
     if not item:
         item = Item(code="ITEM-INV-001", name="Item Test", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add(item)
         database.session.flush()
 
-    cogs_account = database.session.execute(
-        database.select(Accounts).filter_by(entity=company, account_type="cost_of_goods_sold")
-    ).scalars().first()
-    inventory_account = database.session.execute(
-        database.select(Accounts).filter_by(entity=company, account_type="inventory")
-    ).scalars().first()
+    cogs_account = (
+        database.session.execute(database.select(Accounts).filter_by(entity=company, account_type="cost_of_goods_sold"))
+        .scalars()
+        .first()
+    )
+    inventory_account = (
+        database.session.execute(database.select(Accounts).filter_by(entity=company, account_type="inventory"))
+        .scalars()
+        .first()
+    )
 
     return warehouse, item, cogs_account, inventory_account
 

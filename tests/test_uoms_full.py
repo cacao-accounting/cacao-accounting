@@ -209,7 +209,12 @@ def test_uom_conversion_cycle(app_ctx):
 
 def test_item_uom_rows_persist_against_default_uom(app_ctx):
     from cacao_accounting.database import database
-    from cacao_accounting.inventario.service import ItemAccountRow, ItemUOMRow, create_item_with_uoms, list_item_uom_conversions
+    from cacao_accounting.inventario.service import (
+        ItemAccountRow,
+        ItemUOMRow,
+        create_item_with_uoms,
+        list_item_uom_conversions,
+    )
 
     create_item_with_uoms(
         code="UOM-ITEM-001",
@@ -313,7 +318,9 @@ def test_service_item_persists_company_accounts(app_ctx):
     )
     database.session.commit()
 
-    mapping = database.session.execute(database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="cacao")).scalar_one()
+    mapping = database.session.execute(
+        database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="cacao")
+    ).scalar_one()
     assert mapping.expense_account_id == expense_account.id
     assert mapping.cost_center_code == cost_center.code
 
@@ -436,7 +443,10 @@ def test_average_cost(app_ctx):
     # 4. Sell 5 UND (Should use 150 as cost)
     dn_data = {
         "company": "cacao",
-        "customer_id": database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first().id,
+        "customer_id": database.session.execute(database.select(Party).filter(Party.is_customer.is_(True)))
+        .scalars()
+        .first()
+        .id,
         "posting_date": date.today().isoformat(),
         "remarks": "AVG COST SALE",
         "item_code_0": "AVG-ITEM",

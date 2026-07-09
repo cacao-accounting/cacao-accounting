@@ -680,14 +680,14 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
 
     entity = _seed_entity(database)
     entity.currency = "NIO"
-    payable = Accounts(entity="TEST", code="21.01", name="Cuentas por Pagar", account_type="payable", active=True, enabled=True)
+    payable = Accounts(
+        entity="TEST", code="21.01", name="Cuentas por Pagar", account_type="payable", active=True, enabled=True
+    )
     advance = Accounts(
         entity="TEST", code="21.02", name="Anticipos a Proveedores", account_type="supplier_advance", active=True, enabled=True
     )
     book = Book(entity="TEST", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
-    fy = FiscalYear(
-        entity="TEST", name="FY2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
-    )
+    fy = FiscalYear(entity="TEST", name="FY2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31))
     database.session.add_all([payable, advance, book, fy])
     database.session.flush()
     period = AccountingPeriod(
@@ -718,7 +718,12 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         outstanding_amount=Decimal("1000"),
     )
     inv_item = PurchaseInvoiceItem(
-        purchase_invoice_id="PINV-ADV-001", item_code="ITEM-1", item_name="Item", qty=Decimal("1"), rate=Decimal("1000"), amount=Decimal("1000")
+        purchase_invoice_id="PINV-ADV-001",
+        item_code="ITEM-1",
+        item_name="Item",
+        qty=Decimal("1"),
+        rate=Decimal("1000"),
+        amount=Decimal("1000"),
     )
     advance_pay = PaymentEntry(
         id="ADV-P-001",
@@ -734,11 +739,7 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
 
     apply_advance_to_invoice("ADV-P-001", "PINV-ADV-001", Decimal("500"), date(2026, 5, 8))
 
-    entries = (
-        database.session.execute(select(GLEntry).filter_by(company="TEST", voucher_type="journal_entry"))
-        .scalars()
-        .all()
-    )
+    entries = database.session.execute(select(GLEntry).filter_by(company="TEST", voucher_type="journal_entry")).scalars().all()
     assert len(entries) == 2
     debits = [e for e in entries if e.debit > 0]
     credits = [e for e in entries if e.credit > 0]
@@ -747,4 +748,3 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
     assert credits[0].account_id == advance.id
     assert debits[0].debit == Decimal("500")
     assert credits[0].credit == Decimal("500")
-

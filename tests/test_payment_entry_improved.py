@@ -1218,7 +1218,9 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    other_customer = Party(id="candidate_other_customer", code="CANDIDATE_OTHER", is_customer=True, name="Cliente Candidatos Otro")
+    other_customer = Party(
+        id="candidate_other_customer", code="CANDIDATE_OTHER", is_customer=True, name="Cliente Candidatos Otro"
+    )
     invoice = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
@@ -1863,7 +1865,9 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
     from cacao_accounting.document_flow.service import DocumentFlowError, apply_payment_reconciliation
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    other_customer = Party(id="customer_mass_mismatch", code="MASS_MISMATCH", is_customer=True, name="Cliente distinto conciliacion")
+    other_customer = Party(
+        id="customer_mass_mismatch", code="MASS_MISMATCH", is_customer=True, name="Cliente distinto conciliacion"
+    )
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("100.00"), document_no="PAY-ERR-001")
     invoice = SalesInvoice(
         company="cacao",
@@ -1983,9 +1987,7 @@ def test_payment_auto_populates_exchange_rate_same_currency(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(
-        database.select(BankAccount).filter_by(company="cacao", currency="NIO")
-    ).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
 
     payload = {
         "payment_type": "receive",
@@ -2017,9 +2019,7 @@ def test_payment_auto_populates_exchange_rate_different_currency(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(
-        database.select(BankAccount).filter_by(company="cacao", currency="USD")
-    ).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
     assert bank is not None, "Se necesita una cuenta bancaria en USD en los datos de prueba"
 
     payload = {
@@ -2057,9 +2057,15 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
 
-    invoice = database.session.execute(
-        database.select(PurchaseInvoice).filter_by(company="cacao", docstatus=1).filter(PurchaseInvoice.supplier_id.isnot(None))
-    ).scalars().first()
+    invoice = (
+        database.session.execute(
+            database.select(PurchaseInvoice)
+            .filter_by(company="cacao", docstatus=1)
+            .filter(PurchaseInvoice.supplier_id.isnot(None))
+        )
+        .scalars()
+        .first()
+    )
     if not invoice:
         invoice = PurchaseInvoice(
             id="PI-LOCK-TEST",
@@ -2103,9 +2109,9 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
     )
     assert b"Pago registrado correctamente" in response.data
 
-    ref = database.session.execute(
-        database.select(PaymentReference).order_by(PaymentReference.created.desc())
-    ).scalars().first()
+    ref = (
+        database.session.execute(database.select(PaymentReference).order_by(PaymentReference.created.desc())).scalars().first()
+    )
     assert ref is not None
     assert ref.allocated_amount == Decimal("100")
 
