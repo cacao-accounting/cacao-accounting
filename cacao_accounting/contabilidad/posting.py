@@ -1331,7 +1331,10 @@ def _consume_available_layers_for_negative_stock(
     total_available = sum((qty for qty, _ in available), Decimal("0"))
     if total_available > 0:
         consumed, avg_rate = _consume_stock_valuation_layers(
-            company=company, item_code=item_code, warehouse=warehouse, quantity=total_available,
+            company=company,
+            item_code=item_code,
+            warehouse=warehouse,
+            quantity=total_available,
         )
         return avg_rate
     return fallback_rate
@@ -1431,9 +1434,12 @@ def _upsert_stock_bin(
     value_change: Decimal,
 ) -> None:
     # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
-    bin_row = database.session.query(StockBin).with_for_update().filter_by(
-        company=company, item_code=item_code, warehouse=warehouse
-    ).first()
+    bin_row = (
+        database.session.query(StockBin)
+        .with_for_update()
+        .filter_by(company=company, item_code=item_code, warehouse=warehouse)
+        .first()
+    )
     if not bin_row:
         bin_row = StockBin(
             company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"), stock_value=Decimal("0")
@@ -1659,9 +1665,7 @@ def _create_stock_movement(
             line._inventory_cost_amount = cost_amount
         except PostingError:
             if not item.allow_negative_stock:
-                raise PostingError(
-                    f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."
-                )
+                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
             cost_rate = _consume_available_layers_for_negative_stock(
                 company=document.company,
                 item_code=line.item_code,
@@ -1681,9 +1685,7 @@ def _create_stock_movement(
         else:
             item = _stock_item_for(line)
         if not item.allow_negative_stock:
-            raise PostingError(
-                f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."
-            )
+            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
     _upsert_stock_bin(
         company=document.company,
         item_code=line.item_code,
@@ -2516,9 +2518,7 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
     # INV-04: Recepción manual sin origen documental debe usar cuenta de ajuste
     if purpose == "material_receipt":
         has_source = database.session.execute(
-            select(DocumentRelation.id).filter_by(
-                target_type="stock_entry", target_id=document.id, status="active"
-            ).limit(1)
+            select(DocumentRelation.id).filter_by(target_type="stock_entry", target_id=document.id, status="active").limit(1)
         ).scalar_one_or_none()
         offset_type = "inventory_adjustment" if not has_source else "bridge"
     else:
