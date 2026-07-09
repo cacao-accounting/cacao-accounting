@@ -9,6 +9,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from logging import getLogger
 from typing import Any
 
 # ---------------------------------------------------------------------------------------
@@ -43,6 +44,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+logger = getLogger(__name__)
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
@@ -253,6 +255,7 @@ def compras_solicitud_compra_nueva():
             solicitud.total = total
             solicitud.base_total = total
             solicitud.grand_total = total
+            log_create(solicitud)
             database.session.commit()
             flash("Solicitud de compra creada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
@@ -570,6 +573,7 @@ def _create_supplier_quotation_from_request():
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
+        log_create(cotizacion)
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
@@ -1795,6 +1799,7 @@ def _create_purchase_order_from_request(form: dict):
         orden.grand_total = total
         orden.exchange_rate = _purchase_exchange_rate(form.get("company"), posting_date, transaction_currency)
         orden.base_total = (total * orden.exchange_rate).quantize(Decimal("0.0001"))
+        log_create(orden)
         database.session.commit()
         flash("Orden de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
@@ -2019,6 +2024,7 @@ def _create_purchase_quotation_from_request():
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
+        log_create(cotizacion)
         database.session.commit()
         flash("Solicitud de cotización creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
@@ -2608,7 +2614,11 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
 
 
 def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
-    """Valida que las cantidades facturadas no excedan las recibidas en la recepción (3-way match)."""
+    """Valida que las cantidades facturadas no excedan las recibidas/recepcionadas (3-way match).
+
+    Cuando la factura se vincula directamente a una OC (sin recepción),
+    valida contra la cantidad ordenada en la OC.
+    """
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
             target_type="purchase_invoice",
@@ -2617,19 +2627,32 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
         )
     ).scalars()
     for rel in relations:
-        if rel.source_type != "purchase_receipt" or not rel.source_item_id:
+        if not rel.source_item_id:
             continue
-        receipt_item = database.session.get(PurchaseReceiptItem, rel.source_item_id)
-        if not receipt_item:
-            continue
-        consumed = consumed_qty_for_source("purchase_receipt", rel.source_id, rel.source_item_id, "purchase_invoice")
-        received = Decimal(str(receipt_item.qty or 0))
-        if consumed > received:
-            raise ValueError(
-                _("Sobre-facturación: cantidad facturada {} excede la recibida {} para el artículo {}.").format(
-                    consumed, received, receipt_item.item_code
+        if rel.source_type == "purchase_receipt":
+            receipt_item = database.session.get(PurchaseReceiptItem, rel.source_item_id)
+            if not receipt_item:
+                continue
+            consumed = consumed_qty_for_source("purchase_receipt", rel.source_id, rel.source_item_id, "purchase_invoice")
+            received = Decimal(str(receipt_item.qty or 0))
+            if consumed > received:
+                raise ValueError(
+                    _("Sobre-facturación: cantidad facturada {} excede la recibida {} para el artículo {}.").format(
+                        consumed, received, receipt_item.item_code
+                    )
                 )
-            )
+        elif rel.source_type == "purchase_order":
+            po_item = database.session.get(PurchaseOrderItem, rel.source_item_id)
+            if not po_item:
+                continue
+            consumed = consumed_qty_for_source("purchase_order", rel.source_id, rel.source_item_id, "purchase_invoice")
+            ordered = Decimal(str(po_item.qty or 0))
+            if consumed > ordered:
+                raise ValueError(
+                    _("Sobre-facturación: cantidad facturada {} excede la ordenada {} para el artículo {}.").format(
+                        consumed, ordered, po_item.item_code
+                    )
+                )
 
 
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
@@ -2844,7 +2867,8 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
 
     try:
         return _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
-    except Exception:
+    except PostingError:
+        logger.warning("No exchange rate found for %s -> %s on %s", transaction_currency, entity.currency, posting_date)
         return Decimal("1")
 
 
@@ -2930,6 +2954,7 @@ def _create_purchase_invoice_from_request():
         factura.outstanding_amount = total
         factura.base_outstanding_amount = base_grand_total
         _persist_purchase_invoice_fiscal_snapshot(factura)
+        log_create(factura)
         database.session.commit()
         flash("Factura de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
@@ -3067,12 +3092,16 @@ def _handle_purchase_invoice_edit_post(registro):
         ).scalars():
             database.session.delete(item)
         _total_qty, total = _save_purchase_invoice_items(registro.id)
+        fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
+        registro.exchange_rate = fx_rate
+        base_total, _ = _compute_base_amounts(total, fx_rate)
+        base_grand_total, _ = _compute_base_amounts(total, fx_rate)
         registro.total = total
-        registro.base_total = total
+        registro.base_total = base_total
         registro.grand_total = total
-        registro.base_grand_total = total
+        registro.base_grand_total = base_grand_total
         registro.outstanding_amount = total
-        registro.base_outstanding_amount = total
+        registro.base_outstanding_amount = base_grand_total
         _persist_purchase_invoice_fiscal_snapshot(registro)
         after_state = _capture_purchase_state(registro)
         log_update(registro, before=before_state, after=after_state)
