@@ -2668,13 +2668,9 @@ def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: st
     if source.docstatus != 1:
         raise ValueError(f"La factura origen '{reversal_of}' no esta aprobada.")
     if customer_id and source.customer_id != customer_id:
-        raise ValueError(
-            f"La factura origen '{reversal_of}' no pertenece al mismo cliente."
-        )
+        raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo cliente.")
     if company and source.company != company:
-        raise ValueError(
-            f"La factura origen '{reversal_of}' no pertenece a la misma compania."
-        )
+        raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compania.")
 
 
 @ventas.route("/cliente/<customer_id>/deshabilitar-proveedor", methods=["POST"])

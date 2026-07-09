@@ -2737,13 +2737,7 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
         flash("El periodo ya se encuentra cerrado.", "warning")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
-    checks = (
-        database.session.execute(
-            database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)
-        )
-        .scalars()
-        .all()
-    )
+    checks = database.session.execute(database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)).scalars().all()
     if checks and any(check.check_status != "passed" for check in checks):
         flash("No se puede cerrar el periodo: existen verificaciones pendientes o fallidas.", "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
