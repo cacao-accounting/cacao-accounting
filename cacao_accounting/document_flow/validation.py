@@ -43,6 +43,11 @@ def validate_submit_prerequisites(
                     raise ValueError("Todas las cantidades deben ser mayores a cero.")
     if require_warehouse and items:
         for item in items:
-            if not getattr(item, "warehouse", None):
+            wh = (
+                getattr(item, "warehouse", None)
+                or getattr(item, "source_warehouse", None)
+                or getattr(item, "target_warehouse", None)
+            )
+            if not wh:
                 item_code = getattr(item, "item_code", "desconocido")
                 raise ValueError(f"La linea del articulo {item_code} requiere un almacen asignado.")
