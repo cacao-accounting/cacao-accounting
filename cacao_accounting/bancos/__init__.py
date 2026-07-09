@@ -835,7 +835,9 @@ def _invoice_outstanding(invoice) -> Decimal:
             cached_values.append(value)
     if not cached_values:
         return computed
-    return min([computed, *cached_values])
+    if min(cached_values) < computed:
+        return refresh_outstanding_amount_cache(invoice)
+    return computed
 
 
 def _payment_reference_lines_from_form() -> list[dict]:
