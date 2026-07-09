@@ -641,7 +641,8 @@ def apply_payment_reconciliation(
         raise DocumentFlowError("La conciliacion requiere al menos una linea.")
     if len(lines) > MAX_RECONCILIATION_LINES:
         raise DocumentFlowError(
-            "El numero de lineas excede el maximo permitido ({0}).".format(MAX_RECONCILIATION_LINES), 400,
+            "El numero de lineas excede el maximo permitido ({0}).".format(MAX_RECONCILIATION_LINES),
+            400,
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise DocumentFlowError("Debe indicar compania, tipo de tercero y tercero.", 400)
@@ -1282,6 +1283,7 @@ def create_document_relation(
         status="active",
     )
     save_relation(relation)
+    database.session.flush()
     _audit(
         "document_relation",
         relation.id,

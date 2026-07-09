@@ -1113,7 +1113,7 @@ def test_revert_journal_rejects_same_accounting_period(app_ctx):
     assert reversed_rows == []
 
 
-def test_cancel_journal_requires_same_posting_date(app_ctx):
+def test_cancel_journal_works_in_any_open_period(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
     from cacao_accounting.database import Accounts, Book, ComprobanteContable, User, database
 
@@ -1128,7 +1128,7 @@ def test_cancel_journal_requires_same_posting_date(app_ctx):
             "company": "cacao",
             "posting_date": "2026-05-08",
             "books": ["FISC"],
-            "memo": "No se puede anular hoy",
+            "memo": "Anulacion en periodo abierto",
             "lines": [
                 {"account": debit_account.id, "debit": "40.00", "credit": "0"},
                 {"account": credit_account.id, "debit": "0", "credit": "40.00"},
@@ -1143,12 +1143,10 @@ def test_cancel_journal_requires_same_posting_date(app_ctx):
     _login(client, user.id)
 
     response = client.post(f"/accounting/journal/{journal.id}/cancel", follow_redirects=True)
-    html = response.get_data(as_text=True)
     refreshed = database.session.get(ComprobanteContable, journal.id)
 
-    assert response.status_code == 200
-    assert "misma fecha de contabilizacion" in html
-    assert refreshed.status == "submitted"
+    assert response.status_code in (200, 302)
+    assert refreshed.status == "cancelled"
 
 
 def test_update_journal_draft_renumbers_when_posting_date_changes(app_ctx):
