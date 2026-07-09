@@ -1,5 +1,9 @@
 # Estado Actual del Proyecto - 2026-07-09
 
+- **Cierre issue #173 - O2C-01 FALSO POSITIVO (2026-07-09):** Se confirmó que `require_party=False` en SalesRequest es intencional para documentos internos/preliminares. Se agregaron docstrings explicativos a PurchaseRequest, PurchaseQuotation y StockEntry para mantener consistencia y prevenir falsos positivos futuros. Issue cerrado formalmente en GitHub.
+
+- **Fix issue #172 - INV-11: item_code en error de valuación (2026-07-09):** Los mensajes de error en `_line_rate` y `_line_rate_generic` ahora incluyen `item_code` para facilitar la depuración cuando hay múltiples líneas de inventario. Se agregaron docstrings a ambas funciones. Commit `64179e5`.
+
 - **Fix issue #177 - Redundant if-else en posting.py (2026-07-09):** Se simplificó el if-else redundante en `_create_stock_movement` que ejecutaba el mismo código en ambas ramas. Se agregó comment explicativo para prevenir falsos positivos futuros. Commit `f359e57`.
 
 - **Auditoría Funcional / Verificación Independiente (2026-07-09):** Revisión de 89 hallazgos reportados por DeepSeek V4, verificados por MiMo-V2.5 (3 rondas).

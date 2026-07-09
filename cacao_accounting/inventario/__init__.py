@@ -1348,7 +1348,12 @@ def inventario_entrada_duplicar(entry_id: str):
 @modulo_activo("inventory")
 @login_required
 def inventario_entrada_submit(entry_id: str):
-    """Aprueba una entrada de almacen y genera Stock Ledger/GL."""
+    """Aprueba una entrada de almacen y genera Stock Ledger/GL.
+
+    ``require_party=False`` es intencional: una entrada de stock interna
+    puede aprobarse sin proveedor/cliente asignado. El proveedor se asigna
+    al recibir desde compra, y el cliente al entregar por venta.
+    """
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
