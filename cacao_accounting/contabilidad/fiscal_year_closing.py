@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from cacao_accounting.contabilidad.journal_service import create_journal_draft
+from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
 from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
@@ -199,7 +199,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     )
 
     journal = create_journal_draft(payload, user_id=user_id)
-    # Ya no ejecutamos submit_journal aqui para permitir el estado de borrador
+    submit_journal(journal.id)
     return journal
 
 
@@ -223,4 +223,4 @@ def reverse_fiscal_year_closing(fiscal_year_id: str, user_id: str) -> None:
     # Anular el comprobante. Esto disparará el hook en journal_service para actualizar el año fiscal.
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
-    cancel_submitted_journal(journal.id, user_id=user_id, posting_date=journal.date)
+    cancel_submitted_journal(journal.id, user_id=user_id)
