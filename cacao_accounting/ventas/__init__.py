@@ -2603,6 +2603,8 @@ def ventas_factura_venta_cancel(invoice_id: str):
             dn = database.session.get(DeliveryNote, registro.delivery_note_id)
             if dn and dn.docstatus == 1:
                 cancel_document(dn)
+                # O2C-08: Restaurar reserva de inventario al cancelar factura con update_inventory
+                _restore_reservation_for_delivery_note(dn)
                 log_cancel(dn)
                 flash(
                     _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
