@@ -625,6 +625,9 @@ def _cash_consumed(allocated: Decimal, discount: Decimal, gain_loss: Decimal) ->
     return consumed if consumed > 0 else Decimal("0")
 
 
+MAX_RECONCILIATION_LINES = 100
+
+
 def apply_payment_reconciliation(
     *,
     company: str,
@@ -636,6 +639,10 @@ def apply_payment_reconciliation(
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
         raise DocumentFlowError("La conciliacion requiere al menos una linea.")
+    if len(lines) > MAX_RECONCILIATION_LINES:
+        raise DocumentFlowError(
+            "El numero de lineas excede el maximo permitido ({0}).".format(MAX_RECONCILIATION_LINES), 400,
+        )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise DocumentFlowError("Debe indicar compania, tipo de tercero y tercero.", 400)
 
