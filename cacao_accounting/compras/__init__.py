@@ -3217,6 +3217,13 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
+    from cacao_accounting.database import PaymentReference
+
+    if database.session.execute(
+        database.select(PaymentReference.id).filter_by(reference_type="purchase_invoice", reference_id=invoice_id)
+    ).scalars().first() is not None:
+        flash(_("No se puede cancelar la factura de compra porque tiene pagos activos."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     try:
         cancel_document(registro)
         log_cancel(registro)
