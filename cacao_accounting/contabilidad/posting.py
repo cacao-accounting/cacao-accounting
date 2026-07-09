@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 
 from cacao_accounting.database import (
     Accounts,
@@ -1248,15 +1248,6 @@ def _line_rate_generic(line: Any) -> Decimal:
     return rate
 
 
-def _stock_qty_after(company: str, item_code: str, warehouse: str, qty_change: Decimal) -> Decimal:
-    current = database.session.execute(
-        select(func.coalesce(func.sum(StockLedgerEntry.qty_change), 0)).filter_by(
-            company=company, item_code=item_code, warehouse=warehouse, is_cancelled=False
-        )
-    ).scalar_one()
-    return _decimal_value(current) + qty_change
-
-
 def _valuation_method_for_company(company_code: str) -> str:
     entity = database.session.get(Entity, company_code)
     if entity is None:
@@ -1490,6 +1481,10 @@ def _upsert_stock_bin(
 
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
     bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
+
+    # INV-10: Ajustar reserved_qty para que no supere actual_qty
+    if bin_row.reserved_qty and bin_row.reserved_qty > bin_row.actual_qty:
+        bin_row.reserved_qty = bin_row.actual_qty
 
     if bin_row.actual_qty > 0:
         bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
@@ -1725,14 +1720,7 @@ def _create_stock_movement(
             valuation_rate = cost_rate
             value_change = -cost_amount
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
-    qty_after = _stock_qty_after(document.company, line.item_code, warehouse, qty_change)
-    if qty_after < 0:
-        # NOTE: _skip_layer_consumption is irrelevant for negative stock validation;
-        # both branches resolve the same item to check allow_negative_stock.
-        item = _stock_item_for(line)
-        if not item.allow_negative_stock:
-            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
-    _upsert_stock_bin(
+    qty_after, stock_value_after = _upsert_stock_bin(
         company=document.company,
         item_code=line.item_code,
         warehouse=warehouse,
@@ -1740,6 +1728,10 @@ def _create_stock_movement(
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
+    if qty_after < 0:
+        item = _stock_item_for(line)
+        if not item.allow_negative_stock:
+            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
     database.session.add(
         StockValuationLayer(
             item_code=line.item_code,
@@ -1749,7 +1741,7 @@ def _create_stock_movement(
             rate=valuation_rate,
             stock_value_difference=value_change,
             remaining_qty=max(qty_after, Decimal("0")),
-            remaining_stock_value=max(qty_after * valuation_rate, Decimal("0")),
+            remaining_stock_value=max(stock_value_after, Decimal("0")),
             voucher_type=_get_voucher_type(document),
             voucher_id=_get_voucher_id(document),
             posting_date=document.posting_date,
@@ -1764,7 +1756,7 @@ def _create_stock_movement(
         qty_after_transaction=qty_after,
         valuation_rate=valuation_rate,
         stock_value_difference=value_change,
-        stock_value=qty_after * valuation_rate,
+        stock_value=stock_value_after,
         voucher_type=_get_voucher_type(document),
         voucher_id=_get_voucher_id(document),
         batch_id=getattr(line, "batch_id", None),
@@ -1834,7 +1826,7 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     line.qty = abs(qty_change)
     line.qty_in_base_uom = abs(qty_change)
     line.amount = abs(value_change)
-    _upsert_stock_bin(
+    qty_after, stock_value_after = _upsert_stock_bin(
         company=document.company,
         item_code=line.item_code,
         warehouse=warehouse,
@@ -1842,19 +1834,14 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
-    database.session.flush()
-    updated_bin = _stock_bin_for(document.company, line.item_code, warehouse)
-    if not updated_bin:
-        raise PostingError("No se pudo actualizar el stock conciliado.")
-    qty_after = _decimal_value(updated_bin.actual_qty)
-    stock_value_after = _decimal_value(updated_bin.stock_value)
+    valuation_rate_after = stock_value_after / qty_after if qty_after > 0 else Decimal("0")
     database.session.add(
         StockValuationLayer(
             item_code=line.item_code,
             warehouse=warehouse,
             company=document.company,
             qty=qty_change,
-            rate=_decimal_value(updated_bin.valuation_rate),
+            rate=valuation_rate_after,
             stock_value_difference=value_change,
             remaining_qty=max(qty_after, Decimal("0")),
             remaining_stock_value=max(stock_value_after, Decimal("0")),
@@ -1870,7 +1857,7 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         company=document.company,
         qty_change=qty_change,
         qty_after_transaction=qty_after,
-        valuation_rate=_decimal_value(updated_bin.valuation_rate),
+        valuation_rate=valuation_rate_after,
         stock_value_difference=value_change,
         stock_value=stock_value_after,
         voucher_type=_get_voucher_type(document),
@@ -2032,8 +2019,7 @@ def _create_stock_ledger_for_document(
         )
 
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
-    qty_after = _stock_qty_after(document.company, line.item_code, warehouse, qty_change)
-    _upsert_stock_bin(
+    qty_after, stock_value_after = _upsert_stock_bin(
         company=document.company,
         item_code=line.item_code,
         warehouse=warehouse,
@@ -2049,7 +2035,7 @@ def _create_stock_ledger_for_document(
         rate=valuation_rate,
         stock_value_difference=value_change,
         remaining_qty=max(qty_after, Decimal("0")),
-        remaining_stock_value=max(qty_after * valuation_rate, Decimal("0")),
+        remaining_stock_value=max(stock_value_after, Decimal("0")),
         voucher_type=_get_voucher_type(document),
         voucher_id=_get_voucher_id(document),
         posting_date=document.posting_date,
@@ -2066,7 +2052,7 @@ def _create_stock_ledger_for_document(
         qty_after_transaction=qty_after,
         valuation_rate=valuation_rate,
         stock_value_difference=value_change,
-        stock_value=qty_after * valuation_rate,
+        stock_value=stock_value_after,
         voucher_type=_get_voucher_type(document),
         voucher_id=_get_voucher_id(document),
         batch_id=getattr(line, "batch_id", None),
@@ -2183,9 +2169,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
     value_change = -_decimal_value(movement.stock_value_difference)
     valuation_rate = _decimal_value(movement.valuation_rate)
     posting_date = _posting_date_for(document)
-    qty_after = _stock_qty_after(movement.company, movement.item_code, movement.warehouse, qty_change)
-
-    _upsert_stock_bin(
+    qty_after, stock_value_after = _upsert_stock_bin(
         company=movement.company,
         item_code=movement.item_code,
         warehouse=movement.warehouse,
@@ -2193,8 +2177,6 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
-    updated_bin = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
-    stock_value_after = _decimal_value(updated_bin.stock_value) if updated_bin else qty_after * valuation_rate
     database.session.add(
         StockValuationLayer(
             item_code=movement.item_code,
