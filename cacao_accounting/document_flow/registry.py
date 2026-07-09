@@ -748,7 +748,10 @@ def normalize_doctype(value: str) -> str:
 def get_document_type(value: str) -> DocumentType:
     """Devuelve el contrato de un tipo documental conocido."""
     key = normalize_doctype(value)
-    return DOCUMENT_TYPES[key]
+    try:
+        return DOCUMENT_TYPES[key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown document type: {value}") from exc
 
 
 def get_flow(source_type: str, target_type: str) -> FlowSpec:

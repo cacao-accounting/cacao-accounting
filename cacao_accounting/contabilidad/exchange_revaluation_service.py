@@ -32,6 +32,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.audit_trail_service import log_cancel, log_create, log_submit
 
 EXCHANGE_REVALUATION_ENTITY_TYPE = "exchange_revaluation"
 EXCHANGE_REVALUATION_STATUS_POSTED = "posted"
@@ -126,6 +127,7 @@ class ExchangeRevaluationService:
         database.session.add(run)
         database.session.flush()
         self._assign_identifier(run)
+        log_create(run)
 
         drafts = self._calculate_lines(candidates, ledgers, period.end)
         affected = [draft for draft in drafts if draft.exchange_difference != 0]
@@ -153,6 +155,7 @@ class ExchangeRevaluationService:
             (self._decimal(entry.debit) for entry in entries if entry.account_id == defaults.exchange_loss_account_id),
             Decimal("0"),
         )
+        log_submit(run)
         database.session.commit()
         return run
 

@@ -1452,8 +1452,8 @@ class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE), nullable=True)
-    delivered_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
-    billed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    delivered_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True, default=0)
+    billed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True, default=0)
 
 
 class DeliveryNote(database.Model, DocBase):  # type: ignore[name-defined]
