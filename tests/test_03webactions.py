@@ -2,6 +2,7 @@ import pytest
 import os
 import sys
 from datetime import date
+from decimal import Decimal
 from html import unescape
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
@@ -785,21 +786,58 @@ def test_transaccional_full_transition_routes_get_post(request):
             from cacao_accounting.database import (
                 DeliveryNote,
                 PurchaseInvoice,
+                PurchaseInvoiceItem,
                 PurchaseOrder,
+                PurchaseOrderItem,
                 PurchaseQuotation,
+                PurchaseQuotationItem,
                 PurchaseReceipt,
                 SalesInvoice,
+                SalesInvoiceItem,
                 SalesOrder,
+                SalesOrderItem,
                 SalesQuotation,
+                SalesQuotationItem,
                 SalesRequest,
+                SalesRequestItem,
                 StockEntry,
                 SupplierQuotation,
+                SupplierQuotationItem,
                 database,
             )
 
             with app.test_client() as client:
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
                 assert current_user.is_authenticated
+
+                from cacao_accounting.database import Party
+
+                supplier = database.session.execute(
+                    database.select(Party).filter(Party.is_supplier.is_(True))
+                ).scalars().first()
+                if supplier is None:
+                    supplier = Party(
+                        id="SUP-TEST",
+                        code="SUP-TEST",
+                        name="Proveedor prueba",
+                        tax_id="J0100",
+                        is_supplier=True,
+                    )
+                    database.session.add(supplier)
+                    database.session.flush()
+                customer = database.session.execute(
+                    database.select(Party).filter(Party.is_customer.is_(True))
+                ).scalars().first()
+                if customer is None:
+                    customer = Party(
+                        id="CUST-TEST",
+                        code="CUST-TEST",
+                        name="Cliente prueba",
+                        tax_id="J0101",
+                        is_customer=True,
+                    )
+                    database.session.add(customer)
+                    database.session.flush()
 
                 purchase_quotation = PurchaseQuotation(
                     document_no="TEST2-RFQ-DRAFT",
@@ -811,6 +849,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 supplier_quotation = SupplierQuotation(
                     document_no="TEST2-SQ-DRAFT",
                     company="cacao",
+                    supplier_id=supplier.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -818,6 +857,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 purchase_order = PurchaseOrder(
                     document_no="TEST2-PO-DRAFT",
                     company="cacao",
+                    supplier_id=supplier.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -825,6 +865,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 purchase_receipt = PurchaseReceipt(
                     document_no="TEST2-PR-DRAFT",
                     company="cacao",
+                    supplier_id=supplier.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -832,6 +873,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 purchase_invoice = PurchaseInvoice(
                     document_no="TEST2-PI-DRAFT",
                     company="cacao",
+                    supplier_id=supplier.id,
                     posting_date=date(2026, 5, 16),
                     document_type="purchase_invoice",
                     docstatus=0,
@@ -841,6 +883,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 sales_request = SalesRequest(
                     document_no="TEST2-SR-DRAFT",
                     company="cacao",
+                    customer_id=customer.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -848,6 +891,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 sales_quotation = SalesQuotation(
                     document_no="TEST2-SQTN-DRAFT",
                     company="cacao",
+                    customer_id=customer.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -855,6 +899,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 sales_order = SalesOrder(
                     document_no="TEST2-SO-DRAFT",
                     company="cacao",
+                    customer_id=customer.id,
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
@@ -869,6 +914,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 sales_invoice = SalesInvoice(
                     document_no="TEST2-SI-DRAFT",
                     company="cacao",
+                    customer_id=customer.id,
                     posting_date=date(2026, 5, 16),
                     document_type="sales_invoice",
                     docstatus=0,
@@ -924,15 +970,15 @@ def test_transaccional_full_transition_routes_get_post(request):
                     ),
                     (
                         f"/buying/supplier-quotation/{supplier_quotation.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
                     ),
                     (
                         f"/buying/purchase-order/{purchase_order.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
                     ),
                     (
                         f"/buying/purchase-receipt/{purchase_receipt.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
                     ),
                     (
                         f"/buying/purchase-invoice/{purchase_invoice.id}/edit",
@@ -941,27 +987,28 @@ def test_transaccional_full_transition_routes_get_post(request):
                             "posting_date": "2026-05-16",
                             "remarks": "edit",
                             "supplier_invoice_no": "SUP-001",
+                            "supplier_id": supplier.id,
                         },
                     ),
                     (
                         f"/sales/sales-request/{sales_request.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
                     ),
                     (
                         f"/sales/sales-quotation/{sales_quotation.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
                     ),
                     (
                         f"/sales/sales-order/{sales_order.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
                     ),
                     (
                         f"/sales/delivery-note/{delivery_note.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
                     ),
                     (
                         f"/sales/sales-invoice/{sales_invoice.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
                     ),
                     (
                         f"/inventory/stock-entry/{stock_entry.id}/edit",
@@ -988,6 +1035,51 @@ def test_transaccional_full_transition_routes_get_post(request):
                 for url in duplicate_posts:
                     response = client.post(url, data={})
                     assert response.status_code in (302, 303), url
+
+                # Los documentos requieren al menos una linea valida para aprobarse
+                # (validacion S2P-06/O2C-05). Se crean los items aqui, despues de los
+                # edit/duplicate que recrean las lineas de los documentos.
+                from cacao_accounting.database import Item, UOM
+
+                uom = database.session.execute(database.select(UOM).limit(1)).scalars().first()
+                if uom is None:
+                    uom = UOM(code="UND", name="Unidad")
+                    database.session.add(uom)
+                    database.session.flush()
+                item = database.session.execute(database.select(Item).filter_by(code="ART-TEST")).scalars().first()
+                if item is None:
+                    item = Item(
+                        code="ART-TEST",
+                        name="Articulo prueba",
+                        item_type="goods",
+                        is_stock_item=True,
+                        default_uom=uom.code,
+                    )
+                    database.session.add(item)
+                    database.session.flush()
+
+                def _add_line(model, item_model, fk_field):
+                    database.session.add(
+                        item_model(
+                            **{
+                                fk_field: model.id,
+                                "item_code": item.code,
+                                "item_name": item.name,
+                                "qty": Decimal("1"),
+                                "uom": uom.code,
+                                "rate": Decimal("10"),
+                                "amount": Decimal("10"),
+                            }
+                        )
+                    )
+
+                _add_line(purchase_quotation, PurchaseQuotationItem, "purchase_quotation_id")
+                _add_line(supplier_quotation, SupplierQuotationItem, "supplier_quotation_id")
+                _add_line(purchase_order, PurchaseOrderItem, "purchase_order_id")
+                _add_line(sales_request, SalesRequestItem, "sales_request_id")
+                _add_line(sales_quotation, SalesQuotationItem, "sales_quotation_id")
+                _add_line(sales_order, SalesOrderItem, "sales_order_id")
+                database.session.commit()
 
                 strict_transition_docs = [
                     (
