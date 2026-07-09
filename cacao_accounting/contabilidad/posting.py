@@ -1186,6 +1186,11 @@ def _line_qty(line: StockEntryItem) -> Decimal:
 
 
 def _line_rate(line: StockEntryItem) -> Decimal:
+    """Calcula la tasa de valoración para una línea de inventario.
+
+    Incluye item_code en mensajes de error para facilitar la depuración
+    cuando hay múltiples líneas de inventario en un documento.
+    """
     rate = _decimal_value(line.valuation_rate or line.basic_rate)
     if rate <= 0:
         amount = _decimal_value(line.amount)
@@ -1193,7 +1198,7 @@ def _line_rate(line: StockEntryItem) -> Decimal:
         if amount > 0 and qty > 0:
             rate = amount / qty
     if rate <= 0:
-        raise PostingError("La linea de inventario requiere tasa de valuacion.")
+        raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
     return rate
 
 
@@ -1220,6 +1225,11 @@ def _line_qty_generic(line: Any) -> Decimal:
 
 
 def _line_rate_generic(line: Any) -> Decimal:
+    """Calcula la tasa de valoración para una línea de inventario (genérica).
+
+    Incluye item_code en mensajes de error para facilitar la depuración
+    cuando hay múltiples líneas de inventario en un documento.
+    """
     rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "rate", None))
     if rate <= 0:
         amount = _decimal_value(getattr(line, "amount", None))
@@ -1227,7 +1237,8 @@ def _line_rate_generic(line: Any) -> Decimal:
         if amount > 0 and qty > 0:
             rate = amount / qty
     if rate <= 0:
-        raise PostingError("La linea de inventario requiere tasa de valuacion.")
+        item_code = getattr(line, "item_code", "desconocido")
+        raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")
     return rate
 
 
