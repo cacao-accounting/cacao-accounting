@@ -539,8 +539,20 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
 def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     """Aplica conciliaciones bancarias seleccionadas."""
     company = request.form.get("company") or "cacao"
+    transaction_ids = request.form.getlist("bank_transaction_id")
+    if transaction_ids:
+        transactions = (
+            database.session.execute(
+                database.select(BankTransaction).filter(BankTransaction.id.in_(transaction_ids))
+            )
+            .scalars()
+            .all()
+        )
+        if any(txn.is_reconciled for txn in transactions):
+            flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
+            return redirect(url_for("bancos.bancos_conciliacion_bancaria", company=company))
     matches: list[BankReconciliationMatch] = []
-    for transaction_id in request.form.getlist("bank_transaction_id"):
+    for transaction_id in transaction_ids:
         target = request.form.get(f"target_{transaction_id}") or ""
         amount = _form_decimal(f"amount_{transaction_id}")
         if not target or amount <= 0:
