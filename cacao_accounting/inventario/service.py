@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     SerialNumber,
     StockBin,
     StockLedgerEntry,
+    StockValuationLayer,
     StockEntryItem,
     DeliveryNoteItem,
     database,
@@ -41,10 +42,11 @@ class InventoryServiceError(ValueError):
 
 @dataclass(frozen=True)
 class StockRebuildResult:
-    """Resultado de reconstruccion de StockBin."""
+    """Resultado de reconstruccion de StockBin y StockValuationLayer."""
 
     rebuilt_bins: int
-    inconsistencies: list[str]
+    rebuilt_layers: int = 0
+    inconsistencies: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -195,7 +197,58 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
         bin_row.stock_value = value
         bin_row.valuation_rate = valuation_rate
         rebuilt += 1
-    return StockRebuildResult(rebuilt_bins=rebuilt, inconsistencies=inconsistencies)
+    layers_result = rebuild_stock_valuation_layers(company=company, item_code=item_code, warehouse=warehouse)
+    return StockRebuildResult(
+        rebuilt_bins=rebuilt, rebuilt_layers=layers_result.rebuilt_layers, inconsistencies=inconsistencies
+    )
+
+
+def rebuild_stock_valuation_layers(
+    company: str, item_code: str | None = None, warehouse: str | None = None
+) -> StockRebuildResult:
+    """Reconstruye StockValuationLayer desde StockLedgerEntry append-only."""
+    query = select(StockValuationLayer).filter_by(company=company)
+    if item_code:
+        query = query.filter_by(item_code=item_code)
+    if warehouse:
+        query = query.filter_by(warehouse=warehouse)
+    existing = database.session.execute(query).scalars().all()
+    for layer in existing:
+        database.session.delete(layer)
+    database.session.flush()
+
+    entries_query = (
+        select(StockLedgerEntry)
+        .filter_by(company=company, is_cancelled=False)
+        .order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
+    )
+    if item_code:
+        entries_query = entries_query.filter_by(item_code=item_code)
+    if warehouse:
+        entries_query = entries_query.filter_by(warehouse=warehouse)
+    entries = database.session.execute(entries_query).scalars().all()
+
+    new_layers: list[StockValuationLayer] = []
+    for entry in entries:
+        qty_after = _decimal_value(entry.qty_after_transaction)
+        stock_value = _decimal_value(entry.stock_value)
+        new_layers.append(
+            StockValuationLayer(
+                item_code=entry.item_code,
+                warehouse=entry.warehouse,
+                company=entry.company,
+                qty=_decimal_value(entry.qty_change),
+                rate=_decimal_value(entry.valuation_rate),
+                stock_value_difference=_decimal_value(entry.stock_value_difference),
+                remaining_qty=max(qty_after, Decimal("0")),
+                remaining_stock_value=max(stock_value, Decimal("0")),
+                voucher_type=entry.voucher_type,
+                voucher_id=entry.voucher_id,
+                posting_date=entry.posting_date,
+            )
+        )
+    database.session.add_all(new_layers)
+    return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(new_layers))
 
 
 def update_item_with_uoms(
