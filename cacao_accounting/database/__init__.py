@@ -1551,7 +1551,13 @@ class Bank(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class BankAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Cuenta bancaria."""
+    """Cuenta bancaria.
+
+    El saldo no se almacena aqui. Se deriva del GL via ``gl_account_id``
+    consultando ``SUM(debit - credit)`` en ``GLEntry``. Este es el diseño
+    correcto de partida doble: el saldo siempre se calcula desde el libro
+    mayor, nunca se almacena redundante.
+    """
 
     __tablename__ = "bank_account"
     __table_args__ = (UniqueConstraint("company", "account_no", name="uq_bank_account"),)

@@ -1838,7 +1838,14 @@ def bancos_pago_submit(payment_id: str):
 @modulo_activo("cash")
 @login_required
 def bancos_pago_cancel(payment_id: str):
-    """Cancela un pago con reverso contable."""
+    """Cancela un pago con reverso contable.
+
+    Los ``PaymentReference`` NO se eliminan: es diseño append-only.
+    La cancelacion crea entradas GL de reverso pero preserva las
+    referencias de pago como historial funcional. Los saldos de los
+    documentos referenciados se recalculan via
+    ``_refresh_payment_reference_document``.
+    """
     registro = database.session.get(PaymentEntry, payment_id)
     if not registro:
         abort(404)
