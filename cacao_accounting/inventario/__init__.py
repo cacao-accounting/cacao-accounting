@@ -847,6 +847,15 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
+            # INV-05: Calcular qty_in_base_uom para consistencia con StockReconciliation
+            # Este campo es requerido para reportes de inventario y cálculos de FIFO
+            default_uom = _item_default_uom(item_code)
+            qty_in_base_uom = qty
+            if uom and default_uom:
+                try:
+                    qty_in_base_uom = convert_item_qty(item_code, qty, uom, default_uom)
+                except InventoryServiceError:
+                    qty_in_base_uom = qty
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
@@ -854,6 +863,7 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
                 target_warehouse=entry.to_warehouse,
                 qty=qty,
                 uom=uom,
+                qty_in_base_uom=qty_in_base_uom,
                 basic_rate=rate,
                 amount=amount,
             )

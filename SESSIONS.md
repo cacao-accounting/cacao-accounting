@@ -1,5 +1,16 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-09 (INV-05: Corrección de qty_in_base_uom en entradas de stock)
+- **Solicitud:** Analizar issue #171 (INV-05: qty_in_base_uom no persiste al guardar entrada de stock) y corregir si es un error real.
+- **Diagnóstico:** El issue es un error real. La función `_save_stock_entry_items` no calculaba `qty_in_base_uom` al crear líneas de `StockEntryItem`, mientras que `_save_stock_reconciliation_items` sí lo hacía correctamente usando `convert_item_qty`.
+- **Implementación:** Se modificó `_save_stock_entry_items` para:
+  1. Obtener la UOM base del item usando `_item_default_uom(item_code)`
+  2. Si hay UOM y UOM base, convertir la cantidad usando `convert_item_qty`
+  3. Asignar el resultado a `qty_in_base_uom` en el `StockEntryItem`
+  4. Agregar comentario explicativo para evitar falsos positivos futuros
+- **Pruebas:** Todos los tests existentes relacionados con stock_entry pasaron (10 tests). La corrección es consistente con la forma en que los tests ya creaban `StockEntryItem` con `qty_in_base_uom`.
+- **Cierre del issue:** Se cerrará con comentario explicativo indicando que el error fue corregido.
+
 ## 2026-07-09 (Corrección de fallos en filtros del buscador asistido 'search-select' para terceros)
 - **Solicitud:** Investigar y corregir los fallos en las pruebas automatizadas (específicamente la prueba E2E de autocompletado con múltiples fuentes: `test_transaction_form_multi_source_autofill`).
 - **Diagnóstico:** El frontend enviaba el filtro `party_type` al buscar terceros vía `/api/search-select?doctype=party&q=Demo&company=cacao&party_type=customer`. Sin embargo, la especificación de búsqueda de `Party` (`party`, `customer`, `supplier`) en `cacao_accounting/search_select.py` sólo admitía el filtro `role`. Al recibir el parámetro desconocido `party_type`, el backend devolvía error HTTP 400 ("Filtros no permitidos: party_type"), lo que causaba que la búsqueda de Cliente Demo fallara y la prueba E2E fallara por timeout.
