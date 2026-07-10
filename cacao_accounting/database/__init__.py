@@ -139,10 +139,10 @@ class BaseTabla:
         default=obtiene_texto_unico,
     )
     status = database.Column(database.String(50), nullable=True)
-    created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
     modified = database.Column(
-        database.DateTime,
+        database.DateTime(timezone=True),
         default=database.func.now(),
         onupdate=database.func.now(),
         nullable=True,
@@ -159,9 +159,9 @@ class BaseTransaccion(BaseTabla):
     date = database.Column(database.Date())
     reference = database.Column(database.String(50))
     memo = database.Column(database.String(200), nullable=True)
-    canceled = database.Column(database.DateTime, nullable=True)
+    canceled = database.Column(database.DateTime(timezone=True), nullable=True)
     canceled_by = database.Column(database.String(26), nullable=True)
-    applied = database.Column(database.DateTime, nullable=True)
+    applied = database.Column(database.DateTime(timezone=True), nullable=True)
     applied_by = database.Column(database.String(26), nullable=True)
     serie = database.Column(database.String(100), nullable=True)
     sequential = database.Column(database.Integer(), nullable=True)
@@ -599,7 +599,7 @@ class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-de
     entity_id = database.Column(database.String(26), nullable=False, index=True)
     full_identifier = database.Column(database.String(200), nullable=False, unique=True)
     sequence_id = database.Column(database.String(26), database.ForeignKey("sequence.id"), nullable=True)
-    generated_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    generated_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True, index=True)
     posting_date = database.Column(database.Date(), nullable=True)
 
@@ -657,7 +657,7 @@ class ExternalCounterAuditLog(database.Model, BaseTabla):  # type: ignore[name-d
     # Motivo obligatorio por politica de negocio
     reason = database.Column(database.Text(), nullable=False)
     changed_by = database.Column(database.String(26), nullable=True)
-    changed_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    changed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
 class SeriesExternalCounterMap(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -706,7 +706,7 @@ class ExternalNumberUsage(database.Model, BaseTabla):  # type: ignore[name-defin
     entity_id = database.Column(database.String(26), nullable=False, index=True)
     # Valor entero del numero para facilitar validaciones de rango
     sequence_value = database.Column(database.Integer(), nullable=True)
-    recorded_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    recorded_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -1064,7 +1064,7 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
-    created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
 
 
@@ -1105,7 +1105,7 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)
     posting_date = database.Column(database.Date(), nullable=False, index=True)
-    created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
 class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1677,10 +1677,10 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     relation_type = database.Column(database.String(50), nullable=False, index=True)
     # active, reverted, closed. Reverted/closed relations remain as historical trace.
     status = database.Column(database.String(20), default="active", nullable=False, index=True)
-    reversed_at = database.Column(database.DateTime, nullable=True)
+    reversed_at = database.Column(database.DateTime(timezone=True), nullable=True)
     reversed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     reversal_reason = database.Column(database.Text(), nullable=True)
-    cancelled_at = database.Column(database.DateTime, nullable=True)
+    cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     metadata_json = database.Column(database.Text(), nullable=True)
 
@@ -1715,7 +1715,7 @@ class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-def
     pending_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     # open, partial, complete, closed, cancelled
     line_status = database.Column(database.String(30), default="open", nullable=False, index=True)
-    closed_at = database.Column(database.DateTime, nullable=True)
+    closed_at = database.Column(database.DateTime(timezone=True), nullable=True)
     closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
     close_reason = database.Column(database.Text(), nullable=True)
 
@@ -1834,9 +1834,9 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
     currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE), nullable=True)
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
     approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    approved_at = database.Column(database.DateTime, nullable=True)
+    approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    cancelled_at = database.Column(database.DateTime, nullable=True)
+    cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
     last_applied_date = database.Column(database.Date(), nullable=True)
     is_completed = database.Column(database.Boolean(), default=False, nullable=False)
@@ -1975,10 +1975,10 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
     reversal_of = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
-    created = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
     modified = database.Column(
-        database.DateTime,
+        database.DateTime(timezone=True),
         default=database.func.now(),
         onupdate=database.func.now(),
         nullable=True,
@@ -2370,7 +2370,7 @@ class PurchaseEconomicEvent(database.Model, BaseTabla):  # type: ignore[name-def
     payload = database.Column(database.Text(), nullable=True)
     # pending | processed | failed | skipped
     processing_status = database.Column(database.String(20), default="pending", nullable=False, index=True)
-    processed_at = database.Column(database.DateTime(), nullable=True)
+    processed_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
 class PurchaseReconciliation(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2450,7 +2450,7 @@ class ExchangeRevaluation(database.Model, DocBase):  # type: ignore[name-defined
     journal_entry_id = database.Column(database.String(26), nullable=True)
     reversal_journal_id = database.Column(database.String(26), nullable=True)
     voided_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    voided_at = database.Column(database.DateTime(), nullable=True)
+    voided_at = database.Column(database.DateTime(timezone=True), nullable=True)
     void_reason = database.Column(database.Text(), nullable=True)
     processed_documents_count = database.Column(database.Integer(), default=0, nullable=False)
     affected_documents_count = database.Column(database.Integer(), default=0, nullable=False)
@@ -2500,7 +2500,7 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
     # open, in_progress, closed
     run_status = database.Column(database.String(20), nullable=False)
     closed_by = database.Column(database.String(26), nullable=True)
-    closed_at = database.Column(database.DateTime, nullable=True)
+    closed_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
 class PeriodCloseCheck(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2595,7 +2595,7 @@ class WorkflowActionLog(database.Model, BaseTabla):  # type: ignore[name-defined
     )
     action = database.Column(database.String(100), nullable=False)
     performed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    performed_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    performed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     from_state = database.Column(database.String(50), nullable=True)
     to_state = database.Column(database.String(50), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
@@ -2646,7 +2646,7 @@ class AuditLog(database.Model):  # type: ignore[name-defined]
     before_data = database.Column(database.Text(), nullable=True)
     after_data = database.Column(database.Text(), nullable=True)
     user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True, index=True)
-    timestamp = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
 class AuditTrail(database.Model):  # type: ignore[name-defined]
@@ -2669,7 +2669,7 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     action = database.Column(database.String(32), nullable=False, index=True)
     actor_user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True, index=True)
     actor_name = database.Column(database.String(255), nullable=True)
-    timestamp = database.Column(database.DateTime, default=database.func.now(), nullable=False, index=True)
+    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False, index=True)
     before_json = database.Column(database.Text(), nullable=True)
     after_json = database.Column(database.Text(), nullable=True)
     changes_json = database.Column(database.Text(), nullable=True)
@@ -2694,14 +2694,14 @@ class DocumentTask(database.Model, BaseTabla):  # type: ignore[name-defined]
     status = database.Column(database.String(20), nullable=False, default="open", index=True)
     priority = database.Column(database.String(20), nullable=False, default="normal", index=True)
     due_date = database.Column(database.Date(), nullable=True, index=True)
-    created_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     updated_at = database.Column(
-        database.DateTime,
+        database.DateTime(timezone=True),
         default=database.func.now(),
         onupdate=database.func.now(),
         nullable=False,
     )
-    completed_at = database.Column(database.DateTime, nullable=True)
+    completed_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2750,9 +2750,9 @@ class Budget(database.Model, BaseTabla):  # type: ignore[name-defined]
     status = database.Column(database.String(20), default="draft", nullable=False, index=True)
 
     approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    approved_at = database.Column(database.DateTime, nullable=True)
+    approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
     closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=True)
-    closed_at = database.Column(database.DateTime, nullable=True)
+    closed_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
 class BudgetLine(database.Model, BaseTabla):  # type: ignore[name-defined]

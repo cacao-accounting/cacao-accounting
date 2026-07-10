@@ -34,9 +34,9 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
     created_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
     updated_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
 
-    created_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     updated_at = database.Column(
-        database.DateTime,
+        database.DateTime(timezone=True),
         default=database.func.now(),
         onupdate=database.func.now(),
         nullable=False,
@@ -75,7 +75,7 @@ class PrintTemplateVersion(database.Model):  # type: ignore[name-defined]
     status = database.Column(database.String(20), nullable=False)
 
     changed_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
-    changed_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    changed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
     change_note = database.Column(database.String(255))
 
@@ -98,7 +98,7 @@ class PrintJobLog(database.Model):  # type: ignore[name-defined]
 
     output_format = database.Column(database.String(20), nullable=False)
 
-    rendered_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    rendered_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
     success = database.Column(database.Boolean, default=True, nullable=False)
     error_message = database.Column(database.Text)
@@ -142,9 +142,9 @@ class PublicDocumentValidation(database.Model):  # type: ignore[name-defined]
         nullable=False,
     )
 
-    created_at = database.Column(database.DateTime, default=database.func.now(), nullable=False)
+    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     updated_at = database.Column(
-        database.DateTime,
+        database.DateTime(timezone=True),
         default=database.func.now(),
         onupdate=database.func.now(),
         nullable=False,
