@@ -2968,7 +2968,9 @@ def _validate_supplier_invoice_flags(
 def _validate_duplicate_supplier_invoice(
     supplier_id: str | None, supplier_invoice_no: str | None, exclude_id: str | None = None
 ) -> None:
-    """S2P-24: Valida que no exista otra factura de compra activa (no cancelada, docstatus != 2)
+    """S2P-24: Valida la duplicidad de supplier_invoice_no para un mismo proveedor.
+
+    Valida que no exista otra factura de compra activa (no cancelada, docstatus != 2)
     con el mismo supplier_id y supplier_invoice_no.
     """
     if not supplier_id or not supplier_invoice_no:
