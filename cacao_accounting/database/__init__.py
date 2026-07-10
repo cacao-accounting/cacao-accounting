@@ -2839,6 +2839,63 @@ def _item_has_usage(connection, item_code: str) -> bool:
     return False
 
 
+def _warehouse_has_usage(connection, warehouse_code: str) -> bool:
+    """Detecta si un almacén ya tiene registros transaccionales o de stock."""
+    usage_checks = [
+        (StockLedgerEntry.__table__, ["warehouse"]),
+        (StockEntry.__table__, ["from_warehouse", "to_warehouse"]),
+        (StockEntryItem.__table__, ["source_warehouse", "target_warehouse"]),
+        (StockBin.__table__, ["warehouse"]),
+        (StockValuationLayer.__table__, ["warehouse"]),
+        (LandedCostAllocation.__table__, ["warehouse"]),
+        (PurchaseOrderItem.__table__, ["warehouse"]),
+        (PurchaseReceiptItem.__table__, ["warehouse"]),
+        (PurchaseInvoiceItem.__table__, ["warehouse"]),
+        (SalesOrderItem.__table__, ["warehouse"]),
+        (DeliveryNoteItem.__table__, ["warehouse"]),
+        (SalesInvoiceItem.__table__, ["warehouse"]),
+        (SerialNumber.__table__, ["warehouse"]),
+        (PurchaseReconciliationItem.__table__, ["warehouse"]),
+    ]
+    for table, cols in usage_checks:
+        for col in cols:
+            if col not in table.c:
+                continue
+            statement = select(1).select_from(table).where(table.c[col] == warehouse_code).limit(1)
+            if connection.execute(statement).first():
+                return True
+    return False
+
+
+def _party_has_usage(connection, party_id: str) -> bool:
+    """Detecta si un cliente/proveedor ya tiene registros transaccionales."""
+    usage_checks = [
+        (GLEntry.__table__, ["party_id"]),
+        (PurchaseOrder.__table__, ["supplier_id"]),
+        (PurchaseReceipt.__table__, ["supplier_id"]),
+        (PurchaseInvoice.__table__, ["supplier_id"]),
+        (PurchaseQuotation.__table__, ["supplier_id"]),
+        (SupplierQuotation.__table__, ["supplier_id"]),
+        (SalesOrder.__table__, ["customer_id"]),
+        (SalesRequest.__table__, ["customer_id"]),
+        (SalesQuotation.__table__, ["customer_id"]),
+        (DeliveryNote.__table__, ["customer_id"]),
+        (SalesInvoice.__table__, ["customer_id"]),
+        (PaymentEntry.__table__, ["party_id"]),
+        (PaymentReference.__table__, ["party_id"]),
+        (Reconciliation.__table__, ["party_id"]),
+        (ExchangeRevaluationItem.__table__, ["partner_id"]),
+    ]
+    for table, cols in usage_checks:
+        for col in cols:
+            if col not in table.c:
+                continue
+            statement = select(1).select_from(table).where(table.c[col] == party_id).limit(1)
+            if connection.execute(statement).first():
+                return True
+    return False
+
+
 @event.listens_for(Item, "before_update", propagate=True)
 def _lock_item_default_uom_after_usage(_mapper, connection, target) -> None:
     """Impide modificar la UOM base de un item con uso transaccional."""
@@ -2848,3 +2905,39 @@ def _lock_item_default_uom_after_usage(_mapper, connection, target) -> None:
     if not target.code or not _item_has_usage(connection, str(target.code)):
         return
     raise ValueError("La unidad predeterminada no se puede cambiar cuando el item ya tiene registros.")
+
+
+@event.listens_for(Item, "before_delete", propagate=True)
+def _lock_item_delete_after_usage(_mapper, connection, target) -> None:
+    """Impide eliminar físicamente un item si ya tiene uso transaccional."""
+    from cacao_accounting.exceptions import IntegrityError
+
+    if target.code and _item_has_usage(connection, str(target.code)):
+        raise IntegrityError(
+            "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
+            "Se sugiere en su lugar su inactivación o bloqueo."
+        )
+
+
+@event.listens_for(Warehouse, "before_delete", propagate=True)
+def _lock_warehouse_delete_after_usage(_mapper, connection, target) -> None:
+    """Impide eliminar físicamente una bodega si ya tiene uso transaccional."""
+    from cacao_accounting.exceptions import IntegrityError
+
+    if target.code and _warehouse_has_usage(connection, str(target.code)):
+        raise IntegrityError(
+            "La bodega cuenta con transacciones activas en el sistema y no puede ser eliminada físicamente. "
+            "Se sugiere en su lugar su inactivación o bloqueo."
+        )
+
+
+@event.listens_for(Party, "before_delete", propagate=True)
+def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
+    """Impide eliminar físicamente un tercero (cliente/proveedor) si ya tiene uso transaccional."""
+    from cacao_accounting.exceptions import IntegrityError
+
+    if target.id and _party_has_usage(connection, str(target.id)):
+        raise IntegrityError(
+            "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
+            "Se sugiere en su lugar su inactivación o bloqueo."
+        )

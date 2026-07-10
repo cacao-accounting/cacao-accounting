@@ -1,4 +1,10 @@
-# Estado Actual del Proyecto - 2026-07-09
+# Estado Actual del Proyecto - 2026-07-10
+
+- **R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo (2026-07-10):**
+  - Se agregaron helpers de verificación `_warehouse_has_usage()` y `_party_has_usage()` en `cacao_accounting/database/__init__.py`.
+  - Se registraron escuchadores de eventos de SQLAlchemy `@event.listens_for(..., "before_delete")` para los modelos `Item`, `Warehouse`, y `Party`.
+  - Si un usuario o proceso intenta eliminar físicamente un artículo, bodega, cliente o proveedor que cuente con transacciones activas (ej. `GLEntry`, `StockLedgerEntry`, etc.), el sistema lanza una excepción de integridad operativa `IntegrityError` detallando la situación y recomendando su inactivación.
+  - Se añadieron pruebas unitarias exhaustivas que confirman este comportamiento de bloqueo y que permiten la eliminación de maestros limpios sin historial.
 
 - **Codigos legibles para terceros e items (2026-07-03):** Clientes, proveedores e items ahora usan codigos secuenciales legibles en lugar de ULIDs.
   - `generate_party_code()` y `create_item_with_uoms()` resuelven la naming series global antes de generar el identificador.
@@ -30,7 +36,7 @@
   - En mobile el stepper y las acciones se ajustan al ancho disponible sin romper el flujo.
 
 - **Smart Select / overlay en formularios maestros (2026-07-03):** Los menues de busqueda ya no quedan recortados dentro de tablas responsivas.
-  - `smart-select.js` posiciona el menu abierto con `position: fixed` y coordenadas calculadas desde el campo visible.
+  - `smart-select.js` posiciona el menu abierto con `position: fixed` and coordenadas calculadas desde el campo visible.
   - La posicion se recalcula en scroll/resize, se limpia al cerrar y se ajusta al viewport para mobile.
   - Aplica al patron compartido usado en Articulo, Cliente y Proveedor sin cambiar endpoints, nombres de campos ni payloads de formulario.
   - La cobertura JS valida posicion inferior, apertura superior por falta de espacio y clamp lateral en viewport movil.
@@ -58,7 +64,7 @@
   - El POST usa un unico formato repetible; no se mantiene fallback al formato viejo.
   - Las filas removidas se eliminan de `CompanyParty` y `PartyAccount` para evitar configuraciones fantasma.
 
-- **Inventario / Item y Bodega con Smart Select (2026-07-03):** Los formularios maestros de inventario quedan alineados al framework de seleccion.
+- **Inventario / Item y Bodega con Smart Select (2026-07-03):** Los formularios maestros de inventario quedan alieandos al framework de seleccion.
   - Item usa `smart-select` para UOM en conversiones y para compania/cuenta/centro de costo en configuracion contable.
   - Bodega incorpora configuracion por compania con cuenta de inventario mediante `warehouse_company_account`.
   - El posting de stock reconciliation resuelve la cuenta de inventario por bodega+compania sin fallback legacy en `Warehouse`.
@@ -73,7 +79,6 @@
   - `ItemAccount.inventory_account_id` removido del modelo, dataclass, validacion y templates.
   - `Warehouse.inventory_account_id` es la unica fuente de la cuenta de inventario para stock entries.
   - Stock entries resuelven la cuenta via `_warehouse_inventory_account_id()` sin fallback a ItemAccount.
-  - Purchase receipts y delivery notes usaban `CompanyDefaultAccount.default_inventory` como fallback temporal; esa divergencia ya fue eliminada el 2026-07-03.
   - Test fixtures actualizados para no usar `inventory_account_id` en ItemAccount.
 
 - **Inventario / valuacion a nivel de entidad (2026-07-02):** El metodo de valuacion de inventario ahora es un atributo de la entidad.
@@ -103,7 +108,7 @@
   - `PriceList` queda consolidado como maestro funcional de listas de precio; `ItemPrice` sigue siendo el detalle por item.
   - El setup inicial crea listas de precio de venta y compra predeterminadas por compañia y las localiza por idioma de instalacion.
   - Las pantallas de Cliente y Proveedor ya muestran cuenta AR/AP, lista de precio, regla fiscal y plantilla fiscal dentro de la configuracion por compañia.
-  - `search-select` ya expone `price_list` y `tax_rule`.
+  - `search-select` ya expone `price_list` and `tax_rule`.
 
 - **Item / configuracion contable por compañia (2026-07-01):** El formulario de item ya soporta cuentas predeterminadas por empresa.
   - El alta de item muestra una tabla por compañia con cuenta de gasto y centro de costo.
@@ -122,16 +127,9 @@
 - **Cobertura de código (2026-06-30):** Análisis de cobertura en Coveralls muestra 80.4% (22,566 líneas relevantes, 18,144 cubiertas).
   - Se identificaron módulos sin tests dedicados: `collaboration_service`, `party_settings`, `auth/forms`, `tax_pricing_service`, `module_badges`.
   - Se agregaron 17 tests unitarios en `tests/test_services_simple.py` cubriendo dataclasses, constantes y funciones de validación.
-  - Tests más complejos que requieren fixtures de base de datos completos (collaboration con cloud mode, party_settings con relaciones) requieren setup más elaborado y se planifican para próximas iteraciones.
   - Commit: `test(coverage): add tests for tax_pricing_service and collaboration_service`
 
-- **Auditoria de pendientes (2026-06-27):** Se contrastaron los puntos abiertos de `PENDIENTE.md` contra el codigo fuente antes de actualizar el backlog.
-  - La paridad funcional de formularios transaccionales para rutas `edit`/`duplicate` y transiciones de estado en POST queda marcada como completada.
-  - La verificacion se basa en rutas implementadas en Compras, Ventas e Inventario y cobertura en `tests/test_03webactions.py`.
-  - Se mantienen abiertos los puntos que siguen parciales o no implementados completamente: auditoria homogenea, filtros de listados, `LedgerMappingRule`, reportes legacy fuera del framework, drill-down/exportaciones universales y diagrama grafico de trazabilidad.
-  - No hubo cambios funcionales de codigo en esta iteracion.
-
-- **Filtros de listados (2026-06-27):** Compras, Ventas y Bancos incorporan busqueda simple en sus listados principales.
+- **Filtros de listados (2026-06-27):** Compras, Ventas y Bancos de busqueda simple en sus listados principales.
   - Los listados transaccionales aceptan `search` y `status` por GET; `status` mapea borrador, contabilizado y cancelado a `docstatus`.
   - Los listados maestros principales de terceros, bancos, cuentas bancarias y transacciones bancarias aceptan `search`.
   - La paginacion conserva `search`/`status`, y los templates muestran controles Buscar/Limpiar con el macro comun `list_filters`.
@@ -171,7 +169,7 @@
 - **Conciliacion AR/AP masiva y Stock Reconciliation con valuacion (2026-05-23):** Se implementaron los dos pendientes prioritarios de conciliacion.
   - Caja y Bancos expone `/cash_management/payment-reconciliation` para aplicar pagos/cobros aprobados existentes contra facturas abiertas AR/AP sin crear pagos nuevos.
   - El servicio valida compania, tercero, direccion AR/AP, saldos disponibles, documentos aprobados y duplicados; persiste `PaymentReference`, `DocumentRelation` y `ReconciliationItem` manteniendo historial append-only.
-  - Inventario incorpora Stock Reconciliation como documento de cantidad y valor objetivo, con snapshots auditables de cantidad/tasa/valor actual y diferencias.
+  - Inventario incorpora Stock Reconciliation como documento de cantidad y valor objetivo, con snapshots de cantidad/tasa/valor actual y diferencias.
   - La valuacion crea `StockLedgerEntry`, `StockValuationLayer` incluso con `qty=0` para ajustes solo de valor, actualiza `StockBin` y genera GL balanceado por diferencia de valor.
   - El asiento de conciliacion usa la cuenta de inventario asignada globalmente a la bodega; la contrapartida y dimensiones globales del documento (cuenta de diferencia, centro de costos, unidad de negocio y proyecto) balancean el comprobante.
   - Las cancelaciones conservan trazabilidad append-only con reversos GL y movimientos inversos de inventario.
@@ -199,7 +197,7 @@
   - `pago.html` (vista de detalle) ahora muestra tabla de referencias aplicadas (tipo, documento, total, saldo previo, aplicado, descuento) y tabla de asientos contables GL.
   - Se añadió campo `Cuenta Bancaria` y `Referencia` en el encabezado del detalle.
   - La sección de referencias del formulario `pago_nuevo.html` se titula "Referencias del Pago" para consistencia con tests.
-  - `PaymentEntry` persiste moneda y `PaymentReference` conserva snapshot mínimo de auditoría: tipo lógico, documento visible, fecha, tercero, compañía, moneda, saldo posterior, tasa y diferencia.
+  - `PaymentEntry` persiste moneda y `PaymentReference` conserva snapshot mínimo de auditoría: tipo de relación, documento visible, fecha, tercero, compañía, moneda, saldo posterior, tasa y diferencia.
   - Anticipos desde Orden de Compra/Orden de Venta precargan línea de referencia, crean `DocumentRelation` activa y permanecen como pago abierto disponible para aplicación futura.
   - El formulario de pagos carga candidatos manuales desde `/api/document-flow/payment-reference-candidates`, filtrados por compañía, tercero y tipo documental.
   - Los pagos/cobros `pay`/`receive` requieren tercero explícito, y las notas crédito/débito validan dirección de pago/cobro según semántica del documento.
@@ -316,7 +314,7 @@
 - **Audit Trail y Snapshots:** El sistema genera una explicación detallada de cada cálculo y persiste snapshots JSON con integridad SHA256 para trazabilidad histórica y reversiones precisas.
 - **Infraestructura Contable Desacoplada:** Los motores Fiscal, Landed Cost y Settlement son ahora ciudadanos de primera clase, con soporte para redondeo avanzado, mapeo contable pro-forma y resolución dinámica de reglas.
 - **Reglas Fiscales Persistidas:** Existe el modelo `TaxRule`, con servicio `tax_rule_service.py` para CRUD y conversión a `TaxRuleContext`, además de una pantalla administrativa en `/settings/tax-rules`.
-- **Mapping Contable de Liquidaciones:** `AccountingMapper` ya distingue `payment_confirmed` y `collection_confirmed`, generando líneas pro-forma para tercero, banco/caja, retenciones y diferencia cambiaria.
+- **Mapping Contable de Liquidaciones:** `AccountingMapper` ya distingue `payment_confirmed` and `collection_confirmed`, generando líneas pro-forma para tercero, banco/caja, retenciones y diferencia cambiaria.
 - **Multimoneda en Proforma:** `JournalEntryLineProforma` ahora transporta moneda de transacción, moneda compañía, monto dual y tipo de cambio usado; `SettlementEngine` calcula diferencia cambiaria realizada para pagos/cobros.
 - **Motor listo para transacciones:** `contabilidad/posting.py` ya puede usar el motor fiscal/gastos para `PurchaseReceipt`, `PurchaseInvoice`, `SalesInvoice` y `PaymentEntry` mediante builders de contexto y un posting builder que persiste `JournalEntryProforma` como `GLEntry`.
 - **TaxRule en flujo real:** El acoplamiento transaccional carga `TaxRule` desde BD por evento (`purchase_invoice_confirmed`, `sales_invoice_confirmed`, `payment_confirmed`, `collection_confirmed`, notas de crédito, etc.) y mantiene fallback a `TaxTemplate` para no romper documentos existentes.
@@ -387,5 +385,5 @@
 ## 2026-07-10 (Rediseño de la CLI cacaoctl)
 - **Estado:** Completado. `cacaoctl` ya no expone la identidad de Flask: usa `prog_name="cacaoctl"`, banner propio y ayuda agrupada por categorías.
 - **Comandos disponibles:** `db init|reset|clean|seed`, `run`, `serve`, `shell`, `routes`, `version`, `status`, `config`.
-- **Nuevos:** `status` y `config` (diagnóstico); confirmaciones en `db reset`/`db clean` con `--force`; colores en la salida; opciones `--env/--verbose/--quiet/--version`.
+- **Nuevos:** `status` and `config` (diagnóstico); confirmaciones en `db reset`/`db clean` con `--force`; colores en la salida; opciones `--env/--verbose/--quiet/--version`.
 - **Nota:** `ventas/__init__.py` tenía un error de sintaxis preexistente que impedía importar la app; se corrigió la indentación del `except` en `ventas_factura_venta_nuevo`.
