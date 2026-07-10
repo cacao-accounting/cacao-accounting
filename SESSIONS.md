@@ -1,5 +1,26 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-10 : Optimización del Dockerfile
+- **Petición del usuario:** Revisar y mejorar el Dockerfile del proyecto.
+- **Problemas identificados:**
+  - Imagen base desactualizada (`ubi9/ubi-minimal:9.4`).
+  - Node.js/npm se instalaban y desinstalaban en la imagen final, dejando residuos y aumentando tamaño.
+  - El contenedor ejecutaba como root (riesgo de seguridad).
+  - `WORKDIR /app` estaba duplicado (líneas 11 y 31).
+  - Múltiples llamadas a `microdnf install` separadas generaban capas innecesarias.
+  - Sin `HEALTHCHECK` para orquestadores.
+  - `npm install` instalaba `devDependencies` (mocha, chai, playwright) innecesarias en producción.
+  - `ADD` con URL externa para tini es impredecible (sin cache de Docker).
+- **Solución implementada:**
+  - **Multi-stage build:** Etapa `frontend` con Node.js para instalar dependencias npm, la imagen final solo copia `node_modules`.
+  - **Imagen base actualizada:** `ubi9/ubi-minimal:9.8-1782797275`.
+  - **Usuario no-root:** `useradd -r -s /bin/false appuser` + `USER appuser` antes del ENTRYPOINT.
+  - **WORKDIR eliminado duplicado:** Se mantiene solo después de instalar dependencias del sistema.
+  - **Instalaciones consolidadas:** Una sola llamada a `microdnf install` para Python, pango, libxml2 y libxslt.
+  - **HEALTHCHECK agregado:** Verifica `/health` en puerto 8080 cada 30 segundos.
+  - **npm install --omit=dev:** No instala dependencias de desarrollo en producción.
+  - **Tini:** Se mantiene descarga vía ADD por no estar en repos de RHEL.
+
 ## 2026-07-10 : R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo
 - **Petición del usuario:** El sistema permite eliminar registros maestros esenciales (Artículos, Almacenes, Proveedores, Clientes) del catálogo general aun cuando ya tienen un historial de transacciones registradas y contabilizadas (registros activos en `GLEntry`, `StockLedgerEntry`, etc.).
 - **Plan de diseño e implementación:**
