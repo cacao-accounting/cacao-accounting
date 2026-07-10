@@ -5,6 +5,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
+from decimal import Decimal
 from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------------------
@@ -1030,6 +1031,11 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     current_stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     target_stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     stock_value_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+
+    @property
+    def rate(self) -> Decimal | None:
+        """Alias de basic_rate para compatibilidad con validacion generica."""
+        return self.basic_rate
 
 
 class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
