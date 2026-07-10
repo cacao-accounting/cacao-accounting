@@ -1359,7 +1359,7 @@ def _consume_available_layers_for_negative_stock(
     available = _valuation_queue(company, item_code, warehouse)
     total_available = sum((qty for qty, _ in available), Decimal("0"))
     if total_available > 0:
-        consumed, avg_rate = _consume_stock_valuation_layers(
+        _, avg_rate = _consume_stock_valuation_layers(
             company=company,
             item_code=item_code,
             warehouse=warehouse,
