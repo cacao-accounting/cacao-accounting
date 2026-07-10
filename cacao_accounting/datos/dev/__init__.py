@@ -18,7 +18,15 @@ import json
 from datetime import date
 
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
-from cacao_accounting.database import database
+from cacao_accounting.database import (
+    DeliveryNote,
+    PurchaseInvoice,
+    PurchaseOrder,
+    PurchaseReceipt,
+    SalesInvoice,
+    SalesOrder,
+    database,
+)
 from cacao_accounting.datos.dev.data import (
     BASE_USUARIOS,
     USUARIO_ROLES,
@@ -363,8 +371,28 @@ def transacciones():
 
 
 def _cargar_documentos_demo():
-    """Crea documentos transaccionales de demostración."""
-    for d in _make_documentos():
+    """Crea documentos transaccionales de demostración.
+
+    Los documentos se insertan en tres commits separados para respetar
+    las dependencias de foreign keys. MySQL valida las FK a nivel de
+    statement, no al final de la transacción, por lo que el orden de
+    inserción es crítico:
+
+    - Commit 1: Documentos padre sin dependencias entre sí.
+    - Commit 2: Documentos que referencian solo documentos del commit 1.
+    - Commit 3: Documentos que referencian documentos del commit 1 y 2.
+    """
+    documentos = _make_documentos()
+    commit_1 = [d for d in documentos if isinstance(d, (PurchaseOrder, SalesOrder))]
+    commit_2 = [d for d in documentos if isinstance(d, (PurchaseReceipt, DeliveryNote))]
+    commit_3 = [d for d in documentos if isinstance(d, (PurchaseInvoice, SalesInvoice))]
+    for d in commit_1:
+        database.session.add(d)
+    database.session.commit()
+    for d in commit_2:
+        database.session.add(d)
+    database.session.commit()
+    for d in commit_3:
         database.session.add(d)
     database.session.commit()
     for i in _make_items_orden_compra():
