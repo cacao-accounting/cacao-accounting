@@ -1,5 +1,54 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-10 : Auditoría Senior DBA — Commits 4-10 (UniqueConstraints, CheckConstraints, Indexes, Optimistic Locking, Atomic Sequences)
+
+### Commit 4: UniqueConstraints (`10a2bc1`)
+- **Nuevas:** User.user (unique login), FiscalYear(entity,name), NamingSeries(entity_type,company,prefix_template), Workflow(entity_type,name), WorkflowState(workflow_id,name), WorkflowTransition(from_state_id,to_state_id,action_name).
+- **Bug fix:** Roles.note eliminado `unique=True` (erróneo).
+- **Redundantes eliminadas:** Modules, CompanyDefaultAccount, PurchaseMatchingConfig, SalesMatchingConfig (column-level `unique=True` ya cubría).
+
+### Commit 5: CheckConstraints (`53a5bbc` → `7dd1391`)
+- 37 CheckConstraints nuevas en 14 modelos de línea: `qty > 0`, `rate >= 0`, `amount >= 0`.
+- Total en esquema: 38 (37 nuevas + 1 existente en GLEntry de debit_credit_integrity).
+- **Fix (`7dd1391`):** Eliminados `ck_svl_qty_positive` (reversals necesitan qty negativa) y `ck_sei_qty_positive` (reconciliaciones con qty=0). Corregido constraint de naming_series de `(entity_type, company, prefix_template)` a `(entity_type, company, name)`.
+
+### Commit 6+7: Index Optimization (`da55073`)
+- 23 índices redundantes eliminados (single-column cubiertos por composites existentes).
+- GLEntry: −6, DocumentRelation: −6, DocumentLineFlowState: −4, ReconciliationItem: −4, AuditTrail: −3.
+- Total índices: 589 → 566.
+
+### Commit 8: GLBase Refactor — CANCELADO
+- GLBase usa naming incompatible con GLEntry (entity/company, account/account_id, etc.).
+- Forzar herencia requeriría renombrar ~20 columnas (breaking migration). No seguro.
+
+### Commit 9: Version Column (`8c043ad`)
+- `version = Column(Integer, default=1)` agregado a `DocBase`.
+- Cubre 15 modelos transaccionales (Purchase/Sales/Stock/Payment).
+- Habilita optimistic locking en capa de aplicación.
+
+### Commit 10: Atomic Sequences (`dae0c03`)
+- `get_next_sequence_value()` usa `with_for_update()` para bloqueo pesimista.
+- Previene asignaciones duplicadas bajo concurrencia en PostgreSQL/MySQL.
+- SQLite: no-op (single-writer), pero semántica correcta.
+
+## 2026-07-10 : FK Cascade Policies — ON DELETE/ON UPDATE para 444 foreign keys
+- **Petición del usuario:** Auditoría Senior DBA de los modelos SQLAlchemy. Agregar reglas de integridad referencial explícitas a todas las FK.
+- **Diagnostico:** ~444 restricciones FK en 136 tablas no tenían ON DELETE ni ON UPDATE definidos. SQLite los ignora por defecto, pero PostgreSQL y MySQL los aplican. Sin reglas, una eliminación de registro maestro podría crear filas huérfanas silenciosamente.
+- **Implementacion:**
+  - Se definieron constantes `FK_RESTRICT`, `FK_CASCADE`, `FK_SET_NULL` en `database/__init__.py` (~línea 67).
+  - Se clasificaron todas las FKs en tres políticas:
+    - **RESTRICT** (no permitir borrado padre): datos maestros (`entity`, `currency`, `accounts`, `parties`, `items`, `warehouses`, `users`, `books`, `tax_templates`, `print_templates`, `banks`).
+    - **SET NULL** (nullificar FK al borrar padre): referencias opcionales (`naming_series`, `external_counter`, `fiscal_year`, `comprobante_contable`, `purchase_receipt`, `delivery_note`).
+    - **CASCADE** (borrar hijos con padre): líneas de detalle (`purchase_order_item`, `sales_order_item`, `stock_entry_item`, `import_batch_error`, `budget_line`, `workflow_instance`, `comment`).
+  - Circulares/auto-referentes (`fiscal_year`, `comprobante_contable`): SET NULL + `use_alter=True`.
+  - Todas las FK: ON UPDATE CASCADE (propagación de cambios en PK).
+- **Archivos modificados:**
+  - `cacao_accounting/database/__init__.py`: ~360 FKs (modelos principales)
+  - `cacao_accounting/imports/models.py`: 4 FKs (ImportBatch, ImportBatchError)
+  - `cacao_accounting/printing/models.py`: 9 FKs (PrintTemplate, PrintTemplateVersion, PrintJobLog, PublicDocumentValidation)
+- **Validación:** 444 FK constraints verificados vía DDL inspection (sqlite:///:memory:), 136 tablas creadas exitosamente.
+- **Commit:** `dab2de9`
+
 ## 2026-07-10 : Optimización del Dockerfile
 - **Petición del usuario:** Revisar y mejorar el Dockerfile del proyecto.
 - **Problemas identificados:**
