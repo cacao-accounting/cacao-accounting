@@ -7,7 +7,15 @@ WORKDIR /build
 COPY cacao_accounting/static/package.json cacao_accounting/static/package-lock.json ./
 RUN npm install --omit=dev --ignore-scripts
 
-COPY cacao_accounting/static/ .
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275 AS python-builder
+
+RUN microdnf install -y --nodocs --best --refresh \
+       python3.12 python3.12-pip \
+    && microdnf clean all
+
+WORKDIR /build
+COPY requirements.txt .
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275
 
@@ -19,13 +27,13 @@ ENV TINI_SUBREAPER=1
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/bin/tini
 RUN chmod +x /usr/bin/tini
 
-COPY requirements.txt /app/requirements.txt
 RUN microdnf install -y --nodocs --best --refresh \
-       python3.12 python3.12-cryptography python3.12-pip \
-       python3.12-psycopg2 pango libxml2 libxslt \
-    && /usr/bin/python3.12 -m pip --no-cache-dir install -r /app/requirements.txt \
-    && microdnf remove -y --best python3.12-pip \
+       python3.12 python3.12-cryptography \
+       pango libxml2 libxslt \
     && microdnf clean all
+
+COPY --from=python-builder /install/lib/python3.12/site-packages /usr/lib/python3.12/site-packages
+COPY --from=python-builder /install/bin /usr/local/bin
 
 RUN useradd -r -s /bin/false appuser
 
