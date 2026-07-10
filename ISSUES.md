@@ -34,7 +34,7 @@
 | **O2C-21** | `_form_decimal` acoplada a `request.form` | FALSO POSITIVO | — | — |
 | **O2C-22** | `validate_submit_prerequisites` exige almacén para ítems de servicio | CORREGIDO | [#147](https://github.com/cacao-accounting/cacao-accounting/issues/147) | `d88a578` |
 | **O2C-23** | Sin validación de límite de crédito en documentos de venta | PENDIENTE | [#190](https://github.com/cacao-accounting/cacao-accounting/issues/190) | — |
-| **O2C-24** | Precios negativos permitidos en documentos de venta | PENDIENTE | [#191](https://github.com/cacao-accounting/cacao-accounting/issues/191) | — |
+| **O2C-24** | Precios negativos permitidos en documentos de venta | CORREGIDO | [#191](https://github.com/cacao-accounting/cacao-accounting/issues/191) | `93cdadb` |
 | **R2R-01** | Validación de balance usa signed `line.value` después de redondeo por línea | FALSO POSITIVO | — | — |
 | **R2R-02** | Validación de período inconsistente en revaluación cambiaria | FALSO POSITIVO | — | — |
 | **R2R-04** | `duplicate_journal_as_reversal_draft` bloquea reversiones mismo período | FALSO POSITIVO | [#174](https://github.com/cacao-accounting/cacao-accounting/issues/174) | — |
@@ -44,7 +44,7 @@
 | **R2R-10** | Sin control presupuestario en posting | PENDIENTE | [#186](https://github.com/cacao-accounting/cacao-accounting/issues/186) | — |
 | **R2R-11** | Sin protección contra doble posting en funciones `post_*` individuales | CORREGIDO | [#130](https://github.com/cacao-accounting/cacao-accounting/issues/130) | `ab45e31` |
 | **R2R-13** | Linking item-to-entry en revaluación frágil (orden posicional) | CORREGIDO | [#187](https://github.com/cacao-accounting/cacao-accounting/issues/187) | `ab45e31` |
-| **R2R-17** | Sin validación de balance en moneda de transacción | PENDIENTE | [#192](https://github.com/cacao-accounting/cacao-accounting/issues/192) | — |
+| **R2R-17** | Sin validación de balance en moneda de transacción | CORREGIDO | [#192](https://github.com/cacao-accounting/cacao-accounting/issues/192) | `4003b55` |
 | **R2R-18** | Sin consolidación multi-empresa | PENDIENTE | [#193](https://github.com/cacao-accounting/cacao-accounting/issues/193) | — |
 | **CAS-05** | Sin saldo en tiempo real en BankAccount | FALSO POSITIVO | — | — |
 | **CAS-08** | Descuento por pronto pago usa `posting_date` no fecha de factura | FALSO POSITIVO | — | — |
@@ -54,15 +54,15 @@
 | **CAS-13** | `_cash_consumed` cero permite eludir verificación de saldo restante | CORREGIDO | [#134](https://github.com/cacao-accounting/cacao-accounting/issues/134) | `189da6e` |
 | **CAS-16** | PaymentReference rows huérfanos al cancelar pago | FALSO POSITIVO | — | — |
 | **CAS-17** | `_payment_numbering_defaults` no valida compañía del banco | FALSO POSITIVO | — | — |
-| **CAS-18** | Conciliación bancaria no valida docstatus del pago destino | PENDIENTE | [#194](https://github.com/cacao-accounting/cacao-accounting/issues/194) | — |
+| **CAS-18** | Conciliación bancaria no valida docstatus del pago destino | CORREGIDO | [#194](https://github.com/cacao-accounting/cacao-accounting/issues/194) | `a0d3845` |
 | **CAS-19** | Sin pronóstico de flujo de caja | PENDIENTE | [#195](https://github.com/cacao-accounting/cacao-accounting/issues/195) | — |
-| **CAS-20** | Sin alerta de pagos duplicados por monto y proveedor cercano | PENDIENTE | [#196](https://github.com/cacao-accounting/cacao-accounting/issues/196) | — |
+| **CAS-20** | Sin alerta de pagos duplicados por monto y proveedor cercano | CORREGIDO | [#196](https://github.com/cacao-accounting/cacao-accounting/issues/196) | `de7c43d` |
 | **INV-01** | Verificación de stock negativo ocurre después de upsert de StockBin | FALSO POSITIVO (CERRADO) | [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) | — |
 | **INV-10** | `reserved_qty` puede desviarse por movimientos fuera del flujo O2C | CORREGIDO | [#159](https://github.com/cacao-accounting/cacao-accounting/issues/159) | clamp en `_upsert_stock_bin` |
 | **INV-21** | `valuation_rate` se resetea a 0 cuando qty=0 | FALSO POSITIVO | — | — |
 | **INV-22** | Relaciones documentales creadas en draft, eliminadas en edición | FALSO POSITIVO | — | — |
 | **INV-26** | Sin alerta de punto de reorden en movimientos de salida | PENDIENTE | [#197](https://github.com/cacao-accounting/cacao-accounting/issues/197) | — |
-| **SEC-01** | Ausencia de validación de propiedad (created_by) en submit/cancel | PENDIENTE | [#198](https://github.com/cacao-accounting/cacao-accounting/issues/198) | — |
+| **SEC-01** | Ausencia de validación de propiedad (created_by) en submit/cancel | FALSO POSITIVO | [#198](https://github.com/cacao-accounting/cacao-accounting/issues/198) | — |
 | **SEC-02** | Eliminación física de líneas de documento al editar (sin trazabilidad) | PENDIENTE | [#199](https://github.com/cacao-accounting/cacao-accounting/issues/199) | — |
 
 ---
