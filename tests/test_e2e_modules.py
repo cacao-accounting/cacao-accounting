@@ -161,6 +161,32 @@ def test_setup_correct(app_ctx):
     assert len(entities) > 0
 
 
+def test_purchase_order_rejects_zero_qty(app_ctx):
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = (
+        database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    )
+    before = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+    po_data = {
+        "company": "cacao",
+        "supplier_id": supplier.id,
+        "posting_date": date.today().isoformat(),
+        "item_code_0": "ART-001",
+        "item_name_0": "Chocolate 100g",
+        "qty_0": "0",
+        "uom_0": "UND",
+        "rate_0": "45",
+        "amount_0": "0",
+    }
+    response = client.post("/buying/purchase-order/new", data=po_data, follow_redirects=True)
+    error = get_error(response.data)
+    assert error is not None, "Debio rechazar una orden con cantidad cero"
+    after = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+    assert len(after) == len(before)
+
+
+
 def test_purchase_happy_path(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
