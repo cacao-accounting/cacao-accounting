@@ -26,6 +26,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_purchase_reconciliation_pending,
 )
 from cacao_accounting.database import (
+    CompanyParty,
     DocumentRelation,
     Item,
     Party,
@@ -2535,7 +2536,10 @@ def compras_recepcion_editar(receipt_id: str):
 
 def _handle_purchase_receipt_edit_post(registro):
     before_state = _capture_purchase_state(registro)
-    registro.supplier_id = request.form.get("supplier_id") or None
+    supplier_id = request.form.get("supplier_id") or None
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
@@ -2675,6 +2679,40 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
                         consumed, ordered, po_item.item_code
                     )
                 )
+
+
+def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
+    """Exige vínculo a recepción/orden según la configuración del proveedor.
+
+    Si el proveedor no permite facturar sin recepción (o sin orden), la
+    factura debe estar vinculada explícitamente, de lo contrario se omite
+    la validación de 3-way match y se podrían facturar cantidades sin control.
+    """
+    invoice = database.session.get(PurchaseInvoice, invoice_id)
+    if not invoice or not invoice.supplier_id:
+        return
+    cp = database.session.execute(
+        database.select(CompanyParty).filter_by(party_id=invoice.supplier_id, company=invoice.company)
+    ).scalar_one_or_none()
+    if not cp:
+        return
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=invoice_id, status="active")
+        )
+        .scalars()
+        .all()
+    )
+    has_receipt_link = any(r.source_type == "purchase_receipt" for r in relations)
+    has_order_link = any(r.source_type == "purchase_order" for r in relations)
+    if not cp.allow_purchase_invoice_without_receipt and not has_receipt_link:
+        raise ValueError(
+            _("La factura debe estar vinculada a una recepción de compra " "según la configuración del proveedor.")
+        )
+    if not cp.allow_purchase_invoice_without_order and not has_receipt_link and not has_order_link:
+        raise ValueError(
+            _("La factura debe estar vinculada a una orden o recepción de compra " "según la configuración del proveedor.")
+        )
 
 
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
@@ -2968,8 +3006,8 @@ def _create_purchase_invoice_from_request():
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
         fx_rate = _purchase_exchange_rate(company, posting_date, request.form.get("transaction_currency"))
         factura.exchange_rate = fx_rate
-        base_total, _ = _compute_base_amounts(total, fx_rate)
-        base_grand_total, _ = _compute_base_amounts(total, fx_rate)
+        base_total, _base = _compute_base_amounts(total, fx_rate)
+        base_grand_total, _base2 = _compute_base_amounts(total, fx_rate)
         factura.base_total = base_total
         factura.grand_total = total
         factura.base_grand_total = base_grand_total
@@ -3103,7 +3141,7 @@ def _handle_purchase_invoice_edit_post(registro):
             request.form.get("from_receipt") or None,
         )
         registro.posting_date = _parse_date(request.form.get("posting_date"))
-        registro.supplier_invoice_no = request.form.get("supplier_invoice_no")
+        registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
         registro.remarks = request.form.get("remarks")
         for rel in database.session.execute(
             database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=registro.id)
@@ -3116,8 +3154,8 @@ def _handle_purchase_invoice_edit_post(registro):
         _total_qty, total = _save_purchase_invoice_items(registro.id)
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
-        base_total, _ = _compute_base_amounts(total, fx_rate)
-        base_grand_total, _ = _compute_base_amounts(total, fx_rate)
+        base_total, _base = _compute_base_amounts(total, fx_rate)
+        base_grand_total, _base2 = _compute_base_amounts(total, fx_rate)
         registro.total = total
         registro.base_total = base_total
         registro.grand_total = total
@@ -3213,6 +3251,7 @@ def compras_factura_compra_submit(invoice_id: str):
         )
         validate_submit_prerequisites(registro, items=items, require_party=True)
         _validate_invoice_quantities_against_receipt(invoice_id)
+        _validate_invoice_requires_supplier_link(invoice_id)
         _validate_supplier_invoice_flags(
             getattr(registro, "supplier_id", None),
             getattr(registro, "company", None),
