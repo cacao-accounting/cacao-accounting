@@ -2990,9 +2990,9 @@ def _validate_duplicate_supplier_invoice(
     exists = database.session.execute(stmt).scalars().first()
     if exists:
         raise ValueError(
-            _(
-                "El número de factura del proveedor '{}' ya está registrado para este proveedor en otra factura activa."
-            ).format(supplier_invoice_no_cleaned)
+            _("El número de factura del proveedor '{}' ya está registrado para este proveedor en otra factura activa.").format(
+                supplier_invoice_no_cleaned
+            )
         )
 
 

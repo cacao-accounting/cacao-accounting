@@ -55,11 +55,7 @@ is_testing = environ.get("CACAO_TEST") or environ.get("CI") or (environ.get("PYT
 if is_testing:
     env_db = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL")
     if env_db and (
-        "mysql" in env_db or
-        "postgresql" in env_db or
-        "mariadb" in env_db or
-        "mssql" in env_db or
-        "sqlite:///" in env_db
+        "mysql" in env_db or "postgresql" in env_db or "mariadb" in env_db or "mssql" in env_db or "sqlite:///" in env_db
     ):
         DATABASE_URL = env_db
     else:
