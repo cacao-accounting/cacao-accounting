@@ -96,6 +96,7 @@ disable_error_code = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "-n auto"
 markers = [
     "slow: Pruebas unitarias que tardan mucho en ejecurse, normalmente requieren un set de datos real.",
 ]
