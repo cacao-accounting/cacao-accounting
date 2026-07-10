@@ -117,6 +117,8 @@ def _target_amount(target_type: str, target_id: str) -> Decimal:
             payment = database.session.get(PaymentEntry, target_id)
             if not payment:
                 raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+            if getattr(payment, "docstatus", 0) != 1:
+                raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
             return _payment_amount(payment)
         case "gl_entry":
             entry = database.session.get(GLEntry, target_id)
@@ -133,6 +135,8 @@ def _target_company(target_type: str, target_id: str) -> str:
             payment = database.session.get(PaymentEntry, target_id)
             if not payment:
                 raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+            if getattr(payment, "docstatus", 0) != 1:
+                raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
             return str(payment.company)
         case "gl_entry":
             entry = database.session.get(GLEntry, target_id)
@@ -211,6 +215,7 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
             .filter_by(company=company)
             .where(PaymentEntry.posting_date >= date_from)
             .where(PaymentEntry.posting_date <= date_to)
+            .where(PaymentEntry.docstatus == 1)
             .where(or_(PaymentEntry.paid_amount <= amount, PaymentEntry.received_amount <= amount))
         )
         .scalars()

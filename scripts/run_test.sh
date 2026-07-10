@@ -15,7 +15,7 @@ echo
 echo Testing code with pytest
 echo
 echo
-CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -v -s --slow=True
+CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --tb=line --quiet --disable-warnings --slow=True
 echo
 echo Testing code with npm
 echo
