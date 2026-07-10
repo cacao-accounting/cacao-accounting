@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275 AS python-builder
 
 RUN microdnf install -y --nodocs --best --refresh \
-       python3.12 python3.12-pip \
+       python3.12 python3.12-pip python3.12-cryptography \
     && microdnf clean all
 
 WORKDIR /build
