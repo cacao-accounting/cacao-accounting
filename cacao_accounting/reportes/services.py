@@ -1029,6 +1029,12 @@ def _movement_detail_row_values(
 ) -> dict[str, Any]:
     """Construye el diccionario de salida para una fila de movimiento contable."""
     account_code = entry.account_code or (account.code if account else "") or ""
+    if entry.is_cancelled:
+        voucher_status = "cancelled"
+    elif entry.is_reversal:
+        voucher_status = "reversal"
+    else:
+        voucher_status = "submitted"
     row_values: dict[str, Any] = {
         "posting_date": entry.posting_date,
         "accounting_period": period.name if period else None,
@@ -1049,7 +1055,7 @@ def _movement_detail_row_values(
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
-        "voucher_status": "reversal" if entry.is_reversal else ("cancelled" if entry.is_cancelled else "submitted"),
+        "voucher_status": voucher_status,
     }
     if include_running_balance and running_balance is not None:
         row_values["running_balance"] = running_balance

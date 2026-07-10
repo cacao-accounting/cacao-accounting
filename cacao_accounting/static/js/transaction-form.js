@@ -195,7 +195,14 @@
         const obj = {};
         schema.columns.forEach((col, columnIndex) => {
           const foundIndex = matchedIndexes[columnIndex];
-          const effectiveIndex = foundIndex >= 0 ? foundIndex : (!hasHeaderMatches ? columnIndex : -1);
+          let effectiveIndex;
+          if (foundIndex >= 0) {
+            effectiveIndex = foundIndex;
+          } else if (!hasHeaderMatches) {
+            effectiveIndex = columnIndex;
+          } else {
+            effectiveIndex = -1;
+          }
           if (effectiveIndex >= 0) {
             obj[col.key] = row[effectiveIndex] === undefined ? '' : String(row[effectiveIndex]).trim();
           }
