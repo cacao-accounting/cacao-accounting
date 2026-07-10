@@ -12,7 +12,9 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
 
     id = database.Column(database.Integer, primary_key=True)
 
-    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    company_code = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
     document_type = database.Column(database.String(80), nullable=False)
     code = database.Column(database.String(80), nullable=False, index=True)
@@ -87,13 +89,19 @@ class PrintJobLog(database.Model):  # type: ignore[name-defined]
 
     id = database.Column(database.Integer, primary_key=True)
 
-    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    company_code = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    user_id = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
 
     document_type = database.Column(database.String(80), nullable=False)
     document_id = database.Column(database.String(26), nullable=False)
 
-    template_id = database.Column(database.Integer, database.ForeignKey("print_templates.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    template_id = database.Column(
+        database.Integer, database.ForeignKey("print_templates.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     template_version = database.Column(database.Integer, nullable=True)
 
     output_format = database.Column(database.String(20), nullable=False)

@@ -1,5 +1,18 @@
 # PENDIENTE - Cacao Accounting
 
+## DBA Audit — Completado (2026-07-10)
+- [x] ON DELETE/ON UPDATE en 444 FKs (commit `dab2de9`)
+- [x] UniqueConstraints faltantes + eliminación de redundantes (commit `10a2bc1`)
+- [x] CheckConstraints para qty/rate/amount en 14 modelos de línea (commit `53a5bbc`)
+- [x] Eliminación de 23 índices redundantes (commit `da55073`)
+- [x] Columna `version` para optimistic locking en DocBase (commit `8c043ad`)
+- [x] Secuencias atómicas con `with_for_update()` (commit `dae0c03`)
+- [ ] ~~GLBase refactor~~ — Cancelado (naming incompatible con GLEntry, requeriría breaking migration)
+
+## Pendientes del DBA Audit (requieren revisión de regla de negocio)
+- [ ] Evaluar UniqueConstraint en StockLedgerEntry (voucher_type, voucher_id, item_code, warehouse) — requiere confirmar que no hay batch splits legítimos con mismo item+warehouse.
+- [ ] Evaluar UniqueConstraint en StockValuationLayer — misma consideración.
+
 ## Seguimiento 2026-05-19 (MVP Fiscal)
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 

@@ -1243,9 +1243,7 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de una entrada de almacen."""
 
     __tablename__ = "stock_entry_item"
-    __table_args__ = (
-        database.CheckConstraint("amount >= 0", name="ck_sei_amount_non_negative"),
-    )
+    __table_args__ = (database.CheckConstraint("amount >= 0", name="ck_sei_amount_non_negative"),)
     stock_entry_id = database.Column(
         database.String(26),
         database.ForeignKey("stock_entry.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
@@ -1372,9 +1370,7 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     """Capa de valuacion de inventario para FIFO y Promedio Movil."""
 
     __tablename__ = "stock_valuation_layer"
-    __table_args__ = (
-        database.CheckConstraint("rate >= 0", name="ck_svl_rate_non_negative"),
-    )
+    __table_args__ = (database.CheckConstraint("rate >= 0", name="ck_svl_rate_non_negative"),)
     id = database.Column(
         database.String(26),
         primary_key=True,

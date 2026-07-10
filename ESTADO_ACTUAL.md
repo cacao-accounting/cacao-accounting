@@ -1,5 +1,22 @@
 # Estado Actual del Proyecto - 2026-07-10
 
+- **Auditoría Senior DBA — Commits 4-10 (2026-07-10):** Se completaron mejoras de integridad de datos en los modelos SQLAlchemy.
+  - **Commit 4 (`10a2bc1`):** 6 UniqueConstraints nuevas (User.user, FiscalYear, NamingSeries, Workflow, WorkflowState, WorkflowTransition) + bug fix en Roles.note + 4 redundantes eliminadas.
+  - **Commit 5 (`53a5bbc`):** 37 CheckConstraints en 14 modelos de línea (qty>0, rate>=0, amount>=0).
+  - **Commit 6+7 (`da55073`):** 23 índices redundantes eliminados (589→566). Single-column indexes cubiertos por composites.
+  - **Commit 8:** GLBase refactor cancelado (naming incompatible con GLEntry).
+  - **Commit 9 (`8c043ad`):** Columna `version` en DocBase para optimistic locking (15 modelos transaccionales).
+  - **Commit 10 (`dae0c03`):** `get_next_sequence_value()` usa `with_for_update()` para atomicidad bajo concurrencia.
+
+- **FK Cascade Policies (2026-07-10):** Se agregaron reglas ON DELETE/ON UPDATE a las 444 restricciones de llave foránea del esquema.
+  - Constantes `FK_RESTRICT`, `FK_CASCADE`, `FK_SET_NULL` definidas en `database/__init__.py`.
+  - Datos maestros (entity, currency, accounts, parties, items, warehouses, users, books): ON DELETE RESTRICT.
+  - Referencias opcionales (naming_series, external_counter, fiscal_year, comprobante_contable): ON DELETE SET NULL.
+  - Líneas de detalle (order items, stock entries, import errors, budget lines): ON DELETE CASCADE.
+  - Todas las FK: ON UPDATE CASCADE.
+  - Archivos: `database/__init__.py`, `imports/models.py`, `printing/models.py`.
+  - Commit: `dab2de9`
+
 - **Optimización del Dockerfile (2026-07-10):** El Dockerfile del proyecto fue optimizado para reducir tamaño, mejorar seguridad y mantenerencia.
   - Multi-stage build: etapa `frontend` instala npm deps, etapa `python-builder` compila pip deps, imagen final solo copia `node_modules` y `site-packages`.
   - Imagen base actualizada a `ubi9/ubi-minimal:9.8-1782797275`.

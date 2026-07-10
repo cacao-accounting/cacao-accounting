@@ -286,9 +286,7 @@ def get_next_sequence_value(sequence_id: str) -> int:
     """
     from cacao_accounting.database import Sequence
 
-    seq = database.session.execute(
-        database.select(Sequence).filter_by(id=sequence_id).with_for_update()
-    ).scalar_one_or_none()
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
 
     if seq is None:
         raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")
