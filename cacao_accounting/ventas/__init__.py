@@ -40,7 +40,7 @@ from cacao_accounting.document_flow import (
     revert_relations_for_target,
     validate_submit_prerequisites,
 )
-from cacao_accounting.document_flow.repository import has_active_source_relations
+from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
@@ -1311,6 +1311,72 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     return warnings
 
 
+def _validate_delivery_quantities_against_so(note_id: str) -> None:
+    """Valida que las cantidades entregadas no excedan las ordenadas en la Orden de Venta."""
+    relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="delivery_note",
+            target_id=note_id,
+            status="active",
+        )
+    ).scalars()
+    for rel in relations:
+        if rel.source_type != "sales_order" or not rel.source_item_id:
+            continue
+        so_item = database.session.get(SalesOrderItem, rel.source_item_id)
+        if not so_item:
+            continue
+        consumed = consumed_qty_for_source("sales_order", rel.source_id, rel.source_item_id, "delivery_note")
+        ordered = Decimal(str(so_item.qty or 0))
+        if consumed > ordered:
+            raise ValueError(
+                _("Sobre-entrega: cantidad entregada {} excede la ordenada {} para el artículo {}.").format(
+                    consumed, ordered, so_item.item_code
+                )
+            )
+
+
+def _validate_sales_invoice_quantities(invoice_id: str) -> None:
+    """Valida que las cantidades facturadas no excedan las entregadas en la Nota de Entrega
+
+    o las ordenadas en la Orden de Venta.
+    """
+    relations = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="sales_invoice",
+            target_id=invoice_id,
+            status="active",
+        )
+    ).scalars()
+    for rel in relations:
+        if not rel.source_item_id:
+            continue
+        if rel.source_type == "delivery_note":
+            dn_item = database.session.get(DeliveryNoteItem, rel.source_item_id)
+            if not dn_item:
+                continue
+            consumed = consumed_qty_for_source("delivery_note", rel.source_id, rel.source_item_id, "sales_invoice")
+            delivered = Decimal(str(dn_item.qty or 0))
+            if consumed > delivered:
+                raise ValueError(
+                    _("Sobre-facturación: cantidad facturada {} excede la entregada {} para el artículo {}.").format(
+                        consumed, delivered, dn_item.item_code
+                    )
+                )
+        elif rel.source_type == "sales_order":
+            so_item = database.session.get(SalesOrderItem, rel.source_item_id)
+            if not so_item:
+                continue
+            consumed = consumed_qty_for_source("sales_order", rel.source_id, rel.source_item_id, "sales_invoice")
+            ordered = Decimal(str(so_item.qty or 0))
+            if consumed > ordered:
+                raise ValueError(
+                    _("Sobre-facturación: cantidad facturada {} excede la ordenada {} para el artículo {}.").format(
+                        consumed, ordered, so_item.item_code
+                    )
+                )
+
+
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
     persist_document_fiscal_snapshot(
@@ -2251,6 +2317,7 @@ def ventas_entrega_submit(note_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        _validate_delivery_quantities_against_so(note_id)
         submit_document(registro)
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
@@ -2627,6 +2694,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
         if registro.update_inventory and not registro.delivery_note_id:
