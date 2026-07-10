@@ -834,7 +834,7 @@ def test_has_active_source_relations_false_when_children_cancelled(app_ctx):
     from cacao_accounting.document_flow.repository import has_active_source_relations
 
     order_item = _seed_purchase_order(app_ctx)
-    receipt = PurchaseReceipt(id="PR-HAS-CAN", company="cacao", posting_date=date(2026, 5, 4), docstatus=2)
+    receipt = PurchaseReceipt(id="PR-HAS-CAN", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
     receipt_item = PurchaseReceiptItem(
         purchase_receipt_id="PR-HAS-CAN",
         item_code="ART-001",
@@ -859,6 +859,10 @@ def test_has_active_source_relations_false_when_children_cancelled(app_ctx):
         rate=Decimal("5"),
         amount=Decimal("20"),
     )
+    database.session.commit()
+
+    receipt.docstatus = 2
+    database.session.commit()
 
     assert has_active_source_relations("purchase_order", "PO-001") is False
 
