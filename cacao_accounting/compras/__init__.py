@@ -2706,9 +2706,7 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
     has_receipt_link = any(r.source_type == "purchase_receipt" for r in relations)
     has_order_link = any(r.source_type == "purchase_order" for r in relations)
     if not cp.allow_purchase_invoice_without_receipt and not has_receipt_link:
-        raise ValueError(
-            _("La factura debe estar vinculada a una recepción de compra según la configuración del proveedor.")
-        )
+        raise ValueError(_("La factura debe estar vinculada a una recepción de compra según la configuración del proveedor."))
     if not cp.allow_purchase_invoice_without_order and not has_receipt_link and not has_order_link:
         raise ValueError(
             _("La factura debe estar vinculada a una orden o recepción de compra según la configuración del proveedor.")
