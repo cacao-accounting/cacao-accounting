@@ -546,7 +546,7 @@ class ExchangeRevaluationService:
         )
 
     def _link_items_to_entries(self, items: list[ExchangeRevaluationItem], entries: list[GLEntry]) -> None:
-        for item, entry in zip(items, entries[::2], strict=False):
+        for item, entry in zip(items, entries[::2], strict=True):
             item.journal_line_id = entry.id
 
     def _validate_entries(self, entries: list[GLEntry]) -> None:
