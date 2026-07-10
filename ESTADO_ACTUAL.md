@@ -1,7 +1,7 @@
 # Estado Actual del Proyecto - 2026-07-10
 
 - **Optimización del Dockerfile (2026-07-10):** El Dockerfile del proyecto fue optimizado para reducir tamaño, mejorar seguridad y mantenerencia.
-  - Multi-stage build: etapa `frontend` instala npm deps, imagen final solo copia `node_modules`.
+  - Multi-stage build: etapa `frontend` instala npm deps, etapa `python-builder` compila pip deps, imagen final solo copia `node_modules` y `site-packages`.
   - Imagen base actualizada a `ubi9/ubi-minimal:9.8-1782797275`.
   - Contenedor ejecuta como `appuser` (no-root).
   - WORKDIR duplicado eliminado, instalaciones del sistema consolidadas en un solo `RUN`.
