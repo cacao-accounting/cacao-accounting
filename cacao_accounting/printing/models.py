@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Modelos para el servicio de impresión y validación de documentos."""
 
-from cacao_accounting.database import database, ENTITY_CODE, USER_ID
+from cacao_accounting.database import database, ENTITY_CODE, USER_ID, FK_RESTRICT, FK_CASCADE
 
 
 class PrintTemplate(database.Model):  # type: ignore[name-defined]
@@ -12,7 +12,7 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
 
     id = database.Column(database.Integer, primary_key=True)
 
-    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=True)
+    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
 
     document_type = database.Column(database.String(80), nullable=False)
     code = database.Column(database.String(80), nullable=False, index=True)
@@ -31,8 +31,8 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
 
     version = database.Column(database.Integer, default=1, nullable=False)
 
-    created_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
-    updated_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
+    created_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    updated_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
 
     created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     updated_at = database.Column(
@@ -61,7 +61,7 @@ class PrintTemplateVersion(database.Model):  # type: ignore[name-defined]
 
     template_id = database.Column(
         database.Integer,
-        database.ForeignKey("print_templates.id"),
+        database.ForeignKey("print_templates.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
         nullable=False,
     )
 
@@ -74,7 +74,7 @@ class PrintTemplateVersion(database.Model):  # type: ignore[name-defined]
     orientation = database.Column(database.String(20), nullable=False)
     status = database.Column(database.String(20), nullable=False)
 
-    changed_by = database.Column(database.String(26), database.ForeignKey(USER_ID))
+    changed_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     changed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
     change_note = database.Column(database.String(255))
@@ -87,13 +87,13 @@ class PrintJobLog(database.Model):  # type: ignore[name-defined]
 
     id = database.Column(database.Integer, primary_key=True)
 
-    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False)
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID), nullable=False)
+    company_code = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
 
     document_type = database.Column(database.String(80), nullable=False)
     document_id = database.Column(database.String(26), nullable=False)
 
-    template_id = database.Column(database.Integer, database.ForeignKey("print_templates.id"), nullable=True)
+    template_id = database.Column(database.Integer, database.ForeignKey("print_templates.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     template_version = database.Column(database.Integer, nullable=True)
 
     output_format = database.Column(database.String(20), nullable=False)
@@ -120,7 +120,7 @@ class PublicDocumentValidation(database.Model):  # type: ignore[name-defined]
 
     company_code = database.Column(
         database.String(10),
-        database.ForeignKey(ENTITY_CODE),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
     )
 

@@ -3,7 +3,7 @@
 
 """Modelos para el servicio de importación."""
 
-from cacao_accounting.database import database, BaseTabla, ENTITY_CODE, NAMING_SERIES_ID, BOOK_CODE
+from cacao_accounting.database import database, BaseTabla, ENTITY_CODE, NAMING_SERIES_ID, BOOK_CODE, FK_RESTRICT, FK_CASCADE, FK_SET_NULL
 
 
 class ImportBatch(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -11,11 +11,11 @@ class ImportBatch(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "import_batch"
 
-    company_id = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE), nullable=False)
+    company_id = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
     company = database.relationship("Entity", lazy="joined")
     record_type = database.Column(database.String(50), nullable=False)
-    sequence_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID), nullable=True)
-    accounting_book_id = database.Column(database.String(10), database.ForeignKey(BOOK_CODE), nullable=True)
+    sequence_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    accounting_book_id = database.Column(database.String(10), database.ForeignKey(BOOK_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     book = database.relationship("Book", lazy="joined")
     source_format = database.Column(database.String(10))
     source_filename = database.Column(database.String(255))
@@ -39,7 +39,7 @@ class ImportBatchError(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "import_batch_error"
 
-    batch_id = database.Column(database.String(26), database.ForeignKey("import_batch.id"), nullable=False)
+    batch_id = database.Column(database.String(26), database.ForeignKey("import_batch.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False)
     row_number = database.Column(database.Integer())
     document_ref = database.Column(database.String(100))
     field_name = database.Column(database.String(100))
