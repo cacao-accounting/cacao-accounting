@@ -221,6 +221,8 @@ class DocBase(BaseTabla):
     # Voucher traceability
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
+    # Optimistic locking — increment on each save to detect concurrent edits
+    version = database.Column(database.Integer(), default=1, nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
