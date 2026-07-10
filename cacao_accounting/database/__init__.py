@@ -1023,6 +1023,10 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de una entrada de almacen."""
 
     __tablename__ = "stock_entry_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_sei_qty_positive"),
+        database.CheckConstraint("amount >= 0", name="ck_sei_amount_non_negative"),
+    )
     stock_entry_id = database.Column(database.String(26), database.ForeignKey("stock_entry.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
     item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     source_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
@@ -1099,6 +1103,10 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     """Capa de valuacion de inventario para FIFO y Promedio Movil."""
 
     __tablename__ = "stock_valuation_layer"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_svl_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_svl_rate_non_negative"),
+    )
     id = database.Column(
         database.String(26),
         primary_key=True,
@@ -1124,7 +1132,11 @@ class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defi
     """Detalle persistido del prorrateo de costos capitalizables por linea."""
 
     __tablename__ = "landed_cost_allocation"
-    __table_args__ = (UniqueConstraint("document_type", "document_id", "document_line_id", name="uq_landed_cost_line"),)
+    __table_args__ = (
+        UniqueConstraint("document_type", "document_id", "document_line_id", name="uq_landed_cost_line"),
+        database.CheckConstraint("base_amount >= 0", name="ck_lca_base_amount_nn"),
+        database.CheckConstraint("allocated_amount >= 0", name="ck_lca_allocated_amount_nn"),
+    )
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     document_type = database.Column(database.String(50), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
@@ -1170,6 +1182,11 @@ class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined
     """Linea de una orden de compra."""
 
     __tablename__ = "purchase_order_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_poi_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_poi_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_poi_amount_non_negative"),
+    )
     purchase_order_id = database.Column(
         database.String(26), database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1204,6 +1221,11 @@ class PurchaseQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     """Linea de una solicitud de cotización de compra."""
 
     __tablename__ = "purchase_quotation_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_pqi_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_pqi_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_pqi_amount_non_negative"),
+    )
     purchase_quotation_id = database.Column(
         database.String(26), database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1236,6 +1258,9 @@ class PurchaseRequestItem(database.Model, BaseTabla):  # type: ignore[name-defin
     """Linea de una solicitud de compra."""
 
     __tablename__ = "purchase_request_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_preqi_qty_positive"),
+    )
     purchase_request_id = database.Column(
         database.String(26), database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1271,6 +1296,11 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     """Linea de una cotización de proveedor."""
 
     __tablename__ = "supplier_quotation_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_sqi_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_sqi_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_sqi_amount_non_negative"),
+    )
     supplier_quotation_id = database.Column(
         database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1304,6 +1334,11 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
     """Linea de recepcion de compra."""
 
     __tablename__ = "purchase_receipt_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_prci_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_prci_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_prci_amount_non_negative"),
+    )
     purchase_receipt_id = database.Column(
         database.String(26), database.ForeignKey(PURCHASE_RECEIPT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1354,6 +1389,11 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
     """Linea de factura de compra."""
 
     __tablename__ = "purchase_invoice_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_pii_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_pii_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_pii_amount_non_negative"),
+    )
     purchase_invoice_id = database.Column(
         database.String(26), database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1408,6 +1448,11 @@ class SalesRequestItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de pedido de venta."""
 
     __tablename__ = "sales_request_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_sri_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_sri_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_sri_amount_non_negative"),
+    )
     sales_request_id = database.Column(
         database.String(26), database.ForeignKey("sales_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1441,6 +1486,11 @@ class SalesQuotationItem(database.Model, BaseTabla):  # type: ignore[name-define
     """Linea de cotización de venta."""
 
     __tablename__ = "sales_quotation_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_sqti_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_sqti_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_sqti_amount_non_negative"),
+    )
     sales_quotation_id = database.Column(
         database.String(26), database.ForeignKey("sales_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1462,6 +1512,11 @@ class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de orden de venta."""
 
     __tablename__ = "sales_order_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_soi_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_soi_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_soi_amount_non_negative"),
+    )
     sales_order_id = database.Column(database.String(26), database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     item_name = database.Column(database.String(200), nullable=True)
@@ -1498,6 +1553,11 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de nota de entrega."""
 
     __tablename__ = "delivery_note_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_dni_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_dni_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_dni_amount_non_negative"),
+    )
     delivery_note_id = database.Column(
         database.String(26), database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True
     )
@@ -1542,6 +1602,11 @@ class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de factura de venta."""
 
     __tablename__ = "sales_invoice_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_sii_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_sii_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_sii_amount_non_negative"),
+    )
     sales_invoice_id = database.Column(
         database.String(26), database.ForeignKey("sales_invoice.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True
     )
