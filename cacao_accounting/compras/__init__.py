@@ -264,7 +264,7 @@ def compras_solicitud_compra_nueva():
             database.session.commit()
             flash("Solicitud de compra creada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
-        except IdentifierConfigurationError as exc:
+        except (IdentifierConfigurationError, DocumentFlowError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
     return render_template(
@@ -344,7 +344,7 @@ def compras_solicitud_compra_editar(request_id: str):
             database.session.commit()
             flash("Solicitud de compra actualizada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
-        except IdentifierConfigurationError as exc:
+        except (IdentifierConfigurationError, DocumentFlowError) as exc:
             database.session.rollback()
             flash(str(exc), "danger")
 
@@ -582,7 +582,7 @@ def _create_supplier_quotation_from_request():
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except IdentifierConfigurationError as exc:
+    except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return None
@@ -1372,6 +1372,8 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1402,6 +1404,8 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1432,6 +1436,8 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             linea = PurchaseRequestItem(
@@ -1459,6 +1465,8 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1489,6 +1497,8 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1529,6 +1539,8 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
+            if qty <= 0:
+                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1808,7 +1820,7 @@ def _create_purchase_order_from_request(form: dict):
         database.session.commit()
         flash("Orden de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
-    except IdentifierConfigurationError as exc:
+    except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
         return None
@@ -2033,7 +2045,7 @@ def _create_purchase_quotation_from_request():
         database.session.commit()
         flash("Solicitud de cotización creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
-    except IdentifierConfigurationError as exc:
+    except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return None
@@ -2963,7 +2975,7 @@ def _create_purchase_invoice_from_request():
         database.session.commit()
         flash("Factura de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
-    except ValueError as exc:
+    except (ValueError, DocumentFlowError) as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return None
