@@ -719,3 +719,17 @@
 - **Pruebas:** 3 tests nuevos, 1 existente ajustado. 337 tests en verde.
 - **Calidad:** black, ruff, flake8 OK.
 - **Commits:** `bb40f22` (CAS-02), `74079bf` (CAS-03), `61e15a4` (tests).
+
+## 2026-07-10 (Rediseño de la CLI cacaoctl)
+- **Solicitud:** Mejorar la interfaz de linea de comandos `cacaoctl` para que deje de parecer un alias de Flask y tenga identidad propia, siguiendo el estilo de Git/Docker/Poetry.
+- **Diagnóstico:** `cacao_accounting/cli.py` usaba `FlaskGroup`, lo que exponía la ayuda `Usage: python -m flask` y los comandos internos de Flask (`routes`, `run`, `shell`) mezclados con `cleandb`/`setupdb`/`serve`/`version`. El entry point en `pyproject.toml` es `cacaoctl=cacao_accounting:command` → `command()` en `__init__.py`.
+- **Implementación:**
+  - Se reescribió `cli.py` con un `click.Group` propio (`CacaoGroup`) que oculta la identidad de Flask (`prog_name="cacaoctl"`), muestra un banner y agrupa los comandos por categorías (Database, Server, Development, System).
+  - Comandos agrupados: `db init`, `db reset`, `db clean`, `db seed` (subgrupo `db`); `run`, `serve` (Server); `shell`, `routes` (Development); `version`, `status`, `config` (System).
+  - Opciones globales: `--env [dev|test|prod]`, `--verbose`, `--quiet`, `--version`, `-h/--help`.
+  - Confirmaciones interactivas (`¿Desea continuar? [y/N]`) para operaciones destructivas (`db reset`, `db clean`), omitibles con `--force`.
+  - Salida con colores: verde=éxito, amarillo=advertencia, rojo=error, cian=info.
+  - Comandos de diagnóstico nuevos: `status` (app, versión, BD, redis, entorno, servidor) y `config` (entorno, motor BD, debug, host, puerto, hilos, cache).
+  - Se eliminó `_register_app_commands` de `create_app` (los comandos `cleandb`/`setupdb`/`serve`/`version` ya no se registran en `app.cli`) y se actualizó `command()` para invocar `linea_comandos_main()`.
+- **Corrección incidental:** `ventas/__init__.py` tenía un error de indentación preexistente (el `except ValueError` de `ventas_factura_venta_nuevo` quedaba a 4 espacios en lugar de 8), lo que impedía importar la aplicación y por tanto ejecutar `cacaoctl`. Se corrigió la indentación.
+- **Calidad:** black, ruff, flake8 y mypy en verde para los archivos modificados.

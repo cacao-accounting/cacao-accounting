@@ -12,7 +12,6 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from os import environ
 from secrets import token_urlsafe
 
 # ---------------------------------------------------------------------------------------
@@ -70,9 +69,9 @@ alembic = Alembic()
 
 def command() -> None:  # pragma: no cover
     """Interfaz de linea de commandos."""
-    from cacao_accounting.cli import linea_comandos
+    from cacao_accounting.cli import linea_comandos_main
 
-    linea_comandos(as_module="cacao_accounting")
+    linea_comandos_main()
 
 
 def iniciar_extenciones(app: Flask | None = None) -> None:
@@ -282,7 +281,6 @@ def create_app(ajustes: dict | None = None) -> Flask:
         cacao_app.config.from_mapping(ajustes)
 
     _configure_app_secret_key(cacao_app)
-    _register_app_commands(cacao_app)
     _register_app_hooks(cacao_app)
 
     actualiza_variables_globales_jinja(app=cacao_app)
@@ -307,44 +305,6 @@ def _configure_app_secret_key(app: Flask) -> None:
         app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
         return
     app.config["SECRET_KEY"] = token_urlsafe(32)
-
-
-def _register_app_commands(app: Flask) -> None:
-    """Register CLI commands for the application factory."""
-
-    @app.cli.command()
-    def cleandb():  # pragma: no cover
-        """Elimina la base de datos, solo disponible para desarrollo."""
-        if TESTING_MODE:
-            database.drop_all()
-
-    @app.cli.command()
-    def version():  # pragma: no cover
-        """Muestra la version actual instalada."""
-        from cacao_accounting.version import VERSION
-
-        print(VERSION)
-
-    @app.cli.command()
-    def serve():  # pragma: no cover
-        """Inicio la aplicacion con waitress como servidor WSGI por  defecto."""
-        from cacao_accounting.server import server
-
-        server()
-
-    @app.cli.command()
-    def setupdb():  # pragma: no cover
-        """Define una base de datos de desarrollo nueva."""
-        from cacao_accounting.database.helpers import inicia_base_de_datos
-
-        user = environ.get("CACAO_USER") or "cacao"
-        passwd = environ.get("CACAO_PSWD") or "cacao"
-
-        if TESTING_MODE:
-            database.drop_all()
-            inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=True)
-        else:
-            inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
 
 
 def _register_app_hooks(app: Flask) -> None:
