@@ -31,7 +31,7 @@ jobs:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"
         run: |
-          cacaoctl setupdb
+          cacaoctl db init --seed
       - name: Test with MySQL + pymysql
         env:
           CACAO_PRINT_DATABASE_URI: "True"
@@ -39,7 +39,7 @@ jobs:
         run: |
           sudo systemctl start mysql.service
           mysql --user=root --password=root < tests/setup_mysql.sql
-          SECRET_KEY=ASD123kljaAddS CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl setupdb
+          SECRET_KEY=ASD123kljaAddS CACAO_DB=mysql+pymysql://cacao:cacao@localhost/cacao cacaoctl db init --seed
       - name: Test with Postgresql + psycopg2
         env:
           CACAO_PRINT_DATABASE_URI: "True"
@@ -54,7 +54,7 @@ jobs:
           sudo -u postgres psql -c "ALTER ROLE cacao2 CREATEDB;"
           sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao2;"
           sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao2;"
-          SECRET_KEY=ASD123klja+AddS CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl setupdb
+          SECRET_KEY=ASD123klja+AddS CACAO_DB=postgresql+psycopg2://cacao2:cacao2@localhost/cacao2 cacaoctl db init --seed
       - name: Test with Postgresql + pg8000
         env:
           CACAO_PRINT_DATABASE_URI: "True"
@@ -68,4 +68,4 @@ jobs:
           sudo -u postgres psql -c "ALTER ROLE cacao CREATEDB;"
           sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao;"
           sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao;"
-          SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl setupdb
+          SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl db init --seed
