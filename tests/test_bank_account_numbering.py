@@ -45,15 +45,22 @@ def app_ctx():
         database.drop_all()
 
 
+_series_counter = 0
+
+
 def _make_payment_series(company: str = "cacao", entity_type: str = "payment_entry"):
+    global _series_counter
+    _series_counter += 1
     from cacao_accounting.database import NamingSeries, Sequence, SeriesSequenceMap, database
 
-    sequence = Sequence(name=f"{company}-{entity_type}-seq", current_value=0, increment=1, padding=5)
+    seq_name = f"{company}-{entity_type}-seq-{_series_counter}"
+    series_name = f"{company}-{entity_type}-{_series_counter}"
+    sequence = Sequence(name=seq_name, current_value=0, increment=1, padding=5)
     series = NamingSeries(
-        name=f"{company}-{entity_type}",
+        name=series_name,
         entity_type=entity_type,
         company=company,
-        prefix_template=f"{company}-PAY-*YYYY*-*MM*-",
+        prefix_template=f"{company}-PAY-*YYYY*-*MM*-{_series_counter}-",
         is_active=True,
         is_default=True,
     )
