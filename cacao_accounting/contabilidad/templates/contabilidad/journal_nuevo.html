@@ -132,7 +132,14 @@
         var obj = {};
         schema.columns.forEach(function (column, columnIndex) {
           var foundIndex = matchedIndexes[columnIndex];
-          var effectiveIndex = foundIndex >= 0 ? foundIndex : (!hasHeaderMatches ? columnIndex : -1);
+          var effectiveIndex;
+          if (foundIndex >= 0) {
+            effectiveIndex = foundIndex;
+          } else if (!hasHeaderMatches) {
+            effectiveIndex = columnIndex;
+          } else {
+            effectiveIndex = -1;
+          }
           if (effectiveIndex >= 0) {
             var cellValue = row[effectiveIndex];
             obj[column.key] = cellValue === undefined ? '' : String(cellValue).trim();
