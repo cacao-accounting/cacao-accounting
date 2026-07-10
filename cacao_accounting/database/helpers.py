@@ -269,7 +269,10 @@ def resolve_naming_series_prefix(template: str, posting_date: date, company: Opt
 def get_next_sequence_value(sequence_id: str) -> int:
     """Obtiene y reserva el siguiente valor de una secuencia.
 
-    Operacion atomica — incrementa el contador y devuelve el nuevo valor.
+    Operacion atomica con bloqueo pesimista — adquiere lock exclusivo
+    sobre la fila antes de leer e incrementar, evitando asignaciones
+    duplicadas bajo concurrencia.
+
     Soporta politica de reset: never, yearly, monthly.
 
     Args:
@@ -283,7 +286,9 @@ def get_next_sequence_value(sequence_id: str) -> int:
     """
     from cacao_accounting.database import Sequence
 
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
+    seq = database.session.execute(
+        database.select(Sequence).filter_by(id=sequence_id).with_for_update()
+    ).scalar_one_or_none()
 
     if seq is None:
         raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")
