@@ -2737,7 +2737,7 @@ def compras_recepcion_submit(receipt_id: str):
         log_submit(registro)
         database.session.commit()
         flash("Recepcion de compra aprobada.", "success")
-    except (PostingError, ValueError, DocumentFlowError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
@@ -3303,7 +3303,7 @@ def compras_factura_compra_submit(invoice_id: str):
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
-    except (PostingError, ValueError, DocumentFlowError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))

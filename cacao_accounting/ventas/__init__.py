@@ -2320,7 +2320,7 @@ def ventas_entrega_submit(note_id: str):
         log_submit(registro)
         database.session.commit()
         flash("Nota de entrega aprobada.", "success")
-    except (PostingError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
@@ -2702,7 +2702,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             )
         log_submit(registro)
         database.session.commit()
-    except (PostingError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
