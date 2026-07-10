@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # --------------------------------------------------------------------------------------
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import json
 from typing import Any, TypedDict, cast
@@ -225,6 +225,41 @@ def _payment_numbering_defaults(bank_account_id: str | None) -> tuple[str | None
         return None, None
 
     return bank_account.default_naming_series_id, bank_account.default_external_counter_id
+
+
+def _warn_duplicate_payment(payment):
+    """CAS-20: Alerta si existe un pago similar al mismo proveedor/cliente en ±3 días.
+
+    Regla de negocio: solo se emite advertencia (flash warning), no se detiene
+    el registro del pago. El usuario decide si confirma o cancela.
+    """
+    from sqlalchemy import or_
+
+    if not payment.paid_amount or payment.paid_amount <= 0:
+        return
+    window_start = (payment.posting_date or date.today()) - timedelta(days=3)
+    window_end = (payment.posting_date or date.today()) + timedelta(days=3)
+    matches = (
+        database.session.execute(
+            database.select(PaymentEntry).filter(
+                PaymentEntry.id != payment.id,
+                PaymentEntry.company == payment.company,
+                PaymentEntry.party_id == payment.party_id,
+                PaymentEntry.docstatus == 1,
+                PaymentEntry.posting_date >= window_start,
+                PaymentEntry.posting_date <= window_end,
+                or_(PaymentEntry.paid_amount == payment.paid_amount, PaymentEntry.received_amount == payment.paid_amount),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if matches:
+        flash(
+            "Ya existe un pago similar ({0}) al mismo proveedor/cliente en las ultimas dias. "
+            "Verifique que no sea un pago duplicado.".format(matches[0].document_no or matches[0].id),
+            "warning",
+        )
 
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
@@ -1549,6 +1584,7 @@ def _create_payment_from_request():
             allow_order_references=bool(payload.get("advance_mode")),
         )
         _validate_payment_reference_totals(amount, ref_totals)
+        _warn_duplicate_payment(payment)
         persist_document_fiscal_snapshot(
             company=str(payment.company or ""),
             document_type="payment_entry",
