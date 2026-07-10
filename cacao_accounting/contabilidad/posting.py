@@ -2241,6 +2241,8 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
     """Genera Stock Ledger y GL para una recepción de compra aprobada."""
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una recepción de compra aprobada.")
+    if _has_active_gl_entries(document):
+        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
 
     company = _company_for(document)
     from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
@@ -2328,6 +2330,8 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
     """Genera Stock Ledger y GL para una nota de entrega aprobada."""
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una nota de entrega aprobada.")
+    if _has_active_gl_entries(document):
+        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
 
     company = _company_for(document)
     movements = _create_stock_ledger_for_document_type(document, Decimal("-1"))
@@ -2402,6 +2406,9 @@ def _comprobante_entry_params(
 
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
     """Genera GL para un comprobante contable manual."""
+    if _has_active_gl_entries(document):
+        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
+
     company = _company_for(document)
     lines = _comprobante_lines(document)
     if not lines:
