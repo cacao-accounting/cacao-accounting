@@ -652,7 +652,7 @@ class SeriesSequenceMap(database.Model, BaseTabla):  # type: ignore[name-defined
     __tablename__ = "series_sequence_map"
     naming_series_id = database.Column(
         database.String(26),
-        database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
