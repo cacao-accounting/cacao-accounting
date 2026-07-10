@@ -1231,3 +1231,104 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
 
     with pytest.raises(ValueError, match="Sobre-facturación"):
         _validate_invoice_quantities_against_receipt("PI-OVR-01")
+
+
+def test_supplier_invoice_no_duplication_validation(app_ctx):
+    """S2P-24: Valida la duplicidad de supplier_invoice_no para un mismo proveedor."""
+    from cacao_accounting.database import PurchaseInvoice, CompanyParty, database
+    from cacao_accounting.compras import _validate_duplicate_supplier_invoice
+
+    # Setup suppliers in company party
+    cp1 = CompanyParty(
+        party_id="SUPLR-00001",
+        company="cacao",
+        allow_purchase_invoice_without_order=True,
+        allow_purchase_invoice_without_receipt=True,
+    )
+    cp2 = CompanyParty(
+        party_id="SUPLR-00002",
+        company="cacao",
+        allow_purchase_invoice_without_order=True,
+        allow_purchase_invoice_without_receipt=True,
+    )
+    database.session.add_all([cp1, cp2])
+    database.session.commit()
+
+    # Case 1: First invoice, draft status
+    invoice1 = PurchaseInvoice(
+        id="INV-001",
+        supplier_id="SUPLR-00001",
+        company="cacao",
+        supplier_invoice_no="FAC-2026-001",
+        docstatus=0,
+    )
+    database.session.add(invoice1)
+    database.session.commit()
+
+    # Attempting to validate a new invoice with same supplier & same invoice number must fail.
+    with pytest.raises(ValueError, match="ya está registrado"):
+        _validate_duplicate_supplier_invoice(supplier_id="SUPLR-00001", supplier_invoice_no="FAC-2026-001")
+
+    # Creating a duplicate for DIFFERENT supplier should NOT fail
+    _validate_duplicate_supplier_invoice(supplier_id="SUPLR-00002", supplier_invoice_no="FAC-2026-001")
+
+    # Case 2: Submitting/approving first invoice (updates docstatus to 1)
+    invoice1.docstatus = 1
+    database.session.commit()
+
+    # Attempting to insert a duplicate must still fail
+    with pytest.raises(ValueError, match="ya está registrado"):
+        _validate_duplicate_supplier_invoice(supplier_id="SUPLR-00001", supplier_invoice_no="FAC-2026-001")
+
+    # Creating a new second invoice with the same supplier & different invoice number
+    invoice2 = PurchaseInvoice(
+        id="INV-002",
+        supplier_id="SUPLR-00001",
+        company="cacao",
+        supplier_invoice_no="FAC-2026-002",
+        docstatus=0,
+    )
+    database.session.add(invoice2)
+    database.session.commit()
+
+    # Editing second invoice to have duplicate number of invoice1 should fail
+    with pytest.raises(ValueError, match="ya está registrado"):
+        _validate_duplicate_supplier_invoice(
+            supplier_id="SUPLR-00001",
+            supplier_invoice_no="FAC-2026-001",
+            exclude_id=invoice2.id,
+        )
+
+    # Editing second invoice but keeping its own number (FAC-2026-002) should NOT fail
+    _validate_duplicate_supplier_invoice(
+        supplier_id="SUPLR-00001",
+        supplier_invoice_no="FAC-2026-002",
+        exclude_id=invoice2.id,
+    )
+
+    # Submitting/approving second invoice with duplicate number should fail
+    # Let's set its invoice number to FAC-2026-001 (simulating direct mutation without validation on save)
+    invoice2.supplier_invoice_no = "FAC-2026-001"
+    database.session.commit()
+    with pytest.raises(ValueError, match="ya está registrado"):
+        _validate_duplicate_supplier_invoice(
+            supplier_id="SUPLR-00001",
+            supplier_invoice_no="FAC-2026-001",
+            exclude_id=invoice2.id,
+        )
+
+    # Revert invoice2's number to free up FAC-2026-001
+    invoice2.supplier_invoice_no = "FAC-2026-002"
+    database.session.commit()
+
+    # Case 3: Cancel invoice1 (docstatus=2)
+    invoice1.docstatus = 2
+    database.session.commit()
+
+    # Now we can use "FAC-2026-001" since the other is cancelled
+    _validate_duplicate_supplier_invoice(supplier_id="SUPLR-00001", supplier_invoice_no="FAC-2026-001")
+    _validate_duplicate_supplier_invoice(
+        supplier_id="SUPLR-00001",
+        supplier_invoice_no="FAC-2026-001",
+        exclude_id=invoice2.id,
+    )
