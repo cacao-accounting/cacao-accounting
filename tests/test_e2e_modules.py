@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     DocumentRelation,
     AuditTrail,
+    CompanyParty,
     Party,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -879,3 +880,126 @@ def test_s2p09_purchase_order_foreign_currency_base_total(app_ctx):
     assert po.exchange_rate > Decimal("1")
     assert po.total == Decimal("450")
     assert po.base_total == (Decimal("450") * po.exchange_rate).quantize(Decimal("0.0001"))
+
+
+def test_validate_invoice_requires_supplier_link(app_ctx):
+    from cacao_accounting.compras import _validate_invoice_requires_supplier_link
+
+    supplier = Party(name="Prov S2P17", code="SUP-S2P17", is_supplier=True, is_active=True)
+    database.session.add(supplier)
+    database.session.commit()
+    cp = CompanyParty(
+        party_id=supplier.id,
+        company="cacao",
+        allow_purchase_invoice_without_receipt=False,
+        allow_purchase_invoice_without_order=False,
+    )
+    database.session.add(cp)
+    database.session.commit()
+    inv = PurchaseInvoice(supplier_id=supplier.id, company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(inv)
+    database.session.commit()
+
+    with pytest.raises(ValueError):
+        _validate_invoice_requires_supplier_link(inv.id)
+
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_receipt",
+            source_id="RCP-S2P17",
+            target_type="purchase_invoice",
+            target_id=inv.id,
+            qty=Decimal("1"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
+    database.session.commit()
+    _validate_invoice_requires_supplier_link(inv.id)
+
+
+def test_invoice_edit_preserves_supplier_invoice_no(app_ctx):
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    inv_data = {
+        "company": "cacao",
+        "supplier_id": supplier.id,
+        "posting_date": date.today().isoformat(),
+        "supplier_invoice_no": "PROV-123",
+        "item_code_0": "ART-001",
+        "item_name_0": "Chocolate 100g",
+        "qty_0": "5",
+        "uom_0": "UND",
+        "rate_0": "45",
+        "amount_0": "225",
+    }
+    client.post("/buying/purchase-invoice/new", data=inv_data, follow_redirects=True)
+    inv = database.session.execute(database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc())).scalars().first()
+    assert inv.supplier_invoice_no == "PROV-123"
+    edit_data = {
+        "company": "cacao",
+        "supplier_id": supplier.id,
+        "posting_date": date.today().isoformat(),
+        "item_code_0": "ART-001",
+        "item_name_0": "Chocolate 100g",
+        "qty_0": "5",
+        "uom_0": "UND",
+        "rate_0": "45",
+        "amount_0": "225",
+    }
+    client.post(f"/buying/purchase-invoice/{inv.id}/edit", data=edit_data, follow_redirects=True)
+    database.session.refresh(inv)
+    assert inv.supplier_invoice_no == "PROV-123"
+
+
+def test_receipt_edit_updates_supplier_name(app_ctx):
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier_a = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    supplier_b = Party(name="Segundo Proveedor", code="SUP-TEST-002", is_supplier=True, is_active=True)
+    database.session.add(supplier_b)
+    database.session.commit()
+    receipt = PurchaseReceipt(
+        supplier_id=supplier_a.id,
+        supplier_name=supplier_a.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=0,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    from cacao_accounting.document_identifiers import assign_document_identifier
+
+    assign_document_identifier(
+        document=receipt, entity_type="purchase_receipt", posting_date_raw=date.today(), naming_series_id=None
+    )
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ART-001",
+            item_name="Chocolate 100g",
+            qty=Decimal("5"),
+            uom="UND",
+            rate=Decimal("45"),
+            amount=Decimal("225"),
+            warehouse="PRINCIPAL",
+        )
+    )
+    database.session.commit()
+    edit_data = {
+        "company": "cacao",
+        "supplier_id": supplier_b.id,
+        "posting_date": date.today().isoformat(),
+        "item_code_0": "ART-001",
+        "item_name_0": "Chocolate 100g",
+        "qty_0": "5",
+        "uom_0": "UND",
+        "rate_0": "45",
+        "amount_0": "225",
+        "warehouse_0": "PRINCIPAL",
+    }
+    client.post(f"/buying/purchase-receipt/{receipt.id}/edit", data=edit_data, follow_redirects=True)
+    database.session.refresh(receipt)
+    assert receipt.supplier_id == supplier_b.id
+    assert receipt.supplier_name == supplier_b.name
