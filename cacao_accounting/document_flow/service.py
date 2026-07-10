@@ -48,6 +48,7 @@ from cacao_accounting.document_flow.repository import (
     recompute_line_flow_state,
     save_relation,
 )
+from cacao_accounting.audit_trail_service import log_create
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
@@ -1528,6 +1529,7 @@ def _create_target_header(
         external_counter_id=payload.get("external_counter_id"),
         external_number=payload.get("external_number"),
     )
+    log_create(target)
     return target
 
 
