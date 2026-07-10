@@ -1,5 +1,13 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-10 : R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo
+- **Petición del usuario:** El sistema permite eliminar registros maestros esenciales (Artículos, Almacenes, Proveedores, Clientes) del catálogo general aun cuando ya tienen un historial de transacciones registradas y contabilizadas (registros activos en `GLEntry`, `StockLedgerEntry`, etc.).
+- **Plan de diseño e implementación:**
+  - Se implementaron las funciones auxiliares `_warehouse_has_usage()` y `_party_has_usage()` en `cacao_accounting/database/__init__.py` para realizar escaneos eficientes de todas las tablas transaccionales (como diarios contables, diario de inventario, órdenes de compra/venta, facturas, etc.).
+  - Se registraron escuchadores de eventos SQLAlchemy `before_delete` en los modelos `Item`, `Warehouse` y `Party` (clientes/proveedores) para interceptar cualquier intento de eliminación física a nivel de base de datos/ORM.
+  - Al detectar historial transaccional o de stock activo, se lanza una excepción de integridad operativa `cacao_accounting.exceptions.IntegrityError` con un mensaje claro recomendando la inactivación o bloqueo del registro maestro.
+  - Se agregaron pruebas automatizadas integrales en `tests/test_master_data_issues.py` para asegurar que el comportamiento de bloqueo funciona de forma robusta e infalible, y que los registros maestros limpios (sin historial) se puedan seguir eliminando con éxito.
+
 ## 2026-07-09 : ISSUES corregidos de acuerdo al archivo ISSUES.md
 
 ## 2026-07-03 (Inventario: cuenta de inventario unificada por almacen/compania)
@@ -49,7 +57,7 @@
 - **Setup inicial:** Se centralizaron catalogos de idioma, paises de America y monedas reconciliadas con el seed; el wizard renderiza textos segun idioma seleccionado y el paso de catalogo deshabilita/limpia el selector cuando se elige crear desde cero.
 - **Cliente/Proveedor:** La configuracion por compania ahora es una tabla dinamica con `smart-select`, permite agregar/remover companias y sincroniza el borrado de filas persistidas sin mantener soporte de formato legacy en el POST.
 - **Item/Bodega:** Item usa `smart-select` para UOM en conversiones y para compania/centro de costo en configuracion contable. Bodega incorpora una tabla `warehouse_company_account` para definir cuenta de inventario por compania y el posting resuelve inventario desde esa configuracion.
-- **Importador de lineas:** Los modales de importacion ya no evaluan `schema.columns` cuando el esquema aun es `null`, aceptan compania por `Entity.code` o `Entity.id` al validar y muestran errores visibles cuando falla la carga de esquema o la validacion.
+- **Importador de lineas:** Los modales de importacion ya no devaluan `schema.columns` cuando el esquema aun es `null`, aceptan compania por `Entity.code` o `Entity.id` al validar y muestran errores visibles cuando falla la carga de esquema o la validacion.
 - **Validacion:** Se agregaron/regeneraron pruebas focales de setup, terceros, bodega/stock reconciliation e inventario. Queda pendiente ejecutar la suite completa por costo de tiempo.
 
 ## 2026-07-02 (Inventario: cuenta de inventario solo en bodega, valuacion en entidad)
@@ -124,7 +132,7 @@
 
 ## 2026-06-18 (Refresh visual global)
 - **Solicitud:** Mejorar la parte visual de Cacao Accounting para que se vea mas fresca, profesional, moderna, util y atractiva.
-- **Implementacion:** Se agrego una capa de refresh en `cacao_accounting/static/css/cacaoaccounting.css` sobre el sistema visual existente, ajustando tokens, navbar, sidebar, contenido, tarjetas, cards de modulo, tablas, formularios, botones, alerts, dropdowns y modales.
+- **Implementacion:** Se agrego una capa de refresh in `cacao_accounting/static/css/cacaoaccounting.css` sobre el sistema visual existente, ajustando tokens, navbar, sidebar, contenido, tarjetas, cards de modulo, tablas, formularios, botones, alerts, dropdowns y modales.
 - **Ajuste posterior:** Se removio la franja de color superior en las tarjetas de modulo para mantener una estetica mas sobria y evitar competir visualmente con los indicadores de estado.
 - **Criterio UI:** La mejora se mantuvo global y conservadora para impactar pantallas principales sin tocar la logica ni los templates funcionales; se respetaron radios moderados, layout denso y controles conocidos.
 - **Verificacion:** `venv/bin/python -m pytest tests/test_01vistas.py::test_visit_views -q` paso en verde (`1 passed`).
@@ -165,11 +173,11 @@
 - **Tercero:** Se separa en dos selectores explícitos: Tipo de tercero y Tercero filtrado por Cliente/Proveedor según la selección previa.
 - **Cheques:** El contador externo solo aparece para `mode_of_payment=check`; el número de cheque es de solo lectura y se toma del contador, sin edición manual en el formulario.
 - **Backend:** La moneda se toma de la cuenta bancaria, el tipo de cambio queda gestionado por backend/posting y los contadores externos se ignoran para pagos que no sean cheque.
-- **Detalle:** `bancos/pago.html` adopta la estructura visual de `journal.html`, con tarjeta de cabecera, datos clave, referencias y asientos GL.
+- **Detalle:** `bancos/pago.html` adopta la estructura visual de `journal.html`, con tarjeta de cabecera, datos bancarios, referencias y asientos GL.
 - **Verificación parcial:** `tests/test_payment_entry_improved.py` en verde (`37 passed`).
 
 ## 2026-05-22 (Cierre gaps Payment Entry: referencias, anticipos y candidatos)
-- **Solicitud:** Implementar el plan para cerrar gaps detectados en `requerimiento.md` y `payment.md` sobre `payment_entry`.
+- **Solicitud:** Implementar el plan para cerrar gaps detectados en `requerimiento.md` and `payment.md` sobre `payment_entry`.
 - **Modelo:** `PaymentEntry` ahora conserva moneda y `PaymentReference` guarda snapshot mínimo para auditoría/conciliación futura: tipo lógico, documento visible, fecha, tercero, compañía, moneda, saldo posterior, tasa y diferencia.
 - **Anticipos:** Los pagos creados desde Orden de Compra/Venta precargan referencia a la orden, crean `DocumentRelation` activa y se mantienen como pago abierto disponible para aplicación futura, sin reducir saldos AR/AP de facturas.
 - **Carga manual:** Se agregó endpoint de candidatos de referencia para pagos, filtrado por compañía/tercero/tipo documental; `pago_nuevo.html` lo usa para cargar facturas, notas y órdenes compatibles.
@@ -218,20 +226,20 @@
 - **Implementación backend:** `document_flow/tracing.py` ahora serializa `model_target_type`, `enabled` y `condition`; además filtra acciones deshabilitadas (`enabled=False`) antes de exponerlas al panel dinámico.
 - **Consistencia de flujos:** `document_flow/registry.py` amplía `ALLOWED_FLOWS` con pares lógicos para notas de débito/crédito y devoluciones en Compras y Ventas (Purchase Order/Receipt/Invoice y Delivery Note/Sales Invoice).
 - **Cobertura:** `tests/test_05document_flow.py` incorpora validación de `create_url` + `query_params` para acciones derivadas y prueba explícita de exclusión de acciones deshabilitadas.
-- **Verificación:** Pruebas en verde tras cambios: `tests/test_05document_flow.py` (`14 passed`) y `tests/test_03webactions.py` (`19 passed`).
+- **Verificación:** Pruebas en verde tras cambios: `tests/test_05document_flow.py` (`14 passed`) and `tests/test_03webactions.py` (`19 passed`).
 
 ## 2026-05-21 (Inicio implementación matriz de relaciones: fase núcleo + UI dinámica)
 - **Solicitud:** Iniciar implementación de brechas definidas en `modulos/relaciones.md` para acercar el flujo documental al resultado funcional esperado.
 - **Implementación (fase inicial):** `document_flow` ahora serializa `create_actions` con URL navegable (`create_url`) y soporte de `query_params`; esto habilita acciones de creación dinámicas en el panel de trazabilidad.
 - **Registro de flujos:** `registry.py` amplió acciones `Crear` en tipos existentes con rutas ya soportadas: Solicitud de Compra incorpora Solicitud de Cotización; Pedido de Venta incorpora Orden de Venta; se agregan acciones de Devolución y Nota de Débito/Crédito en Compra/Venta donde ya existe endpoint de factura con `document_type`.
 - **UI:** `macros.document_flow_trace` ahora muestra sección **Acciones disponibles** con botones dinámicos derivados del resumen de flujo, reduciendo dependencia de botones hardcodeados en detalles.
-- **Verificación:** Pruebas focales en verde tras cambios: `tests/test_05document_flow.py` (`9 passed`) y `tests/test_03webactions.py` (`19 passed`).
+- **Verificación:** Pruebas focales en verde tras cambios: `tests/test_05document_flow.py` (`9 passed`) and `tests/test_03webactions.py` (`19 passed`).
 
 ## 2026-05-21 (Importaciones: recuperación silenciosa sin lotes pendientes)
 - **Solicitud:** Evitar el log de error `Error al recuperar lotes de importación` cuando no hay lotes pendientes o el esquema de importaciones aún no está inicializado.
 - **Implementación:** `recover_crashed_batches()` ahora verifica que existan las tablas requeridas, retorna `0` cuando no hay lotes vencidos y solo hace `commit` si recupera lotes reales; el log de arranque usa formato correcto de Loguru.
 - **Cobertura:** Se añadieron pruebas para arranque sin tablas, recuperación sin pendientes y marcado de un lote procesando vencido como fallido.
-- **Ajuste UI:** Las plantillas de Importaciones usan el bloque `contenido` correcto de `base.html`; el índice muestra estado vacío accionable y el formulario de nuevo lote usa `smart-select` en orden Compañía → Tipo de registro → Serie/Secuencia filtrada por compañía y registro, con Libro Contable solo para comprobantes contables.
+- **Ajuste UI:** Las plantillas de Importaciones usan el bloque `contenido` correcto de `base.html`; el índice muestra estado vacío acionable y el formulario de nuevo lote usa `smart-select` en orden Compañía → Tipo de registro → Serie/Secuencia filtrada por compañía y registro, con Libro Contable solo para comprobantes contables.
 - **Cobertura S2P/O2C:** El selector de tipo de registro ahora agrupa Source to Pay y Order to Cash, y el servicio incorpora adaptadores transaccionales para solicitudes, cotizaciones, órdenes, recepciones/entregas y facturas de compra/venta.
 - **Comprobantes contables:** En importación, no seleccionar Libro Contable se interpreta como todos los libros activos de la compañía; si se selecciona uno, se importa solo para ese libro.
 - **Importar líneas y Actualizar Elementos:** Source to Pay, Order to Cash e Inventario muestran `Importar líneas` para carga masiva de detalle. Los documentos derivados mantienen `Actualizar Elementos` desde fuentes reales con ítems abiertos de la misma compañía y tercero; Cotización de Proveedor usa el doctype real `purchase_quotation` para traer líneas desde Solicitud de Cotización.
@@ -249,15 +257,15 @@
 - **Implementación UI:** `transaction-form.js` y `transaction_form_macros.html` agregan acción `Añadir impuesto/cargo`, modal editable para líneas manuales, eliminación de líneas manuales y recálculo local de resumen.
 - **Backend fiscal:** `fiscal_preview_service.py` conserva reglas canónicas persistidas y adjunta líneas manuales marcadas por el formulario, evitando duplicar líneas automáticas reenviadas.
 - **Backlog inventario:** Se precisó que el motor `LandedCostEngine` ya calcula prorrateos, pero sigue pendiente persistir dichas asignaciones en `StockValuationLayer` dentro del flujo transaccional.
-- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` + `tests/test_fiscal_preview.py` (`9 passed`) y `npm test -- --grep transaction-form` (`7 passing`).
+- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` + `tests/test_fiscal_preview.py` (`9 passed`) and `npm test -- --grep transaction-form` (`7 passing`).
 
 ## 2026-05-19 (Fix FIXME fiscal: preview canónico, cobros y FK nullable)
 - **Solicitud:** Analizar `FIXME.md` y resolver los issues identificados sobre el MVP fiscal.
 - **Preview fiscal:** `fiscal_preview_service.py` ahora recarga reglas canónicas persistidas antes de considerar líneas reenviadas por el cliente, conservando solo campos editables como cuenta/notas del preview previo.
-- **Cobros:** `payment_entry` con `payment_type="receive"` resuelve un perfil fiscal de cobro con `applies_to="sales"` y `recognition_event="collection_confirmed"`.
+- **Cobros:** `payment_entry` con `payment_type="receive"` resuelve un perfil fiscal de cobro con `applies_to="sales"` and `recognition_event="collection_confirmed"`.
 - **UX transaccional:** `transaction-form.js` omite llamadas automáticas al preview fiscal para doctypes fuera de la matriz, evitando errores iniciales en cotizaciones y otros flujos no soportados.
 - **Persistencia:** `fiscal_persistence_service.py` normaliza `account_id` vacío a `NULL` antes de guardar `DocumentTaxLine`.
-- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` (`6 passed`) y `npm test -- --grep transaction-form` (`6 passing`).
+- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` (`6 passed`) and `npm test -- --grep transaction-form` (`6 passing`).
 
 ## 2026-05-19 (Cierre review final: submit_document + robustez bancos)
 - **Solicitud:** Resolver dos pendientes finales de review: confirmar/garantizar consumo del snapshot fiscal en `submit_document` y robustecer manejo transaccional/errores en `bancos_pago_nuevo`.
@@ -268,11 +276,11 @@
 ## 2026-05-19 (Seguimiento review: faltantes fiscales de persistencia y posting)
 - **Solicitud:** Atender comentario de revisión que señala brechas en la implementación fiscal MVP.
 - **Resultado:** Se dejó explícito en `PENDIENTE.md` y `ESTADO_ACTUAL.md` que aún faltan dos frentes críticos: (1) persistencia fiscal real por documento con snapshot inmutable de reglas; (2) integración de ese payload persistido en el posting de `purchase_invoice`, `sales_invoice` y `payment_entry`.
-- **Alcance de esta iteración:** Sin cambios funcionales en backend/UI; se actualizó trazabilidad del estado para evitar ambigüedad entre preview visual y persistencia/contabilización final.
+- **Alcance de esta iteración:** Sin cambios funcionales en backend/UI; se actualizó la trazabilidad del estado para evitar ambigüedad entre preview visual y persistencia/contabilización final.
 
 ## 2026-05-19 (MVP fiscal: matriz + API preview + UX común con modal por línea)
 - **Solicitud:** Ejecutar el plan MVP ampliado para Compras, Ventas, Inventario y Bancos, incorporando matriz fiscal por tipo documental, API unificada de preview y bloque UX común de `Impuestos y Cargos`.
-- **Requisito UX confirmado:** Se mantiene patrón visual alineado al framework transaccional existente, con capacidad de ampliar cada línea fiscal en modal para capturar información adicional.
+- **Requisito UX confirmado:** Se mantiene el patrón visual alineado al framework transaccional existente, con capacidad de ampliar cada línea fiscal en modal para capturar información adicional.
 - **Implementación core:** Se agregó `cacao_accounting/fiscal_preview_service.py` con matriz fiscal por documento y cálculo unificado usando `FiscalEngine` + `TaxRuleContext` persistidas.
 - **API unificada:** Nuevo endpoint `POST /api/fiscal/preview` en `cacao_accounting/api/__init__.py` para que todos los formularios consulten el mismo preview.
 - **UX común transaccional:** `transaction_form_macros.html` y `static/js/transaction-form.js` ahora incluyen bloque `Impuestos y Cargos`, resumen (`Subtotal/Impuestos/Total`) y modal por línea fiscal.
@@ -343,7 +351,7 @@
 - **Solicitud:** Ejecutar pruebas unitarias completas con cobertura Python y JavaScript, asegurando que el workflow `.github/workflows/python-package.yml` pase correctamente y que la cobertura de Contabilidad, Compras, Inventario y Ventas sea adecuada.
 - **Correccion aplicada:** Se activaron los terceros demo (`Cliente Demo SA` y `Proveedor Demo SA`) en `CompanyParty` para la compania `cacao`, de modo que los `smart-select` filtrados por compania encuentren clientes/proveedores en formularios transaccionales.
 - **Pruebas E2E:** `tests/test_e2e_transactional_ui.py` se actualizo para seleccionar la compania demo real del seed y liberar la conexion SQLAlchemy antes de borrar la base temporal en Windows.
-- **Formato:** Se normalizo con Black `tests/test_e2e_modules.py` y `tests/test_uoms_full.py`.
+- **Formato:** Se normalizo con Black `tests/test_e2e_modules.py` and `tests/test_uoms_full.py`.
 - **Verificacion:** `pytest` completo con cobertura paso (`623 passed`) con cobertura Python total de 83%. Mocha paso (`21 passing`) y cobertura JavaScript total fue 77%. Build/twine, flake8, ruff, mypy, black y `npm ci && npm test` quedaron en verde.
 
 ## 2026-05-15 (Inicio de implementación de paridad funcional en formularios transaccionales)
@@ -374,7 +382,7 @@
 
 - **Revisión de parche:** Se verificó que `72.patch` contiene los commits `4e8b192`, `3ea5f45` y `49a9081`, ya presentes en la rama.
 - **Incorporación/ajuste mínimo:** Se aplicó formato Black en `tests/test_e2e_transactional_ui.py` para eliminar el único fallo de estilo pendiente.
-- **Verificación completa:** Black, Ruff, Flake8, Mypy y Pytest ejecutados en `.venv` con resultado exitoso (`607 passed, 5 skipped`).
+- **Verificación completa:** Black, Ruff, Flake8, Mypy y Pytest ejecutados en `.venv` con resultado exitoso (`607 passed, 3 skipped`).
 
 ## Summary of Previous Milestones (May 2026)
 - **Architecture:** Standardized on Python 3.12+, Flask, and Alpine.js. Implemented a clear separation between routes, services, and repositories.
@@ -551,7 +559,7 @@
 
 ## 2026-05-23 (Conciliacion masiva AR/AP y Stock Reconciliation con valuacion)
 - **Solicitud:** Implementar la conciliacion masiva de facturas contra pagos existentes y extender Stock Reconciliation para ajustar cantidad y valor.
-- **AR/AP:** Se agrego `/cash_management/payment-reconciliation` y `/api/document-flow/payment-reconciliation-candidates`, con servicio que aplica pagos/cobros aprobados contra documentos abiertos, validando compania, tercero, direccion AR/AP, saldos y duplicados.
+- **AR/AP:** Se agrego `/cash_management/payment-reconciliation` y `/api/document-flow/payment-reconciliation-candidates`, con servicio que aplica pagos/cobros aprobados existentes contra documentos abiertos, validando compania, tercero, direccion AR/AP, saldos y duplicados.
 - **Persistencia AR/AP:** Cada aplicacion crea `PaymentReference`, `DocumentRelation` y `ReconciliationItem`, actualiza saldos pendientes y conserva compatibilidad con cancelaciones append-only.
 - **Inventario:** `stock_reconciliation` ahora guarda snapshots de cantidad/tasa/valor actual y objetivo por linea, genera SLE/SVL y actualiza `StockBin` por diferencia de cantidad y/o valor.
 - **Contabilidad:** La diferencia de valuacion se contabiliza balanceada contra la cuenta de inventario asignada a la bodega y una cuenta global de diferencia del documento, aplicando centro de costos, unidad de negocio y proyecto globales a todo el comprobante.
