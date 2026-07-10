@@ -1266,8 +1266,8 @@ def create_document_relation(
             raise DocumentFlowError("El documento origen debe estar aprobado (docstatus=1) para crear la relación.", 409)
     if target_doc is not None:
         target_status = getattr(target_doc, "docstatus", None)
-        if target_status != 0:
-            raise DocumentFlowError("El documento destino debe estar en borrador (docstatus=0) para recibir la relación.", 409)
+        if target_status == 2:
+            raise DocumentFlowError("No se puede crear una relación hacia un documento cancelado (docstatus=2).", 409)
 
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
