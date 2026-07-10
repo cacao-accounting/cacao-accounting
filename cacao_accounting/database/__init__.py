@@ -1740,12 +1740,12 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
             name="uq_document_relation_line",
         ),
     )
-    source_type = database.Column(database.String(50), nullable=False, index=True)
-    source_id = database.Column(database.String(26), nullable=False, index=True)
-    source_item_id = database.Column(database.String(26), nullable=True, index=True)
-    target_type = database.Column(database.String(50), nullable=False, index=True)
-    target_id = database.Column(database.String(26), nullable=False, index=True)
-    target_item_id = database.Column(database.String(26), nullable=True, index=True)
+    source_type = database.Column(database.String(50), nullable=False)
+    source_id = database.Column(database.String(26), nullable=False)
+    source_item_id = database.Column(database.String(26), nullable=True)
+    target_type = database.Column(database.String(50), nullable=False)
+    target_id = database.Column(database.String(26), nullable=False)
+    target_item_id = database.Column(database.String(26), nullable=True)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
@@ -1780,10 +1780,10 @@ class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-def
         ),
         database.Index("ix_document_line_flow_state_source", "source_type", "source_id", "source_item_id"),
     )
-    source_type = database.Column(database.String(50), nullable=False, index=True)
-    source_id = database.Column(database.String(26), nullable=False, index=True)
-    source_item_id = database.Column(database.String(26), nullable=False, index=True)
-    target_type = database.Column(database.String(50), nullable=False, index=True)
+    source_type = database.Column(database.String(50), nullable=False)
+    source_id = database.Column(database.String(26), nullable=False)
+    source_item_id = database.Column(database.String(26), nullable=False)
+    target_type = database.Column(database.String(50), nullable=False)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     source_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     processed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
@@ -2013,9 +2013,9 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         default=obtiene_texto_unico,
     )
     posting_date = database.Column(database.Date(), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
     # Libro contable al que pertenece esta entrada (Fiscal, NIIF, Board Review, etc.)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     account_code = database.Column(database.String(50), nullable=True, index=True)
     # Debito y credito en moneda base de la compania
@@ -2028,14 +2028,14 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     company_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     # Tercero (AR/AP) — requerido si la cuenta es receivable o payable
-    party_type = database.Column(database.String(20), nullable=True, index=True)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    party_type = database.Column(database.String(20), nullable=True)
+    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     is_advance = database.Column(database.Boolean(), default=False, nullable=False)
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)
     # Trazabilidad de voucher — permite rastrear el origen de cada entrada
-    voucher_type = database.Column(database.String(50), nullable=False, index=True)
-    voucher_id = database.Column(database.String(26), nullable=False, index=True)
+    voucher_type = database.Column(database.String(50), nullable=False)
+    voucher_id = database.Column(database.String(26), nullable=False)
     # Identificador documental (series) persistido para trazabilidad cruzada
     document_no = database.Column(database.String(100), nullable=True, index=True)
     naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
@@ -2367,10 +2367,10 @@ class ReconciliationItem(database.Model, BaseTabla):  # type: ignore[name-define
     reconciliation_date = database.Column(database.Date(), nullable=True, index=True)
     # draft, partial, reconciled, cancelled
     status = database.Column(database.String(20), default="reconciled", nullable=False, index=True)
-    source_type = database.Column(database.String(50), nullable=True, index=True)
-    source_id = database.Column(database.String(26), nullable=True, index=True)
-    target_type = database.Column(database.String(50), nullable=True, index=True)
-    target_id = database.Column(database.String(26), nullable=True, index=True)
+    source_type = database.Column(database.String(50), nullable=True)
+    source_id = database.Column(database.String(26), nullable=True)
+    target_type = database.Column(database.String(50), nullable=True)
+    target_id = database.Column(database.String(26), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2739,14 +2739,14 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
         ),
     )
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
-    document_type = database.Column(database.String(80), nullable=False, index=True)
-    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_type = database.Column(database.String(80), nullable=False)
+    document_id = database.Column(database.String(26), nullable=False)
     document_no = database.Column(database.String(100), nullable=True, index=True)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     action = database.Column(database.String(32), nullable=False, index=True)
     actor_user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
     actor_name = database.Column(database.String(255), nullable=True)
-    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False, index=True)
+    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     before_json = database.Column(database.Text(), nullable=True)
     after_json = database.Column(database.Text(), nullable=True)
     changes_json = database.Column(database.Text(), nullable=True)
