@@ -1,6 +1,6 @@
 # ISSUES.md — REGISTRO DE AUDITORÍA FUNCIONAL ERP
 
-**Última actualización:** 2026-07-10
+**Última actualización:** 2026-07-10 (actualizado con issues de GitHub)
 **Versión del código auditado:** HEAD `5a1374d`
 
 | ID | Descripción | Status | GitHub | Commits |
@@ -19,8 +19,8 @@
 | **S2P-20** | Cancelación de Recepción no verifica facturas downstream con pago asociado | FALSO POSITIVO | [#143](https://github.com/cacao-accounting/cacao-accounting/issues/143) | `5a1374d` |
 | **S2P-21** | Control presupuestario configurable (global) en aprobación PR/PO | PENDIENTE | [#188](https://github.com/cacao-accounting/cacao-accounting/issues/188) | — |
 | **S2P-22** | Sin automatización de punto de reorden | PENDIENTE | [#189](https://github.com/cacao-accounting/cacao-accounting/issues/189) | — |
-| **S2P-23** | Ausencia de límites de aprobación jerárquica por monto en Órdenes de Compra | PENDIENTE | — | — |
-| **S2P-24** | Duplicidad del número de factura del proveedor (`supplier_invoice_no`) no validada | PENDIENTE | — | — |
+| **S2P-23** | Ausencia de límites de aprobación jerárquica por monto en Órdenes de Compra | PENDIENTE | [#205](https://github.com/cacao-accounting/cacao-accounting/issues/205) | — |
+| **S2P-24** | Duplicidad del número de factura del proveedor (`supplier_invoice_no`) no validada | CORREGIDO | [#208](https://github.com/cacao-accounting/cacao-accounting/issues/208) | `593ae77` |
 | **O2C-01** | SalesRequest submit usa `require_party=False` | FALSO POSITIVO | — | — |
 | **O2C-02** | Secuencia de cancelación inconsistente en SalesInvoice | FALSO POSITIVO | — | — |
 | **O2C-04** | `_release_reservation_for_delivery_note` no es idempotente | CORREGIDO | [#139](https://github.com/cacao-accounting/cacao-accounting/issues/139) | `d794cfa` |
@@ -37,8 +37,8 @@
 | **O2C-22** | `validate_submit_prerequisites` exige almacén para ítems de servicio | CORREGIDO | [#147](https://github.com/cacao-accounting/cacao-accounting/issues/147) | `d88a578` |
 | **O2C-23** | Sin validación de límite de crédito en documentos de venta | PENDIENTE | [#190](https://github.com/cacao-accounting/cacao-accounting/issues/190) | — |
 | **O2C-24** | Precios negativos permitidos en documentos de venta | CORREGIDO | [#191](https://github.com/cacao-accounting/cacao-accounting/issues/191) | `93cdadb` |
-| **O2C-25** | Falta de control de sobre-entrega (Over-delivery) en Notas de Entrega | PENDIENTE | — | — |
-| **O2C-26** | Falta de control de sobre-facturación (Over-billing) en Ventas | PENDIENTE | — | — |
+| **O2C-25** | Falta de control de sobre-entrega (Over-delivery) en Notas de Entrega | CORREGIDO | [#209](https://github.com/cacao-accounting/cacao-accounting/issues/209) | `3f1c162` |
+| **O2C-26** | Falta de control de sobre-facturación (Over-billing) en Ventas | CORREGIDO | [#210](https://github.com/cacao-accounting/cacao-accounting/issues/210) | `3f1c162` |
 | **R2R-01** | Validación de balance usa signed `line.value` después de redondeo por línea | FALSO POSITIVO | — | — |
 | **R2R-02** | Validación de período inconsistente en revaluación cambiaria | FALSO POSITIVO | — | — |
 | **R2R-04** | `duplicate_journal_as_reversal_draft` bloquea reversiones mismo período | FALSO POSITIVO | [#174](https://github.com/cacao-accounting/cacao-accounting/issues/174) | — |
@@ -50,7 +50,7 @@
 | **R2R-13** | Linking item-to-entry en revaluación frágil (orden posicional) | CORREGIDO | [#187](https://github.com/cacao-accounting/cacao-accounting/issues/187) | `ab45e31` |
 | **R2R-17** | Sin validación de balance en moneda de transacción | CORREGIDO | [#192](https://github.com/cacao-accounting/cacao-accounting/issues/192) | `4003b55` |
 | **R2R-18** | Sin consolidación multi-empresa | PENDIENTE | [#193](https://github.com/cacao-accounting/cacao-accounting/issues/193) | — |
-| **R2R-19** | Falta de bloqueo de eliminación de maestros con historial transaccional activo | PENDIENTE | — | — |
+| **R2R-19** | Falta de bloqueo de eliminación de maestros con historial transaccional activo | CORREGIDO | [#211](https://github.com/cacao-accounting/cacao-accounting/issues/211) | `56bd179` |
 | **CAS-05** | Sin saldo en tiempo real en BankAccount | FALSO POSITIVO | — | — |
 | **CAS-08** | Descuento por pronto pago usa `posting_date` no fecha de factura | FALSO POSITIVO | — | — |
 | **CAS-09** | Descuento por pronto pago no accesible en formulario de pago | FALSO POSITIVO | — | — |
@@ -62,13 +62,13 @@
 | **CAS-18** | Conciliación bancaria no valida docstatus del pago destino | CORREGIDO | [#194](https://github.com/cacao-accounting/cacao-accounting/issues/194) | `a0d3845` |
 | **CAS-19** | Sin pronóstico de flujo de caja | PENDIENTE | [#195](https://github.com/cacao-accounting/cacao-accounting/issues/195) | — |
 | **CAS-20** | Sin alerta de pagos duplicados por monto y proveedor cercano | CORREGIDO | [#196](https://github.com/cacao-accounting/cacao-accounting/issues/196) | `de7c43d` |
-| **CAS-21** | Ausencia de flujo de aprobación para cancelaciones de pagos | PENDIENTE | — | — |
+| **CAS-21** | Ausencia de flujo de aprobación para cancelaciones de pagos | PENDIENTE | [#206](https://github.com/cacao-accounting/cacao-accounting/issues/206) | — |
 | **INV-01** | Verificación de stock negativo ocurre después de upsert de StockBin | FALSO POSITIVO (CERRADO) | [#155](https://github.com/cacao-accounting/cacao-accounting/issues/155) | — |
 | **INV-10** | `reserved_qty` puede desviarse por movimientos fuera del flujo O2C | CORREGIDO | [#159](https://github.com/cacao-accounting/cacao-accounting/issues/159) | clamp en `_upsert_stock_bin` |
 | **INV-21** | `valuation_rate` se resetea a 0 cuando qty=0 | FALSO POSITIVO | — | — |
 | **INV-22** | Relaciones documentales creadas en draft, eliminadas en edición | FALSO POSITIVO | — | — |
 | **INV-26** | Sin alerta de punto de reorden en movimientos de salida | PENDIENTE | [#197](https://github.com/cacao-accounting/cacao-accounting/issues/197) | — |
-| **INV-27** | Falta de auditoría y log de cambios en edición de borradores (eliminación física de líneas) | PENDIENTE | — | — |
+| **INV-27** | Falta de auditoría y log de cambios en edición de borradores (eliminación física de líneas) | PENDIENTE | [#207](https://github.com/cacao-accounting/cacao-accounting/issues/207) | — |
 | **SEC-01** | Ausencia de validación de propiedad (created_by) en submit/cancel | FALSO POSITIVO | [#198](https://github.com/cacao-accounting/cacao-accounting/issues/198) | — |
 | **SEC-02** | Eliminación física de líneas de documento al editar (sin trazabilidad) | PENDIENTE | [#199](https://github.com/cacao-accounting/cacao-accounting/issues/199) | — |
 
@@ -147,7 +147,7 @@ Implementar una matriz de autorizaciones configurable por compañía (`ApprovalM
 
 **Veredicto:** PENDIENTE
 **Confianza:** Muy Alto
-**GitHub Issue:** —
+**GitHub Issue:** [#205](https://github.com/cacao-accounting/cacao-accounting/issues/205)
 **Commit(s):** —
 
 ---
@@ -171,10 +171,10 @@ Agregar un validador en el guardado y en la función de submit de facturas de co
 2. Crear una segunda Factura de Compra diferente para el mismo proveedor "SUPLR-00001" e ingresar el mismo número `supplier_invoice_no = "FAC-2026-001"`.
 3. Intentar aprobar la factura. El sistema debe rechazar el submit con un mensaje claro de duplicidad.
 
-**Veredicto:** PENDIENTE
+**Veredicto:** CORREGIDO
 **Confianza:** Muy Alto
-**GitHub Issue:** —
-**Commit(s):** —
+**GitHub Issue:** [#208](https://github.com/cacao-accounting/cacao-accounting/issues/208)
+**Commit(s):** `593ae77`
 
 ---
 
@@ -199,10 +199,10 @@ Implementar un validador similar a `_validate_receipt_quantities_against_po` per
 2. Crear una Nota de Entrega asociada a esta Orden de Venta por 12 unidades.
 3. Intentar aprobar la Nota de Entrega. El sistema debe arrojar una excepción por sobre-entrega y bloquear el submit.
 
-**Veredicto:** PENDIENTE
+**Veredicto:** CORREGIDO
 **Confianza:** Muy Alto
-**GitHub Issue:** —
-**Commit(s):** —
+**GitHub Issue:** [#209](https://github.com/cacao-accounting/cacao-accounting/issues/209)
+**Commit(s):** `3f1c162`
 
 ---
 
@@ -225,10 +225,10 @@ Desarrollar una validación de cantidades en `ventas_factura_venta_submit` para 
 2. Crear una Factura de Venta vinculada a dicha Nota de Entrega por 7 unidades.
 3. Intentar aprobar la Factura de Venta. El sistema debe lanzar un error de validación de sobre-facturación.
 
-**Veredicto:** PENDIENTE
+**Veredicto:** CORREGIDO
 **Confianza:** Muy Alto
-**GitHub Issue:** —
-**Commit(s):** —
+**GitHub Issue:** [#210](https://github.com/cacao-accounting/cacao-accounting/issues/210)
+**Commit(s):** `3f1c162`
 
 ---
 
@@ -253,10 +253,10 @@ Implementar una regla de negocio que intercepte los métodos de eliminación (u 
 2. Intentar eliminar físicamente el artículo o la bodega del sistema a través de la API o pantalla de edición.
 3. El sistema debe lanzar una excepción de integridad operativa indicando que el registro cuenta con transacciones activas y sugerir su inactivación.
 
-**Veredicto:** PENDIENTE
+**Veredicto:** CORREGIDO
 **Confianza:** Muy Alto
-**GitHub Issue:** —
-**Commit(s):** —
+**GitHub Issue:** [#211](https://github.com/cacao-accounting/cacao-accounting/issues/211)
+**Commit(s):** `56bd179`
 
 ---
 
@@ -283,7 +283,7 @@ Implementar un doble control o flujo de autorización para las cancelaciones del
 
 **Veredicto:** PENDIENTE
 **Confianza:** Muy Alto
-**GitHub Issue:** —
+**GitHub Issue:** [#206](https://github.com/cacao-accounting/cacao-accounting/issues/206)
 **Commit(s):** —
 
 ---
@@ -311,5 +311,82 @@ Integrar el `audit_trail_service` o un decorador de auditoría que documente el 
 
 **Veredicto:** PENDIENTE
 **Confianza:** Muy Alto
-**GitHub Issue:** —
+**GitHub Issue:** [#207](https://github.com/cacao-accounting/cacao-accounting/issues/207)
 **Commit(s):** —
+
+---
+
+# INFORME DE AUDITORÍA DE SEGURIDAD (10-JUL-2026)
+
+Este reporte detalla los hallazgos de seguridad identificados durante la auditoría completa del código fuente de Cacao Accounting, siguiendo las recomendaciones de OWASP Top 10, OWASP ASVS y CWE.
+
+## Resumen Ejecutivo
+
+Se identificaron **11 vulnerabilidades** (1 crítica, 2 altas, 4 medias, 4 bajas) y **8 hallazgos de hardening/configuración**. La aplicación muestra buenas prácticas en: uso de Argon2 para contraseñas, CSRFProtect global, SQLAlchemy sin SQL dinámico, Jinja2 auto-escaping por defecto, y sistema granular de roles/permisos.
+
+## Tabla de Vulnerabilidades de Seguridad
+
+| ID | Descripción | Severidad | CWE | Archivo | GitHub |
+|:---|:---|---:|:---:|:---|:---:|
+| **SEC-001** | Credenciales predeterminadas hardcodeadas en `run.py` | **CRÍTICA** | CWE-798 | `run.py:38-39` | [#212](https://github.com/cacao-accounting/cacao-accounting/issues/212) |
+| **SEC-002** | Logout sin invalidación de sesión ni JWT | **ALTA** | CWE-613 | `auth/__init__.py:99-102` | [#213](https://github.com/cacao-accounting/cacao-accounting/issues/213) |
+| **SEC-003** | Open Redirect via `request.referrer` | **ALTA** | CWE-601 | `api/__init__.py:180-181,194-195` | [#214](https://github.com/cacao-accounting/cacao-accounting/issues/214) |
+| **SEC-004** | JWT sin expiración (`exp`/`iat`) | **MEDIA** | CWE-613 | `auth/helpers.py:72-83` | [#215](https://github.com/cacao-accounting/cacao-accounting/issues/215) |
+| **SEC-005** | Ruta `/info` expone información sensible del sistema | **MEDIA** | CWE-200 | `app/__init__.py:72-83` | [#216](https://github.com/cacao-accounting/cacao-accounting/issues/216) |
+| **SEC-006** | Flash de excepciones expone detalles internos | **MEDIA** | CWE-209 | 64 instancias en módulos | [#217](https://github.com/cacao-accounting/cacao-accounting/issues/217) |
+| **SEC-007** | Variables Jinja2 dentro de `<script>` sin escaping JS | **MEDIA** | CWE-79 | Múltiples templates | [#218](https://github.com/cacao-accounting/cacao-accounting/issues/218) |
+| **SEC-008** | Token API JWT en atributo volátil (no persistido) | **BAJA** | CWE-311 | `auth/helpers.py:72-83` | [#219](https://github.com/cacao-accounting/cacao-accounting/issues/219) |
+| **SEC-009** | Sin rate limiting en login ni API | **BAJA** | CWE-307 | `auth/__init__.py:68-93` | [#220](https://github.com/cacao-accounting/cacao-accounting/issues/220) |
+| **SEC-010** | Validación insuficiente en subida de archivos (MIME/tamaño) | **BAJA** | CWE-434 | `imports/routes.py:157-167` | [#221](https://github.com/cacao-accounting/cacao-accounting/issues/221) |
+| **SEC-011** | Sin CSP ni cabeceras HTTP de seguridad | **BAJA** | CWE-1021 | `__init__.py` | [#222](https://github.com/cacao-accounting/cacao-accounting/issues/222) |
+
+## Hallazgos de Hardening y Configuración
+
+| # | Hallazgo | Estado | Recomendación |
+|:---|---|:---:|:---|
+| H-01 | `SESSION_COOKIE_SECURE` no configurado | ❌ | `app.config["SESSION_COOKIE_SECURE"] = True` |
+| H-02 | `SESSION_COOKIE_HTTPONLY` no configurado | ❌ | `app.config["SESSION_COOKIE_HTTPONLY"] = True` |
+| H-03 | `SESSION_COOKIE_SAMESITE` no configurado | ❌ | `app.config["SESSION_COOKIE_SAMESITE"] = "Lax"` |
+| H-04 | `MAX_CONTENT_LENGTH` no configurado | ❌ | `app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024` |
+| H-05 | Ausencia de `X-Frame-Options`, `X-Content-Type-Options`, HSTS | ❌ | Agregar via `@app.after_request` |
+| H-06 | Logging minimalista (solo stderr, sin rotación) | ⚠️ | Configurar loguru con rotación y formato estructurado |
+| H-07 | Sin AuditLog automático para operaciones críticas | ⚠️ | Implementar auditoría para cambios de roles/permisos |
+| H-08 | `SECRET_KEY` generado dinámicamente vía `token_urlsafe(32)` | ✅ | Correcto |
+
+## Buenas Prácticas Observadas (✅)
+
+- ✅ Argon2 para hashing de contraseñas (no bcrypt como dice el docstring)
+- ✅ CSRFProtect global sin exenciones
+- ✅ SQLAlchemy ORM sin SQL dinámico peligroso
+- ✅ Jinja2 auto-escaping habilitado por defecto
+- ✅ `SandboxedEnvironment` para templates de impresión
+- ✅ Sistema granular de roles con 16 acciones por módulo
+- ✅ Permiso `delete=False` por defecto en todos los roles
+- ✅ `secure_filename()` en subida de archivos
+- ✅ Validación de contraseña segura (8+ chars, mayúscula, minúscula, dígito, especial)
+- ✅ Session lifetime de 30 minutos
+
+## Plan de Remediación por Fases
+
+### Fase 1 — Inmediata (1-2 días)
+- SEC-001: Exigir credenciales por variable de entorno en `run.py`
+- SEC-002: Invalidar JWT y limpiar sesión en logout
+- SEC-009: Agregar rate limiting en login
+
+### Fase 2 — Corto plazo (1 semana)
+- SEC-003: Validar origen en open redirects
+- SEC-004: Agregar expiración JWT
+- SEC-006: Reemplazar `flash(str(exc))` con mensajes genéricos
+- H-01/H-02/H-03: Configurar cookies de sesión (Secure, HttpOnly, SameSite)
+
+### Fase 3 — Mediano plazo (2-4 semanas)
+- SEC-005: Restringir `/info` y `/development` a administradores
+- SEC-007: Sanitizar variables en templates JavaScript
+- SEC-010: Validación MIME y límite de tamaño en uploads
+- SEC-011: Implementar CSP y cabeceras HTTP de seguridad
+- H-04/H-05: Configurar MAX_CONTENT_LENGTH y cabeceras faltantes
+
+### Fase 4 — Hardening (1-2 meses)
+- H-06: Logging centralizado con rotación
+- H-07: Sistema de AuditLog para operaciones críticas
+- Pruebas SAST automatizadas en CI/CD (Bandit, Semgrep)
