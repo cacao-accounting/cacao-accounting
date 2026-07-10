@@ -549,7 +549,7 @@ def ventas_pedido_venta_submit(request_id: str):
         items = (
             database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars().all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
