@@ -19,10 +19,13 @@ class MockRegistro:
 
 
 class MockItem:
-    def __init__(self, qty=1, warehouse=None, item_code=None):
+    def __init__(self, qty=1, warehouse=None, item_code=None, rate=1, amount=1, is_stock_item=True):
         self.qty = qty
         self.warehouse = warehouse
         self.item_code = item_code
+        self.rate = rate
+        self.amount = amount
+        self.is_stock_item = is_stock_item
 
 
 class TestValidateSubmitPrerequisites:
@@ -114,3 +117,62 @@ class TestValidateSubmitPrerequisites:
         registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
         with pytest.raises(ValueError, match="ITEM-002"):
             validate_submit_prerequisites(registro, items=items, require_warehouse=True)
+
+    def test_rejects_zero_rate(self):
+        items = [MockItem(qty=1, rate=0)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="tarifas"):
+            validate_submit_prerequisites(registro, items=items, require_rate_positive=True)
+
+    def test_rejects_negative_rate(self):
+        items = [MockItem(qty=1, rate=-5)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="tarifas"):
+            validate_submit_prerequisites(registro, items=items, require_rate_positive=True)
+
+    def test_skips_rate_validation_when_disabled(self):
+        items = [MockItem(qty=1, rate=0)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(registro, items=items, require_rate_positive=False)
+
+    def test_rejects_zero_amount(self):
+        items = [MockItem(qty=1, rate=1, amount=0)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="montos"):
+            validate_submit_prerequisites(registro, items=items, require_amount_nonzero=True)
+
+    def test_skips_amount_validation_when_disabled(self):
+        items = [MockItem(qty=1, rate=1, amount=0)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(registro, items=items, require_amount_nonzero=False)
+
+    def test_warehouse_required_only_for_stock_items(self):
+        items = [MockItem(qty=1, warehouse=None, item_code="SVC-001", is_stock_item=False)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(
+            registro,
+            items=items,
+            require_warehouse=True,
+            warehouse_for_stock_items_only=True,
+        )
+
+    def test_warehouse_required_for_stock_items_when_disabled(self):
+        items = [MockItem(qty=1, warehouse=None, item_code="ITEM-001", is_stock_item=True)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        with pytest.raises(ValueError, match="ITEM-001"):
+            validate_submit_prerequisites(
+                registro,
+                items=items,
+                require_warehouse=True,
+                warehouse_for_stock_items_only=False,
+            )
+
+    def test_warehouse_skipped_for_service_when_disabled_flag(self):
+        items = [MockItem(qty=1, warehouse=None, item_code="SVC-001", is_stock_item=False)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
+        validate_submit_prerequisites(
+            registro,
+            items=items,
+            require_warehouse=True,
+            warehouse_for_stock_items_only=True,
+        )
