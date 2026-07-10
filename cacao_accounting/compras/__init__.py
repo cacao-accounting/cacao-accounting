@@ -2965,6 +2965,35 @@ def _validate_supplier_invoice_flags(
         raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
 
 
+def _validate_duplicate_supplier_invoice(
+    supplier_id: str | None, supplier_invoice_no: str | None, exclude_id: str | None = None
+) -> None:
+    """S2P-24: Valida que no exista otra factura de compra activa (no cancelada, docstatus != 2)
+    con el mismo supplier_id y supplier_invoice_no.
+    """
+    if not supplier_id or not supplier_invoice_no:
+        return
+    supplier_invoice_no_cleaned = supplier_invoice_no.strip()
+    if not supplier_invoice_no_cleaned:
+        return
+
+    stmt = database.select(PurchaseInvoice).filter(
+        PurchaseInvoice.supplier_id == supplier_id,
+        PurchaseInvoice.supplier_invoice_no == supplier_invoice_no_cleaned,
+        PurchaseInvoice.docstatus != 2,
+    )
+    if exclude_id:
+        stmt = stmt.filter(PurchaseInvoice.id != exclude_id)
+
+    exists = database.session.execute(stmt).scalars().first()
+    if exists:
+        raise ValueError(
+            _(
+                "El número de factura del proveedor '{}' ya está registrado para este proveedor en otra factura activa."
+            ).format(supplier_invoice_no_cleaned)
+        )
+
+
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
@@ -2975,6 +3004,7 @@ def _create_purchase_invoice_from_request():
         from_order = request.form.get("from_order") or None
         from_receipt = request.form.get("from_receipt") or None
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
+        _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
         factura = PurchaseInvoice(
             supplier_id=supplier_id,
             company=company,
@@ -3140,6 +3170,11 @@ def _handle_purchase_invoice_edit_post(registro):
             request.form.get("from_order") or None,
             request.form.get("from_receipt") or None,
         )
+        _validate_duplicate_supplier_invoice(
+            registro.supplier_id,
+            request.form.get("supplier_invoice_no") or registro.supplier_invoice_no,
+            exclude_id=registro.id,
+        )
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
         registro.remarks = request.form.get("remarks")
@@ -3257,6 +3292,11 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "company", None),
             getattr(registro, "purchase_order_id", None),
             getattr(registro, "purchase_receipt_id", None),
+        )
+        _validate_duplicate_supplier_invoice(
+            getattr(registro, "supplier_id", None),
+            getattr(registro, "supplier_invoice_no", None),
+            exclude_id=registro.id,
         )
         submit_document(registro)
         log_submit(registro)
