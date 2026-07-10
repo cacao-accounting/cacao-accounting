@@ -733,3 +733,16 @@
   - Se eliminó `_register_app_commands` de `create_app` (los comandos `cleandb`/`setupdb`/`serve`/`version` ya no se registran en `app.cli`) y se actualizó `command()` para invocar `linea_comandos_main()`.
 - **Corrección incidental:** `ventas/__init__.py` tenía un error de indentación preexistente (el `except ValueError` de `ventas_factura_venta_nuevo` quedaba a 4 espacios en lugar de 8), lo que impedía importar la aplicación y por tanto ejecutar `cacaoctl`. Se corrigió la indentación.
 - **Calidad:** black, ruff, flake8 y mypy en verde para los archivos modificados.
+
+### 2026-07-10 — CAS-13: reject discount >= allocated
+- **Petición:** Fix CAS-13 VERIFICADO bug — `_cash_consumed=0` bypasses balance check
+- **Plan:** Added validation in `_process_reconciliation_line` that raises `DocumentFlowError` when `discount + gain_loss >= allocated`. Added 4 unit/integration tests.
+- **Commits:** `ab45e31` (R2R-11/13), `189da6e` (CAS-13)
+- **Test results:** 47/47 existing payment tests pass, 4/4 new CAS-13 tests pass
+
+### 2026-07-10 — Stabilization: CAS-13 + S2P-15 + ISSUES.md cleanup
+- **Petición:** Fix remaining VERIFICADO bugs, no new features, stabilize only
+- **Plan:** Fix CAS-13 (discount >= allocated bypass), fix S2P-15 (downstream revert on cancel), update ISSUES.md
+- **Commits:** `189da6e` (CAS-13), `709f7e3` (S2P-15)
+- **Test results:** 31/31 document_flow tests, 4/4 CAS-13 tests, 2/2 S2P-15 tests, 47/47 payment_entry tests
+- **ISSUES.md:** All VERIFICADO bugs now marked CORREGIDO or PENDIENTE. 0 VERIFICADO remaining.
