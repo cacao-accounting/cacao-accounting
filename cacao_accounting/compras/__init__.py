@@ -429,6 +429,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
     duplicada.total = total
     duplicada.base_total = total
     duplicada.grand_total = total
+    log_create(duplicada)
     database.session.commit()
     flash("Solicitud de compra duplicada como nuevo borrador.", "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=duplicada.id))
@@ -898,6 +899,7 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
     duplicada.total = total
     duplicada.base_total = total
     duplicada.grand_total = total
+    log_create(duplicada)
     database.session.commit()
     flash(_("Cotizacion de proveedor duplicada como nuevo borrador."), "success")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=duplicada.id))
@@ -1904,6 +1906,7 @@ def compras_orden_compra_duplicar(order_id: str):
     duplicada.net_total = total
     duplicada.grand_total = total
     duplicada.base_total = total
+    log_create(duplicada)
     database.session.commit()
     flash(_("Orden de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=duplicada.id))
@@ -2218,6 +2221,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
     duplicada.total = total
     duplicada.base_total = total
     duplicada.grand_total = total
+    log_create(duplicada)
     database.session.commit()
     flash(_("Solicitud de cotizacion duplicada como nuevo borrador."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=duplicada.id))
@@ -2600,6 +2604,7 @@ def compras_recepcion_duplicar(receipt_id: str):
         total += item.amount or Decimal("0")
     duplicada.total = total
     duplicada.grand_total = total
+    log_create(duplicada)
     database.session.commit()
     flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
@@ -3184,6 +3189,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     duplicada.base_grand_total = total
     duplicada.outstanding_amount = total
     duplicada.base_outstanding_amount = total
+    log_create(duplicada)
     database.session.commit()
     flash(_("Factura de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=duplicada.id))
