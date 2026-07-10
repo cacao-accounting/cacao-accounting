@@ -1310,12 +1310,16 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
 
 
 class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
-    """Factura de compra."""
+    """Factura de compra.
+
+    S2P-24: El número de factura física del proveedor (supplier_invoice_no) para un mismo
+    proveedor (supplier_id) debe ser único entre todas las facturas activas (no canceladas).
+    """
 
     __tablename__ = "purchase_invoice"
     supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID), nullable=True, index=True)
     supplier_name = database.Column(database.String(200), nullable=True)
-    supplier_invoice_no = database.Column(database.String(50), nullable=True)
+    supplier_invoice_no = database.Column(database.String(50), nullable=True)  # Validado contra duplicados
     document_type = database.Column(database.String(50), nullable=False, default="purchase_invoice")
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     purchase_order_id = database.Column(database.String(26), database.ForeignKey(PURCHASE_ORDER_ID), nullable=True, index=True)
