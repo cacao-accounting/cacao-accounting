@@ -20,6 +20,7 @@
   - **HEALTHCHECK agregado:** Verifica `/health` en puerto 8080 cada 30 segundos.
   - **npm install --omit=dev:** No instala dependencias de desarrollo en producción.
   - **Tini:** Se mantiene descarga vía ADD por no estar en repos de RHEL.
+  - **Python site-packages via multi-stage:** Las dependencias pip se compilan en una etapa `python-builder` dedicada y se copian via `--prefix=/install`, eliminando pip, headers de compilación y herramientas de build de la imagen final.
 
 ## 2026-07-10 : R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo
 - **Petición del usuario:** El sistema permite eliminar registros maestros esenciales (Artículos, Almacenes, Proveedores, Clientes) del catálogo general aun cuando ya tienen un historial de transacciones registradas y contabilizadas (registros activos en `GLEntry`, `StockLedgerEntry`, etc.).
