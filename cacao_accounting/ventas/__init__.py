@@ -177,7 +177,7 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
 
         if available < item.qty:
             raise ValueError(
-                f"Stock insuficiente para {item.item_code} en {warehouse}: " f"disponible {available}, requerido {item.qty}."
+                f"Stock insuficiente para {item.item_code} en {warehouse}: disponible {available}, requerido {item.qty}."
             )
 
         bin_row.reserved_qty = reserved + item.qty
