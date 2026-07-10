@@ -411,3 +411,9 @@
   - R2R-01: `validate_accounting_period` ya se llama desde `_document_contexts()` en todos los postings.
   - R2R-02: `_assert_entries_balance()` en `_add_entries()` ya verifica balance antes de persistir.
   - CAS-01: El balance bancario ya se deriva de GLEntry en dashboard, reportes y revaluación.
+
+## 2026-07-10 (Rediseño de la CLI cacaoctl)
+- **Estado:** Completado. `cacaoctl` ya no expone la identidad de Flask: usa `prog_name="cacaoctl"`, banner propio y ayuda agrupada por categorías.
+- **Comandos disponibles:** `db init|reset|clean|seed`, `run`, `serve`, `shell`, `routes`, `version`, `status`, `config`.
+- **Nuevos:** `status` y `config` (diagnóstico); confirmaciones en `db reset`/`db clean` con `--force`; colores en la salida; opciones `--env/--verbose/--quiet/--version`.
+- **Nota:** `ventas/__init__.py` tenía un error de sintaxis preexistente que impedía importar la app; se corrigió la indentación del `except` en `ventas_factura_venta_nuevo`.
