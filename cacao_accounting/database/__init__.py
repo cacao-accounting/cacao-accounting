@@ -255,7 +255,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __allow_unmapped__ = True
 
-    user = database.Column(database.String(50), nullable=False)
+    user = database.Column(database.String(50), unique=True, nullable=False)
     name = database.Column(database.String(80))
     name2 = database.Column(database.String(80))
     last_name = database.Column(database.String(80))
@@ -274,7 +274,7 @@ class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles para las administración de permisos de usuario."""
 
     name = database.Column(database.String(50), nullable=False, unique=True)
-    note = database.Column(database.String(100), nullable=False, unique=True)
+    note = database.Column(database.String(100), nullable=False)
 
 
 class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -333,7 +333,6 @@ class UserFormPreference(database.Model, BaseTabla):  # type: ignore[name-define
 class Modules(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Lista de los modulos del sistema."""
 
-    __table_args__ = (database.UniqueConstraint("module", name="modulo_unico"),)
     module = database.Column(database.String(50), unique=True, index=True)
     default = database.Column(database.Boolean(), nullable=False)
     enabled = database.Column(database.Boolean(), nullable=True)
@@ -454,6 +453,7 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Anio fiscal de una entidad."""
 
     __tablename__ = "fiscal_year"
+    __table_args__ = (database.UniqueConstraint("entity", "name", name="uq_fiscal_year_name"),)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     name = database.Column(database.String(50), nullable=False)
     year_start_date = database.Column(database.Date(), nullable=False)
@@ -556,6 +556,7 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "naming_series"
+    __table_args__ = (database.UniqueConstraint("entity_type", "company", "prefix_template", name="uq_naming_series_prefix"),)
     name = database.Column(database.String(100), nullable=False)
     # Tipo de entidad: sales_invoice, payment_entry, journal_entry, etc.
     entity_type = database.Column(database.String(50), nullable=False, index=True)
@@ -2070,7 +2071,6 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     """Cuentas contables predeterminadas por compania."""
 
     __tablename__ = "company_default_account"
-    __table_args__ = (UniqueConstraint("company", name="uq_company_default_account"),)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
     default_receivable = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
     default_payable = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
@@ -2322,7 +2322,6 @@ class PurchaseMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-de
     """
 
     __tablename__ = "purchase_matching_config"
-    __table_args__ = (UniqueConstraint("company", name="uq_purchase_matching_config"),)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
     # 2-way: OC vs Factura | 3-way: OC vs Recepcion vs Factura
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
@@ -2350,7 +2349,6 @@ class SalesMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-defin
     """
 
     __tablename__ = "sales_matching_config"
-    __table_args__ = (UniqueConstraint("company", name="uq_sales_matching_config"),)
     company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
     # 3-way: OV + DN + Factura | 2-way: OV + Factura
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
@@ -2562,6 +2560,7 @@ class Workflow(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Definicion de flujo de trabajo."""
 
     __tablename__ = "workflow"
+    __table_args__ = (database.UniqueConstraint("entity_type", "name", name="uq_workflow_type_name"),)
     name = database.Column(database.String(100), nullable=False)
     entity_type = database.Column(database.String(50), nullable=False, index=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
@@ -2571,6 +2570,7 @@ class WorkflowState(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Estado en un flujo de trabajo."""
 
     __tablename__ = "workflow_state"
+    __table_args__ = (database.UniqueConstraint("workflow_id", "name", name="uq_workflow_state_name"),)
     workflow_id = database.Column(database.String(26), database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     name = database.Column(database.String(50), nullable=False)
     is_initial = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2581,6 +2581,7 @@ class WorkflowTransition(database.Model, BaseTabla):  # type: ignore[name-define
     """Transicion entre estados de un flujo de trabajo."""
 
     __tablename__ = "workflow_transition"
+    __table_args__ = (database.UniqueConstraint("from_state_id", "to_state_id", "action_name", name="uq_workflow_transition"),)
     from_state_id = database.Column(database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     to_state_id = database.Column(database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
     action_name = database.Column(database.String(100), nullable=False)
