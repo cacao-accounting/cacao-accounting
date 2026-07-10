@@ -1258,6 +1258,17 @@ def create_document_relation(
 
     _assert_same_company(source_key, source_id, target_key, target_id)
 
+    source_doc = get_document(source_key, source_id)
+    target_doc = get_document(target_key, target_id)
+    if source_doc is not None:
+        source_status = getattr(source_doc, "docstatus", None)
+        if source_status != 1:
+            raise DocumentFlowError("El documento origen debe estar aprobado (docstatus=1) para crear la relación.", 409)
+    if target_doc is not None:
+        target_status = getattr(target_doc, "docstatus", None)
+        if target_status != 0:
+            raise DocumentFlowError("El documento destino debe estar en borrador (docstatus=0) para recibir la relación.", 409)
+
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
         raise DocumentFlowError("La cantidad relacionada debe ser mayor que cero.", 409)

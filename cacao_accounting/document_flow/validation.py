@@ -11,8 +11,8 @@ def validate_submit_prerequisites(
     require_party=True,
     require_lines=True,
     require_qty_positive=True,
-    require_rate_positive=True,
-    require_amount_nonzero=True,
+    require_rate_positive=False,
+    require_amount_nonzero=False,
     require_warehouse=False,
     warehouse_for_stock_items_only=True,
 ):
