@@ -39,6 +39,7 @@ from cacao_accounting.database import (
     GLEntry,
     StockLedgerEntry,
     DocumentRelation,
+    AuditTrail,
     Party,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -89,6 +90,7 @@ def app_ctx():
 
         # Configure supplier settings to allow direct invoices for tests
         from cacao_accounting.database import CompanyParty, Party
+
         supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
         if supplier:
             cp = database.session.execute(
@@ -164,9 +166,7 @@ def test_setup_correct(app_ctx):
 def test_purchase_order_rejects_zero_qty(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
-    supplier = (
-        database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    )
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     before = database.session.execute(database.select(PurchaseOrder)).scalars().all()
     po_data = {
         "company": "cacao",
@@ -185,6 +185,38 @@ def test_purchase_order_rejects_zero_qty(app_ctx):
     after = database.session.execute(database.select(PurchaseOrder)).scalars().all()
     assert len(after) == len(before)
 
+
+def test_duplicate_purchase_order_creates_audit_log(app_ctx):
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    po_data = {
+        "company": "cacao",
+        "supplier_id": supplier.id,
+        "posting_date": date.today().isoformat(),
+        "item_code_0": "ART-001",
+        "item_name_0": "Chocolate 100g",
+        "qty_0": "5",
+        "uom_0": "UND",
+        "rate_0": "45",
+        "amount_0": "225",
+    }
+    client.post("/buying/purchase-order/new", data=po_data, follow_redirects=True)
+    original = (
+        database.session.execute(database.select(PurchaseOrder).order_by(PurchaseOrder.created.desc())).scalars().first()
+    )
+    response = client.post(f"/buying/purchase-order/{original.id}/duplicate", follow_redirects=True)
+    assert response.status_code == 200
+    duplicada = (
+        database.session.execute(database.select(PurchaseOrder).filter(PurchaseOrder.id != original.id)).scalars().first()
+    )
+    assert duplicada is not None
+    log = (
+        database.session.execute(database.select(AuditTrail).filter_by(document_id=duplicada.id, action="created"))
+        .scalars()
+        .first()
+    )
+    assert log is not None, "La duplicacion debe registrar un log de creacion"
 
 
 def test_purchase_happy_path(app_ctx):
