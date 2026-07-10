@@ -820,3 +820,91 @@ def test_accounting_templates_define_title(app_ctx, path):
     response = client.get(path)
     assert response.status_code == 200
     assert b"<title>Contabilidad |" in response.data
+
+
+def test_block_deletion_of_master_with_transactional_history(app_ctx):
+    from cacao_accounting.database import Item, Warehouse, Party, StockLedgerEntry, GLEntry, database
+    from cacao_accounting.exceptions import IntegrityError
+
+    # 1. Create records
+    item = Item(
+        code="ART-RESERVE",
+        name="Articulo Reserva",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="unidad",
+    )
+    warehouse = Warehouse(
+        code="WH-RESERVE",
+        name="Bodega Reserva",
+        company="cacao",
+    )
+    party = Party(
+        code="PARTY-RESERVE",
+        name="Tercero Reserva",
+        is_active=True,
+    )
+    database.session.add_all([item, warehouse, party])
+    database.session.commit()
+
+    # First, let's simulate a transactional record for Item and Warehouse.
+    sle = StockLedgerEntry(
+        item_code="ART-RESERVE",
+        warehouse="WH-RESERVE",
+        company="cacao",
+        qty_change=10,
+        posting_date=date(2026, 1, 1),
+        voucher_type="Stock Entry",
+        voucher_id="some-id",
+    )
+    database.session.add(sle)
+    database.session.commit()
+
+    # Now trying to delete item should raise IntegrityError
+    with pytest.raises(IntegrityError) as exc:
+        database.session.delete(item)
+        database.session.commit()
+    assert "transacciones activas" in str(exc.value)
+    database.session.rollback()
+
+    # Trying to delete warehouse should raise IntegrityError
+    with pytest.raises(IntegrityError) as exc:
+        database.session.delete(warehouse)
+        database.session.commit()
+    assert "transacciones activas" in str(exc.value)
+    database.session.rollback()
+
+    # Now let's simulate transactional history for party
+    gle = GLEntry(
+        posting_date=date(2026, 1, 1),
+        company="cacao",
+        debit=100,
+        credit=0,
+        party_type="customer",
+        party_id=party.id,
+        voucher_type="Sales Invoice",
+        voucher_id="some-id-2",
+    )
+    database.session.add(gle)
+    database.session.commit()
+
+    # Trying to delete party should raise IntegrityError
+    with pytest.raises(IntegrityError) as exc:
+        database.session.delete(party)
+        database.session.commit()
+    assert "transacciones activas" in str(exc.value)
+    database.session.rollback()
+
+    # Verify that clean master records (no transactions) can be deleted
+    clean_item = Item(
+        code="CLEAN-ITEM",
+        name="Articulo Limpio",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="unidad",
+    )
+    database.session.add(clean_item)
+    database.session.commit()
+    database.session.delete(clean_item)
+    database.session.commit()
+    assert Item.query.filter_by(code="CLEAN-ITEM").first() is None
