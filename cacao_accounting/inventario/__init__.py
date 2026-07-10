@@ -1385,7 +1385,7 @@ def inventario_entrada_submit(entry_id: str):
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
-    except (PostingError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
