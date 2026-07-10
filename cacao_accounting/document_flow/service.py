@@ -1317,7 +1317,11 @@ def create_document_relation(
 
 
 def revert_relations_for_target(target_type: str, target_id: str, reason: str = "target_cancelled") -> int:
-    """Revierte relaciones activas de un documento destino y libera saldos."""
+    """Revierte relaciones activas de un documento destino y libera saldos.
+
+    Tambien revierte relaciones donde el documento cancelado es SOURCE
+    (relaciones downstream), propagando la invalidez de caches.
+    """
     target_key = normalize_doctype(target_type)
     relations = (
         database.session.execute(
@@ -1334,9 +1338,6 @@ def revert_relations_for_target(target_type: str, target_id: str, reason: str = 
         relation.reversed_by = _current_user_id()
         relation.reversal_reason = reason
         if relation.source_item_id:
-            # Solo las relaciones con línea fuente requieren recomputar estados
-            # y caches. Las relaciones header-only (por ejemplo factura -> pago)
-            # se revierten únicamente a nivel de trazabilidad.
             recompute_line_flow_state(
                 relation.source_type,
                 relation.source_id,
@@ -1352,7 +1353,36 @@ def revert_relations_for_target(target_type: str, target_id: str, reason: str = 
             before,
             {"status": relation.status, "reason": reason},
         )
-    return len(relations)
+    downstream = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(source_type=target_key, source_id=target_id, status="active")
+        )
+        .scalars()
+        .all()
+    )
+    for relation in downstream:
+        before = {"status": relation.status, "qty": str(relation.qty)}
+        relation.status = "reverted"
+        relation.reversed_at = now
+        relation.reversed_by = _current_user_id()
+        relation.reversal_reason = reason
+        if relation.source_item_id:
+            recompute_line_flow_state(
+                relation.source_type,
+                relation.source_id,
+                relation.source_item_id,
+                relation.target_type,
+                relation.company,
+            )
+            _update_source_cache(relation.source_type, relation.source_id, relation.source_item_id, relation.target_type)
+        _audit(
+            "document_relation",
+            relation.id,
+            "revert",
+            before,
+            {"status": relation.status, "reason": reason},
+        )
+    return len(relations) + len(downstream)
 
 
 def close_line_balance(
