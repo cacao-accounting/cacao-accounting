@@ -457,7 +457,7 @@ def compras_solicitud_compra_submit(request_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -922,7 +922,7 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2249,7 +2249,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2299,7 +2299,7 @@ def compras_orden_compra_submit(order_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2731,7 +2731,7 @@ def compras_recepcion_submit(receipt_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         _validate_receipt_quantities_against_po(receipt_id)
         submit_document(registro)
         log_submit(registro)
@@ -3249,7 +3249,7 @@ def compras_factura_compra_submit(invoice_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         _validate_invoice_quantities_against_receipt(invoice_id)
         _validate_invoice_requires_supplier_link(invoice_id)
         _validate_supplier_invoice_flags(
