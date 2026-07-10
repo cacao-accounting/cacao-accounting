@@ -17,6 +17,7 @@ pydocstyle
 # Cobertura de código
 coverage
 pytest-cov
+pytest-xdist
 
 # Verificación de tipos
 mypy

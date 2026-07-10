@@ -49,7 +49,24 @@ PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 # En entornos de web y de contenedores es un patron recomendado utlizar variables del entorno para
 # configurar la aplicacion.
 
-DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL") or SQLITE
+# Force tests to run by default on an in-memory database, except those designed for a specific database.
+is_testing = environ.get("CACAO_TEST") or environ.get("CI") or (environ.get("PYTEST_VERSION") is not None)
+
+if is_testing:
+    env_db = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL")
+    if env_db and (
+        "mysql" in env_db or
+        "postgresql" in env_db or
+        "mariadb" in env_db or
+        "mssql" in env_db or
+        "sqlite:///" in env_db
+    ):
+        DATABASE_URL = env_db
+    else:
+        DATABASE_URL = "sqlite:///:memory:"
+else:
+    DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL") or SQLITE
+
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
