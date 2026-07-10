@@ -200,20 +200,34 @@ class DocBase(BaseTabla):
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
     posting_date = database.Column(database.Date(), nullable=True, index=True)
     document_date = database.Column(database.Date(), nullable=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     # Human-readable identifier generated from NamingSeries + Sequence
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     # External counter support — llevar numeracion paralela externa (cheque, numero fiscal, etc.)
     # external_counter_id: FK al ExternalCounter seleccionado para este documento
     external_counter_id = database.Column(
-        database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     # external_number: numero fisico asignado (puede ser distinto del sugerido por el contador)
     external_number = database.Column(database.String(100), nullable=True, index=True)
     # Multi-currency support
-    transaction_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    base_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    transaction_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    base_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     # Reversal support (never delete, always reverse)
     is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
@@ -243,8 +257,12 @@ class ExchangeRate(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "exchange_rate"
     __table_args__ = (UniqueConstraint("origin", "destination", "date", name="uq_exchange_rate_date"),)
-    origin = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
-    destination = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    origin = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    destination = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     date = database.Column(database.Date(), nullable=False)
 
@@ -283,7 +301,9 @@ class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Los roles definen una cantidad de permisos."""
 
     rol_id = database.Column(database.String(26), database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
-    module_id = database.Column(database.String(26), database.ForeignKey("modules.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    module_id = database.Column(
+        database.String(26), database.ForeignKey("modules.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
+    )
     access = database.Column(database.Boolean, nullable=False, default=False)
     update = database.Column(database.Boolean, nullable=False, default=False)
     set_null = database.Column(database.Boolean, nullable=False, default=False)
@@ -322,7 +342,12 @@ class UserFormPreference(database.Model, BaseTabla):  # type: ignore[name-define
         ),
     )
 
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     form_key = database.Column(database.String(100), nullable=False, index=True)
     view_key = database.Column(database.String(50), nullable=False, index=True)
     schema_version = database.Column(database.Integer(), nullable=False, default=1)
@@ -356,7 +381,9 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     company_name = database.Column(database.String(100), unique=True, nullable=False)
     name = database.Column(database.String(100))
     tax_id = database.Column(database.String(50), unique=True, nullable=False)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
+    )
     country = database.Column(database.String(2), nullable=True)
     entity_type = database.Column(database.String(50))
     tipo_entidad_lista = [
@@ -427,7 +454,9 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     # El libro primario es la fuente de verdad base
     is_primary = database.Column(database.Boolean(), default=False, nullable=False)
     default = database.Column(database.Boolean())
@@ -443,10 +472,24 @@ class LedgerMappingRule(database.Model, BaseTabla):  # type: ignore[name-defined
     """
 
     __tablename__ = "ledger_mapping_rule"
-    source_book = database.Column(database.String(10), database.ForeignKey(BOOK_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    target_book = database.Column(database.String(10), database.ForeignKey(BOOK_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    source_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    target_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    source_book = database.Column(
+        database.String(10),
+        database.ForeignKey(BOOK_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    target_book = database.Column(
+        database.String(10),
+        database.ForeignKey(BOOK_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    source_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    target_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     rule_description = database.Column(database.String(200), nullable=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
@@ -456,7 +499,12 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "fiscal_year"
     __table_args__ = (database.UniqueConstraint("entity", "name", name="uq_fiscal_year_name"),)
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    entity = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     name = database.Column(database.String(50), nullable=False)
     year_start_date = database.Column(database.Date(), nullable=False)
     year_end_date = database.Column(database.Date(), nullable=False)
@@ -472,8 +520,12 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
 class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Todas las transaciones deben estar vinculadas a un periodo contable."""
 
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), index=True)
-    fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    entity = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), index=True
+    )
+    fiscal_year_id = database.Column(
+        database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     name = database.Column(database.String(50), nullable=False)
     status = database.Column(database.String(50))
     enabled = database.Column(database.Boolean(), index=True)
@@ -494,7 +546,9 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     name = database.Column(database.String(100))
     group = database.Column(database.Boolean())
     parent = database.Column(database.String(50), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     # Activo, Pasivo, Patrimonio, Ingresos, Gastos
     classification = database.Column(database.String(50), index=True)
     # Efectivo, Cta. Bancaria, Inventario, Por Cobrar, Por Pagar
@@ -539,7 +593,9 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     start = database.Column(database.Date())
     end = database.Column(database.Date())
     budget = database.Column(database.Numeric(precision=20, scale=2), nullable=True)
-    budget_currency_code = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    budget_currency_code = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -558,11 +614,13 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "naming_series"
-    __table_args__ = (database.UniqueConstraint("entity_type", "company", "prefix_template", name="uq_naming_series_prefix"),)
+    __table_args__ = (database.UniqueConstraint("entity_type", "company", "name", name="uq_naming_series_name"),)
     name = database.Column(database.String(100), nullable=False)
     # Tipo de entidad: sales_invoice, payment_entry, journal_entry, etc.
     entity_type = database.Column(database.String(50), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     prefix_template = database.Column(database.String(100), nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     # Solo una serie activa puede ser predeterminada por entity_type + company.
@@ -592,8 +650,18 @@ class SeriesSequenceMap(database.Model, BaseTabla):  # type: ignore[name-defined
     """Mapa N:M entre series y secuencias — flexibilidad maxima."""
 
     __tablename__ = "series_sequence_map"
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True)
-    sequence_id = database.Column(database.String(26), database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    naming_series_id = database.Column(
+        database.String(26),
+        database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    sequence_id = database.Column(
+        database.String(26),
+        database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     priority = database.Column(database.Integer(), default=0, nullable=False)
     # Condicion JSON para seleccion dinamica (banco, metodo de pago, etc.)
     condition = database.Column(database.Text(), nullable=True)
@@ -612,9 +680,16 @@ class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-de
     entity_type = database.Column(database.String(50), nullable=False, index=True)
     entity_id = database.Column(database.String(26), nullable=False, index=True)
     full_identifier = database.Column(database.String(200), nullable=False, unique=True)
-    sequence_id = database.Column(database.String(26), database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    sequence_id = database.Column(
+        database.String(26), database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     generated_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     posting_date = database.Column(database.Date(), nullable=True)
 
 
@@ -630,7 +705,12 @@ class ExternalCounter(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "external_counter"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     name = database.Column(database.String(100), nullable=False)
     # Tipo: checkbook, fiscal, receipt, bank_transfer, other
     counter_type = database.Column(database.String(50), nullable=True)
@@ -640,7 +720,9 @@ class ExternalCounter(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     description = database.Column(database.Text(), nullable=True)
     # Relacion opcional con una NamingSeries interna
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
 
     @property
     def next_suggested(self) -> int:
@@ -664,7 +746,10 @@ class ExternalCounterAuditLog(database.Model, BaseTabla):  # type: ignore[name-d
 
     __tablename__ = "external_counter_audit_log"
     external_counter_id = database.Column(
-        database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     previous_value = database.Column(database.Integer(), nullable=False)
     new_value = database.Column(database.Integer(), nullable=False)
@@ -690,9 +775,17 @@ class SeriesExternalCounterMap(database.Model, BaseTabla):  # type: ignore[name-
     """
 
     __tablename__ = "series_external_counter_map"
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True)
+    naming_series_id = database.Column(
+        database.String(26),
+        database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     external_counter_id = database.Column(
-        database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     priority = database.Column(database.Integer(), default=0, nullable=False)
     # JSON con condiciones para seleccion dinamica. Ejemplo:
@@ -711,7 +804,10 @@ class ExternalNumberUsage(database.Model, BaseTabla):  # type: ignore[name-defin
     __tablename__ = "external_number_usage"
     __table_args__ = (UniqueConstraint("external_counter_id", "external_number", name="uq_external_number_per_counter"),)
     external_counter_id = database.Column(
-        database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     # Numero externo como string para soportar prefijos alfanumericos
     external_number = database.Column(database.String(100), nullable=False, index=True)
@@ -750,7 +846,12 @@ class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(50), unique=True, index=True, nullable=False)
     is_customer = database.Column(database.Boolean(), default=False, nullable=False)
     is_supplier = database.Column(database.Boolean(), default=False, nullable=False)
-    party_group_id = database.Column(database.String(26), database.ForeignKey(PARTY_GROUP_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    party_group_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_GROUP_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     name = database.Column(database.String(150), nullable=False)
     comercial_name = database.Column(database.String(150), nullable=True)
     fiscal_name = database.Column(database.String(150), nullable=True)
@@ -808,8 +909,18 @@ class PartyContact(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Relacion N:M entre terceros y contactos."""
 
     __tablename__ = "party_contact"
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    contact_id = database.Column(database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    contact_id = database.Column(
+        database.String(26),
+        database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     # billing, sales, purchasing, logistics, support, primary
     role = database.Column(database.String(30), nullable=True)
 
@@ -818,8 +929,18 @@ class PartyAddress(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Relacion N:M entre terceros y direcciones."""
 
     __tablename__ = "party_address"
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    address_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     # billing, shipping, office, branch, warehouse
     address_type = database.Column(database.String(30), nullable=True)
     is_primary = database.Column(database.Boolean(), default=False, nullable=False)
@@ -851,23 +972,61 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "company_party"
     __table_args__ = (UniqueConstraint("company", "party_id", name="uq_company_party"),)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     credit_limit = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    payment_terms_id = database.Column(database.String(26), database.ForeignKey(PAYMENT_TERMS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    tax_template_id = database.Column(database.String(26), database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    default_tax_rule_id = database.Column(database.String(26), database.ForeignKey("tax_rule.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    payment_terms_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PAYMENT_TERMS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    tax_template_id = database.Column(
+        database.String(26),
+        database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    default_tax_rule_id = database.Column(
+        database.String(26),
+        database.ForeignKey("tax_rule.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     default_price_list_id = database.Column(
-        database.String(26), database.ForeignKey("price_list.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("price_list.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     allow_purchase_invoice_without_order = database.Column(database.Boolean(), default=False, nullable=False)
     allow_purchase_invoice_without_receipt = database.Column(database.Boolean(), default=False, nullable=False)
-    default_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_purchase_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    default_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_income_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_expense_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_purchase_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_advance_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     default_cost_center = database.Column(database.String(10), nullable=True)
     default_business_unit = database.Column(database.String(10), nullable=True)
     default_bank_name = database.Column(database.String(150), nullable=True)
@@ -906,22 +1065,45 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_stock_item = database.Column(database.Boolean(), default=False, nullable=False)
     is_purchase_item = database.Column(database.Boolean(), default=True, nullable=False)
     is_sale_item = database.Column(database.Boolean(), default=True, nullable=False)
-    item_category_id = database.Column(database.String(26), database.ForeignKey(ITEM_CATEGORY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    item_category_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ITEM_CATEGORY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     has_batch = database.Column(database.Boolean(), default=False, nullable=False)
     has_serial_no = database.Column(database.Boolean(), default=False, nullable=False)
     has_expiry_date = database.Column(database.Boolean(), default=False, nullable=False)
-    default_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
-    purchase_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    sale_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_warehouse_id = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    default_supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    default_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    purchase_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    sale_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_warehouse_id = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    default_supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     allow_negative_stock = database.Column(database.Boolean(), default=False, nullable=False)
     min_stock_qty = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     max_stock_qty = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     reorder_level = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     standard_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     last_purchase_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     brand = database.Column(database.String(100), nullable=True)
     model_name = database.Column(database.String(100), nullable=True)
     barcode = database.Column(database.String(100), nullable=True)
@@ -933,9 +1115,18 @@ class ItemUOMConversion(database.Model, BaseTabla):  # type: ignore[name-defined
 
     __tablename__ = "item_uom_conversion"
     __table_args__ = (UniqueConstraint("item_code", "from_uom", "to_uom", name="uq_item_uom_conv"),)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    from_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
-    to_uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    from_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    to_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     conversion_factor = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
 
 
@@ -949,7 +1140,12 @@ class Warehouse(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     code = database.Column(database.String(20), index=True, nullable=False)
     name = database.Column(database.String(150), nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     parent_warehouse = database.Column(database.String(20), nullable=True)
     is_group = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
@@ -985,7 +1181,12 @@ class Batch(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "batch"
     __table_args__ = (UniqueConstraint("item_code", "batch_no", name="uq_batch"),)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     batch_no = database.Column(database.String(100), nullable=False, index=True)
     expiry_date = database.Column(database.Date(), nullable=True)
     manufacturing_date = database.Column(database.Date(), nullable=True)
@@ -997,10 +1198,17 @@ class SerialNumber(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Numero de serie de un item inventariable."""
 
     __tablename__ = "serial_number"
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     serial_no = database.Column(database.String(100), nullable=False, unique=True, index=True)
     serial_status = database.Column(database.String(20), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     purchase_date = database.Column(database.Date(), nullable=True)
     warranty_expiry_date = database.Column(database.Date(), nullable=True)
 
@@ -1011,13 +1219,23 @@ class StockEntry(database.Model, DocBase):  # type: ignore[name-defined]
     __tablename__ = "stock_entry"
     # receipt, issue, transfer, manufacture, repack
     purpose = database.Column(database.String(30), nullable=False, index=True)
-    from_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    to_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    from_warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    to_warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     total_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    adjustment_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     cost_center_code = database.Column(database.String(10), nullable=True)
-    unit_code = database.Column(database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    project_code = database.Column(database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    unit_code = database.Column(
+        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    project_code = database.Column(
+        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1026,19 +1244,36 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "stock_entry_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_sei_qty_positive"),
         database.CheckConstraint("amount >= 0", name="ck_sei_amount_non_negative"),
     )
-    stock_entry_id = database.Column(database.String(26), database.ForeignKey("stock_entry.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    source_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    target_warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    stock_entry_id = database.Column(
+        database.String(26),
+        database.ForeignKey("stock_entry.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    source_warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    target_warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     basic_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     current_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
@@ -1069,9 +1304,24 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     )
     posting_date = database.Column(database.Date(), nullable=False, index=True)
     posting_time = database.Column(database.Time(), nullable=True)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     qty_change = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     qty_after_transaction = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
@@ -1079,7 +1329,9 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     serial_no = database.Column(database.String(100), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
     created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
@@ -1091,9 +1343,24 @@ class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "stock_bin"
     __table_args__ = (UniqueConstraint("item_code", "warehouse", name="uq_stock_bin"),)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     actual_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=False)
     reserved_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=False)
     ordered_qty = database.Column(database.Numeric(precision=20, scale=9), default=0, nullable=True)
@@ -1106,7 +1373,6 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
 
     __tablename__ = "stock_valuation_layer"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_svl_qty_positive"),
         database.CheckConstraint("rate >= 0", name="ck_svl_rate_non_negative"),
     )
     id = database.Column(
@@ -1116,9 +1382,24 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
         index=True,
         default=obtiene_texto_unico,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     stock_value_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1139,12 +1420,27 @@ class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defi
         database.CheckConstraint("base_amount >= 0", name="ck_lca_base_amount_nn"),
         database.CheckConstraint("allocated_amount >= 0", name="ck_lca_allocated_amount_nn"),
     )
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     document_type = database.Column(database.String(50), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
     document_line_id = database.Column(database.String(26), nullable=False, index=True)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     posting_date = database.Column(database.Date(), nullable=False, index=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
@@ -1167,7 +1463,12 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
     """Orden de compra."""
 
     __tablename__ = "purchase_order"
-    supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     supplier_name = database.Column(database.String(200), nullable=True)
     supplier_invoice_no = database.Column(database.String(50), nullable=True)
     total_qty = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1176,7 +1477,9 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
     net_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    billing_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    billing_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1190,13 +1493,23 @@ class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined
         database.CheckConstraint("amount >= 0", name="ck_poi_amount_non_negative"),
     )
     purchase_order_id = database.Column(
-        database.String(26), database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1204,14 +1517,21 @@ class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     received_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     billed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class PurchaseQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     """Solicitud de cotización de compra."""
 
     __tablename__ = "purchase_quotation"
-    supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     supplier_name = database.Column(database.String(200), nullable=True)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1229,19 +1549,31 @@ class PurchaseQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
         database.CheckConstraint("amount >= 0", name="ck_pqi_amount_non_negative"),
     )
     purchase_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class PurchaseRequest(database.Model, DocBase):  # type: ignore[name-defined]
@@ -1260,33 +1592,51 @@ class PurchaseRequestItem(database.Model, BaseTabla):  # type: ignore[name-defin
     """Linea de una solicitud de compra."""
 
     __tablename__ = "purchase_request_item"
-    __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_preqi_qty_positive"),
-    )
+    __table_args__ = (database.CheckConstraint("qty > 0", name="ck_preqi_qty_positive"),)
     purchase_request_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class SupplierQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     """Cotización de proveedor derivada de una solicitud de cotización."""
 
     __tablename__ = "supplier_quotation"
-    supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     supplier_name = database.Column(database.String(200), nullable=True)
     purchase_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1304,28 +1654,50 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
         database.CheckConstraint("amount >= 0", name="ck_sqi_amount_non_negative"),
     )
     supplier_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class PurchaseReceipt(database.Model, DocBase):  # type: ignore[name-defined]
     """Recepcion de compra."""
 
     __tablename__ = "purchase_receipt"
-    supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     supplier_name = database.Column(database.String(200), nullable=True)
-    purchase_order_id = database.Column(database.String(26), database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    purchase_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1342,18 +1714,32 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
         database.CheckConstraint("amount >= 0", name="ck_prci_amount_non_negative"),
     )
     purchase_receipt_id = database.Column(
-        database.String(26), database.ForeignKey(PURCHASE_RECEIPT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(PURCHASE_RECEIPT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
 
@@ -1366,16 +1752,34 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     """
 
     __tablename__ = "purchase_invoice"
-    supplier_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     supplier_name = database.Column(database.String(200), nullable=True)
     supplier_invoice_no = database.Column(database.String(50), nullable=True)  # Validado contra duplicados
     document_type = database.Column(database.String(50), nullable=False, default="purchase_invoice")
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
-    purchase_order_id = database.Column(database.String(26), database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    purchase_receipt_id = database.Column(
-        database.String(26), database.ForeignKey(PURCHASE_RECEIPT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    purchase_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
-    tax_template_id = database.Column(database.String(26), database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    purchase_receipt_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_RECEIPT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    tax_template_id = database.Column(
+        database.String(26),
+        database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1383,7 +1787,9 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     base_grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    billing_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    billing_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1397,18 +1803,32 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
         database.CheckConstraint("amount >= 0", name="ck_pii_amount_non_negative"),
     )
     purchase_invoice_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    expense_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -1418,19 +1838,33 @@ class SalesOrder(database.Model, DocBase):  # type: ignore[name-defined]
     """Orden de venta."""
 
     __tablename__ = "sales_order"
-    customer_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    customer_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     customer_name = database.Column(database.String(200), nullable=True)
     sales_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("sales_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("sales_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     is_pos = database.Column(database.Boolean(), default=False, nullable=False)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    billing_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    shipping_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    contact_id = database.Column(database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    billing_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    shipping_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    contact_id = database.Column(
+        database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1438,7 +1872,12 @@ class SalesRequest(database.Model, DocBase):  # type: ignore[name-defined]
     """Pedido de venta interno."""
 
     __tablename__ = "sales_request"
-    customer_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    customer_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     customer_name = database.Column(database.String(200), nullable=True)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1456,28 +1895,50 @@ class SalesRequestItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.CheckConstraint("amount >= 0", name="ck_sri_amount_non_negative"),
     )
     sales_request_id = database.Column(
-        database.String(26), database.ForeignKey("sales_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("sales_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class SalesQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     """Cotización de venta."""
 
     __tablename__ = "sales_quotation"
-    customer_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    customer_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     customer_name = database.Column(database.String(200), nullable=True)
-    sales_request_id = database.Column(database.String(26), database.ForeignKey("sales_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    sales_request_id = database.Column(
+        database.String(26),
+        database.ForeignKey("sales_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1494,20 +1955,32 @@ class SalesQuotationItem(database.Model, BaseTabla):  # type: ignore[name-define
         database.CheckConstraint("amount >= 0", name="ck_sqti_amount_non_negative"),
     )
     sales_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("sales_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("sales_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(20, scale=4), nullable=True)
     discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1519,18 +1992,32 @@ class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.CheckConstraint("rate >= 0", name="ck_soi_rate_non_negative"),
         database.CheckConstraint("amount >= 0", name="ck_soi_amount_non_negative"),
     )
-    sales_order_id = database.Column(database.String(26), database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    sales_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     delivered_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True, default=0)
     billed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True, default=0)
 
@@ -1539,12 +2026,26 @@ class DeliveryNote(database.Model, DocBase):  # type: ignore[name-defined]
     """Nota de entrega."""
 
     __tablename__ = "delivery_note"
-    customer_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    customer_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     customer_name = database.Column(database.String(200), nullable=True)
-    sales_order_id = database.Column(database.String(26), database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    sales_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
-    shipping_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    contact_id = database.Column(database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    shipping_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    contact_id = database.Column(
+        database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     reservation_released = database.Column(database.Boolean(), default=False, nullable=False)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1561,17 +2062,31 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.CheckConstraint("amount >= 0", name="ck_dni_amount_non_negative"),
     )
     delivery_note_id = database.Column(
-        database.String(26), database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     serial_no = database.Column(database.String(100), nullable=True)
 
 
@@ -1579,15 +2094,35 @@ class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     """Factura de venta."""
 
     __tablename__ = "sales_invoice"
-    customer_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    customer_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     customer_name = database.Column(database.String(200), nullable=True)
     document_type = database.Column(database.String(50), nullable=False, default="sales_invoice")
     is_pos = database.Column(database.Boolean(), default=False, nullable=False)
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
-    sales_order_id = database.Column(database.String(26), database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    delivery_note_id = database.Column(database.String(26), database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True, index=True)
+    sales_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(SALES_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    delivery_note_id = database.Column(
+        database.String(26),
+        database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     update_inventory = database.Column(database.Boolean(), default=False, nullable=False)
-    tax_template_id = database.Column(database.String(26), database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    tax_template_id = database.Column(
+        database.String(26),
+        database.ForeignKey(TAX_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1595,8 +2130,12 @@ class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     base_grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    billing_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    contact_id = database.Column(database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    billing_address_id = database.Column(
+        database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    contact_id = database.Column(
+        database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.Text(), nullable=True)
 
 
@@ -1610,21 +2149,37 @@ class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.CheckConstraint("amount >= 0", name="ck_sii_amount_non_negative"),
     )
     sales_invoice_id = database.Column(
-        database.String(26), database.ForeignKey("sales_invoice.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("sales_invoice.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     item_name = database.Column(database.String(200), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    batch_id = database.Column(database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    income_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     serial_no = database.Column(database.String(100), nullable=True)
 
 
@@ -1651,15 +2206,33 @@ class BankAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "bank_account"
     __table_args__ = (UniqueConstraint("company", "account_no", name="uq_bank_account"),)
-    bank_id = database.Column(database.String(26), database.ForeignKey("bank.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    bank_id = database.Column(
+        database.String(26),
+        database.ForeignKey("bank.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     account_name = database.Column(database.String(150), nullable=False)
     account_no = database.Column(database.String(50), nullable=True)
     iban = database.Column(database.String(50), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    gl_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
-    default_external_counter_id = database.Column(database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    gl_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    default_external_counter_id = database.Column(
+        database.String(26), database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -1670,20 +2243,39 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     # receive, pay, internal_transfer
     payment_type = database.Column(database.String(30), nullable=False, index=True)
     party_type = database.Column(database.String(20), nullable=True, index=True)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    party_name = database.Column(database.String(200), nullable=True)
-    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    target_bank_account_id = database.Column(
-        database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    party_name = database.Column(database.String(200), nullable=True)
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    target_bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    paid_from_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    paid_to_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    paid_from_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    paid_to_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(database.String(10), nullable=True)
     project_code = database.Column(database.String(10), nullable=True)
@@ -1698,7 +2290,12 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "payment_reference"
     __table_args__ = (UniqueConstraint("payment_id", "reference_type", "reference_id", name="uq_payment_reference"),)
-    payment_id = database.Column(database.String(26), database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    payment_id = database.Column(
+        database.String(26),
+        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     flow_source_type = database.Column(database.String(50), nullable=True, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
@@ -1707,7 +2304,9 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     party_type = database.Column(database.String(20), nullable=True, index=True)
     party_id = database.Column(database.String(26), nullable=True, index=True)
     company = database.Column(database.String(26), nullable=True, index=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     total_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount_after = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -1748,19 +2347,30 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     target_type = database.Column(database.String(50), nullable=False)
     target_id = database.Column(database.String(26), nullable=False)
     target_item_id = database.Column(database.String(26), nullable=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     relation_type = database.Column(database.String(50), nullable=False, index=True)
     # active, reverted, closed. Reverted/closed relations remain as historical trace.
     status = database.Column(database.String(20), default="active", nullable=False, index=True)
     reversed_at = database.Column(database.DateTime(timezone=True), nullable=True)
-    reversed_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    reversed_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     reversal_reason = database.Column(database.Text(), nullable=True)
     cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
-    cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    cancelled_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     metadata_json = database.Column(database.Text(), nullable=True)
 
 
@@ -1786,7 +2396,12 @@ class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-def
     source_id = database.Column(database.String(26), nullable=False)
     source_item_id = database.Column(database.String(26), nullable=False)
     target_type = database.Column(database.String(50), nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     source_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     processed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     cancelled_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
@@ -1795,7 +2410,9 @@ class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-def
     # open, partial, complete, closed, cancelled
     line_status = database.Column(database.String(30), default="open", nullable=False, index=True)
     closed_at = database.Column(database.DateTime(timezone=True), nullable=True)
-    closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    closed_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     close_reason = database.Column(database.Text(), nullable=True)
 
 
@@ -1803,14 +2420,24 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Transaccion bancaria importada o ingresada manualmente."""
 
     __tablename__ = "bank_transaction"
-    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     posting_date = database.Column(database.Date(), nullable=False, index=True)
     deposit = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     withdrawal = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     reference_number = database.Column(database.String(100), nullable=True)
     is_reconciled = database.Column(database.Boolean(), default=False, nullable=False)
-    payment_entry_id = database.Column(database.String(26), database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    payment_entry_id = database.Column(
+        database.String(26),
+        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -1864,7 +2491,9 @@ class GLBase:
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    naming_series_id = database.Column(database.String(26), database.ForeignKey("naming_series.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey("naming_series.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name-defined]
@@ -1874,9 +2503,13 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     book_codes = database.Column(database.Text(), nullable=True)
-    transaction_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    transaction_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     is_closing = database.Column(database.Boolean(), default=False, nullable=False)
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)
@@ -1887,10 +2520,14 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     )
     is_recurrent = database.Column(database.Boolean(), default=False, nullable=False)
     recurrent_template_id = database.Column(
-        database.String(26), database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(26),
+        database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
     )
     recurrent_application_id = database.Column(
-        database.String(26), database.ForeignKey("recurring_journal_application.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE), nullable=True
+        database.String(26),
+        database.ForeignKey("recurring_journal_application.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        nullable=True,
     )
 
 
@@ -1899,9 +2536,18 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
 
     __tablename__ = "recurring_journal_template"
     code = database.Column(database.String(50), unique=True, index=True, nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    )
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     book_codes = database.Column(database.Text(), nullable=True)
     name = database.Column(database.String(100), nullable=False)
     description = database.Column(database.Text(), nullable=True)
@@ -1910,11 +2556,17 @@ class RecurringJournalTemplate(database.Model, BaseTabla):  # type: ignore[name-
     # monthly, etc.
     frequency = database.Column(database.String(20), default="monthly", nullable=False)
     status = database.Column(database.String(20), default="draft", nullable=False, index=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     docstatus = database.Column(database.Integer(), default=0, nullable=False)
-    approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    approved_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
-    cancelled_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    cancelled_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
     last_applied_date = database.Column(database.Date(), nullable=True)
@@ -1926,7 +2578,10 @@ class RecurringJournalItem(database.Model, BaseTabla):  # type: ignore[name-defi
 
     __tablename__ = "recurring_journal_item"
     template_id = database.Column(
-        database.String(26), database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     account_code = database.Column(database.String(50), nullable=False)
     debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
@@ -1953,10 +2608,20 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
             "company", "ledger_id", "template_id", "fiscal_year", "accounting_period", name="uq_recurring_application"
         ),
     )
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    )
     template_id = database.Column(
-        database.String(26), database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(RECURRING_JOURNAL_TEMPLATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     fiscal_year = database.Column(database.String(50), nullable=False)
     accounting_period = database.Column(database.String(50), nullable=False)
@@ -1964,9 +2629,13 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     # applied, failed, reversed, skipped
     status = database.Column(database.String(20), default="applied", nullable=False, index=True)
     journal_id = database.Column(
-        database.String(26), database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE), nullable=True
+        database.String(26),
+        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        nullable=True,
     )
-    applied_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    applied_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     error_message = database.Column(database.Text(), nullable=True)
 
 
@@ -1975,7 +2644,12 @@ class ComprobanteContableDetalle(database.Model, GLBase):  # type: ignore[name-d
 
     __tablename__ = "comprobante_contable_detalle"
     is_advance = database.Column(database.Boolean(), default=False, nullable=False)
-    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 class GLEntry(database.Model):  # type: ignore[name-defined]
@@ -1998,7 +2672,9 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         database.Index("ix_gl_entry_company_date", "company", "posting_date"),
         database.Index("ix_gl_entry_ledger", "ledger_id", "posting_date"),
         database.Index("ix_gl_entry_reversal", "reversal_of"),
-        ForeignKeyConstraint(["company", "cost_center_code"], ["cost_center.entity", "cost_center.code"], ondelete=FK_RESTRICT),
+        ForeignKeyConstraint(
+            ["company", "cost_center_code"], ["cost_center.entity", "cost_center.code"], ondelete=FK_RESTRICT
+        ),
         CheckConstraint(
             "(debit > 0 AND credit = 0) OR (debit = 0 AND credit > 0)",
             name="ck_gl_entry_debit_credit_integrity",
@@ -2015,10 +2691,19 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         default=obtiene_texto_unico,
     )
     posting_date = database.Column(database.Date(), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     # Libro contable al que pertenece esta entrada (Fiscal, NIIF, Board Review, etc.)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    ledger_id = database.Column(
+        database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     account_code = database.Column(database.String(50), nullable=True, index=True)
     # Debito y credito en moneda base de la compania
     debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
@@ -2026,13 +2711,24 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     # Debito y credito en moneda original de la transaccion
     debit_in_account_currency = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     credit_in_account_currency = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    account_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    company_currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    account_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    company_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     # Tercero (AR/AP) — requerido si la cuenta es receivable o payable
     party_type = database.Column(database.String(20), nullable=True)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    party_id = database.Column(
+        database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     is_advance = database.Column(database.Boolean(), default=False, nullable=False)
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)
     # Trazabilidad de voucher — permite rastrear el origen de cada entrada
@@ -2040,19 +2736,33 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     voucher_id = database.Column(database.String(26), nullable=False)
     # Identificador documental (series) persistido para trazabilidad cruzada
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    naming_series_id = database.Column(database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     # Periodo fiscal
-    fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    accounting_period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    fiscal_year_id = database.Column(
+        database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    accounting_period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
     # Dimensiones analiticas de primer nivel
     cost_center_code = database.Column(database.String(10), nullable=True)
     # Unidad de negocio como dimension analitica (sucursal, oficina, punto de venta)
-    unit_code = database.Column(database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    project_code = database.Column(database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    unit_code = database.Column(
+        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    project_code = database.Column(
+        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     remarks = database.Column(database.String(500), nullable=True)
     # Reversion contable append-only
     is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
-    reversal_of = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    reversal_of = database.Column(
+        database.String(26), database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
     created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
@@ -2064,7 +2774,10 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     )
     modified_by = database.Column(database.String(26), nullable=True)
     exchange_revaluation_run_id = database.Column(
-        database.String(26), database.ForeignKey("exchange_revaluation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("exchange_revaluation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
 
 
@@ -2085,10 +2798,15 @@ class DimensionValue(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "dimension_value"
     dimension_type_id = database.Column(
-        database.String(26), database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     value = database.Column(database.String(100), nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -2096,12 +2814,23 @@ class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Dimension analitica adicional de una entrada GL (0..N por entrada)."""
 
     __tablename__ = "gl_entry_dimension"
-    gl_entry_id = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    gl_entry_id = database.Column(
+        database.String(26),
+        database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     dimension_type_id = database.Column(
-        database.String(26), database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     dimension_value_id = database.Column(
-        database.String(26), database.ForeignKey("dimension_value.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("dimension_value.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
 
 
@@ -2114,12 +2843,30 @@ class ItemAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "item_account"
     __table_args__ = (UniqueConstraint("item_code", "company", name="uq_item_account"),)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    cogs_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    stock_adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    income_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    expense_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    cogs_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    stock_adjustment_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     cost_center_code = database.Column(database.String(10), nullable=True)
 
 
@@ -2128,43 +2875,110 @@ class PartyAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "party_account"
     __table_args__ = (UniqueConstraint("party_id", "company", name="uq_party_account"),)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    receivable_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    payable_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    receivable_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    payable_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Cuentas contables predeterminadas por compania."""
 
     __tablename__ = "company_default_account"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
-    default_receivable = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_payable = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_cash = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_bank = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_income = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_expense = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_cogs = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    inventory_adjustment_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        unique=True,
+    )
+    default_receivable = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_payable = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_cash = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_bank = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_income = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_expense = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_cogs = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    inventory_adjustment_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     # Cuenta puente para conciliacion de recepciones con facturas de compra
-    bridge_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    customer_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    supplier_advance_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    bridge_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    customer_advance_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    supplier_advance_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     apply_advances_automatically = database.Column(database.Boolean(), default=False, nullable=False)
-    bank_difference_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_sales_tax_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_purchase_tax_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    default_rounding_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    exchange_gain_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    exchange_loss_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    unrealized_exchange_gain_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    unrealized_exchange_loss_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    deferred_income_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    deferred_expense_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    payment_discount_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    period_profit_loss_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    retained_earnings_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    bank_difference_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_sales_tax_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_purchase_tax_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    default_rounding_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    exchange_gain_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    exchange_loss_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    unrealized_exchange_gain_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    unrealized_exchange_loss_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    deferred_income_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    deferred_expense_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    payment_discount_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    period_profit_loss_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    retained_earnings_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2180,7 +2994,9 @@ class Tax(database.Model, BaseTabla):  # type: ignore[name-defined]
     tax_type = database.Column(database.String(20), nullable=False)
     # purchase, sales, both
     applies_to = database.Column(database.String(20), default="both", nullable=False, index=True)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     is_charge = database.Column(database.Boolean(), default=False, nullable=False)
     is_capitalizable = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
@@ -2191,10 +3007,14 @@ class TaxTemplate(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "tax_template"
     name = database.Column(database.String(100), nullable=False)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     # buying, selling
     template_type = database.Column(database.String(20), default="selling", nullable=False, index=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
@@ -2202,8 +3022,18 @@ class TaxTemplateItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de plantilla de impuestos."""
 
     __tablename__ = "tax_template_item"
-    tax_template_id = database.Column(database.String(26), database.ForeignKey("tax_template.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    tax_id = database.Column(database.String(26), database.ForeignKey("tax.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    tax_template_id = database.Column(
+        database.String(26),
+        database.ForeignKey("tax_template.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    tax_id = database.Column(
+        database.String(26),
+        database.ForeignKey("tax.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     sequence = database.Column(database.Integer(), nullable=True)
     # net_line, net_document, previous_total
     calculation_base = database.Column(database.String(30), default="net_document", nullable=False)
@@ -2216,7 +3046,12 @@ class TaxRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Regla fiscal configurable para el motor de calculo."""
 
     __tablename__ = "tax_rule"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     name = database.Column(database.String(100), nullable=False)
     applies_to = database.Column(database.String(20), default="both", nullable=False, index=True)
     level = database.Column(database.String(20), default="transaction", nullable=False, index=True)
@@ -2231,14 +3066,18 @@ class TaxRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     sequence = database.Column(database.Integer(), default=10, nullable=False, index=True)
     accounting_treatment = database.Column(database.String(50), default="separate_tax_account", nullable=False)
     recognition_event = database.Column(database.String(30), default="invoice", nullable=False)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     affects_inventory = database.Column(database.Boolean(), default=False, nullable=False)
     affects_cost = database.Column(database.Boolean(), default=False, nullable=False)
     affects_document_total = database.Column(database.Boolean(), default=True, nullable=False)
     affects_settlement = database.Column(database.Boolean(), default=False, nullable=False)
     participates_in_next_base = database.Column(database.Boolean(), default=False, nullable=False)
     allocation_method = database.Column(database.String(30), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     country = database.Column(database.String(10), nullable=True)
     valid_from = database.Column(database.Date(), nullable=True)
     valid_to = database.Column(database.Date(), nullable=True)
@@ -2250,10 +3089,17 @@ class DocumentTaxSummary(database.Model, BaseTabla):  # type: ignore[name-define
 
     __tablename__ = "document_tax_summary"
     __table_args__ = (UniqueConstraint("document_type", "document_id", name="uq_document_tax_summary_document"),)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     document_type = database.Column(database.String(50), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     subtotal = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     document_tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     capitalizable_tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
@@ -2283,7 +3129,9 @@ class DocumentTaxLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     accounting_treatment = database.Column(database.String(50), nullable=False, default="separate_tax_account")
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     affects_inventory = database.Column(database.Boolean(), default=False, nullable=False)
     affects_document_total = database.Column(database.Boolean(), default=True, nullable=False)
     included_in_price = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2302,8 +3150,12 @@ class PriceList(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "price_list"
     name = database.Column(database.String(100), nullable=False)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     is_buying = database.Column(database.Boolean(), default=False, nullable=False)
     is_selling = database.Column(database.Boolean(), default=True, nullable=False)
     is_default = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2314,9 +3166,21 @@ class ItemPrice(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Precio de un item en una lista de precios."""
 
     __tablename__ = "item_price"
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    price_list_id = database.Column(database.String(26), database.ForeignKey("price_list.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    price_list_id = database.Column(
+        database.String(26),
+        database.ForeignKey("price_list.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     price = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     min_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     valid_from = database.Column(database.Date(), nullable=True)
@@ -2327,8 +3191,18 @@ class BankMatchingRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Regla configurable para matching de extractos bancarios."""
 
     __tablename__ = "bank_matching_rule"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    bank_account_id = database.Column(database.String(26), database.ForeignKey("bank_account.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey("bank_account.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     name = database.Column(database.String(100), nullable=False)
     days_tolerance = database.Column(database.Integer(), default=7, nullable=False)
     amount_tolerance = database.Column(database.Numeric(precision=20, scale=4), default=0, nullable=False)
@@ -2344,8 +3218,18 @@ class Reconciliation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Conciliacion de cuentas."""
 
     __tablename__ = "reconciliation"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    party_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     recon_date = database.Column(database.Date(), nullable=False)
     # bank, AR, AP
     recon_type = database.Column(database.String(20), nullable=False)
@@ -2360,7 +3244,10 @@ class ReconciliationItem(database.Model, BaseTabla):  # type: ignore[name-define
         database.Index("ix_reconciliation_item_target", "target_type", "target_id"),
     )
     reconciliation_id = database.Column(
-        database.String(26), database.ForeignKey("reconciliation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("reconciliation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     reference_type = database.Column(database.String(50), nullable=False)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
@@ -2389,7 +3276,12 @@ class PurchaseMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-de
     """
 
     __tablename__ = "purchase_matching_config"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        unique=True,
+    )
     # 2-way: OC vs Factura | 3-way: OC vs Recepcion vs Factura
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
     # percentage | absolute
@@ -2416,7 +3308,12 @@ class SalesMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-defin
     """
 
     __tablename__ = "sales_matching_config"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, unique=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        unique=True,
+    )
     # 3-way: OV + DN + Factura | 2-way: OV + Factura
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
     # percentage | absolute
@@ -2439,7 +3336,12 @@ class PurchaseEconomicEvent(database.Model, BaseTabla):  # type: ignore[name-def
     __tablename__ = "purchase_economic_event"
     # GOODS_RECEIVED | INVOICE_RECEIVED | MATCH_COMPLETED | MATCH_FAILED | MATCH_CANCELLED
     event_type = database.Column(database.String(30), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     # purchase_receipt | purchase_invoice | purchase_reconciliation
     document_type = database.Column(database.String(50), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
@@ -2453,15 +3355,29 @@ class PurchaseReconciliation(database.Model, BaseTabla):  # type: ignore[name-de
     """Conciliacion de recepciones de compra con facturas de proveedor."""
 
     __tablename__ = "purchase_reconciliation"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     purchase_order_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_order.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_order.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     purchase_receipt_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_receipt.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_receipt.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     purchase_invoice_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     # matching_type snapshot from config at the time of reconciliation
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
@@ -2485,20 +3401,44 @@ class PurchaseReconciliationItem(database.Model, BaseTabla):  # type: ignore[nam
         database.Index("ix_purch_recon_item_invoice", "purchase_invoice_item_id"),
     )
     purchase_reconciliation_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_reconciliation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("purchase_reconciliation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     purchase_order_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_order_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_order_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     purchase_receipt_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_receipt_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     purchase_invoice_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("purchase_invoice_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    uom = database.Column(database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     received_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     invoiced_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     matched_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
@@ -2521,11 +3461,17 @@ class ExchangeRevaluation(database.Model, DocBase):  # type: ignore[name-defined
     month = database.Column(database.Integer(), nullable=True, index=True)
     run_date = database.Column(database.Date(), nullable=True, index=True)
     generated_journal = database.Column(database.Boolean(), default=False, nullable=False)
-    target_account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    currency = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    target_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     journal_entry_id = database.Column(database.String(26), nullable=True)
     reversal_journal_id = database.Column(database.String(26), nullable=True)
-    voided_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    voided_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     voided_at = database.Column(database.DateTime(timezone=True), nullable=True)
     void_reason = database.Column(database.Text(), nullable=True)
     processed_documents_count = database.Column(database.Integer(), default=0, nullable=False)
@@ -2539,7 +3485,10 @@ class ExchangeRevaluationItem(database.Model, BaseTabla):  # type: ignore[name-d
 
     __tablename__ = "exchange_revaluation_item"
     revaluation_id = database.Column(
-        database.String(26), database.ForeignKey("exchange_revaluation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("exchange_revaluation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     reference_type = database.Column(database.String(50), nullable=False)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
@@ -2549,19 +3498,45 @@ class ExchangeRevaluationItem(database.Model, BaseTabla):  # type: ignore[name-d
     source_document_type = database.Column(database.String(50), nullable=True, index=True)
     source_document_id = database.Column(database.String(26), nullable=True, index=True)
     source_document_no = database.Column(database.String(100), nullable=True, index=True)
-    partner_id = database.Column(database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    partner_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     partner_type = database.Column(database.String(20), nullable=True, index=True)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    original_currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
-    ledger_currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    )
+    original_currency_id = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    ledger_currency_id = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     open_amount_original = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     previous_ledger_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     closing_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     revalued_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     exchange_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    journal_line_id = database.Column(database.String(26), database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    bank_account_id = database.Column(database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    journal_line_id = database.Column(
+        database.String(26),
+        database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2571,8 +3546,18 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Ejecucion de cierre de periodo."""
 
     __tablename__ = "period_close_run"
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     # open, in_progress, closed
     run_status = database.Column(database.String(20), nullable=False)
     closed_by = database.Column(database.String(26), nullable=True)
@@ -2583,7 +3568,12 @@ class PeriodCloseCheck(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Verificacion realizada durante el cierre de periodo."""
 
     __tablename__ = "period_close_check"
-    close_run_id = database.Column(database.String(26), database.ForeignKey("period_close_run.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    close_run_id = database.Column(
+        database.String(26),
+        database.ForeignKey("period_close_run.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     check_type = database.Column(database.String(50), nullable=False)
     check_status = database.Column(database.String(20), nullable=False)
     message = database.Column(database.Text(), nullable=True)
@@ -2606,8 +3596,18 @@ class CommentMention(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Mencion de usuario en un comentario."""
 
     __tablename__ = "comment_mention"
-    comment_id = database.Column(database.String(26), database.ForeignKey("comment.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    comment_id = database.Column(
+        database.String(26),
+        database.ForeignKey("comment.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
 
 
 class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2616,8 +3616,15 @@ class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "assignment"
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
-    assigned_to = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    assigned_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    assigned_to = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    assigned_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     # open, in_progress, completed, cancelled
     assignment_status = database.Column(database.String(20), nullable=False, default="open")
     due_date = database.Column(database.Date(), nullable=True)
@@ -2638,7 +3645,12 @@ class WorkflowState(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "workflow_state"
     __table_args__ = (database.UniqueConstraint("workflow_id", "name", name="uq_workflow_state_name"),)
-    workflow_id = database.Column(database.String(26), database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    workflow_id = database.Column(
+        database.String(26),
+        database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     name = database.Column(database.String(50), nullable=False)
     is_initial = database.Column(database.Boolean(), default=False, nullable=False)
     is_final = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2649,8 +3661,18 @@ class WorkflowTransition(database.Model, BaseTabla):  # type: ignore[name-define
 
     __tablename__ = "workflow_transition"
     __table_args__ = (database.UniqueConstraint("from_state_id", "to_state_id", "action_name", name="uq_workflow_transition"),)
-    from_state_id = database.Column(database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    to_state_id = database.Column(database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    from_state_id = database.Column(
+        database.String(26),
+        database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    to_state_id = database.Column(
+        database.String(26),
+        database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     action_name = database.Column(database.String(100), nullable=False)
     role_required = database.Column(database.String(50), nullable=True)
 
@@ -2659,10 +3681,17 @@ class WorkflowInstance(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Instancia de un flujo de trabajo activo en un registro."""
 
     __tablename__ = "workflow_instance"
-    workflow_id = database.Column(database.String(26), database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    workflow_id = database.Column(
+        database.String(26),
+        database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
-    current_state_id = database.Column(database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    current_state_id = database.Column(
+        database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class WorkflowActionLog(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2670,10 +3699,15 @@ class WorkflowActionLog(database.Model, BaseTabla):  # type: ignore[name-defined
 
     __tablename__ = "workflow_action_log"
     workflow_instance_id = database.Column(
-        database.String(26), database.ForeignKey("workflow_instance.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey("workflow_instance.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
     )
     action = database.Column(database.String(100), nullable=False)
-    performed_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    performed_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     performed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     from_state = database.Column(database.String(50), nullable=True)
     to_state = database.Column(database.String(50), nullable=True)
@@ -2692,14 +3726,21 @@ class File(database.Model, BaseTabla):  # type: ignore[name-defined]
     blob_reference = database.Column(database.String(500), nullable=True)
     file_size = database.Column(database.Integer(), nullable=True)
     mime_type = database.Column(database.String(100), nullable=True)
-    uploaded_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    uploaded_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
 
 
 class FileAttachment(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Relacion entre un archivo y cualquier registro del sistema."""
 
     __tablename__ = "file_attachment"
-    file_id = database.Column(database.String(26), database.ForeignKey("file.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    file_id = database.Column(
+        database.String(26),
+        database.ForeignKey("file.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     reference_type = database.Column(database.String(50), nullable=False, index=True)
     reference_id = database.Column(database.String(26), nullable=False, index=True)
 
@@ -2724,7 +3765,9 @@ class AuditLog(database.Model):  # type: ignore[name-defined]
     action = database.Column(database.String(20), nullable=False)
     before_data = database.Column(database.Text(), nullable=True)
     after_data = database.Column(database.Text(), nullable=True)
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    user_id = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    )
     timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
@@ -2744,9 +3787,16 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     document_type = database.Column(database.String(80), nullable=False)
     document_id = database.Column(database.String(26), nullable=False)
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     action = database.Column(database.String(32), nullable=False, index=True)
-    actor_user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    actor_user_id = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+    )
     actor_name = database.Column(database.String(255), nullable=True)
     timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     before_json = database.Column(database.Text(), nullable=True)
@@ -2765,11 +3815,26 @@ class DocumentTask(database.Model, BaseTabla):  # type: ignore[name-defined]
     document_type = database.Column(database.String(80), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     title = database.Column(database.String(255), nullable=False)
     description = database.Column(database.Text(), nullable=True)
-    assigned_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    assigned_to = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    assigned_by = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    assigned_to = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     status = database.Column(database.String(20), nullable=False, default="open", index=True)
     priority = database.Column(database.String(20), nullable=False, default="normal", index=True)
     due_date = database.Column(database.Date(), nullable=True, index=True)
@@ -2792,8 +3857,18 @@ class AccountBalanceSnapshot(database.Model, BaseTabla):  # type: ignore[name-de
 
     __tablename__ = "account_balance_snapshot"
     __table_args__ = (UniqueConstraint("account_id", "company", "snapshot_date", name="uq_account_balance_snap"),)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     snapshot_date = database.Column(database.Date(), nullable=False, index=True)
     debit_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
     credit_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
@@ -2805,9 +3880,24 @@ class StockBalanceSnapshot(database.Model, BaseTabla):  # type: ignore[name-defi
 
     __tablename__ = "stock_balance_snapshot"
     __table_args__ = (UniqueConstraint("item_code", "warehouse", "snapshot_date", name="uq_stock_balance_snap"),)
-    item_code = database.Column(database.String(50), database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    warehouse = database.Column(database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    warehouse = database.Column(
+        database.String(20),
+        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     snapshot_date = database.Column(database.Date(), nullable=False, index=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
@@ -2819,18 +3909,39 @@ class Budget(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "budget"
     __table_args__ = (UniqueConstraint("company", "ledger_id", "fiscal_year_id", "budget_code", name="uq_budget_code"),)
-    company = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    ledger_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    fiscal_year_id = database.Column(database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    fiscal_year_id = database.Column(
+        database.String(26),
+        database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     budget_code = database.Column(database.String(50), nullable=False, index=True)
     name = database.Column(database.String(100), nullable=False)
     description = database.Column(database.Text(), nullable=True)
-    currency_id = database.Column(database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False)
+    currency_id = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     status = database.Column(database.String(20), default="draft", nullable=False, index=True)
 
-    approved_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    approved_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
-    closed_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True)
+    closed_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     closed_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
@@ -2849,12 +3960,42 @@ class BudgetLine(database.Model, BaseTabla):  # type: ignore[name-defined]
             name="uq_budget_line",
         ),
     )
-    budget_id = database.Column(database.String(26), database.ForeignKey("budget.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
-    account_id = database.Column(database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    cost_center_id = database.Column(database.String(26), database.ForeignKey("cost_center.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    business_unit_id = database.Column(database.String(26), database.ForeignKey("unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    project_id = database.Column(database.String(26), database.ForeignKey("project.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True)
-    period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    budget_id = database.Column(
+        database.String(26),
+        database.ForeignKey("budget.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    cost_center_id = database.Column(
+        database.String(26),
+        database.ForeignKey("cost_center.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    business_unit_id = database.Column(
+        database.String(26),
+        database.ForeignKey("unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    project_id = database.Column(
+        database.String(26),
+        database.ForeignKey("project.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     description = database.Column(database.String(200), nullable=True)
 
@@ -2863,7 +4004,12 @@ class BudgetImport(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Lote de importación de presupuesto."""
 
     __tablename__ = "budget_import"
-    budget_id = database.Column(database.String(26), database.ForeignKey("budget.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
+    budget_id = database.Column(
+        database.String(26),
+        database.ForeignKey("budget.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     filename = database.Column(database.String(255), nullable=False)
     # validated, imported, failed
     status = database.Column(database.String(20), default="validated", nullable=False)
@@ -2876,7 +4022,12 @@ class BudgetImportLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Línea temporal de importación para previsualización."""
 
     __tablename__ = "budget_import_line"
-    import_id = database.Column(database.String(26), database.ForeignKey("budget_import.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE), nullable=False, index=True)
+    import_id = database.Column(
+        database.String(26),
+        database.ForeignKey("budget_import.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     row_index = database.Column(database.Integer(), nullable=False, default=0, index=True)
     account_id = database.Column(database.String(26), nullable=True)
     cost_center_id = database.Column(database.String(26), nullable=True)
@@ -2893,8 +4044,18 @@ class UserBookAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "user_book_access"
     __table_args__ = (UniqueConstraint("user_id", "book_id", name="uq_user_book_access"),)
 
-    user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
-    book_id = database.Column(database.String(26), database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False, index=True)
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    book_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     can_read = database.Column(database.Boolean, default=True, nullable=False)
     can_write = database.Column(database.Boolean, default=False, nullable=False)
     can_cancel = database.Column(database.Boolean, default=False, nullable=False)
