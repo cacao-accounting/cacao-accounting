@@ -25,9 +25,8 @@ RUN microdnf update -y --nodocs --best --refresh \
 ENV TINI_VERSION=v0.19.0
 ENV TINI_SUBREAPER=1
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/bin/tini
-RUN chmod +x /usr/bin/tini
-
-RUN microdnf install -y --nodocs --best --refresh \
+RUN chmod +x /usr/bin/tini \
+    && microdnf install -y --nodocs --best --refresh \
        python3.12 python3.12-cryptography \
        pango libxml2 libxslt \
     && microdnf clean all
