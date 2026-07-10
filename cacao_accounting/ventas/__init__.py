@@ -1337,10 +1337,7 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
 
 
 def _validate_sales_invoice_quantities(invoice_id: str) -> None:
-    """Valida que las cantidades facturadas no excedan las entregadas en la Nota de Entrega
-
-    o las ordenadas en la Orden de Venta.
-    """
+    """Valida cantidades facturadas contra Nota de Entrega u Orden de Venta."""
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
             target_type="sales_invoice",
