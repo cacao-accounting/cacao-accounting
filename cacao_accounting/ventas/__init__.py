@@ -203,10 +203,17 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
 
 
 def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
-    """Libera reserva al aprobar una Nota de Entrega vinculada a una OV."""
+    """Libera reserva al aprobar una Nota de Entrega vinculada a una OV.
+
+    Es idempotente: si la liberacion ya ocurrio (``reservation_released``)
+    no resta la cantidad nuevamente, evitando corromper ``reserved_qty`` en
+    reintentos o dobles llamadas.
+    """
     if dn.docstatus != 1:
         return
     if not dn.sales_order_id:
+        return
+    if getattr(dn, "reservation_released", False):
         return
 
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
@@ -224,6 +231,7 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         new_reserved = max(Decimal("0"), reserved - item.qty)
         bin_row.reserved_qty = new_reserved
+    dn.reservation_released = True
 
 
 def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
@@ -249,6 +257,7 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         bin_row.reserved_qty = reserved + item.qty
+    dn.reservation_released = False
 
 
 def _upsert_customer_company_settings_from_request(customer_id: str, form: dict) -> None:
@@ -1226,12 +1235,14 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     return dn
 
 
-def _validate_invoice_prices_against_source(invoice: SalesInvoice) -> list[str]:
+def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_violation: bool = True) -> list[str]:
     """Valida precios de factura contra la Orden de Venta origen.
 
     Retorna una lista de mensajes de advertencia si ``allow_price_difference``
     es ``True`` y el precio excede la tolerancia. Si ``allow_price_difference``
-    es ``False`` y el precio excede la tolerancia, lanza ``ValueError``.
+    es ``False`` y el precio excede la tolerancia, lanza ``ValueError`` salvo
+    que ``raise_on_violation`` sea ``False`` (p.ej. al guardar un borrador), en
+    cuyo caso se agrega a las advertencias sin bloquear el guardado.
     """
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
@@ -1294,7 +1305,9 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice) -> list[str]:
             if allow_diff:
                 warnings.append(msg)
             else:
-                raise ValueError(msg)
+                if raise_on_violation:
+                    raise ValueError(msg)
+                warnings.append(msg)
     return warnings
 
 
@@ -1379,6 +1392,12 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
     except IdentifierConfigurationError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+    except Exception as exc:  # noqa: BLE001
+        database.session.rollback()
+        flash(_("Error inesperado al crear la orden de venta: ") + str(exc), "danger")
 
 
 @ventas.route("/sales-order/new", methods=["GET", "POST"])
@@ -1861,7 +1880,9 @@ def ventas_cotizacion_submit(quotation_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(
+            registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
+        )
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -1907,7 +1928,9 @@ def ventas_orden_venta_submit(order_id: str):
         abort(400)
     try:
         items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars().all()
-        validate_submit_prerequisites(registro, items=items, require_party=True)
+        validate_submit_prerequisites(
+            registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
+        )
         _validate_and_reserve_stock_for_sales_order(registro)
         registro.docstatus = 1
         log_submit(registro)
@@ -2220,7 +2243,14 @@ def ventas_entrega_submit(note_id: str):
         items = (
             database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars().all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=True, require_warehouse=True)
+        validate_submit_prerequisites(
+            registro,
+            items=items,
+            require_party=True,
+            require_warehouse=True,
+            require_rate_positive=True,
+            require_amount_nonzero=True,
+        )
         submit_document(registro)
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
@@ -2360,6 +2390,7 @@ def ventas_factura_venta_nuevo():
         except ValueError as exc:
             database.session.rollback()
             flash(str(exc), "danger")
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
     return render_template(
         "ventas/factura_venta_nuevo.html",
         form=formulario,
@@ -2491,6 +2522,10 @@ def _handle_sales_invoice_edit_post(registro):
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
         registro.update_inventory = bool(request.form.get("update_inventory"))
+        if registro.reversal_of and (
+            before_state.get("customer_id") != registro.customer_id or before_state.get("company") != registro.company
+        ):
+            _validate_reversal_of(registro.reversal_of, registro.customer_id, registro.company)
         for item in database.session.execute(
             database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
         ).scalars():
@@ -2502,7 +2537,7 @@ def _handle_sales_invoice_edit_post(registro):
         registro.base_grand_total = total
         registro.outstanding_amount = total
         registro.base_outstanding_amount = total
-        warnings = _validate_invoice_prices_against_source(registro)
+        warnings = _validate_invoice_prices_against_source(registro, raise_on_violation=False)
         _persist_sales_invoice_fiscal_snapshot(registro)
         after_state = _capture_sales_state(registro)
         log_update(registro, before=before_state, after=after_state)
@@ -2514,6 +2549,7 @@ def _handle_sales_invoice_edit_post(registro):
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc), "danger")
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
 
 
 @ventas.route("/sales-invoice/<invoice_id>/duplicate", methods=["POST"])
@@ -2584,7 +2620,12 @@ def ventas_factura_venta_submit(invoice_id: str):
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
         validate_submit_prerequisites(
-            registro, items=items, require_party=True, require_warehouse=bool(registro.update_inventory)
+            registro,
+            items=items,
+            require_party=True,
+            require_warehouse=bool(registro.update_inventory),
+            require_rate_positive=True,
+            require_amount_nonzero=True,
         )
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)

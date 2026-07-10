@@ -1466,6 +1466,7 @@ class DeliveryNote(database.Model, DocBase):  # type: ignore[name-defined]
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     shipping_address_id = database.Column(database.String(26), database.ForeignKey(ADDRESS_ID), nullable=True)
     contact_id = database.Column(database.String(26), database.ForeignKey(CONTACT_ID), nullable=True)
+    reservation_released = database.Column(database.Boolean(), default=False, nullable=False)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
