@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-07-10
 
+- **Optimización del Dockerfile (2026-07-10):** El Dockerfile del proyecto fue optimizado para reducir tamaño, mejorar seguridad y mantenerencia.
+  - Multi-stage build: etapa `frontend` instala npm deps, imagen final solo copia `node_modules`.
+  - Imagen base actualizada a `ubi9/ubi-minimal:9.8-1782797275`.
+  - Contenedor ejecuta como `appuser` (no-root).
+  - WORKDIR duplicado eliminado, instalaciones del sistema consolidadas en un solo `RUN`.
+  - `npm install --omit=dev` para excluir mocha/chai/playwright en producción.
+  - `HEALTHCHECK` agregado para verificación de salud del contenedor vía `/health` cada 30s.
+
 - **R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo (2026-07-10):**
   - Se agregaron helpers de verificación `_warehouse_has_usage()` y `_party_has_usage()` en `cacao_accounting/database/__init__.py`.
   - Se registraron escuchadores de eventos de SQLAlchemy `@event.listens_for(..., "before_delete")` para los modelos `Item`, `Warehouse`, y `Party`.
