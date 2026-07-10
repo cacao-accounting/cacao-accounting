@@ -132,3 +132,8 @@
 - [ ] Extender integración Audit Trail a documentos restantes de Compras/Ventas/Bancos/Inventario (órdenes, facturas, cotizaciones, notas) con render homogéneo de timeline en UI.
 - [ ] Seguir reduciendo complejidad en flujos de Bancos donde todavía existan ramas largas, usando helpers pequeños y cobertura focal por cada refactor.
 - [ ] Revisar si `issues.txt` debe regenerarse o depurarse, porque `_save_payment_references` ya quedó refactorizado y aparece como pendiente histórico.
+
+## 2026-07-10 (Pendientes de la CLI cacaoctl)
+- [ ] Documentar la nueva CLI en el README y en la documentación de usuario (docs/).
+- [ ] Añadir completado de shell (autocompletado) para los subcomandos de `db`.
+- [ ] Considerar exponer `db migrate` integrado con flask-alembic si se adopta migracion de esquema.
