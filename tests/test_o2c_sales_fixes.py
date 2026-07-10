@@ -255,3 +255,140 @@ def test_create_document_relation_rejects_cancelled_source(app_ctx):
             target_item_id=si_item.id,
             qty=Decimal("1"),
         )
+
+
+def test_over_delivery_validation(app_ctx):
+    from cacao_accounting.database import DeliveryNote, DeliveryNoteItem
+    from cacao_accounting.ventas import _validate_delivery_quantities_against_so
+
+    _ensure_item("ART-RESERVE")
+    customer = _ensure_customer("CUST-O2C25", "Cliente O2C25")
+
+    # 1. Crear y aprobar una Orden de Venta por 10 unidades.
+    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(so)
+    database.session.flush()
+    so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-RESERVE", qty=Decimal("10"), rate=Decimal("5"))
+    database.session.add(so_item)
+    database.session.flush()
+
+    # 2. Crear una Nota de Entrega asociada a esta Orden de Venta por 12 unidades (invalida).
+    dn = DeliveryNote(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(dn)
+    database.session.flush()
+    dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART-RESERVE", qty=Decimal("12"), rate=Decimal("5"))
+    database.session.add(dn_item)
+    database.session.flush()
+
+    # Create document relation between SO item and DN item
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_order",
+            source_id=so.id,
+            source_item_id=so_item.id,
+            target_type="delivery_note",
+            target_id=dn.id,
+            target_item_id=dn_item.id,
+            qty=Decimal("12"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    # 3. Intentar aprobar la Nota de Entrega (debe lanzar ValueError por sobre-entrega)
+    with pytest.raises(ValueError) as excinfo:
+        _validate_delivery_quantities_against_so(dn.id)
+    assert "Sobre-entrega" in str(excinfo.value)
+
+    # Now let's change the DN quantity to 10 (valid) and check it passes
+    dn_item.qty = Decimal("10")
+    # Also need to update the DocumentRelation qty to 10
+    rel = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            target_type="delivery_note",
+            target_id=dn.id,
+            target_item_id=dn_item.id,
+        )
+    ).scalar_one()
+    rel.qty = Decimal("10")
+    database.session.commit()
+
+    # This should not raise any exceptions
+    _validate_delivery_quantities_against_so(dn.id)
+
+
+def test_over_billing_validation(app_ctx):
+    from cacao_accounting.database import DeliveryNote, DeliveryNoteItem
+    from cacao_accounting.ventas import _validate_sales_invoice_quantities
+
+    _ensure_item("ART-RESERVE")
+    customer = _ensure_customer("CUST-O2C26", "Cliente O2C26")
+
+    # Flow 1: Direct sales order billing over-billing
+    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(so)
+    database.session.flush()
+    so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-RESERVE", qty=Decimal("10"), rate=Decimal("5"))
+    database.session.add(so_item)
+    database.session.flush()
+
+    si1 = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(si1)
+    database.session.flush()
+    si1_item = SalesInvoiceItem(sales_invoice_id=si1.id, item_code="ART-RESERVE", qty=Decimal("11"), rate=Decimal("5"))
+    database.session.add(si1_item)
+    database.session.flush()
+
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_order",
+            source_id=so.id,
+            source_item_id=so_item.id,
+            target_type="sales_invoice",
+            target_id=si1.id,
+            target_item_id=si1_item.id,
+            qty=Decimal("11"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(ValueError) as excinfo:
+        _validate_sales_invoice_quantities(si1.id)
+    assert "Sobre-facturación" in str(excinfo.value)
+
+    # Flow 2: Delivery Note billing over-billing
+    dn = DeliveryNote(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(dn)
+    database.session.flush()
+    dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART-RESERVE", qty=Decimal("5"), rate=Decimal("5"))
+    database.session.add(dn_item)
+    database.session.flush()
+
+    si2 = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(si2)
+    database.session.flush()
+    si2_item = SalesInvoiceItem(sales_invoice_id=si2.id, item_code="ART-RESERVE", qty=Decimal("7"), rate=Decimal("5"))
+    database.session.add(si2_item)
+    database.session.flush()
+
+    database.session.add(
+        DocumentRelation(
+            source_type="delivery_note",
+            source_id=dn.id,
+            source_item_id=dn_item.id,
+            target_type="sales_invoice",
+            target_id=si2.id,
+            target_item_id=si2_item.id,
+            qty=Decimal("7"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(ValueError) as excinfo:
+        _validate_sales_invoice_quantities(si2.id)
+    assert "Sobre-facturación" in str(excinfo.value)
