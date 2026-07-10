@@ -1,122 +1,6 @@
 # SESSIONS - Historical Decisions & Milestones
 
-## 2026-07-09 (S2P-01/O2C-09: Verificación de relaciones activas al cancelar documentos)
-- **Solicitud:** Analizar issue #119 (S2P-01: Sin verificación de relaciones activas al cancelar documentos no financieros) y #145 (O2C-09: SalesQuotation cancel no verifica relaciones descendientes).
-- **Diagnóstico:** Los issues son errores reales verificados. Solo `compras_orden_compra_cancel` (PO) y `ventas_orden_venta_cancel` (SO) llamaban a `has_active_source_relations()` antes de cancelar. Los demás handlers de cancelación en Compras (PR, SQ, PQ, Receipt) y Ventas (SR, SQ, DN, Invoice) permitían cancelar documentos con hijos activos, violando integridad referencial.
-- **Implementación:**
-  1. **Compras** — Se agregó `has_active_source_relations()` a:
-     - `compras_solicitud_compra_cancel` (PurchaseRequest)
-     - `compras_cotizacion_proveedor_cancel` (SupplierQuotation)
-     - `compras_solicitud_cotizacion_cancel` (PurchaseQuotation)
-     - `compras_recepcion_cancel` (PurchaseReceipt)
-  2. **Ventas** — Se agregó `has_active_source_relations()` a:
-     - `ventas_pedido_venta_cancel` (SalesRequest)
-     - `ventas_cotizacion_cancel` (SalesQuotation)
-     - `ventas_entrega_cancel` (DeliveryNote)
-     - `ventas_factura_venta_cancel` (SalesInvoice)
-  3. Cada handler ahora bloquea la cancelación con flash message descriptivo si hay hijos activos.
-- **Pruebas:** Suite completa de cancelación pasó (31 tests). Patrón consistente con PO y SO existentes.
-- **Cierre del issues:** #119 (S2P-01) cerrado, #145 (O2C-09) cerrado con comentario explicativo del fix completo en O2C.
-
-## 2026-07-09 (S2P-09: Validación estricta cuando CompanyParty es None en _validate_supplier_invoice_flags)
-- **Solicitud:** Ejecutar corrección del issue #138 (S2P-09): `_validate_supplier_invoice_flags` omitía validación cuando `CompanyParty` es None.
-- **Implementación:** Se modificó `_validate_supplier_invoice_flags` en `cacao_accounting/compras/__init__.py:2846-2848` para lanzar `PostingError("No se encontró configuración de flags para el proveedor en la compañía.")` en lugar de retornar silenciosamente. Se agregó comentario con referencia al issue.
-- **Cierre del issue:** #138 cerrado con comentario explicativo. Commit `13f77a4`.
-
-## 2026-07-09 (O2C-22: Validación de almacén en validate_submit_prerequisites)
-- **Solicitud:** Analizar issue #147 (O2C-22: validate_submit_prerequisites no valida almacén para ítems de stock) y corregir si es un error real.
-- **Diagnóstico:** El issue es un error real verificado. La función `validate_submit_prerequisites` no validaba que ítems con `is_stock_item=True` tengan un almacén asignado antes de aprobar el documento. La validación de almacén solo ocurría después en `posting.py` durante la creación de `StockLedgerEntry`, causando errores después de la aprobación.
-- **Implementación:**
-  1. Se agregó parámetro `require_warehouse` a `validate_submit_prerequisites()` en `document_flow/validation.py`
-  2. Cuando `require_warehouse=True`, valida que todas las líneas tengan `warehouse` asignado
-  3. Se actualizaron handlers de submit:
-     - Purchase Receipt: `require_warehouse=True` (siempre)
-     - Delivery Note: `require_warehouse=True` (siempre)
-     - Stock Entry: `require_warehouse=True` (siempre)
-     - Sales Invoice: `require_warehouse=True` solo cuando `update_inventory=True`
-  4. Se agregaron 4 tests en `tests/test_validation.py` para la validación de almacén
-- **Pruebas:** Todos los tests pasaron (16 tests en test_validation.py). Black, ruff y mypy en verde.
-- **Commits:** `e30c173` (fix(validation): add require_warehouse parameter to validate_submit_prerequisites)
-- **Cierre del issue:** Issue #147 cerrado con comentario explicativo.
-
-## 2026-07-09 (CAS-04: Corrección de conciliación bancaria al cancelar pago)
-- **Solicitud:** Analizar issue #151 (CAS-04: Cancelación de pago no limpia enlace de conciliación bancaria) y corregir si es un error real.
-- **Diagnóstico:** El issue es un error real verificado. Al cancelar un pago, el handler `bancos_pago_cancel` no reseteaba `is_reconciled` ni `payment_entry_id` en las `BankTransaction` vinculadas, dejando referencias huérfanas y estado de conciliación inconsistente.
-- **Implementación:**
-  1. Se agregó lógica en `bancos_pago_cancel` para buscar `BankTransaction` con `payment_entry_id` igual al pago cancelado
-  2. Se resetea `is_reconciled = False` y `payment_entry_id = None` en cada transacción encontrada
-  3. Se agregó comentario explicativo con referencia al issue CAS-04/#151 para prevenir falsos positivos futuros
-- **Pruebas:** Todos los tests existentes de pagos y cancelación pasaron (51 tests). La corrección es consistente con el patrón de conciliación existente en `reconciliation_service.py`.
-- **Cierre del issue:** Se cerrará con comentario explicativo indicando que el error fue corregido.
-
-## 2026-07-09 (INV-05: Corrección de qty_in_base_uom en entradas de stock)
-- **Solicitud:** Analizar issue #171 (INV-05: qty_in_base_uom no persiste al guardar entrada de stock) y corregir si es un error real.
-- **Diagnóstico:** El issue es un error real. La función `_save_stock_entry_items` no calculaba `qty_in_base_uom` al crear líneas de `StockEntryItem`, mientras que `_save_stock_reconciliation_items` sí lo hacía correctamente usando `convert_item_qty`.
-- **Implementación:** Se modificó `_save_stock_entry_items` para:
-  1. Obtener la UOM base del item usando `_item_default_uom(item_code)`
-  2. Si hay UOM y UOM base, convertir la cantidad usando `convert_item_qty`
-  3. Asignar el resultado a `qty_in_base_uom` en el `StockEntryItem`
-  4. Agregar comentario explicativo para evitar falsos positivos futuros
-- **Pruebas:** Todos los tests existentes relacionados con stock_entry pasaron (10 tests). La corrección es consistente con la forma en que los tests ya creaban `StockEntryItem` con `qty_in_base_uom`.
-- **Cierre del issue:** Se cerrará con comentario explicativo indicando que el error fue corregido.
-
-## 2026-07-09 (Corrección de fallos en filtros del buscador asistido 'search-select' para terceros)
-- **Solicitud:** Investigar y corregir los fallos en las pruebas automatizadas (específicamente la prueba E2E de autocompletado con múltiples fuentes: `test_transaction_form_multi_source_autofill`).
-- **Diagnóstico:** El frontend enviaba el filtro `party_type` al buscar terceros vía `/api/search-select?doctype=party&q=Demo&company=cacao&party_type=customer`. Sin embargo, la especificación de búsqueda de `Party` (`party`, `customer`, `supplier`) en `cacao_accounting/search_select.py` sólo admitía el filtro `role`. Al recibir el parámetro desconocido `party_type`, el backend devolvía error HTTP 400 ("Filtros no permitidos: party_type"), lo que causaba que la búsqueda de Cliente Demo fallara y la prueba E2E fallara por timeout.
-- **Implementación:**
-  - Se modificaron las especificaciones de búsqueda para `party`, `customer` y `supplier` en `_SEARCH_SELECT_REGISTRY` en `cacao_accounting/search_select.py` para admitir `"party_type"` como un filtro válido, mapeándolo al campo de validación de rol de base de datos (`"role"`).
-  - Se actualizó `_apply_request_filters` para capturar tanto `"role"` como `"party_type"` para los modelos de terceros (`Party`) y aplicar la lógica unificada de `_apply_role_filter`.
-- **Pruebas:** Se verificaron con éxito la prueba E2E (`tests/test_e2e_transactional_ui.py`) y la prueba de conciliación (`tests/test_08_reconciliation_reports.py`).
-
-## 2026-07-09 (Cierre de los 4 hallazgos reales pendientes de ISSUES.md)
-- **Solicitud:** Preparar y ejecutar el plan para corregir los issues pendientes R2R-04, O2C-04, S2P-09 y S2P-07, con commits semánticos firmados (sign-off) como williamjmorenor@gmail.com.
-- **Decisiones de diseño:**
-  - **R2R-04:** El asistente de cierre ya ejecutaba recurrentes y revaluación pero no cerraba el período. Se agregó `finalizar_cierre_mensual` que fija `run_status="closed"`, `closed_by`, `closed_at` y `AccountingPeriod.is_closed=True`; Paso 3 expuesto en UI.
-  - **S2P-09:** La infra de multimoneda ya existía (DocBase + `_lookup_exchange_rate`). Solo faltaba UI: se agregó smart_select de moneda en OC/Recepción/Factura de compra y el backend persistió `transaction_currency`/`exchange_rate` calculando `base_total`. `_purchase_exchange_rate` corregido para buscar la entidad por `code` (no `id`) y devolver tasa 1:1 como fallback seguro.
-  - **O2C-04:** `sales_return` implementado como espejo de `purchase_return` (registry, flujos, ruta `/sales-invoice/return/new`, template, `DeliveryNote.is_return` en UI). El posting engine ya trata `is_return` igual a `sales_credit_note`, sin cambios en accounting_engine.
-  - **S2P-07 (flag + neteo automático, según decisión del usuario):** Flag `apply_advances_automatically` en `CompanyDefaultAccount` + UI. Al aplicar anticipo a factura se genera un `ComprobanteContable` de neteo (Dr Payable / Cr Advance en compras; Dr Advance / Cr Receivable en ventas) y se postea vía `post_comprobante_contable`.
-- **Pruebas agregadas:** `test_e2e_monthly_close_finalizes_and_closes_period` (R2R-04), `test_s2p09_purchase_order_foreign_currency_base_total` (S2P-09), `test_sales_return_*` (O2C-04), `test_s2p07_settle_advance_generates_netting_journal` (S2P-07).
-- **Calidad:** Black, ruff, mypy en verde en archivos modificados. Nota: `test_purchase_happy_path` (test_e2e_modules) es preexistente y falla por flag de proveedor S2P-08, independiente de estos cambios.
-- **Commits:** `4610fdd` (R2R-04), `bb2ac5d` (S2P-09), `b31ce72` (O2C-04), `3f72f1a` (S2P-07). ISSUES.md marcado con todos los hallazgos CORREGIDOS.
-
-## 2026-07-08 (S2P-06 y O2C-05: validaciones pre-submit en 12 endpoints)
-- **Solicitud:** Analizar ISSUES.md, identificar siguiente issue (S2P-06/O2C-05: validaciones pre-submit insuficientes) e implementar validación centralizada.
-- **Diagnóstico:** 6 endpoints con cero validación (solo `docstatus != 0`) y 6 con validación solo en capa de posting. Ninguno validaba compañía, fecha, tercero ni existencia de líneas en el límite del submit.
-- **Implementación:**
-  - `document_flow/validation.py`: nueva función `validate_submit_prerequisites()` que valida compañía, fecha, tercero (supplier/customer), al menos una línea y qty > 0.
-  - Aplicada en 12 endpoints de compras (6), ventas (5) e inventario (1).
-  - Endpoints sin try/except previo ahora capturan `ValueError` y muestran flash `danger`.
-  - `ventas_entrega_submit` e `inventario_entrada_submit` ampliaron captura a `ValueError`.
-- **Pruebas:** 12 tests unitarios en `tests/test_validation.py` cubren todos los casos. 290 tests en verde (sin regresión).
-- **Calidad:** Black, ruff, mypy, flake8 en verde.
-- **Commits:** `b149b09` (código), `3fa36a6` (tests), `a774532` (fix fixture), `faf08a4` (ISSUES.md).
-
-## 2026-07-08 (O2C-03: reserva de inventario en Orden de Venta)
-- **Solicitud:** Analizar ISSUES.md, identificar el siguiente issue a atender (O2C-03) e implementar reserva de inventario al aprobar Orden de Venta.
-- **Semántica:** `actual_qty` = stock físico, `reserved_qty` = comprometido en OV, `available_qty` = `actual_qty - reserved_qty`.
-- **Implementación:**
-  - `reserved_qty` cambió a non-nullable con default 0.
-  - SO submit: valida `actual_qty - reserved_qty >= qty`, incrementa `reserved_qty`.
-  - SO cancel: decrementa `reserved_qty`.
-  - DN submit: libera reserva solo si tiene `sales_order_id`.
-  - DN cancel: restaura reserva solo si tiene `sales_order_id`.
-  - `_create_delivery_note_from_invoice` propaga `sales_order_id` para facturas con `update_inventory=True`.
-  - `rebuild_stock_bins` preserva `reserved_qty` existente.
-  - API `/api/inventory/stock-bin-snapshot` expone `reserved_qty`.
-- **Pruebas:** 8 tests nuevos en `test_stock_reservation.py`, todos en verde.
-- **Validación:** Black OK, flake8 OK, mypy OK. 36 tests existentes no regresionados.
-- **Commits:** `7c6c85f`, `fc336fc`, `8868cec`, `35e220c`.
-
-## 2026-07-08 (S2P-02 + S2P-05: sobre-facturación y crash 500)
-- **Solicitud:** Analizar ISSUES.md, validar el siguiente issue pendiente y proponer plan de cierre.
-- **Diagnóstico:** S2P-02 (sobre-facturación contra recepción) es real: no había validación submit-time de `consumed_qty <= receipt.qty`, y `_handle_purchase_invoice_edit_post` no limpiaba relaciones viejas (doble conteo). S2P-05 (crash 500) es real: `except PostingError` no capturaba `PurchaseReconciliationError` (hereda de `ValueError`).
-- **Implementación:**
-  - `_validate_invoice_quantities_against_receipt()`: itera `DocumentRelation` activas, consulta `consumed_qty_for_source(receipt, invoice)` y rechaza si excede `receipt_item.qty`.
-  - `_handle_purchase_invoice_edit_post`: elimina `DocumentRelation` viejas antes de recrear ítems.
-  - `compras_factura_compra_submit`: llama a la validación y captura `(PostingError, ValueError, DocumentFlowError)`.
-- **Pruebas:** `test_invoice_submit_validates_against_receipt`, `test_invoice_edit_cleans_old_relations`, `test_invoice_submit_rejects_over_invoice` en `test_05document_flow.py`.
-- **Validación:** 26/26 tests en verde, black OK, mypy OK.
-- **Commits:** `f920176` (código), `f74b0f7` (ISSUES.md).
+## 2026-07-09 : ISSUES corregidos de acuerdo al archivo ISSUES.md
 
 ## 2026-07-03 (Inventario: cuenta de inventario unificada por almacen/compania)
 - **Solicitud:** Alinear toda la contabilidad de inventario para que la cuenta se configure solo por `Almacen/Compañia` y no queden fallbacks globales en recepción, entrega ni cálculo contable.
@@ -746,3 +630,16 @@
 - **Commits:** `189da6e` (CAS-13), `709f7e3` (S2P-15)
 - **Test results:** 31/31 document_flow tests, 4/4 CAS-13 tests, 2/2 S2P-15 tests, 47/47 payment_entry tests
 - **ISSUES.md:** All VERIFICADO bugs now marked CORREGIDO or PENDIENTE. 0 VERIFICADO remaining.
+
+### 2026-07-10 — Stabilization batch: #191 #194 #192 #198 #196 #199
+- **Petición:** Cerrar issues abiertos antes de continuar
+- **Plan:** Fix bugs, reclasificar falsos positivos, marcar features futuras
+- **Commits:** `93cdadb` (O2C-24), `a0d3845` (CAS-18), `4003b55` (R2R-17), `de7c43d` (CAS-20), `97fd422` (docs)
+- **Resultado:**
+  - #191 O2C-24: require_rate_positive=True default + all submit calls → CORREGIDO
+  - #194 CAS-18: docstatus validation in bank reconciliation → CORREGIDO
+  - #192 R2R-17: balance check per transaction currency → CORREGIDO
+  - #198 SEC-01: FALSO POSITIVO (regla four-eyes no aplica) → cerrado
+  - #196 CAS-20: duplicate payment warning (no bloqueo) → CORREGIDO
+  - #199 SEC-02: marcado para desarrollo futuro (requiere soft-delete architecture)
+- **Test results:** 51/51 payment tests, 42/42 posting tests, 5/5 R2R-17 tests, 4/4 CAS-18 tests
