@@ -689,6 +689,13 @@ def _process_reconciliation_line(
 
     if allocated <= 0:
         raise DocumentFlowError(_MSG_MONTO_MAYOR_CERO, 409)
+    if discount + gain_loss >= allocated:
+        raise DocumentFlowError(
+            "El descuento + diferencia de cambio ({0}) no puede ser igual o mayor al monto asignado ({1}).".format(
+                discount + gain_loss, allocated
+            ),
+            409,
+        )
     key = (payment_id, flow_source_type, reference_id)
     if key in processed:
         raise DocumentFlowError("No se puede aplicar la misma factura dos veces en un pago.", 409)
