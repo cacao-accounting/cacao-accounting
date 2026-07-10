@@ -413,6 +413,16 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
         credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
         if abs(debit_total - credit_total) > Decimal("0.01"):
             raise PostingError("Las entradas GL generadas no balancean por libro contable.")
+        currency_groups: dict[str, list[GLEntry]] = {}
+        for entry in ledger_entries:
+            curr = getattr(entry, "account_currency", None)
+            if curr is not None:
+                currency_groups.setdefault(curr, []).append(entry)
+        for currency, curr_entries in currency_groups.items():
+            curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
+            curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
+            if abs(curr_debit - curr_credit) > Decimal("0.01"):
+                raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
