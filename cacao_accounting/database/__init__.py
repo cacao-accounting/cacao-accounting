@@ -155,17 +155,17 @@ class BaseTransaccion(BaseTabla):
 
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE))
     book = database.Column(database.String(10), database.ForeignKey(BOOK_CODE))
-    user_id = database.Column(database.String(75))
+    user_id = database.Column(database.String(26))
     date = database.Column(database.Date())
     reference = database.Column(database.String(50))
     memo = database.Column(database.String(200), nullable=True)
     canceled = database.Column(database.DateTime, nullable=True)
-    canceled_by = database.Column(database.String(15), nullable=True)
+    canceled_by = database.Column(database.String(26), nullable=True)
     applied = database.Column(database.DateTime, nullable=True)
-    applied_por = database.Column(database.String(15), nullable=True)
-    serie = database.Column(database.String(10), nullable=True)
+    applied_by = database.Column(database.String(26), nullable=True)
+    serie = database.Column(database.String(100), nullable=True)
     sequential = database.Column(database.Integer(), nullable=True)
-    sequential_id = database.Column(database.String(10), nullable=True)
+    sequential_id = database.Column(database.String(26), nullable=True)
 
 
 class BaseTercero(BaseTabla):
@@ -244,7 +244,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __allow_unmapped__ = True
 
-    user = database.Column(database.String(15), nullable=False)
+    user = database.Column(database.String(50), nullable=False)
     name = database.Column(database.String(80))
     name2 = database.Column(database.String(80))
     last_name = database.Column(database.String(80))
@@ -1769,7 +1769,7 @@ class GLBase:
     transaction_id = database.Column(database.String(75))
     order = database.Column(database.Integer(), nullable=True)
     value = database.Column(database.Numeric(precision=20, scale=4))
-    currency_id = database.Column(database.String(200))
+    currency_id = database.Column(database.String(10))
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9))
     value_default = database.Column(database.Numeric(precision=20, scale=4))
     memo = database.Column(database.String(500), nullable=True)
@@ -2499,7 +2499,7 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
     period_id = database.Column(database.String(26), database.ForeignKey(ACCOUNTING_PERIOD_ID), nullable=False, index=True)
     # open, in_progress, closed
     run_status = database.Column(database.String(20), nullable=False)
-    closed_by = database.Column(database.String(15), nullable=True)
+    closed_by = database.Column(database.String(26), nullable=True)
     closed_at = database.Column(database.DateTime, nullable=True)
 
 
