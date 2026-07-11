@@ -1468,3 +1468,31 @@ def test_accounting_module_badges_are_semantic_for_admin(request):
                 assert response.status_code == 200
                 assert 'data-status="ok"' in exchange_rates_row
                 assert "ca-status-warning" not in exchange_rates_row
+
+
+def test_logout_invalidates_session_and_token(request):
+    if request.config.getoption("--slow") == "True":
+        with app.app_context():
+            from flask_login import current_user
+            with app.test_client() as client:
+                # Login first
+                response = client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+                assert response.status_code == 302
+
+                # Verify we are logged in and session is set
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
+
+                assert current_user.is_authenticated
+                assert current_user.token is not None
+                old_user = current_user._get_current_object()
+
+                # Invalidate session/token by logging out
+                logout_response = client.get("/logout")
+                assert logout_response.status_code == 302
+
+                # Verify that the session is cleared
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is None
+
+                assert old_user.token is None
