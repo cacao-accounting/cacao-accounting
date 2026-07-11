@@ -505,3 +505,32 @@ def reset_sequence(sequence_id: str) -> None:
 
     seq.current_value = 0
     database.session.flush()
+
+
+def resolver_credenciales_iniciales() -> tuple[str, str]:
+    """Resuelve las credenciales de administración iniciales de forma segura.
+
+    Verifica que CACAO_USER y CACAO_PSWD estén configuradas de forma explícita.
+    Si faltan, y el entorno actual no está configurado como desarrollo ('dev' o
+    'development'), lanza un error para detener la ejecución inmediatamente.
+
+    Returns:
+        Tupla con (usuario, contraseña) resueltos.
+
+    Raises:
+        ValueError: Si faltan las credenciales y no es entorno de desarrollo.
+    """
+    flask_env = (environ.get("FLASK_ENV") or "").lower()
+    env_var = (environ.get("ENV") or "").lower()
+    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
+
+    usuario = environ.get("CACAO_USER")
+    contrasena = environ.get("CACAO_PSWD")
+
+    if not usuario or not contrasena:
+        if not is_dev:
+            raise ValueError("CACAO_USER and CACAO_PSWD must be set in environment")
+        usuario = usuario or "cacao"
+        contrasena = contrasena or "cacao"
+
+    return usuario, contrasena
