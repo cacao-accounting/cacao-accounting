@@ -15,7 +15,8 @@ RUN microdnf install -y --nodocs --best --refresh \
 
 WORKDIR /build
 COPY requirements.txt .
-RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt "python-magic>=0.4.27"
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0" "python-magic>=0.4.27"
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275
 

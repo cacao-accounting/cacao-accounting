@@ -29,6 +29,8 @@ extra-formats = [
     "odfpy>=1.4.1",
 ]
 cloud = [
+    "Flask-Limiter[redis]>=3.8.0",
+    "flask-caching>=2.4.0",
     "python-magic>=0.4.27",
 ]
 
