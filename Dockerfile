@@ -15,7 +15,8 @@ RUN microdnf install -y --nodocs --best --refresh \
 
 WORKDIR /build
 COPY requirements.txt .
-RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0"
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0" "python-magic>=0.4.27"
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275
 
@@ -28,7 +29,7 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/
 RUN chmod +x /usr/bin/tini \
     && microdnf install -y --nodocs --best --refresh \
        python3.12 python3.12-cryptography \
-       pango libxml2 libxslt \
+       pango libxml2 libxslt file-libs \
     && microdnf clean all
 
 COPY --from=python-builder /install/lib/python3.12/site-packages /usr/lib/python3.12/site-packages

@@ -28,9 +28,10 @@ extra-formats = [
     "xlrd>=2.0.2",
     "odfpy>=1.4.1",
 ]
-limiter = [
+cloud = [
     "Flask-Limiter[redis]>=3.8.0",
     "flask-caching>=2.4.0",
+    "python-magic>=0.4.27",
 ]
 
 [project.scripts]
