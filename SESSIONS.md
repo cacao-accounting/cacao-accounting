@@ -1,5 +1,19 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-10 : Implementación de Límite de Intentos de Inicio de Sesión y Rate Limiting en API (CWE-307)
+- **Petición del usuario:** No hay límite de intentos de inicio de sesión ni rate limiting en endpoints de la API, lo que posibilita ataques de fuerza bruta (CWE-307). Se sugiere usar `Flask-Limiter` con Redis para modo nube, pero de manera completamente opcional para respetar el modo escritorio como ciudadano de primer nivel. Adicionalmente se solicita proveer un archivo `docker-compose.yml` que defina tres servicios (`app`, `db`, `cache`).
+- **Implementación:**
+  - Se creó la biblioteca de control `cacao_accounting/limiter.py` que importa condicionalmente `flask_limiter`. Si no está instalada, hereda en una clase de respaldo `DummyLimiter` para que los decoradores `@limiter.limit` no arrojen errores de carga o ejecución.
+  - Se implementó `init_limiter(app)` que desactiva el limitador si `is_desktop_mode()` retorna `True`. En modo nube, lo activa y configura con `RATELIMIT_STORAGE_URI` mapeado a `CACHE_REDIS_URL` o fallback a memoria.
+  - Se registró el limitador en el factory de la aplicación `cacao_accounting/__init__.py`.
+  - Se decoró la ruta `/login` en `cacao_accounting/auth/__init__.py` con `@limiter.limit("10 per minute")`.
+  - Se decoraron las rutas de API en `cacao_accounting/api/__init__.py` con límites de `"60 per minute"` en los blueprints `api`, `line_import_bp` y `dashboard_api`.
+  - Se añadió `limiter` como dependencia opcional en `pyproject.toml` (`Flask-Limiter[redis]>=3.8.0`).
+  - Se editó el `Dockerfile` para requerir e instalar `Flask-Limiter[redis]` de forma nativa en la imagen final.
+  - Se añadió `docker-compose.yml` con servicios `app`, `db` (PostgreSQL) y `cache` (Redis).
+  - Se agregaron pruebas automatizadas exhaustivas en `tests/test_auth_limiter.py`.
+- **Validación:** Black, Ruff, Flake8, Mypy y Pytest en verde con cero advertencias y todos los tests pasando con éxito.
+
 ## 2026-07-10 : Auditoría Senior DBA — Commits 4-10 (UniqueConstraints, CheckConstraints, Indexes, Optimistic Locking, Atomic Sequences)
 
 ### Commit 4: UniqueConstraints (`10a2bc1`)
@@ -74,7 +88,7 @@
 ## 2026-07-10 : R2R-19 — Bloqueo de eliminación de maestros con historial transaccional activo
 - **Petición del usuario:** El sistema permite eliminar registros maestros esenciales (Artículos, Almacenes, Proveedores, Clientes) del catálogo general aun cuando ya tienen un historial de transacciones registradas y contabilizadas (registros activos en `GLEntry`, `StockLedgerEntry`, etc.).
 - **Plan de diseño e implementación:**
-  - Se implementaron las funciones auxiliares `_warehouse_has_usage()` y `_party_has_usage()` en `cacao_accounting/database/__init__.py` para realizar escaneos eficientes de todas las tablas transaccionales (como diarios contables, diario de inventario, órdenes de compra/venta, facturas, etc.).
+  - Se implementaron las funciones auxiliares `_warehouse_has_usage()` and `_party_has_usage()` en `cacao_accounting/database/__init__.py` para realizar escaneos eficientes de todas las tablas transaccionales (como diarios contables, diario de inventario, órdenes de compra/venta, facturas, etc.).
   - Se registraron escuchadores de eventos SQLAlchemy `before_delete` en los modelos `Item`, `Warehouse` y `Party` (clientes/proveedores) para interceptar cualquier intento de eliminación física a nivel de base de datos/ORM.
   - Al detectar historial transaccional o de stock activo, se lanza una excepción de integridad operativa `cacao_accounting.exceptions.IntegrityError` con un mensaje claro recomendando la inactivación o bloqueo del registro maestro.
   - Se agregaron pruebas automatizadas integrales en `tests/test_master_data_issues.py` para asegurar que el comportamiento de bloqueo funciona de forma robusta e infalible, y que los registros maestros limpios (sin historial) se puedan seguir eliminando con éxito.
@@ -97,7 +111,7 @@
 
 ## 2026-07-03 (Contabilidad: arboles de cuentas y centros de costo)
 - **Solicitud:** Corregir el mismo patron visual del setup en el arbol de cuentas contables y el arbol de centros de costos, incluyendo comportamiento usable en dispositivos mobiles.
-- **Diagnostico:** Ambas vistas compartian el patron `.ca-tree`, pero estaban montadas sobre una tarjeta demasiado amplia con toolbar dispersa, demasiado espacio en blanco y un arbol visualmente estrecho y poco tactil en pantallas pequenas.
+- **Diagnostico:** Ambos vistas compartian el patron `.ca-tree`, pero estaban montadas sobre una tarjeta demasiado amplia con toolbar dispersa, demasiado espacio en blanco y un arbol visualmente estrecho y poco tactil en pantallas pequenas.
 - **Implementacion:** Se introdujo un layout comun para arboles maestros con toolbar responsive, contexto de entidad, panel de arbol con scroll controlado y ajustes compartidos de espaciado/hover/area tactil en `.ca-tree`.
 - **Mobile:** Filtros y acciones se apilan a ancho completo, el panel del arbol conserva scroll horizontal cuando hace falta y los nodos ganan altura tactil para evitar errores de pulsacion.
 
@@ -158,7 +172,7 @@
 ## 2026-07-01 (Cliente/Proveedor: cuentas, regla fiscal y lista de precio por compania)
 - **Solicitud:** Completar Cliente y Proveedor con configuracion por compania para cuenta por cobrar/pagar predeterminada, regla fiscal predeterminada y lista de precio predeterminada, tomando como base las referencias visuales compartidas.
 - **Correccion de fondo:** No se creo un maestro nuevo para precios; se reutilizo `PriceList` como concepto funcional de **Lista de Precio** y `ItemPrice` sigue como detalle de precios por item. La relacion por defecto del tercero se persiste en `CompanyParty`.
-- **Implementacion:** `CompanyParty` ahora guarda `default_tax_rule_id` y `default_price_list_id`. `party_settings` resuelve defaults, valida compania/tipo (`sales` vs `purchase`) y hace fallback a listas predeterminadas por compania. `search-select` incorpora `tax_rule` y `price_list`.
+- **Implementacion:** `CompanyParty` ahora guarda `default_tax_rule_id` and `default_price_list_id`. `party_settings` resuelve defaults, valida compania/tipo (`sales` vs `purchase`) y hace fallback a listas predeterminadas por compania. `search-select` incorpora `tax_rule` y `price_list`.
 - **Setup inicial:** El asistente crea listas de precio predeterminadas de venta y compra por compania, localizadas segun idioma (`ES`/`EN`) y marcadas como default.
 - **UI:** Cliente y Proveedor muestran y editan por compania cuenta AR/AP, lista de precio, regla fiscal y plantilla fiscal; el detalle del tercero expone esos valores en la tabla de configuracion.
 - **Validacion:** Pruebas focales de terceros, setup, search-select, esquema y vistas en verde.
@@ -328,7 +342,7 @@
 - **Implementación UI:** `transaction-form.js` y `transaction_form_macros.html` agregan acción `Añadir impuesto/cargo`, modal editable para líneas manuales, eliminación de líneas manuales y recálculo local de resumen.
 - **Backend fiscal:** `fiscal_preview_service.py` conserva reglas canónicas persistidas y adjunta líneas manuales marcadas por el formulario, evitando duplicar líneas automáticas reenviadas.
 - **Backlog inventario:** Se precisó que el motor `LandedCostEngine` ya calcula prorrateos, pero sigue pendiente persistir dichas asignaciones en `StockValuationLayer` dentro del flujo transaccional.
-- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` + `tests/test_fiscal_preview.py` (`9 passed`) and `npm test -- --grep transaction-form` (`7 passing`).
+- **Verificación:** Pruebas focales en verde: `tests/test_tax_rules.py` + `tests/test_fiscal_preview.py` (`9 passed`) and `npm test -- --grep transaction-form` (`6 passing`).
 
 ## 2026-05-19 (Fix FIXME fiscal: preview canónico, cobros y FK nullable)
 - **Solicitud:** Analizar `FIXME.md` y resolver los issues identificados sobre el MVP fiscal.
@@ -531,29 +545,7 @@
 ## 2026-05-15 (Corrección UX del framework transaccional en Compras, Ventas e Inventario)
 - **Framework unificado:** `transaction-form.js` ahora normaliza configuración legacy, impone las 6 columnas núcleo (código, descripción, UOM, cantidad, precio/costo unitario y total) y soporta detalle por línea en modal con dimensiones/trazabilidad.
 - **Plantillas operativas:** Los formularios transaccionales de Compras, Ventas e Inventario migraron al macro compartido `transaction_form_macros.html` para replicar la UX del comprobante contable en documentos nuevos.
-- **Detalle de documentos:** `detail_view_macros.html` y `macros.lineas_tabla_lectura` ahora renderizan una tabla interactiva con panel y modal de detalle por línea, alineada con `journal.html`.
-- **Cobertura:** Se agregaron pruebas para el JS del framework transaccional y una validación web que comprueba el render del grid unificado y del detalle por línea.
-
-## 2026-05-15 (Resolución de issues identificados en FIXME.md)
-- **Correcciones Funcionales:** Se agregaron columnas predeterminadas para formularios de transacción nuevos. Se habilitó el flujo desde Solicitud de Compra hacia Orden de Compra.
-- **Formularios Dinámicos:** La grilla transaccional ahora respeta las cantidades editadas manualmente en el modal al importar líneas origen.
-- **Refactorización:** Simplificación de retornos en el servicio de conciliación de compras.
-- **Calidad:** De-duplicación masiva de literales de cadena en todo el proyecto mediante la definición de constantes centralizadas. Suite completa de 609 pruebas aprobada.
-
-## 2026-05-15 (Merge de `fix/resolve-fixme-issues-17130081935948712802` en main)
-- **Conflictos resueltos:** Se preservaron tanto la UX unificada de `transaction-form.js` como las correcciones funcionales de FIXME, incluyendo la importación con cantidad editable desde documentos origen.
-- **Documentación de estado:** `SESSIONS.md`, `ESTADO_ACTUAL.md` y `PENDIENTE.md` quedaron sincronizados con el estado integrado de la rama.
-- **Verificación:** Se ejecutó la batería de calidad del proyecto antes y después de la integración para confirmar que no se perdió funcionalidad (`607 passed, 3 skipped` en pytest y `17 passing` en Mocha).
-
-## 2026-05-15 (Estandarización UX y multi-merge en Compras, Ventas e Inventario)
-- **Estandarización de Macros:** Se rediseñaron las macros de encabezado y grid en `transaction_form_macros.html` para imponer un layout uniforme (Breadcrumb -> Encabezado con Compañía/Secuencia/Moneda/Fecha -> Grid).
-- **Smart-Select Integral:** Se implementó el uso consistente de `smart-select` en todos los campos de selección de los módulos de Compras, Ventas e Inventario, incluyendo cabeceras y detalles de línea (Ítems, Cuentas, Centros de Costo, etc.).
-- **Funcionalidad de Multi-Merge:** Se implementó un flujo de "Actualizar Elementos" en dos pasos que permite seleccionar múltiples documentos fuente y fusionar sus líneas pendientes en una sola transacción.
-- **Renombramiento de Rutas de Inventario:** Se migraron las rutas de `/stock-entry/adjustment-negative` a `/stock-entry/inventory-issue` para reflejar una semántica más genérica.
-- **Calidad y Pruebas:** Se extendió la API de flujo documental para soportar filtrado por tercero y se añadieron pruebas E2E con Playwright para validar la nueva lógica de interfaz.
-
-## 2026-05-16 (Paridad visual entre comprobante manual y documentos operativos)
-- **Cabecera de detalle:** `detail_view_macros.detail_header` adopta el patron visual de `journal.html`: numero como titulo, tipo de documento debajo, estado junto al titulo, acciones a la derecha y datos en la misma tarjeta.
+- **Detalle de documentos:** `detail_view_macros.detail_header` adopta el patron visual de `journal.html`: numero como titulo, tipo de documento debajo, estado junto al titulo, acciones a la derecha y datos en la misma tarjeta.
 - **Comprobante manual:** `journal.html` ahora muestra `Comprobante manual` bajo el numero para igualar la estructura visual de los documentos operativos.
 - **Solicitud de Compra:** En borrador muestra `Editar`, `Duplicar`, `Aprobar`, `Listado` y `Nuevo`; en aprobado mantiene `Crear` para Solicitud de Cotizacion y Orden de Compra.
 - **Actualizar Elementos:** Orden de Compra y Solicitud de Cotizacion precargan origen `purchase_request` cuando se crean desde una Solicitud de Compra.

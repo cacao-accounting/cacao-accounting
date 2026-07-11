@@ -31,7 +31,6 @@ from cacao_accounting.app import cacao_app as main_app
 from cacao_accounting.auth import administrador_sesion, login
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.bancos import bancos
-from cacao_accounting.cache import cache
 from cacao_accounting.compras import compras
 from cacao_accounting.config import (
     DIRECTORIO_ARCHIVOS,
@@ -78,13 +77,16 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
         from flask_wtf.csrf import CSRFProtect
+        from cacao_accounting.limiter import init_limiter
+        from cacao_accounting.cache import init_cache
 
         csrf = CSRFProtect()
         csrf.init_app(app)
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
-        cache.init_app(app)
+        init_cache(app)
+        init_limiter(app)
     else:
         raise RuntimeError(ERROR2)
 
