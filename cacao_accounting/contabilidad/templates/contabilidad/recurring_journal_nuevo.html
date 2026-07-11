@@ -152,7 +152,7 @@
   };
 </script>
 
-<form class="ca-journal-form" method="post" x-data='recurringJournalForm({ initialJournal: {{ (initial_journal or {}) | tojson | safe }} })' @submit="prepareSubmit" action="{{ submit_url }}">
+<form class="ca-journal-form" method="post" x-data='recurringJournalForm({ initialJournal: {{ (initial_journal or {}) | tojson }} })' @submit="prepareSubmit" action="{{ submit_url }}">
   {{ form.csrf_token }}
   <input type="hidden" name="items_json" :value="payload">
   <input type="hidden" name="ledger_id" :value="primarySelectedBook">

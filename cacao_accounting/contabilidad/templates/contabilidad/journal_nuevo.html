@@ -710,7 +710,7 @@
   },
 } %}
 
-<form class="ca-journal-form" method="post" x-data='journalEntryForm({{ journal_initial_state | tojson | safe }})'
+<form class="ca-journal-form" method="post" x-data='journalEntryForm({{ journal_initial_state | tojson }})'
   @submit="prepareSubmit" action="{{ submit_url }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="journal_payload" :value="payload">
