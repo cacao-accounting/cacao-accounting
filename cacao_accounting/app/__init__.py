@@ -90,18 +90,34 @@ def dev_info():
 def informacion_para_desarrolladores():
     """Pagina con información para desarrolladores o administradores del sistema."""
     import platform
-    import sys
+    from flask import abort
+    from flask_login import current_user
+    from cacao_accounting.database import Roles, RolesUser, database
     from cacao_accounting.database.helpers import db_version
+
+    is_admin = False
+    if getattr(current_user, "classification", None) == "admin":
+        is_admin = True
+    else:
+        admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+        if (
+            admin_role
+            and database.session.execute(
+                database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id)
+            ).scalar_one_or_none()
+        ):
+            is_admin = True
+
+    if not is_admin:
+        abort(403)
 
     return render_template(
         "development.html",
         info=dev_info(),
         db=bd_actual(),
-        current_app=current_app,
         os=platform.system(),
         db_version=db_version(),
         test="CACAO_TEST" in environ,
-        py_version=sys.version,
     )
 
 
