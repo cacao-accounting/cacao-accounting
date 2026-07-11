@@ -3,6 +3,7 @@
 
 """Rutas para el submódulo de Presupuesto."""
 
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -83,7 +84,7 @@ def nuevo():
             flash("Presupuesto creado exitosamente.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
         except BudgetError as e:
-            flash(str(e), "danger")
+            flash_error(e)
 
     return render_template(
         "contabilidad/presupuestos/form.html",
@@ -162,7 +163,7 @@ def editar(budget_id):
             flash("Presupuesto actualizado.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except BudgetError as e:
-            flash(str(e), "danger")
+            flash_error(e)
 
     return render_template(
         "contabilidad/presupuestos/form.html",
@@ -218,7 +219,7 @@ def nueva_linea(budget_id):
             flash("Línea agregada.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except BudgetError as e:
-            flash(str(e), "danger")
+            flash_error(e)
 
     return render_template(
         "contabilidad/presupuestos/line_form.html",
@@ -278,7 +279,7 @@ def editar_linea(line_id):
             flash("Línea actualizada.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
         except BudgetError as e:
-            flash(str(e), "danger")
+            flash_error(e)
 
     return render_template(
         "contabilidad/presupuestos/line_form.html",
@@ -309,7 +310,7 @@ def eliminar_linea(line_id):
         BudgetService().delete_budget_line(line_id, str(current_user.id))
         flash("Línea eliminada.", "info")
     except BudgetError as e:
-        flash(str(e), "danger")
+        flash_error(e)
 
     return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
@@ -329,7 +330,7 @@ def aprobar(budget_id):
         BudgetService().approve_budget(budget_id, str(current_user.id))
         flash("Presupuesto aprobado.", "success")
     except BudgetError as e:
-        flash(str(e), "danger")
+        flash_error(e)
     return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
 
@@ -348,7 +349,7 @@ def cerrar(budget_id):
         BudgetService().close_budget(budget_id, str(current_user.id))
         flash("Presupuesto cerrado.", "info")
     except BudgetError as e:
-        flash(str(e), "danger")
+        flash_error(e)
     return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
 
 

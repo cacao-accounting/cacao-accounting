@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Mapping
 
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -367,10 +368,10 @@ def inventario_articulo_nuevo():
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:
                 database.session.rollback()
-                flash(str(exc), "danger")
+                flash_error(exc)
             except ValueError as exc:
                 database.session.rollback()
-                flash(str(exc), "danger")
+                flash_error(exc)
         else:
             flash("Revise los datos del formulario de artículo.", "danger")
 
@@ -474,10 +475,10 @@ def inventario_articulo_editar(item_id):
                 return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
             except InventoryServiceError as exc:
                 database.session.rollback()
-                flash(str(exc), "danger")
+                flash_error(exc)
             except ValueError as exc:
                 database.session.rollback()
-                flash(str(exc), "danger")
+                flash_error(exc)
         else:
             flash("Revise los datos del formulario de artículo.", "danger")
 
@@ -680,7 +681,7 @@ def inventario_bodega_nuevo():
         try:
             _validate_warehouse_company_rows(company_rows)
         except ValueError as exc:
-            flash(str(exc), "danger")
+            flash_error(exc)
             return render_template(
                 "inventario/bodega_nuevo.html",
                 form=formulario,
@@ -1105,7 +1106,7 @@ def _handle_stock_entry_new_post(form_data):
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
     except IdentifierConfigurationError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
 
 
 @inventario.route("/stock-entry/adjustment/new-shortcut")

@@ -15,6 +15,7 @@ from typing import Any
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -267,7 +268,7 @@ def compras_solicitud_compra_nueva():
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
         except (IdentifierConfigurationError, DocumentFlowError) as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
     return render_template(
         "compras/solicitud_compra_nueva.html",
         form=formulario,
@@ -347,7 +348,7 @@ def compras_solicitud_compra_editar(request_id: str):
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
         except (IdentifierConfigurationError, DocumentFlowError) as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
 
     lineas = database.session.execute(
         database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id)
@@ -463,7 +464,7 @@ def compras_solicitud_compra_submit(request_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     flash("Solicitud de compra aprobada.", "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
@@ -586,7 +587,7 @@ def _create_supplier_quotation_from_request():
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
     except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return None
 
 
@@ -805,7 +806,7 @@ def _handle_supplier_create(
     except ValueError as exc:
         database.session.rollback()
         company_settings_rows = draft_party_company_settings_rows("supplier", form)
-        flash(str(exc), "danger")
+        flash_error(exc)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
@@ -840,7 +841,7 @@ def _handle_supplier_update(
     except ValueError as exc:
         database.session.rollback()
         company_settings_rows = draft_party_company_settings_rows("supplier", form)
-        flash(str(exc), "danger")
+        flash_error(exc)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
         form=formulario,
@@ -928,7 +929,7 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     flash(_("Cotizacion de proveedor aprobada."), "success")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
@@ -1246,7 +1247,7 @@ def compras_proveedor_contacto_crear(supplier_id: str):
         flash(_("Contacto agregado correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -1262,7 +1263,7 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
         flash(_("Contacto actualizado correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -1290,7 +1291,7 @@ def compras_proveedor_direccion_crear(supplier_id: str):
         flash(_("Direccion agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -1306,7 +1307,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
         flash(_("Direccion actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -1825,7 +1826,7 @@ def _create_purchase_order_from_request(form: dict):
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
     except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return None
 
 
@@ -2051,7 +2052,7 @@ def _create_purchase_quotation_from_request():
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
     except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return None
 
 
@@ -2255,7 +2256,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     flash(_("Solicitud de cotizacion aprobada."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
@@ -2305,7 +2306,7 @@ def compras_orden_compra_submit(order_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     flash("Orden de compra aprobada.", "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
@@ -2411,7 +2412,7 @@ def compras_recepcion_nuevo():
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=recepcion.id))
         except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
@@ -2737,7 +2738,7 @@ def compras_recepcion_submit(receipt_id: str):
         flash("Recepcion de compra aprobada.", "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
@@ -2763,7 +2764,7 @@ def compras_recepcion_cancel(receipt_id: str):
         flash("Recepción de compra cancelada.", "warning")
     except PostingError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
@@ -3050,7 +3051,7 @@ def _create_purchase_invoice_from_request():
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
     except (ValueError, DocumentFlowError) as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return None
 
 
@@ -3205,7 +3206,7 @@ def _handle_purchase_invoice_edit_post(registro):
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
 
 
