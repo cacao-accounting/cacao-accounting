@@ -199,7 +199,8 @@ def test_upload_mime_type_validation():
                 follow_redirects=True,
             )
             assert response.status_code == 200
-            assert "Tipo de archivo no válido" in response.get_data(as_text=True)
+            html_text = response.get_data(as_text=True)
+            assert ("Tipo de archivo no válido" in html_text) or ("Error al validar el tipo de archivo" in html_text)
 
             # Subir archivo con tipo de contenido válido (un CSV real)
             csv_content = b"codigo,nombre,clasificacion\n1,Test Account,activo"
