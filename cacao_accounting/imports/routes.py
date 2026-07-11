@@ -160,6 +160,47 @@ def upload(batch_id):
             flash("Formato de archivo no soportado", "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
+        # Check MIME type of the file using python-magic only if not in desktop mode
+        if not is_desktop_mode():
+            try:
+                import magic
+                # Read first 2048 bytes to detect the MIME type
+                chunk = file.read(2048)
+                file.seek(0)  # Reset pointer
+                mime = magic.from_buffer(chunk, mime=True)
+            except Exception:
+                flash("Error al validar el tipo de archivo", "danger")
+                return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+
+            allowed_mimes = {
+                "text/csv",
+                "text/plain",
+                "application/csv",
+                "text/x-csv",
+                "application/x-csv",
+                "text/comma-separated-values",
+                "text/x-comma-separated-values",
+                "application/vnd.ms-excel",
+                "application/msexcel",
+                "application/x-msexcel",
+                "application/x-ms-excel",
+                "application/x-excel",
+                "application/x-dos_ms_excel",
+                "application/xls",
+                "application/x-xls",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.oasis.opendocument.spreadsheet",
+                "application/zip",
+                "application/x-zip",
+                "application/x-zip-compressed",
+                "application/octet-stream",
+                "application/x-empty",
+            }
+
+            if mime not in allowed_mimes:
+                flash("Tipo de archivo no válido", "danger")
+                return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+
         safe_batch_id = secure_filename(str(batch.id))
         import_dir = os.path.join(current_app.instance_path, "imports", safe_batch_id)
         os.makedirs(import_dir, exist_ok=True)

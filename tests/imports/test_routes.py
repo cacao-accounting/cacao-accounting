@@ -144,3 +144,114 @@ def test_import_tables_define_caption_before_table_head():
 
     assert index_content.index("<caption>") < index_content.index("<thead>")
     assert detail_content.index("<caption>") < detail_content.index("<thead>")
+
+
+def test_max_content_length_is_configured():
+    """Verificar que el límite de tamaño de archivo MAX_CONTENT_LENGTH está configurado."""
+    app = create_app(
+        {
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        }
+    )
+    assert app.config["MAX_CONTENT_LENGTH"] == 16 * 1024 * 1024
+
+
+def test_upload_mime_type_validation():
+    """Verificar que la validación del MIME type del archivo funciona correctamente al subirlo."""
+    from io import BytesIO
+    from cacao_accounting.database.helpers import inicia_base_de_datos
+    from cacao_accounting.imports.models import ImportBatch
+    from ulid import ULID
+
+    # 1. Test when NOT in desktop mode (cloud/web mode) -> MIME validation should be active
+    app_web = create_app(
+        {
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
+    with app_web.app_context():
+        inicia_base_de_datos(app=app_web, user="cacao", passwd="cacao", with_examples=True)
+
+        batch_id = str(ULID())
+        batch = ImportBatch(
+            id=batch_id,
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            import_status=0,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        with app_web.test_client() as client:
+            # Iniciar sesión
+            client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+            # Subir archivo con tipo de contenido inválido (un archivo HTML con extensión .csv)
+            html_content = b"<html><body>Hello! This is not a CSV file.</body></html>"
+            response = client.post(
+                f"/imports/{batch_id}/upload",
+                data={"file": (BytesIO(html_content), "test.csv")},
+                follow_redirects=True,
+            )
+            assert response.status_code == 200
+            assert "Tipo de archivo no válido" in response.get_data(as_text=True)
+
+            # Subir archivo con tipo de contenido válido (un CSV real)
+            csv_content = b"codigo,nombre,clasificacion\n1,Test Account,activo"
+            response = client.post(
+                f"/imports/{batch_id}/upload",
+                data={"file": (BytesIO(csv_content), "test.csv")},
+                follow_redirects=True,
+            )
+            assert response.status_code == 200
+            assert "Archivo cargado correctamente" in response.get_data(as_text=True)
+
+    # 2. Test when in DESKTOP mode -> MIME validation should be bypassed
+    app_desktop = create_app(
+        {
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,  # Start as False for database initialization
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
+    with app_desktop.app_context():
+        inicia_base_de_datos(app=app_desktop, user="cacao", passwd="cacao", with_examples=True)
+        # Change to True after database initialization
+        app_desktop.config["MODO_ESCRITORIO"] = True
+
+        batch_id = str(ULID())
+        batch = ImportBatch(
+            id=batch_id,
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            import_status=0,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        with app_desktop.test_client() as client:
+            # Iniciar sesión
+            client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+            # In desktop mode, we can upload imports but check_desktop_mode check blocks route access.
+            # Wait, let's look at check_desktop_mode():
+            # @imports.before_request
+            # def before_request():
+            #     check_desktop_mode()
+            # So in desktop mode, any request to /imports/ returns 403 Forbidden!
+            # Therefore, we can't upload in desktop mode at all because the whole blueprint is blocked.
+            # But let's verify if the route check is correctly bypassed, we can mock/override check_desktop_mode
+            # or just assert that check_desktop_mode raises 403.
+            # Let's test that the whole Blueprint is blocked (returns 403) in desktop mode.
+            response = client.post(
+                f"/imports/{batch_id}/upload",
+                data={"file": (BytesIO(html_content), "test.csv")},
+                follow_redirects=True,
+            )
+            assert response.status_code == 403
