@@ -21,7 +21,7 @@
   </ol>
 </nav>
 
-<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {{ tf_macros.transaction_form_header("Editar Nota de Entrega" if edit else "Nota de Entrega", cancel_url=url_for('ventas.ventas_entrega_lista')) }}

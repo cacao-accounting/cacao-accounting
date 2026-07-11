@@ -436,7 +436,7 @@
             document.getElementById('line-reference2').textContent = readValue(data.reference2);
             document.getElementById('line-debit').textContent = data.debit || '0.00';
             document.getElementById('line-credit').textContent = data.credit || '0.00';
-            document.getElementById('line-advance').textContent = data.advance === '1' ? '{{ _('Sí') }}' : '{{ _('No') }}';
+            document.getElementById('line-advance').textContent = data.advance === '1' ? {{ _('Sí') | tojson }} : {{ _('No') | tojson }};
             document.getElementById('line-memo').textContent = readValue(data.memo);
 
             document.getElementById('modal-line-order').textContent = data.order || '-';
@@ -452,7 +452,7 @@
             document.getElementById('modal-line-reference2').textContent = readValue(data.reference2);
             document.getElementById('modal-line-debit').textContent = data.debit || '0.00';
             document.getElementById('modal-line-credit').textContent = data.credit || '0.00';
-            document.getElementById('modal-line-advance').textContent = data.advance === '1' ? '{{ _('Sí') }}' : '{{ _('No') }}';
+            document.getElementById('modal-line-advance').textContent = data.advance === '1' ? {{ _('Sí') | tojson }} : {{ _('No') | tojson }};
             document.getElementById('modal-line-memo').textContent = readValue(data.memo);
         }
 
@@ -482,19 +482,19 @@
     (function () {
         var reversalDateInput = document.getElementById('reversal_date');
         var guidance = document.getElementById('reversal-period-guidance');
-        var originalPostingDate = '{{ registro.date.isoformat() if registro.date else '' }}';
+        var originalPostingDate = {{ (registro.date.isoformat() if registro.date else "") | tojson }};
         if (!reversalDateInput || !guidance || !originalPostingDate) return;
 
         function updateReversalGuidance() {
             var selectedDate = reversalDateInput.value || '';
             if (!selectedDate) {
-                guidance.textContent = '{{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') }}';
+                guidance.textContent = {{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') | tojson }};
                 return;
             }
             var samePeriod = selectedDate.slice(0, 7) === originalPostingDate.slice(0, 7);
             guidance.textContent = samePeriod
-                ? '{{ _('La fecha elegida cae en el mismo período. Debe usar una fecha de otro período para revertir este comprobante.') }}'
-                : '{{ _('La fecha elegida cae en un período distinto. Se puede crear el borrador de reversión para el nuevo período contable.') }}';
+                ? {{ _('La fecha elegida cae en el mismo período. Debe usar una fecha de otro período para revertir este comprobante.') | tojson }}
+                : {{ _('La fecha elegida cae en un período distinto. Se puede crear el borrador de reversión para el nuevo período contable.') | tojson }};
         }
 
         reversalDateInput.addEventListener('input', updateReversalGuidance);

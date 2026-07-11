@@ -15,7 +15,7 @@
       {{ (registro.document_no or registro.id) if edit else _('Nuevo Movimiento') }}</li>
   </ol>
 </nav>
-<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {{ tf_macros.transaction_form_header("Editar Movimiento de Inventario" if edit else "Movimiento de Inventario") }}
   <div class="ca-card p-3 mb-3">

@@ -14,7 +14,7 @@
       {{ (registro.document_no or registro.id) if edit else 'Nueva Orden' }}</li>
   </ol>
 </nav>
-<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
   {% if from_rfq_id %}<input type="hidden" name="from_rfq" value="{{ from_rfq_id }}">{% endif %}
