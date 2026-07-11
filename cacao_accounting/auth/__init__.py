@@ -11,7 +11,7 @@ from typing import Any
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
@@ -98,7 +98,10 @@ def inicio_sesion():  # pragma: no cover
 @login.route("/salir")
 def cerrar_sesion():  # pragma: no cover
     """Finaliza la sesion actual."""
+    if current_user and current_user.is_authenticated:
+        current_user.token = None
     logout_user()
+    session.clear()
     return INICIO_SESION
 
 
