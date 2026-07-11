@@ -55,15 +55,15 @@ from cacao_accounting.search_select import SearchSelectError, search_select
 from cacao_accounting.api.line_import import line_import_bp
 from cacao_accounting.api.dashboard import dashboard_api
 from cacao_accounting.runtime_mode import is_desktop_mode
-from cacao_accounting.limiter import limiter
+from cacao_accounting.limiter import rate_limit_blueprint
 
 api = Blueprint("api", __name__, template_folder="templates")
 api.register_blueprint(line_import_bp)
 api.register_blueprint(dashboard_api)
 
-limiter.limit("60 per minute")(api)
-limiter.limit("60 per minute")(line_import_bp)
-limiter.limit("60 per minute")(dashboard_api)
+rate_limit_blueprint(api)
+rate_limit_blueprint(line_import_bp)
+rate_limit_blueprint(dashboard_api)
 
 
 def token_requerido(f):  # pragma: no cover

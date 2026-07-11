@@ -8,10 +8,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - CACAO_DATABASE_URL=postgresql://cacao:cacaopass@db:5432/cacaodb
+      - CACAO_DATABASE_URL=postgresql://${DB_USER:-cacao}:${DB_PASSWORD:-}@db:5432/${DB_NAME:-cacaodb}
       - CACHE_REDIS_URL=redis://cache:6379/0
-      - CACAO_USER=cacao
-      - CACAO_PSWD=cacao
+      - CACAO_USER=${CACAO_USER:-cacao}
+      - CACAO_PSWD=${CACAO_PSWD:-}
       - ENV=production
       - FLASK_ENV=production
     depends_on:
@@ -23,9 +23,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=cacao
-      - POSTGRES_PASSWORD=cacaopass
-      - POSTGRES_DB=cacaodb
+      - POSTGRES_USER=${DB_USER:-cacao}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-}
+      - POSTGRES_DB=${DB_NAME:-cacaodb}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

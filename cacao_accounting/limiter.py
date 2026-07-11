@@ -73,3 +73,9 @@ def init_limiter(app: Flask) -> None:
         app.config["RATELIMIT_STORAGE_URI"] = storage_uri
 
     limiter.init_app(app)
+
+
+def rate_limit_blueprint(blueprint: Any, limit_value: str = "60 per minute") -> None:
+    """Aplica un límite de velocidad a un Blueprint."""
+    if _has_limiter:
+        limiter.limit(limit_value)(blueprint)
