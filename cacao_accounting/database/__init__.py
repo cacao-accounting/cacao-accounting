@@ -287,7 +287,33 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
-    token: str | None = None
+
+    @property
+    def token(self) -> str | None:
+        """Obtiene el token de autenticación del usuario desde la caché si está disponible."""
+        if self.id:
+            try:
+                from cacao_accounting.cache import cache
+                cached_token = cache.get(f"jwt_token:{self.id}")
+                if cached_token:
+                    return str(cached_token)
+            except Exception:
+                pass
+        return getattr(self, "_token_volatile", None)
+
+    @token.setter
+    def token(self, value: str | None) -> None:
+        """Establece el token de autenticación en la caché y de forma volátil."""
+        self._token_volatile = value
+        if self.id:
+            try:
+                from cacao_accounting.cache import cache
+                if value is None:
+                    cache.delete(f"jwt_token:{self.id}")
+                else:
+                    cache.set(f"jwt_token:{self.id}", value, timeout=8 * 3600)
+            except Exception:
+                pass
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
