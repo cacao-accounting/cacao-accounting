@@ -722,3 +722,14 @@
   - #196 CAS-20: duplicate payment warning (no bloqueo) → CORREGIDO
   - #199 SEC-02: marcado para desarrollo futuro (requiere soft-delete architecture)
 - **Test results:** 51/51 payment tests, 42/42 posting tests, 5/5 R2R-17 tests, 4/4 CAS-18 tests
+
+### 2026-07-10 — SEC-005: Restringir /info y /development a administradores (#216)
+- **Petición:** Solucionar CWE-200: Exposure of Sensitive Information to an Unauthorized Actor. Restringir `/info`, `/dev`, `/development` a administradores y eliminar `bdrul`, `py_version`, `current_app` de los contextos de las plantillas.
+- **Plan:**
+  - Restringir el acceso a las rutas `/info`, `/dev`, y `/development` a usuarios administradores utilizando una validación del rol admin y clasificación admin.
+  - Eliminar la variable global `bdrul` (URI de conexión de la base de datos) del contexto global de Jinja.
+  - Eliminar las variables `py_version`, `bdrul`, y `current_app` del contexto de la plantilla en las rutas de desarrollo.
+  - Actualizar los archivos HTML `login.html` y `development.html` para remover referencias a las variables eliminadas.
+  - Añadir pruebas unitarias para garantizar el bloqueo de usuarios estándar y el acceso correcto de administradores.
+- **Commits:** `SEC-005`
+- **Resultados de pruebas:** Pruebas unitarias añadidas exitosamente, 2/2 vistas y restricciones de acceso en verde.
