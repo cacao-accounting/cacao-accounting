@@ -549,4 +549,179 @@
 - **Comprobante manual:** `journal.html` ahora muestra `Comprobante manual` bajo el numero para igualar la estructura visual de los documentos operativos.
 - **Solicitud de Compra:** En borrador muestra `Editar`, `Duplicar`, `Aprobar`, `Listado` y `Nuevo`; en aprobado mantiene `Crear` para Solicitud de Cotizacion y Orden de Compra.
 - **Actualizar Elementos:** Orden de Compra y Solicitud de Cotizacion precargan origen `purchase_request` cuando se crean desde una Solicitud de Compra.
-- **Backlog:** Se dejo pendiente completar la paridad de formatos y acciones específicas en el resto de Compras, Inventario y Ventas.
+- **Backlog:** Se dejo pendiente completar la paridad de formatos y acciones especificas en el resto de Compras, Inventario y Ventas.
+
+## 2026-05-16 (Verificación de patch E2E/ULID)
+- **Solicitud:** Verificar que los cambios reportados para pruebas E2E de Compras/Ventas/Inventario, ajuste de valuación de inventario y migración de IDs a ULID estuvieran aplicados correctamente.
+- **Ajuste aplicado:** Se corrigieron los campos `GLEntry.reversal_of` y `GLEntryDimension.gl_entry_id` a `String(26)` para alinear referencias con `gl_entry.id` ULID.
+- **Pruebas E2E:** Se robusteció `tests/test_e2e_modules.py` para detectar errores reales vía `alert-danger` en lugar de buscar el literal `danger` en todo el HTML.
+- **Verificación:** Suite completa `pytest` ejecutada con éxito (`618 passed, 5 skipped`).
+
+## 2026-05-16 (Motores de Cálculo de Impuestos, Landed Cost y Liquidaciones)
+- **Implementación de Motores:** Se crearon tres motores de cálculo independientes y determinísticos: Fiscal Engine, Landed Cost Engine y Settlement Engine en `cacao_accounting/accounting_engine/`.
+- **Fiscal Engine:** Soporta impuestos en cascada, incluidos en precio, prioridades jerárquicas (Ítem > Tercero > Transacción) y detección de dependencias circulares.
+- **Landed Cost Engine:** Implementa prorrateo secuencial por valor, cantidad, peso, volumen e igualitario, asegurando la capitalización correcta de costos accesorios al inventario.
+- **Settlement Engine:** Gestiona retenciones proporcionales en pagos parciales y diferencias de cambio.
+- **Auditabilidad y Snapshots:** Sistema de snapshots JSON inmutables para cada cálculo confirmado y generación automática de pistas de auditoría (Audit Trail) detallando fórmulas y bases de cálculo.
+- **Documentación y Calidad:** Se crearon 12 manuales técnicos en `docs/tax-cost-engines/` y se validó el "Golden Test" de importación (Costo 1081.50, Total 1243.73).
+
+## 2026-05-17 (Refinamiento Enterprise de Motores de Cálculo)
+- **Precisión Financiera:** Se implementó el `RoundingManager` con soporte para múltiples políticas (HALF_UP, HALF_EVEN) y distribución de residuos para garantizar el balance matemático.
+- **Mapeo Contable Pro-forma:** Creación del `AccountingMapper` que traduce resultados de cálculo en asientos contables equilibrados, incluyendo ajustes automáticos por redondeo.
+- **Integridad de Snapshots:** Los snapshots JSON ahora incluyen un fingerprint SHA256 y versionado de motor para auditoría inmutable.
+- **Resolución de Reglas Avanzada:** El `RuleResolver` ahora evalúa condiciones dinámicas como vigencia por fechas, moneda y jurisdicción geográfica.
+- **Calidad de Código:** Tipado estático completo con Mypy y cumplimiento de Flake8/Ruff en todo el paquete `accounting_engine`.
+
+## 2026-05-19 (Materialización de costos de importación en inventario)
+- **Solicitud:** Atender el pendiente de prorrateo de cargos capitalizables para que el costo aterrizado se materialice dentro del flujo real de documentos, evitando sobrecargar una sola tabla.
+- **Diseño aplicado:** Se agregó `LandedCostAllocation` como tabla dedicada de detalle y trazabilidad del prorrateo; `StockValuationLayer` conserva solo el efecto de valuación.
+- **Recepción de compra:** Cuando los cargos de importación ya están disponibles al ingreso al almacén, `post_purchase_receipt` ejecuta el motor antes del stock ledger y crea la capa inicial con `final_inventory_cost`.
+- **Factura de compra:** Cuando el costo capitalizable aparece después de una recepción ya contabilizada, `post_purchase_invoice` persiste el prorrateo y crea una capa de ajuste por valor (`qty = 0`) contra el inventario existente.
+- **Pruebas:** Se agregó cobertura unitaria para una importación recibida con flete capitalizable prorrateado por valor, validando `LandedCostAllocation`, `StockValuationLayer` y `StockBin`.
+
+## 2026-05-20 (Política definitiva para `document_no` en borradores)
+- **Solicitud:** Formalizar que las secuencias y series deben llevar consecutivo riguroso; si una numeración fue emitida con datos incorrectos, el registro se anula y se crea uno nuevo.
+- **Decisión:** `document_no` es irreversible una vez asignado, incluso en borradores. No se libera, no se reutiliza y no se renumera por cambios posteriores de fecha, compañía o serie.
+- **Implementación:** `assign_document_identifier` ahora es idempotente para documentos ya numerados; retorna sin consumir secuencia ni alterar numeración interna/externa.
+- **Prueba:** Se agregó cobertura para verificar que una factura en borrador conserva su `document_no` y no incrementa la secuencia al intentar reasignar tras cambiar la fecha.
+
+## 2026-05-20 (Servicio Centralizado de Importación Tabular)
+- **Solicitud:** Implementar un servicio centralizado para importar registros (Cuentas, Clientes, Proveedores, Comprobantes, Órdenes de Compra) desde CSV, XLS, XLSX y ODS, inhabilitándolo en modo escritorio.
+- **Implementación Core:** Creado paquete `cacao_accounting.imports` con una arquitectura de Lectores (CSV, XLS vía xlrd, XLSX vía openpyxl, ODS vía odfpy) y Adaptadores por módulo.
+- **Servicio y UI:** `ImportService` gestiona el ciclo de vida del lote (Pendiente -> Validado -> Procesando -> Completado). Se agregó UI web completa para carga, previsualización y ejecución de importaciones.
+- **Seguridad:** Implementado el flag `MODO_ESCRITORIO` en `before_request` del blueprint y visibilidad de UI para cumplir con la restricción de inhabilitación en despliegues locales.
+- **Resiliencia:** El procesamiento de documentos incluye rollbacks por registro para evitar estados corruptos del `database.session` y se integró un proceso de recuperación de lotes huérfanos al inicio de la aplicación.
+- **Docker:** Actualizado `Dockerfile` con dependencias del sistema necesarias para el procesamiento de archivos.
+- **Validación:** Creadas pruebas unitarias para lectores, rutas y servicios en `tests/imports/`. Se resolvieron fallos de linting D401 y se garantizó la compatibilidad con el esquema de base de datos actual.
+- **Refinamiento Enterprise:**
+  - Implementada normalización inmediata de datos a diccionarios para corregir bug crítico en agrupamiento.
+  - Agregada validación de períodos contables abiertos en todo el pipeline de importación.
+  - Implementada protección contra inyección de fórmulas en lectores de hojas de cálculo.
+  - Mejorada la robustez de ejecución con bloqueos de base de datos (`with_for_update`) e hilos daemon.
+  - Soporte para auto-detección de delimitadores en CSV y extracción de tipos avanzada en ODS.
+  - Implementada generación de plantillas en formatos CSV, XLSX y ODS con descarga vía UI.
+
+# 2026-07-03 (Reparación de layout en plantilla de comprobante recurrente)
+- **Solicitud:** Corregir el layout roto de `/accounting/journal/recurring/new`, donde la cabecera del formulario y la tabla de asientos quedaban comprimidas en una sola línea.
+- **Hallazgo:** El template `recurring_journal_nuevo.html` tenía los campos de cabecera incrustados dentro de `.ca-journal-toolbar` junto al botón `Cancelar`, usando clases `col-md-*` sin una grilla real, lo que rompía el flujo visual.
+- **Implementación:** Se separó el toolbar del bloque de metadatos y se añadió una grilla explícita `ca-journal-header-grid` para `code`, `name`, `company`, `naming_series`, libros y fechas. La sección `Asientos contables` volvió a quedar debajo de la cabecera, con ancho normal.
+- **Validación:** Se amplió la prueba de render HTML del formulario recurrente y se ejecutó junto al flujo E2E de plantilla recurrente (`2 passed`).
+
+# 2026-07-03 (Reversión contable, anulación estricta y numeración mensual)
+- **Solicitud:** Corregir el naming/numeración de reversión contable, endurecer la regla operativa para `Anular` y `Revertir`, y evitar que el listado de comprobantes muestre ULIDs como nombre visible cuando el borrador aún no tiene documento contable definitivo.
+- **Hallazgo en desarrollo:** El comprobante `01KWK1HFDXZ3QPDM6BXDTM75GB` quedó con fecha `2026-08-01` pero referencia/numeración visible de julio, y la serie `BMO-JOU` estaba vinculada a una secuencia con política `yearly` aunque su prefijo usa `*YYYY*-*MM*`, lo que provocaba números como `...-00004` en agosto en lugar de reiniciar a `...-00001`.
+- **Implementación:** La reversión ahora exige otro período contable, asigna número desde la fecha de reversión y conserva la serie del origen; los borradores de comprobante se renumeran si cambia `posting_date` o `naming_series_id`; la anulación solo se permite en la misma fecha del comprobante; y el listado usa un nombre visible amigable para borradores de reversión sin `document_no`.
+- **Series dinámicas:** La política efectiva de reset de secuencia ahora sube a `monthly` cuando la serie usa tokens mensuales en el prefijo, incluso si la secuencia heredada estaba configurada como `yearly`. Las series nuevas con prefijo mensual también nacen con reset mensual.
+- **Validación:** Pruebas focales en `tests/test_09_journal_entry_form.py`, `tests/test_e2e_journalentry.py`, `tests/test_11_contabilidad_coverage.py` y `tests/test_audit_trail_journal.py` quedaron en verde (`9 passed`).
+
+# 2026-07-03 (Asistente de importación de líneas en comprobantes)
+- **Solicitud:** Hacer más intuitivo el auxiliar de `Importar líneas` en comprobantes contables, agregando descarga de plantilla, carga local de XLSX y tolerancia real a encabezados en inglés o español sin depender del título exacto.
+- **Implementación:** El modal de `journal_nuevo.html` ahora separa pegar/subir en pestañas, permite descargar una plantilla XLSX en navegador con `ExcelJS` y leer archivos locales sin enviar el archivo al servidor. El mapeo de columnas quedó normalizado sin acentos ni guiones bajos y con fallback por posición cuando no hay coincidencias de encabezado.
+- **Esquemas compartidos:** `LineImportSchemaRegistry` expone aliases explícitos ES/EN para columnas de todos los doctypes soportados por line import, de modo que el asistente compartido y el comprobante manual acepten los mismos encabezados bilingües.
+- **Validación:** Se agregaron pruebas de render del modal en comprobantes y pruebas API para aliases bilingües; la suite focal `tests/test_09_journal_entry_form.py` + `tests/test_line_import_api.py` quedó en verde (`48 passed`).
+
+## 2026-05-23 (Conciliacion masiva AR/AP y Stock Reconciliation con valuacion)
+- **Solicitud:** Implementar la conciliacion masiva de facturas contra pagos existentes y extender Stock Reconciliation para ajustar cantidad y valor.
+- **AR/AP:** Se agrego `/cash_management/payment-reconciliation` y `/api/document-flow/payment-reconciliation-candidates`, con servicio que aplica pagos/cobros aprobados existentes contra documentos abiertos, validando compania, tercero, direccion AR/AP, saldos y duplicados.
+- **Persistencia AR/AP:** Cada aplicacion crea `PaymentReference`, `DocumentRelation` y `ReconciliationItem`, actualiza saldos pendientes y conserva compatibilidad con cancelaciones append-only.
+- **Inventario:** `stock_reconciliation` ahora guarda snapshots de cantidad/tasa/valor actual y objetivo por linea, genera SLE/SVL y actualiza `StockBin` por diferencia de cantidad y/o valor.
+- **Contabilidad:** La diferencia de valuacion se contabiliza balanceada contra la cuenta de inventario asignada a la bodega y una cuenta global de diferencia del documento, aplicando centro de costos, unidad de negocio y proyecto globales a todo el comprobante.
+- **Validacion:** Pruebas focales nuevas cubren conciliacion AR/AP, render de pantallas, ajuste de valor de inventario, cuenta de bodega, dimensiones globales y cancelacion con reversos.
+
+## 2026-06-27 (Badges semánticos de tarjetas de módulos)
+- **Solicitud:** Confirmar y corregir la semántica de los badges de tarjetas de módulos, incluyendo Administración como módulo, para evitar colores hardcodeados como el badge beige/ámbar en Tasas de Cambio para usuarios administradores.
+- **Implementación:** Se agregó `module_badge()` como helper Python disponible en Jinja y `module_status_badge` como macro reutilizable. Las tarjetas de Contabilidad, Compras, Ventas, Inventario, Bancos y Administración ahora calculan estado desde permisos y parámetros declarativos.
+- **Decisión de diseño:** Verde indica acceso operativo correcto, gris sin acceso, azul pendientes reales de aprobación, beige solo visualización y rojo atención. Los estados antiguos de warning ya no se usan como sustituto de datos reales.
+- **Validación:** Se agregaron pruebas unitarias de precedencia semántica y una prueba web que verifica que Tasas de Cambio se renderiza como `ok` para administrador.
+- **Ajuste posterior:** Se extendió el buscador reusable de listados a comprobantes contables, comprobantes recurrentes y revalorizaciones cambiarias para cubrir transacciones de Contabilidad igual que Compras, Ventas y Bancos.
+
+## 2026-06-28 (Refactor de persistencia de referencias de pago)
+- **Solicitud:** Reducir la complejidad cognitiva de `_save_payment_references` en `cacao_accounting/bancos/__init__.py` y conservar la cobertura con pruebas unitarias.
+- **Implementación:** Se extrajo la lectura de líneas desde el formulario, la resolución del documento referenciado, la validación de negocio por documento y la construcción de `PaymentReference` en helpers dedicados. La función principal quedó como orquestador lineal.
+- **Validación:** Se ejecutó la suite focal de referencias de pago y cancelación, con `5 passed` en `tests/test_06transaction_closure.py`; también se corrió `ruff check` sobre el módulo modificado.
+
+## 2026-06-29 (Refactor de hotspots Bancos y Compras)
+- **Solicitud:** Refactorizar los métodos listados en `issues.txt` para bajar complejidad cognitiva, usar `match/case` donde aplique, mover lógica a helpers, preservar contratos, y validar con pruebas unitarias y herramientas de calidad.
+- **Alcance acordado:** Se priorizaron solo los hotspots reales; `_save_payment_references` se trató como falso positivo histórico porque ya figuraba refactorizado en la bitácora.
+- **Implementación:** Se simplificaron los handlers y servicios de Bancos con helpers de dispatch, validación y persistencia; `find_bank_reconciliation_candidates`, `reconcile_bank_items`, `import_bank_statement`, `bancos_pago_nuevo`, `_crear_nota_bancaria`, `_payment_source_rows` y `_validate_payment_header` quedaron menos anidados. En Compras, `compras_cotizacion_proveedor_nueva` y `compras_cotizacion_proveedor_editar` comparten ahora helpers de contexto y catálogos.
+- **Validación:** Se ejecutaron `ruff`, `mypy` y pruebas focales de Bancos, Conciliación, Importación y Compras; el bloque relevante quedó en verde con `116 passed`.
+
+## 2026-06-29 (Fix unit tests in CI workflows)
+- **Solicitud:** Revisar y corregir fallos en las pruebas unitarias definidas en los workflows de GitHub.
+- **Implementación:**
+  - En `cacao_accounting/contabilidad/posting.py`: Se corrigió `_landed_cost_result_is_invalid` para que no trate una lista de errores vacía como un resultado inválido. Esto corrigió `test_purchase_receipt_lands_import_costs_into_initial_valuation_layers`.
+  - En `cacao_accounting/reportes/services.py`: Se reescribió `_process_payment_entry` para manejar correctamente las transferencias internas en el reporte de movimientos bancarios y se corrigió el cálculo de totales en `get_bank_movement_detail`. Esto corrigió `test_get_bank_movement_detail_supports_bank_filter`.
+  - En `tests/test_transaction_update_elements.py`: Se corrigió una regresión en las aserciones de etiquetas de UI que usaban constantes internas en lugar de los valores esperados.
+- **Verificación:** Se ejecutó la suite completa de pruebas unitarias (`1015 passed`).
+
+## 2026-07-03 (Códigos legibles para clientes, proveedores e items)
+- **Solicitud:** Reemplazar los códigos ULID visibles en clientes, proveedores e items por códigos secuenciales legibles (CUSTM-00001, SUPLR-00001, ITEM-000001) usando el sistema de naming-series existente.
+- **Diagnóstico:** `generate_party_code()` en `party_management.py` y `create_item_with_uoms()` en `inventario/service.py` llamaban a `generate_identifier()` sin `naming_series_id`/`sequence_id`, cayendo al fallback `full_identifier = entity_id` (ULID).
+- **Implementación:**
+  - `document_identifiers.py`: Se agregaron códigos `customer→CUSTM`, `supplier→SUPLR`, `item→ITEM` en `_default_entity_code()`. Nueva función `ensure_global_naming_series()` que crea series globales (`company=None`) con prefijo fijo, padding 5 (cliente/proveedor) o 6 (item), y `reset_policy="never"`. Nueva función `generate_entity_code()` como helper público que encapsula la resolución de naming-series + secuencia + generación.
+  - `party_management.py`: `generate_party_code()` ahora usa `generate_entity_code()`.
+  - `inventario/service.py`: `create_item_with_uoms()` ahora usa `generate_entity_code()` para items.
+  - `setup/service.py`: Llama a `ensure_global_naming_series()` durante la creación de compañía.
+  - `datos/dev/__init__.py`: Llama a `ensure_global_naming_series()` antes de crear datos demo.
+- **Calidad:** Black, ruff, mypy en verde. 254 tests de cobertura contable + 874 tests generales pasan (fallo preexistente en `test_fiscal_year_closing_cycle`).
+- **Commit:** `9b6f80d` — `feat: human-readable codes for customers, suppliers, and items`
+
+## 2026-07-08 (CAS-02 y CAS-03: exchange_rate en pagos y bloqueo FOR UPDATE)
+- **Solicitud:** Analizar 5 issues de prioridad alta (R2R-01, R2R-02, CAS-01, CAS-02, CAS-03) e implementar los reales.
+- **Falsos positivos (3):** R2R-01 (period validation ya existe via _document_contexts), R2R-02 (balance check ya existe via _assert_entries_balance), CAS-01 (saldo bancario ya se deriva de GLEntry). Marcados como REQUIERE REVISION.
+- **CAS-02 (implementado):** `_create_payment_entry` ya no hardcodea `exchange_rate=None`. Ahora recibe el rate resuelto desde `_lookup_exchange_rate()` cuando la moneda del pago difiere de la moneda base. `_update_payment_amounts` aplica el rate a `base_paid_amount`/`base_received_amount`.
+- **CAS-03 (implementado):** `_load_payment_reference_document` y `_get_reference_document` ahora usan `with_for_update()` para bloquear la fila del documento antes de leer el saldo pendiente, previniendo condición TOCTOU.
+- **Pruebas:** 3 tests nuevos, 1 existente ajustado. 337 tests en verde.
+- **Calidad:** black, ruff, flake8 OK.
+- **Commits:** `bb40f22` (CAS-02), `74079bf` (CAS-03), `61e15a4` (tests).
+
+## 2026-07-10 (Rediseño de la CLI cacaoctl)
+- **Solicitud:** Mejorar la interfaz de linea de comandos `cacaoctl` para que deje de parecer un alias de Flask y tenga identidad propia, siguiendo el estilo de Git/Docker/Poetry.
+- **Diagnóstico:** `cacao_accounting/cli.py` usaba `FlaskGroup`, lo que exponía la ayuda `Usage: python -m flask` y los comandos internos de Flask (`routes`, `run`, `shell`) mezclados con `cleandb`/`setupdb`/`serve`/`version`. El entry point en `pyproject.toml` es `cacaoctl=cacao_accounting:command` → `command()` en `__init__.py`.
+- **Implementación:**
+  - Se reescribió `cli.py` con un `click.Group` propio (`CacaoGroup`) que oculta la identidad de Flask (`prog_name="cacaoctl"`), muestra un banner y agrupa los comandos por categorías (Database, Server, Development, System).
+  - Comandos agrupados: `db init`, `db reset`, `db clean`, `db seed` (subgrupo `db`); `run`, `serve` (Server); `shell`, `routes` (Development); `version`, `status`, `config` (System).
+  - Opciones globales: `--env [dev|test|prod]`, `--verbose`, `--quiet`, `--version`, `-h/--help`.
+  - Confirmaciones interactivas (`¿Desea continuar? [y/N]`) para operaciones destructivas (`db reset`, `db clean`), omitibles con `--force`.
+  - Salida con colores: verde=éxito, amarillo=advertencia, rojo=error, cian=info.
+  - Comandos de diagnóstico nuevos: `status` (app, versión, BD, redis, entorno, servidor) y `config` (entorno, motor BD, debug, host, puerto, hilos, cache).
+  - Se eliminó `_register_app_commands` de `create_app` (los comandos `cleandb`/`setupdb`/`serve`/`version` ya no se registran en `app.cli`) y se actualizó `command()` para invocar `linea_comandos_main()`.
+- **Corrección incidental:** `ventas/__init__.py` tenía un error de indentación preexistente (el `except ValueError` de `ventas_factura_venta_nuevo` quedaba a 4 espacios en lugar de 8), lo que impedía importar la aplicación y por tanto ejecutar `cacaoctl`. Se corrigió la indentación.
+- **Calidad:** black, ruff, flake8 y mypy en verde para los archivos modificados.
+
+### 2026-07-10 — CAS-13: reject discount >= allocated
+- **Petición:** Fix CAS-13 VERIFICADO bug — `_cash_consumed=0` bypasses balance check
+- **Plan:** Added validation in `_process_reconciliation_line` that raises `DocumentFlowError` when `discount + gain_loss >= allocated`. Added 4 unit/integration tests.
+- **Commits:** `ab45e31` (R2R-11/13), `189da6e` (CAS-13)
+- **Test results:** 47/47 existing payment tests pass, 4/4 new CAS-13 tests pass
+
+### 2026-07-10 — Stabilization: CAS-13 + S2P-15 + ISSUES.md cleanup
+- **Petición:** Fix remaining VERIFICADO bugs, no new features, stabilize only
+- **Plan:** Fix CAS-13 (discount >= allocated bypass), fix S2P-15 (downstream revert on cancel), update ISSUES.md
+- **Commits:** `189da6e` (CAS-13), `709f7e3` (S2P-15)
+- **Test results:** 31/31 document_flow tests, 4/4 CAS-13 tests, 2/2 S2P-15 tests, 47/47 payment_entry tests
+- **ISSUES.md:** All VERIFICADO bugs now marked CORREGIDO or PENDIENTE. 0 VERIFICADO remaining.
+
+### 2026-07-10 — Stabilization batch: #191 #194 #192 #198 #196 #199
+- **Petición:** Cerrar issues abiertos antes de continuar
+- **Plan:** Fix bugs, reclasificar falsos positivos, marcar features futuras
+- **Commits:** `93cdadb` (O2C-24), `a0d3845` (CAS-18), `4003b55` (R2R-17), `de7c43d` (CAS-20), `97fd422` (docs)
+- **Resultado:**
+  - #191 O2C-24: require_rate_positive=True default + all submit calls → CORREGIDO
+  - #194 CAS-18: docstatus validation in bank reconciliation → CORREGIDO
+  - #192 R2R-17: balance check per transaction currency → CORREGIDO
+  - #198 SEC-01: FALSO POSITIVO (regla four-eyes no aplica) → cerrado
+  - #196 CAS-20: duplicate payment warning (no bloqueo) → CORREGIDO
+  - #199 SEC-02: marcado para desarrollo futuro (requiere soft-delete architecture)
+- **Test results:** 51/51 payment tests, 42/42 posting tests, 5/5 R2R-17 tests, 4/4 CAS-18 tests
+
+### 2026-07-10 — SEC-005: Restringir /info y /development a administradores (#216)
+- **Petición:** Solucionar CWE-200: Exposure of Sensitive Information to an Unauthorized Actor. Restringir `/info`, `/dev`, `/development` a administradores y eliminar `bdrul`, `py_version`, `current_app` de los contextos de las plantillas.
+- **Plan:**
+  - Restringir el acceso a las rutas `/info`, `/dev`, y `/development` a usuarios administradores utilizando una validación del rol admin y clasificación admin.
+  - Eliminar la variable global `bdrul` (URI de conexión de la base de datos) del contexto global de Jinja.
+  - Eliminar las variables `py_version`, `bdrul`, y `current_app` del contexto de la plantilla en las rutas de desarrollo.
+  - Actualizar los archivos HTML `login.html` y `development.html` para remover referencias a las variables eliminadas.
+  - Añadir pruebas unitarias para garantizar el bloqueo de usuarios estándar y el acceso correcto de administradores.
+- **Commits:** `SEC-005`
+- **Resultados de pruebas:** Pruebas unitarias añadidas exitosamente, 2/2 vistas y restricciones de acceso en verde.
