@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -387,7 +388,7 @@ def ventas_pedido_venta_nuevo():
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
     return render_template(
         "ventas/solicitud_venta_nuevo.html",
         form=formulario,
@@ -555,7 +556,7 @@ def ventas_pedido_venta_submit(request_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
     flash("Pedido de venta aprobado.", "success")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
@@ -740,7 +741,7 @@ def _handle_cliente_create(
     except ValueError as exc:
         database.session.rollback()
         company_settings_rows = draft_party_company_settings_rows("customer", form)
-        flash(str(exc), "danger")
+        flash_error(exc)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
@@ -824,7 +825,7 @@ def _handle_cliente_update(
     except ValueError as exc:
         database.session.rollback()
         company_settings_rows = draft_party_company_settings_rows("customer", form)
-        flash(str(exc), "danger")
+        flash_error(exc)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
         form=formulario,
@@ -850,7 +851,7 @@ def ventas_cliente_contacto_crear(customer_id: str):
         flash(_("Contacto agregado correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
@@ -912,7 +913,7 @@ def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
         flash(_("Contacto actualizado correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
@@ -940,7 +941,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
         flash(_("Direccion agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
@@ -956,7 +957,7 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
         flash(_("Direccion actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
@@ -1454,10 +1455,10 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
     except IdentifierConfigurationError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     except Exception as exc:  # noqa: BLE001
         database.session.rollback()
         flash(_("Error inesperado al crear la orden de venta: ") + str(exc), "danger")
@@ -1754,7 +1755,7 @@ def ventas_cotizacion_nueva():
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=cotizacion.id))
         except IdentifierConfigurationError as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
     return render_template(
         "ventas/cotizacion_nuevo.html",
         form=formulario,
@@ -1951,7 +1952,7 @@ def ventas_cotizacion_submit(quotation_id: str):
         database.session.commit()
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
     flash("Cotizacion de venta aprobada.", "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
@@ -2001,7 +2002,7 @@ def ventas_orden_venta_submit(order_id: str):
         flash("Orden de venta aprobada con reserva de inventario.", "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
@@ -2102,7 +2103,7 @@ def ventas_entrega_nuevo():
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
         except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
     return render_template(
         "ventas/entrega_nuevo.html",
         form=formulario,
@@ -2322,7 +2323,7 @@ def ventas_entrega_submit(note_id: str):
         flash("Nota de entrega aprobada.", "success")
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
@@ -2349,7 +2350,7 @@ def ventas_entrega_cancel(note_id: str):
         flash("Nota de entrega cancelada.", "warning")
     except PostingError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
@@ -2453,7 +2454,7 @@ def ventas_factura_venta_nuevo():
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
         except ValueError as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
     return render_template(
         "ventas/factura_venta_nuevo.html",
@@ -2612,7 +2613,7 @@ def _handle_sales_invoice_edit_post(registro):
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
     except ValueError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
 
 

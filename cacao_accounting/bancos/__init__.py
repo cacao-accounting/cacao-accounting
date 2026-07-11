@@ -14,6 +14,7 @@ from typing import Any, TypedDict, cast
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_required
@@ -351,13 +352,13 @@ def bancos_conciliacion_facturas_pagos():
             return redirect(url_for("bancos.bancos_conciliacion_facturas_pagos", reconciliation_id=reconciliation.id))
         except ValueError as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
         except Exception as exc:  # noqa: BLE001
             from cacao_accounting.document_flow import DocumentFlowError
 
             database.session.rollback()
             if isinstance(exc, DocumentFlowError):
-                flash(str(exc), "danger")
+                flash_error(exc)
             else:
                 raise
 
@@ -1599,7 +1600,7 @@ def _create_payment_from_request():
         return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
     except (ValueError, ArithmeticError) as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
     except Exception as exc:  # noqa: BLE001
         from werkzeug.exceptions import HTTPException
 
