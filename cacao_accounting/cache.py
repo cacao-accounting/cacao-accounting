@@ -38,9 +38,6 @@ cache = _crear_cache()
 
 def init_cache(app: Flask) -> None:
     """Inicializa la caché de la aplicación adaptándola al modo de ejecución (escritorio o nube)."""
-    if not _has_caching:
-        return
-
     if "MODO_ESCRITORIO" in app.config:
         desktop = is_truthy(app.config.get("MODO_ESCRITORIO"))
     else:
@@ -58,5 +55,8 @@ def init_cache(app: Flask) -> None:
             app.config["CACHE_REDIS_URL"] = redis_url
         else:
             app.config["CACHE_TYPE"] = "SimpleCache"
+
+    if not _has_caching:
+        return
 
     cache.init_app(app)

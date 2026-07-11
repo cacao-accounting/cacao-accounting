@@ -63,7 +63,12 @@ def init_limiter(app: Flask) -> None:
         return
 
     # El limitador sólo es necesario cuando no está habilitado el modo escritorio (en la nube)
-    desktop = is_desktop_mode()
+    from cacao_accounting.runtime_mode import is_truthy
+
+    if "MODO_ESCRITORIO" in app.config:
+        desktop = is_truthy(app.config.get("MODO_ESCRITORIO"))
+    else:
+        desktop = is_desktop_mode()
     enabled = not desktop
 
     app.config["RATELIMIT_ENABLED"] = enabled
