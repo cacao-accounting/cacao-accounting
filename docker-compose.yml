@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - CACAO_DATABASE_URL=postgresql://${DB_USER:-cacao}:${DB_PASSWORD:-}@db:5432/${DB_NAME:-cacaodb}
+      - CACHE_REDIS_URL=redis://cache:6379/0
+      - CACAO_USER=${CACAO_USER:-cacao}
+      - CACAO_PSWD=${CACAO_PSWD:-}
+      - ENV=production
+      - FLASK_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${DB_USER:-cacao}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-}
+      - POSTGRES_DB=${DB_NAME:-cacaodb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cacao -d cacaodb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
