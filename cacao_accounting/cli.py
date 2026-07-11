@@ -204,6 +204,21 @@ def db_init(force: bool, seed: bool) -> None:
         usuarios_creados,
     )
 
+    flask_env = (os.environ.get("FLASK_ENV") or "").lower()
+    env_var = (os.environ.get("ENV") or "").lower()
+    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
+
+    usuario = os.environ.get("CACAO_USER")
+    contrasena = os.environ.get("CACAO_PSWD")
+
+    if not usuario or not contrasena:
+        if not is_dev:
+            _mensaje_error("CACAO_USER and CACAO_PSWD must be set in environment")
+            raise click.exceptions.Exit(1)
+        else:
+            usuario = usuario or "cacao"
+            contrasena = contrasena or "cacao"
+
     app = _obtener_aplicacion()
     with app.app_context():
         existe = entidades_creadas() or usuarios_creados()
@@ -214,8 +229,9 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_error("La base de datos ya existe, use --force para sobrescribirla.")
             raise click.exceptions.Exit(1)
 
-        usuario = os.environ.get("CACAO_USER") or "cacao"
-        contrasena = os.environ.get("CACAO_PSWD") or "cacao"
+        if usuario == "cacao" and contrasena == "cacao":
+            _mensaje_advertencia("Se están usando usuario y contraseña predeterminados para el setup inicial.")
+
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
             _mensaje_exito("Base de datos creada.")
         else:
@@ -235,6 +251,21 @@ def db_reset(force: bool, seed: bool) -> None:
         usuarios_creados,
     )
 
+    flask_env = (os.environ.get("FLASK_ENV") or "").lower()
+    env_var = (os.environ.get("ENV") or "").lower()
+    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
+
+    usuario = os.environ.get("CACAO_USER")
+    contrasena = os.environ.get("CACAO_PSWD")
+
+    if not usuario or not contrasena:
+        if not is_dev:
+            _mensaje_error("CACAO_USER and CACAO_PSWD must be set in environment")
+            raise click.exceptions.Exit(1)
+        else:
+            usuario = usuario or "cacao"
+            contrasena = contrasena or "cacao"
+
     app = _obtener_aplicacion()
     with app.app_context():
         existe = entidades_creadas() or usuarios_creados()
@@ -248,8 +279,8 @@ def db_reset(force: bool, seed: bool) -> None:
     with app.app_context():
         database.drop_all()
         _mensaje_advertencia("Base de datos eliminada.")
-        usuario = os.environ.get("CACAO_USER") or "cacao"
-        contrasena = os.environ.get("CACAO_PSWD") or "cacao"
+        if usuario == "cacao" and contrasena == "cacao":
+            _mensaje_advertencia("Se están usando usuario y contraseña predeterminados para el setup inicial.")
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
             _mensaje_exito("Base de datos recreada correctamente.")
         else:
