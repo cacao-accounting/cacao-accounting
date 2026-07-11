@@ -29,8 +29,9 @@ class AccessDenied(CacaoAccountingException):
 
 
 def flash_error(exc, category="danger"):
-    """Log the exception details and flash a generic localized error message to the user,
+    """Log the exception details and flash a generic localized error message to the user.
 
+    This function logs the full exception safely, but displays a generic message
     unless the exception is a known safe domain/validation exception.
     """
     from flask import flash
