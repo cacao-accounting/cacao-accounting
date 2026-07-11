@@ -17,6 +17,7 @@
 - [ ] Ampliar cobertura de pruebas funcionales por documento del MVP fiscal (casos positivos/negativos por doctype).
 
 ## Administracion y Seguridad
+- [x] Mitigar vulnerabilidad SEC-003 de Redirección Abierta (Open Redirect) vía request.referrer.
 - [ ] Activar `AuditLog` automatico para cambios en documentos operativos.
 
 ## Multi-Ledger y Revalorizacion

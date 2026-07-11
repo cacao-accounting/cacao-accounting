@@ -1,5 +1,15 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-11 : Mitigación de Redirección Abierta (Open Redirect) vía request.referrer (SEC-003, CWE-601)
+- **Petición del usuario:** En `api/__init__.py:180-181,194-195` se usa `request.referrer` sin validación para redirecciones POST de comentarios y tareas creados desde formularios. Esto posibilita ataques de redirección abierta (CWE-601).
+- **Implementación:**
+  - Se importó `urlparse` desde `urllib.parse` y `url_for` en `cacao_accounting/api/__init__.py`.
+  - Se modificaron los endpoints de creación de comentarios (`/api/documents/<document_type>/<document_id>/comments`) y tareas (`/api/documents/<document_type>/<document_id>/tasks`) para validar el referrer antes de redirigir.
+  - La redirección solo se ejecuta si el referrer es seguro, es decir, si es una URL relativa (`netloc == ""`) o si el host coincide con el de la aplicación (`netloc == request.host`).
+  - Si el referrer es externo o no confiable, se realiza una redirección segura a la página de inicio (`url_for("cacao_app.pagina_inicio")`).
+  - Se agregaron pruebas automatizadas exhaustivas en `tests/test_desktop_cloud_mode.py` (`test_cloud_collaboration_open_redirect_protection`) para verificar que referer seguro redirige correctamente y referer inseguro redirige a `/index`.
+- **Validación:** Todas las pruebas pasaron satisfactoriamente y no hay regresiones.
+
 ## 2026-07-10 : Implementación de Límite de Intentos de Inicio de Sesión y Rate Limiting en API (CWE-307)
 - **Petición del usuario:** No hay límite de intentos de inicio de sesión ni rate limiting en endpoints de la API, lo que posibilita ataques de fuerza bruta (CWE-307). Se sugiere usar `Flask-Limiter` con Redis para modo nube, pero de manera completamente opcional para respetar el modo escritorio como ciudadano de primer nivel. Adicionalmente se solicita proveer un archivo `docker-compose.yml` que defina tres servicios (`app`, `db`, `cache`).
 - **Implementación:**
