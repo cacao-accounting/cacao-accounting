@@ -232,13 +232,12 @@ def test_set_entity_inactive(request):
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from flask_login import current_user
-
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
                 client.get("/accounts/entity/set_inactive/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
@@ -248,13 +247,12 @@ def test_set_entity_active(request):
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from flask_login import current_user
-
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
                 client.get("/accounts/entity/set_active/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
@@ -264,13 +262,12 @@ def test_default_entity(request):
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from flask_login import current_user
-
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
                 client.get("/accounts/entity/set_default/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
@@ -280,13 +277,12 @@ def test_delete_entity(request):
     if request.config.getoption("--slow") == "True":
 
         with app.app_context():
-            from flask_login import current_user
-
             with app.test_client() as client:
                 # Keep the session alive until the with clausule closes
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
                 client.get("/accounts/entity/delete/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
 
