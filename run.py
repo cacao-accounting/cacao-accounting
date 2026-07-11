@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
-from os import environ
+import sys
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -20,17 +20,27 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
 from cacao_accounting.config import PORT, THREADS, configuracion
-from cacao_accounting.database.helpers import verifica_coneccion_db, usuarios_creados
-from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.database.helpers import (
+    verifica_coneccion_db,
+    usuarios_creados,
+    inicia_base_de_datos,
+    resolver_credenciales_iniciales,
+)
 
 app = create_app(configuracion)
-user = environ.get("CACAO_USER") or "cacao"
-passwd = environ.get("CACAO_PSWD") or "cacao"
+
+try:
+    user, passwd = resolver_credenciales_iniciales()
+except ValueError as exc:
+    logger.critical(str(exc))
+    sys.exit(1)
 
 if verifica_coneccion_db(app=app):
     with app.app_context():
 
         if not usuarios_creados():
+            if user == "cacao" and passwd == "cacao":
+                logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             try:
                 inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
                 db = True
@@ -42,6 +52,8 @@ if verifica_coneccion_db(app=app):
 else:
     with app.app_context():
         try:
+            if not usuarios_creados() and user == "cacao" and passwd == "cacao":
+                logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
             db = True
         except OperationalError:
