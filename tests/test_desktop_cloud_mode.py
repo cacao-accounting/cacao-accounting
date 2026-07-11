@@ -199,3 +199,66 @@ def test_cloud_comment_and_task_flow_records_audit_trail(app_ctx) -> None:
     assert "task_status_changed" in actions
     assert "task_completed" in actions
     assert "task_cancelled" in actions
+
+
+def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
+    """Comments and tasks redirect to referrer safely, avoiding Open Redirect."""
+    client = app_ctx.test_client()
+    _login(client)
+
+    # 1. Safe relative referrer should be accepted
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/comments",
+        data={"comment": "Safe comment"},
+        headers={"Referer": "/safe-relative-path"},
+    )
+    assert response.status_code == 302
+    assert response.location in ("/safe-relative-path", "http://localhost/safe-relative-path")
+
+    # 2. Safe same-host referrer should be accepted
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/comments",
+        data={"comment": "Safe comment"},
+        headers={"Referer": "http://localhost/another-safe-path"},
+    )
+    assert response.status_code == 302
+    assert response.location == "http://localhost/another-safe-path"
+
+    # 3. Unsafe external referrer should be redirected to home page
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/comments",
+        data={"comment": "Safe comment"},
+        headers={"Referer": "https://malicious.com/phishing"},
+    )
+    assert response.status_code == 302
+    assert response.location in ("/index", "http://localhost/index")
+
+    # 4. Safe relative referrer for tasks
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/tasks",
+        data={
+            "title": "Validate task",
+            "description": "Task desc",
+            "assigned_to": "admin-id",
+            "priority": "high",
+            "due_date": "2026-05-31",
+        },
+        headers={"Referer": "/safe-task-path"},
+    )
+    assert response.status_code == 302
+    assert response.location in ("/safe-task-path", "http://localhost/safe-task-path")
+
+    # 5. Unsafe external referrer for tasks should be redirected to home page
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/tasks",
+        data={
+            "title": "Validate task",
+            "description": "Task desc",
+            "assigned_to": "admin-id",
+            "priority": "high",
+            "due_date": "2026-05-31",
+        },
+        headers={"Referer": "https://evil.com/phishing"},
+    )
+    assert response.status_code == 302
+    assert response.location in ("/index", "http://localhost/index")

@@ -1,4 +1,9 @@
-# Estado Actual del Proyecto - 2026-07-10
+# Estado Actual del Proyecto - 2026-07-11
+
+- **Mitigación de Redirección Abierta (SEC-003 — 2026-07-11):** Se corrigió la vulnerabilidad de Open Redirect en redirecciones de comentarios y tareas.
+  - Se validó `request.referrer` antes de la redirección en los endpoints `/api/documents/<document_type>/<document_id>/comments` y `/api/documents/<document_type>/<document_id>/tasks`.
+  - La redirección solo se ejecuta para URL relativas o con el mismo origen de la aplicación (`request.host`), cayendo a `url_for("cacao_app.pagina_inicio")` en caso de referrers externos.
+  - Se agregaron pruebas exhaustivas que validan la protección.
 
 - **Auditoría Senior DBA — Commits 4-10 (2026-07-10):** Se completaron mejoras de integridad de datos en los modelos SQLAlchemy.
   - **Commit 4 (`10a2bc1`):** 6 UniqueConstraints nuevas (User.user, FiscalYear, NamingSeries, Workflow, WorkflowState, WorkflowTransition) + bug fix en Roles.note + 4 redundantes eliminadas.
