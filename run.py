@@ -52,9 +52,8 @@ if verifica_coneccion_db(app=app):
 else:
     with app.app_context():
         try:
-            if not usuarios_creados():
-                if user == "cacao" and passwd == "cacao":
-                    logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
+            if not usuarios_creados() and user == "cacao" and passwd == "cacao":
+                logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)
             db = True
         except OperationalError:
