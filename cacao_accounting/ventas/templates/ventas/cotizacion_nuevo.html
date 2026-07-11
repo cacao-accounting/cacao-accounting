@@ -21,7 +21,7 @@
   </ol>
 </nav>
 
-<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_request_id %}
   <input type="hidden" name="from_request" value="{{ from_request_id }}">
