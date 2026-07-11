@@ -274,6 +274,9 @@ def create_app(ajustes: dict | None = None) -> Flask:
         static_folder=DIRECTORIO_ARCHIVOS,
     )
 
+    # Configurar límites por defecto
+    cacao_app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+
     setattr(cacao_app, "wsgi_app", ProxyFix(cacao_app.wsgi_app, x_for=1, x_proto=1, x_host=1))
 
     if ajustes:

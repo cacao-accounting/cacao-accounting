@@ -28,6 +28,9 @@ extra-formats = [
     "xlrd>=2.0.2",
     "odfpy>=1.4.1",
 ]
+cloud = [
+    "python-magic>=0.4.27",
+]
 
 [project.scripts]
 cacaoctl="cacao_accounting:command"

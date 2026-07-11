@@ -43,6 +43,7 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 - Crear un entorno virtual: `python -m venv .venv`
 - Activar el entorno: `source .venv/bin/activate`
 - Instalar dependencias: `pip install -r requirements.txt`
+- Para habilitar características en la nube (como validación MIME segura en la subida de archivos), instale las dependencias opcionales: `pip install cacao-accounting[cloud]`
 - Ejecutar pruebas: `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
 
 ## Demo online
