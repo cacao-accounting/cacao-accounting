@@ -6,7 +6,6 @@
 # ---------------------------------------------------------------------------------------
 # Libreria estandar
 # ---------------------------------------------------------------------------------------
-from os import environ
 import sys
 
 # ---------------------------------------------------------------------------------------
@@ -21,27 +20,20 @@ from sqlalchemy.exc import OperationalError
 # ---------------------------------------------------------------------------------------
 from cacao_accounting import create_app
 from cacao_accounting.config import PORT, THREADS, configuracion
-from cacao_accounting.database.helpers import verifica_coneccion_db, usuarios_creados
-from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.database.helpers import (
+    verifica_coneccion_db,
+    usuarios_creados,
+    inicia_base_de_datos,
+    resolver_credenciales_iniciales,
+)
 
 app = create_app(configuracion)
 
-flask_env = (environ.get("FLASK_ENV") or "").lower()
-env = (environ.get("ENV") or "").lower()
-
-# Se asume modo desarrollo si alguna variable de entorno está explícitamente en "dev" o "development"
-is_dev = flask_env in ("dev", "development") or env in ("dev", "development")
-
-user = environ.get("CACAO_USER")
-passwd = environ.get("CACAO_PSWD")
-
-if not user or not passwd:
-    if not is_dev:
-        logger.critical("CACAO_USER and CACAO_PSWD must be set in environment")
-        sys.exit(1)
-    else:
-        user = user or "cacao"
-        passwd = passwd or "cacao"
+try:
+    user, passwd = resolver_credenciales_iniciales()
+except ValueError as exc:
+    logger.critical(str(exc))
+    sys.exit(1)
 
 if verifica_coneccion_db(app=app):
     with app.app_context():

@@ -202,22 +202,14 @@ def db_init(force: bool, seed: bool) -> None:
         entidades_creadas,
         inicia_base_de_datos,
         usuarios_creados,
+        resolver_credenciales_iniciales,
     )
 
-    flask_env = (os.environ.get("FLASK_ENV") or "").lower()
-    env_var = (os.environ.get("ENV") or "").lower()
-    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
-
-    usuario = os.environ.get("CACAO_USER")
-    contrasena = os.environ.get("CACAO_PSWD")
-
-    if not usuario or not contrasena:
-        if not is_dev:
-            _mensaje_error("CACAO_USER and CACAO_PSWD must be set in environment")
-            raise click.exceptions.Exit(1)
-        else:
-            usuario = usuario or "cacao"
-            contrasena = contrasena or "cacao"
+    try:
+        usuario, contrasena = resolver_credenciales_iniciales()
+    except ValueError as exc:
+        _mensaje_error(str(exc))
+        raise click.exceptions.Exit(1)
 
     app = _obtener_aplicacion()
     with app.app_context():
@@ -249,22 +241,14 @@ def db_reset(force: bool, seed: bool) -> None:
         entidades_creadas,
         inicia_base_de_datos,
         usuarios_creados,
+        resolver_credenciales_iniciales,
     )
 
-    flask_env = (os.environ.get("FLASK_ENV") or "").lower()
-    env_var = (os.environ.get("ENV") or "").lower()
-    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
-
-    usuario = os.environ.get("CACAO_USER")
-    contrasena = os.environ.get("CACAO_PSWD")
-
-    if not usuario or not contrasena:
-        if not is_dev:
-            _mensaje_error("CACAO_USER and CACAO_PSWD must be set in environment")
-            raise click.exceptions.Exit(1)
-        else:
-            usuario = usuario or "cacao"
-            contrasena = contrasena or "cacao"
+    try:
+        usuario, contrasena = resolver_credenciales_iniciales()
+    except ValueError as exc:
+        _mensaje_error(str(exc))
+        raise click.exceptions.Exit(1)
 
     app = _obtener_aplicacion()
     with app.app_context():
