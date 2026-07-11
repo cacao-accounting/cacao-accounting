@@ -1995,6 +1995,10 @@ def ventas_orden_venta_submit(order_id: str):
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
+        if not getattr(registro, "is_return", False):
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0")
+            )
         _validate_and_reserve_stock_for_sales_order(registro)
         registro.docstatus = 1
         log_submit(registro)
@@ -2692,6 +2696,10 @@ def ventas_factura_venta_submit(invoice_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        if not getattr(registro, "is_return", False):
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0")
+            )
         _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
@@ -2764,6 +2772,69 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
         database.session.rollback()
         flash(_(str(exc)), "danger")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
+
+
+def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, current_doc_total: Decimal) -> None:
+    """Valida el límite de crédito y facturas vencidas de un cliente antes de submit."""
+    if not customer_id or not company:
+        return
+
+    from cacao_accounting.database import CompanyParty, PaymentTerms, SalesInvoice
+    from cacao_accounting.document_flow.service import compute_outstanding_amount
+    from datetime import date, timedelta
+
+    company_party = database.session.execute(
+        database.select(CompanyParty).filter_by(company=company, party_id=customer_id)
+    ).scalar_one_or_none()
+
+    if not company_party:
+        return
+
+    # 1. Validación de facturas vencidas (block_overdue)
+    if company_party.block_overdue:
+        # Buscar facturas aprobadas con saldo pendiente
+        invoices = database.session.execute(
+            database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+        ).scalars().all()
+
+        due_days = 0
+        if company_party.payment_terms_id:
+            payment_terms = database.session.get(PaymentTerms, company_party.payment_terms_id)
+            if payment_terms:
+                due_days = payment_terms.due_days or 0
+
+        today = date.today()
+        for inv in invoices:
+            if compute_outstanding_amount(inv) <= 0:
+                continue
+            if inv.posting_date:
+                due_date = inv.posting_date + timedelta(days=due_days)
+                if today > due_date:
+                    raise ValueError(
+                        f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
+                        f"Factura vencida: {inv.document_no or inv.id} (Vencimiento: {due_date})."
+                    )
+
+    # 2. Validación de límite de crédito (credit_limit)
+    if company_party.credit_limit is not None:
+        # Calcular saldo pendiente total de facturas aprobadas
+        invoices = database.session.execute(
+            database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+        ).scalars().all()
+
+        total_outstanding = Decimal("0")
+        for inv in invoices:
+            total_outstanding += compute_outstanding_amount(inv)
+
+        total_exposure = total_outstanding + current_doc_total
+        limit = Decimal(str(company_party.credit_limit))
+
+        if total_exposure > limit:
+            raise ValueError(
+                f"El límite de crédito para el cliente ha sido excedido. "
+                f"Límite: {limit}, Saldo actual: {total_outstanding}, "
+                f"Monto del documento: {current_doc_total}, Exposición total: {total_exposure}."
+            )
 
 
 def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: str | None) -> None:
