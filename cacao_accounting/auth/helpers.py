@@ -72,8 +72,17 @@ def puede_iniciar_en_escritorio(identidad: User) -> bool:
 def asignar_token_para_usuario(identidad: User) -> None:
     """Genera y asigna el token de autenticación para la API REST."""
     try:
+        from datetime import datetime, timedelta, timezone
+
+        ahora = datetime.now(timezone.utc)
+        payload = {
+            "user_id": identidad.id,
+            "iat": ahora,
+            "nbf": ahora,
+            "exp": ahora + timedelta(hours=8),
+        }
         identidad.token = encode(
-            {"user_id": identidad.id},
+            payload,
             current_app.config["SECRET_KEY"],
             algorithm="HS256",
         )
