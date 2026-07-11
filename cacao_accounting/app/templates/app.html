@@ -117,30 +117,30 @@
 <script src="{{ url_for('static', filename='node_modules/chart.js/dist/chart.umd.js') }}"></script>
 <script>
   globalThis.dashboardConfig = {
-    initialCompany: '{{ entidades[0].id if entidades else "" }}',
-    periods: {{ dashboard_periods | tojson | safe }},
-    companies: {{ dashboard_entities | tojson | safe }},
+    initialCompany: {{ (entidades[0].id if entidades else "") | tojson }},
+    periods: {{ dashboard_periods | tojson }},
+    companies: {{ dashboard_entities | tojson }},
     messages: {
-      dashboardLoadError: '{{ _("No se pudo cargar el dashboard.") }}'
+      dashboardLoadError: {{ _("No se pudo cargar el dashboard.") | tojson }}
     },
     titles: {
-      accounting: '{{ _("Resumen financiero") }}',
-      banks: '{{ _("Saldos bancarios") }}',
-      purchases: '{{ _("Facturas por pagar") }}',
-      inventory: '{{ _("Menor existencia") }}',
-      sales: '{{ _("Mejores clientes") }}'
+      accounting: {{ _("Resumen financiero") | tojson }},
+      banks: {{ _("Saldos bancarios") | tojson }},
+      purchases: {{ _("Facturas por pagar") | tojson }},
+      inventory: {{ _("Menor existencia") | tojson }},
+      sales: {{ _("Mejores clientes") | tojson }}
     },
     headings: {
-      accounting: ['{{ _("Concepto") }}', '{{ _("Valor") }}'],
-      banks: ['{{ _("Cuenta") }}', '{{ _("Saldo") }}'],
-      purchases: ['{{ _("Factura") }}', '{{ _("Proveedor") }}', '{{ _("Pendiente") }}'],
-      inventory: ['{{ _("Ítem") }}', '{{ _("Bodega") }}', '{{ _("Existencia") }}'],
-      sales: ['{{ _("Cliente") }}', '{{ _("Total") }}']
+      accounting: [{{ _("Concepto") | tojson }}, {{ _("Valor") | tojson }}],
+      banks: [{{ _("Cuenta") | tojson }}, {{ _("Saldo") | tojson }}],
+      purchases: [{{ _("Factura") | tojson }}, {{ _("Proveedor") | tojson }}, {{ _("Pendiente") | tojson }}],
+      inventory: [{{ _("Ítem") | tojson }}, {{ _("Bodega") | tojson }}, {{ _("Existencia") | tojson }}],
+      sales: [{{ _("Cliente") | tojson }}, {{ _("Total") | tojson }}]
     },
     chartLabels: {
-      income: '{{ _("Ingresos") }}',
-      expense: '{{ _("Gastos") }}',
-      sales: '{{ _("Ventas") }}'
+      income: {{ _("Ingresos") | tojson }},
+      expense: {{ _("Gastos") | tojson }},
+      sales: {{ _("Ventas") | tojson }}
     },
     monthNames: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   };

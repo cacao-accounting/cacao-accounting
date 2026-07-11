@@ -1,13 +1,13 @@
 {% macro transaction_form_js(config) %}
 <script>
-  globalThis.transactionFormConfig = {{ config | tojson | safe }};
+  globalThis.transactionFormConfig = {{ config | tojson }};
 </script>
 {% endmacro %}
 
 {% macro smart_select(doctype, name, label, initial_value='', initial_label='', filters={}, filter_sources=[], required=False, min_chars=1, preload=False, required_filters=[], auto_select_default=False, load_on_filter_change=False, x_model=None, on_select=None, initial_value_expr=None, initial_label_expr=None) %}
 <div class="ca-smart-select" x-data='smartSelect({
-    doctype: "{{ doctype }}",
-    name: "{{ name }}",
+    doctype: {{ doctype | tojson }},
+    name: {{ name | tojson }},
     minChars: {{ min_chars }},
     preload: {{ "true" if preload else "false" }},
     loadOnFilterChange: {{ "true" if load_on_filter_change else "false" }},

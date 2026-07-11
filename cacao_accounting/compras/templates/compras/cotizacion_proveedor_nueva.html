@@ -21,7 +21,7 @@
   </ol>
 </nav>
 
-<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson | safe }})'>
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {{ tf_macros.transaction_form_header("Editar Cotización de Proveedor" if edit else "Cotización de Proveedor", cancel_url=url_for('compras.compras_cotizacion_proveedor_lista')) }}
   <div class="ca-card p-3 mb-3">
