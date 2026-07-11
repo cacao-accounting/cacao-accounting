@@ -76,7 +76,9 @@ def token_requerido(f):  # pragma: no cover
         token = None
 
         if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]
+            parts = request.headers["Authorization"].split(" ")
+            if len(parts) > 1:
+                token = parts[1]
 
         if not token:
             return {
@@ -88,16 +90,20 @@ def token_requerido(f):  # pragma: no cover
         try:
             data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
             assert data is not None  # nosec
+            user_id = data.get("user_id")
 
-            if not current_user:
+            from cacao_accounting.database import User, database
+            identidad = database.session.get(User, user_id)
+            if not identidad or identidad.token != token:
                 return {
-                    "message": "Invalid Authentication token!",
+                    "message": "Invalid or expired Authentication token!",
                     "data": None,
                     "error": "Unauthorized",
                 }, 401
 
-            if not current_user.is_authenticated:
-                abort(403)
+            from flask_login import login_user
+            if not current_user or not current_user.is_authenticated:
+                login_user(identidad)
 
         except Exception as e:
             return {
