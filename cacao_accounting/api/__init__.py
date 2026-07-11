@@ -8,11 +8,12 @@
 # --------------------------------------------------------------------------------------
 from functools import wraps
 from typing import Any, cast
+from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from jwt import decode
 
@@ -183,7 +184,10 @@ def api_document_comment(document_type: str, document_id: str):
     except CollaborationError as exc:
         abort_for_collaboration_error(exc)
     if request.form and request.referrer:
-        return redirect(request.referrer)
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
     return jsonify({"id": entry.id, "action": entry.action}), 201
 
 
@@ -197,7 +201,10 @@ def api_document_task(document_type: str, document_id: str):
     except CollaborationError as exc:
         abort_for_collaboration_error(exc)
     if request.form and request.referrer:
-        return redirect(request.referrer)
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
     return jsonify({"id": task.id, "status": task.status}), 201
 
 
