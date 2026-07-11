@@ -721,7 +721,16 @@
   - Restringir el acceso a las rutas `/info`, `/dev`, y `/development` a usuarios administradores utilizando una validación del rol admin y clasificación admin.
   - Eliminar la variable global `bdrul` (URI de conexión de la base de datos) del contexto global de Jinja.
   - Eliminar las variables `py_version`, `bdrul`, y `current_app` del contexto de la plantilla en las rutas de desarrollo.
-  - Actualizar los archivos HTML `login.html` y `development.html` para remover referencias a las variables eliminadas.
+  - Actualizar los archivos HTML `login.html` and `development.html` para remover referencias a las variables eliminadas.
   - Añadir pruebas unitarias para garantizar el bloqueo de usuarios estándar y el acceso correcto de administradores.
 - **Commits:** `SEC-005`
 - **Resultados de pruebas:** Pruebas unitarias añadidas exitosamente, 2/2 vistas y restricciones de acceso en verde.
+
+## 2026-07-11 — SEC-008: Token API JWT almacenado en atributo volátil (no persistido) (#219)
+- **Petición:** Evitar que el token API JWT se almacene en un atributo volátil en `User` que se pierde al reiniciar o recargar el objeto `User` desde la base de datos. Usar Redis/Cache para almacenar los tokens JWT activos en modo nube y eliminarlos al hacer logout.
+- **Implementación:**
+  - Se mejoró la clase `DummyCache` en `cacao_accounting/cache.py` con métodos `get`, `set` y `delete` totalmente funcionales en memoria para asegurar consistencia cuando Flask-Caching no está instalado.
+  - Se modificó el modelo `User` en `cacao_accounting/database/__init__.py` para reemplazar el atributo de clase `token` con un `@property` descriptor. El getter y setter interactúan con la caché de la aplicación usando la clave `jwt_token:{self.id}` con un timeout de 8 horas, y borran la clave en logout cuando se asigna `None`.
+  - Se actualizó el decorador de API `token_requerido` en `cacao_accounting/api/__init__.py` para cargar al usuario correspondiente de la base de datos, validar su token contra el token activo almacenado en la caché y loguear automáticamente al usuario si aún no está autenticado en `current_user`.
+  - Se agregaron pruebas integrales en `tests/test_auth_jwt.py` cubriendo la generación del token, la persistencia en caché/recuperación en nuevas instancias de `User`, la anulación al hacer logout/revocación de sesión y la validación en el endpoint `/api/test`.
+- **Validación:** Black, Ruff, Flake8, Mypy y Pytest ejecutados con éxito, con todos los 1281 tests pasando sin regresiones.

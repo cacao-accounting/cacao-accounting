@@ -18,12 +18,24 @@ class DummyCache:
     """Implementación dummy de caché cuando Flask-Caching no está instalado."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Inicializa la caché dummy."""
-        pass
+        """Inicializa la caché dummy con un diccionario en memoria."""
+        self._data: dict[str, Any] = {}
 
     def init_app(self, app: Flask) -> None:
         """Inicializa la app con la caché dummy."""
         pass
+
+    def get(self, key: str) -> Any:
+        """Obtiene un valor de la caché."""
+        return self._data.get(key)
+
+    def set(self, key: str, value: Any, timeout: int = 0) -> None:
+        """Guarda un valor en la caché."""
+        self._data[key] = value
+
+    def delete(self, key: str) -> None:
+        """Elimina un valor de la caché."""
+        self._data.pop(key, None)
 
 
 def _crear_cache() -> Any:
