@@ -78,13 +78,16 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
     if app and isinstance(app, Flask):
         from flask_wtf.csrf import CSRFProtect
+        from cacao_accounting.limiter import init_limiter
+        from cacao_accounting.cache import init_cache
 
         csrf = CSRFProtect()
         csrf.init_app(app)
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
-        cache.init_app(app)
+        init_cache(app)
+        init_limiter(app)
     else:
         raise RuntimeError(ERROR2)
 

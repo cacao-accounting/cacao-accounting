@@ -28,6 +28,10 @@ extra-formats = [
     "xlrd>=2.0.2",
     "odfpy>=1.4.1",
 ]
+limiter = [
+    "Flask-Limiter[redis]>=3.8.0",
+    "flask-caching>=2.4.0",
+]
 
 [project.scripts]
 cacaoctl="cacao_accounting:command"

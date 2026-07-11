@@ -20,6 +20,7 @@ from flask_login import LoginManager, current_user, login_required, login_user, 
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
+from cacao_accounting.limiter import limiter
 
 # <---------------------------------------------------------------------------------------------> #
 # Logica de inicio de sesión.
@@ -66,6 +67,7 @@ def validar_acceso(usuario, clave) -> bool:
 
 
 @login.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def inicio_sesion():  # pragma: no cover
     """Inicio de sesión del usuario."""
     from flask_login import current_user
