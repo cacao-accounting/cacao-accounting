@@ -6,6 +6,7 @@
 import os
 import openpyxl
 from odf import opendocument, table as odf_table
+from cacao_accounting.exceptions import flash_error
 from flask import (
     Blueprint,
     render_template,
@@ -256,5 +257,5 @@ def download_template(record_type):
             return send_file(template_path, as_attachment=True, download_name=output_name)
 
     except Exception as e:
-        flash(str(e), "danger")
+        flash_error(e)
         return redirect(url_for("imports.index"))

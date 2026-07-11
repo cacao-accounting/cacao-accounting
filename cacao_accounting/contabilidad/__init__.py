@@ -15,6 +15,7 @@ from decimal import Decimal
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import current_user, login_required
@@ -266,7 +267,7 @@ def editar_moneda(code):
                 default=bool(formulario.default.data),
             )
         except CurrencyGuardError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
                 titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
@@ -301,7 +302,7 @@ def currency_toggle_active(code):
         try:
             CurrencyGuard().assert_can_deactivate(registro)
         except CurrencyGuardError as error:
-            flash(str(error), "warning")
+            flash_error(error, "warning")
             return redirect(url_for("contabilidad.moneda", code=code))
         registro.active = False
     else:
@@ -418,7 +419,7 @@ def nueva_entidad():
             )
         except ValueError as exc:
             database.session.rollback()
-            flash(str(exc), "danger")
+            flash_error(exc)
             return render_template(
                 "contabilidad/entidad_crear.html",
                 form=formulario,
@@ -520,7 +521,7 @@ def inactivar_entidad(id_entidad):
     try:
         _validate_entity_can_be_deactivated(ENTIDAD[0].code)
     except ValueError as error:
-        flash(str(error), "warning")
+        flash_error(error, "warning")
         return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD[0].code))
     ENTIDAD[0].enabled = False
     ENTIDAD[0].status = "inactivo"
@@ -647,7 +648,7 @@ def nueva_unidad():
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_UNIDAD_CREAR,
                 titulo=TITULO,
@@ -697,7 +698,7 @@ def editar_unidad(id_unidad):
         try:
             _validate_active_entity_submission(formulario.entidad.data)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_UNIDAD_CREAR,
                 titulo="Editar Unidad de Negocio - " + APPNAME,
@@ -810,7 +811,7 @@ def editar_libro(id_libro):
         try:
             _validate_active_entity_submission(formulario.entidad.data)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_BOOK_CREAR,
                 titulo=TITULO,
@@ -827,7 +828,7 @@ def editar_libro(id_libro):
             else:
                 CurrencyGuard().get_currency(formulario.moneda.data)
         except CurrencyGuardError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_BOOK_CREAR,
                 titulo=TITULO,
@@ -868,7 +869,7 @@ def nuevo_libro():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_BOOK_CREAR,
                 titulo=TITULO,
@@ -883,7 +884,7 @@ def nuevo_libro():
             else:
                 CurrencyGuard().get_currency(formulario.moneda.data)
         except CurrencyGuardError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_BOOK_CREAR,
                 titulo=TITULO,
@@ -1085,7 +1086,7 @@ def nueva_cuenta():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_CUENTA_CREAR,
                 titulo=TITULO,
@@ -1096,7 +1097,7 @@ def nueva_cuenta():
         try:
             parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_CUENTA_CREAR,
                 titulo=TITULO,
@@ -1218,7 +1219,7 @@ def editar_cuenta(entity, id_cta):
     try:
         _validate_active_entity_submission(formulario.entidad.data)
     except ValueError as error:
-        flash(str(error), "danger")
+        flash_error(error)
         return render_template(
             _TPL_CUENTA_CREAR,
             titulo=TITULO,
@@ -1234,7 +1235,7 @@ def editar_cuenta(entity, id_cta):
             current_code=registro.code,
         )
     except ValueError as error:
-        flash(str(error), "danger")
+        flash_error(error)
         return render_template(
             _TPL_CUENTA_CREAR,
             titulo=TITULO,
@@ -1369,7 +1370,7 @@ def nuevo_centro_costo():
         try:
             _validate_active_entity_submission(entity)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
@@ -1380,7 +1381,7 @@ def nuevo_centro_costo():
         try:
             parent_code = _validate_cost_center_parent(entity, request.form.get("padre") or None)
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_CENTRO_COSTO_CREAR,
                 titulo=TITULO,
@@ -1441,7 +1442,7 @@ def editar_centro_costo(id_cc):
     try:
         _validate_active_entity_submission(entity)
     except ValueError as error:
-        flash(str(error), "danger")
+        flash_error(error)
         return render_template(
             _TPL_CENTRO_COSTO_CREAR,
             titulo=TITULO,
@@ -1457,7 +1458,7 @@ def editar_centro_costo(id_cc):
             current_code=registro.code,
         )
     except ValueError as error:
-        flash(str(error), "danger")
+        flash_error(error)
         return render_template(
             _TPL_CENTRO_COSTO_CREAR,
             titulo=TITULO,
@@ -1559,7 +1560,7 @@ def nuevo_proyecto():
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_PROYECTO_CREAR,
                 titulo=TITULO,
@@ -1572,7 +1573,7 @@ def nuevo_proyecto():
             try:
                 budget_currency = CurrencyGuard().validate_company_functional_currency(request.form.get("entidad")).code
             except CurrencyGuardError as error:
-                flash(str(error), "danger")
+                flash_error(error)
                 return render_template(
                     _TPL_PROYECTO_CREAR,
                     titulo=TITULO,
@@ -1654,13 +1655,13 @@ def editar_proyecto(project_id):
         try:
             _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         budget_amount = formulario.presupuesto.data
         try:
             budget_currency = _resolve_project_budget_currency(request.form.get("entidad", proyecto.entity), budget_amount)
         except CurrencyGuardError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         _update_project_from_form(proyecto, formulario, budget_amount, budget_currency)
         database.session.commit()
@@ -1810,7 +1811,7 @@ def fiscal_year_edit(fy_id):
         try:
             _validate_active_entity_submission(request.form.get("entidad", fiscal_year.entity))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,
                 titulo=TITULO,
@@ -1897,7 +1898,7 @@ def accounting_period_new():
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_PERIODO_CREAR,
                 titulo=TITULO,
@@ -1959,7 +1960,7 @@ def accounting_period_edit(period_id):
         try:
             _validate_active_entity_submission(request.form.get("entidad", period.entity))
         except ValueError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_PERIODO_CREAR,
                 titulo=TITULO,
@@ -2078,7 +2079,7 @@ def nueva_tasa_cambio():
                 _("La moneda destino debe existir y estar activa."),
             )
         except CurrencyGuardError as error:
-            flash(str(error), "danger")
+            flash_error(error)
             return render_template(
                 _TPL_TC_CREAR,
                 titulo=TITULO,
@@ -2324,7 +2325,7 @@ def nuevo_comprobante_recurrente():
             flash("Plantilla de comprobante recurrente creada.", "success")
             return redirect(url_for("contabilidad.comprobantes_recurrentes"))
         except (RecurringJournalError, json.JSONDecodeError) as exc:
-            flash(str(exc), "danger")
+            flash_error(exc)
 
     return render_template(
         "contabilidad/recurring_journal_nuevo.html",
@@ -2375,7 +2376,7 @@ def aprobar_plantilla_recurrente(identifier: str):
         approve_recurring_template(identifier, user_id=str(current_user.id))
         flash("Plantilla recurrente aprobada.", "success")
     except RecurringJournalError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
 
     return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
@@ -2397,7 +2398,7 @@ def cancelar_plantilla_recurrente(identifier: str):
         cancel_recurring_template(identifier, reason=motivo, user_id=str(current_user.id))
         flash("Plantilla recurrente cancelada.", "warning")
     except RecurringJournalError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
 
     return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
@@ -2691,7 +2692,7 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
             )
         )
         database.session.commit()
-        flash(str(exc), "danger")
+        flash_error(exc)
     else:
         close_run.run_status = "in_progress"
         database.session.add(
@@ -2859,7 +2860,7 @@ def _handle_exchange_revaluation_post() -> "Any":
         run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=str(current_user.id))
     except ExchangeRevaluationError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return None
 
     flash("La revalorizacion fue ejecutada correctamente.", "success")
@@ -2968,7 +2969,7 @@ def anular_revalorizacion_cambiaria(identifier: str):
         )
     except ExchangeRevaluationError as exc:
         database.session.rollback()
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=identifier))
 
     flash("Revalorizacion anulada correctamente.", "success")
@@ -2992,7 +2993,7 @@ def nuevo_comprobante():
         try:
             journal = create_journal_draft(parse_journal_form(request.form), user_id=str(current_user.id))
         except JournalValidationError as exc:
-            flash(str(exc), "danger")
+            flash_error(exc)
         else:
             flash("Comprobante contable guardado como borrador.", "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
@@ -3031,7 +3032,7 @@ def contabilizar_comprobante(identifier: str):
     try:
         submit_journal(identifier)
     except JournalValidationError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
     else:
         flash("Comprobante contable contabilizado.", "success")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
@@ -3054,7 +3055,7 @@ def rechazar_comprobante(identifier: str):
     try:
         reject_journal_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
     else:
         flash("Comprobante contable rechazado.", "warning")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
@@ -3077,7 +3078,7 @@ def anular_comprobante(identifier: str):
     try:
         cancel_submitted_journal(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
     else:
         flash("Comprobante contable anulado con reversa contable.", "warning")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
@@ -3229,7 +3230,7 @@ def duplicar_comprobante(identifier: str):
     try:
         duplicated = duplicate_journal_as_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     flash("Comprobante duplicado como nuevo borrador.", "success")
@@ -3256,7 +3257,7 @@ def revertir_comprobante(identifier: str):
             reversal_date_raw=reversal_date,
         )
     except JournalValidationError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     flash("Reversión creada como nuevo borrador editable.", "success")
@@ -3290,7 +3291,7 @@ def editar_comprobante(identifier: str):
         try:
             journal = update_journal_draft(identifier, parse_journal_form(request.form), user_id=str(current_user.id))
         except JournalValidationError as exc:
-            flash(str(exc), "danger")
+            flash_error(exc)
         else:
             flash("Comprobante contable actualizado.", "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
@@ -3720,7 +3721,7 @@ def external_counter_adjust(counter_id: str):
             from cacao_accounting.logs import log
 
             log.warning(f"Error al ajustar contador externo {counter_id}: {exc}")
-            flash(str(exc), "danger")
+            flash_error(exc)
         return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
     return render_template(
@@ -3821,7 +3822,7 @@ def fiscal_year_closing_new():
             flash("Cierre de año fiscal ejecutado correctamente.", "success")
             return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
         except FiscalYearClosingError as exc:
-            flash(str(exc), "danger")
+            flash_error(exc)
 
     # Obtener años fiscales cerrados administrativamente pero no financieramente
     fiscal_years = (
@@ -3855,6 +3856,6 @@ def fiscal_year_closing_reverse(fy_id):
         reverse_fiscal_year_closing(fy_id, user_id=str(current_user.id))
         flash("Cierre de año fiscal revertido correctamente.", "success")
     except FiscalYearClosingError as exc:
-        flash(str(exc), "danger")
+        flash_error(exc)
 
     return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
