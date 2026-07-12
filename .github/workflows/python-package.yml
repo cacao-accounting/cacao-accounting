@@ -121,3 +121,57 @@ jobs:
           sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao;"
           sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao;"
           SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl db init --seed
+
+  desktop:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cacao_accounting/static/package-lock.json
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install -r requirements.txt
+          pip install pytest
+          pip install -e . --no-deps
+      - name: Install JavaScript dependencies
+        working-directory: cacao_accounting/static
+        run: npm ci
+      - name: Test with pytest in Desktop Mode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACAO_TEST: "True"
+          LOGURU_LEVEL: "WARNING"
+          SECRET_KEY: "ASD123kljaAddS"
+          CACAO_ACCOUNTING_DESKTOP: "True"
+        run: |
+          python -m pytest -v -s --exitfirst --slow=True
+
+  coverage:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r development.txt
+          python -m pip install -e .[cloud]
+      - name: Test with pytest
+        run: |
+          SECRET_KEY=ASD123kljaAddS CACAO_TEST=True python -m pytest -v -s --slow=True --cov=cacao_accounting
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2

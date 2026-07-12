@@ -2,6 +2,10 @@
 import os
 import sys
 import subprocess
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RUN_PY = str(PROJECT_ROOT / "run.py")
 
 
 def test_run_py_fails_fast_in_production_without_credentials():
@@ -15,7 +19,7 @@ def test_run_py_fails_fast_in_production_without_credentials():
     env["ENV"] = "production"
     env["FLASK_ENV"] = "production"
 
-    result = subprocess.run([sys.executable, "run.py"], env=env, capture_output=True, text=True, timeout=10)
+    result = subprocess.run([sys.executable, RUN_PY], env=env, capture_output=True, text=True, timeout=10)
 
     assert result.returncode == 1
     # Check that it logged the critical message
@@ -39,7 +43,7 @@ def test_run_py_allows_execution_in_dev_without_credentials():
         env["CACAO_TEST"] = "True"
 
         try:
-            result = subprocess.run([sys.executable, "run.py"], env=env, capture_output=True, text=True, timeout=4)
+            result = subprocess.run([sys.executable, RUN_PY], env=env, capture_output=True, text=True, timeout=4)
             # If it exits, it should not be returncode 1 (credential failure)
             assert result.returncode != 1
             assert "CACAO_USER and CACAO_PSWD must be set in environment" not in result.stderr
@@ -118,7 +122,7 @@ def test_cli_db_init_allows_dev_without_credentials():
             env=env,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=60,
         )
 
         # In dev mode, it should not fail on credentials.

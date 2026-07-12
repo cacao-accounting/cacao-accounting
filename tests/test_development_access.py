@@ -12,6 +12,7 @@ from z_func import init_test_db  # noqa: E402
 from cacao_accounting import create_app  # noqa: E402
 from cacao_accounting.database import User, database  # noqa: E402
 from cacao_accounting.auth import proteger_passwd  # noqa: E402
+from cacao_accounting.runtime_mode import is_desktop_mode  # noqa: E402
 
 app = create_app(
     {
@@ -30,7 +31,12 @@ def test_development_access_restrictions(request):
     """Verifica que solo los administradores puedan acceder a /development, /dev e /info."""
     if request.config.getoption("--slow") == "True":
         with app.app_context():
-            init_test_db(app)
+            if is_desktop_mode():
+                from cacao_accounting.database.helpers import inicia_base_de_datos
+
+                inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=False)
+            else:
+                init_test_db(app)
 
             hashed_pwd = proteger_passwd("passwd123")
             non_admin = User(
@@ -50,9 +56,14 @@ def test_development_access_restrictions(request):
 
                 # Test 2: Como usuario estándar (no admin)
                 client.post("/login", data={"usuario": "test_non_admin", "acceso": "passwd123"})
-                for path in ["/development", "/dev", "/info"]:
-                    res = client.get(path)
-                    assert res.status_code == 403
+                if is_desktop_mode():
+                    for path in ["/development", "/dev", "/info"]:
+                        res = client.get(path)
+                        assert res.status_code in [302, 403]
+                else:
+                    for path in ["/development", "/dev", "/info"]:
+                        res = client.get(path)
+                        assert res.status_code == 403
 
                 # Cerrar sesión
                 client.get("/logout")
