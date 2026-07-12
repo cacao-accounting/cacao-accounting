@@ -18,6 +18,7 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 # Create custom test app
 test_app = create_app(
@@ -236,6 +237,7 @@ def test_forecast_comparison():
         db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_routes_list_and_details():
     """Test HTTP routes for listing and displaying forecast details."""
     with test_app.test_client() as client:
@@ -323,6 +325,7 @@ def test_routes_list_and_details():
                 db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_routes_import_entries():
     """Test importing manual entries from CSV and XLSX file."""
     with test_app.test_client() as client:
@@ -433,6 +436,7 @@ def test_desktop_mode_redirect(monkeypatch):
         )
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_edit_manual_entry_route():
     """Test that editing a manual entry via its dedicated POST endpoint works."""
     with test_app.test_client() as client:
@@ -493,6 +497,7 @@ def test_edit_manual_entry_route():
             db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_manual_entries_dashboard_route():
     """Test that the new /cash-forecast/manual-entries route renders and list entries."""
     with test_app.test_client() as client:
