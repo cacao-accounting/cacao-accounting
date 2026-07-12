@@ -32,11 +32,21 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
 )
 
+from cacao_accounting.runtime_mode import is_desktop_mode
+
 _ENDPOINT_LISTAR = "contabilidad.presupuestos.listar"
 _ENDPOINT_DETALLE = "contabilidad.presupuestos.detalle"
 _TEMPLATE_PRESUPUESTO_IMPORTAR = "contabilidad/presupuestos/import.html"
 
 presupuestos = Blueprint("presupuestos", __name__)
+
+
+@presupuestos.before_request
+def check_desktop_mode_for_presupuestos():
+    """Verify that we are not running in desktop mode for budget features."""
+    if is_desktop_mode():
+        flash("Gestión de presupuesto no disponible en modo DESKTOP", "danger")
+        return redirect(url_for("contabilidad.conta"))
 
 
 @presupuestos.route("/list")
