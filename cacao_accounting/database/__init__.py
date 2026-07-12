@@ -4212,7 +4212,7 @@ def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
 # <---------------------------------------------------------------------------------------------> #
 # Cash Flow Forecast — Pronóstico de Flujo de Caja
 # <---------------------------------------------------------------------------------------------> #
-class CashForecast(database.Model, BaseTabla):
+class CashForecast(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa una versión del presupuesto / pronóstico de caja."""
 
     __tablename__ = "cash_forecast"
@@ -4240,7 +4240,7 @@ class CashForecast(database.Model, BaseTabla):
     approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
-class CashForecastEntry(database.Model, BaseTabla):
+class CashForecastEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Detalle de cada movimiento proyectado manualmente."""
 
     __tablename__ = "cash_forecast_entry"
