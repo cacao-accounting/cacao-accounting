@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Control Presupuestario") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-sliders me-2" style="color:#78BF30"></i>{{ _("Configuración de Control Presupuestario") }}</h4>
+  <p class="text-muted small">
+    {{ _("Habilita o deshabilita la validación de presupuestos y define la acción a ejecutar cuando se exceda el monto disponible por compañía.") }}
+  </p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-3">
+
+  {# — Formulario nueva/editar configuracion — #}
+  <div class="col-lg-5">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-sliders me-1"></i>{{ _("Ajustar Configuración") }}</h6>
+      </div>
+      <div class="p-3">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Compañía") }}</label>
+            <select name="company" class="form-select" required onchange="this.form.method='get'; this.form.submit();">
+              <option value="">— {{ _("Seleccionar") }} —</option>
+              {% for company in companies %}
+              <option value="{{ company.code }}" {% if company.code == selected_company %}selected{% endif %}>{{ company.code }} – {{ company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="enabled" id="enabled" {% if enabled %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="enabled">
+                {{ _("Habilitar validación presupuestaria") }}
+              </label>
+            </div>
+            <div class="form-text">{{ _("Cuando esté desactivado no se realizará ninguna validación.") }}</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Acción cuando el presupuesto sea excedido") }}</label>
+            <select name="action_on_exceeded" class="form-select">
+              <option value="do_nothing" {% if action == "do_nothing" %}selected{% endif %}>{{ _("do_nothing — No realiza ninguna acción") }}</option>
+              <option value="notify" {% if action == "notify" %}selected{% endif %}>{{ _("notify — Advierte pero permite continuar") }}</option>
+              <option value="block" {% if action == "block" %}selected{% endif %}>{{ _("block — Impide aprobar el documento") }}</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary mt-2">
+            <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# — Listado de configuraciones existentes — #}
+  <div class="col-lg-7">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-list-ul me-1"></i>{{ _("Estado por Compañía") }}</h6>
+      </div>
+      <div class="p-2">
+        {% if configs %}
+        <table class="ca-table">
+          <caption style="display:none;">{{ _("Configuraciones de control presupuestario") }}</caption>
+          <thead>
+            <tr>
+              <th>{{ _("Compañía") }}</th>
+              <th>{{ _("Validación") }}</th>
+              <th>{{ _("Acción por defecto") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cfg in configs %}
+            <tr>
+              <td><strong>{{ cfg.company }}</strong></td>
+              <td>
+                {% if cfg.enabled %}
+                <span class="badge bg-success">{{ _("Activado") }}</span>
+                {% else %}
+                <span class="badge bg-secondary">{{ _("Desactivado") }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="text-monospace">{{ cfg.action }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted text-center">
+          <i class="bi bi-info-circle me-1"></i>{{ _("No hay compañías registradas.") }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
