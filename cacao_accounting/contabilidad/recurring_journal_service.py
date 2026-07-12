@@ -22,6 +22,8 @@ from cacao_accounting.database import (
 class RecurringJournalError(Exception):
     """Error base para comprobantes recurrentes."""
 
+    _safe_for_display = True
+
 
 PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
 

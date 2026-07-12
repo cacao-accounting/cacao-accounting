@@ -3,6 +3,7 @@
 
 """Servicio de cálculo y negocio para el Pronóstico de Flujo de Caja."""
 
+import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import func, or_
@@ -28,8 +29,6 @@ def generate_periods(fiscal_year, periodicity):
     if periodicity == "monthly":
         current_start = start
         while current_start <= end:
-            import calendar
-
             _, last_day = calendar.monthrange(current_start.year, current_start.month)
             current_end = date(current_start.year, current_start.month, last_day)
             if current_end > end:
@@ -73,7 +72,15 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
         if rate:
             return Decimal(str(amount)) * Decimal(str(rate))
     except Exception:
-        pass
+        from cacao_accounting.logs import log
+
+        log.warning(
+            "No se pudo convertir {} {} a {} usando tasa del {}, usando monto original",
+            amount,
+            currency_code,
+            company_currency,
+            target_date,
+        )
     return Decimal(str(amount))
 
 

@@ -93,6 +93,7 @@ LISTA_ROLES = "admin.lista_roles"
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
 LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
+BUDGET_CONTROL_VALID_ACTIONS = ("do_nothing", "notify", "block")
 
 
 def _require_system_admin() -> None:
@@ -630,6 +631,10 @@ def config_control_presupuestario():
         enabled = request.form.get("enabled") == "on"
         action = request.form.get("action_on_exceeded") or "do_nothing"
 
+        if action not in BUDGET_CONTROL_VALID_ACTIONS:
+            flash(_("Política de control presupuestario no válida."), "danger")
+            return redirect(url_for("admin.config_control_presupuestario", company=company))
+
         set_setup_value(f"budget_control_enabled_{company}", "1" if enabled else "0")
         set_setup_value(f"budget_control_action_{company}", action)
 
@@ -644,11 +649,13 @@ def config_control_presupuestario():
     for comp in companies:
         c_enabled = get_setup_value(f"budget_control_enabled_{comp.code}", "0") == "1"
         c_action = get_setup_value(f"budget_control_action_{comp.code}", "do_nothing")
-        configs_list.append({
-            "company": comp.code,
-            "enabled": c_enabled,
-            "action": c_action,
-        })
+        configs_list.append(
+            {
+                "company": comp.code,
+                "enabled": c_enabled,
+                "action": c_action,
+            }
+        )
 
     return render_template(
         "admin/budget_control_config.html",

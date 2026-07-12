@@ -25,6 +25,8 @@ from cacao_accounting.database import (
 class BudgetError(Exception):
     """Excepción base para errores de presupuesto."""
 
+    _safe_for_display = True
+
 
 class BudgetService:
     """Servicio para manejar la lógica de negocio de presupuestos."""
@@ -271,6 +273,7 @@ class BudgetService:
     def resolve_expense_account(self, item_code: str, company: str) -> Accounts | None:
         """Resuelve la cuenta de gastos para un artículo y compañía."""
         from cacao_accounting.database import ItemAccount, CompanyDefaultAccount, Accounts
+
         if item_code:
             item_acc = database.session.query(ItemAccount).filter_by(item_code=item_code, company=company).first()
             if item_acc and item_acc.expense_account_id:
@@ -287,6 +290,7 @@ class BudgetService:
     def resolve_cost_center(self, item_code: str, company: str, supplier_id: str | None = None) -> CostCenter | None:
         """Resuelve el centro de costos para un artículo, compañía y proveedor opcional."""
         from cacao_accounting.database import ItemAccount, CompanyParty, CostCenter
+
         if item_code:
             item_acc = database.session.query(ItemAccount).filter_by(item_code=item_code, company=company).first()
             if item_acc and item_acc.cost_center_code:
@@ -333,12 +337,16 @@ class BudgetService:
             date_val = date_val.date()  # type: ignore
 
         # 1. Resolve AccountingPeriod
-        period = database.session.query(AccountingPeriod).filter(
-            AccountingPeriod.entity == company,
-            AccountingPeriod.start <= date_val,
-            AccountingPeriod.end >= date_val,
-            AccountingPeriod.enabled.is_(True)
-        ).first()
+        period = (
+            database.session.query(AccountingPeriod)
+            .filter(
+                AccountingPeriod.entity == company,
+                AccountingPeriod.start <= date_val,
+                AccountingPeriod.end >= date_val,
+                AccountingPeriod.enabled.is_(True),
+            )
+            .first()
+        )
 
         if not period:
             return {
@@ -347,52 +355,58 @@ class BudgetService:
                 "committed": Decimal("0"),
                 "available": Decimal("0"),
                 "requested": amount,
-                "excess": Decimal("0")
+                "excess": Decimal("0"),
             }
 
         # 2. Resolve Account ID
-        acc = database.session.query(Accounts).filter(
-            Accounts.entity == company,
-            (Accounts.id == account_id) | (Accounts.code == account_id)
-        ).first()
+        acc = (
+            database.session.query(Accounts)
+            .filter(Accounts.entity == company, (Accounts.id == account_id) | (Accounts.code == account_id))
+            .first()
+        )
         resolved_account_id = acc.id if acc else account_id
 
         # 3. Resolve Cost Center ID
-        cc = database.session.query(CostCenter).filter(
-            CostCenter.entity == company,
-            (CostCenter.id == cost_center_id) | (CostCenter.code == cost_center_id)
-        ).first()
+        cc = (
+            database.session.query(CostCenter)
+            .filter(CostCenter.entity == company, (CostCenter.id == cost_center_id) | (CostCenter.code == cost_center_id))
+            .first()
+        )
         resolved_cost_center_id = cc.id if cc else cost_center_id
 
         # 4. Resolve Approved Budgets
-        budgets = database.session.query(Budget).filter_by(
-            company=company,
-            fiscal_year_id=period.fiscal_year_id,
-            status="approved"
-        ).all()
+        budgets = (
+            database.session.query(Budget)
+            .filter_by(company=company, fiscal_year_id=period.fiscal_year_id, status="approved")
+            .all()
+        )
         budget_ids = [b.id for b in budgets]
 
         # 5. Get Budget Amount
         budget_amount = Decimal("0")
         if budget_ids:
-            lines = database.session.query(BudgetLine).filter(
-                BudgetLine.budget_id.in_(budget_ids),
-                BudgetLine.account_id == resolved_account_id,
-                BudgetLine.cost_center_id == resolved_cost_center_id,
-                BudgetLine.period_id == period.id
-            ).all()
+            lines = (
+                database.session.query(BudgetLine)
+                .filter(
+                    BudgetLine.budget_id.in_(budget_ids),
+                    BudgetLine.account_id == resolved_account_id,
+                    BudgetLine.cost_center_id == resolved_cost_center_id,
+                    BudgetLine.period_id == period.id,
+                )
+                .all()
+            )
             budget_amount = sum(line.amount for line in lines)
 
         # 6. Calculate Committed Amount (from GLEntry actuals)
-        gl_query = database.session.query(
-            GLEntry.debit,
-            GLEntry.credit,
-            Accounts.classification
-        ).join(Accounts, GLEntry.account_id == Accounts.id).filter(
-            GLEntry.company == company,
-            GLEntry.accounting_period_id == period.id,
-            GLEntry.account_id == resolved_account_id,
-            GLEntry.is_cancelled.is_(False)
+        gl_query = (
+            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification)
+            .join(Accounts, GLEntry.account_id == Accounts.id)
+            .filter(
+                GLEntry.company == company,
+                GLEntry.accounting_period_id == period.id,
+                GLEntry.account_id == resolved_account_id,
+                GLEntry.is_cancelled.is_(False),
+            )
         )
         if cc:
             gl_query = gl_query.filter(GLEntry.cost_center_code == cc.code)
@@ -418,5 +432,5 @@ class BudgetService:
             "committed": committed_amount,
             "available": available_amount,
             "requested": amount,
-            "excess": excess
+            "excess": excess,
         }
