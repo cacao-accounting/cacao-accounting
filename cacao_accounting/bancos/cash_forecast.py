@@ -29,7 +29,7 @@ from cacao_accounting.bancos.cash_forecast_service import (
 
 
 def _check_desktop_mode():
-    """Helper to check if desktop mode is active and redirect with a warning if so."""
+    """Check if desktop mode is active and redirect with a warning if so."""
     if is_desktop_mode():
         flash("Proyección de flujo de caja no disponible en modo DESKTOP", "danger")
         return True
