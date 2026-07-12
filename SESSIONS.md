@@ -744,3 +744,17 @@
   - Se actualizó el decorador de API `token_requerido` en `cacao_accounting/api/__init__.py` para cargar al usuario correspondiente de la base de datos, validar su token contra el token activo almacenado en la caché y loguear automáticamente al usuario si aún no está autenticado en `current_user`.
   - Se agregaron pruebas integrales en `tests/test_auth_jwt.py` cubriendo la generación del token, la persistencia en caché/recuperación en nuevas instancias de `User`, la anulación al hacer logout/revocación de sesión y la validación en el endpoint `/api/test`.
 - **Validación:** Black, Ruff, Flake8, Mypy y Pytest ejecutados con éxito, con todos los 1281 tests pasando sin regresiones.
+
+## 2026-07-12 — Feature: Control presupuestario configurable
+- **Petición:** Incorporar un mecanismo centralizado de validación presupuestaria que permita controlar la ejecución del presupuesto durante la aprobación de documentos y en el registro contable.
+- **Implementación:**
+  - Se creó la plantilla HTML `budget_control_config.html` para la administración de control presupuestario por compañía.
+  - Se implementó la ruta `/settings/budget-control` en `cacao_accounting/admin/__init__.py`.
+  - Se agregó un enlace de acceso directo en el panel de administración (`admin.html`).
+  - Se implementó el método `validate_transaction` en `BudgetService` (`budget_service.py`) para calcular el presupuesto, lo comprometido, lo disponible, lo solicitado y el exceso.
+  - Se añadieron métodos de resolución para mapear dinámicamente las cuentas de gastos (`resolve_expense_account`) y centros de costo (`resolve_cost_center`) desde el ítem y la compañía.
+  - Se añadió el hook de validación en `compras_solicitud_compra_submit` y `compras_orden_compra_submit` (`cacao_accounting/compras/__init__.py`).
+  - Se implementó el registro en la bitácora `AuditTrail` con el formato y comentarios exactos requeridos de exceso presupuestario, persistiendo antes de levantar excepciones.
+  - Se implementaron las acciones `do_nothing`, `notify` (que emite alertas en Flask) y `block` (que interrumpe la transacción y levanta un ValueError detallado).
+  - Se creó un archivo de pruebas completo `tests/test_budget_control.py` que cubre la validación de transacciones, las vistas de configuración, y todos los escenarios (Budget OFF, ON con do_nothing, notify, block, y bajo presupuesto).
+- **Validación:** Black, Ruff, Flake8, Mypy y Pytest ejecutados con éxito.

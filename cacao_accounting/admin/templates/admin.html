@@ -64,6 +64,16 @@
   </div>
 
   <div class="ca-module-card">
+    <h5><i class="bi bi-sliders"></i> {{ _("Control Presupuestario") }}</h5>
+    <ul class="ca-module-links">
+      <li>
+        <a href="{{ url_for('admin.config_control_presupuestario') }}">{{ _("Configuración de Control Presupuestario") }}</a>
+        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
+      </li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
     <h5><i class="bi bi-arrow-left-right"></i> {{ _("Configuración de Conciliación de Ventas") }}</h5>
     <ul class="ca-module-links">
       <li>
