@@ -93,6 +93,7 @@ def token_requerido(f):  # pragma: no cover
             user_id = data.get("user_id")
 
             from cacao_accounting.database import User, database
+
             identidad = database.session.get(User, user_id)
             if not identidad or identidad.token != token:
                 return {
@@ -102,6 +103,7 @@ def token_requerido(f):  # pragma: no cover
                 }, 401
 
             from flask_login import login_user
+
             if not current_user or not current_user.is_authenticated:
                 login_user(identidad)
 

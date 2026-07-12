@@ -231,64 +231,128 @@ def test_set_entity_inactive(request):
 
     if request.config.getoption("--slow") == "True":
 
+        from cacao_accounting.database import Entity, database
+
         with app.app_context():
-            from flask_login import current_user
+            temp_entity = Entity(
+                id="TEMP_ENTITY_INACTIVE",
+                code="T_INAC",
+                company_name="Temporary Entity Inactive",
+                tax_id="TAX-T-INAC",
+                currency="NIO",
+                enabled=True,
+                status="activo"
+            )
+            database.session.add(temp_entity)
+            database.session.commit()
 
             with app.test_client() as client:
-                # Keep the session alive until the with clausule closes
-
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
-                client.get("/accounts/entity/set_inactive/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+                client.get("/accounts/entity/set_inactive/TEMP_ENTITY_INACTIVE", follow_redirects=True)
+
+            db_ent = database.session.get(Entity, "TEMP_ENTITY_INACTIVE")
+            if db_ent:
+                database.session.delete(db_ent)
+                database.session.commit()
 
 
 def test_set_entity_active(request):
 
     if request.config.getoption("--slow") == "True":
 
+        from cacao_accounting.database import Entity, database
+
         with app.app_context():
-            from flask_login import current_user
+            temp_entity = Entity(
+                id="TEMP_ENTITY_ACTIVE",
+                code="T_ACT",
+                company_name="Temporary Entity Active",
+                tax_id="TAX-T-ACT",
+                currency="NIO",
+                enabled=False,
+                status="inactivo"
+            )
+            database.session.add(temp_entity)
+            database.session.commit()
 
             with app.test_client() as client:
-                # Keep the session alive until the with clausule closes
-
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
-                client.get("/accounts/entity/set_active/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+                client.get("/accounts/entity/set_active/TEMP_ENTITY_ACTIVE", follow_redirects=True)
+
+            db_ent = database.session.get(Entity, "TEMP_ENTITY_ACTIVE")
+            if db_ent:
+                database.session.delete(db_ent)
+                database.session.commit()
 
 
 def test_default_entity(request):
 
     if request.config.getoption("--slow") == "True":
 
+        from cacao_accounting.database import Entity, database
+
         with app.app_context():
-            from flask_login import current_user
+            temp_entity = Entity(
+                id="TEMP_ENTITY_DEFAULT",
+                code="T_DEF",
+                company_name="Temporary Entity Default",
+                tax_id="TAX-T-DEF",
+                currency="NIO",
+                enabled=True,
+                status="activo"
+            )
+            database.session.add(temp_entity)
+            database.session.commit()
 
             with app.test_client() as client:
-                # Keep the session alive until the with clausule closes
-
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
-                client.get("/accounts/entity/set_default/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+                client.get("/accounts/entity/set_default/TEMP_ENTITY_DEFAULT", follow_redirects=True)
+
+            db_ent = database.session.get(Entity, "TEMP_ENTITY_DEFAULT")
+            if db_ent:
+                database.session.delete(db_ent)
+                database.session.commit()
 
 
 def test_delete_entity(request):
 
     if request.config.getoption("--slow") == "True":
 
+        from cacao_accounting.database import Entity, database
+
         with app.app_context():
-            from flask_login import current_user
+            temp_entity = Entity(
+                id="TEMP_ENTITY_DELETE",
+                code="T_DEL",
+                company_name="Temporary Entity Delete",
+                tax_id="TAX-T-DEL",
+                currency="NIO",
+                enabled=True,
+                status="activo"
+            )
+            database.session.add(temp_entity)
+            database.session.commit()
 
             with app.test_client() as client:
-                # Keep the session alive until the with clausule closes
-
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+                with client.session_transaction() as sess:
+                    assert sess.get("_user_id") is not None
 
-                client.get("/accounts/entity/delete/01J092PXHEBF4M129A7GZZ48E2", follow_redirects=True)
+                client.get("/accounts/entity/delete/TEMP_ENTITY_DELETE", follow_redirects=True)
+
+            db_ent = database.session.get(Entity, "TEMP_ENTITY_DELETE")
+            if db_ent:
+                database.session.delete(db_ent)
+                database.session.commit()
 
 
 def test_purchase_credit_note_list_route(request):

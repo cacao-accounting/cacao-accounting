@@ -1996,9 +1996,7 @@ def ventas_orden_venta_submit(order_id: str):
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(
-                registro.company, registro.customer_id, registro.grand_total or Decimal("0")
-            )
+            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
         _validate_and_reserve_stock_for_sales_order(registro)
         registro.docstatus = 1
         log_submit(registro)
@@ -2697,9 +2695,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             require_amount_nonzero=True,
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(
-                registro.company, registro.customer_id, registro.grand_total or Decimal("0")
-            )
+            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
         _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
         submit_document(registro)
@@ -2793,9 +2789,13 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
     # 1. Validación de facturas vencidas (block_overdue)
     if company_party.block_overdue:
         # Buscar facturas aprobadas con saldo pendiente
-        invoices = database.session.execute(
-            database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
-        ).scalars().all()
+        invoices = (
+            database.session.execute(
+                database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+            )
+            .scalars()
+            .all()
+        )
 
         due_days = 0
         if company_party.payment_terms_id:
@@ -2818,9 +2818,13 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
     # 2. Validación de límite de crédito (credit_limit)
     if company_party.credit_limit is not None:
         # Calcular saldo pendiente total de facturas aprobadas
-        invoices = database.session.execute(
-            database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
-        ).scalars().all()
+        invoices = (
+            database.session.execute(
+                database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+            )
+            .scalars()
+            .all()
+        )
 
         total_outstanding = Decimal("0")
         for inv in invoices:

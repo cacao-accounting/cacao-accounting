@@ -21,6 +21,3 @@ pytest-xdist
 
 # Verificación de tipos
 mypy
-
-# Dependencias para pruebas en la nube (cloud)
-python-magic>=0.4.27
