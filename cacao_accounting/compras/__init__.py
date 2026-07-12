@@ -3398,7 +3398,7 @@ def check_budget_control(
     supplier_id: str | None,
     document_id: str,
     document_type: str,
-    items: list
+    items: Any
 ) -> None:
     """Valida el control presupuestario de las líneas del documento según la política de la compañía."""
     from cacao_accounting.setup.repository import get_setup_value
@@ -3417,7 +3417,7 @@ def check_budget_control(
 
     # 2. Group item requested amounts by (account_id, cost_center_id)
     budget_service = BudgetService()
-    groups = {}
+    groups: dict[tuple, Decimal] = {}
     for item in items:
         item_code = getattr(item, "item_code", None) or ""
         amount = getattr(item, "base_amount", None) or getattr(item, "amount", None) or Decimal("0")
