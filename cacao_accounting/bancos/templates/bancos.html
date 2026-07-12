@@ -93,6 +93,12 @@
         <a href="{{ url_for('bancos.bancos_conciliacion_facturas_pagos') }}">{{ _("Conciliación Facturas/Pagos") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
+      {% if not MODO_ESCRITORIO %}
+      <li>
+        <a href="{{ url_for('bancos.cash_forecast_list') }}">{{ _("Pronóstico de Flujo de Caja") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      {% endif %}
       {% else %}
       <li class="ca-no-access">
         <span>Entradas de Pago</span>

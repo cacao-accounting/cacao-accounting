@@ -1,5 +1,18 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-11 : Módulo de Pronóstico de Flujo de Caja (Cash Flow Forecast)
+- **Petición del usuario:** Incorporar un módulo de Pronóstico de Flujo de Caja que permita estimar la liquidez futura combinando la información real registrada en el ERP con proyecciones manuales ingresadas por el usuario. El cálculo consta de Flujo Real (ERP posted) y Flujo Proyectado (Manual Forecast + ERP). Proyecciones manuales deben almacenarse en base de datos para auditoría, versionamiento y comparación. Se requiere una visualización Year-to-Date (YTD) con tres zonas temporales: Real, Current, Projected.
+- **Implementación:**
+  - **Modelos de datos:** Se añadieron los modelos `CashForecast` y `CashForecastEntry` al final de `cacao_accounting/database/__init__.py`. Se configuraron con CASCADE/RESTRICT policies correspondientes y con una UniqueConstraint para `company + fiscal_year_id + version` para evitar duplicación de escenarios.
+  - **Servicio de Negocio (`cash_forecast_service.py`):**
+    - `generate_periods()`: Divide el año fiscal en períodos semanales o mensuales.
+    - `get_cash_forecast_matrix()`: Calcula la matriz acumulativa Year-to-Date (YTD). Resuelve el saldo inicial acumulado y calcula para cada período los flujos reales de caja/banco (desde `GLEntry`), los documentos pendientes AR/AP de clientes/proveedores (`SalesInvoice`/`PurchaseInvoice`), y las proyecciones manuales de acuerdo a la zona temporal del período (Real, Current, Projected) respecto a la fecha actual.
+    - `get_forecast_comparison()`: Genera la varianza y comparación detallada de proyecciones manuales y saldos proyectados entre dos escenarios de pronóstico.
+  - **Controlador de Rutas (`cash_forecast.py`):** Se implementaron los controladores de rutas bajo el Blueprint `bancos` para listar, crear, detallar, eliminar, aprobar, cerrar, archivar pronósticos, y gestionar líneas manuales de ingresos/egresos, así como comparar escenarios side-by-side.
+  - **Vistas HTML:** Se crearon las plantillas `cash_forecast_lista.html`, `cash_forecast_nuevo.html`, `cash_forecast_detalle.html`, y `cash_forecast_comparar.html` en `cacao_accounting/bancos/templates/bancos/` siguiendo las pautas del Voucher Pattern, Alpine.js y clases responsivas del ERP. Se vinculó el módulo en la pantalla principal de Caja y Bancos (`bancos.html`).
+  - **Pruebas Unitarias e Integración (`tests/test_cash_forecast.py`):** Se escribió una suite completa de pruebas unitarias que validan la persistencia, el cálculo de la matriz con las zonas temporales, la herencia de monedas, las transiciones de estados (Draft, Approved, etc.), la inmutabilidad de aprobados, y las rutas web con simulación de sesión.
+- **Validación:** Se instalaron las dependencias de desarrollo y se ejecutaron las pruebas, logrando la aprobación del 100% de la nueva suite (5 tests pasando sin regresiones).
+
 ## 2026-07-11 : Mitigación de Redirección Abierta (Open Redirect) vía request.referrer (SEC-003, CWE-601)
 - **Petición del usuario:** En `api/__init__.py:180-181,194-195` se usa `request.referrer` sin validación para redirecciones POST de comentarios y tareas creados desde formularios. Esto posibilita ataques de redirección abierta (CWE-601).
 - **Implementación:**

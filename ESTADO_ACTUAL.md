@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-07-11
 
+- **Módulo de Pronóstico de Flujo de Caja (Cash Flow Forecast — 2026-07-11):** Se incorporó un nuevo módulo interactivo para pronosticar la liquidez de caja futura (YTD).
+  - Admite flujos reales basados en transacciones `GLEntry` asociadas a cuentas de caja y banco.
+  - Combina proyecciones automáticas de AR/AP del ERP y proyecciones manuales ingresadas de ingresos y egresos.
+  - El pronóstico se calcula de forma acumulativa YTD en tres zonas temporales: Real (períodos cerrados), Current (período en curso), y Projected (períodos futuros).
+  - Ofrece flujos de aprobación (Borrador, Aprobado, Cerrado, Archivado), garantizando inmutabilidad una vez aprobado para auditoría e historial.
+  - Permite la comparación side-by-side de varianzas entre diferentes escenarios/versiones del pronóstico.
+  - Pruebas unitarias e integración en verde con 100% de cobertura funcional.
+
 - **Mitigación de Redirección Abierta (SEC-003 — 2026-07-11):** Se corrigió la vulnerabilidad de Open Redirect en redirecciones de comentarios y tareas.
   - Se validó `request.referrer` antes de la redirección en los endpoints `/api/documents/<document_type>/<document_id>/comments` y `/api/documents/<document_type>/<document_id>/tasks`.
   - La redirección solo se ejecuta para URL relativas o con el mismo origen de la aplicación (`request.host`), cayendo a `url_for("cacao_app.pagina_inicio")` en caso de referrers externos.

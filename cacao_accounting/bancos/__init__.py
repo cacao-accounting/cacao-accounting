@@ -1946,3 +1946,7 @@ def bancos_pago_cancel(payment_id: str):
         return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
     flash(_("Pago cancelado con reverso contable."), "warning")
     return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
+
+
+# Import split routes/modules
+from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
