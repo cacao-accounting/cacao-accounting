@@ -301,6 +301,11 @@ def create_app(ajustes: dict | None = None) -> Flask:
     # Configurar límites por defecto
     cacao_app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
+    # Configurar cookies de sesión
+    cacao_app.config["SESSION_COOKIE_SECURE"] = True
+    cacao_app.config["SESSION_COOKIE_HTTPONLY"] = True
+    cacao_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
     setattr(cacao_app, "wsgi_app", ProxyFix(cacao_app.wsgi_app, x_for=1, x_proto=1, x_host=1))
 
     if ajustes:
@@ -341,6 +346,23 @@ def _register_app_hooks(app: Flask) -> None:
         """Establece un periodo de 30 minutos de valides de la sesión."""
         session.permanent = True
         app.permanent_session_lifetime = timedelta(minutes=30)
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "frame-ancestors 'none'"
+        )
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Referrer-Policy"] = "same-origin"
+        return response
 
 
 # <---------------------------------------------------------------------------------------------> #
