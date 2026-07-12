@@ -104,7 +104,7 @@ def _handle_setup_regional_step() -> object | None:
     form = SetupRegionalForm(language=setup_data.get("idioma"), currencies=available_currencies())
     if form.validate_on_submit():
         try:
-            save_regional_settings(form.pais.data, form.moneda.data)
+            save_regional_settings(form.pais.data, form.moneda.data, form.zona_horaria.data)
         except ValueError as exc:
             flash(texts["invalid_currency"] if str(exc) else texts["invalid_regional"], "danger")
             return None
@@ -162,7 +162,11 @@ def _setup_form(step: int, setup_data: dict[str, str]) -> SetupLanguageForm | Se
         return SetupLanguageForm(data={"idioma": setup_data.get("idioma")})
     if step == 2:
         return SetupRegionalForm(
-            data={"pais": setup_data.get("pais"), "moneda": setup_data.get("moneda")},
+            data={
+                "pais": setup_data.get("pais"),
+                "moneda": setup_data.get("moneda"),
+                "zona_horaria": setup_data.get("zona_horaria"),
+            },
             language=setup_data.get("idioma"),
             currencies=available_currencies(),
         )

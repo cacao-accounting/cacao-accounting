@@ -55,44 +55,45 @@ class CountryOption:
     name_es: str
     name_en: str
     currency: str
+    timezone: str
 
 
 AMERICA_COUNTRIES = (
-    CountryOption("AG", "Antigua y Barbuda", "Antigua and Barbuda", "XCD"),
-    CountryOption("AR", "Argentina", "Argentina", "ARS"),
-    CountryOption("BS", "Bahamas", "Bahamas", "BSD"),
-    CountryOption("BB", "Barbados", "Barbados", "BBD"),
-    CountryOption("BZ", "Belice", "Belize", "BZD"),
-    CountryOption("BO", "Bolivia", "Bolivia", "BOB"),
-    CountryOption("BR", "Brasil", "Brazil", "BRL"),
-    CountryOption("CA", "Canadá", "Canada", "CAD"),
-    CountryOption("CL", "Chile", "Chile", "CLP"),
-    CountryOption("CO", "Colombia", "Colombia", "COP"),
-    CountryOption("CR", "Costa Rica", "Costa Rica", "CRC"),
-    CountryOption("CU", "Cuba", "Cuba", "CUP"),
-    CountryOption("DM", "Dominica", "Dominica", "XCD"),
-    CountryOption("DO", "República Dominicana", "Dominican Republic", "DOP"),
-    CountryOption("EC", "Ecuador", "Ecuador", "USD"),
-    CountryOption("SV", "El Salvador", "El Salvador", "USD"),
-    CountryOption("US", "Estados Unidos", "United States", "USD"),
-    CountryOption("GD", "Granada", "Grenada", "XCD"),
-    CountryOption("GT", "Guatemala", "Guatemala", "GTQ"),
-    CountryOption("GY", "Guyana", "Guyana", "GYD"),
-    CountryOption("HT", "Haití", "Haiti", "HTG"),
-    CountryOption("HN", "Honduras", "Honduras", "HNL"),
-    CountryOption("JM", "Jamaica", "Jamaica", "JMD"),
-    CountryOption("MX", "México", "Mexico", "MXN"),
-    CountryOption("NI", "Nicaragua", "Nicaragua", "NIO"),
-    CountryOption("PA", "Panamá", "Panama", "PAB"),
-    CountryOption("PY", "Paraguay", "Paraguay", "PYG"),
-    CountryOption("PE", "Perú", "Peru", "PEN"),
-    CountryOption("KN", "San Cristóbal y Nieves", "Saint Kitts and Nevis", "XCD"),
-    CountryOption("LC", "Santa Lucía", "Saint Lucia", "XCD"),
-    CountryOption("VC", "San Vicente y las Granadinas", "Saint Vincent and the Grenadines", "XCD"),
-    CountryOption("SR", "Surinam", "Suriname", "SRD"),
-    CountryOption("TT", "Trinidad y Tobago", "Trinidad and Tobago", "TTD"),
-    CountryOption("UY", "Uruguay", "Uruguay", "UYU"),
-    CountryOption("VE", "Venezuela", "Venezuela", "VES"),
+    CountryOption("AG", "Antigua y Barbuda", "Antigua and Barbuda", "XCD", "America/Antigua"),
+    CountryOption("AR", "Argentina", "Argentina", "ARS", "America/Argentina/Buenos_Aires"),
+    CountryOption("BS", "Bahamas", "Bahamas", "BSD", "America/Nassau"),
+    CountryOption("BB", "Barbados", "Barbados", "BBD", "America/Barbados"),
+    CountryOption("BZ", "Belice", "Belize", "BZD", "America/Belize"),
+    CountryOption("BO", "Bolivia", "Bolivia", "BOB", "America/La_Paz"),
+    CountryOption("BR", "Brasil", "Brazil", "BRL", "America/Sao_Paulo"),
+    CountryOption("CA", "Canadá", "Canada", "CAD", "America/Toronto"),
+    CountryOption("CL", "Chile", "Chile", "CLP", "America/Santiago"),
+    CountryOption("CO", "Colombia", "Colombia", "COP", "America/Bogota"),
+    CountryOption("CR", "Costa Rica", "Costa Rica", "CRC", "America/Costa_Rica"),
+    CountryOption("CU", "Cuba", "Cuba", "CUP", "America/Havana"),
+    CountryOption("DM", "Dominica", "Dominica", "XCD", "America/Dominica"),
+    CountryOption("DO", "República Dominicana", "Dominican Republic", "DOP", "America/Santo_Domingo"),
+    CountryOption("EC", "Ecuador", "Ecuador", "USD", "America/Guayaquil"),
+    CountryOption("SV", "El Salvador", "El Salvador", "USD", "America/El_Salvador"),
+    CountryOption("US", "Estados Unidos", "United States", "USD", "America/New_York"),
+    CountryOption("GD", "Granada", "Grenada", "XCD", "America/Grenada"),
+    CountryOption("GT", "Guatemala", "Guatemala", "GTQ", "America/Guatemala"),
+    CountryOption("GY", "Guyana", "Guyana", "GYD", "America/Guyana"),
+    CountryOption("HT", "Haití", "Haiti", "HTG", "America/Port-au-Prince"),
+    CountryOption("HN", "Honduras", "Honduras", "HNL", "America/Tegucigalpa"),
+    CountryOption("JM", "Jamaica", "Jamaica", "JMD", "America/Jamaica"),
+    CountryOption("MX", "México", "Mexico", "MXN", "America/Mexico_City"),
+    CountryOption("NI", "Nicaragua", "Nicaragua", "NIO", "America/Managua"),
+    CountryOption("PA", "Panamá", "Panama", "PAB", "America/Panama"),
+    CountryOption("PY", "Paraguay", "Paraguay", "PYG", "America/Asuncion"),
+    CountryOption("PE", "Perú", "Peru", "PEN", "America/Lima"),
+    CountryOption("KN", "San Cristóbal y Nieves", "Saint Kitts and Nevis", "XCD", "America/St_Kitts"),
+    CountryOption("LC", "Santa Lucía", "Saint Lucia", "XCD", "America/St_Lucia"),
+    CountryOption("VC", "San Vicente y las Granadinas", "Saint Vincent and the Grenadines", "XCD", "America/St_Vincent"),
+    CountryOption("SR", "Surinam", "Suriname", "SRD", "America/Paramaribo"),
+    CountryOption("TT", "Trinidad y Tobago", "Trinidad and Tobago", "TTD", "America/Port_of_Spain"),
+    CountryOption("UY", "Uruguay", "Uruguay", "UYU", "America/Montevideo"),
+    CountryOption("VE", "Venezuela", "Venezuela", "VES", "America/Caracas"),
 )
 
 
@@ -112,6 +113,7 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
         "regional_help": "La moneda se sugiere según el país y solo se listan monedas disponibles en la base de datos.",
         "country": "País predeterminado",
         "currency": "Moneda predeterminada",
+        "timezone": "Zona horaria",
         "company_title": "Datos de empresa",
         "company_help": "Estos datos crean la compañía base, su libro contable y el período inicial.",
         "company_code": "Código de empresa",
@@ -156,6 +158,7 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
         "regional_help": "Currency is suggested by country and only database currencies are listed.",
         "country": "Default country",
         "currency": "Default currency",
+        "timezone": "Timezone",
         "company_title": "Company details",
         "company_help": "These details create the base company, accounting book, and initial period.",
         "company_code": "Company code",
@@ -209,6 +212,24 @@ def country_currency_map() -> dict[str, str]:
     return {country.code: country.currency for country in AMERICA_COUNTRIES}
 
 
+def country_timezone_map() -> dict[str, str]:
+    """Devuelve la zona horaria sugerida por país."""
+    return {country.code: country.timezone for country in AMERICA_COUNTRIES}
+
+
+def timezone_choices() -> list[tuple[str, str]]:
+    """Devuelve las opciones de zona horaria disponibles en zoneinfo."""
+    import zoneinfo
+    tzs = sorted(list(zoneinfo.available_timezones()))
+    choices = []
+    for tz in tzs:
+        if "/" in tz or tz == "UTC":
+            choices.append((tz, tz))
+    if not choices:
+        choices = [("UTC", "UTC")]
+    return choices
+
+
 def catalog_choices(language: str | None) -> list[tuple[str, str]]:
     """Devuelve opciones localizadas de catálogo contable."""
     texts = setup_texts(language)
@@ -223,5 +244,6 @@ def setup_template_context(language: str | None) -> dict[str, Any]:
     return {
         "texts": setup_texts(language),
         "country_currency_map": country_currency_map(),
+        "country_timezone_map": country_timezone_map(),
         "language": normalize_language(language),
     }

@@ -581,6 +581,7 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
         class _DummyRegionalForm:
             pais = _DummyField("NI")
             moneda = _DummyField("NIO")
+            zona_horaria = _DummyField("America/Managua")
 
             def __init__(self, *args, **kwargs):
                 pass
@@ -625,7 +626,7 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
         monkeypatch.setattr(
             setup_module,
             "save_regional_settings",
-            lambda country, currency: captured.setdefault("regional", (country, currency)),
+            lambda country, currency, timezone: captured.setdefault("regional", (country, currency, timezone)),
         )
         monkeypatch.setattr(
             setup_module,
@@ -657,11 +658,11 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
             with client.session_transaction() as session_:
                 session_["setup_step"] = 2
 
-            response = client.post("/setup/", data={"pais": "NI", "moneda": "NIO"}, follow_redirects=False)
+            response = client.post("/setup/", data={"pais": "NI", "moneda": "NIO", "zona_horaria": "America/Managua"}, follow_redirects=False)
             assert response.status_code == 302
             with client.session_transaction() as session_:
                 assert session_["setup_step"] == 3
-            assert captured["regional"] == ("NI", "NIO")
+            assert captured["regional"] == ("NI", "NIO", "America/Managua")
 
             with client.session_transaction() as session_:
                 session_["setup_step"] = 3
