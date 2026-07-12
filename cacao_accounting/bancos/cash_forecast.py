@@ -1,0 +1,487 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
+"""Controlador de rutas para el Pronóstico de Flujo de Caja."""
+
+import csv
+import openpyxl
+from datetime import date
+from decimal import Decimal
+from flask import abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
+from cacao_accounting.bancos import bancos
+from cacao_accounting.database import (
+    database,
+    CashForecast,
+    CashForecastEntry,
+    FiscalYear,
+)
+from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.runtime_mode import is_desktop_mode
+from cacao_accounting.contabilidad.auxiliares import (
+    obtener_lista_entidades_por_id_razonsocial,
+    obtener_lista_monedas,
+)
+from cacao_accounting.bancos.cash_forecast_service import (
+    get_cash_forecast_matrix,
+    get_forecast_comparison,
+)
+
+
+def _check_desktop_mode():
+    """Check if desktop mode is active and redirect with a warning if so."""
+    if is_desktop_mode():
+        flash("Proyección de flujo de caja no disponible en modo DESKTOP", "danger")
+        return True
+    return False
+
+
+@bancos.route("/cash-forecast/list")
+@modulo_activo("cash")
+@login_required
+def cash_forecast_list():
+    """Listado de pronósticos de flujo de caja."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    company = request.args.get("company")
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    if company in (None, "") and companies:
+        for code, name in companies:
+            if code:
+                company = code
+                break
+
+    forecasts = (
+        database.session.query(CashForecast)
+        .filter_by(company=company)
+        .order_by(CashForecast.created.desc())
+        .all()
+    )
+
+    return render_template(
+        "bancos/cash_forecast_lista.html",
+        forecasts=forecasts,
+        companies=companies,
+        selected_company=company,
+        titulo="Pronósticos de Flujo de Caja",
+    )
+
+
+@bancos.route("/cash-forecast/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_new():
+    """Crea un nuevo pronóstico de flujo de caja (Draft)."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    company = request.args.get("company") or request.form.get("company")
+    if company in (None, "") and companies:
+        for code, name in companies:
+            if code:
+                company = code
+                break
+
+    fiscal_years = database.session.query(FiscalYear).filter_by(entity=company).all()
+
+    if request.method == "POST":
+        version = request.form.get("version", "").strip()
+        description = request.form.get("description", "").strip()
+        fiscal_year_id = request.form.get("fiscal_year_id")
+        periodicity = request.form.get("periodicity")
+
+        if not version or not fiscal_year_id or not periodicity:
+            flash("Todos los campos obligatorios deben ser completados.", "danger")
+        else:
+            # Check unique version for this company and fiscal year
+            existing = (
+                database.session.query(CashForecast)
+                .filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version)
+                .first()
+            )
+            if existing:
+                flash(f"La versión '{version}' ya existe para este año fiscal.", "danger")
+            else:
+                forecast = CashForecast(
+                    version=version,
+                    description=description,
+                    fiscal_year_id=fiscal_year_id,
+                    company=company,
+                    periodicity=periodicity,
+                    status="Draft",
+                    created_by=getattr(current_user, "id", None),
+                )
+                database.session.add(forecast)
+                database.session.commit()
+                flash("Pronóstico de flujo de caja creado correctamente.", "success")
+                return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    return render_template(
+        "bancos/cash_forecast_nuevo.html",
+        companies=companies,
+        selected_company=company,
+        fiscal_years=fiscal_years,
+        titulo="Nuevo Pronóstico de Flujo de Caja",
+    )
+
+
+@bancos.route("/cash-forecast/<forecast_id>", methods=["GET"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_detail(forecast_id):
+    """Muestra la matriz YTD y permite gestionar las proyecciones manuales."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+
+    fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
+    currencies = obtener_lista_monedas()
+
+    # Obtener matriz de flujo
+    matrix = get_cash_forecast_matrix(forecast.company, forecast.id)
+
+    # Obtener entradas manuales de este forecast
+    entries = (
+        database.session.query(CashForecastEntry)
+        .filter_by(forecast_id=forecast.id)
+        .order_by(CashForecastEntry.estimated_date.asc())
+        .all()
+    )
+
+    return render_template(
+        "bancos/cash_forecast_detalle.html",
+        forecast=forecast,
+        fiscal_year=fiscal_year,
+        currencies=currencies,
+        matrix=matrix,
+        entries=entries,
+        titulo=f"Pronóstico de Flujo de Caja: {forecast.version}",
+    )
+
+
+@bancos.route("/cash-forecast/<forecast_id>/approve", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_approve(forecast_id):
+    """Aprueba el pronóstico y lo hace inmutable."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("Sólo los pronósticos en estado Borrador pueden ser aprobados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    forecast.status = "Approved"
+    forecast.approved_by = getattr(current_user, "id", None)
+    forecast.approved_at = database.func.now()
+    database.session.commit()
+    flash("Pronóstico de flujo de caja aprobado con éxito.", "success")
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/close", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_close(forecast_id):
+    """Cierra el pronóstico."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Approved":
+        flash("Sólo los pronósticos en estado Aprobado pueden ser cerrados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    forecast.status = "Closed"
+    database.session.commit()
+    flash("Pronóstico de flujo de caja cerrado con éxito.", "success")
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/archive", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_archive(forecast_id):
+    """Archiva el pronóstico."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status not in ("Approved", "Closed"):
+        flash("Sólo los pronósticos Aprobados o Cerrados pueden ser archivados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    forecast.status = "Archived"
+    database.session.commit()
+    flash("Pronóstico de flujo de caja archivado con éxito.", "success")
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/delete", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_delete(forecast_id):
+    """Elimina el pronóstico de flujo de caja si está en Borrador."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("Sólo los pronósticos en estado Borrador pueden ser eliminados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    company = forecast.company
+    database.session.delete(forecast)
+    database.session.commit()
+    flash("Pronóstico de flujo de caja eliminado con éxito.", "success")
+    return redirect(url_for("bancos.cash_forecast_list", company=company))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/entry/add", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_entry_add(forecast_id):
+    """Añade un movimiento proyectado manual al pronóstico."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    try:
+        type_ = request.form.get("type")
+        concept = request.form.get("concept", "").strip()
+        currency = request.form.get("currency")
+        amount = Decimal(request.form.get("amount", "0"))
+        estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
+        notes = request.form.get("notes", "").strip()
+
+        if not type_ or not concept or not currency or amount <= 0 or not estimated_date:
+            flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
+        else:
+            entry = CashForecastEntry(
+                forecast_id=forecast.id,
+                type=type_,
+                concept=concept,
+                currency=currency,
+                amount=amount,
+                estimated_date=estimated_date,
+                notes=notes,
+                created_by=getattr(current_user, "id", None),
+            )
+            database.session.add(entry)
+            database.session.commit()
+            flash("Proyección manual agregada correctamente.", "success")
+    except Exception as exc:
+        database.session.rollback()
+        flash(f"Error al agregar proyección: {str(exc)}", "danger")
+
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/entry/<entry_id>/delete", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_entry_delete(forecast_id, entry_id):
+    """Elimina un movimiento proyectado manual del pronóstico."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    entry = database.session.get(CashForecastEntry, entry_id)
+    if entry and entry.forecast_id == forecast.id:
+        database.session.delete(entry)
+        database.session.commit()
+        flash("Proyección manual eliminada correctamente.", "success")
+
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/<forecast_id>/entry/import", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_entry_import(forecast_id):
+    """Importa proyecciones manuales desde un archivo CSV o XLSX."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Debe seleccionar un archivo válido.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    filename = file.filename.lower()
+    entries_to_add = []
+
+    try:
+        if filename.endswith(".csv"):
+            # Parse CSV
+            stream = file.stream.read().decode("utf-8-sig").splitlines()
+            reader = csv.DictReader(stream)
+            for row in reader:
+                if not row.get("type") or not row.get("concept") or not row.get("amount"):
+                    continue
+                entries_to_add.append(
+                    CashForecastEntry(
+                        forecast_id=forecast.id,
+                        type=row.get("type").strip(),
+                        concept=row.get("concept").strip(),
+                        currency=row.get("currency", "NIO").strip(),
+                        amount=Decimal(row.get("amount").strip()),
+                        estimated_date=date.fromisoformat(row.get("estimated_date").strip()),
+                        notes=row.get("notes", "").strip(),
+                        created_by=getattr(current_user, "id", None),
+                    )
+                )
+        elif filename.endswith(".xlsx"):
+            # Parse Excel using openpyxl
+            wb = openpyxl.load_workbook(file)
+            ws = wb.active
+            headers = [str(cell.value).strip().lower() if cell.value else "" for cell in ws[1]]
+
+            try:
+                col_type = headers.index("type")
+                col_concept = headers.index("concept")
+                col_currency = headers.index("currency")
+                col_amount = headers.index("amount")
+                col_date = headers.index("estimated_date")
+                col_notes = headers.index("notes") if "notes" in headers else -1
+            except ValueError:
+                flash(
+                    "Encabezados de columna incorrectos. Se requiere: type, concept, currency, amount, estimated_date",
+                    "danger",
+                )
+                return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+            for r_idx in range(2, ws.max_row + 1):
+                row_cells = ws[r_idx]
+                r_type = str(row_cells[col_type].value or "").strip()
+                r_concept = str(row_cells[col_concept].value or "").strip()
+                r_currency = str(row_cells[col_currency].value or "NIO").strip()
+                r_amount_val = row_cells[col_amount].value
+                r_date_val = row_cells[col_date].value
+                r_notes = (
+                    str(row_cells[col_notes].value or "").strip() if col_notes != -1 else ""
+                )
+
+                if not r_type or not r_concept or r_amount_val is None or r_date_val is None:
+                    continue
+
+                if isinstance(r_date_val, date):
+                    estimated_date = r_date_val
+                else:
+                    estimated_date = date.fromisoformat(str(r_date_val).strip()[:10])
+
+                entries_to_add.append(
+                    CashForecastEntry(
+                        forecast_id=forecast.id,
+                        type=r_type,
+                        concept=r_concept,
+                        currency=r_currency,
+                        amount=Decimal(str(r_amount_val)),
+                        estimated_date=estimated_date,
+                        notes=r_notes,
+                        created_by=getattr(current_user, "id", None),
+                    )
+                )
+        else:
+            flash("Formato de archivo no soportado. Suba un archivo CSV o XLSX.", "danger")
+            return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+        if entries_to_add:
+            database.session.add_all(entries_to_add)
+            database.session.commit()
+            flash(
+                f"Se importaron {len(entries_to_add)} proyecciones manuales con éxito.",
+                "success",
+            )
+        else:
+            flash("No se encontraron registros válidos para importar.", "warning")
+
+    except Exception as exc:
+        database.session.rollback()
+        flash(f"Error al importar archivo: {str(exc)}", "danger")
+
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+
+@bancos.route("/cash-forecast/compare", methods=["GET"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_compare():
+    """Formulario y resultado de comparación de pronósticos."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    company = request.args.get("company")
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    if company in (None, "") and companies:
+        for code, name in companies:
+            if code:
+                company = code
+                break
+
+    # Obtener todos los forecast de esta compañía
+    forecasts = (
+        database.session.query(CashForecast)
+        .filter_by(company=company)
+        .order_by(CashForecast.version.asc())
+        .all()
+    )
+
+    base_id = request.args.get("base_id")
+    compare_id = request.args.get("compare_id")
+
+    comparison = []
+    base_forecast = None
+    compare_forecast = None
+
+    if base_id and compare_id:
+        base_forecast = database.session.get(CashForecast, base_id)
+        compare_forecast = database.session.get(CashForecast, compare_id)
+        if base_forecast and compare_forecast:
+            comparison = get_forecast_comparison(company, base_id, compare_id)
+
+    return render_template(
+        "bancos/cash_forecast_comparar.html",
+        companies=companies,
+        selected_company=company,
+        forecasts=forecasts,
+        base_id=base_id,
+        compare_id=compare_id,
+        base_forecast=base_forecast,
+        compare_forecast=compare_forecast,
+        comparison=comparison,
+        titulo="Comparación de Escenarios de Flujo de Caja",
+    )

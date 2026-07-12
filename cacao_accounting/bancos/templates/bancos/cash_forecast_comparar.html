@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.cash_forecast_list') }}" class="link-dark">Pronósticos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Comparar Escenarios</li>
+  </ol>
+</nav>
+
+<div class="ca-card mb-4 shadow-sm border-0">
+  <div class="ca-card-header bg-white py-3">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-arrow-left-right"></i> Comparación de Escenarios de Flujo de Caja</h5>
+  </div>
+
+  <div class="p-4 bg-light border-bottom">
+    <form method="GET" action="{{ url_for('bancos.cash_forecast_compare') }}" class="row g-3 align-items-end">
+
+      <div class="col-md-3">
+        <label for="company" class="form-label small fw-bold">Compañía</label>
+        <select name="company" id="company" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for code, name in companies %}
+          <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label for="base_id" class="form-label small fw-bold">Escenario Base (A)</label>
+        <select name="base_id" id="base_id" class="form-select form-select-sm" required>
+          <option value="" disabled selected>Seleccione escenario base</option>
+          {% for f in forecasts %}
+          <option value="{{ f.id }}" {% if f.id == base_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label for="compare_id" class="form-label small fw-bold">Escenario Comparar (B)</label>
+        <select name="compare_id" id="compare_id" class="form-select form-select-sm" required>
+          <option value="" disabled selected>Seleccione escenario a comparar</option>
+          {% for f in forecasts %}
+          <option value="{{ f.id }}" {% if f.id == compare_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-sm btn-primary w-100">
+          <i class="bi bi-arrow-left-right me-1"></i>Comparar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if base_forecast and compare_forecast %}
+  <div class="p-4 bg-white border-bottom">
+    <div class="row g-3 text-center">
+      <div class="col-md-6 border-end">
+        <span class="text-muted d-block small">Escenario Base (A)</span>
+        <strong class="fs-5 text-primary">{{ base_forecast.version }}</strong>
+        <span class="badge bg-secondary d-inline-block">{{ base_forecast.status }}</span>
+      </div>
+      <div class="col-md-6">
+        <span class="text-muted d-block small">Escenario a Comparar (B)</span>
+        <strong class="fs-5 text-success">{{ compare_forecast.version }}</strong>
+        <span class="badge bg-secondary d-inline-block">{{ compare_forecast.status }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="ca-table text-nowrap align-middle">
+      <caption style="display: none;">Comparación de pronósticos.</caption>
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Período / Zona</th>
+          <th scope="col" class="text-end">Base Projected (A)</th>
+          <th scope="col" class="text-end">Compare Projected (B)</th>
+          <th scope="col" class="text-end">Varianza</th>
+          <th scope="col" class="text-end">Manual Inflow Var</th>
+          <th scope="col" class="text-end">Manual Outflow Var</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in comparison %}
+        <tr>
+          <td>
+            <strong>{{ row.period }}</strong>
+            <span class="badge bg-light text-dark small ms-1">{{ row.zone }}</span>
+          </td>
+          <td class="text-end text-primary">{{ format_money_with_currency(row.base_projected) }}</td>
+          <td class="text-end text-success">{{ format_money_with_currency(row.compare_projected) }}</td>
+          <td class="text-end fw-bold {% if row.variance > 0 %}text-success{% elif row.variance < 0 %}text-danger{% endif %}">
+            {{ format_money_with_currency(row.variance) }}
+          </td>
+          <td class="text-end text-muted small">
+            {% if row.variance_manual_inflow != 0 %}
+            {{ "+" if row.variance_manual_inflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_inflow) }}
+            {% else %}-{% endif %}
+          </td>
+          <td class="text-end text-muted small">
+            {% if row.variance_manual_outflow != 0 %}
+            {{ "+" if row.variance_manual_outflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_outflow) }}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="p-5 text-center text-muted">
+    <i class="bi bi-arrow-left-right fs-1 d-block mb-3 text-secondary"></i>
+    Seleccione dos escenarios y haga clic en "Comparar" para analizar la variaciones del flujo proyectado.
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

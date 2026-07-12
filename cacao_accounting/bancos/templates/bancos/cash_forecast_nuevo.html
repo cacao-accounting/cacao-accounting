@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.cash_forecast_list') }}" class="link-dark">Pronósticos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nuevo Pronóstico</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-plus-circle"></i> Nuevo Pronóstico de Flujo de Caja</h5>
+  </div>
+
+  <div class="card-body p-4">
+    <form method="POST" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="col-md-6">
+        <label for="company" class="form-label fw-bold">Compañía</label>
+        <select name="company" id="company" class="form-select" required>
+          {% for code, name in companies %}
+          <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">La compañía para la cual se calculará y guardará el pronóstico.</div>
+      </div>
+
+      <div class="col-md-6">
+        <label for="fiscal_year_id" class="form-label fw-bold">Año Fiscal</label>
+        <select name="fiscal_year_id" id="fiscal_year_id" class="form-select" required>
+          <option value="" disabled selected>Seleccione Año Fiscal</option>
+          {% for fy in fiscal_years %}
+          <option value="{{ fy.id }}">{{ fy.name }} ({{ fy.year_start_date.strftime('%d/%m/%Y') }} - {{ fy.year_end_date.strftime('%d/%m/%Y') }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-6">
+        <label for="version" class="form-label fw-bold">Versión / Identificador</label>
+        <input type="text" name="version" id="version" class="form-control" placeholder="Ej: Q3-2026, Escenario Optimista, v1" required>
+        <div class="form-text">Nombre único para identificar esta versión del pronóstico de caja.</div>
+      </div>
+
+      <div class="col-md-6">
+        <label for="periodicity" class="form-label fw-bold">Periodicidad</label>
+        <select name="periodicity" id="periodicity" class="form-select" required>
+          <option value="weekly">Semanal</option>
+          <option value="monthly" selected>Mensual</option>
+        </select>
+        <div class="form-text">Define la división temporal de las proyecciones (semanal o mensual).</div>
+      </div>
+
+      <div class="col-12">
+        <label for="description" class="form-label fw-bold">Descripción</label>
+        <textarea name="description" id="description" class="form-control" rows="3" placeholder="Añada notas sobre el escenario, suposiciones, objetivos..."></textarea>
+      </div>
+
+      <div class="col-12 mt-4 d-flex justify-content-end gap-2">
+        <a href="{{ url_for('bancos.cash_forecast_list', company=selected_company) }}" class="btn btn-outline-secondary">
+          Cancelar
+        </a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>Crear Pronóstico
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
