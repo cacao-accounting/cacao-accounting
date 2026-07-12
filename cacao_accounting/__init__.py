@@ -62,8 +62,10 @@ from cacao_accounting.runtime_mode import force_single_entity, is_cloud_mode, is
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.version import PRERELEASE
+from flask_babel import Babel
 
 alembic = Alembic()
+babel = Babel()
 
 
 def command() -> None:  # pragma: no cover
@@ -79,12 +81,32 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
         from flask_wtf.csrf import CSRFProtect
         from cacao_accounting.limiter import init_limiter
         from cacao_accounting.cache import init_cache
+        from flask import has_app_context, has_request_context
+
+        def get_locale():
+            if not (has_app_context() or has_request_context()):
+                return "es"
+            try:
+                from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
+                return get_setup_value(SETUP_LANGUAGE, "es")
+            except Exception:
+                return "es"
+
+        def get_timezone():
+            if not (has_app_context() or has_request_context()):
+                return "America/Managua"
+            try:
+                from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
+                return get_setup_value(SETUP_TIMEZONE, "America/Managua")
+            except Exception:
+                return "America/Managua"
 
         csrf = CSRFProtect()
         csrf.init_app(app)
         # alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
+        babel.init_app(app, locale_selector=get_locale, timezone_selector=get_timezone)
         init_cache(app)
         init_limiter(app)
     else:

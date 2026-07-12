@@ -323,6 +323,13 @@
                   <div class="text-danger small mt-1">{{ form.moneda.errors[0] }}</div>
                   {% endif %}
                 </div>
+                <div class="col-md-12">
+                  <label class="form-label" for="zona_horaria">{{ texts.timezone }}</label>
+                  {{ form.zona_horaria(class="form-select form-select-lg", id="zona_horaria") }}
+                  {% if form.zona_horaria.errors %}
+                  <div class="text-danger small mt-1">{{ form.zona_horaria.errors[0] }}</div>
+                  {% endif %}
+                </div>
               </div>
             </div>
           </section>
@@ -435,13 +442,23 @@
   <script>
     (function () {
       var countryCurrencyMap = {{ country_currency_map | tojson }};
+      var countryTimezoneMap = {{ country_timezone_map | tojson }};
       var country = document.getElementById('pais');
       var currency = document.getElementById('moneda');
-      if (country && currency) {
+      var timezone = document.getElementById('zona_horaria');
+      if (country) {
         country.addEventListener('change', function () {
-          var suggested = countryCurrencyMap[country.value];
-          if (suggested && currency.querySelector('option[value="' + suggested + '"]')) {
-            currency.value = suggested;
+          if (currency) {
+            var suggested = countryCurrencyMap[country.value];
+            if (suggested && currency.querySelector('option[value="' + suggested + '"]')) {
+              currency.value = suggested;
+            }
+          }
+          if (timezone) {
+            var suggestedTz = countryTimezoneMap[country.value];
+            if (suggestedTz && timezone.querySelector('option[value="' + suggestedTz + '"]')) {
+              timezone.value = suggestedTz;
+            }
           }
         });
       }
