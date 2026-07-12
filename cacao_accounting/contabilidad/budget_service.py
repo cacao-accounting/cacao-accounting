@@ -3,7 +3,7 @@
 
 """Servicio para la gestión de presupuestos."""
 
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -267,3 +267,156 @@ class BudgetService:
             .all()
         )
         return {period_id: amount for period_id, amount in results}
+
+    def resolve_expense_account(self, item_code: str, company: str) -> Accounts | None:
+        """Resuelve la cuenta de gastos para un artículo y compañía."""
+        from cacao_accounting.database import ItemAccount, CompanyDefaultAccount, Accounts
+        if item_code:
+            item_acc = database.session.query(ItemAccount).filter_by(item_code=item_code, company=company).first()
+            if item_acc and item_acc.expense_account_id:
+                acc = database.session.query(Accounts).filter_by(id=item_acc.expense_account_id).first()
+                if acc:
+                    return acc
+        defaults = database.session.query(CompanyDefaultAccount).filter_by(company=company).first()
+        if defaults and defaults.default_expense:
+            acc = database.session.query(Accounts).filter_by(id=defaults.default_expense).first()
+            if acc:
+                return acc
+        return None
+
+    def resolve_cost_center(self, item_code: str, company: str, supplier_id: str | None = None) -> CostCenter | None:
+        """Resuelve el centro de costos para un artículo, compañía y proveedor opcional."""
+        from cacao_accounting.database import ItemAccount, CompanyParty, CostCenter
+        if item_code:
+            item_acc = database.session.query(ItemAccount).filter_by(item_code=item_code, company=company).first()
+            if item_acc and item_acc.cost_center_code:
+                cc = database.session.query(CostCenter).filter_by(code=item_acc.cost_center_code, entity=company).first()
+                if cc:
+                    return cc
+        if supplier_id:
+            cp = database.session.query(CompanyParty).filter_by(party_id=supplier_id, company=company).first()
+            if cp and cp.default_cost_center:
+                cc = database.session.query(CostCenter).filter_by(code=cp.default_cost_center, entity=company).first()
+                if cc:
+                    return cc
+        cc = database.session.query(CostCenter).filter_by(entity=company, default=True).first()
+        if cc:
+            return cc
+        cc = database.session.query(CostCenter).filter_by(entity=company, code="MAIN").first()
+        return cc
+
+    def validate_transaction(
+        self,
+        company: str,
+        date_val: datetime | date,
+        account_id: str,
+        cost_center_id: str,
+        amount: Decimal,
+        document_id: str,
+        document_type: str,
+    ) -> Dict[str, Any]:
+        """Valida si una transacción excede el presupuesto disponible de la cuenta y centro de costo.
+
+        Considera:
+        - compañía
+        - cuenta contable
+        - centro de costo
+        - período presupuestario
+        - monto solicitado
+
+        Retorna un diccionario indicando si excede el presupuesto, el presupuesto,
+        lo comprometido, disponible, lo solicitado y el exceso.
+        """
+        from cacao_accounting.database import AccountingPeriod, Accounts, Budget, BudgetLine, CostCenter, GLEntry
+
+        if hasattr(date_val, "date"):
+            date_val = date_val.date()  # type: ignore
+
+        # 1. Resolve AccountingPeriod
+        period = database.session.query(AccountingPeriod).filter(
+            AccountingPeriod.entity == company,
+            AccountingPeriod.start <= date_val,
+            AccountingPeriod.end >= date_val,
+            AccountingPeriod.enabled.is_(True)
+        ).first()
+
+        if not period:
+            return {
+                "exceeded": False,
+                "budget": Decimal("0"),
+                "committed": Decimal("0"),
+                "available": Decimal("0"),
+                "requested": amount,
+                "excess": Decimal("0")
+            }
+
+        # 2. Resolve Account ID
+        acc = database.session.query(Accounts).filter(
+            Accounts.entity == company,
+            (Accounts.id == account_id) | (Accounts.code == account_id)
+        ).first()
+        resolved_account_id = acc.id if acc else account_id
+
+        # 3. Resolve Cost Center ID
+        cc = database.session.query(CostCenter).filter(
+            CostCenter.entity == company,
+            (CostCenter.id == cost_center_id) | (CostCenter.code == cost_center_id)
+        ).first()
+        resolved_cost_center_id = cc.id if cc else cost_center_id
+
+        # 4. Resolve Approved Budgets
+        budgets = database.session.query(Budget).filter_by(
+            company=company,
+            fiscal_year_id=period.fiscal_year_id,
+            status="approved"
+        ).all()
+        budget_ids = [b.id for b in budgets]
+
+        # 5. Get Budget Amount
+        budget_amount = Decimal("0")
+        if budget_ids:
+            lines = database.session.query(BudgetLine).filter(
+                BudgetLine.budget_id.in_(budget_ids),
+                BudgetLine.account_id == resolved_account_id,
+                BudgetLine.cost_center_id == resolved_cost_center_id,
+                BudgetLine.period_id == period.id
+            ).all()
+            budget_amount = sum(line.amount for line in lines)
+
+        # 6. Calculate Committed Amount (from GLEntry actuals)
+        gl_query = database.session.query(
+            GLEntry.debit,
+            GLEntry.credit,
+            Accounts.classification
+        ).join(Accounts, GLEntry.account_id == Accounts.id).filter(
+            GLEntry.company == company,
+            GLEntry.accounting_period_id == period.id,
+            GLEntry.account_id == resolved_account_id,
+            GLEntry.is_cancelled.is_(False)
+        )
+        if cc:
+            gl_query = gl_query.filter(GLEntry.cost_center_code == cc.code)
+        actual_entries = gl_query.all()
+
+        committed_amount = Decimal("0")
+        for entry in actual_entries:
+            classif = entry.classification.lower() if entry.classification else ""
+            if classif in ("gastos", "activo", "expense", "asset"):
+                val = entry.debit - entry.credit
+            else:
+                val = entry.credit - entry.debit
+            committed_amount += val
+
+        # 7. Compute results
+        available_amount = budget_amount - committed_amount
+        exceeded = amount > available_amount
+        excess = (amount - available_amount) if exceeded else Decimal("0")
+
+        return {
+            "exceeded": exceeded,
+            "budget": budget_amount,
+            "committed": committed_amount,
+            "available": available_amount,
+            "requested": amount,
+            "excess": excess
+        }

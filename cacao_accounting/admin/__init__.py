@@ -610,6 +610,57 @@ def config_conciliacion_ventas():
     )
 
 
+@admin.route("/settings/budget-control", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def config_control_presupuestario():
+    """Administra la configuración de control presupuestario por compañía."""
+    _require_system_admin()
+    from cacao_accounting.setup.repository import get_setup_value, set_setup_value
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.values.get("company") or (companies[0].code if companies else "")
+
+    if request.method == "POST":
+        company = request.form.get("company") or ""
+        if not company:
+            flash(_("Debe seleccionar una compañía."), "danger")
+            return redirect(url_for("admin.config_control_presupuestario"))
+
+        enabled = request.form.get("enabled") == "on"
+        action = request.form.get("action_on_exceeded") or "do_nothing"
+
+        set_setup_value(f"budget_control_enabled_{company}", "1" if enabled else "0")
+        set_setup_value(f"budget_control_action_{company}", action)
+
+        database.session.commit()
+        flash(_("Configuración de control presupuestario guardada correctamente."), "success")
+        return redirect(url_for("admin.config_control_presupuestario", company=company))
+
+    enabled_val = get_setup_value(f"budget_control_enabled_{selected_company}", "0") == "1"
+    action_val = get_setup_value(f"budget_control_action_{selected_company}", "do_nothing")
+
+    configs_list = []
+    for comp in companies:
+        c_enabled = get_setup_value(f"budget_control_enabled_{comp.code}", "0") == "1"
+        c_action = get_setup_value(f"budget_control_action_{comp.code}", "do_nothing")
+        configs_list.append({
+            "company": comp.code,
+            "enabled": c_enabled,
+            "action": c_action,
+        })
+
+    return render_template(
+        "admin/budget_control_config.html",
+        companies=companies,
+        selected_company=selected_company,
+        enabled=enabled_val,
+        action=action_val,
+        configs=configs_list,
+        titulo=_("Control Presupuestario"),
+    )
+
+
 @admin.route("/settings/default-accounts", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
