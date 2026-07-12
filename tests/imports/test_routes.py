@@ -165,6 +165,12 @@ def test_upload_mime_type_validation():
     from cacao_accounting.imports.models import ImportBatch
     from ulid import ULID
 
+    try:
+        import magic
+        has_magic = True
+    except ImportError:
+        has_magic = False
+
     # 1. Test when NOT in desktop mode (cloud/web mode) -> MIME validation should be active
     app_web = create_app(
         {
@@ -210,7 +216,10 @@ def test_upload_mime_type_validation():
                 follow_redirects=True,
             )
             assert response.status_code == 200
-            assert "Archivo cargado correctamente" in response.get_data(as_text=True)
+            if has_magic:
+                assert "Archivo cargado correctamente" in response.get_data(as_text=True)
+            else:
+                assert "Error al validar el tipo de archivo" in response.get_data(as_text=True)
 
     # 2. Test when in DESKTOP mode -> MIME validation should be bypassed
     app_desktop = create_app(

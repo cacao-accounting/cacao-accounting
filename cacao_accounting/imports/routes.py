@@ -165,6 +165,7 @@ def upload(batch_id):
         if not is_desktop_mode():
             try:
                 import magic
+
                 # Read first 2048 bytes to detect the MIME type
                 chunk = file.read(2048)
                 file.seek(0)  # Reset pointer
