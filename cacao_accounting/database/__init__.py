@@ -4207,3 +4207,57 @@ def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
             "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
             "Se sugiere en su lugar su inactivación o bloqueo."
         )
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Cash Flow Forecast — Pronóstico de Flujo de Caja
+# <---------------------------------------------------------------------------------------------> #
+class CashForecast(database.Model, BaseTabla):
+    """Representa una versión del presupuesto / pronóstico de caja."""
+
+    __tablename__ = "cash_forecast"
+    __table_args__ = (UniqueConstraint("company", "fiscal_year_id", "version", name="uq_cash_forecast_version"),)
+
+    version = database.Column(database.String(50), nullable=False)
+    description = database.Column(database.String(200), nullable=True)
+    fiscal_year_id = database.Column(
+        database.String(26),
+        database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    periodicity = database.Column(database.String(20), nullable=False)  # weekly, monthly
+    approved_by = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    approved_at = database.Column(database.DateTime(timezone=True), nullable=True)
+
+
+class CashForecastEntry(database.Model, BaseTabla):
+    """Detalle de cada movimiento proyectado manualmente."""
+
+    __tablename__ = "cash_forecast_entry"
+
+    forecast_id = database.Column(
+        database.String(26),
+        database.ForeignKey("cash_forecast.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    type = database.Column(database.String(20), nullable=False)  # Income, Expense
+    concept = database.Column(database.String(100), nullable=False)
+    currency = database.Column(
+        database.String(10),
+        database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    estimated_date = database.Column(database.Date(), nullable=False)
+    notes = database.Column(database.Text(), nullable=True)

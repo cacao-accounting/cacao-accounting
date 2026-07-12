@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html"></div>
+{%- endif -%}
+
+{% set currency = document_currency_code(forecast) %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.cash_forecast_list', company=forecast.company) }}" class="link-dark">Pronósticos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ forecast.version }}</li>
+  </ol>
+</nav>
+
+<!-- Ficha de Información General -->
+<div class="card mb-4 shadow-sm border-0">
+  <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between border-0">
+    <div>
+      <h4 class="mb-0 fw-bold"><i class="bi bi-graph-up-arrow text-primary"></i> Pronóstico de Flujo de Caja: {{ forecast.version }}</h4>
+      <small class="text-muted">Compañía: {{ forecast.company }} | Año Fiscal: {{ fiscal_year.name }}</small>
+    </div>
+
+    <div class="d-flex gap-2">
+      <!-- Transiciones de estado -->
+      {% if forecast.status == "Draft" %}
+      <form method="POST" action="{{ url_for('bancos.cash_forecast_approve', forecast_id=forecast.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-success">
+          <i class="bi bi-check-circle me-1"></i>Aprobar Pronóstico
+        </button>
+      </form>
+      {% elif forecast.status == "Approved" %}
+      <form method="POST" action="{{ url_for('bancos.cash_forecast_close', forecast_id=forecast.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary me-1">
+          <i class="bi bi-x-circle me-1"></i>Cerrar
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('bancos.cash_forecast_archive', forecast_id=forecast.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-dark">
+          <i class="bi bi-archive me-1"></i>Archivar
+        </button>
+      </form>
+      {% elif forecast.status == "Closed" %}
+      <form method="POST" action="{{ url_for('bancos.cash_forecast_archive', forecast_id=forecast.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-dark">
+          <i class="bi bi-archive me-1"></i>Archivar
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body bg-light border-top">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <span class="text-muted d-block small">Estado</span>
+        <strong class="fs-5">
+          {% if forecast.status == "Draft" %}
+          <span class="text-warning"><i class="bi bi-file-earmark-diff"></i> Borrador</span>
+          {% elif forecast.status == "Approved" %}
+          <span class="text-success"><i class="bi bi-check-all"></i> Aprobado</span>
+          {% elif forecast.status == "Closed" %}
+          <span class="text-secondary"><i class="bi bi-lock"></i> Cerrado</span>
+          {% else %}
+          <span class="text-dark">{{ forecast.status }}</span>
+          {% endif %}
+        </strong>
+      </div>
+      <div class="col-md-3">
+        <span class="text-muted d-block small">Periodicidad</span>
+        <strong>{{ "Semanal" if forecast.periodicity == "weekly" else "Mensual" }}</strong>
+      </div>
+      <div class="col-md-3">
+        <span class="text-muted d-block small">Creado por</span>
+        <strong>{{ forecast.created_by or "Sistema" }}</strong>
+      </div>
+      <div class="col-md-3">
+        <span class="text-muted d-block small">Descripción</span>
+        <p class="mb-0 text-muted small">{{ forecast.description or "Sin descripción" }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Matriz de Proyección -->
+<div class="ca-card mb-4 shadow-sm border-0">
+  <div class="ca-card-header bg-white py-3">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-table"></i> Matriz de Flujo de Caja (YTD)</h5>
+  </div>
+
+  <div class="table-responsive">
+    <table class="ca-table text-nowrap align-middle">
+      <caption style="display: none;">Matriz de flujo de caja YTD.</caption>
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Período</th>
+          <th scope="col">Zona Temporal</th>
+          <th scope="col" class="text-end">Real (ERP Posted)</th>
+          <th scope="col" class="text-end">Current (ERP + AR/AP)</th>
+          <th scope="col" class="text-end">Projected (Manual + ERP)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in matrix %}
+        <tr class="{% if row.zone == 'Current' %}table-primary fw-bold{% endif %}">
+          <td>{{ row.period }}</td>
+          <td>
+            {% if row.zone == "Real" %}
+            <span class="badge bg-secondary">Real</span>
+            {% elif row.zone == "Current" %}
+            <span class="badge bg-primary">Current</span>
+            {% else %}
+            <span class="badge bg-info text-dark">Projected</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-success">{{ format_money_with_currency(row.real_balance, currency) }}</td>
+          <td class="text-end text-primary">{{ format_money_with_currency(row.current_balance, currency) }}</td>
+          <td class="text-end text-dark fw-bold">{{ format_money_with_currency(row.projected_balance, currency) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Gestión de Proyecciones Manuales -->
+<div class="ca-card mb-4 shadow-sm border-0">
+  <div class="ca-card-header bg-white py-3 d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title mb-0"><i class="bi bi-pencil-square"></i> Proyecciones Manuales (Manual Forecast)</h5>
+
+    {% if forecast.status == "Draft" %}
+    <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#newEntryForm">
+      <i class="bi bi-plus-circle me-1"></i>Añadir Proyección
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Formulario para agregar proyecciones manuales (colapsable) -->
+  {% if forecast.status == "Draft" %}
+  <div class="collapse p-4 border-bottom bg-light" id="newEntryForm">
+    <h6 class="fw-bold mb-3">Nueva Proyección Manual</h6>
+    <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_add', forecast_id=forecast.id) }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="col-md-3">
+        <label for="type" class="form-label small fw-bold">Tipo</label>
+        <select name="type" id="type" class="form-select form-select-sm" required>
+          <option value="Income">Ingreso (+)</option>
+          <option value="Expense">Egreso (-)</option>
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label for="concept" class="form-label small fw-bold">Concepto</label>
+        <input type="text" name="concept" id="concept" class="form-control form-control-sm" placeholder="Ej: Nómina, Préstamo, Impuestos" required>
+      </div>
+
+      <div class="col-md-2">
+        <label for="currency" class="form-label small fw-bold">Moneda</label>
+        <select name="currency" id="currency" class="form-select form-select-sm" required>
+          {% for code, name in currencies %}
+          <option value="{{ code }}" {% if code == currency %}selected{% endif %}>{{ code }} - {{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label for="amount" class="form-label small fw-bold">Monto</label>
+        <input type="number" step="0.01" name="amount" id="amount" class="form-control form-control-sm" placeholder="0.00" required>
+      </div>
+
+      <div class="col-md-2">
+        <label for="estimated_date" class="form-label small fw-bold">Fecha Estimada</label>
+        <input type="date" name="estimated_date" id="estimated_date" class="form-control form-control-sm" required>
+      </div>
+
+      <div class="col-12">
+        <label for="notes" class="form-label small fw-bold">Notas / Observaciones</label>
+        <textarea name="notes" id="notes" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales..."></textarea>
+      </div>
+
+      <div class="col-12 d-flex justify-content-end gap-2">
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#newEntryForm">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-circle me-1"></i>Guardar Proyección
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Listado de Proyecciones Manuales -->
+  <div class="table-responsive">
+    <table class="ca-table text-nowrap align-middle">
+      <caption style="display: none;">Proyecciones manuales.</caption>
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Fecha Estimada</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Concepto</th>
+          <th scope="col" class="text-end">Monto</th>
+          <th scope="col">Moneda</th>
+          <th scope="col">Notas</th>
+          {% if forecast.status == "Draft" %}
+          <th scope="col">Acciones</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td>{{ entry.estimated_date.strftime('%d/%m/%Y') }}</td>
+          <td>
+            {% if entry.type == "Income" %}
+            <span class="badge bg-success">Ingreso</span>
+            {% else %}
+            <span class="badge bg-danger">Egreso</span>
+            {% endif %}
+          </td>
+          <td>{{ entry.concept }}</td>
+          <td class="text-end fw-bold">{{ format_money_with_currency(entry.amount, entry.currency) }}</td>
+          <td>{{ entry.currency }}</td>
+          <td><small class="text-muted">{{ entry.notes or "" }}</small></td>
+          {% if forecast.status == "Draft" %}
+          <td>
+            <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_delete', forecast_id=forecast.id, entry_id=entry.id) }}" onsubmit="return confirm('¿Está seguro de eliminar esta proyección?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{% if forecast.status == 'Draft' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">
+            No se han registrado proyecciones manuales para esta versión.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

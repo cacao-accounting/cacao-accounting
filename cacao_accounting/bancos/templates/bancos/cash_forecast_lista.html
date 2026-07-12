@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Pronósticos de Flujo de Caja</li>
+  </ol>
+</nav>
+
+<div class="ca-card mb-3">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-graph-up-arrow"></i> Pronósticos de Flujo de Caja</h5>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('bancos.cash_forecast_compare') }}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-left-right me-1"></i>Comparar Escenarios
+      </a>
+      <a href="{{ url_for('bancos.cash_forecast_new', company=selected_company) }}" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>Nuevo Pronóstico
+      </a>
+    </div>
+  </div>
+
+  <div class="p-3 bg-light border-bottom">
+    <form method="GET" action="{{ url_for('bancos.cash_forecast_list') }}" class="row g-3 align-items-center">
+      <div class="col-auto">
+        <label for="companySelect" class="form-label mb-0 fw-bold">Compañía:</label>
+      </div>
+      <div class="col-auto" style="min-width: 250px;">
+        <select name="company" id="companySelect" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for code, name in companies %}
+          <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <table class="ca-table">
+    <caption style="display: none;">Listado de pronósticos de flujo de caja.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Versión / Identificador</th>
+        <th scope="col">Periodicidad</th>
+        <th scope="col">Descripción</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Creado el</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for forecast in forecasts %}
+      <tr>
+        <td>
+          <a class="fw-bold" href="{{ url_for('bancos.cash_forecast_detail', forecast_id=forecast.id) }}">
+            {{ forecast.version }}
+          </a>
+        </td>
+        <td>{{ "Semanal" if forecast.periodicity == "weekly" else "Mensual" }}</td>
+        <td>{{ forecast.description or "" }}</td>
+        <td>
+          {% if forecast.status == "Draft" %}
+          <span class="badge bg-warning text-dark">Borrador</span>
+          {% elif forecast.status == "Approved" %}
+          <span class="badge bg-success">Aprobado</span>
+          {% elif forecast.status == "Closed" %}
+          <span class="badge bg-secondary">Cerrado</span>
+          {% else %}
+          <span class="badge bg-dark">{{ forecast.status }}</span>
+          {% endif %}
+        </td>
+        <td>{{ forecast.created.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('bancos.cash_forecast_detail', forecast_id=forecast.id) }}" class="btn btn-sm btn-outline-secondary py-0">
+              <i class="bi bi-eye"></i> Ver
+            </a>
+            {% if forecast.status == "Draft" %}
+            <form method="POST" action="{{ url_for('bancos.cash_forecast_delete', forecast_id=forecast.id) }}" onsubmit="return confirm('¿Está seguro de eliminar este pronóstico?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0">
+                <i class="bi bi-trash"></i> Eliminar
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center text-muted py-4">
+          No hay pronósticos de flujo de caja creados para esta compañía.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
