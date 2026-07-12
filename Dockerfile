@@ -33,6 +33,7 @@ RUN chmod +x /usr/bin/tini \
     && microdnf clean all
 
 COPY --from=python-builder /install/lib/python3.12/site-packages /usr/lib/python3.12/site-packages
+COPY --from=python-builder /install/lib64/python3.12/site-packages /usr/lib64/python3.12/site-packages
 COPY --from=python-builder /install/bin /usr/local/bin
 
 RUN useradd -r -s /bin/false appuser
@@ -40,6 +41,7 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 COPY ./cacao_accounting /app/cacao_accounting
+COPY run.py /app/run.py
 COPY --from=frontend /build/node_modules /app/cacao_accounting/static/node_modules
 COPY docker-entry-point.sh /app/docker-entry-point.sh
 RUN chmod +x /app/docker-entry-point.sh
