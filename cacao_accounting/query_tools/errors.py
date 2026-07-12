@@ -28,6 +28,7 @@ class ErrorCode(str, Enum):
 class QueryToolError(Exception):
     """Excepción personalizada para errores de herramientas de consulta."""
 
+    _safe_for_display = True
     code: ErrorCode
     message: str
     request_id: str | None = None

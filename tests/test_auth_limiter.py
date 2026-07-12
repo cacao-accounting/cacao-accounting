@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Pruebas unitarias para el limitador de velocidad (Rate Limiting) y configuración de caché."""
 
+from unittest.mock import patch
 from flask import Flask
 from cacao_accounting.limiter import DummyLimiter, init_limiter, _has_limiter
 from cacao_accounting.cache import init_cache
@@ -41,7 +42,8 @@ def test_init_limiter_cloud_mode() -> None:
     app.config["MODO_ESCRITORIO"] = False
     app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/1"
 
-    init_limiter(app)
+    with patch("cacao_accounting.config.TESTING_MODE", False):
+        init_limiter(app)
 
     if _has_limiter:
         assert app.config.get("RATELIMIT_ENABLED") is True

@@ -6,6 +6,8 @@
 class PrintingError(Exception):
     """Base exception for printing service."""
 
+    _safe_for_display = True
+
 
 class PrintTemplateNotFoundError(PrintingError):
     """Raised when a print template is not found."""

@@ -17,18 +17,13 @@ except ImportError:
 
 
 class DummyLimiter:
-    """Implementación dummy de un limitador de velocidad."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Inicializa el limitador dummy."""
-        pass
+    """Fallback cuando flask-limiter no está instalado."""
 
     def init_app(self, app: Flask) -> None:
-        """Inicialización de la aplicación dummy."""
-        pass
+        """Inicialización dummy."""
 
     def limit(self, limit_value: str, *args: Any, **kwargs: Any) -> Callable[[Any], Any]:
-        """Decorador dummy para limitar un endpoint o blueprint."""
+        """Decorador dummy."""
 
         def decorator(f: Any) -> Any:
             return f
@@ -36,7 +31,7 @@ class DummyLimiter:
         return decorator
 
     def shared_limit(self, limit_value: str, *args: Any, **kwargs: Any) -> Callable[[Any], Any]:
-        """Decorador dummy para un límite compartido."""
+        """Decorador dummy para límite compartido."""
 
         def decorator(f: Any) -> Any:
             return f
@@ -45,7 +40,7 @@ class DummyLimiter:
 
 
 def _crear_limiter() -> Any:
-    """Instancia el limitador adecuado según la disponibilidad de Flask-Limiter."""
+    """Instancia el limitador según la disponibilidad de Flask-Limiter."""
     if _has_limiter:
         return Limiter(
             key_func=get_remote_address,
@@ -62,17 +57,15 @@ def init_limiter(app: Flask) -> None:
     if not _has_limiter:
         return
 
-    # El limitador sólo es necesario cuando no está habilitado el modo escritorio (en la nube)
+    from cacao_accounting.config import TESTING_MODE
     from cacao_accounting.runtime_mode import is_truthy
 
     if "MODO_ESCRITORIO" in app.config:
         desktop = is_truthy(app.config.get("MODO_ESCRITORIO"))
     else:
         desktop = is_desktop_mode()
-    enabled = not desktop
 
-    if app.config.get("TESTING"):
-        enabled = False
+    enabled = not desktop and not TESTING_MODE
 
     app.config["RATELIMIT_ENABLED"] = enabled
 
