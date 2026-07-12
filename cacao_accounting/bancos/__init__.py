@@ -1949,4 +1949,4 @@ def bancos_pago_cancel(payment_id: str):
 
 
 # Import split routes/modules
-import cacao_accounting.bancos.cash_forecast
+from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402

@@ -1,14 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-import os
-import sys
-from datetime import date, timedelta
+import io
+from datetime import date
 from decimal import Decimal
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_func import init_test_db
 from cacao_accounting import create_app
@@ -17,12 +12,6 @@ from cacao_accounting.database import (
     CashForecast,
     CashForecastEntry,
     FiscalYear,
-    User,
-    Entity,
-    Accounts,
-    GLEntry,
-    SalesInvoice,
-    PurchaseInvoice,
 )
 from cacao_accounting.bancos.cash_forecast_service import (
     generate_periods,
@@ -296,7 +285,9 @@ def test_routes_list_and_details():
 
         with test_app.app_context():
             # Verify entry was saved
-            entry = db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).first()
+            entry = (
+                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).first()
+            )
             assert entry is not None
             assert entry.concept == "Cobro Extraordinario"
             assert entry.amount == Decimal("800.00")
@@ -332,6 +323,96 @@ def test_routes_list_and_details():
                 db.session.commit()
 
 
+def test_routes_import_entries():
+    """Test importing manual entries from CSV and XLSX file."""
+    with test_app.test_client() as client:
+        # Simulate login
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        with test_app.app_context():
+            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            # Create a test forecast in draft mode
+            forecast = CashForecast(
+                version="IMPORT-TEST",
+                description="Import test",
+                fiscal_year_id=fy.id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            db.session.add(forecast)
+            db.session.commit()
+            forecast_id = forecast.id
+
+        # 1. Test CSV Import
+        csv_data = (
+            "type,concept,currency,amount,estimated_date,notes\n"
+            "Income,Inyeccion Capital,NIO,25000.00,2026-05-15,Socio A\n"
+            "Expense,Prestamo Banco,NIO,5000.00,2026-05-20,Cuota 1"
+        )
+        data = {"file": (io.BytesIO(csv_data.encode("utf-8")), "test_forecast.csv")}
+        response = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/import",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Se importaron 2 proyecciones manuales con" in response.data
+
+        with test_app.app_context():
+            entries = (
+                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
+            )
+            assert len(entries) == 2
+            # Check fields
+            entries_by_concept = {e.concept: e for e in entries}
+            assert "Inyeccion Capital" in entries_by_concept
+            assert entries_by_concept["Inyeccion Capital"].amount == Decimal("25000.00")
+            assert "Prestamo Banco" in entries_by_concept
+            assert entries_by_concept["Prestamo Banco"].amount == Decimal("5000.00")
+
+        # 2. Test XLSX Import
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        # Write headers
+        ws.append(["type", "concept", "currency", "amount", "estimated_date", "notes"])
+        ws.append(["Income", "Excel Income", "NIO", 12000.00, "2026-06-01", "From Excel"])
+
+        file_stream = io.BytesIO()
+        wb.save(file_stream)
+        file_stream.seek(0)
+
+        data_xlsx = {"file": (file_stream, "test_forecast.xlsx")}
+        response = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/import",
+            data=data_xlsx,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Se importaron 1 proyecciones manuales con" in response.data
+
+        with test_app.app_context():
+            entries = (
+                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
+            )
+            # 2 from CSV + 1 from XLSX = 3
+            assert len(entries) == 3
+            xlsx_entry = [e for e in entries if e.concept == "Excel Income"][0]
+            assert xlsx_entry.amount == Decimal("12000.00")
+            assert xlsx_entry.estimated_date == date(2026, 6, 1)
+
+        # Clean up
+        with test_app.app_context():
+            forecast_del = db.session.get(CashForecast, forecast_id)
+            if forecast_del:
+                db.session.delete(forecast_del)
+                db.session.commit()
+
+
 def test_desktop_mode_redirect(monkeypatch):
     """Test that if in desktop mode, the routes redirect with warning."""
     with test_app.test_client() as client:
@@ -340,10 +421,13 @@ def test_desktop_mode_redirect(monkeypatch):
 
         # Mock is_desktop_mode to return True
         import sys
+
         cf_module = sys.modules["cacao_accounting.bancos.cash_forecast"]
         monkeypatch.setattr(cf_module, "is_desktop_mode", lambda: True)
 
         response = client.get("/cash_management/cash-forecast/list", follow_redirects=True)
         assert response.status_code == 200
         # Check that we redirected back to bancos dashboard and warning is flashed
-        assert b"Proyecci\xc3\xb3n de flujo de caja no disponible en modo DESKTOP" in response.data
+        assert (
+            b"Proyecci\xc3\xb3n de flujo de caja no disponible en modo DESKTOP" in response.data
+        )

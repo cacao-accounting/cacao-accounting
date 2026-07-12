@@ -103,7 +103,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         .filter(
             Accounts.entity == company,
             Accounts.account_type.in_(["cash", "bank"]),
-            Accounts.enabled == True,
+            Accounts.enabled.is_(True),
         )
         .all()
     )
@@ -117,8 +117,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             GLEntry.company == company,
             GLEntry.account_id.in_(account_ids),
             GLEntry.posting_date < first_start,
-            GLEntry.is_cancelled == False,
-            GLEntry.is_reversal == False,
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
         )
         init_val = bal_query.scalar()
         if init_val is not None:
@@ -182,8 +182,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                     GLEntry.posting_date >= start_date,
                     GLEntry.posting_date <= limit_end,
                     GLEntry.party_type == "customer",
-                    GLEntry.is_cancelled == False,
-                    GLEntry.is_reversal == False,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
                 )
                 .scalar()
             )
@@ -199,8 +199,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                     GLEntry.posting_date >= start_date,
                     GLEntry.posting_date <= limit_end,
                     GLEntry.party_type == "supplier",
-                    GLEntry.is_cancelled == False,
-                    GLEntry.is_reversal == False,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
                 )
                 .scalar()
             )
@@ -219,8 +219,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                         GLEntry.party_type.is_(None),
                         ~GLEntry.party_type.in_(["customer", "supplier"]),
                     ),
-                    GLEntry.is_cancelled == False,
-                    GLEntry.is_reversal == False,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
                 )
                 .scalar()
             )
