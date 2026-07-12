@@ -41,6 +41,7 @@ from cacao_accounting.setup.repository import (
 SETUP_LANGUAGE = "SETUP_LANGUAGE"
 SETUP_COUNTRY = "SETUP_COUNTRY"
 SETUP_CURRENCY = "SETUP_CURRENCY"
+SETUP_TIMEZONE = "SETUP_TIMEZONE"
 SETUP_COMPLETED = "SETUP_COMPLETE"
 SETUP_ENTITY = "SETUP_DEFAULT_ENTITY"
 CATALOG_FILE_ALIASES = {
@@ -126,17 +127,23 @@ def save_language(language: str) -> None:
     database.session.commit()
 
 
-def save_regional_settings(country: str, currency: str) -> None:
-    """Guarda los valores regionales de país y moneda."""
+def save_regional_settings(country: str, currency: str, timezone: str) -> None:
+    """Guarda los valores regionales de país, moneda y zona horaria."""
     from cacao_accounting.database import Currency
+    import zoneinfo
 
     selected_currency = database.session.execute(
         database.select(Currency).filter_by(code=currency, active=True)
     ).scalar_one_or_none()
     if selected_currency is None:
         raise ValueError("La moneda seleccionada no existe o no está activa.")
+
+    if timezone not in zoneinfo.available_timezones():
+        raise ValueError("La zona horaria seleccionada no es válida.")
+
     set_setup_value(SETUP_COUNTRY, country)
     set_setup_value(SETUP_CURRENCY, currency)
+    set_setup_value(SETUP_TIMEZONE, timezone)
     database.session.commit()
 
 
@@ -156,6 +163,7 @@ def get_setup_configuration() -> dict[str, Any]:
         "idioma": normalize_language(get_setup_value(SETUP_LANGUAGE, "es")),
         "pais": get_setup_value(SETUP_COUNTRY, "NI"),
         "moneda": get_setup_value(SETUP_CURRENCY, "NIO"),
+        "zona_horaria": get_setup_value(SETUP_TIMEZONE, "America/Managua"),
     }
 
 
