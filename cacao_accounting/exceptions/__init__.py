@@ -7,6 +7,8 @@
 class CacaoAccountingException(Exception):
     """Clase base para generar errores locales."""
 
+    _safe_for_display = True
+
 
 class DataError(CacaoAccountingException):
     """Clase para generar errores de datos."""
@@ -33,6 +35,10 @@ def flash_error(exc, category="danger"):
 
     This function logs the full exception safely, but displays a generic message
     unless the exception is a known safe domain/validation exception.
+
+    Exceptions are considered safe for display when they define the class attribute
+    ``_safe_for_display = True``. Built-in exception types are checked by name as
+    a fallback since they cannot be modified directly.
     """
     from flask import flash
     from cacao_accounting.logs import log
@@ -40,20 +46,20 @@ def flash_error(exc, category="danger"):
 
     log.error("Error en operación: {}", exc)
 
-    safe_exception_names = {
-        "ValueError",
-        "ArithmeticError",
-        "CacaoAccountingException",
-        "RecurringJournalError",
-        "BudgetError",
-        "QueryToolError",
-        "PrintingError",
-        "HTTPException",
-    }
+    _SAFE_BUILTIN_NAMES = frozenset(
+        {
+            "ValueError",
+            "ArithmeticError",
+            "HTTPException",
+        }
+    )
 
     is_safe = False
     for base in type(exc).__mro__:
-        if base.__name__ in safe_exception_names:
+        if getattr(base, "_safe_for_display", False):
+            is_safe = True
+            break
+        if base.__name__ in _SAFE_BUILTIN_NAMES:
             is_safe = True
             break
 

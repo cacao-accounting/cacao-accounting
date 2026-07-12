@@ -105,7 +105,7 @@ def token_requerido(f):  # pragma: no cover
             from flask_login import login_user
 
             if not current_user or not current_user.is_authenticated:
-                login_user(identidad)
+                login_user(identidad, remember=False, force=False)
 
         except Exception as e:
             return {
