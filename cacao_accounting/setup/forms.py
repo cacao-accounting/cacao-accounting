@@ -36,6 +36,7 @@ class SetupRegionalForm(FlaskForm):
 
     pais = SelectField("País predeterminado", choices=COUNTRY_CHOICES, validators=[DataRequired()])
     moneda = SelectField("Moneda predeterminada", choices=[], validators=[DataRequired()])
+    zona_horaria = SelectField("Zona horaria", choices=[], validators=[DataRequired()])
     step = HiddenField(default="2")
 
     def __init__(self, *args, **kwargs):
@@ -46,8 +47,11 @@ class SetupRegionalForm(FlaskForm):
         texts = setup_texts(language)
         self.pais.label.text = texts["country"]
         self.moneda.label.text = texts["currency"]
+        self.zona_horaria.label.text = texts.get("timezone", "Zona horaria")
         self.pais.choices = country_choices(language)
         self.moneda.choices = currencies or []
+        from cacao_accounting.setup.catalogs import timezone_choices
+        self.zona_horaria.choices = timezone_choices()
 
 
 class SetupCompanyForm(FlaskForm):
