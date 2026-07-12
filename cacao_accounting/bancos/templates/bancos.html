@@ -93,12 +93,6 @@
         <a href="{{ url_for('bancos.bancos_conciliacion_facturas_pagos') }}">{{ _("Conciliación Facturas/Pagos") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
-      {% if not MODO_ESCRITORIO %}
-      <li>
-        <a href="{{ url_for('bancos.cash_forecast_list') }}">{{ _("Pronóstico de Flujo de Caja") }}</a>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
-      </li>
-      {% endif %}
       {% else %}
       <li class="ca-no-access">
         <span>Entradas de Pago</span>
@@ -113,7 +107,37 @@
     </ul>
   </div>
 
-  {# ── Columna 3: Reportes ──────────────────────────── #}
+  {# ── Columna 3: Proyección de Flujo de Caja ───────── #}
+  {% if not MODO_ESCRITORIO %}
+  <div class="ca-module-card">
+    <h5><i class="bi bi-graph-up-arrow"></i> Proyección de Flujo de Caja</h5>
+    <ul class="ca-module-links">
+
+      {% if acceso.autorizado %}
+      <li>
+        <a href="{{ url_for('bancos.cash_forecast_list') }}">Flujo de caja (Year to Day) Real, Periodo Corriente, Proyección</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.cash_forecast_compare') }}">Comparativo de real versus presupuesto de flujo de caja</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.cash_forecast_manual_entries') }}">Forecast de Entradas manuales</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Proyección de Flujo de Caja</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Columna 4: Reportes ──────────────────────────── #}
   <div class="ca-module-card">
     <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
     <ul class="ca-module-links">

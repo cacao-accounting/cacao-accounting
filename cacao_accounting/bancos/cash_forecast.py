@@ -294,6 +294,9 @@ def cash_forecast_entry_add(forecast_id):
         database.session.rollback()
         flash(f"Error al agregar proyección: {str(exc)}", "danger")
 
+    next_url = request.args.get("next")
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
     return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
 
 
@@ -318,6 +321,9 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
         database.session.commit()
         flash("Proyección manual eliminada correctamente.", "success")
 
+    next_url = request.args.get("next")
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
     return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
 
 
@@ -433,6 +439,9 @@ def cash_forecast_entry_import(forecast_id):
         database.session.rollback()
         flash(f"Error al importar archivo: {str(exc)}", "danger")
 
+    next_url = request.args.get("next")
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
     return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
 
 
@@ -485,3 +494,106 @@ def cash_forecast_compare():
         comparison=comparison,
         titulo="Comparación de Escenarios de Flujo de Caja",
     )
+
+
+@bancos.route("/cash-forecast/manual-entries", methods=["GET"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_manual_entries():
+    """Vista dedicada para gestionar el Forecast de Entradas manuales."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    company = request.args.get("company")
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    if company in (None, "") and companies:
+        for code, name in companies:
+            if code:
+                company = code
+                break
+
+    # Obtener todos los forecast de esta compañía
+    forecasts = (
+        database.session.query(CashForecast)
+        .filter_by(company=company)
+        .order_by(CashForecast.version.asc())
+        .all()
+    )
+
+    selected_forecast_id = request.args.get("forecast_id")
+    # Default to first forecast if not specified
+    if not selected_forecast_id and forecasts:
+        selected_forecast_id = forecasts[0].id
+
+    selected_forecast = None
+    entries = []
+    if selected_forecast_id:
+        selected_forecast = database.session.get(CashForecast, selected_forecast_id)
+        if selected_forecast:
+            entries = (
+                database.session.query(CashForecastEntry)
+                .filter_by(forecast_id=selected_forecast.id)
+                .order_by(CashForecastEntry.estimated_date.asc())
+                .all()
+            )
+
+    currencies = obtener_lista_monedas()
+
+    return render_template(
+        "bancos/cash_forecast_entradas.html",
+        companies=companies,
+        selected_company=company,
+        forecasts=forecasts,
+        selected_forecast=selected_forecast,
+        entries=entries,
+        currencies=currencies,
+        titulo="Forecast de Entradas manuales",
+    )
+
+
+@bancos.route("/cash-forecast/<forecast_id>/entry/<entry_id>/edit", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def cash_forecast_entry_edit(forecast_id, entry_id):
+    """Edita un movimiento proyectado manual del pronóstico."""
+    if _check_desktop_mode():
+        return redirect(url_for("bancos.bancos_"))
+
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    if forecast.status != "Draft":
+        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
+        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+
+    entry = database.session.get(CashForecastEntry, entry_id)
+    if not entry or entry.forecast_id != forecast.id:
+        abort(404)
+
+    try:
+        type_ = request.form.get("type")
+        concept = request.form.get("concept", "").strip()
+        currency = request.form.get("currency")
+        amount = Decimal(request.form.get("amount", "0"))
+        estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
+        notes = request.form.get("notes", "").strip()
+
+        if not type_ or not concept or not currency or amount <= 0 or not estimated_date:
+            flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
+        else:
+            entry.type = type_
+            entry.concept = concept
+            entry.currency = currency
+            entry.amount = amount
+            entry.estimated_date = estimated_date
+            entry.notes = notes
+            database.session.commit()
+            flash("Proyección manual actualizada correctamente.", "success")
+    except Exception as exc:
+        database.session.rollback()
+        flash(f"Error al actualizar la proyección: {str(exc)}", "danger")
+
+    next_url = request.args.get("next")
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
+    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))

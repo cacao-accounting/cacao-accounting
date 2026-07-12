@@ -3,6 +3,9 @@
 
 import pytest
 from decimal import Decimal
+from cacao_accounting.runtime_mode import is_desktop_mode
+
+pytestmark = pytest.mark.skipif(is_desktop_mode(), reason="Gestión de presupuesto no disponible en modo DESKTOP")
 from types import SimpleNamespace
 from cacao_accounting import create_app
 from cacao_accounting.contabilidad.budget_service import BudgetService, BudgetError
