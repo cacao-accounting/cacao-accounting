@@ -294,6 +294,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
         if self.id:
             try:
                 from cacao_accounting.cache import cache
+
                 cached_token = cache.get(f"jwt_token:{self.id}")
                 if cached_token:
                     return str(cached_token)
@@ -308,6 +309,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
         if self.id:
             try:
                 from cacao_accounting.cache import cache
+
                 if value is None:
                     cache.delete(f"jwt_token:{self.id}")
                 else:

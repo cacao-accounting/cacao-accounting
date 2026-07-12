@@ -71,6 +71,9 @@ def init_limiter(app: Flask) -> None:
         desktop = is_desktop_mode()
     enabled = not desktop
 
+    if app.config.get("TESTING"):
+        enabled = False
+
     app.config["RATELIMIT_ENABLED"] = enabled
 
     if enabled:
