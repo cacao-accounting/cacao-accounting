@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+import os
 from collections import namedtuple
 
 "".encode("utf-8"),
@@ -7,6 +8,8 @@ Route = namedtuple(
     "Route",
     ["url", "text"],
 )
+
+desktop_mode = os.environ.get("CACAO_ACCOUNTING_DESKTOP") == "True" or os.environ.get("CACAO_ACCOUNTING_DESKTOP") == "true"
 
 static_rutes = [
     Route(
@@ -32,12 +35,13 @@ static_rutes = [
             ),
             "Configuración del Módulo".encode("utf-8"),
             "Registros del Módulo".encode("utf-8"),
+            "Reportes del Módulo".encode("utf-8"),
+            "Entidades".encode("utf-8"),
+        ] + ([
             "Presupuesto".encode("utf-8"),
             "Administrar Presupuestos".encode("utf-8"),
             "Real versus Presupuesto".encode("utf-8"),
-            "Reportes del Módulo".encode("utf-8"),
-            "Entidades".encode("utf-8"),
-        ],
+        ] if not desktop_mode else []),
     ),
     Route(
         url="/accounting/entity/list",

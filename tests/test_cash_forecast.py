@@ -18,6 +18,7 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 # Create custom test app
 test_app = create_app(
@@ -236,6 +237,7 @@ def test_forecast_comparison():
         db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_routes_list_and_details():
     """Test HTTP routes for listing and displaying forecast details."""
     with test_app.test_client() as client:
@@ -323,6 +325,7 @@ def test_routes_list_and_details():
                 db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_routes_import_entries():
     """Test importing manual entries from CSV and XLSX file."""
     with test_app.test_client() as client:
@@ -430,4 +433,129 @@ def test_desktop_mode_redirect(monkeypatch):
         # Check that we redirected back to bancos dashboard and warning is flashed
         assert (
             b"Proyecci\xc3\xb3n de flujo de caja no disponible en modo DESKTOP" in response.data
+        )
+
+
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
+def test_edit_manual_entry_route():
+    """Test that editing a manual entry via its dedicated POST endpoint works."""
+    with test_app.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        with test_app.app_context():
+            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            forecast = CashForecast(
+                version="EDIT-ROUTE-TEST",
+                description="Edit test",
+                fiscal_year_id=fy.id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            db.session.add(forecast)
+            db.session.flush()
+
+            entry = CashForecastEntry(
+                forecast_id=forecast.id,
+                type="Income",
+                concept="Original Concept",
+                currency="NIO",
+                amount=Decimal("100.00"),
+                estimated_date=date(2026, 5, 10),
+            )
+            db.session.add(entry)
+            db.session.commit()
+            forecast_id = forecast.id
+            entry_id = entry.id
+
+        # Perform the edit via POST
+        response = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/{entry_id}/edit",
+            data={
+                "type": "Expense",
+                "concept": "Updated Concept",
+                "currency": "NIO",
+                "amount": "250.00",
+                "estimated_date": "2026-05-12",
+                "notes": "Edited notes",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        with test_app.app_context():
+            updated_entry = db.session.get(CashForecastEntry, entry_id)
+            assert updated_entry.type == "Expense"
+            assert updated_entry.concept == "Updated Concept"
+            assert updated_entry.amount == Decimal("250.00")
+            assert updated_entry.estimated_date == date(2026, 5, 12)
+            assert updated_entry.notes == "Edited notes"
+
+            # Clean up
+            db.session.delete(updated_entry)
+            db.session.delete(db.session.get(CashForecast, forecast_id))
+            db.session.commit()
+
+
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
+def test_manual_entries_dashboard_route():
+    """Test that the new /cash-forecast/manual-entries route renders and list entries."""
+    with test_app.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        with test_app.app_context():
+            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            forecast = CashForecast(
+                version="DASHBOARD-TEST",
+                description="Dashboard list test",
+                fiscal_year_id=fy.id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            db.session.add(forecast)
+            db.session.flush()
+
+            entry = CashForecastEntry(
+                forecast_id=forecast.id,
+                type="Income",
+                concept="Visible Concept",
+                currency="NIO",
+                amount=Decimal("150.00"),
+                estimated_date=date(2026, 6, 12),
+            )
+            db.session.add(entry)
+            db.session.commit()
+            forecast_id = forecast.id
+            entry_id = entry.id
+
+        response = client.get(f"/cash_management/cash-forecast/manual-entries?company=cacao&forecast_id={forecast_id}")
+        assert response.status_code == 200
+        assert b"Forecast de Entradas manuales" in response.data
+        assert b"Visible Concept" in response.data
+
+        # Clean up
+        with test_app.app_context():
+            db.session.delete(db.session.get(CashForecastEntry, entry_id))
+            db.session.delete(db.session.get(CashForecast, forecast_id))
+            db.session.commit()
+
+
+def test_budget_desktop_mode_redirect(monkeypatch):
+    """Test that if in desktop mode, the budget routes redirect with warning."""
+    with test_app.test_client() as client:
+        # Login
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        # Mock is_desktop_mode to return True
+        import sys
+
+        bp_module = sys.modules["cacao_accounting.contabilidad.presupuesto"]
+        monkeypatch.setattr(bp_module, "is_desktop_mode", lambda: True)
+
+        response = client.get("/accounting/presupuestos/list", follow_redirects=True)
+        assert response.status_code == 200
+        # Check that we redirected back to contabilidad dashboard and warning is flashed
+        assert (
+            b"Gesti\xc3\xb3n de presupuesto no disponible en modo DESKTOP" in response.data
         )
