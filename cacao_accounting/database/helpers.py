@@ -88,6 +88,7 @@ def entidades_creadas():
             return False
 
     except Exception:  # noqa: BLE001
+        database.session.rollback()
         return False
 
 
@@ -104,15 +105,19 @@ def usuarios_creados():
             return False
 
     except OperationalError:
+        database.session.rollback()
         return False
 
     except TypeError:
+        database.session.rollback()
         return False
 
     except InterfaceError:
+        database.session.rollback()
         return False
 
     except ProgrammingError:
+        database.session.rollback()
         return False
 
 

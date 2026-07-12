@@ -776,7 +776,7 @@ class ExternalCounterAuditLog(database.Model, BaseTabla):  # type: ignore[name-d
     external_counter_id = database.Column(
         database.String(26),
         database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     previous_value = database.Column(database.Integer(), nullable=False)
@@ -806,13 +806,13 @@ class SeriesExternalCounterMap(database.Model, BaseTabla):  # type: ignore[name-
     naming_series_id = database.Column(
         database.String(26),
         database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     external_counter_id = database.Column(
         database.String(26),
         database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     priority = database.Column(database.Integer(), default=0, nullable=False)
@@ -834,7 +834,7 @@ class ExternalNumberUsage(database.Model, BaseTabla):  # type: ignore[name-defin
     external_counter_id = database.Column(
         database.String(26),
         database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     # Numero externo como string para soportar prefijos alfanumericos
@@ -2088,7 +2088,7 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     delivery_note_id = database.Column(
         database.String(26),
         database.ForeignKey("delivery_note.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     item_code = database.Column(
