@@ -47,7 +47,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -v -s --exitfirst --slow=True
+          CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest  -qq -s --exitfirst --slow=True --tb=line
       - name: Test Smart Select JavaScript
         working-directory: cacao_accounting/static
         run: npm test
@@ -120,7 +120,7 @@ jobs:
           sudo -u postgres psql -c "ALTER ROLE cacao CREATEDB;"
           sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao;"
           sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao;"
-          SECRET_KEY=ASD123klj+aAddS CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl db init --seed
+          SECRET_KEY=ASD123klj+aAddS LOGURU_LEVEL=WARNING CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl db init --seed
 
   desktop:
     needs: build
@@ -150,11 +150,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CACAO_TEST: "True"
-          LOGURU_LEVEL: "WARNING"
+          LOGURU_LEVEL: "ERROR"
           SECRET_KEY: "ASD123kljaAddS"
           CACAO_ACCOUNTING_DESKTOP: "True"
         run: |
-          python -m pytest -v -s --exitfirst --slow=True
+          python -m pytest -qq -s --exitfirst --slow=True --tb=line
 
   coverage:
     needs: build
@@ -172,6 +172,6 @@ jobs:
           python -m pip install -e .[cloud]
       - name: Test with pytest
         run: |
-          SECRET_KEY=ASD123kljaAddS CACAO_TEST=True python -m pytest -v -s --slow=True --cov=cacao_accounting
+          SECRET_KEY=ASD123kljaAddS LOGURU_LEVEL=ERROR CACAO_TEST=True python -m pytest -qq -s --slow=True --cov=cacao_accounting
       - name: Coveralls
         uses: coverallsapp/github-action@v2
