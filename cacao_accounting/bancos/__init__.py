@@ -38,6 +38,7 @@ from cacao_accounting.database import (
     Accounts,
     Bank,
     BankAccount,
+    BankAccountNumberingConfig,
     BankMatchingRule,
     BankTransaction,
     DocumentRelation,
@@ -63,7 +64,11 @@ from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.service import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    PAYMENT_TYPE_TO_ENTITY_TYPE,
+    assign_document_identifier,
+)
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
@@ -226,6 +231,71 @@ def _payment_numbering_defaults(bank_account_id: str | None) -> tuple[str | None
         return None, None
 
     return bank_account.default_naming_series_id, bank_account.default_external_counter_id
+
+
+# --------------------------------------------------------------------------------------
+# Nuevo sistema de configuracion de numeracion por tipo de transaccion
+# --------------------------------------------------------------------------------------
+
+
+def _payment_type_to_entity_type(payment_type: str) -> str:
+    """Retorna el entity_type de NamingSeries para un tipo de transaccion bancaria."""
+    return PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry")
+
+
+def _get_default_entity_type_for_payment_type() -> dict[str, str]:
+    """Retorna el mapeo de payment_type a entity_type."""
+    return dict(PAYMENT_TYPE_TO_ENTITY_TYPE)
+
+
+PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
+
+
+def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
+    """Crea configuraciones predeterminadas de numeracion para cada tipo de transaccion.
+
+    Usa los defaults legacy (default_naming_series_id, default_external_counter_id)
+    como valores iniciales para todos los tipos de transaccion.
+    """
+    for payment_type in PAYMENT_TYPES:
+        existing = database.session.execute(
+            database.select(BankAccountNumberingConfig).filter_by(
+                bank_account_id=bank_account.id,
+                payment_type=payment_type,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            continue
+        entity_type = _payment_type_to_entity_type(payment_type)
+        naming_series_id = bank_account.default_naming_series_id
+        if naming_series_id:
+            series = database.session.get(NamingSeries, naming_series_id)
+            if series and series.entity_type == "payment_entry":
+                naming_series_id = None
+        use_external = payment_type in ("pay", "receive")
+        config = BankAccountNumberingConfig(
+            bank_account_id=bank_account.id,
+            payment_type=payment_type,
+            naming_series_id=naming_series_id,
+            use_external_counter=use_external,
+            external_counter_id=bank_account.default_external_counter_id if use_external else None,
+        )
+        database.session.add(config)
+
+
+def _resolve_bank_account_numbering_config(
+    bank_account_id: str | None,
+    payment_type: str | None,
+) -> BankAccountNumberingConfig | None:
+    """Resuelve la configuracion de numeracion para una cuenta y tipo de transaccion."""
+    if not bank_account_id or not payment_type:
+        return None
+    return database.session.execute(
+        database.select(BankAccountNumberingConfig).filter_by(
+            bank_account_id=bank_account_id,
+            payment_type=payment_type,
+        )
+    ).scalar_one_or_none()
 
 
 def _warn_duplicate_payment(payment):
@@ -831,6 +901,7 @@ def bancos_cuenta_bancaria_nuevo():
         database.session.add(cuenta)
         database.session.flush()
         _ensure_bank_account_counter_mapping(cuenta)
+        _ensure_bank_account_numbering_config(cuenta)
         database.session.commit()
         return redirect("/cash_management/bank-account/list")
     return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
@@ -847,7 +918,117 @@ def bancos_cuenta_bancaria(account_id):
     if not registro:
         abort(404)
     titulo = registro.account_name + " - " + APPNAME
-    return render_template("bancos/banco_cuenta.html", registro=registro, titulo=titulo)
+    configs = (
+        database.session.execute(
+            database.select(BankAccountNumberingConfig)
+            .filter_by(bank_account_id=account_id)
+            .order_by(BankAccountNumberingConfig.payment_type)
+        )
+        .scalars()
+        .all()
+    )
+    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
+
+    numbering_configs = []
+    for payment_type in PAYMENT_TYPES:
+        cfg = next((c for c in configs if c.payment_type == payment_type), None)
+        entity_type = ENTITY_MAP.get(payment_type, "payment_entry")
+        if cfg:
+            numbering_configs.append(
+                {
+                    "payment_type": cfg.payment_type,
+                    "naming_series_id": cfg.naming_series_id,
+                    "use_external_counter": cfg.use_external_counter,
+                    "external_counter_id": cfg.external_counter_id,
+                    "entity_type": entity_type,
+                }
+            )
+        else:
+            numbering_configs.append(
+                {
+                    "payment_type": payment_type,
+                    "naming_series_id": None,
+                    "use_external_counter": payment_type in ("pay", "receive"),
+                    "external_counter_id": None,
+                    "entity_type": entity_type,
+                }
+            )
+    return render_template("bancos/banco_cuenta.html", registro=registro, titulo=titulo, numbering_configs=numbering_configs)
+
+
+@bancos.route("/bank-account/<account_id>/numbering-config", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnValue:
+    """Gestiona la configuracion de numeracion por tipo de transaccion."""
+    bank_account = database.session.get(BankAccount, account_id)
+    if not bank_account:
+        abort(404)
+
+    if request.method == "POST":
+        data = request.get_json(force=True) or {}
+        configs = data.get("configs") if isinstance(data, dict) else None
+        if configs and isinstance(configs, list):
+            for entry in configs:
+                if not isinstance(entry, dict):
+                    continue
+                payment_type = entry.get("payment_type")
+                if payment_type not in PAYMENT_TYPES:
+                    continue
+                config = database.session.execute(
+                    database.select(BankAccountNumberingConfig).filter_by(
+                        bank_account_id=bank_account.id,
+                        payment_type=payment_type,
+                    )
+                ).scalar_one_or_none()
+                if not config:
+                    config = BankAccountNumberingConfig(
+                        bank_account_id=bank_account.id,
+                        payment_type=payment_type,
+                    )
+                    database.session.add(config)
+                config.naming_series_id = entry.get("naming_series_id") or None
+                config.use_external_counter = bool(entry.get("use_external_counter"))
+                config.external_counter_id = entry.get("external_counter_id") or None if config.use_external_counter else None
+            database.session.commit()
+        return {"status": "ok"}
+
+    configs = (
+        database.session.execute(
+            database.select(BankAccountNumberingConfig)
+            .filter_by(bank_account_id=bank_account.id)
+            .order_by(BankAccountNumberingConfig.payment_type)
+        )
+        .scalars()
+        .all()
+    )
+    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
+
+    result = []
+    for payment_type in PAYMENT_TYPES:
+        cfg = next((c for c in configs if c.payment_type == payment_type), None)
+        entity_type = ENTITY_MAP.get(payment_type, "payment_entry")
+        if cfg:
+            result.append(
+                {
+                    "payment_type": cfg.payment_type,
+                    "naming_series_id": cfg.naming_series_id,
+                    "use_external_counter": cfg.use_external_counter,
+                    "external_counter_id": cfg.external_counter_id,
+                    "entity_type": entity_type,
+                }
+            )
+        else:
+            result.append(
+                {
+                    "payment_type": payment_type,
+                    "naming_series_id": None,
+                    "use_external_counter": payment_type in ("pay", "receive"),
+                    "external_counter_id": None,
+                    "entity_type": entity_type,
+                }
+            )
+    return {"configs": result}
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
@@ -1563,16 +1744,21 @@ def _create_payment_from_request():
     try:
         payload = _payment_payload_from_request()
         payment, amount, mode_of_payment = _build_payment_from_payload(payload)
-        default_series_id, default_counter_id = _payment_numbering_defaults(payment.bank_account_id)
-        naming_series_id, external_counter_id = _payment_identifier_inputs(
-            payload=payload,
-            mode_of_payment=mode_of_payment,
-            default_series_id=default_series_id,
-            default_counter_id=default_counter_id,
-        )
+        payment_type = payment.payment_type or payload.get("payment_type") or "pay"
+        config = _resolve_bank_account_numbering_config(payment.bank_account_id, payment_type)
+        entity_type = _payment_type_to_entity_type(payment_type)
+        naming_series_id = cast(str | None, payload.get("naming_series_id") or (config.naming_series_id if config else None))
+        external_counter_id: str | None = None
+        if config and config.use_external_counter:
+            if mode_of_payment == "check":
+                external_counter_id = cast(
+                    str | None, payload.get("external_counter_id") or config.external_counter_id
+                )
+        elif mode_of_payment == "check":
+            external_counter_id = cast(str | None, payload.get("external_counter_id"))
         assign_document_identifier(
             document=payment,
-            entity_type="payment_entry",
+            entity_type=entity_type,
             posting_date_raw=payload.get("posting_date"),
             naming_series_id=naming_series_id,
             external_counter_id=external_counter_id,
