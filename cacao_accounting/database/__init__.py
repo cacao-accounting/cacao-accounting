@@ -2260,6 +2260,35 @@ class BankAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
+class BankAccountNumberingConfig(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Configuracion de numeracion por tipo de transaccion para una cuenta bancaria.
+
+    Permite configurar independientemente la serie interna y el contador externo
+    para cada tipo de transaccion bancaria (pago, cobro, transferencia, notas).
+    """
+
+    __tablename__ = "bank_account_numbering_config"
+    __table_args__ = (
+        database.UniqueConstraint("bank_account_id", "payment_type", name="uq_bank_numbering_config"),
+    )
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    payment_type = database.Column(database.String(30), nullable=False)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    use_external_counter = database.Column(database.Boolean(), default=False, nullable=False)
+    external_counter_id = database.Column(
+        database.String(26),
+        database.ForeignKey(EXTERNAL_COUNTER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+
+
 class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     """Entrada de pago."""
 
