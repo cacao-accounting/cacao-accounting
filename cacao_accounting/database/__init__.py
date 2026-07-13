@@ -2524,6 +2524,14 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     """Comprobante contable manual."""
 
     __tablename__ = "comprobante_contable"
+
+    @property
+    def total(self) -> Decimal:
+        """Suma de los débitos del comprobante contable para aprobación."""
+        lines = database.session.execute(
+            select(ComprobanteContableDetalle).filter_by(transaction_id=self.id)
+        ).scalars().all()
+        return sum((Decimal(str(line.value)) for line in lines if line.value > 0), Decimal("0"))
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)
@@ -4263,3 +4271,95 @@ class CashForecastEntry(database.Model, BaseTabla):  # type: ignore[name-defined
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     estimated_date = database.Column(database.Date(), nullable=False)
     notes = database.Column(database.Text(), nullable=True)
+
+
+class ApprovalMatrix(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Matriz de aprobación de documentos configurada por compañía."""
+
+    __tablename__ = "approval_matrix"
+
+    company_id = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    role_id = database.Column(
+        database.String(26),
+        database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    min_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    max_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    approval_level = database.Column(database.Integer(), nullable=False, default=1)
+    enabled = database.Column(database.Boolean(), default=True, nullable=False)
+
+
+class ApprovalRequest(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Solicitud de aprobación para un documento transaccional."""
+
+    __tablename__ = "approval_request"
+
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    company_id = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    requested_by = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    current_level = database.Column(database.Integer(), nullable=False, default=1)
+    required_level = database.Column(database.Integer(), nullable=False, default=1)
+    status = database.Column(database.String(50), nullable=False, default="Pending Approval")
+    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+
+
+class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Registro de acciones tomadas sobre una solicitud de aprobación."""
+
+    __tablename__ = "approval_action"
+
+    approval_request_id = database.Column(
+        database.String(26),
+        database.ForeignKey("approval_request.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    approved_by = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    role_id = database.Column(
+        database.String(26),
+        database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    rule_id = database.Column(
+        database.String(26),
+        database.ForeignKey("approval_matrix.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    limit_allowed = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    document_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    action = database.Column(database.String(50), nullable=False)  # "approve", "reject"
+    comments = database.Column(database.Text(), nullable=True)
+    level = database.Column(database.Integer(), nullable=True)
+    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
