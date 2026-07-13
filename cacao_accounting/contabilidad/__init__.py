@@ -3024,12 +3024,30 @@ def contabilizar_comprobante(identifier: str):
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+    from cacao_accounting.approval_engine import ApprovalEngine
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.autorizar:
         abort(403)
 
+    journal = database.session.get(ComprobanteContable, identifier)
+    if not journal:
+        abort(404)
+
     try:
+        if ApprovalEngine.is_enabled(journal.entity):
+            if ApprovalEngine.can_approve(journal, current_user):
+                ApprovalEngine.request_approval(journal)
+                ApprovalEngine.approve(journal, current_user, "Aprobado por el remitente")
+                database.session.commit()
+                flash("Comprobante contable aprobado.", "success")
+            else:
+                ApprovalEngine.request_approval(journal)
+                journal.status = "Pending Approval"
+                database.session.commit()
+                flash("Comprobante contable enviado para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+
         submit_journal(identifier)
     except JournalValidationError as exc:
         flash_error(exc)
@@ -3070,12 +3088,23 @@ def anular_comprobante(identifier: str):
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, cancel_submitted_journal
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+    from cacao_accounting.approval_engine import ApprovalEngine
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if not permisos.anular:
         abort(403)
 
+    journal = database.session.get(ComprobanteContable, identifier)
+    if not journal:
+        abort(404)
+
     try:
+        if ApprovalEngine.is_enabled(journal.entity):
+            ApprovalEngine.request_cancellation(journal)
+            database.session.commit()
+            flash("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).", "info")
+            return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+
         cancel_submitted_journal(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
         flash_error(exc)

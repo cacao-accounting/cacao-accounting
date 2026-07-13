@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Mis Aprobaciones Pendientes") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-shield-check me-2" style="color:#FFA500"></i>{{ _("Mis Aprobaciones Pendientes") }}</h4>
+  <p class="text-muted small">
+    {{ _("Documentos en espera de autorización que coinciden con sus límites configurados y roles jerárquicos.") }}
+  </p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-hourglass-split me-1"></i>{{ _("Bandeja de Entrada de Aprobaciones") }}</h6>
+  </div>
+  <div class="p-2">
+    {% if pending_list %}
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Documentos pendientes de aprobación") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Documento") }}</th>
+          <th>{{ _("Número/ID") }}</th>
+          <th>{{ _("Compañía") }}</th>
+          <th>{{ _("Solicitado por") }}</th>
+          <th>{{ _("Monto") }}</th>
+          <th class="text-center">{{ _("Nivel Requerido") }}</th>
+          <th>{{ _("Comentarios / Acción") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in pending_list %}
+        <tr>
+          <td>
+            <span class="badge bg-secondary">{{ item.label }}</span>
+          </td>
+          <td>
+            <a href="{{ item.detail_url }}" class="link-primary fw-semibold">{{ item.doc_no }}</a>
+          </td>
+          <td>
+            <strong>{{ item.request.company_id }}</strong>
+          </td>
+          <td>
+            {{ item.requester_name }}
+          </td>
+          <td>
+            <strong>{{ item.amount|round(2) }}</strong>
+          </td>
+          <td class="text-center">
+            <span class="badge bg-dark">{{ item.request.current_level }} de {{ item.request.required_level }}</span>
+          </td>
+          <td>
+            <form method="post" class="d-flex align-items-center g-2" style="gap: 5px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="request_id" value="{{ item.request.id }}">
+
+              <input type="text" name="comments" class="form-control form-control-sm text-start" placeholder="{{ _("Comentario opcional") }}" style="max-width: 180px;">
+
+              <button type="submit" name="action" value="approve" class="btn btn-sm btn-success px-2 py-1">
+                <i class="bi bi-check-circle me-1"></i>{{ _("Aprobar") }}
+              </button>
+              <button type="submit" name="action" value="reject" class="btn btn-sm btn-danger px-2 py-1">
+                <i class="bi bi-x-circle me-1"></i>{{ _("Rechazar") }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-5 text-muted text-center">
+      <i class="bi bi-check-all me-1 fs-3 d-block mb-2 text-success"></i>
+      {{ _("¡Excelente! No tiene aprobaciones pendientes en su bandeja.") }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
