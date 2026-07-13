@@ -196,6 +196,8 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
 
 
 def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = None) -> list[LedgerContext]:
+    if not isinstance(document, ComprobanteContable):
+        ledger_code = None
     company = _company_for(document)
     posting_date = _posting_date_for(document)
     allow_closing = bool(getattr(document, "is_closing", False))
@@ -368,23 +370,52 @@ def _create_gl_entry(
     params: GLEntryParams,
 ) -> GLEntry:
     _validate_single_sided_amount(params.debit, params.credit)
+
+    debit = params.debit
+    credit = params.credit
+    debit_in_ac = params.debit_in_account_currency
+    credit_in_ac = params.credit_in_account_currency
+    exchange_rate = context.exchange_rate
+
+    if params.is_reversal:
+        pass
+    elif context.transaction_currency and context.company_currency and context.transaction_currency != context.company_currency:
+        if debit_in_ac is None and credit_in_ac is None:
+            if exchange_rate is None or exchange_rate == 0:
+                try:
+                    exchange_rate = _lookup_exchange_rate(
+                        context.transaction_currency,
+                        context.company_currency,
+                        context.posting_date,
+                    )
+                except Exception as exc:
+                    raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
+
+            debit_in_ac = debit
+            credit_in_ac = credit
+            debit = _to_company_currency(debit, exchange_rate)
+            credit = _to_company_currency(credit, exchange_rate)
+
+    resolved_debit_in_ac = _resolve_currency_amount(
+        debit_in_ac, params.debit, bool(context.transaction_currency)
+    )
+    resolved_credit_in_ac = _resolve_currency_amount(
+        credit_in_ac, params.credit, bool(context.transaction_currency)
+    )
+
     return GLEntry(
         posting_date=context.posting_date,
         company=context.company,
         ledger_id=context.ledger_id,
         account_id=_require_account(params.account_id, "Toda entrada GL requiere cuenta contable."),
         account_code=_account_code_for(params.account_id),
-        debit=params.debit,
-        credit=params.credit,
-        debit_in_account_currency=_resolve_currency_amount(
-            params.debit_in_account_currency, params.debit, bool(context.transaction_currency)
-        ),
-        credit_in_account_currency=_resolve_currency_amount(
-            params.credit_in_account_currency, params.credit, bool(context.transaction_currency)
-        ),
+        debit=debit,
+        credit=credit,
+        debit_in_account_currency=resolved_debit_in_ac,
+        credit_in_account_currency=resolved_credit_in_ac,
         account_currency=context.transaction_currency,
         company_currency=context.company_currency,
-        exchange_rate=context.exchange_rate,
+        exchange_rate=exchange_rate,
         party_type=params.party_type,
         party_id=params.party_id,
         bank_account_id=params.bank_account_id,
