@@ -68,66 +68,8 @@ def _relation_payload(relation: DocumentRelation, upstream: bool) -> dict[str, A
     }
 
 
-def _doctype_module(doctype: str) -> str:
-    """Devuelve la etiqueta del modulo al que pertenece un tipo documental."""
-    spec = DOCUMENT_TYPES.get(doctype)
-    return spec.module_label if spec else "General"
-
-
-def _doctype_label(doctype: str) -> str:
-    """Devuelve la etiqueta legible de un tipo documental."""
-    spec = DOCUMENT_TYPES.get(doctype)
-    return spec.label if spec and spec.label else doctype
-
-
-def document_flow_summary(document_type: str, document_id: str) -> dict[str, Any]:
-    """Devuelve un resumen agrupado de documentos relacionados con contadores.
-
-    Agrupa las relaciones upstream (origen) y downstream (destino) por tipo
-    documental, calculando contadores activos e historicos para el panel de
-    trazabilidad en la vista de detalle.
-    """
-    doctype = normalize_doctype(document_type)
-
-    upstream_rows: list[DocumentRelation] = list(
-        database.session.execute(
-            database.select(DocumentRelation)
-            .filter_by(target_type=doctype, target_id=document_id)
-            .order_by(DocumentRelation.created)
-        )
-        .scalars()
-        .all()
-    )
-    downstream_rows: list[DocumentRelation] = list(
-        database.session.execute(
-            database.select(DocumentRelation)
-            .filter_by(source_type=doctype, source_id=document_id)
-            .order_by(DocumentRelation.created)
-        )
-        .scalars()
-        .all()
-    )
-
-    upstream_groups = _build_groups(upstream_rows, use_source=True, current_id=document_id, current_type=doctype)
-    downstream_groups = _build_groups(downstream_rows, use_source=False, current_id=document_id, current_type=doctype)
-
-    spec = DOCUMENT_TYPES.get(doctype)
-    document = get_document(doctype, document_id)
-    create_actions = []
-    if spec and _is_create_actions_enabled(document):
-        create_actions = [_create_action_payload(action, document_id) for action in spec.create_actions if action.enabled]
-
-    return {
-        "document_type": doctype,
-        "document_id": document_id,
-        "upstream": upstream_groups,
-        "downstream": downstream_groups,
-        "create_actions": create_actions,
-    }
-
-
 def _is_create_actions_enabled(document: Any) -> bool:
-    """Indica si el documento puede exponer acciones `Crear` en UI."""
+    """Indica si el documento puede exponer acciones ``Crear`` en UI."""
     if not document:
         return False
     return getattr(document, "docstatus", None) == 1
@@ -158,60 +100,16 @@ def _create_action_payload(action: Any, document_id: str) -> dict[str, Any]:
     }
 
 
-def _build_groups(
-    rows: list[DocumentRelation],
-    use_source: bool,
-    current_id: str,
-    current_type: str,
-) -> list[dict[str, Any]]:
-    """Agrupa relaciones por tipo documental con contadores y documentos."""
-    from flask import url_for
+def get_create_actions(document_type: str, document_id: str) -> list[dict[str, Any]]:
+    """Devuelve las acciones ``Crear`` disponibles para un documento submitted.
 
-    groups: dict[str, dict[str, Any]] = {}
-    for relation in rows:
-        related_type = relation.source_type if use_source else relation.target_type
-        related_id = relation.source_id if use_source else relation.target_id
-        is_active = relation.status == "active"
-
-        if related_type not in groups:
-            try:
-                list_url: str | None = url_for(
-                    "api.document_flow_related_list",
-                    doctype=related_type,
-                    related_doctype=current_type,
-                    related_id=current_id,
-                )
-            except Exception:  # noqa: BLE001 — url_for puede fallar fuera de contexto de peticion
-                list_url = None
-
-            groups[related_type] = {
-                "doctype": related_type,
-                "label": _doctype_label(related_type),
-                "module": _doctype_module(related_type),
-                "list_url": list_url,
-                "active_count": 0,
-                "historical_count": 0,
-                "documents": [],
-            }
-
-        if is_active:
-            groups[related_type]["active_count"] += 1
-        else:
-            groups[related_type]["historical_count"] += 1
-
-        doc_payload = _document_payload(related_type, related_id)
-        groups[related_type]["documents"].append(
-            {
-                "relation_id": relation.id,
-                "relation_type": relation.relation_type,
-                "status": relation.status,
-                "document": doc_payload,
-                "badge_class": (
-                    doc_payload.get("status", {}).get("badge_class", "text-bg-secondary")
-                    if doc_payload.get("status")
-                    else "text-bg-secondary"
-                ),
-            }
-        )
-
-    return list(groups.values())
+    Solo se exponen acciones cuando el documento tiene ``docstatus == 1``
+    (aprobado). Cada acción incluye una URL navegable construida con
+    ``url_for`` y los query params definidos en el registro.
+    """
+    doctype = normalize_doctype(document_type)
+    spec = DOCUMENT_TYPES.get(doctype)
+    document = get_document(doctype, document_id)
+    if not spec or not _is_create_actions_enabled(document):
+        return []
+    return [_create_action_payload(action, document_id) for action in spec.create_actions if action.enabled]

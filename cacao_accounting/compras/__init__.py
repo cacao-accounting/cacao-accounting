@@ -61,7 +61,7 @@ from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifi
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
-    document_flow_summary,
+    get_create_actions,
     refresh_source_caches_for_target,
     revert_relations_for_target,
     validate_submit_prerequisites,
@@ -291,7 +291,7 @@ def compras_solicitud_compra(request_id: str):
     if not registro:
         abort(404)
     items = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_id)).all()
-    create_actions = document_flow_summary("purchase_request", request_id).get("create_actions", [])
+    create_actions = get_create_actions("purchase_request", request_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or request_id) + " - " + APPNAME
     return render_template(
@@ -2533,7 +2533,7 @@ def compras_recepcion(receipt_id):
     if not registro:
         abort(404)
     items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)).all()
-    create_actions = document_flow_summary("purchase_receipt", receipt_id).get("create_actions", [])
+    create_actions = get_create_actions("purchase_receipt", receipt_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or registro.id) + " - " + APPNAME
     return render_template(
