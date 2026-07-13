@@ -156,6 +156,11 @@ ENTITY_TYPE_CHOICES = [
     ("sales_request", "Pedido de Venta"),
     ("sales_quotation", "Cotizacion de Venta"),
     ("delivery_note", "Nota de Entrega"),
+    ("bank_payment", "Pago a Proveedor (Banco)"),
+    ("bank_receipt", "Cobro de Cliente (Banco)"),
+    ("bank_transfer", "Transferencia Bancaria"),
+    ("bank_debit_note", "Nota de Debito Bancaria"),
+    ("bank_credit_note", "Nota de Credito Bancaria"),
 ]
 
 RESET_POLICY_CHOICES = [
