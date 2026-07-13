@@ -2978,13 +2978,8 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     cls = type(registro)
     if cls in mapping:
         item_cls, fk_name = mapping[cls]
-        items = database.session.execute(
-            database.select(item_cls).filter_by(**{fk_name: registro.id})
-        ).scalars().all()
-        state["items"] = [
-            {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", fk_name)}
-            for item in items
-        ]
+        from cacao_accounting.audit_trail_service import capture_lines_snapshot
+        state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
 
     return state
 

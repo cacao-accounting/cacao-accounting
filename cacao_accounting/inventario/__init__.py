@@ -1233,14 +1233,8 @@ def _capture_stock_entry_state(registro: StockEntry) -> dict:
         "remarks": registro.remarks or "",
     }
 
-    items = database.session.execute(
-        database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)
-    ).scalars().all()
-
-    state["items"] = [
-        {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", "stock_entry_id")}
-        for item in items
-    ]
+    from cacao_accounting.audit_trail_service import capture_lines_snapshot
+    state["items"] = capture_lines_snapshot(registro, StockEntryItem, "stock_entry_id")
 
     return state
 

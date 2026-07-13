@@ -149,6 +149,17 @@ def log_update(document: Any, before: Any, after: Any) -> AuditTrail:
     return _log("updated", document, before=before, after=after)
 
 
+def capture_lines_snapshot(registro: Any, item_cls: Any, fk_name: str) -> list[dict[str, Any]]:
+    """Captura el snapshot de las líneas de un documento para auditoría."""
+    items = database.session.execute(
+        database.select(item_cls).filter_by(**{fk_name: registro.id})
+    ).scalars().all()
+    return [
+        {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", fk_name)}
+        for item in items
+    ]
+
+
 def log_submit(document: Any) -> AuditTrail:
     """Log that a document was submitted."""
     return _log("submitted", document, after=document)
