@@ -146,7 +146,7 @@ def test_cas13_valid_discount_below_allocated_accepted(app_ctx):
 
 def test_cas13_unit_cash_consumed():
     """Unit test: _cash_consumed returns correct values."""
-    from cacao_accounting.document_flow.service import _cash_consumed
+    from cacao_accounting.document_flow.payment import _cash_consumed
 
     assert _cash_consumed(Decimal("100"), Decimal("30"), Decimal("0")) == Decimal("70")
     assert _cash_consumed(Decimal("100"), Decimal("0"), Decimal("0")) == Decimal("100")

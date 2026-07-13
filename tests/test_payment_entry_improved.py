@@ -1258,10 +1258,10 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
 
     assert response.status_code == 200
     items = response.get_json()["items"]
-    assert any(item["reference_id"] == invoice.id for item in items)
-    assert all(item["reference_id"] != other_invoice.id for item in items)
-    candidate = next(item for item in items if item["reference_id"] == invoice.id)
-    assert candidate["reference_type"] == "sales_invoice"
+    assert any(item["document_id"] == invoice.id for item in items)
+    assert all(item["document_id"] != other_invoice.id for item in items)
+    candidate = next(item for item in items if item["document_id"] == invoice.id)
+    assert candidate["model_type"] == "sales_invoice"
     assert candidate["flow_source_type"] == "sales_invoice"
     assert candidate["pending_amount"] == 300.0
 
@@ -1961,7 +1961,7 @@ def test_payment_reconciliation_screen_menu_and_candidates_endpoint_render(app_c
     assert api_response.status_code == 200
     payload = api_response.get_json()
     assert any(row["payment_id"] == payment.id for row in payload["payments"])
-    assert any(row["reference_id"] == invoice.id for row in payload["documents"])
+    assert any(row["document_id"] == invoice.id for row in payload["documents"])
 
 
 def test_stock_reconciliation_screen_exposes_global_accounting_dimension_fields(app_ctx):
