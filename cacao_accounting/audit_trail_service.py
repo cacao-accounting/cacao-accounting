@@ -149,6 +149,17 @@ def log_update(document: Any, before: Any, after: Any) -> AuditTrail:
     return _log("updated", document, before=before, after=after)
 
 
+def capture_lines_snapshot(registro: Any, item_cls: Any, fk_name: str) -> list[dict[str, Any]]:
+    """Captura el snapshot de las líneas de un documento para auditoría."""
+    items = database.session.execute(
+        database.select(item_cls).filter_by(**{fk_name: registro.id})
+    ).scalars().all()
+    return [
+        {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", fk_name)}
+        for item in items
+    ]
+
+
 def log_submit(document: Any) -> AuditTrail:
     """Log that a document was submitted."""
     return _log("submitted", document, after=document)
@@ -238,7 +249,51 @@ def _parse_timeline_changes(changes_json: str | None) -> dict[str, dict[str, Any
 
 def _format_timeline_value(value: Any) -> str:
     """Format a timeline value for display."""
-    return "-" if value in (None, "") else str(value)
+    if value in (None, "", [], {}):
+        return "-"
+    if isinstance(value, list):
+        formatted_items = []
+        for item in value:
+            if isinstance(item, dict):
+                code = item.get("item_code") or item.get("item") or "?"
+                qty = item.get("qty") or item.get("quantity") or "0"
+
+                def _clean_dec(v: Any) -> str:
+                    try:
+                        dec = Decimal(str(v)).normalize()
+                        s = f"{dec:f}"
+                        if "." in s:
+                            s = s.rstrip('0').rstrip('.')
+                        return s
+                    except Exception:
+                        return str(v)
+
+                rate = item.get("rate") or item.get("basic_rate") or item.get("price") or ""
+                if rate is not None and rate != "":
+                    rate = _clean_dec(rate)
+
+                amount = item.get("amount") or ""
+                if amount is not None and amount != "":
+                    amount = _clean_dec(amount)
+
+                qty_str = _clean_dec(qty)
+
+                uom = item.get("uom") or ""
+
+                parts = []
+                parts.append(qty_str)
+                if uom:
+                    parts.append(f" {uom}")
+                parts.append(f" de {code}")
+                if rate:
+                    parts.append(f" a {rate}")
+                if amount:
+                    parts.append(f" (Total: {amount})")
+                formatted_items.append("".join(parts))
+            else:
+                formatted_items.append(str(item))
+        return "; ".join(formatted_items)
+    return str(value)
 
 
 def _format_timeline_changes(
