@@ -670,6 +670,7 @@ def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
     if not target_type or not company or not posting_date or not lines:
         raise DocumentFlowError("Debe indicar destino, compania, fecha y lineas.", 400)
     if target_type == "payment_entry":
+        from cacao_accounting.document_flow.payment import _create_payment_target
         return _create_payment_target(payload)
 
     target_spec = get_document_type(target_type)
