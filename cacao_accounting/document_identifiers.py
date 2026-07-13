@@ -35,6 +35,18 @@ class ExternalNumberDuplicateError(IdentifierConfigurationError):
 EL_CONTADOR_EXTERNO_NO_EXISTE = "El contador externo no existe."
 EL_CONTADOR_EXTERNO_ESTA_INACTIVO = "El contador externo esta inactivo."
 
+# Tipos de entidad bancaria — cada transacción bancaria tiene su propia serie.
+BANK_PAYMENT_ENTITY_TYPES = ("bank_payment", "bank_receipt", "bank_transfer", "bank_debit_note", "bank_credit_note")
+
+# Mapeo de payment_type a entity_type para la resolución de numeración.
+PAYMENT_TYPE_TO_ENTITY_TYPE: dict[str, str] = {
+    "pay": "bank_payment",
+    "receive": "bank_receipt",
+    "internal_transfer": "bank_transfer",
+    "debit_note": "bank_debit_note",
+    "credit_note": "bank_credit_note",
+}
+
 # -------------------------------------------------------------------------------------
 # Parsing y validaciones de datos de entrada
 # -------------------------------------------------------------------------------------
@@ -184,6 +196,11 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
             "sales_request",
             "sales_quotation",
             "delivery_note",
+            "bank_payment",
+            "bank_receipt",
+            "bank_transfer",
+            "bank_debit_note",
+            "bank_credit_note",
         ]
     for entity_type in entity_types:
         _pick_naming_series(entity_type=entity_type, company=company, naming_series_id=None)
@@ -291,6 +308,11 @@ def _default_entity_code(entity_type: str) -> str:
         "customer": "CUSTM",
         "supplier": "SUPLR",
         "item": "ITEM",
+        "bank_payment": "BPAY",
+        "bank_receipt": "BREC",
+        "bank_transfer": "BTRF",
+        "bank_debit_note": "BDBN",
+        "bank_credit_note": "BCRN",
     }
     return map_codes.get(entity_type, entity_type[:3].upper())
 
