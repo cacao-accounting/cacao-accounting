@@ -10,19 +10,16 @@ Convencion de naming para referencias de pago:
 """
 
 import json
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 from flask_login import current_user
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from cacao_accounting.database import (
     AuditLog,
     DocumentRelation,
-    PurchaseInvoice,
-    SalesInvoice,
     database,
 )
 from cacao_accounting.document_flow.registry import (
@@ -671,6 +668,7 @@ def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
         raise DocumentFlowError("Debe indicar destino, compania, fecha y lineas.", 400)
     if target_type == "payment_entry":
         from cacao_accounting.document_flow.payment import _create_payment_target
+
         return _create_payment_target(payload)
 
     target_spec = get_document_type(target_type)
