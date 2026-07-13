@@ -97,6 +97,7 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
         return _status("requires_attention", "Requiere Atención", "red")
 
     from cacao_accounting.database import ApprovalRequest, database
+
     req = database.session.execute(
         database.select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
     ).scalar_one_or_none()

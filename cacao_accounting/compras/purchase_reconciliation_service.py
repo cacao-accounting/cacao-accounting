@@ -1072,17 +1072,19 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     """Retorna el estatus de las ordenes de compra aprobadas/activas para la compania."""
     from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem
 
-    orders = database.session.execute(
-        select(PurchaseOrder)
-        .filter_by(company=company, docstatus=1)
-        .order_by(PurchaseOrder.posting_date.desc(), PurchaseOrder.id.desc())
-    ).scalars().all()
+    orders = (
+        database.session.execute(
+            select(PurchaseOrder)
+            .filter_by(company=company, docstatus=1)
+            .order_by(PurchaseOrder.posting_date.desc(), PurchaseOrder.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     report_rows = []
     for order in orders:
-        items = database.session.execute(
-            select(PurchaseOrderItem).filter_by(purchase_order_id=order.id)
-        ).scalars().all()
+        items = database.session.execute(select(PurchaseOrderItem).filter_by(purchase_order_id=order.id)).scalars().all()
 
         ordered_qty = sum((_decimal_value(item.qty) for item in items), Decimal("0"))
         received_qty = sum((_decimal_value(item.received_qty) for item in items), Decimal("0"))
@@ -1108,19 +1110,21 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
         else:
             billing_status = "Pendiente"
 
-        report_rows.append({
-            "id": order.id,
-            "document_no": order.document_no or order.id,
-            "posting_date": order.posting_date,
-            "supplier_id": order.supplier_id,
-            "supplier_name": order.supplier_name or "",
-            "grand_total": order.grand_total or Decimal("0"),
-            "ordered_qty": ordered_qty,
-            "received_qty": received_qty,
-            "billed_qty": billed_qty,
-            "receipt_status": receipt_status,
-            "billing_status": billing_status,
-        })
+        report_rows.append(
+            {
+                "id": order.id,
+                "document_no": order.document_no or order.id,
+                "posting_date": order.posting_date,
+                "supplier_id": order.supplier_id,
+                "supplier_name": order.supplier_name or "",
+                "grand_total": order.grand_total or Decimal("0"),
+                "ordered_qty": ordered_qty,
+                "received_qty": received_qty,
+                "billed_qty": billed_qty,
+                "receipt_status": receipt_status,
+                "billing_status": billing_status,
+            }
+        )
 
     return report_rows
 
@@ -1129,12 +1133,16 @@ def get_unlinked_purchase_invoices(company: str) -> list[dict[str, Any]]:
     """Retorna las facturas de compra aprobadas que no tienen recepcion asociada."""
     from cacao_accounting.database import PurchaseInvoice, PurchaseOrder, Party
 
-    invoices = database.session.execute(
-        select(PurchaseInvoice)
-        .filter_by(company=company, docstatus=1, document_type="purchase_invoice")
-        .where(PurchaseInvoice.purchase_receipt_id.is_(None))
-        .order_by(PurchaseInvoice.posting_date.desc(), PurchaseInvoice.id.desc())
-    ).scalars().all()
+    invoices = (
+        database.session.execute(
+            select(PurchaseInvoice)
+            .filter_by(company=company, docstatus=1, document_type="purchase_invoice")
+            .where(PurchaseInvoice.purchase_receipt_id.is_(None))
+            .order_by(PurchaseInvoice.posting_date.desc(), PurchaseInvoice.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     report_rows = []
     for inv in invoices:
@@ -1150,16 +1158,18 @@ def get_unlinked_purchase_invoices(company: str) -> list[dict[str, Any]]:
             if supp:
                 supplier_name = supp.name
 
-        report_rows.append({
-            "id": inv.id,
-            "document_no": inv.document_no or inv.id,
-            "posting_date": inv.posting_date,
-            "supplier_id": inv.supplier_id,
-            "supplier_name": supplier_name or "",
-            "grand_total": inv.grand_total or Decimal("0"),
-            "purchase_order_id": inv.purchase_order_id,
-            "purchase_order_no": po_no,
-        })
+        report_rows.append(
+            {
+                "id": inv.id,
+                "document_no": inv.document_no or inv.id,
+                "posting_date": inv.posting_date,
+                "supplier_id": inv.supplier_id,
+                "supplier_name": supplier_name or "",
+                "grand_total": inv.grand_total or Decimal("0"),
+                "purchase_order_id": inv.purchase_order_id,
+                "purchase_order_no": po_no,
+            }
+        )
 
     return report_rows
 
@@ -1198,18 +1208,20 @@ def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]
             if supp:
                 supplier_name = supp.name
 
-        report_rows.append({
-            "id": receipt.id,
-            "document_no": receipt.document_no or receipt.id,
-            "posting_date": receipt.posting_date,
-            "supplier_id": receipt.supplier_id,
-            "supplier_name": supplier_name or "",
-            "grand_total": receipt.grand_total or Decimal("0"),
-            "purchase_order_id": receipt.purchase_order_id,
-            "purchase_order_no": po_no,
-            "pending_qty": totals["pending_qty"],
-            "pending_amount": totals["pending_amount"],
-        })
+        report_rows.append(
+            {
+                "id": receipt.id,
+                "document_no": receipt.document_no or receipt.id,
+                "posting_date": receipt.posting_date,
+                "supplier_id": receipt.supplier_id,
+                "supplier_name": supplier_name or "",
+                "grand_total": receipt.grand_total or Decimal("0"),
+                "purchase_order_id": receipt.purchase_order_id,
+                "purchase_order_no": po_no,
+                "pending_qty": totals["pending_qty"],
+                "pending_amount": totals["pending_amount"],
+            }
+        )
 
     # Sort by posting date desc
     report_rows.sort(key=lambda x: (x["posting_date"] or date.min, x["id"]), reverse=True)

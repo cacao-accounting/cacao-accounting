@@ -151,9 +151,7 @@ def log_update(document: Any, before: Any, after: Any) -> AuditTrail:
 
 def capture_lines_snapshot(registro: Any, item_cls: Any, fk_name: str) -> list[dict[str, Any]]:
     """Captura el snapshot de las líneas de un documento para auditoría."""
-    items = database.session.execute(
-        database.select(item_cls).filter_by(**{fk_name: registro.id})
-    ).scalars().all()
+    items = database.session.execute(database.select(item_cls).filter_by(**{fk_name: registro.id})).scalars().all()
     return [
         {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", fk_name)}
         for item in items
@@ -263,7 +261,7 @@ def _format_timeline_value(value: Any) -> str:
                         dec = Decimal(str(v)).normalize()
                         s = f"{dec:f}"
                         if "." in s:
-                            s = s.rstrip('0').rstrip('.')
+                            s = s.rstrip("0").rstrip(".")
                         return s
                     except Exception:
                         return str(v)

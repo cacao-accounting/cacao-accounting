@@ -188,7 +188,7 @@ def test_validate_permission_combined_success(app_instance):
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
         user_uuid = user.id
         ctx = QueryContext(
-            user_id=user_uuid, # use the actual user UUID so that Permisos can load it
+            user_id=user_uuid,  # use the actual user UUID so that Permisos can load it
             permissions={"accounting.reports.read"},
             company_ids=["cacao"],
         )

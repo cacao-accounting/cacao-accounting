@@ -54,9 +54,7 @@ def app_instance():
     with _app.app_context():
         init_test_db(_app)
         # Ensure 'cacao' user is admin classification
-        cacao_user = database.session.execute(
-            database.select(User).filter_by(user="cacao")
-        ).scalar_one_or_none()
+        cacao_user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one_or_none()
         if cacao_user:
             cacao_user.classification = "admin"
             database.session.commit()
