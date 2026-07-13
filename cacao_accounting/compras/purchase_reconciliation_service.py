@@ -1070,7 +1070,7 @@ def get_events_for_document(company: str, document_id: str) -> list[dict[str, An
 
 def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     """Retorna el estatus de las ordenes de compra aprobadas/activas para la compania."""
-    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party
+    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem
 
     orders = database.session.execute(
         select(PurchaseOrder)
