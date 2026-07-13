@@ -290,230 +290,95 @@ def test_document_status_maps_journal_entry_state_without_docstatus(app_ctx):
     assert rejected_status.badge_class == "text-bg-secondary"
 
 
-def test_document_flow_summary_returns_grouped_relations(app_ctx):
-    """document_flow_summary agrupa upstream/downstream por tipo documental."""
+def test_get_create_actions_includes_purchase_order_actions(app_ctx):
+    """get_create_actions expone acciones de creacion del tipo documental."""
 
-    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
-    from cacao_accounting.document_flow import create_document_relation
-    from cacao_accounting.document_flow.tracing import document_flow_summary
-
-    order_item = _seed_purchase_order(app_ctx)
-    receipt = PurchaseReceipt(id="PR-SUM-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
-    receipt_item = PurchaseReceiptItem(
-        purchase_receipt_id="PR-SUM-001",
-        item_code="ART-001",
-        item_name="Chocolate",
-        qty=Decimal("5"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("25"),
-    )
-    database.session.add_all([receipt, receipt_item])
-    database.session.flush()
-
-    create_document_relation(
-        source_type="purchase_order",
-        source_id="PO-001",
-        source_item_id=order_item.id,
-        target_type="purchase_receipt",
-        target_id="PR-SUM-001",
-        target_item_id=receipt_item.id,
-        qty=Decimal("5"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("25"),
-    )
-
-    summary = document_flow_summary("purchase_order", "PO-001")
-
-    assert summary["document_type"] == "purchase_order"
-    assert summary["document_id"] == "PO-001"
-    assert len(summary["downstream"]) == 1
-    group = summary["downstream"][0]
-    assert group["doctype"] == "purchase_receipt"
-    assert group["active_count"] == 1
-    assert group["historical_count"] == 0
-    assert len(group["documents"]) == 1
-    assert group["documents"][0]["document"]["document_id"] == "PR-SUM-001"
-
-
-def test_document_flow_summary_counts_historical_after_revert(app_ctx):
-    """document_flow_summary distingue relaciones activas e historicas."""
-
-    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
-    from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
-    from cacao_accounting.document_flow.tracing import document_flow_summary
-
-    order_item = _seed_purchase_order(app_ctx)
-    receipt = PurchaseReceipt(id="PR-SUM-002", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
-    receipt_item = PurchaseReceiptItem(
-        purchase_receipt_id="PR-SUM-002",
-        item_code="ART-001",
-        item_name="Chocolate",
-        qty=Decimal("3"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("15"),
-    )
-    database.session.add_all([receipt, receipt_item])
-    database.session.flush()
-
-    create_document_relation(
-        source_type="purchase_order",
-        source_id="PO-001",
-        source_item_id=order_item.id,
-        target_type="purchase_receipt",
-        target_id="PR-SUM-002",
-        target_item_id=receipt_item.id,
-        qty=Decimal("3"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("15"),
-    )
-
-    receipt.docstatus = 2
-    revert_relations_for_target("purchase_receipt", "PR-SUM-002")
-
-    summary = document_flow_summary("purchase_order", "PO-001")
-
-    assert len(summary["downstream"]) == 1
-    group = summary["downstream"][0]
-    assert group["active_count"] == 0
-    assert group["historical_count"] == 1
-
-
-def test_document_flow_summary_upstream_from_receipt(app_ctx):
-    """document_flow_summary incluye documentos upstream para un recibo."""
-
-    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
-    from cacao_accounting.document_flow import create_document_relation
-    from cacao_accounting.document_flow.tracing import document_flow_summary
-
-    order_item = _seed_purchase_order(app_ctx)
-    receipt = PurchaseReceipt(id="PR-SUM-003", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
-    receipt_item = PurchaseReceiptItem(
-        purchase_receipt_id="PR-SUM-003",
-        item_code="ART-001",
-        item_name="Chocolate",
-        qty=Decimal("5"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("25"),
-    )
-    database.session.add_all([receipt, receipt_item])
-    database.session.flush()
-
-    create_document_relation(
-        source_type="purchase_order",
-        source_id="PO-001",
-        source_item_id=order_item.id,
-        target_type="purchase_receipt",
-        target_id="PR-SUM-003",
-        target_item_id=receipt_item.id,
-        qty=Decimal("5"),
-        uom="UND",
-        rate=Decimal("5"),
-        amount=Decimal("25"),
-    )
-
-    summary = document_flow_summary("purchase_receipt", "PR-SUM-003")
-
-    assert len(summary["upstream"]) == 1
-    group = summary["upstream"][0]
-    assert group["doctype"] == "purchase_order"
-    assert group["label"] == "Orden de Compra"
-    assert group["active_count"] == 1
-
-
-def test_document_flow_summary_includes_create_actions(app_ctx):
-    """document_flow_summary expone acciones de creacion del tipo documental."""
-
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     _seed_purchase_order(app_ctx)
-    summary = document_flow_summary("purchase_order", "PO-001")
+    actions = get_create_actions("purchase_order", "PO-001")
 
-    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    action_targets = [a["target_type"] for a in actions]
     assert "purchase_receipt" in action_targets
     assert "purchase_invoice" in action_targets
     assert "payment_entry" in action_targets
 
 
-def test_document_flow_summary_includes_rfq_to_order_action(app_ctx):
+def test_get_create_actions_includes_rfq_to_order_action(app_ctx):
     """La RFQ expone accion para crear orden de compra."""
 
     from cacao_accounting.database import PurchaseQuotation, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     quotation = PurchaseQuotation(id="RFQ-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     database.session.add(quotation)
     database.session.flush()
 
-    summary = document_flow_summary("purchase_quotation", quotation.id)
+    actions = get_create_actions("purchase_quotation", quotation.id)
 
-    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    action_targets = [a["target_type"] for a in actions]
     assert "supplier_quotation" in action_targets
     assert "purchase_order" in action_targets
 
 
-def test_document_flow_summary_includes_request_to_supplier_quotation_action(app_ctx):
+def test_get_create_actions_includes_request_to_supplier_quotation_action(app_ctx):
     """La solicitud de compra expone accion para crear cotizacion de proveedor."""
 
     from cacao_accounting.database import PurchaseRequest, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     request_doc = PurchaseRequest(id="PREQ-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     database.session.add(request_doc)
     database.session.flush()
 
-    summary = document_flow_summary("purchase_request", request_doc.id)
+    actions = get_create_actions("purchase_request", request_doc.id)
 
-    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    action_targets = [a["target_type"] for a in actions]
     assert "purchase_quotation" in action_targets
     assert "supplier_quotation" in action_targets
     assert "purchase_order" in action_targets
 
 
-def test_document_flow_summary_includes_sales_request_to_order_action(app_ctx):
+def test_get_create_actions_includes_sales_request_to_order_action(app_ctx):
     """El pedido de venta expone accion para crear orden de venta."""
 
     from cacao_accounting.database import SalesRequest, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     request_doc = SalesRequest(id="SR-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     database.session.add(request_doc)
     database.session.flush()
 
-    summary = document_flow_summary("sales_request", request_doc.id)
+    actions = get_create_actions("sales_request", request_doc.id)
 
-    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    action_targets = [a["target_type"] for a in actions]
     assert "sales_quotation" in action_targets
     assert "sales_order" in action_targets
 
 
-def test_document_flow_summary_includes_sales_order_payment_action(app_ctx):
+def test_get_create_actions_includes_sales_order_payment_action(app_ctx):
     """La orden de venta expone accion para crear pago (anticipo/cobro)."""
 
     from cacao_accounting.database import SalesOrder, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     order = SalesOrder(id="SO-ACT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     database.session.add(order)
     database.session.flush()
 
-    summary = document_flow_summary("sales_order", order.id)
+    actions = get_create_actions("sales_order", order.id)
 
-    action_targets = [a["target_type"] for a in summary["create_actions"]]
+    action_targets = [a["target_type"] for a in actions]
     assert "delivery_note" in action_targets
     assert "sales_invoice" in action_targets
     assert "payment_entry" in action_targets
 
 
-def test_document_flow_summary_hides_create_actions_for_non_submitted_documents(app_ctx):
+def test_get_create_actions_hides_for_non_submitted_documents(app_ctx):
     """`create_actions` solo se expone para documentos aprobados (`docstatus=1`)."""
 
     from cacao_accounting.database import PurchaseOrder, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     draft_order = PurchaseOrder(id="PO-DRAFT-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
     cancelled_order = PurchaseOrder(id="PO-CAN-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=2)
@@ -521,20 +386,20 @@ def test_document_flow_summary_hides_create_actions_for_non_submitted_documents(
     database.session.add_all([draft_order, cancelled_order, submitted_order])
     database.session.flush()
 
-    draft_summary = document_flow_summary("purchase_order", draft_order.id)
-    cancelled_summary = document_flow_summary("purchase_order", cancelled_order.id)
-    submitted_summary = document_flow_summary("purchase_order", submitted_order.id)
+    draft_actions = get_create_actions("purchase_order", draft_order.id)
+    cancelled_actions = get_create_actions("purchase_order", cancelled_order.id)
+    submitted_actions = get_create_actions("purchase_order", submitted_order.id)
 
-    assert draft_summary["create_actions"] == []
-    assert cancelled_summary["create_actions"] == []
-    assert len(submitted_summary["create_actions"]) >= 1
+    assert draft_actions == []
+    assert cancelled_actions == []
+    assert len(submitted_actions) >= 1
 
 
-def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
+def test_get_create_actions_builds_urls_with_query_params(app_ctx):
     """Las acciones de notas/devoluciones exponen URL con query params esperados."""
 
     from cacao_accounting.database import DeliveryNote, PurchaseInvoice, PurchaseReceipt, SalesInvoice, StockEntry, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     purchase_invoice = PurchaseInvoice(
         id="PINV-ACT-001",
@@ -563,85 +428,85 @@ def test_document_flow_summary_builds_create_urls_with_query_params(app_ctx):
     database.session.flush()
 
     with app_ctx.test_request_context():
-        purchase_invoice_summary = document_flow_summary("purchase_invoice", purchase_invoice.id)
-        purchase_receipt_summary = document_flow_summary("purchase_receipt", purchase_receipt.id)
-        sales_invoice_summary = document_flow_summary("sales_invoice", sales_invoice.id)
-        delivery_note_summary = document_flow_summary("delivery_note", delivery_note.id)
-        stock_entry_summary = document_flow_summary("stock_entry", stock_entry.id)
+        purchase_invoice_actions = get_create_actions("purchase_invoice", purchase_invoice.id)
+        purchase_receipt_actions = get_create_actions("purchase_receipt", purchase_receipt.id)
+        sales_invoice_actions = get_create_actions("sales_invoice", sales_invoice.id)
+        delivery_note_actions = get_create_actions("delivery_note", delivery_note.id)
+        stock_entry_actions = get_create_actions("stock_entry", stock_entry.id)
 
-    def _find_action(summary: dict, label: str) -> dict:
-        for action in summary["create_actions"]:
+    def _find_action(actions: list, label: str) -> dict:
+        for action in actions:
             if action["label"] == label:
                 return action
         raise AssertionError(f"Action '{label}' not found")
 
-    purchase_credit = _find_action(purchase_invoice_summary, "Crear Nota de Crédito")
+    purchase_credit = _find_action(purchase_invoice_actions, "Crear Nota de Crédito")
     assert purchase_credit["query_params"]["document_type"] == "purchase_credit_note"
     assert "from_invoice=PINV-ACT-001" in (purchase_credit["create_url"] or "")
     assert "document_type=purchase_credit_note" in (purchase_credit["create_url"] or "")
 
-    purchase_debit = _find_action(purchase_invoice_summary, "Crear Nota de Débito")
+    purchase_debit = _find_action(purchase_invoice_actions, "Crear Nota de Débito")
     assert purchase_debit["query_params"]["document_type"] == "purchase_debit_note"
     assert "from_invoice=PINV-ACT-001" in (purchase_debit["create_url"] or "")
     assert "document_type=purchase_debit_note" in (purchase_debit["create_url"] or "")
 
-    purchase_return = _find_action(purchase_receipt_summary, "Crear Devolución")
+    purchase_return = _find_action(purchase_receipt_actions, "Crear Devolución")
     assert purchase_return["query_params"]["document_type"] == "purchase_return"
     assert "from_receipt=PREC-ACT-001" in (purchase_return["create_url"] or "")
     assert "document_type=purchase_return" in (purchase_return["create_url"] or "")
 
-    purchase_receipt_credit = _find_action(purchase_receipt_summary, "Crear Nota de Crédito")
+    purchase_receipt_credit = _find_action(purchase_receipt_actions, "Crear Nota de Crédito")
     assert purchase_receipt_credit["query_params"]["document_type"] == "purchase_credit_note"
     assert "from_receipt=PREC-ACT-001" in (purchase_receipt_credit["create_url"] or "")
     assert "document_type=purchase_credit_note" in (purchase_receipt_credit["create_url"] or "")
 
-    purchase_receipt_debit = _find_action(purchase_receipt_summary, "Crear Nota de Débito")
+    purchase_receipt_debit = _find_action(purchase_receipt_actions, "Crear Nota de Débito")
     assert purchase_receipt_debit["query_params"]["document_type"] == "purchase_debit_note"
     assert "from_receipt=PREC-ACT-001" in (purchase_receipt_debit["create_url"] or "")
     assert "document_type=purchase_debit_note" in (purchase_receipt_debit["create_url"] or "")
 
-    purchase_receipt_stock = _find_action(purchase_receipt_summary, "Crear Entrada de Almacén")
+    purchase_receipt_stock = _find_action(purchase_receipt_actions, "Crear Entrada de Almacén")
     assert purchase_receipt_stock["query_params"]["source_type"] == "purchase_receipt"
     assert "source_id=PREC-ACT-001" in (purchase_receipt_stock["create_url"] or "")
     assert "source_type=purchase_receipt" in (purchase_receipt_stock["create_url"] or "")
 
-    sales_credit = _find_action(sales_invoice_summary, "Crear Nota de Crédito")
+    sales_credit = _find_action(sales_invoice_actions, "Crear Nota de Crédito")
     assert sales_credit["query_params"]["document_type"] == "sales_credit_note"
     assert "from_invoice=SINV-ACT-001" in (sales_credit["create_url"] or "")
     assert "document_type=sales_credit_note" in (sales_credit["create_url"] or "")
 
-    sales_debit = _find_action(sales_invoice_summary, "Crear Nota de Débito")
+    sales_debit = _find_action(sales_invoice_actions, "Crear Nota de Débito")
     assert sales_debit["query_params"]["document_type"] == "sales_debit_note"
     assert "from_invoice=SINV-ACT-001" in (sales_debit["create_url"] or "")
     assert "document_type=sales_debit_note" in (sales_debit["create_url"] or "")
 
-    delivery_credit = _find_action(delivery_note_summary, "Crear Nota de Crédito")
+    delivery_credit = _find_action(delivery_note_actions, "Crear Nota de Crédito")
     assert delivery_credit["query_params"]["document_type"] == "sales_credit_note"
     assert "from_note=DN-ACT-001" in (delivery_credit["create_url"] or "")
     assert "document_type=sales_credit_note" in (delivery_credit["create_url"] or "")
 
-    delivery_debit = _find_action(delivery_note_summary, "Crear Nota de Débito")
+    delivery_debit = _find_action(delivery_note_actions, "Crear Nota de Débito")
     assert delivery_debit["query_params"]["document_type"] == "sales_debit_note"
     assert "from_note=DN-ACT-001" in (delivery_debit["create_url"] or "")
     assert "document_type=sales_debit_note" in (delivery_debit["create_url"] or "")
 
-    delivery_stock = _find_action(delivery_note_summary, "Crear Movimiento de Inventario")
+    delivery_stock = _find_action(delivery_note_actions, "Crear Movimiento de Inventario")
     assert delivery_stock["query_params"]["source_type"] == "delivery_note"
     assert "source_id=DN-ACT-001" in (delivery_stock["create_url"] or "")
     assert "source_type=delivery_note" in (delivery_stock["create_url"] or "")
 
-    stock_reuse = _find_action(stock_entry_summary, "Crear Reuso Interno")
+    stock_reuse = _find_action(stock_entry_actions, "Crear Reuso Interno")
     assert stock_reuse["target_type"] == "stock_entry"
     assert stock_reuse["query_params"]["source_type"] == "stock_entry"
     assert "source_id=STE-ACT-001" in (stock_reuse["create_url"] or "")
     assert "source_type=stock_entry" in (stock_reuse["create_url"] or "")
 
 
-def test_document_flow_summary_includes_note_payment_actions(app_ctx):
-    """Las notas de crédito/débito exponen acción de pago/reembolso en trazabilidad."""
+def test_get_create_actions_includes_note_payment_actions(app_ctx):
+    """Las notas de crédito/débito exponen acción de pago/reembolso."""
 
     from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     purchase_credit = PurchaseInvoice(
         id="PINV-CN-001",
@@ -675,34 +540,34 @@ def test_document_flow_summary_includes_note_payment_actions(app_ctx):
     database.session.flush()
 
     with app_ctx.test_request_context():
-        purchase_credit_summary = document_flow_summary("purchase_credit_note", purchase_credit.id)
-        purchase_debit_summary = document_flow_summary("purchase_debit_note", purchase_debit.id)
-        sales_credit_summary = document_flow_summary("sales_credit_note", sales_credit.id)
-        sales_debit_summary = document_flow_summary("sales_debit_note", sales_debit.id)
+        purchase_credit_actions = get_create_actions("purchase_credit_note", purchase_credit.id)
+        purchase_debit_actions = get_create_actions("purchase_debit_note", purchase_debit.id)
+        sales_credit_actions = get_create_actions("sales_credit_note", sales_credit.id)
+        sales_debit_actions = get_create_actions("sales_debit_note", sales_debit.id)
 
-    purchase_credit_action = purchase_credit_summary["create_actions"][0]
+    purchase_credit_action = purchase_credit_actions[0]
     assert purchase_credit_action["target_type"] == "payment_entry"
     assert "from_purchase_credit_note=PINV-CN-001" in (purchase_credit_action["create_url"] or "")
 
-    purchase_debit_action = purchase_debit_summary["create_actions"][0]
+    purchase_debit_action = purchase_debit_actions[0]
     assert purchase_debit_action["target_type"] == "payment_entry"
     assert "from_purchase_debit_note=PINV-DN-001" in (purchase_debit_action["create_url"] or "")
 
-    sales_credit_action = sales_credit_summary["create_actions"][0]
+    sales_credit_action = sales_credit_actions[0]
     assert sales_credit_action["target_type"] == "payment_entry"
     assert "from_sales_credit_note=SINV-CN-001" in (sales_credit_action["create_url"] or "")
 
-    sales_debit_action = sales_debit_summary["create_actions"][0]
+    sales_debit_action = sales_debit_actions[0]
     assert sales_debit_action["target_type"] == "payment_entry"
     assert "from_sales_debit_note=SINV-DN-001" in (sales_debit_action["create_url"] or "")
 
 
-def test_document_flow_summary_excludes_disabled_actions(app_ctx):
-    """Las acciones deshabilitadas en el registro no se exponen en el resumen."""
+def test_get_create_actions_excludes_disabled_actions(app_ctx):
+    """Las acciones deshabilitadas en el registro no se exponen."""
 
     from cacao_accounting.database import PurchaseOrder, database
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentAction
-    from cacao_accounting.document_flow.tracing import document_flow_summary
+    from cacao_accounting.document_flow.tracing import get_create_actions
 
     order = PurchaseOrder(id="PO-ENABLED-001", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     database.session.add(order)
@@ -720,11 +585,11 @@ def test_document_flow_summary_excludes_disabled_actions(app_ctx):
         **{**original_type.__dict__, "create_actions": original_type.create_actions + (disabled_action,)}
     )
     try:
-        summary = document_flow_summary("purchase_order", order.id)
+        actions = get_create_actions("purchase_order", order.id)
     finally:
         DOCUMENT_TYPES["purchase_order"] = original_type
 
-    labels = [action["label"] for action in summary["create_actions"]]
+    labels = [action["label"] for action in actions]
     assert "Acción Deshabilitada" not in labels
 
 
