@@ -1226,12 +1226,17 @@ def _handle_stock_entry_edit_post(registro: StockEntry):
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
     """Captura el estado del registro antes/después de la edición."""
-    return {
+    state = {
         "purpose": registro.purpose,
         "company": registro.company,
         "posting_date": str(registro.posting_date or ""),
         "remarks": registro.remarks or "",
     }
+
+    from cacao_accounting.audit_trail_service import capture_lines_snapshot
+    state["items"] = capture_lines_snapshot(registro, StockEntryItem, "stock_entry_id")
+
+    return state
 
 
 def _update_stock_entry_from_form(registro: StockEntry) -> None:

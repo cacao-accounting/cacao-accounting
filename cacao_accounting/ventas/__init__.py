@@ -268,13 +268,37 @@ def _upsert_customer_company_settings_from_request(customer_id: str, form: dict)
 
 def _capture_sales_state(registro: Any) -> dict[str, Any]:
     """CROSS-01: Captura estado de documento de ventas para auditoría."""
-    return {
+    state = {
         "customer_id": getattr(registro, "customer_id", None),
         "company": getattr(registro, "company", None),
         "posting_date": str(getattr(registro, "posting_date", "")),
         "total": str(getattr(registro, "total", "")),
         "remarks": getattr(registro, "remarks", None),
     }
+
+    from cacao_accounting.database import (
+        SalesRequest, SalesRequestItem,
+        SalesQuotation, SalesQuotationItem,
+        SalesOrder, SalesOrderItem,
+        DeliveryNote, DeliveryNoteItem,
+        SalesInvoice, SalesInvoiceItem,
+    )
+
+    mapping = {
+        SalesRequest: (SalesRequestItem, "sales_request_id"),
+        SalesQuotation: (SalesQuotationItem, "sales_quotation_id"),
+        SalesOrder: (SalesOrderItem, "sales_order_id"),
+        DeliveryNote: (DeliveryNoteItem, "delivery_note_id"),
+        SalesInvoice: (SalesInvoiceItem, "sales_invoice_id"),
+    }
+
+    cls = type(registro)
+    if cls in mapping:
+        item_cls, fk_name = mapping[cls]
+        from cacao_accounting.audit_trail_service import capture_lines_snapshot
+        state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
+
+    return state
 
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
