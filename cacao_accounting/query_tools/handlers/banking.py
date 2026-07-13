@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import func
 
-from cacao_accounting.database import BankAccount, BankTransaction, database
+from cacao_accounting.database import BankAccount, BankTransaction, Bank, database
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import (
@@ -48,31 +48,34 @@ def get_banking_accounts(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = database.select(BankAccount).where(BankAccount.entity == company_id)
+    query = (
+        database.select(BankAccount, Bank.name.label("bank_name"))
+        .join(Bank, BankAccount.bank_id == Bank.id)
+        .where(BankAccount.company == company_id)
+    )
 
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
     rows = (
         database.session.execute(
-            query.order_by(BankAccount.bank_name, BankAccount.account_number)
+            query.order_by(Bank.name, BankAccount.account_no)
             .offset((_page - 1) * _page_size)
             .limit(_page_size)
         )
-        .scalars()
         .all()
     )
 
     items = [
         {
-            "id": a.id,
-            "bank_name": a.bank_name,
-            "account_number": a.account_number,
-            "account_type": a.account_type,
-            "currency": a.currency,
-            "balance": str(a.balance) if hasattr(a, "balance") and a.balance else "0",
-            "status": a.status,
+            "id": r.BankAccount.id,
+            "bank_name": r.bank_name,
+            "account_number": r.BankAccount.account_no,
+            "account_type": r.BankAccount.account_name,
+            "currency": r.BankAccount.currency,
+            "balance": "0",
+            "status": r.BankAccount.status,
         }
-        for a in rows
+        for r in rows
     ]
 
     result = PaginatedResult(
@@ -123,10 +126,14 @@ def get_banking_transactions(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = database.select(BankTransaction).where(BankTransaction.entity == company_id)
+    query = (
+        database.select(BankTransaction, BankAccount.currency.label("currency"))
+        .join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
+        .where(BankAccount.company == company_id)
+    )
 
     if bank_account_id:
-        query = query.where(BankTransaction.bank_account == bank_account_id)
+        query = query.where(BankTransaction.bank_account_id == bank_account_id)
     if date_from:
         query = query.where(BankTransaction.posting_date >= date_from)
     if date_to:
@@ -136,25 +143,26 @@ def get_banking_transactions(
 
     rows = (
         database.session.execute(
-            query.order_by(BankTransaction.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
+            query.order_by(BankTransaction.posting_date.desc())
+            .offset((_page - 1) * _page_size)
+            .limit(_page_size)
         )
-        .scalars()
         .all()
     )
 
     items = [
         {
-            "id": t.id,
-            "posting_date": t.posting_date.isoformat() if t.posting_date else None,
-            "description": t.description,
-            "debit": str(t.debit) if t.debit else None,
-            "credit": str(t.credit) if t.credit else None,
-            "currency": t.currency,
-            "exchange_rate": str(t.exchange_rate) if t.exchange_rate else None,
-            "reference": t.reference,
-            "reconciled": t.reconciled,
+            "id": r.BankTransaction.id,
+            "posting_date": r.BankTransaction.posting_date.isoformat() if r.BankTransaction.posting_date else None,
+            "description": r.BankTransaction.description,
+            "debit": str(r.BankTransaction.deposit) if r.BankTransaction.deposit else None,
+            "credit": str(r.BankTransaction.withdrawal) if r.BankTransaction.withdrawal else None,
+            "currency": r.currency,
+            "exchange_rate": None,
+            "reference": r.BankTransaction.reference_number,
+            "reconciled": r.BankTransaction.is_reconciled,
         }
-        for t in rows
+        for r in rows
     ]
 
     result = PaginatedResult(
