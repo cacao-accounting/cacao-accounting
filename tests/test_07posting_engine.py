@@ -3429,7 +3429,7 @@ def test_payment_credit_note_creates_balanced_gl_entries(app_ctx):
 
 def test_base_outstanding_amount_converts_exchange_rate(app_ctx):
     """Verifica que base_outstanding_amount se convierte usando exchange_rate."""
-    from cacao_accounting.document_flow.service import refresh_outstanding_amount_cache, _update_document_outstanding
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache, _update_document_outstanding
     from cacao_accounting.database import PurchaseInvoice, database
     from decimal import Decimal
 
