@@ -56,14 +56,9 @@ def get_banking_accounts(
 
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
-    rows = (
-        database.session.execute(
-            query.order_by(Bank.name, BankAccount.account_no)
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
-        )
-        .all()
-    )
+    rows = database.session.execute(
+        query.order_by(Bank.name, BankAccount.account_no).offset((_page - 1) * _page_size).limit(_page_size)
+    ).all()
 
     items = [
         {
@@ -141,14 +136,9 @@ def get_banking_transactions(
 
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 
-    rows = (
-        database.session.execute(
-            query.order_by(BankTransaction.posting_date.desc())
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
-        )
-        .all()
-    )
+    rows = database.session.execute(
+        query.order_by(BankTransaction.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
+    ).all()
 
     items = [
         {

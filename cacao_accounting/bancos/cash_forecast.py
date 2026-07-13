@@ -52,12 +52,7 @@ def cash_forecast_list():
                 company = code
                 break
 
-    forecasts = (
-        database.session.query(CashForecast)
-        .filter_by(company=company)
-        .order_by(CashForecast.created.desc())
-        .all()
-    )
+    forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.created.desc()).all()
 
     return render_template(
         "bancos/cash_forecast_lista.html",
@@ -397,9 +392,7 @@ def cash_forecast_entry_import(forecast_id):
                 r_currency = str(row_cells[col_currency].value or "NIO").strip()
                 r_amount_val = row_cells[col_amount].value
                 r_date_val = row_cells[col_date].value
-                r_notes = (
-                    str(row_cells[col_notes].value or "").strip() if col_notes != -1 else ""
-                )
+                r_notes = str(row_cells[col_notes].value or "").strip() if col_notes != -1 else ""
 
                 if not r_type or not r_concept or r_amount_val is None or r_date_val is None:
                     continue
@@ -462,12 +455,7 @@ def cash_forecast_compare():
                 break
 
     # Obtener todos los forecast de esta compañía
-    forecasts = (
-        database.session.query(CashForecast)
-        .filter_by(company=company)
-        .order_by(CashForecast.version.asc())
-        .all()
-    )
+    forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.version.asc()).all()
 
     base_id = request.args.get("base_id")
     compare_id = request.args.get("compare_id")
@@ -513,12 +501,7 @@ def cash_forecast_manual_entries():
                 break
 
     # Obtener todos los forecast de esta compañía
-    forecasts = (
-        database.session.query(CashForecast)
-        .filter_by(company=company)
-        .order_by(CashForecast.version.asc())
-        .all()
-    )
+    forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.version.asc()).all()
 
     selected_forecast_id = request.args.get("forecast_id")
     # Default to first forecast if not specified
