@@ -97,6 +97,9 @@
 ### 2026-07-13
 - **Caddy**: reverse proxy sirve assets estáticos, gzip, Cache-Control 24h, proxy a Waitress:8080.
 - **Limpieza código muerto**: eliminados `gl/`, `validaciones/`, `admin/registros/`, `I18N.py`, `datos/base/data.py`.
+- **Document Flow refactor (Fase 1)**: eliminado `document_flow_trace` macro muerta, `document_flow_summary()` y funciones auxiliares de `tracing.py`. Commit `e96a5da`.
+- **Document Flow refactor (Fase 2)**: extraída lógica de pagos a `document_flow/payment.py` (~1150 líneas). service.py reducido de ~1818 a ~500 líneas. Re-exports para compatibilidad retroactiva. `DocumentFlowError` con status codes correctos via import tardío. Commit `25f87c3`.
+- **Document Flow refactor (Fase 3)**: unificación de naming en variables de pago: `reference_type`→`model_type` (physical), `reference_id`→`document_id` (identifier), `source_type`→`flow_source_type` (logical). DB columns sin cambios. Commit `5f1b294`.
 
 ### 2026-07-11
 - **Cash Flow Forecast**: módulo YTD con flujos reales (GLEntry), proyecciones AR/AP y manuales. Flujos de aprobación (Borrador→Aprobado→Cerrado→Archivado). Comparación side-by-side.
@@ -198,3 +201,5 @@
 6. **Smart Select migration**: completada al 100%. Solo quedan `<select>` de enum/choice.
 7. **Reportes**: `financial_report.html` es el patrón superset; `operational_report.html` es la variante simplificada.
 8. **Docker**: Internet → Caddy:80 → Waitress:8080 → Flask. Caddy maneja static + compresión + proxy.
+9. **Document Flow naming**: `flow_source_type` (lógico, ej. `purchase_credit_note`), `model_type` (físico SQLAlchemy, ej. `purchase_invoice`), `document_id` (identificador). DB columns sin cambios, solo Python variables.
+10. **Document Flow modules**: `payment.py` para lógica de pagos/conciliación AR/AP; `service.py` para relaciones documentales y creación de documentos; `registry.py` para tipos/flows permitidos.
