@@ -5,54 +5,274 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ _("Conciliacion de Compras Pendiente") }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Conciliación de Compras") }}</li>
   </ol>
 </nav>
 
-<div class="ca-card">
+<div class="ca-card mb-3">
   <div class="ca-card-header">
-    <h5 class="ca-card-title">{{ _("Conciliacion de Compras Pendiente") }}</h5>
+    <h5 class="ca-card-title">{{ _("Conciliación de Compras") }}</h5>
   </div>
   <div class="p-3">
     <form method="get" class="row g-2 mb-3">
       <div class="col-md-3">
-        <input name="company" class="form-control" value="{{ company }}" placeholder="{{ _('Compañía') }}">
+        <input name="company" class="form-control form-control-sm" value="{{ company }}" placeholder="{{ _('Compañía') }}">
       </div>
       <div class="col-md-2">
-        <button class="btn btn-primary w-100" type="submit">
+        <button class="btn btn-sm btn-primary w-100" type="submit">
           <i class="bi bi-funnel me-1"></i>{{ _("Filtrar") }}
         </button>
       </div>
+      <div class="col-md-auto ms-auto">
+        <a href="{{ url_for('compras.compras_reconciliation_panel', company=company) }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-diagram-3 me-1"></i>{{ _("Ver Panel de Conciliaciones") }}
+        </a>
+      </div>
     </form>
-    <table class="ca-table">
-      <caption style="display:none;">{{ _("Conciliaciones de compra pendientes") }}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{{ _("Recepción") }}</th>
-          <th scope="col">{{ _("Item") }}</th>
-          <th scope="col">{{ _("Bodega") }}</th>
-          <th scope="col">{{ _("UOM") }}</th>
-          <th scope="col">{{ _("Cantidad pendiente") }}</th>
-          <th scope="col">{{ _("Monto pendiente") }}</th>
-          <th scope="col">{{ _("Estado") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          <td>{{ row.purchase_receipt_id }}</td>
-          <td>{{ row.item_code }}</td>
-          <td>{{ row.warehouse or "" }}</td>
-          <td>{{ row.uom or "" }}</td>
-          <td>{{ row.pending_qty }}</td>
-          <td>{{ row.pending_amount }}</td>
-          <td>{{ row.status }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="7">{{ _("No hay conciliaciones de compra pendientes.") }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="reconciliationTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders-panel" type="button" role="tab" aria-controls="orders-panel" aria-selected="true">
+      <i class="bi bi-cart-check me-1"></i>{{ _("Estatus de Órdenes de Compra") }}
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="invoices-tab" data-bs-toggle="tab" data-bs-target="#invoices-panel" type="button" role="tab" aria-controls="invoices-panel" aria-selected="false">
+      <i class="bi bi-receipt me-1"></i>{{ _("Facturas sin Recepción (En Tránsito)") }}
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="receipts-tab" data-bs-toggle="tab" data-bs-target="#receipts-panel" type="button" role="tab" aria-controls="receipts-panel" aria-selected="false">
+      <i class="bi bi-box-seam me-1"></i>{{ _("Recepciones sin Factura") }}
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="reconciliationTabsContent">
+  {# ─── TAB 1: Estatus de Órdenes de Compra ─── #}
+  <div class="tab-pane fade show active" id="orders-panel" role="tabpanel" aria-labelledby="orders-tab">
+    <div class="ca-card">
+      <div class="p-3">
+        <p class="text-muted small mb-3">
+          {{ _("Monitoreo del estatus físico (recepción) y financiero (facturación) de las órdenes de compra aprobadas.") }}
+        </p>
+        <div class="table-responsive">
+          <table class="ca-table">
+            <caption style="display:none;">{{ _("Estatus de órdenes de compra") }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ _("Orden de Compra") }}</th>
+                <th scope="col">{{ _("Fecha") }}</th>
+                <th scope="col">{{ _("Proveedor") }}</th>
+                <th scope="col" class="text-end">{{ _("Cant. Ordenada") }}</th>
+                <th scope="col" class="text-end">{{ _("Cant. Recibida") }}</th>
+                <th scope="col" class="text-end">{{ _("Cant. Facturada") }}</th>
+                <th scope="col">{{ _("Estado Recepción") }}</th>
+                <th scope="col">{{ _("Estado Facturación") }}</th>
+                <th scope="col" class="text-end">{{ _("Monto Total") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in order_status_report %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('compras.compras_orden_compra', order_id=row.id) }}" class="link-dark fw-bold">
+                    {{ row.document_no }}
+                  </a>
+                </td>
+                <td>{{ row.posting_date }}</td>
+                <td>{{ row.supplier_name }}</td>
+                <td class="text-end">{{ row.ordered_qty | float | round(4) }}</td>
+                <td class="text-end">{{ row.received_qty | float | round(4) }}</td>
+                <td class="text-end">{{ row.billed_qty | float | round(4) }}</td>
+                <td>
+                  {% if row.receipt_status == "Completado" %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>{{ _("Completado") }}</span>
+                  {% elif row.receipt_status == "Parcial" %}
+                    <span class="badge bg-primary"><i class="bi bi-arrow-left-right me-1"></i>{{ _("Parcial") }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary"><i class="bi bi-hourglass me-1"></i>{{ _("Pendiente") }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.billing_status == "Completado" %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>{{ _("Completado") }}</span>
+                  {% elif row.billing_status == "Parcial" %}
+                    <span class="badge bg-primary"><i class="bi bi-arrow-left-right me-1"></i>{{ _("Parcial") }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary"><i class="bi bi-hourglass me-1"></i>{{ _("Pendiente") }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-end fw-bold">{{ row.grand_total | float | round(2) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="9" class="text-center text-muted">{{ _("No hay órdenes de compra activas.") }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── TAB 2: Facturas sin Recepción (En Tránsito) ─── #}
+  <div class="tab-pane fade" id="invoices-panel" role="tabpanel" aria-labelledby="invoices-tab">
+    <div class="ca-card">
+      <div class="p-3">
+        <p class="text-muted small mb-3">
+          {{ _("Facturas de proveedor aprobadas que no tienen asociada una recepción de mercancía (Bienes en Tránsito o servicios no inventariables).") }}
+        </p>
+        <div class="table-responsive">
+          <table class="ca-table">
+            <caption style="display:none;">{{ _("Facturas sin recepción") }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ _("Factura") }}</th>
+                <th scope="col">{{ _("Fecha") }}</th>
+                <th scope="col">{{ _("Proveedor") }}</th>
+                <th scope="col" class="text-end">{{ _("Monto Total") }}</th>
+                <th scope="col">{{ _("Orden de Compra") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in unlinked_invoices %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('compras.compras_factura_compra', invoice_id=row.id) }}" class="link-dark fw-bold">
+                    {{ row.document_no }}
+                  </a>
+                </td>
+                <td>{{ row.posting_date }}</td>
+                <td>{{ row.supplier_name }}</td>
+                <td class="text-end fw-bold">{{ row.grand_total | float | round(2) }}</td>
+                <td>
+                  {% if row.purchase_order_id %}
+                    <a href="{{ url_for('compras.compras_orden_compra', order_id=row.purchase_order_id) }}" class="link-dark">
+                      {{ row.purchase_order_no }}
+                    </a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted">{{ _("No hay facturas sin recepción asociada.") }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── TAB 3: Recepciones sin Factura ─── #}
+  <div class="tab-pane fade" id="receipts-panel" role="tabpanel" aria-labelledby="receipts-tab">
+    <div class="ca-card mb-4">
+      <div class="ca-card-header">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-box-seam me-1"></i>{{ _("Resumen de Recepciones Pendientes de Facturar") }}</h6>
+      </div>
+      <div class="p-3">
+        <p class="text-muted small mb-3">
+          {{ _("Recepciones de mercancía aprobadas que aún no han sido facturadas (o facturadas parcialmente).") }}
+        </p>
+        <div class="table-responsive">
+          <table class="ca-table">
+            <caption style="display:none;">{{ _("Recepciones sin factura") }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ _("Recepción") }}</th>
+                <th scope="col">{{ _("Fecha") }}</th>
+                <th scope="col">{{ _("Proveedor") }}</th>
+                <th scope="col" class="text-end">{{ _("Cantidad Pendiente") }}</th>
+                <th scope="col" class="text-end">{{ _("Monto Pendiente") }}</th>
+                <th scope="col" class="text-end">{{ _("Total Recepción") }}</th>
+                <th scope="col">{{ _("Orden de Compra") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in unlinked_receipts %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('compras.compras_recepcion', receipt_id=row.id) }}" class="link-dark fw-bold">
+                    {{ row.document_no }}
+                  </a>
+                </td>
+                <td>{{ row.posting_date }}</td>
+                <td>{{ row.supplier_name }}</td>
+                <td class="text-end">{{ row.pending_qty | float | round(4) }}</td>
+                <td class="text-end fw-bold">{{ row.pending_amount | float | round(2) }}</td>
+                <td class="text-end text-muted">{{ row.grand_total | float | round(2) }}</td>
+                <td>
+                  {% if row.purchase_order_id %}
+                    <a href="{{ url_for('compras.compras_orden_compra', order_id=row.purchase_order_id) }}" class="link-dark">
+                      {{ row.purchase_order_no }}
+                    </a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted">{{ _("No hay recepciones pendientes de facturar.") }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-list-ul me-1"></i>{{ _("Detalle por Línea de Recepción Pendiente") }}</h6>
+      </div>
+      <div class="p-3">
+        <div class="table-responsive">
+          <table class="ca-table">
+            <caption style="display:none;">{{ _("Líneas de recepción pendientes") }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ _("Recepción") }}</th>
+                <th scope="col">{{ _("Artículo") }}</th>
+                <th scope="col">{{ _("Almacén") }}</th>
+                <th scope="col">{{ _("UOM") }}</th>
+                <th scope="col" class="text-end">{{ _("Cantidad Pendiente") }}</th>
+                <th scope="col" class="text-end">{{ _("Monto Pendiente") }}</th>
+                <th scope="col">{{ _("Estado") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('compras.compras_recepcion', receipt_id=row.purchase_receipt_id) }}" class="link-dark">
+                    {{ row.purchase_receipt_id }}
+                  </a>
+                </td>
+                <td>{{ row.item_code }}</td>
+                <td>{{ row.warehouse or "" }}</td>
+                <td>{{ row.uom or "" }}</td>
+                <td class="text-end">{{ row.pending_qty | float | round(4) }}</td>
+                <td class="text-end fw-bold">{{ row.pending_amount | float | round(2) }}</td>
+                <td>
+                  {% if row.status == "open" %}
+                    <span class="badge bg-secondary"><i class="bi bi-hourglass me-1"></i>{{ _("Abierto") }}</span>
+                  {% elif row.status == "partial" %}
+                    <span class="badge bg-primary"><i class="bi bi-arrow-left-right me-1"></i>{{ _("Parcial") }}</span>
+                  {% else %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>{{ row.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted">{{ _("No hay líneas de recepción pendientes de facturar.") }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

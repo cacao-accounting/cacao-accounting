@@ -2842,3 +2842,203 @@ def test_goods_received_cancelled_event_emitted_on_receipt_cancel(app_ctx):
         )
     ).scalar_one_or_none()
     assert cancel_event is not None
+
+
+def test_purchase_order_status_report(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_order_status_report
+    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, database
+
+    order_p = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-P1", docstatus=1)
+    database.session.add(order_p)
+    database.session.flush()
+
+    item_p = PurchaseOrderItem(
+        purchase_order_id=order_p.id,
+        item_code="ITEM-P1",
+        item_name="Item P1",
+        qty=Decimal("15"),
+        qty_in_base_uom=Decimal("15"),
+        uom="EA",
+        rate=Decimal("10.00"),
+        amount=Decimal("150.00"),
+        received_qty=Decimal("5"),
+        billed_qty=Decimal("10"),
+    )
+    database.session.add(item_p)
+    database.session.commit()
+
+    report = get_purchase_order_status_report("cacao")
+    assert len(report) >= 1
+    row = next(r for r in report if r["id"] == order_p.id)
+    assert row["ordered_qty"] == Decimal("15")
+    assert row["received_qty"] == Decimal("5")
+    assert row["billed_qty"] == Decimal("10")
+    assert row["receipt_status"] == "Parcial"
+    assert row["billing_status"] == "Parcial"
+
+
+def test_unlinked_purchase_invoices(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import get_unlinked_purchase_invoices
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    unlinked = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        supplier_id="SUPP-UN1",
+        purchase_receipt_id=None,
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("450.00"),
+    )
+    linked = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        supplier_id="SUPP-UN1",
+        purchase_receipt_id="PREC-SOME",
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("200.00"),
+    )
+    database.session.add_all([unlinked, linked])
+    database.session.commit()
+
+    report = get_unlinked_purchase_invoices("cacao")
+    ids = [r["id"] for r in report]
+    assert unlinked.id in ids
+    assert linked.id not in ids
+
+
+def test_unlinked_purchase_receipts_summary(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import get_unlinked_purchase_receipts_summary
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database, UOM, Item, Warehouse
+
+    database.session.add_all(
+        [
+            UOM(code="EA-UR", name="Each UR"),
+            Item(code="ITEM-UR", name="Item UR", item_type="goods", is_stock_item=True, default_uom="EA-UR"),
+            Warehouse(code="WH-UR", name="Bodega UR", company="cacao"),
+        ]
+    )
+    database.session.flush()
+
+    receipt = PurchaseReceipt(company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-UR", docstatus=1)
+    database.session.add(receipt)
+    database.session.flush()
+
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt.id,
+        item_code="ITEM-UR",
+        item_name="Item UR",
+        qty=Decimal("100"),
+        qty_in_base_uom=Decimal("100"),
+        uom="EA-UR",
+        rate=Decimal("12.00"),
+        amount=Decimal("1200.00"),
+        warehouse="WH-UR",
+    )
+    database.session.add(receipt_item)
+    database.session.commit()
+
+    # Total pending is 100
+    report = get_unlinked_purchase_receipts_summary("cacao")
+    assert len(report) >= 1
+    row = next(r for r in report if r["id"] == receipt.id)
+    assert row["pending_qty"] == Decimal("100")
+
+
+def test_purchase_reconciliation_web_view_and_tabs(app_ctx):
+    from cacao_accounting.database import User, Modules, database
+    app_ctx.config["SECRET_KEY"] = "testing-reconc"
+    client = app_ctx.test_client()
+
+    user = User(user="reconciliation-user", name="Reconc User", password=b"x", classification="admin", active=True)
+    purchases_module = Modules(module="purchases", default=True, enabled=True)
+    database.session.add_all([user, purchases_module])
+    database.session.commit()
+
+    with client.session_transaction() as session:
+        session["_user_id"] = user.id
+        session["_fresh"] = True
+
+    response = client.get("/buying/purchase-reconciliation?company=cacao")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert "orders-panel" in html
+    assert "invoices-panel" in html
+    assert "receipts-panel" in html
+    assert "reconciliationTabs" in html
+
+
+def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice, PurchaseReconciliationError
+    from cacao_accounting.database import (
+        Item,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-CURR", name="Each CURR"),
+            Item(code="ITEM-CURR", name="Item CURR", item_type="goods", is_stock_item=True, default_uom="EA-CURR"),
+            Warehouse(code="WH-CURR", name="Bodega CURR", company="cacao"),
+        ]
+    )
+    database.session.flush()
+
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-CURR",
+        transaction_currency="USD",
+        docstatus=1
+    )
+    database.session.add(receipt)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-CURR",
+            qty=Decimal("10"),
+            qty_in_base_uom=Decimal("10"),
+            uom="EA-CURR",
+            rate=Decimal("5.00"),
+            amount=Decimal("50.00"),
+            warehouse="WH-CURR",
+        )
+    )
+
+    # Invoice in NIO
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-CURR",
+        purchase_receipt_id=receipt.id,
+        transaction_currency="NIO",
+        docstatus=1,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-CURR",
+            qty=Decimal("10"),
+            uom="EA-CURR",
+            rate=Decimal("170.00"),
+            amount=Decimal("1700.00"),
+            warehouse="WH-CURR",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
+        reconcile_purchase_invoice(invoice.id)
