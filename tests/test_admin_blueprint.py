@@ -4,8 +4,6 @@
 """Pruebas unitarias para el módulo administrativo."""
 
 import pytest
-from datetime import date
-from decimal import Decimal
 from unittest import mock
 
 from cacao_accounting import create_app
@@ -13,18 +11,12 @@ from cacao_accounting.database import (
     database,
     User,
     Roles,
-    RolesUser,
     Modules,
     Tax,
     TaxTemplate,
-    TaxTemplateItem,
     PriceList,
-    ItemPrice,
     Entity,
     PartyGroup,
-    PurchaseMatchingConfig,
-    SalesMatchingConfig,
-    CompanyDefaultAccount,
 )
 import sys
 import os
@@ -105,24 +97,40 @@ def test_lista_modulos(app_instance):
         assert response.status_code == 200
 
         # POST module not found
-        response = client.post("/settings/modules", data={"module_id": "nonexistent_id", "action": "toggle"}, follow_redirects=True)
+        response = client.post(
+            "/settings/modules",
+            data={"module_id": "nonexistent_id", "action": "toggle"},
+            follow_redirects=True,
+        )
         assert b"M" in response.data  # "Módulo no encontrado."
 
         # POST try to toggle administrative module (should fail)
         with app_instance.app_context():
-            admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one()
+            admin_module = database.session.execute(
+                database.select(Modules).filter_by(module="admin")
+            ).scalar_one()
             admin_module_id = admin_module.id
 
-        response = client.post("/settings/modules", data={"module_id": admin_module_id, "action": "toggle"}, follow_redirects=True)
+        response = client.post(
+            "/settings/modules",
+            data={"module_id": admin_module_id, "action": "toggle"},
+            follow_redirects=True,
+        )
         assert b"administrativo" in response.data  # El módulo administrativo no puede deshabilitarse.
 
         # POST toggle another module
         with app_instance.app_context():
-            other_module = database.session.execute(database.select(Modules).filter(Modules.module != "admin")).scalars().first()
+            other_module = database.session.execute(
+                database.select(Modules).filter(Modules.module != "admin")
+            ).scalars().first()
             other_module_id = other_module.id
             orig_enabled = other_module.enabled
 
-        response = client.post("/settings/modules", data={"module_id": other_module_id, "action": "toggle"}, follow_redirects=True)
+        response = client.post(
+            "/settings/modules",
+            data={"module_id": other_module_id, "action": "toggle"},
+            follow_redirects=True,
+        )
         assert response.status_code == 200
         with app_instance.app_context():
             other_module = database.session.get(Modules, other_module_id)

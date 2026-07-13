@@ -16,7 +16,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../../tests"))
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
-    Entity,
     AccountingPeriod,
     Accounts,
     GLEntry,
