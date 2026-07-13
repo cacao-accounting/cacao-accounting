@@ -164,9 +164,13 @@
               </td>
               <td>
                 {% if r.user_id %}
-                  <span class="badge bg-info"><i class="bi bi-person me-1"></i>{{ _("Usuario:") }} {{ r.user_id }}</span>
+                  {% for u in users if u.id == r.user_id %}
+                    <span class="badge bg-info"><i class="bi bi-person me-1"></i>{{ u.name or u.user }}</span>
+                  {% endfor %}
                 {% elif r.role_id %}
-                  <span class="badge bg-primary"><i class="bi bi-shield me-1"></i>{{ _("Rol:") }} {{ r.role_id }}</span>
+                  {% for r2 in roles if r2.id == r.role_id %}
+                    <span class="badge bg-primary"><i class="bi bi-shield me-1"></i>{{ r2.note or r2.name }}</span>
+                  {% endfor %}
                 {% else %}
                   <span class="badge bg-secondary">{{ _("Cualquiera") }}</span>
                 {% endif %}
