@@ -39,11 +39,10 @@ def test_visit_views(request):
 
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
                 assert current_user.is_authenticated
-                log.warning("")
 
                 for ruta in static_rutes:
                     if not isinstance(ruta, str):
-                        log.warning("Testing route: " + ruta.url)
+                        log.trace("Testing route: " + ruta.url)
                         consulta = client.get(ruta.url)
                         assert consulta.status_code == 200
                         if ruta.text:
