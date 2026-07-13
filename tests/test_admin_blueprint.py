@@ -1,7 +1,13 @@
+# ruff: noqa: E402
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 William José Moreno Reyes
+# Copyright 2026 William José Reyes
 
 """Pruebas unitarias para el módulo administrativo."""
+
+import sys
+from unittest import mock
+# Mock email_validator module to avoid environment dependency errors in WTForms Email validator
+sys.modules["email_validator"] = mock.MagicMock()
 
 import pytest
 from unittest import mock
