@@ -2949,13 +2949,44 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
 
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     """CROSS-01: Captura estado de documento de compras para auditoría."""
-    return {
+    state = {
         "supplier_id": getattr(registro, "supplier_id", None),
         "company": getattr(registro, "company", None),
         "posting_date": str(getattr(registro, "posting_date", "")),
         "total": str(getattr(registro, "total", "")),
         "remarks": getattr(registro, "remarks", None),
     }
+
+    from cacao_accounting.database import (
+        PurchaseRequest, PurchaseRequestItem,
+        PurchaseQuotation, PurchaseQuotationItem,
+        SupplierQuotation, SupplierQuotationItem,
+        PurchaseOrder, PurchaseOrderItem,
+        PurchaseReceipt, PurchaseReceiptItem,
+        PurchaseInvoice, PurchaseInvoiceItem,
+    )
+
+    mapping = {
+        PurchaseRequest: (PurchaseRequestItem, "purchase_request_id"),
+        PurchaseQuotation: (PurchaseQuotationItem, "purchase_quotation_id"),
+        SupplierQuotation: (SupplierQuotationItem, "supplier_quotation_id"),
+        PurchaseOrder: (PurchaseOrderItem, "purchase_order_id"),
+        PurchaseReceipt: (PurchaseReceiptItem, "purchase_receipt_id"),
+        PurchaseInvoice: (PurchaseInvoiceItem, "purchase_invoice_id"),
+    }
+
+    cls = type(registro)
+    if cls in mapping:
+        item_cls, fk_name = mapping[cls]
+        items = database.session.execute(
+            database.select(item_cls).filter_by(**{fk_name: registro.id})
+        ).scalars().all()
+        state["items"] = [
+            {str(col.name): getattr(item, col.name) for col in item.__table__.columns if col.name not in ("id", fk_name)}
+            for item in items
+        ]
+
+    return state
 
 
 def _validate_supplier_invoice_flags(
