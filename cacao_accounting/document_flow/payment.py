@@ -41,9 +41,10 @@ _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 MAX_RECONCILIATION_LINES = 100
 
 
-def _document_flow_error(message: str, status_code: int = 400) -> "DocumentFlowError":
+def _document_flow_error(message: str, status_code: int = 400) -> Exception:
     """Resuelve DocumentFlowError via import tardio para evitar circular."""
     from cacao_accounting.document_flow.service import DocumentFlowError as _DFE
+
     return _DFE(message, status_code)
 
 
