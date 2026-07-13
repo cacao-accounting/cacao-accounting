@@ -376,10 +376,12 @@ def _register_app_hooks(app: Flask) -> None:
     def add_security_headers(response):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "connect-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
+            "manifest-src 'self'; "
             "frame-ancestors 'none'"
         )
         response.headers["X-Frame-Options"] = "DENY"
