@@ -529,8 +529,8 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
     env_var = (environ.get("ENV") or "").lower()
     is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
 
-    usuario = environ.get("CACAO_USER")
-    contrasena = environ.get("CACAO_PSWD")
+    usuario = environ.get("CACAO_USER") or environ.get("ADMIN_USER")
+    contrasena = environ.get("CACAO_PSWD") or environ.get("CACAO_PASSWORD") or environ.get("ADMIN_PASSWORD")
 
     if not usuario or not contrasena:
         if not is_dev:
