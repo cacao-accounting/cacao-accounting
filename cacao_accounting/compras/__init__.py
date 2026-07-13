@@ -23,8 +23,11 @@ from flask_login import current_user, login_required
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.compras.purchase_reconciliation_service import (
+    get_purchase_order_status_report,
     get_purchase_reconciliation_panel_groups,
     get_purchase_reconciliation_pending,
+    get_unlinked_purchase_invoices,
+    get_unlinked_purchase_receipts_summary,
 )
 from cacao_accounting.database import (
     CompanyParty,
@@ -1150,8 +1153,19 @@ def compras_purchase_reconciliation():
     """Report pending purchase reconciliation lines."""
     company = request.args.get("company", "cacao")
     rows = get_purchase_reconciliation_pending(company=company)
-    titulo = _("Conciliacion de Compras Pendiente") + " - " + APPNAME
-    return render_template("compras/purchase_reconciliation.html", rows=rows, company=company, titulo=titulo)
+    order_status_report = get_purchase_order_status_report(company=company)
+    unlinked_invoices = get_unlinked_purchase_invoices(company=company)
+    unlinked_receipts = get_unlinked_purchase_receipts_summary(company=company)
+    titulo = _("Conciliación de Compras") + " - " + APPNAME
+    return render_template(
+        "compras/purchase_reconciliation.html",
+        rows=rows,
+        order_status_report=order_status_report,
+        unlinked_invoices=unlinked_invoices,
+        unlinked_receipts=unlinked_receipts,
+        company=company,
+        titulo=titulo
+    )
 
 
 @compras.route("/purchase-reconciliation/panel")
