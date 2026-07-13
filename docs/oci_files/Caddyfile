@@ -1,3 +1,16 @@
 :80 {
-    reverse_proxy localhost:8080
+    encode gzip
+
+    handle_path /static/* {
+        root * /app/cacao_accounting/static
+        file_server
+        header Cache-Control "public, max-age=86400"
+        header -Server
+    }
+
+    reverse_proxy localhost:8080 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
 }

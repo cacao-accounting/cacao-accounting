@@ -1,5 +1,13 @@
 # Estado Actual del Proyecto - 2026-07-13
 
+- **Caddy como servidor HTTP/reverse proxy (2026-07-13):** Se agregó Caddy como servidor HTTP reverse proxy en el contenedor Docker.
+  - El Dockerfile ahora incluye una etapa multi-stage para obtener el binario de Caddy desde `caddy:2-alpine`.
+  - Caddy sirve archivos estáticos (`/static/*`) directamente desde el filesystem, quitando ese trabajo al servidor WSGI Waitress.
+  - Configuración de compresión gzip, headers `Cache-Control` (24 horas) para assets estáticos y proxy reverso a Waitress en puerto 8080.
+  - El contenedor expone puerto 80 (Caddy) en lugar de 8080 (Waitress).
+  - `docker-entry-point.sh` inicia Caddy antes de Waitress.
+  - `docker-compose.yml` actualizado para mapear puerto 80:80.
+
 - **Limpieza de Código Muerto (2026-07-13):** Se eliminaron de forma segura los archivos y directorios de código muerto que no poseían funciones o utilidad activa en el sistema.
   - Eliminados los directorios vacíos y sus correspondientes archivos `__init__.py` sin funciones: `cacao_accounting/gl/`, `cacao_accounting/validaciones/`, y `cacao_accounting/admin/registros/`.
   - Eliminados los archivos de andamiaje inactivos: `cacao_accounting/I18N.py` y `cacao_accounting/datos/base/data.py` (los cuales solo poseían comentarios de licencia y docstrings, y nunca eran importados).

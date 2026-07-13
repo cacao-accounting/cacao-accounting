@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "80:80"
     environment:
       - CACAO_DATABASE_URL=postgresql://${DB_USER:-cacao}:${DB_PASSWORD:-}@db:5432/${DB_NAME:-cacaodb}
       - CACHE_REDIS_URL=redis://cache:6379/0
