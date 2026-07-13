@@ -3455,3 +3455,163 @@ def test_base_outstanding_amount_converts_exchange_rate(app_ctx):
     _update_document_outstanding(invoice, Decimal("80.00"), Decimal("30.00"))
     assert invoice.outstanding_amount == Decimal("50.00")
     assert invoice.base_outstanding_amount == Decimal("1825.00")
+
+
+def test_operational_posting_ignores_ledger_code_and_affects_all_active_books(app_ctx):
+    """Verifica que los modulos operativos siempre afecten todos los libros activos,
+    ignorando cualquier parametro ledger_code."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import Accounts, Book, GLEntry, PartyAccount, SalesInvoice, SalesInvoiceItem, database
+    from decimal import Decimal
+
+    receivable_account = Accounts(
+        entity="cacao",
+        code="AR-ML-TEST",
+        name="Cuentas por cobrar ML Test",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="receivable",
+    )
+    income_account = Accounts(
+        entity="cacao",
+        code="IN-ML-TEST",
+        name="Ventas ML Test",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    fiscal_book = Book(entity="cacao", code="FISC-T1", name="Fiscal Test 1", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS-T1", name="IFRS Test 1", is_primary=False)
+    database.session.add_all([receivable_account, income_account, fiscal_book, ifrs_book])
+    database.session.flush()
+    database.session.add(PartyAccount(party_id="CUST-ML-TEST", company="cacao", receivable_account_id=receivable_account.id))
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-ML-TEST",
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ITEM-ML-TEST",
+            item_name="Servicio multi libro test",
+            qty=Decimal("1"),
+            rate=Decimal("100.00"),
+            amount=Decimal("100.00"),
+            income_account_id=income_account.id,
+        )
+    )
+    database.session.commit()
+
+    # Intentamos registrar limitando a un solo libro "FISC-T1"
+    post_document_to_gl(invoice, ledger_code="FISC-T1")
+    database.session.commit()
+
+    # Verificamos que aun asi, se crearon entradas para ambos libros activos
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 4
+    ledger_ids_posted = {entry.ledger_id for entry in entries}
+    assert fiscal_book.id in ledger_ids_posted
+    assert ifrs_book.id in ledger_ids_posted
+
+
+def test_operational_posting_multimoneda_real(app_ctx):
+    """Verifica que los modulos operativos manejen multimoneda real, convirtiendo
+    valores a la moneda base del libro/compania en debit/credit, y guardando el original."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import Accounts, Book, GLEntry, PartyAccount, SalesInvoice, SalesInvoiceItem, ExchangeRate, database
+    from decimal import Decimal
+
+    receivable_account = Accounts(
+        entity="cacao",
+        code="AR-MC-TEST",
+        name="Cuentas por cobrar MC Test",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="receivable",
+    )
+    income_account = Accounts(
+        entity="cacao",
+        code="IN-MC-TEST",
+        name="Ventas MC Test",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    fiscal_book = Book(entity="cacao", code="FISC-MC", name="Fiscal MC", is_primary=True, currency="NIO")
+    database.session.add_all([receivable_account, income_account, fiscal_book])
+    database.session.flush()
+
+    # Agregar tipo de cambio de USD a NIO
+    exchange_rate_record = ExchangeRate(
+        origin="USD",
+        destination="NIO",
+        rate=Decimal("36.50"),
+        date=date(2026, 5, 4)
+    )
+    database.session.add(exchange_rate_record)
+    database.session.flush()
+
+    database.session.add(PartyAccount(party_id="CUST-MC-TEST", company="cacao", receivable_account_id=receivable_account.id))
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-MC-TEST",
+        docstatus=1,
+        total=Decimal("10.00"),
+        grand_total=Decimal("10.00"),
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.50"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ITEM-MC-TEST",
+            item_name="Servicio multi moneda test",
+            qty=Decimal("1"),
+            rate=Decimal("10.00"),
+            amount=Decimal("10.00"),
+            income_account_id=income_account.id,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    database.session.commit()
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 2
+    for entry in entries:
+        assert entry.account_currency == "USD"
+        assert entry.company_currency == "NIO"
+        assert entry.exchange_rate == Decimal("36.50")
+
+        if entry.debit > 0:
+            # 10.00 USD converted to NIO = 365.00
+            assert entry.debit == Decimal("365.00")
+            assert entry.debit_in_account_currency == Decimal("10.00")
+        else:
+            assert entry.credit == Decimal("365.00")
+            assert entry.credit_in_account_currency == Decimal("10.00")
