@@ -924,6 +924,7 @@
 {# ─── Audit Timeline (reusable across all document types) ─────── #}
 {% macro audit_timeline(timeline, page_size=20) %}
 {% set field_labels = {
+    'items':               _('Líneas del documento'),
     'memo':                _('Observaciones'),
     'exchange_rate':       _('Tipo de cambio'),
     'fiscal_year_id':      _('Año fiscal'),
