@@ -1,5 +1,22 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-13 : Agregar Caddy como servidor HTTP/reverse proxy
+- **Petición del usuario:** El Dockerfile tiene un problema: expone la app directamente, tiene base de datos y Redis como cache pero no tiene un servidor HTTP. Se propuso Caddy para servir archivos estáticos y quitar ese trabajo al servidor WSGI.
+- **Implementación:**
+  - Se actualizó el `Dockerfile` con una nueva etapa multi-stage `caddy:2-alpine` para obtener el binario de Caddy.
+  - Se copió el binario de Caddy a `/usr/bin/caddy` en la imagen final.
+  - Se copió el `Caddyfile` de `docs/oci_files/Caddyfile` a `/etc/caddy/Caddyfile`.
+  - Se actualizó `docker-entry-point.sh` para iniciar Caddy en background antes de Waitress.
+  - Se actualizó `docker-compose.yml` para exponer puerto 80 (Caddy) en lugar de 8080 (Waitress).
+  - Se actualizó el `Caddyfile` con configuración completa:
+    - Compresión gzip habilitada.
+    - `handle_path /static/*` sirve archivos estáticos directamente desde `/app/cacao_accounting/static`.
+    - Headers `Cache-Control` con 24 horas de cache para assets estáticos.
+    - `reverse_proxy` a Waitress en puerto 8080 con headers de proxy (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`).
+  - Se cambió `EXPOSE` de 8080 a 80 en el Dockerfile.
+  - Se actualizó el `HEALTHCHECK` para usar `caddy validate` en lugar de urllib.
+- **Arquitectura resultante:** Internet → :80 [Caddy] → :8080 [Waitress/Flask]. Caddy maneja compresión, archivos estáticos y proxy reverso. Waitress maneja lógica de aplicación y endpoints dinámicos.
+
 ## 2026-07-13 : Limpieza de código muerto
 - **Petición del usuario:** Limpiar el sistema de código muerto. Encontrar y eliminar líneas de código que no tienen uso o función, y archivos que solo tienen un `__init__` vacío sin funciones.
 - **Implementación:**
