@@ -1,7 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""Servicios de flujo documental y parcialidades."""
+"""Servicios de flujo documental y parcialidades.
+
+Convencion de naming para referencias de pago:
+- ``flow_source_type``: tipo logico del documento fuente (e.g. ``purchase_credit_note``).
+- ``model_type``: tipo fisico del modelo SQLAlchemy (e.g. ``purchase_invoice``).
+- ``document_id``: identificador del documento referenciado.
+"""
 
 import json
 from dataclasses import dataclass
@@ -363,9 +369,9 @@ def _payment_candidate_party(document: Any, source_type: str) -> tuple[str, str 
     return "customer", getattr(document, "customer_id", None)
 
 
-def _payment_candidate_physical_type(source_type: str) -> str:
-    """Devuelve el tipo físico persistido para la referencia de pago."""
-    source_key = normalize_doctype(source_type)
+def _payment_candidate_physical_type(flow_source_type: str) -> str:
+    """Devuelve el tipo fisico del modelo SQLAlchemy para una referencia de pago."""
+    source_key = normalize_doctype(flow_source_type)
     if source_key in {"purchase_credit_note", "purchase_debit_note"}:
         return "purchase_invoice"
     if source_key in {"sales_credit_note", "sales_debit_note"}:
@@ -479,15 +485,14 @@ def _collect_candidates_from_documents(
     return rows
 
 
-def _build_candidate_row(document: Any, source_type: str, party_type: str, party_id: str, company: str) -> dict[str, Any]:
+def _build_candidate_row(document: Any, flow_source_type: str, party_type: str, party_id: str, company: str) -> dict[str, Any]:
+    """Serializa un documento candidato para conciliacion AR/AP."""
     document_date = _payment_candidate_date(document)
-    physical_type = _payment_candidate_physical_type(source_type)
+    physical_type = _payment_candidate_physical_type(flow_source_type)
     return {
-        "source_type": source_type,
-        "reference_type": physical_type,
-        "flow_source_type": source_type,
-        "reference_id": document.id,
-        "source_id": document.id,
+        "flow_source_type": flow_source_type,
+        "model_type": physical_type,
+        "document_id": document.id,
         "document_no": getattr(document, "document_no", None) or document.id,
         "document_date": document_date.isoformat() if document_date else "",
         "party_type": party_type,
@@ -495,8 +500,7 @@ def _build_candidate_row(document: Any, source_type: str, party_type: str, party
         "company": company,
         "currency": getattr(document, "currency", None) or "",
         "grand_total": _to_json_number(getattr(document, "grand_total", None)),
-        "pending_amount": _to_json_number(_payment_candidate_outstanding(document, source_type)),
-        "source_label": source_type,
+        "pending_amount": _to_json_number(_payment_candidate_outstanding(document, flow_source_type)),
     }
 
 
@@ -677,10 +681,10 @@ def _process_reconciliation_line(
     payment_remaining: dict[str, Decimal],
 ) -> None:
     payment_id = str(raw_line.get("payment_id") or "")
-    reference_id = str(raw_line.get("reference_id") or "")
+    document_id = str(raw_line.get("reference_id") or raw_line.get("document_id") or "")
     flow_source_type = normalize_doctype(str(raw_line.get("flow_source_type") or raw_line.get("reference_type") or ""))
-    reference_type = normalize_doctype(
-        str(raw_line.get("reference_type") or _payment_candidate_physical_type(flow_source_type))
+    model_type = normalize_doctype(
+        str(raw_line.get("reference_type") or raw_line.get("model_type") or _payment_candidate_physical_type(flow_source_type))
     )
     allocated = decimal_or_zero(raw_line.get("allocated_amount"))
     discount = decimal_or_zero(raw_line.get("discount_amount"))
@@ -696,7 +700,7 @@ def _process_reconciliation_line(
             ),
             409,
         )
-    key = (payment_id, flow_source_type, reference_id)
+    key = (payment_id, flow_source_type, document_id)
     if key in processed:
         raise DocumentFlowError("No se puede aplicar la misma factura dos veces en un pago.", 409)
     processed.add(key)
@@ -712,9 +716,9 @@ def _process_reconciliation_line(
     if consumed > payment_remaining[payment_id] + Decimal("0.01"):
         raise DocumentFlowError("El monto aplicado excede el saldo disponible del pago.", 409)
 
-    document = _get_reference_document(flow_source_type, reference_id, company, party_type, party_id)
+    document = _get_reference_document(flow_source_type, document_id, company, party_type, party_id)
     _validate_payment_currency_match(payment, document)
-    _check_duplicate_application(payment.id, flow_source_type, reference_id)
+    _check_duplicate_application(payment.id, flow_source_type, document_id)
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
     allocation_ctx = PaymentAllocationContext(
         allocation_date=allocation_date,
@@ -730,15 +734,15 @@ def _process_reconciliation_line(
         payment,
         document,
         flow_source_type,
-        reference_type,
-        reference_id,
+        model_type,
+        document_id,
         allocation_ctx,
     )
     _update_document_outstanding(document, outstanding, allocated)
     _create_reconciliation_item(
         reconciliation_id,
         flow_source_type,
-        reference_id,
+        document_id,
         payment.id,
         allocated,
         allocation_date,
