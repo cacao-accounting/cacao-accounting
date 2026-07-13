@@ -1,5 +1,9 @@
 # PENDIENTE - Cacao Accounting
 
+## Docker / Infraestructura
+- [x] Agregar Caddy como servidor HTTP/reverse proxy (2026-07-13)
+- [x] Optimización del Dockerfile con multi-stage build (2026-07-10)
+
 ## DBA Audit — Completado (2026-07-10)
 - [x] ON DELETE/ON UPDATE en 444 FKs (commit `dab2de9`)
 - [x] UniqueConstraints faltantes + eliminación de redundantes (commit `10a2bc1`)
