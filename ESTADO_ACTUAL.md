@@ -1,4 +1,9 @@
-# Estado Actual del Proyecto - 2026-07-11
+# Estado Actual del Proyecto - 2026-07-13
+
+- **Limpieza de Código Muerto (2026-07-13):** Se eliminaron de forma segura los archivos y directorios de código muerto que no poseían funciones o utilidad activa en el sistema.
+  - Eliminados los directorios vacíos y sus correspondientes archivos `__init__.py` sin funciones: `cacao_accounting/gl/`, `cacao_accounting/validaciones/`, y `cacao_accounting/admin/registros/`.
+  - Eliminados los archivos de andamiaje inactivos: `cacao_accounting/I18N.py` y `cacao_accounting/datos/base/data.py` (los cuales solo poseían comentarios de licencia y docstrings, y nunca eran importados).
+  - Todas las herramientas estáticas (`ruff`, `flake8`, `mypy`) y la suite de pruebas unitarias/E2E completa (1317 tests) se validaron exitosamente en verde tras la remoción.
 
 - **Módulo de Pronóstico de Flujo de Caja (Cash Flow Forecast — 2026-07-11):** Se incorporó un nuevo módulo interactivo para pronosticar la liquidez de caja futura (YTD).
   - Admite flujos reales basados en transacciones `GLEntry` asociadas a cuentas de caja y banco.

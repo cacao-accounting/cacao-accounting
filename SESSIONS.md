@@ -1,5 +1,17 @@
 # SESSIONS - Historical Decisions & Milestones
 
+## 2026-07-13 : Limpieza de código muerto
+- **Petición del usuario:** Limpiar el sistema de código muerto. Encontrar y eliminar líneas de código que no tienen uso o función, y archivos que solo tienen un `__init__` vacío sin funciones.
+- **Implementación:**
+  - Se identificaron y eliminaron de forma segura los siguientes directorios y archivos de código muerto:
+    - `cacao_accounting/gl/` (contenía solo un `__init__.py` con dos firmas de funciones vacías que no se importaban ni usaban en ningún lugar del sistema).
+    - `cacao_accounting/validaciones/` (contenía solo un `__init__.py` vacío con docstring).
+    - `cacao_accounting/admin/registros/` (contenía solo un `__init__.py` vacío con docstring).
+    - `cacao_accounting/I18N.py` (archivo vacío con solo comentarios de licencia y docstring, nunca importado).
+    - `cacao_accounting/datos/base/data.py` (archivo vacío con comentarios de licencia y docstring, nunca importado ya que `base_data` está implementada en `__init__.py`).
+  - Se verificó que todas las herramientas de análisis de calidad estática (`black`, `ruff`, `flake8`, `mypy`) pasaran con cero errores después de la limpieza.
+  - Se ejecutó de forma robusta la suite de pruebas completa en segundo plano de acuerdo con las directrices de `AGENTS.md`, confirmando que los 1317 tests pasaron exitosamente (1307 aprobados, 10 omitidos) sin ninguna regresión.
+
 ## 2026-07-11 : Módulo de Pronóstico de Flujo de Caja (Cash Flow Forecast)
 - **Petición del usuario:** Incorporar un módulo de Pronóstico de Flujo de Caja que permita estimar la liquidez futura combinando la información real registrada en el ERP con proyecciones manuales ingresadas por el usuario. El cálculo consta de Flujo Real (ERP posted) y Flujo Proyectado (Manual Forecast + ERP). Proyecciones manuales deben almacenarse en base de datos para auditoría, versionamiento y comparación. Se requiere una visualización Year-to-Date (YTD) con tres zonas temporales: Real, Current, Projected.
 - **Implementación:**
