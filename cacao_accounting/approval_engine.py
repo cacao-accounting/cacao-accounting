@@ -77,10 +77,10 @@ class ApprovalEngine:
 
     @staticmethod
     def _resolve_doctype(document: Any) -> str:
-        doctype = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
+        doctype = getattr(document, "document_type", None) or getattr(document, "__tablename__", "") or ""
         if doctype == "comprobante_contable":
             return "journal_entry"
-        return normalize_doctype(doctype)
+        return normalize_doctype(str(doctype))
 
     @staticmethod
     def get_document_amount(document: Any) -> Decimal:
