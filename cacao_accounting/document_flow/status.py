@@ -65,6 +65,7 @@ BADGE_CLASSES = {
     "green": "text-bg-success",
     "blue": "text-bg-primary",
     "red": "text-bg-danger",
+    "orange": "text-bg-warning",
 }
 
 BADGE_ICONS = {
@@ -72,6 +73,7 @@ BADGE_ICONS = {
     "green": "bi-check-circle-fill",
     "blue": "bi-arrow-repeat",
     "red": "bi-exclamation-triangle-fill",
+    "orange": "bi-hourglass-split",
 }
 
 
@@ -93,6 +95,18 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
     document = document_or_id if not isinstance(document_or_id, str) else get_document(doctype, document_or_id)
     if document is None:
         return _status("requires_attention", "Requiere Atención", "red")
+
+    from cacao_accounting.database import ApprovalRequest, database
+    req = database.session.execute(
+        database.select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
+    ).scalar_one_or_none()
+    if req and req.status.startswith("Pending"):
+        if req.status == "Pending Approval":
+            return _status("pending_approval", "Pendiente de Aprobación", "orange")
+        elif req.status == "Pending Cancellation" or req.status.startswith("Pending Cancel"):
+            return _status("pending_cancellation", "Anulación Pendiente", "orange")
+        else:
+            return _status("pending_approval", req.status, "orange")
 
     docstatus = getattr(document, "docstatus", None)
     journal_status = _journal_entry_status(doctype=doctype, document=document, docstatus=docstatus)
@@ -120,6 +134,8 @@ def _journal_entry_status(doctype: str, document: Any, docstatus: Any) -> Docume
     if doctype != "journal_entry" or docstatus is not None:
         return None
     status = str(getattr(document, "status", "") or "").lower()
+    if status == "pending approval":
+        return _status("pending_approval", "Pendiente de Aprobación", "orange")
     if status in {"draft", "rejected"}:
         return _status("draft", "Borrador", "gray")
     if status == "submitted":

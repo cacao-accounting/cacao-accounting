@@ -468,8 +468,21 @@ def compras_solicitud_compra_submit(request_id: str):
             supplier_id=None,
             document_id=registro.id,
             document_type="purchase_request",
-            items=items
+            items=items,
         )
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Solicitud de compra aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Solicitud de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -494,6 +507,17 @@ def compras_solicitud_compra_cancel(request_id: str):
     if has_active_source_relations("purchase_request", request_id):
         flash("No se puede cancelar la solicitud de compra porque tiene órdenes de compra o cotizaciones activas.", "danger")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_request", request_id)
@@ -935,6 +959,19 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
             .all()
         )
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Cotización de proveedor aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Cotización de proveedor enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -959,6 +996,17 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
     if has_active_source_relations("supplier_quotation", quotation_id):
         flash("No se puede cancelar la cotización de proveedor porque tiene solicitudes de cotización activas.", "danger")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("supplier_quotation", quotation_id)
@@ -1164,7 +1212,7 @@ def compras_purchase_reconciliation():
         unlinked_invoices=unlinked_invoices,
         unlinked_receipts=unlinked_receipts,
         company=company,
-        titulo=titulo
+        titulo=titulo,
     )
 
 
@@ -2273,6 +2321,19 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
             .all()
         )
         validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Solicitud de cotización aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Solicitud de cotización enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2297,6 +2358,17 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
     if has_active_source_relations("purchase_quotation", quotation_id):
         flash("No se puede cancelar la solicitud de cotización porque tiene órdenes de compra activas.", "danger")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_quotation", quotation_id)
@@ -2329,8 +2401,21 @@ def compras_orden_compra_submit(order_id: str):
             supplier_id=registro.supplier_id,
             document_id=registro.id,
             document_type="purchase_order",
-            items=items
+            items=items,
         )
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Orden de compra aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Orden de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2355,6 +2440,17 @@ def compras_orden_compra_cancel(order_id: str):
     if has_active_source_relations("purchase_order", order_id):
         flash("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas.", "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     registro.docstatus = 2
     log_cancel(registro)
     revert_relations_for_target("purchase_order", order_id)
@@ -2762,6 +2858,19 @@ def compras_recepcion_submit(receipt_id: str):
         )
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         _validate_receipt_quantities_against_po(receipt_id)
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Recepción de compra aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Recepción de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
+
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
@@ -2785,6 +2894,17 @@ def compras_recepcion_cancel(receipt_id: str):
     if has_active_source_relations("purchase_receipt", receipt_id):
         flash("No se puede cancelar la recepción de compra porque tiene facturas de compra activas.", "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     try:
         cancel_document(registro)
         revert_relations_for_target("purchase_receipt", receipt_id)
@@ -2972,12 +3092,18 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     }
 
     from cacao_accounting.database import (
-        PurchaseRequest, PurchaseRequestItem,
-        PurchaseQuotation, PurchaseQuotationItem,
-        SupplierQuotation, SupplierQuotationItem,
-        PurchaseOrder, PurchaseOrderItem,
-        PurchaseReceipt, PurchaseReceiptItem,
-        PurchaseInvoice, PurchaseInvoiceItem,
+        PurchaseRequest,
+        PurchaseRequestItem,
+        PurchaseQuotation,
+        PurchaseQuotationItem,
+        SupplierQuotation,
+        SupplierQuotationItem,
+        PurchaseOrder,
+        PurchaseOrderItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
     )
 
     mapping = {
@@ -2993,6 +3119,7 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     if cls in mapping:
         item_cls, fk_name = mapping[cls]
         from cacao_accounting.audit_trail_service import capture_lines_snapshot
+
         state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
 
     return state
@@ -3355,6 +3482,19 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "supplier_invoice_no", None),
             exclude_id=registro.id,
         )
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                flash("Factura de compra aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Factura de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
@@ -3388,6 +3528,17 @@ def compras_factura_compra_cancel(invoice_id: str):
     ):
         flash(_("No se puede cancelar la factura de compra porque tiene pagos activos."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     try:
         cancel_document(registro)
         log_cancel(registro)
@@ -3433,12 +3584,7 @@ def compras_proveedor_deshabilitar_cliente(supplier_id: str):
 
 
 def check_budget_control(
-    company: str,
-    posting_date: Any,
-    supplier_id: str | None,
-    document_id: str,
-    document_type: str,
-    items: Any
+    company: str, posting_date: Any, supplier_id: str | None, document_id: str, document_type: str, items: Any
 ) -> None:
     """Valida el control presupuestario de las líneas del documento según la política de la compañía."""
     from cacao_accounting.setup.repository import get_setup_value
@@ -3483,7 +3629,7 @@ def check_budget_control(
             cost_center_id=cc_id,
             amount=total_requested,
             document_id=document_id,
-            document_type=document_type
+            document_type=document_type,
         )
 
         if result["exceeded"]:
@@ -3497,20 +3643,18 @@ def check_budget_control(
             doc_no = None
             if document_type == "purchase_request":
                 from cacao_accounting.database import PurchaseRequest
+
                 doc = database.session.get(PurchaseRequest, document_id)
                 doc_no = doc.document_no if doc else None
             elif document_type == "purchase_order":
                 from cacao_accounting.database import PurchaseOrder
+
                 doc = database.session.get(PurchaseOrder, document_id)
                 doc_no = doc.document_no if doc else None
 
             action_label = "Approval allowed" if action_policy != "block" else "Approval rejected"
 
-            comment_str = (
-                f"Budget exceeded\n\n"
-                f"Mode:\n{action_policy}\n\n"
-                f"Action:\n{action_label}"
-            )
+            comment_str = f"Budget exceeded\n\n" f"Mode:\n{action_policy}\n\n" f"Action:\n{action_label}"
 
             # Save audit trail
             log_entry = AuditTrail(
@@ -3523,19 +3667,22 @@ def check_budget_control(
                 actor_name=user_name,
                 comment=comment_str,
                 timestamp=datetime.now(),
-                changes_json=json.dumps({
-                    "date": str(posting_date),
-                    "user": user_name,
-                    "company": company,
-                    "document": doc_no or document_id,
-                    "account_id": acc_id,
-                    "cost_center_id": cc_id,
-                    "budget": float(result["budget"]),
-                    "available": float(result["available"]),
-                    "requested": float(result["requested"]),
-                    "excess": float(result["excess"]),
-                    "action_executed": action_policy
-                }, ensure_ascii=False)
+                changes_json=json.dumps(
+                    {
+                        "date": str(posting_date),
+                        "user": user_name,
+                        "company": company,
+                        "document": doc_no or document_id,
+                        "account_id": acc_id,
+                        "cost_center_id": cc_id,
+                        "budget": float(result["budget"]),
+                        "available": float(result["available"]),
+                        "requested": float(result["requested"]),
+                        "excess": float(result["excess"]),
+                        "action_executed": action_policy,
+                    },
+                    ensure_ascii=False,
+                ),
             )
             database.session.add(log_entry)
             database.session.commit()

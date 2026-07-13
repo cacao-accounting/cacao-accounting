@@ -31,6 +31,7 @@ from cacao_accounting.auth.forms import (
 )
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.database import (
+    ApprovalMatrix,
     CompanyDefaultAccount,
     Entity,
     ItemPrice,
@@ -48,6 +49,7 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.exceptions import flash_error
 from cacao_accounting.contabilidad.default_accounts import (
     DEFAULT_ACCOUNT_DEFINITIONS,
     DEFAULT_ACCOUNT_FIELDS,
@@ -1097,4 +1099,166 @@ def rol_permisos(role_id: str):
         modulos=modulos,
         permisos_existentes=permisos_existentes,
         acciones=acciones,
+    )
+
+
+@admin.route("/settings/approval-matrix", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def config_approval_matrix():
+    """Administra la matriz de aprobación de documentos por compañía."""
+    _require_system_admin()
+    from cacao_accounting.setup.repository import get_setup_value, set_setup_value
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.values.get("company") or (companies[0].code if companies else "")
+
+    if request.method == "POST" and request.form.get("action") == "save_global":
+        company = request.form.get("company") or ""
+        enabled = request.form.get("enabled") == "on"
+        set_setup_value(f"approval_engine_enabled_{company}", "1" if enabled else "0")
+        database.session.commit()
+        flash(_("Configuración global de aprobación guardada correctamente."), "success")
+        return redirect(url_for("admin.config_approval_matrix", company=company))
+
+    if request.method == "POST" and request.form.get("action") == "add_rule":
+        company = request.form.get("company") or ""
+        doc_type = request.form.get("document_type") or ""
+        role_id = request.form.get("role_id") or None
+        user_id = request.form.get("user_id") or None
+        min_amount = Decimal(request.form.get("min_amount") or "0")
+        max_amount_str = request.form.get("max_amount")
+        max_amount = Decimal(max_amount_str) if max_amount_str and max_amount_str.strip() else None
+        level = int(request.form.get("approval_level") or "1")
+
+        rule = ApprovalMatrix(
+            company_id=company,
+            document_type=doc_type,
+            role_id=role_id if role_id != "" else None,
+            user_id=user_id if user_id != "" else None,
+            min_amount=min_amount,
+            max_amount=max_amount,
+            approval_level=level,
+            enabled=True,
+        )
+        database.session.add(rule)
+        database.session.commit()
+        flash(_("Regla de aprobación creada correctamente."), "success")
+        return redirect(url_for("admin.config_approval_matrix", company=company))
+
+    if request.method == "POST" and request.form.get("action") == "delete_rule":
+        rule_id = request.form.get("rule_id")
+        rule = database.session.get(ApprovalMatrix, rule_id)
+        if rule:
+            database.session.delete(rule)
+            database.session.commit()
+            flash(_("Regla de aprobación eliminada."), "success")
+        return redirect(url_for("admin.config_approval_matrix", company=selected_company))
+
+    global_enabled = get_setup_value(f"approval_engine_enabled_{selected_company}", "0") == "1"
+    stmt = (
+        database.select(ApprovalMatrix)
+        .filter_by(company_id=selected_company)
+        .order_by(ApprovalMatrix.document_type, ApprovalMatrix.approval_level)
+    )
+    rules = database.session.execute(stmt).scalars().all()
+
+    roles = database.session.execute(database.select(Roles).order_by(Roles.name)).scalars().all()
+    users = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
+
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+    doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items()]
+
+    return render_template(
+        "admin/approval_matrix.html",
+        companies=companies,
+        selected_company=selected_company,
+        global_enabled=global_enabled,
+        rules=rules,
+        roles=roles,
+        users=users,
+        doc_types=doc_types,
+        titulo=_("Matriz de Aprobaciones"),
+    )
+
+
+@admin.route("/me/pending-approvals", methods=["GET", "POST"])
+@login_required
+def pending_approvals():
+    """Listado de documentos que requieren la aprobación del usuario actual."""
+    from cacao_accounting.approval_engine import ApprovalEngine, get_model_class
+    from cacao_accounting.database import ApprovalRequest, User
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        req_id = request.form.get("request_id")
+        comments = request.form.get("comments") or None
+
+        req = database.session.get(ApprovalRequest, req_id)
+        if req:
+            doc_cls = get_model_class(req.document_type)
+            document = database.session.get(doc_cls, req.document_id)
+            if document:
+                if action == "approve":
+                    try:
+                        ApprovalEngine.approve(document, current_user, comments)
+                        database.session.commit()
+                        flash(_("Documento aprobado con éxito."), "success")
+                    except Exception as exc:
+                        database.session.rollback()
+                        flash_error(exc)
+                elif action == "reject":
+                    try:
+                        ApprovalEngine.reject(document, current_user, comments)
+                        database.session.commit()
+                        flash(_("Documento rechazado con éxito."), "warning")
+                    except Exception as exc:
+                        database.session.rollback()
+                        flash_error(exc)
+        return redirect(url_for("admin.pending_approvals"))
+
+    stmt_all = (
+        database.select(ApprovalRequest)
+        .filter(ApprovalRequest.status.startswith("Pending"))
+        .order_by(ApprovalRequest.created_at.desc())
+    )
+    all_pending = database.session.execute(stmt_all).scalars().all()
+
+    my_pending = []
+    for req in all_pending:
+        try:
+            doc_cls = get_model_class(req.document_type)
+            document = database.session.get(doc_cls, req.document_id)
+            if document:
+                if ApprovalEngine.can_approve(document, current_user):
+                    doc_info = DOCUMENT_TYPES.get(req.document_type)
+                    detail_url = "#"
+                    if doc_info and doc_info.detail_endpoint:
+                        detail_url = url_for(doc_info.detail_endpoint, **{doc_info.detail_arg: req.document_id})
+
+                    requester = database.session.get(User, req.requested_by)
+                    requester_name = requester.name or requester.user if requester else req.requested_by
+
+                    doc_no_val = (
+                        getattr(document, "document_no", None)
+                        or getattr(document, "id", None)
+                        or req.document_id
+                    )
+                    my_pending.append({
+                        "request": req,
+                        "document": document,
+                        "label": doc_info.label if doc_info else req.document_type,
+                        "detail_url": detail_url,
+                        "requester_name": requester_name,
+                        "amount": ApprovalEngine.get_document_amount(document),
+                        "doc_no": doc_no_val
+                    })
+        except Exception:
+            continue
+
+    return render_template(
+        "admin/pending_approvals.html",
+        pending_list=my_pending,
+        titulo=_("Mis Aprobaciones Pendientes"),
     )

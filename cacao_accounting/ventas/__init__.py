@@ -575,6 +575,19 @@ def ventas_pedido_venta_submit(request_id: str):
             database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars().all()
         )
         validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                database.session.commit()
+                flash("Pedido de venta aprobado.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Pedido de venta enviado para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -599,11 +612,22 @@ def ventas_pedido_venta_cancel(request_id: str):
     if has_active_source_relations("sales_request", request_id):
         flash("No se puede cancelar el pedido de venta porque tiene cotizaciones u órdenes de venta activas.", "danger")
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
-    registro.docstatus = 2
-    log_cancel(registro)
-    revert_relations_for_target("sales_request", request_id)
-    refresh_source_caches_for_target("sales_request", request_id)
-    database.session.commit()
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
+
+        registro.docstatus = 2
+        log_cancel(registro)
+        revert_relations_for_target("sales_request", request_id)
+        refresh_source_caches_for_target("sales_request", request_id)
+        database.session.commit()
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     flash("Pedido de venta cancelado.", "warning")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
@@ -1971,6 +1995,19 @@ def ventas_cotizacion_submit(quotation_id: str):
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                database.session.commit()
+                flash("Cotización de venta aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Cotización de venta enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -1995,11 +2032,22 @@ def ventas_cotizacion_cancel(quotation_id: str):
     if has_active_source_relations("sales_quotation", quotation_id):
         flash("No se puede cancelar la cotización de venta porque tiene órdenes de venta activas.", "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
-    registro.docstatus = 2
-    log_cancel(registro)
-    revert_relations_for_target("sales_quotation", quotation_id)
-    refresh_source_caches_for_target("sales_quotation", quotation_id)
-    database.session.commit()
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
+
+        registro.docstatus = 2
+        log_cancel(registro)
+        revert_relations_for_target("sales_quotation", quotation_id)
+        refresh_source_caches_for_target("sales_quotation", quotation_id)
+        database.session.commit()
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     flash("Cotización de venta cancelada.", "warning")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
@@ -2022,6 +2070,19 @@ def ventas_orden_venta_submit(order_id: str):
         if not getattr(registro, "is_return", False):
             _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
         _validate_and_reserve_stock_for_sales_order(registro)
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                database.session.commit()
+                flash("Orden de venta aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Orden de venta enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
@@ -2045,12 +2106,23 @@ def ventas_orden_venta_cancel(order_id: str):
     if has_active_source_relations("sales_order", order_id):
         flash("No se puede cancelar la orden de venta porque tiene notas de entrega o facturas activas.", "danger")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
-    _release_reservation_for_sales_order(registro)
-    registro.docstatus = 2
-    log_cancel(registro)
-    revert_relations_for_target("sales_order", order_id)
-    refresh_source_caches_for_target("sales_order", order_id)
-    database.session.commit()
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+
+        _release_reservation_for_sales_order(registro)
+        registro.docstatus = 2
+        log_cancel(registro)
+        revert_relations_for_target("sales_order", order_id)
+        refresh_source_caches_for_target("sales_order", order_id)
+        database.session.commit()
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
     flash("Orden de venta cancelada y reserva liberada.", "warning")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
@@ -2342,6 +2414,20 @@ def ventas_entrega_submit(note_id: str):
             require_amount_nonzero=True,
         )
         _validate_delivery_quantities_against_so(note_id)
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                _release_reservation_for_delivery_note(registro)
+                database.session.commit()
+                flash("Nota de entrega aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Nota de entrega enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
+
         submit_document(registro)
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
@@ -2367,6 +2453,13 @@ def ventas_entrega_cancel(note_id: str):
         flash("No se puede cancelar la nota de entrega porque tiene facturas de venta activas.", "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
     try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
+
         cancel_document(registro)
         _restore_reservation_for_delivery_note(registro)
         revert_relations_for_target("delivery_note", note_id)
@@ -2722,6 +2815,25 @@ def ventas_factura_venta_submit(invoice_id: str):
             _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
         _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                if registro.update_inventory and not registro.delivery_note_id:
+                    dn = _create_delivery_note_from_invoice(registro)
+                    msg = _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (
+                        dn.document_no or dn.id
+                    )
+                    flash(msg, "info")
+                database.session.commit()
+                flash("Factura de venta aprobada.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Factura de venta enviada para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+
         submit_document(registro)
         if registro.update_inventory and not registro.delivery_note_id:
             dn = _create_delivery_note_from_invoice(registro)
@@ -2755,6 +2867,13 @@ def ventas_factura_venta_cancel(invoice_id: str):
         flash("No se puede cancelar la factura de venta porque tiene documentos financieros activos.", "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+
         if registro.update_inventory and registro.delivery_note_id:
             dn = database.session.get(DeliveryNote, registro.delivery_note_id)
             if dn and dn.docstatus == 1:

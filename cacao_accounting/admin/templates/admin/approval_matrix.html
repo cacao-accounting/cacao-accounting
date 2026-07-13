@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Administración") }}</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Matriz de Aprobaciones") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-shield-check me-2" style="color:#78BF30"></i>{{ _("Matriz de Aprobaciones") }}</h4>
+  <p class="text-muted small">
+    {{ _("Habilita el motor de aprobaciones por compañía y configura las reglas de aprobación según tipo de documento, rol, usuario, montos y niveles jerárquicos.") }}
+  </p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-3 mb-4">
+  {# — Configuración Global / Compañía — #}
+  <div class="col-md-6">
+    <div class="ca-card p-3">
+      <form method="post" id="company-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_global">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{{ _("Compañía") }}</label>
+          <select name="company" class="form-select" required onchange="this.form.method='get'; this.form.submit();">
+            <option value="">— {{ _("Seleccionar") }} —</option>
+            {% for company in companies %}
+            <option value="{{ company.code }}" {% if company.code == selected_company %}selected{% endif %}>{{ company.code }} – {{ company.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="enabled" id="enabled" {% if global_enabled %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="enabled">
+              {{ _("Habilitar Motor de Aprobaciones") }}
+            </label>
+          </div>
+          <div class="form-text">{{ _("Cuando esté activo, los documentos que superen los límites de los usuarios pasarán a estado 'Pendiente de Aprobación'.") }}</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-floppy me-1"></i>{{ _("Guardar Estado") }}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  {# — Agregar Nueva Regla — #}
+  <div class="col-lg-4">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-plus-circle me-1"></i>{{ _("Agregar Regla de Aprobación") }}</h6>
+      </div>
+      <div class="p-3">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="add_rule">
+          <input type="hidden" name="company" value="{{ selected_company }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Tipo de Documento") }}</label>
+            <select name="document_type" class="form-select" required>
+              <option value="">— {{ _("Seleccionar") }} —</option>
+              {% for k, label in doc_types %}
+              <option value="{{ k }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Rol (RBAC)") }}</label>
+            <select name="role_id" class="form-select">
+              <option value="">— {{ _("Todos los Roles") }} —</option>
+              {% for r in roles %}
+              <option value="{{ r.id }}">{{ r.note or r.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Usuario Específico (Excepción)") }}</label>
+            <select name="user_id" class="form-select">
+              <option value="">— {{ _("Todos los Usuarios") }} —</option>
+              {% for u in users %}
+              <option value="{{ u.id }}">{{ u.name or u.user }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text small">{{ _("Las reglas por usuario tienen prioridad sobre las de rol.") }}</div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Monto Desde") }}</label>
+              <input type="number" step="0.01" name="min_amount" class="form-select text-start" value="0.00" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ _("Monto Hasta") }}</label>
+              <input type="number" step="0.01" name="max_amount" class="form-select text-start" placeholder="{{ _("Sin límite") }}">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ _("Nivel de Aprobación") }}</label>
+            <input type="number" name="approval_level" class="form-select text-start" value="1" min="1" required>
+          </div>
+
+          <button type="submit" class="ca-button-primary w-100">
+            <i class="bi bi-plus-circle me-1"></i>{{ _("Agregar a Matriz") }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# — Matriz Existente — #}
+  <div class="col-lg-8">
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h6 class="ca-card-title mb-0"><i class="bi bi-grid-3x3-gap me-1"></i>{{ _("Matriz de Aprobación para") }} {{ selected_company }}</h6>
+      </div>
+      <div class="p-2">
+        {% if rules %}
+        <table class="ca-table">
+          <caption style="display:none;">{{ _("Matriz de aprobación por compañía") }}</caption>
+          <thead>
+            <tr>
+              <th>{{ _("Documento") }}</th>
+              <th>{{ _("Aplicado a") }}</th>
+              <th>{{ _("Límite Permitido") }}</th>
+              <th class="text-center">{{ _("Nivel") }}</th>
+              <th class="text-center">{{ _("Acciones") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rules %}
+            <tr>
+              <td>
+                {% for k, label in doc_types %}
+                  {% if k == r.document_type %}
+                    <strong>{{ label }}</strong>
+                  {% endif %}
+                {% endfor %}
+              </td>
+              <td>
+                {% if r.user_id %}
+                  <span class="badge bg-info"><i class="bi bi-person me-1"></i>{{ _("Usuario:") }} {{ r.user_id }}</span>
+                {% elif r.role_id %}
+                  <span class="badge bg-primary"><i class="bi bi-shield me-1"></i>{{ _("Rol:") }} {{ r.role_id }}</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ _("Cualquiera") }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {{ r.min_amount|round(2) }} –
+                {% if r.max_amount %}
+                  {{ r.max_amount|round(2) }}
+                {% else %}
+                  <span class="text-muted">{{ _("Sin límite") }}</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <span class="badge bg-dark">{{ r.approval_level }}</span>
+              </td>
+              <td class="text-center">
+                <form method="post" onsubmit="return confirm('¿Está seguro de eliminar esta regla?');" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="delete_rule">
+                  <input type="hidden" name="rule_id" value="{{ r.id }}">
+                  <button type="submit" class="btn btn-sm btn-danger p-1 py-0">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="p-5 text-muted text-center">
+          <i class="bi bi-info-circle me-1 fs-4 d-block mb-2"></i>
+          {{ _("No hay reglas de aprobación configuradas para esta compañía.") }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

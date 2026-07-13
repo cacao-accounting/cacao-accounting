@@ -1888,6 +1888,19 @@ def bancos_pago_submit(payment_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            if ApprovalEngine.can_approve(registro, current_user):
+                ApprovalEngine.request_approval(registro)
+                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
+                database.session.commit()
+                flash("Pago aprobado.", "success")
+            else:
+                ApprovalEngine.request_approval(registro)
+                database.session.commit()
+                flash("Pago enviado para aprobación (Pendiente de Aprobación).", "info")
+            return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
+
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
@@ -1917,6 +1930,13 @@ def bancos_pago_cancel(payment_id: str):
     if registro.docstatus != 1:
         abort(400)
     try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
+
         cancel_document(registro)
         revert_relations_for_target("payment_entry", registro.id, reason="payment_cancelled")
         # CAS-04: Resetear conciliación bancaria vinculada al pago cancelado.
