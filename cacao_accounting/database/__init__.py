@@ -2528,10 +2528,9 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     @property
     def total(self) -> Decimal:
         """Suma de los débitos del comprobante contable para aprobación."""
-        lines = database.session.execute(
-            select(ComprobanteContableDetalle).filter_by(transaction_id=self.id)
-        ).scalars().all()
+        lines = database.session.execute(select(ComprobanteContableDetalle).filter_by(transaction_id=self.id)).scalars().all()
         return sum((Decimal(str(line.value)) for line in lines if line.value > 0), Decimal("0"))
+
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)

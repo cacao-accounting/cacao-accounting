@@ -380,9 +380,7 @@ def _create_gl_entry(
     if params.is_reversal:
         pass
     elif (
-        context.transaction_currency
-        and context.company_currency
-        and context.transaction_currency != context.company_currency
+        context.transaction_currency and context.company_currency and context.transaction_currency != context.company_currency
     ):
         if debit_in_ac is None and credit_in_ac is None:
             if exchange_rate is None or exchange_rate == 0:
@@ -400,12 +398,8 @@ def _create_gl_entry(
             debit = _to_company_currency(debit, exchange_rate)
             credit = _to_company_currency(credit, exchange_rate)
 
-    resolved_debit_in_ac = _resolve_currency_amount(
-        debit_in_ac, params.debit, bool(context.transaction_currency)
-    )
-    resolved_credit_in_ac = _resolve_currency_amount(
-        credit_in_ac, params.credit, bool(context.transaction_currency)
-    )
+    resolved_debit_in_ac = _resolve_currency_amount(debit_in_ac, params.debit, bool(context.transaction_currency))
+    resolved_credit_in_ac = _resolve_currency_amount(credit_in_ac, params.credit, bool(context.transaction_currency))
 
     return GLEntry(
         posting_date=context.posting_date,

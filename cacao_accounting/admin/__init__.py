@@ -1167,6 +1167,7 @@ def config_approval_matrix():
     users = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
 
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
     doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items()]
 
     return render_template(
@@ -1240,20 +1241,18 @@ def pending_approvals():
                     requester = database.session.get(User, req.requested_by)
                     requester_name = requester.name or requester.user if requester else req.requested_by
 
-                    doc_no_val = (
-                        getattr(document, "document_no", None)
-                        or getattr(document, "id", None)
-                        or req.document_id
+                    doc_no_val = getattr(document, "document_no", None) or getattr(document, "id", None) or req.document_id
+                    my_pending.append(
+                        {
+                            "request": req,
+                            "document": document,
+                            "label": doc_info.label if doc_info else req.document_type,
+                            "detail_url": detail_url,
+                            "requester_name": requester_name,
+                            "amount": ApprovalEngine.get_document_amount(document),
+                            "doc_no": doc_no_val,
+                        }
                     )
-                    my_pending.append({
-                        "request": req,
-                        "document": document,
-                        "label": doc_info.label if doc_info else req.document_type,
-                        "detail_url": detail_url,
-                        "requester_name": requester_name,
-                        "amount": ApprovalEngine.get_document_amount(document),
-                        "doc_no": doc_no_val
-                    })
         except Exception:
             continue
 

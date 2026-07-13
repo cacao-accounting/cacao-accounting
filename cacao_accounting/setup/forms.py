@@ -51,6 +51,7 @@ class SetupRegionalForm(FlaskForm):
         self.pais.choices = country_choices(language)
         self.moneda.choices = currencies or []
         from cacao_accounting.setup.catalogs import timezone_choices
+
         self.zona_horaria.choices = timezone_choices()
 
 

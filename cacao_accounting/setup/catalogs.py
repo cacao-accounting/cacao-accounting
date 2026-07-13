@@ -220,6 +220,7 @@ def country_timezone_map() -> dict[str, str]:
 def timezone_choices() -> list[tuple[str, str]]:
     """Devuelve las opciones de zona horaria disponibles en zoneinfo."""
     import zoneinfo
+
     tzs = sorted(list(zoneinfo.available_timezones()))
     choices = []
     for tz in tzs:
