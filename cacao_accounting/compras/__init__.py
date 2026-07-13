@@ -472,15 +472,7 @@ def compras_solicitud_compra_submit(request_id: str):
         )
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Solicitud de compra aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Solicitud de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Solicitud de compra"):
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
         registro.docstatus = 1
@@ -961,15 +953,7 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Cotización de proveedor aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Cotización de proveedor enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Cotización de proveedor"):
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
         registro.docstatus = 1
@@ -2323,15 +2307,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
         validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Solicitud de cotización aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Solicitud de cotización enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Solicitud de cotización"):
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
 
         registro.docstatus = 1
@@ -2405,15 +2381,7 @@ def compras_orden_compra_submit(order_id: str):
         )
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Orden de compra aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Orden de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Orden de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
         registro.docstatus = 1
@@ -2860,15 +2828,7 @@ def compras_recepcion_submit(receipt_id: str):
         _validate_receipt_quantities_against_po(receipt_id)
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Recepción de compra aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Recepción de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Recepción de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
         submit_document(registro)
@@ -3484,15 +3444,7 @@ def compras_factura_compra_submit(invoice_id: str):
         )
         from cacao_accounting.approval_engine import ApprovalEngine
 
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                flash("Factura de compra aprobada.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Factura de compra enviada para aprobación (Pendiente de Aprobación).", "info")
+        if ApprovalEngine.handle_submission(registro, current_user, "Factura de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
 
         submit_document(registro)
