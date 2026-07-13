@@ -88,6 +88,7 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
                 return "es"
             try:
                 from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
+
                 return get_setup_value(SETUP_LANGUAGE, "es")
             except Exception:
                 return "es"
@@ -97,6 +98,7 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
                 return "America/Managua"
             try:
                 from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
+
                 return get_setup_value(SETUP_TIMEZONE, "America/Managua")
             except Exception:
                 return "America/Managua"
@@ -201,6 +203,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)
             app.jinja_env.globals.update(document_collaboration_tasks=document_collaboration_tasks)
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
+            app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
             from cacao_accounting.document_flow.status import calculate_document_status
 
@@ -277,6 +280,28 @@ def current_user_open_task_count() -> int:
     from cacao_accounting.collaboration_service import open_task_count
 
     return open_task_count(str(current_user.id))
+
+
+def pending_approval_count() -> int:
+    """Return count of pending approval requests for the current user."""
+    if not is_cloud_mode() or not current_user or not current_user.is_authenticated:
+        return 0
+    from cacao_accounting.database import ApprovalRequest
+    from sqlalchemy import select
+
+    try:
+        count = (
+            database.session.execute(
+                select(ApprovalRequest).filter(
+                    ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return len(count)
+    except Exception:
+        return 0
 
 
 def audit_action_label(action: str) -> str:

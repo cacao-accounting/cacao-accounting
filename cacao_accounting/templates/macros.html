@@ -182,6 +182,10 @@
       <a href="{{ url_for('admin.admin_') }}" class="nav-link {% if request.blueprint == 'admin' %}active{% endif %}">
         <i class="bi bi-gear"></i>
         Administración
+        {% set ap_count = pending_approval_count() %}
+        {% if ap_count > 0 %}
+        <span class="badge bg-warning text-dark ms-1">{{ ap_count }}</span>
+        {% endif %}
       </a>
     </li>
     {%- endif %}
