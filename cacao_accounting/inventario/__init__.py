@@ -1234,6 +1234,7 @@ def _capture_stock_entry_state(registro: StockEntry) -> dict:
     }
 
     from cacao_accounting.audit_trail_service import capture_lines_snapshot
+
     state["items"] = capture_lines_snapshot(registro, StockEntryItem, "stock_entry_id")
 
     return state
@@ -1389,16 +1390,8 @@ def inventario_entrada_submit(entry_id: str):
         items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
         validate_submit_prerequisites(registro, items=items, require_party=False, require_warehouse=True)
         from cacao_accounting.approval_engine import ApprovalEngine
-        if ApprovalEngine.is_enabled(registro.company):
-            if ApprovalEngine.can_approve(registro, current_user):
-                ApprovalEngine.request_approval(registro)
-                ApprovalEngine.approve(registro, current_user, "Aprobado por el remitente")
-                database.session.commit()
-                flash("Movimiento de inventario aprobado.", "success")
-            else:
-                ApprovalEngine.request_approval(registro)
-                database.session.commit()
-                flash("Movimiento de inventario enviado para aprobación (Pendiente de Aprobación).", "info")
+
+        if ApprovalEngine.handle_submission(registro, current_user, "Movimiento de inventario"):
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
 
         submit_document(registro)
@@ -1424,6 +1417,7 @@ def inventario_entrada_cancel(entry_id: str):
         abort(400)
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
+
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()

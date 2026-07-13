@@ -41,6 +41,40 @@ class ApprovalEngine:
             return True
         return False
 
+    @classmethod
+    def handle_submission(cls, document: Any, user: Any, label: str = "Documento") -> bool:
+        """Maneja el flujo completo de aprobación al enviar un documento.
+
+        Retorna True si el motor procesó la solicitud (el caller debe redirigir).
+        Retorna False si el motor no está activo o no cubre el monto (el caller
+        debe proceder con el submit normal).
+        """
+        from flask import flash as flask_flash
+
+        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        if not company_id or not cls.is_enabled(company_id):
+            return False
+
+        req = cls.request_approval(document)
+        if not req:
+            flask_flash(
+                "No existe una regla de aprobación que cubra este monto. " "El documento permanece en borrador.",
+                "warning",
+            )
+            database.session.commit()
+            return True
+
+        if cls.can_approve(document, user):
+            cls.approve(document, user, "Aprobado por el remitente")
+            flask_flash(f"{label} aprobada.", "success")
+        else:
+            database.session.commit()
+            flask_flash(
+                f"{label} enviada para aprobación (Pendiente de Aprobación).",
+                "info",
+            )
+        return True
+
     @staticmethod
     def _resolve_doctype(document: Any) -> str:
         doctype = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
@@ -69,16 +103,16 @@ class ApprovalEngine:
                     user_id=user_id,
                     enabled=True,
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         if rules:
             return rules
 
         # 2. Reglas del rol del usuario si no hay específicas
         role_ids = list(
-            database.session.execute(
-                select(RolesUser.role_id).filter_by(user_id=user_id, active=True)
-            ).scalars().all()
+            database.session.execute(select(RolesUser.role_id).filter_by(user_id=user_id, active=True)).scalars().all()
         )
         if not role_ids:
             return []
@@ -92,7 +126,9 @@ class ApprovalEngine:
                     ApprovalMatrix.user_id.is_(None),
                     ApprovalMatrix.enabled,
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         return rules
 
@@ -128,7 +164,9 @@ class ApprovalEngine:
                     document_type=document_type,
                     enabled=True,
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         covering_rules = []
         for r in rules:
@@ -136,7 +174,7 @@ class ApprovalEngine:
                 covering_rules.append(r)
 
         if not covering_rules:
-            raise ValueError("No existe ninguna regla de aprobación configurada que cubra este monto.")
+            return 0
 
         return min(r.approval_level for r in covering_rules)
 
@@ -157,6 +195,8 @@ class ApprovalEngine:
             return req
 
         req_level = cls._get_required_level(company_id, doctype, amount)
+        if req_level == 0:
+            return None
         user_id = getattr(current_user, "id", None) or getattr(document, "user_id", None) or "system"
 
         req = ApprovalRequest(
@@ -190,6 +230,8 @@ class ApprovalEngine:
             return req
 
         req_level = cls._get_required_level(company_id, base_doctype, amount)
+        if req_level == 0:
+            return None
         user_id = getattr(current_user, "id", None) or getattr(document, "user_id", None) or "system"
 
         req = ApprovalRequest(
@@ -219,7 +261,7 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"})
+                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
             )
         ).scalar_one_or_none()
         if not req:
@@ -285,12 +327,18 @@ class ApprovalEngine:
 
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
+
             submit_journal(document.id)
             return
 
         if doctype in {
-            "purchase_request", "purchase_quotation", "supplier_quotation",
-            "purchase_order", "sales_request", "sales_quotation", "sales_order"
+            "purchase_request",
+            "purchase_quotation",
+            "supplier_quotation",
+            "purchase_order",
+            "sales_request",
+            "sales_quotation",
+            "sales_order",
         }:
             document.docstatus = 1
             log_submit(document)
@@ -298,23 +346,27 @@ class ApprovalEngine:
 
         if doctype == "delivery_note":
             from cacao_accounting.ventas import _release_reservation_for_delivery_note
+
             submit_document(document)
             try:
                 _release_reservation_for_delivery_note(document)
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).warning("Error al liberar reserva: %s", e)
             log_submit(document)
             return
 
         if doctype == "sales_invoice":
             from cacao_accounting.ventas import _create_delivery_note_from_invoice
+
             submit_document(document)
             if document.update_inventory and not document.delivery_note_id:
                 try:
                     _create_delivery_note_from_invoice(document)
                 except Exception as e:
                     import logging
+
                     logging.getLogger(__name__).warning("Error al crear nota de entrega para factura: %s", e)
             log_submit(document)
             return
@@ -333,12 +385,18 @@ class ApprovalEngine:
 
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
+
             cancel_submitted_journal(document.id, user_id=user.id)
             return
 
         if doctype in {
-            "purchase_request", "purchase_quotation", "supplier_quotation",
-            "purchase_order", "sales_request", "sales_quotation", "sales_order"
+            "purchase_request",
+            "purchase_quotation",
+            "supplier_quotation",
+            "purchase_order",
+            "sales_request",
+            "sales_quotation",
+            "sales_order",
         }:
             document.docstatus = 2
             log_cancel(document)
@@ -346,9 +404,7 @@ class ApprovalEngine:
             refresh_source_caches_for_target(doctype, document.id)
             return
 
-        if doctype in {
-            "purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"
-        }:
+        if doctype in {"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"}:
             cancel_document(document)
             log_cancel(document)
             revert_relations_for_target(doctype, document.id)
@@ -372,7 +428,7 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"})
+                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
             )
         ).scalar_one_or_none()
         if not req:
@@ -411,7 +467,7 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"})
+                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
             )
         ).scalar_one_or_none()
         if not req or req.status not in {"Pending Approval", "Pending Cancellation"}:
@@ -426,7 +482,9 @@ class ApprovalEngine:
                     ApprovalMatrix.approval_level >= req.current_level,
                     ApprovalMatrix.enabled,
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
         roles = []
@@ -439,6 +497,7 @@ class ApprovalEngine:
                         users.append(u.name)
                 elif r.role_id:
                     from cacao_accounting.database import Roles
+
                     rol = database.session.get(Roles, r.role_id)
                     if rol:
                         roles.append(rol.note or rol.name)
@@ -449,6 +508,7 @@ class ApprovalEngine:
 def get_model_class(doctype: str) -> Any:
     """Devuelve la clase del modelo correspondiente al doctype."""
     from cacao_accounting.document_flow.registry import get_document_type
+
     actual_doctype = doctype
     if actual_doctype.startswith("cancel_"):
         actual_doctype = actual_doctype[7:]
