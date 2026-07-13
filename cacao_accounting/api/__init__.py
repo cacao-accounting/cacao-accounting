@@ -25,7 +25,6 @@ from cacao_accounting.document_flow import (
     close_document_balances,
     close_line_balance,
     create_target_document,
-    document_flow_summary,
     get_document_flow_items,
     get_pending_lines,
     list_source_documents,
@@ -573,17 +572,6 @@ def api_document_flow_tree():
     return jsonify(
         build_document_flow_tree(document_type, document_id, direction=direction, max_depth=max_depth, max_nodes=max_nodes)
     )
-
-
-@api.route("/api/document-flow/summary")
-@login_required
-def api_document_flow_summary():
-    """Devuelve resumen agrupado por tipo documental de relaciones de un documento."""
-    document_type = request.args.get("document_type", "")
-    document_id = request.args.get("document_id", "")
-    if not document_type or not document_id:
-        abort(400)
-    return jsonify(document_flow_summary(document_type, document_id))
 
 
 def _source_items_or_abort(source_type: str, source_id: str):
