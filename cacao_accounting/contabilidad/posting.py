@@ -196,7 +196,7 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
 
 
 def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = None) -> list[LedgerContext]:
-    if not isinstance(document, ComprobanteContable):
+    if type(document).__name__ != "ComprobanteContable":
         ledger_code = None
     company = _company_for(document)
     posting_date = _posting_date_for(document)
@@ -379,7 +379,11 @@ def _create_gl_entry(
 
     if params.is_reversal:
         pass
-    elif context.transaction_currency and context.company_currency and context.transaction_currency != context.company_currency:
+    elif (
+        context.transaction_currency
+        and context.company_currency
+        and context.transaction_currency != context.company_currency
+    ):
         if debit_in_ac is None and credit_in_ac is None:
             if exchange_rate is None or exchange_rate == 0:
                 try:
