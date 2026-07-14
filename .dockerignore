@@ -8,10 +8,11 @@
 .coveragerc
 .coverage
 
-
-# Documentacion
+# Documentacion (excluimos todo excepto el Caddyfile necesario en oci_files)
 mkdocs.yml
-docs
+docs/**
+!docs/oci_files
+!docs/oci_files/Caddyfile
 
 # No necesitamos docker files en el contenedor
 Dockerfile
@@ -34,7 +35,7 @@ run_server.sh
 run_test.sh
 
 # Cache files
-.mypy_cacha
+.mypy_cache
 .pytest_cache
 .ruff_cache
 .venv
@@ -42,6 +43,29 @@ run_test.sh
 *replit*
 docs.txt
 **/*.md
+
+# Archivos temporales, compilados y caches de Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.egg-info
+build/
+dist/
+
+# Tests dentro de cacao_accounting (no se necesitan en produccion)
+cacao_accounting/query_tools/tests
+cacao_accounting/static/test
+
+# Archivos estáticos y multimedia sin usar para optimizar el tamaño de la imagen OCI
+cacao_accounting/static/media/Linux
+cacao_accounting/static/media/Windows
+cacao_accounting/static/media/Web
+cacao_accounting/static/media/brand.svg
+cacao_accounting/static/media/cacao_accounting _logo.png
+cacao_accounting/static/media/cacao_logo.svg
+cacao_accounting/static/media/Cacao Accounting SVG.svg
+cacao_accounting/static/media/circle-solid.svg
 
 LICENSE
 README.md

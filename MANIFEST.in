@@ -7,5 +7,21 @@ include pyproject.toml
 include cacao_accounting/
 recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.j2 *.py *.csv *.json
 recursive-include docs *.py *.rst
+
+# Excluir caches y archivos compilados de Python
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
+
+# Excluir directorios de pruebas (tests) para evitar que se empaqueten en PyPI
+recursive-exclude cacao_accounting/static/test *
+recursive-exclude cacao_accounting/query_tools/tests *
+
+# Excluir archivos estáticos y multimedia de diseño sin usar para optimizar el tamaño de la distribución
+recursive-exclude cacao_accounting/static/media/Linux *
+recursive-exclude cacao_accounting/static/media/Windows *
+recursive-exclude cacao_accounting/static/media/Web *
+exclude cacao_accounting/static/media/brand.svg
+exclude cacao_accounting/static/media/cacao_accounting _logo.png
+exclude cacao_accounting/static/media/cacao_logo.svg
+exclude cacao_accounting/static/media/Cacao Accounting SVG.svg
+exclude cacao_accounting/static/media/circle-solid.svg
