@@ -95,6 +95,8 @@ CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
 CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
+ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
+CONTABILIDAD_CUENTAS_ENDPOINT = "contabilidad.cuentas"
 
 # ---------------------------------------------------------------------------------------
 # Constantes para templates (evita duplicacion de cadenas literales - SonarQube S1192)
@@ -124,7 +126,7 @@ def _validate_active_entity_submission(company_code: str) -> None:
 
     company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
     if company is None:
-        raise ValueError(_("La entidad indicada no existe."))
+        raise ValueError(_(ENTIDAD_NO_EXISTE_MSG))
     if not bool(company.enabled):
         raise ValueError(_("La entidad indicada está inactiva."))
 
@@ -146,7 +148,7 @@ def _validate_entity_can_be_deactivated(company_code: str) -> None:
 
     company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
     if company is None:
-        raise ValueError(_("La entidad indicada no existe."))
+        raise ValueError(_(ENTIDAD_NO_EXISTE_MSG))
     active_count = (
         database.session.execute(database.select(database.func.count(Entity.id)).filter(Entity.enabled.is_(True))).scalar()
         or 0
@@ -373,7 +375,7 @@ def entidad(entidad_id):
 
     registro = database.session.execute(database.select(Entity).filter_by(code=entidad_id)).scalar_one_or_none()
     if registro is None:
-        flash(_("La entidad indicada no existe."), "warning")
+        flash(_(ENTIDAD_NO_EXISTE_MSG), "warning")
         return redirect(url_for("contabilidad.entidades"))
 
     return render_template(
@@ -985,7 +987,7 @@ def cuenta(entity, id_cta):
     ).scalar_one_or_none()
     if registro is None:
         flash(_("La cuenta contable no existe"), "warning")
-        return redirect(url_for("contabilidad.cuentas"))
+        return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     return render_template(
         "contabilidad/cuenta.html",
@@ -1120,7 +1122,7 @@ def nueva_cuenta():
         )
         database.session.add(DATA)
         database.session.commit()
-        return redirect(url_for("contabilidad.cuentas"))
+        return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     return render_template(
         _TPL_CUENTA_CREAR,
@@ -1201,7 +1203,7 @@ def editar_cuenta(entity, id_cta):
 
     if registro is None:
         flash("La cuenta contable indicada no existe.", "warning")
-        return redirect(url_for("contabilidad.cuentas"))
+        return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
     TITULO = "Contabilidad | Editar Cuenta Contable - " + APPNAME
