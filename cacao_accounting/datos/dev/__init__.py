@@ -285,11 +285,15 @@ def cargar_bancos():
             )
         )
         for payment_type, entity_type in PAYMENT_TYPE_TO_ENTITY_TYPE.items():
-            naming_series = database.session.execute(
-                database.select(NamingSeries)
-                .filter_by(company="cacao", entity_type=entity_type, is_active=True)
-                .order_by(NamingSeries.is_default.desc())
-            ).scalars().first()
+            naming_series = (
+                database.session.execute(
+                    database.select(NamingSeries)
+                    .filter_by(company="cacao", entity_type=entity_type, is_active=True)
+                    .order_by(NamingSeries.is_default.desc())
+                )
+                .scalars()
+                .first()
+            )
             use_external = payment_type in ("pay", "receive")
             cfg = BankAccountNumberingConfig(
                 bank_account_id=bank_account.id,
