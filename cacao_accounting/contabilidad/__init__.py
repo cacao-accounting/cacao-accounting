@@ -3791,6 +3791,88 @@ def external_counter_audit_log(counter_id: str):
     )
 
 
+@contabilidad.route("/external-counter/<counter_id>/toggle-active", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def external_counter_toggle_active(counter_id: str):
+    """Activa o desactiva un contador externo."""
+    from cacao_accounting.database import ExternalCounter
+
+    counter = database.session.get(ExternalCounter, counter_id)
+    if counter:
+        counter.is_active = not counter.is_active
+        database.session.commit()
+    return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
+
+
+@contabilidad.route("/external-counter/<counter_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def external_counter_edit(counter_id: str):
+    """Edita los datos de un contador externo."""
+    from cacao_accounting.contabilidad.forms import FormularioExternalCounter
+    from cacao_accounting.database import Entity, ExternalCounter, NamingSeries, SeriesExternalCounterMap
+
+    counter = database.session.get(ExternalCounter, counter_id)
+    if not counter:
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
+
+    form = FormularioExternalCounter(obj=counter)
+    entidades = database.session.execute(database.select(Entity)).scalars().all()
+    form.company.choices = [(e.code, e.name) for e in entidades]
+
+    series_list = (
+        database.session.execute(database.select(NamingSeries).filter_by(is_active=True).order_by(NamingSeries.name))
+        .scalars()
+        .all()
+    )
+    form.naming_series_id.choices = [("", "— Sin asociar —")] + [(s.id, f"{s.name} ({s.entity_type})") for s in series_list]
+
+    if form.validate_on_submit():
+        counter.company = form.company.data
+        counter.name = form.nombre.data
+        counter.counter_type = form.counter_type.data or None
+        counter.prefix = form.prefix.data or None
+        counter.last_used = form.last_used.data or 0
+        counter.padding = form.padding.data or 5
+        counter.is_active = bool(form.is_active.data)
+        counter.description = form.description.data or None
+
+        new_naming_series_id = form.naming_series_id.data or None
+        if counter.naming_series_id != new_naming_series_id:
+            counter.naming_series_id = new_naming_series_id
+            existing_map = database.session.execute(
+                database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)
+            ).scalar_one_or_none()
+            if new_naming_series_id:
+                if existing_map:
+                    existing_map.naming_series_id = new_naming_series_id
+                else:
+                    database.session.add(
+                        SeriesExternalCounterMap(
+                            naming_series_id=new_naming_series_id,
+                            external_counter_id=counter.id,
+                            priority=0,
+                            condition_json=None,
+                        )
+                    )
+            elif existing_map:
+                database.session.delete(existing_map)
+
+        database.session.commit()
+        return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
+
+    return render_template(
+        "contabilidad/external_counter_nuevo.html",
+        form=form,
+        counter=counter,
+        titulo="Editar Contador Externo - " + APPNAME,
+        modo_edicion=True,
+    )
+
+
 @contabilidad.route("/fiscal_year_closing/list")
 @login_required
 @modulo_activo("accounting")
