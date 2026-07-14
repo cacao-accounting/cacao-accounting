@@ -199,11 +199,16 @@ def cargar_bancos():
     from cacao_accounting.database import (
         Bank,
         BankAccount,
+        BankAccountNumberingConfig,
         ExternalCounter,
         NamingSeries,
         SeriesExternalCounterMap,
     )
-    from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
+    from cacao_accounting.document_identifiers import (
+        PAYMENT_TYPE_TO_ENTITY_TYPE,
+        ensure_default_naming_series_for_company,
+        ensure_global_naming_series,
+    )
 
     for b in _make_bancos():
         database.session.add(b)
@@ -211,6 +216,8 @@ def cargar_bancos():
 
     ensure_global_naming_series()
     ensure_default_naming_series_for_company("cacao", ["payment_entry"])
+    ensure_default_naming_series_for_company("cacao", list(PAYMENT_TYPE_TO_ENTITY_TYPE.values()))
+
     payment_series = (
         database.session.execute(
             database.select(NamingSeries)
@@ -277,6 +284,22 @@ def cargar_bancos():
                 condition_json=json.dumps({"bank_account_id": bank_account.id}, sort_keys=True),
             )
         )
+        for payment_type, entity_type in PAYMENT_TYPE_TO_ENTITY_TYPE.items():
+            naming_series = database.session.execute(
+                database.select(NamingSeries)
+                .filter_by(company="cacao", entity_type=entity_type, is_active=True)
+                .order_by(NamingSeries.is_default.desc())
+            ).scalars().first()
+            use_external = payment_type in ("pay", "receive")
+            cfg = BankAccountNumberingConfig(
+                bank_account_id=bank_account.id,
+                payment_type=payment_type,
+                naming_series_id=naming_series.id if naming_series else None,
+                use_external_counter=use_external,
+                external_counter_id=counter.id if use_external else None,
+            )
+            database.session.add(cfg)
+
     database.session.commit()
 
 
