@@ -71,14 +71,25 @@
         </td>
         <td>
           <div class="d-flex gap-1">
+            <a href="{{ url_for('contabilidad.external_counter_edit', counter_id=item.id) }}"
+               class="btn btn-xs btn-outline-primary" title="Editar contador">
+              <i class="bi bi-pencil"></i>
+            </a>
             <a href="{{ url_for('contabilidad.external_counter_adjust', counter_id=item.id) }}"
-               class="btn btn-xs btn-outline-primary" title="Ajustar ultimo numero usado">
+               class="btn btn-xs btn-outline-warning" title="Ajustar ultimo numero usado">
               <i class="bi bi-pencil-square"></i>
             </a>
             <a href="{{ url_for('contabilidad.external_counter_audit_log', counter_id=item.id) }}"
                class="btn btn-xs btn-outline-secondary" title="Ver bitacora de auditoria">
               <i class="bi bi-clock-history"></i>
             </a>
+            <form method="post" action="{{ url_for('contabilidad.external_counter_toggle_active', counter_id=item.id) }}"
+                  class="d-inline" onsubmit="return confirm('{{ _("Cambiar estado del contador?") }}')">
+              <button type="submit" class="btn btn-xs {% if item.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
+                      title="{% if item.is_active %}Desactivar{% else %}Activar{% endif %}">
+                <i class="bi {% if item.is_active %}bi-pause{% else %}bi-play{% endif %}"></i>
+              </button>
+            </form>
           </div>
         </td>
       </tr>
