@@ -25,6 +25,7 @@ class BankStatementAdapter(BaseImportAdapter):
     required_columns = ["bank_account_id", "posting_date"]
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
+        """Validate a single bank statement row."""
         errors = super().validate_row(row_data)
         bank_account = database.session.get(BankAccount, str(row_data.get("bank_account_id", "")))
         if bank_account is None:
@@ -32,9 +33,11 @@ class BankStatementAdapter(BaseImportAdapter):
         return errors
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
+        """Validate the full bank statement document."""
         return []
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
+        """Build bank transactions from the imported data."""
         transactions = []
         for row in document_data:
             posting_date = row.get("posting_date")
@@ -56,6 +59,7 @@ class BankStatementAdapter(BaseImportAdapter):
         return transactions
 
     def persist_document(self, document: Any) -> None:
+        """Persist bank transactions to the database."""
         for tx_data in document:
             tx = BankTransaction(
                 bank_account_id=tx_data["bank_account_id"],
