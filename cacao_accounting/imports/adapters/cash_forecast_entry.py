@@ -52,16 +52,18 @@ class CashForecastEntryAdapter(BaseImportAdapter):
             estimated_date = row.get("estimated_date")
             if isinstance(estimated_date, str):
                 estimated_date = date.fromisoformat(estimated_date)
-            entries.append({
-                "forecast_id": str(row.get("forecast_id", "")),
-                "type": str(row.get("type", "")).strip(),
-                "concept": str(row.get("concept", "")).strip(),
-                "currency": str(row.get("currency", "NIO")).strip(),
-                "amount": Decimal(str(row.get("amount", 0))),
-                "estimated_date": estimated_date,
-                "notes": str(row.get("notes", "")).strip(),
-                "created_by": context.get("created_by"),
-            })
+            entries.append(
+                {
+                    "forecast_id": str(row.get("forecast_id", "")),
+                    "type": str(row.get("type", "")).strip(),
+                    "concept": str(row.get("concept", "")).strip(),
+                    "currency": str(row.get("currency", "NIO")).strip(),
+                    "amount": Decimal(str(row.get("amount", 0))),
+                    "estimated_date": estimated_date,
+                    "notes": str(row.get("notes", "")).strip(),
+                    "created_by": context.get("created_by"),
+                }
+            )
         return entries
 
     def persist_document(self, document: Any) -> None:
