@@ -191,6 +191,14 @@
 ### 2026-05-11
 - **UX contable**: rediseño de formularios de Cuentas y Entidades, Smart Select para cuentas padre.
 
+### 2026-07-14
+- **Per-Transaction-Type Numbering**: se agregaron 5 entity types separados en NamingSeries para transacciones bancarias (`bank_payment`, `bank_receipt`, `bank_transfer`, `bank_debit_note`, `bank_credit_note`), cada uno con su propia serie predeterminada.
+- **BankAccountNumberingConfig**: nuevo modelo para configurar la numeración por tipo de transacción + cuenta bancaria (serie interna, uso de contador externo, contador externo asociado).
+- **UI de configuración**: sección editable en la vista detalle de cuenta bancaria con tabla por tipo de transacción, que permite asignar serie interna y contador externo por tipo.
+- **Contadores externos mejorados**: toggle activo/inactivo, edición de datos (nombre, prefijo, padding, serie asociada).
+- **Fallback legacy**: las cuentas existentes sin `BankAccountNumberingConfig` siguen funcionando con los defaults legacy del modelo `BankAccount`.
+- **Seed actualizado**: datos demo crean configuraciones por tipo de transacción para las chequeras NIO y USD.
+
 ---
 
 ## Decisiones de Diseño Clave
