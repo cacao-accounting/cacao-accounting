@@ -28,12 +28,14 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+from typing import Any
+
+magic: Any = None
 try:
     import magic
 
     _MAGIC_EXCEPTION: type[BaseException] = magic.MagicException
 except ImportError:
-    magic = None  # type: ignore[assignment]
     _MAGIC_EXCEPTION = ImportError
 
 imports = Blueprint("imports", __name__, template_folder="templates")
