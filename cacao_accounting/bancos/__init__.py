@@ -282,7 +282,6 @@ def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
         ).scalar_one_or_none()
         if existing:
             continue
-        entity_type = _payment_type_to_entity_type(payment_type)
         naming_series_id = bank_account.default_naming_series_id
         if naming_series_id:
             series = database.session.get(NamingSeries, naming_series_id)
@@ -998,9 +997,9 @@ def bancos_cuenta_bancaria(account_id):
             naming_series_options.append({"value": s.id, "label": f"{s.name} ({s.prefix_template})"})
 
     external_counter_options = []
-    counters = database.session.execute(
-        database.select(ExternalCounter).filter_by(company=company, is_active=True)
-    ).scalars().all()
+    counters = (
+        database.session.execute(database.select(ExternalCounter).filter_by(company=company, is_active=True)).scalars().all()
+    )
     for c in counters:
         external_counter_options.append({"value": c.id, "label": f"{c.name} ({c.next_suggested_formatted})"})
 
@@ -1810,9 +1809,7 @@ def _create_payment_from_request():
         external_counter_id: str | None = None
         if config and config.use_external_counter:
             if mode_of_payment == "check":
-                external_counter_id = cast(
-                    str | None, payload.get("external_counter_id") or config.external_counter_id
-                )
+                external_counter_id = cast(str | None, payload.get("external_counter_id") or config.external_counter_id)
         elif mode_of_payment == "check":
             external_counter_id = cast(str | None, payload.get("external_counter_id"))
         assign_document_identifier(
