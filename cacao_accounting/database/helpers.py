@@ -13,7 +13,7 @@ from typing import Optional
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask
-from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError
+from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -87,7 +87,7 @@ def entidades_creadas():
         else:
             return False
 
-    except Exception:  # noqa: BLE001
+    except (OperationalError, TypeError, InterfaceError, ProgrammingError):
         database.session.rollback()
         return False
 
@@ -141,7 +141,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             else:
                 base_data(user, passwd, carga_rapida=True)
             DB_ESQUEMA = True
-        except Exception:
+        except (SQLAlchemyError, OperationalError, ProgrammingError, InterfaceError):
             log.exception("No se pudo inicializar esquema de base de datos.")
             DB_ESQUEMA = False
 
