@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import (
     Accounts,
@@ -58,6 +59,7 @@ from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 _ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."
 _ERROR_YA_TIENE_ENTRADAS_GL = "Este documento ya tiene entradas GL contabilizadas."
+_DOCUMENTO_YA_CONTABILIZADO_MSG = "El documento ya tiene asientos contables activos; no se puede contabilizar dos veces."
 
 
 class PostingError(ValueError):
@@ -392,7 +394,7 @@ def _create_gl_entry(
                         context.company_currency,
                         context.posting_date,
                     )
-                except Exception as exc:
+                except (PostingError, SQLAlchemyError) as exc:
                     raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
 
             debit_in_ac = debit
@@ -2303,7 +2305,7 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una recepción de compra aprobada.")
     if _has_active_gl_entries(document):
-        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
+        raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
     company = _company_for(document)
     from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
@@ -2392,7 +2394,7 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede contabilizar una nota de entrega aprobada.")
     if _has_active_gl_entries(document):
-        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
+        raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
     company = _company_for(document)
     movements = _create_stock_ledger_for_document_type(document, Decimal("-1"))
@@ -2468,7 +2470,7 @@ def _comprobante_entry_params(
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
     """Genera GL para un comprobante contable manual."""
     if _has_active_gl_entries(document):
-        raise PostingError("El documento ya tiene asientos contables activos; no se puede contabilizar dos veces.")
+        raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
     company = _company_for(document)
     lines = _comprobante_lines(document)
