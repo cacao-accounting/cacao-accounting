@@ -7,6 +7,7 @@ import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import func, or_
+from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.database import (
     database,
     Accounts,
@@ -71,7 +72,7 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
         rate = _lookup_exchange_rate(currency_code, company_currency, target_date)
         if rate:
             return Decimal(str(amount)) * Decimal(str(rate))
-    except Exception:
+    except (ValueError, SQLAlchemyError):
         from cacao_accounting.logs import log
 
         log.warning(
