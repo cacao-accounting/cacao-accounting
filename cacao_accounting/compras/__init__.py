@@ -301,12 +301,14 @@ def compras_solicitud_compra(request_id: str):
     create_actions = get_create_actions("purchase_request", request_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or request_id) + " - " + APPNAME
+    audit_timeline = format_document_timeline("purchase_request", registro.id)
     return render_template(
         "compras/solicitud_compra.html",
         registro=registro,
         items=items,
         titulo=titulo,
         create_actions_json=create_actions_json,
+        audit_timeline=audit_timeline,
     )
 
 
@@ -637,7 +639,10 @@ def compras_cotizacion_proveedor(quotation_id: str):
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=quotation_id)
     ).all()
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
-    return render_template("compras/cotizacion_proveedor.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline("supplier_quotation", registro.id)
+    return render_template(
+        "compras/cotizacion_proveedor.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @compras.route("/supplier-quotation/<quotation_id>/edit", methods=["GET", "POST"])
@@ -1738,7 +1743,10 @@ def compras_orden_compra(order_id):
         abort(404)
     items = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
-    return render_template("compras/orden_compra.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline("purchase_order", registro.id)
+    return render_template(
+        "compras/orden_compra.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @compras.route("/purchase-order/<order_id>/edit", methods=["GET", "POST"])
@@ -2130,12 +2138,14 @@ def compras_solicitud_cotizacion(quotation_id: str):
     ).all()
     offers = database.session.execute(database.select(SupplierQuotation).filter_by(purchase_quotation_id=quotation_id)).all()
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
+    audit_timeline = format_document_timeline("purchase_quotation", registro.id)
     return render_template(
         "compras/solicitud_cotizacion.html",
         registro=registro,
         items=items,
         offers=offers,
         titulo=titulo,
+        audit_timeline=audit_timeline,
     )
 
 
@@ -3216,12 +3226,14 @@ def compras_factura_compra(invoice_id):
     items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, FACTURA_DE_COMPRA)
+    audit_timeline = format_document_timeline(registro.document_type or "purchase_invoice", registro.id)
     return render_template(
         "compras/factura_compra.html",
         registro=registro,
         items=items,
         titulo=titulo,
         document_type_label=document_type_label,
+        audit_timeline=audit_timeline,
     )
 
 
@@ -3794,6 +3806,7 @@ def compras_import_landed_cost(landed_cost_id: str):
     items = _get_import_landed_cost_items(landed_cost_id)
     cargos = _get_import_landed_cost_charges(landed_cost_id)
     titulo = f"Costo de Importacion {registro.document_no or registro.id} - {APPNAME}"
+    audit_timeline = format_document_timeline("import_landed_cost", registro.id)
     return render_template(
         "compras/import_landed_cost.html",
         registro=registro,
@@ -3801,6 +3814,7 @@ def compras_import_landed_cost(landed_cost_id: str):
         cargos=cargos,
         titulo=titulo,
         document_type_label=IMPORT_LANDED_COST_LABEL,
+        audit_timeline=audit_timeline,
     )
 
 

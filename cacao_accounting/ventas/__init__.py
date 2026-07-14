@@ -439,7 +439,10 @@ def ventas_pedido_venta(request_id: str):
         abort(404)
     items = database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=request_id)).all()
     titulo = (registro.document_no or request_id) + " - " + APPNAME
-    return render_template("ventas/solicitud_venta.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline("sales_request", registro.id)
+    return render_template(
+        "ventas/solicitud_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @ventas.route("/sales-request/<request_id>/edit", methods=["GET", "POST"])
@@ -1583,7 +1586,10 @@ def ventas_orden_venta(order_id):
         abort(404)
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
-    return render_template("ventas/orden_venta.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline("sales_order", registro.id)
+    return render_template(
+        "ventas/orden_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @ventas.route("/sales-order/<order_id>/edit", methods=["GET", "POST"])
@@ -1825,7 +1831,10 @@ def ventas_cotizacion(quotation_id: str):
         abort(404)
     items = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=quotation_id)).all()
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
-    return render_template("ventas/cotizacion.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline("sales_quotation", registro.id)
+    return render_template(
+        "ventas/cotizacion.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @ventas.route("/sales-quotation/<quotation_id>/edit", methods=["GET", "POST"])
@@ -2581,7 +2590,10 @@ def ventas_factura_venta(invoice_id):
         abort(404)
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
-    return render_template("ventas/factura_venta.html", registro=registro, items=items, titulo=titulo)
+    audit_timeline = format_document_timeline(registro.document_type or "sales_invoice", registro.id)
+    return render_template(
+        "ventas/factura_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+    )
 
 
 @ventas.route("/sales-invoice/<invoice_id>/edit", methods=["GET", "POST"])
