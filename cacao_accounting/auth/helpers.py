@@ -10,6 +10,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
+from jwt.exceptions import PyJWTError
 
 from cacao_accounting.database import CacaoConfig as Config, User, database
 from cacao_accounting.logs import log
@@ -87,7 +88,7 @@ def asignar_token_para_usuario(identidad: User) -> None:
             algorithm="HS256",
         )
         assert identidad.token is not None  # nosec
-    except Exception as exc:
+    except (KeyError, PyJWTError) as exc:
         assert exc is not None  # nosec
         log.warning("No se pudo generar auth token.")
 

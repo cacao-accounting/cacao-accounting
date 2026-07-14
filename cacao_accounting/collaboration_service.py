@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from typing import Any, NoReturn
 
 from flask import abort, url_for
+from werkzeug.routing import BuildError
 
 from cacao_accounting.audit_trail_service import log_comment, log_task_event
 from cacao_accounting.auth.permisos import Permisos
@@ -174,7 +175,7 @@ def document_url(task: DocumentTask) -> str | None:
         return None
     try:
         return url_for(spec.detail_endpoint, **{spec.detail_arg: task.document_id})
-    except Exception:
+    except BuildError:
         return None
 
 

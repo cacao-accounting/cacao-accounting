@@ -20,7 +20,7 @@ class CSVReader(BaseReader):
                 sample = f.read(1024)
                 f.seek(0)
                 dialect = csv.Sniffer().sniff(sample, delimiters=",;")
-            except Exception:
+            except csv.Error:
                 dialect = "excel"  # Fallback a coma
 
             reader = csv.reader(f, dialect=dialect)

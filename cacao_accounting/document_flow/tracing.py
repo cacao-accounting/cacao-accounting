@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from typing import Any
+from werkzeug.routing import BuildError
 
 from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
@@ -85,7 +86,7 @@ def _create_action_payload(action: Any, document_id: str) -> dict[str, Any]:
         endpoint_args.update(action.query_params)
     try:
         create_url = url_for(action.endpoint, **endpoint_args)
-    except Exception:  # noqa: BLE001 — url_for puede fallar fuera de contexto de peticion
+    except (BuildError, RuntimeError):
         create_url = None
     return {
         "label": action.label,
