@@ -64,6 +64,9 @@
         <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
         <div class="ca-kv-item"><label>{{ _('Entidad') }}</label><p>{{ registro.entity }}</p></div>
         <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Unidad Padre') }}</label><p>{{ registro.parent.name if registro.parent else '—' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Ruta (Path)') }}</label><p>{{ registro.path or '—' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Nivel') }}</label><p>{{ registro.level or 0 }}</p></div>
     </div>
   </div>
 </div>

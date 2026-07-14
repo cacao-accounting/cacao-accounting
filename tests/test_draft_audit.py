@@ -89,7 +89,7 @@ def test_stock_entry_draft_audit_capture(app_ctx):
                 "basic_rate": Decimal("50.00"),
                 "amount": Decimal("4000.00"),
             }
-        ]
+        ],
     }
 
     # 4. Format values and check difference
@@ -189,8 +189,14 @@ def test_format_document_timeline_with_items_changes(app_ctx):
         "purpose": "material_receipt",
         "company": "cacao",
         "items": [
-            {"item_code": "ITEM-A", "qty": Decimal("100"), "uom": "Pza", "basic_rate": Decimal("1.5"), "amount": Decimal("150")}
-        ]
+            {
+                "item_code": "ITEM-A",
+                "qty": Decimal("100"),
+                "uom": "Pza",
+                "basic_rate": Decimal("1.5"),
+                "amount": Decimal("150"),
+            }
+        ],
     }
 
     after_state = {
@@ -198,7 +204,7 @@ def test_format_document_timeline_with_items_changes(app_ctx):
         "company": "cacao",
         "items": [
             {"item_code": "ITEM-A", "qty": Decimal("80"), "uom": "Pza", "basic_rate": Decimal("1.5"), "amount": Decimal("120")}
-        ]
+        ],
     }
 
     log_update(se, before=before_state, after=after_state)

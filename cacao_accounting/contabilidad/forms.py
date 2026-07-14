@@ -103,6 +103,7 @@ class FormularioUnidad(FlaskForm):
     id = StringField(validators=[DataRequired()])
     nombre = StringField(validators=[DataRequired()])
     entidad = SelectField("Entidad")
+    parent_id = SelectField("Unidad Padre", choices=[], validators=[Optional()], validate_choice=False)
     correo_electronico = StringField(validators=[])
     web = StringField(validators=[])
     telefono1 = StringField(validators=[])
@@ -258,6 +259,7 @@ class FormularioProyecto(FlaskForm):
     id = StringField("Codigo", validators=[DataRequired()])
     nombre = StringField("Nombre", validators=[DataRequired()])
     entidad = SelectField("Entidad", validators=[DataRequired()])
+    parent_id = SelectField("Proyecto Padre", choices=[], validators=[Optional()], validate_choice=False)
     inicio = DateField(FECHA_INICIO, validators=[Optional()])
     fin = DateField(FECHA_FIN, validators=[Optional()])
     presupuesto = DecimalField("Presupuesto", places=2, validators=[Optional(), NumberRange(min=0)])
@@ -271,6 +273,10 @@ class FormularioProyecto(FlaskForm):
         ],
         default="open",
         validators=[DataRequired()],
+    )
+    capitalizable = BooleanField("Capitalizable", default=False)
+    capitalization_account_id = SelectField(
+        "Cuenta de Activo de Capitalización", choices=[], validators=[Optional()], validate_choice=False
     )
 
 

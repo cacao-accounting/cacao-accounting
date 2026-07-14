@@ -37,11 +37,16 @@ static_rutes = [
             "Registros del Módulo".encode("utf-8"),
             "Reportes del Módulo".encode("utf-8"),
             "Entidades".encode("utf-8"),
-        ] + ([
-            "Presupuesto".encode("utf-8"),
-            "Administrar Presupuestos".encode("utf-8"),
-            "Real versus Presupuesto".encode("utf-8"),
-        ] if not desktop_mode else []),
+        ]
+        + (
+            [
+                "Presupuesto".encode("utf-8"),
+                "Administrar Presupuestos".encode("utf-8"),
+                "Real versus Presupuesto".encode("utf-8"),
+            ]
+            if not desktop_mode
+            else []
+        ),
     ),
     Route(
         url="/accounting/entity/list",

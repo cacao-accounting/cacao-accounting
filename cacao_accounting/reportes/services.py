@@ -121,6 +121,7 @@ class FinancialReportFilters:
     sort_by: str = "posting_date"
     sort_dir: str = "asc"
     export_all: bool = False
+    include_descendants: bool = False
 
 
 @dataclass(frozen=True)
@@ -852,6 +853,8 @@ def _apply_base_filters(query: Any, filters: FinancialReportFilters) -> Any:
 
 
 def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
+    from cacao_accounting.database import Unit, Project, database
+
     if filters.account_code:
         query = query.where(GLEntry.account_code == filters.account_code)
     if filters.account_from:
@@ -861,9 +864,25 @@ def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.cost_center_code:
         query = query.where(GLEntry.cost_center_code == filters.cost_center_code)
     if filters.unit_code:
-        query = query.where(GLEntry.unit_code == filters.unit_code)
+        if filters.include_descendants:
+            node = database.session.execute(database.select(Unit).filter_by(code=filters.unit_code)).scalar_one_or_none()
+            if node:
+                codes_list = [node.code] + [d.code for d in node.descendants]
+                query = query.where(GLEntry.unit_code.in_(codes_list))
+            else:
+                query = query.where(GLEntry.unit_code == filters.unit_code)
+        else:
+            query = query.where(GLEntry.unit_code == filters.unit_code)
     if filters.project_code:
-        query = query.where(GLEntry.project_code == filters.project_code)
+        if filters.include_descendants:
+            node = database.session.execute(database.select(Project).filter_by(code=filters.project_code)).scalar_one_or_none()
+            if node:
+                codes_list = [node.code] + [d.code for d in node.descendants]
+                query = query.where(GLEntry.project_code.in_(codes_list))
+            else:
+                query = query.where(GLEntry.project_code == filters.project_code)
+        else:
+            query = query.where(GLEntry.project_code == filters.project_code)
     return query
 
 

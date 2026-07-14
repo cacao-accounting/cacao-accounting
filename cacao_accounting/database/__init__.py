@@ -464,6 +464,48 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     name = database.Column(database.String(50), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     enabled = database.Column(database.Boolean(), nullable=True)
+    parent_id = database.Column(
+        database.String(26), database.ForeignKey("unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    level = database.Column(database.Integer(), default=0)
+    path = database.Column(database.String(500), nullable=True)
+
+    @property
+    def parent(self):
+        if not self.parent_id:
+            return None
+        return database.session.get(Unit, self.parent_id)
+
+    @property
+    def children(self):
+        return database.session.execute(database.select(Unit).filter_by(parent_id=self.id)).scalars().all()
+
+    @property
+    def ancestors(self):
+        res = []
+        curr = self.parent
+        visited = set()
+        while curr:
+            if curr.id in visited:
+                break
+            visited.add(curr.id)
+            res.append(curr)
+            curr = curr.parent
+        return res
+
+    @property
+    def descendants(self):
+        res = []
+        stack = list(self.children)
+        visited = set()
+        while stack:
+            node = stack.pop()
+            if node.id in visited:
+                continue
+            visited.add(node.id)
+            res.append(node)
+            stack.extend(node.children)
+        return res
 
 
 # Alias para compatibilidad
@@ -618,6 +660,48 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     code = database.Column(database.String(10), index=True)
     name = database.Column(database.String(100))
+    parent_id = database.Column(
+        database.String(26), database.ForeignKey("business_unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    level = database.Column(database.Integer(), default=0)
+    path = database.Column(database.String(500), nullable=True)
+
+    @property
+    def parent(self):
+        if not self.parent_id:
+            return None
+        return database.session.get(BusinessUnit, self.parent_id)
+
+    @property
+    def children(self):
+        return database.session.execute(database.select(BusinessUnit).filter_by(parent_id=self.id)).scalars().all()
+
+    @property
+    def ancestors(self):
+        res = []
+        curr = self.parent
+        visited = set()
+        while curr:
+            if curr.id in visited:
+                break
+            visited.add(curr.id)
+            res.append(curr)
+            curr = curr.parent
+        return res
+
+    @property
+    def descendants(self):
+        res = []
+        stack = list(self.children)
+        visited = set()
+        while stack:
+            node = stack.pop()
+            if node.id in visited:
+                continue
+            visited.add(node.id)
+            res.append(node)
+            stack.extend(node.children)
+        return res
 
 
 class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -634,6 +718,52 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     budget_currency_code = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    parent_id = database.Column(
+        database.String(26), database.ForeignKey("project.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    level = database.Column(database.Integer(), default=0)
+    path = database.Column(database.String(500), nullable=True)
+    capitalizable = database.Column(database.Boolean(), default=False)
+    capitalization_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+
+    @property
+    def parent(self):
+        if not self.parent_id:
+            return None
+        return database.session.get(Project, self.parent_id)
+
+    @property
+    def children(self):
+        return database.session.execute(database.select(Project).filter_by(parent_id=self.id)).scalars().all()
+
+    @property
+    def ancestors(self):
+        res = []
+        curr = self.parent
+        visited = set()
+        while curr:
+            if curr.id in visited:
+                break
+            visited.add(curr.id)
+            res.append(curr)
+            curr = curr.parent
+        return res
+
+    @property
+    def descendants(self):
+        res = []
+        stack = list(self.children)
+        visited = set()
+        while stack:
+            node = stack.pop()
+            if node.id in visited:
+                continue
+            visited.add(node.id)
+            res.append(node)
+            stack.extend(node.children)
+        return res
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -2694,6 +2824,16 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     recurrent_application_id = database.Column(
         database.String(26),
         database.ForeignKey("recurring_journal_application.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    capitalized_by_id = database.Column(
+        database.String(26),
+        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    capitalization_origin_id = database.Column(
+        database.String(26),
+        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
         nullable=True,
     )
 
