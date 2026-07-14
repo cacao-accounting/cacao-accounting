@@ -238,6 +238,22 @@ def _payment_numbering_defaults(bank_account_id: str | None) -> tuple[str | None
 # --------------------------------------------------------------------------------------
 
 
+def _lookup_series_name(naming_series_id: str | None) -> str | None:
+    """Retorna el nombre de una naming series."""
+    if not naming_series_id:
+        return None
+    series = database.session.get(NamingSeries, naming_series_id)
+    return series.name if series else None
+
+
+def _lookup_counter_name(external_counter_id: str | None) -> str | None:
+    """Retorna el nombre de un contador externo."""
+    if not external_counter_id:
+        return None
+    counter = database.session.get(ExternalCounter, external_counter_id)
+    return counter.name if counter else None
+
+
 def _payment_type_to_entity_type(payment_type: str) -> str:
     """Retorna el entity_type de NamingSeries para un tipo de transaccion bancaria."""
     return PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry")
@@ -918,6 +934,17 @@ def bancos_cuenta_bancaria(account_id):
     if not registro:
         abort(404)
     titulo = registro.account_name + " - " + APPNAME
+
+    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
+
+    PAYMENT_TYPE_LABELS = {
+        "pay": _("Pago a Proveedor"),
+        "receive": _("Cobro de Cliente"),
+        "internal_transfer": _("Transferencia Interna"),
+        "debit_note": _("Nota de Debito"),
+        "credit_note": _("Nota de Credito"),
+    }
+
     configs = (
         database.session.execute(
             database.select(BankAccountNumberingConfig)
@@ -927,19 +954,25 @@ def bancos_cuenta_bancaria(account_id):
         .scalars()
         .all()
     )
-    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
 
     numbering_configs = []
     for payment_type in PAYMENT_TYPES:
         cfg = next((c for c in configs if c.payment_type == payment_type), None)
         entity_type = ENTITY_MAP.get(payment_type, "payment_entry")
+        naming_series_name = None
+        counter_name = None
         if cfg:
+            naming_series_name = _lookup_series_name(cfg.naming_series_id)
+            counter_name = _lookup_counter_name(cfg.external_counter_id)
             numbering_configs.append(
                 {
                     "payment_type": cfg.payment_type,
+                    "label": PAYMENT_TYPE_LABELS.get(payment_type, payment_type),
                     "naming_series_id": cfg.naming_series_id,
+                    "naming_series_name": naming_series_name,
                     "use_external_counter": cfg.use_external_counter,
                     "external_counter_id": cfg.external_counter_id,
+                    "counter_name": counter_name,
                     "entity_type": entity_type,
                 }
             )
@@ -947,13 +980,39 @@ def bancos_cuenta_bancaria(account_id):
             numbering_configs.append(
                 {
                     "payment_type": payment_type,
+                    "label": PAYMENT_TYPE_LABELS.get(payment_type, payment_type),
                     "naming_series_id": None,
+                    "naming_series_name": None,
                     "use_external_counter": payment_type in ("pay", "receive"),
                     "external_counter_id": None,
+                    "counter_name": None,
                     "entity_type": entity_type,
                 }
             )
-    return render_template("bancos/banco_cuenta.html", registro=registro, titulo=titulo, numbering_configs=numbering_configs)
+
+    company = registro.company
+    naming_series_options = []
+    for et in set(ENTITY_MAP.values()):
+        series_list = get_active_naming_series(entity_type=et, company=company)
+        for s in series_list:
+            naming_series_options.append({"value": s.id, "label": f"{s.name} ({s.prefix_template})"})
+
+    external_counter_options = []
+    counters = database.session.execute(
+        database.select(ExternalCounter).filter_by(company=company, is_active=True)
+    ).scalars().all()
+    for c in counters:
+        external_counter_options.append({"value": c.id, "label": f"{c.name} ({c.next_suggested_formatted})"})
+
+    return render_template(
+        "bancos/banco_cuenta.html",
+        registro=registro,
+        titulo=titulo,
+        numbering_configs=numbering_configs,
+        naming_series_options=naming_series_options,
+        external_counter_options=external_counter_options,
+        PAYMENT_TYPES=PAYMENT_TYPES,
+    )
 
 
 @bancos.route("/bank-account/<account_id>/numbering-config", methods=["GET", "POST"])
