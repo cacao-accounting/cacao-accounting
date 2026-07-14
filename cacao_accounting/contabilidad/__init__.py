@@ -2941,6 +2941,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
         if ledger_ids
         else {}
     )
+    audit_timeline = format_document_timeline("exchange_revaluation", run.id)
     return render_template(
         "contabilidad/exchange_revaluation.html",
         titulo="Revalorizacion cambiaria - " + APPNAME,
@@ -2949,6 +2950,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
         accounts=accounts,
         ledgers=ledgers,
         selected_period=period,
+        audit_timeline=audit_timeline,
     )
 
 
