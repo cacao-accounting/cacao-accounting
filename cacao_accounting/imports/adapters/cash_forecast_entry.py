@@ -26,6 +26,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
     required_columns = ["forecast_id", "type", "concept", "currency", "amount", "estimated_date"]
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
+        """Validate a single cash forecast entry row."""
         errors = super().validate_row(row_data)
         forecast = database.session.get(CashForecast, str(row_data.get("forecast_id", "")))
         if forecast is None:
@@ -44,9 +45,11 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         return errors
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
+        """Validate the full cash forecast entry document."""
         return []
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
+        """Build cash forecast entries from the imported data."""
         entries = []
         for row in document_data:
             estimated_date = row.get("estimated_date")
@@ -67,6 +70,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         return entries
 
     def persist_document(self, document: Any) -> None:
+        """Persist cash forecast entries to the database."""
         for entry_data in document:
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
