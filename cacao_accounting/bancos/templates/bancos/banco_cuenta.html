@@ -14,7 +14,7 @@
   </ol>
 </nav>
 
-<div class="ca-card">
+<div class="ca-card" x-data="numberingConfig()">
   <div class="ca-card-header">
     <h5 class="ca-card-title">
       <i class="bi bi-credit-card"></i>{{ registro.account_name }}
@@ -35,6 +35,134 @@
       <div class="ca-kv-item"><label>{{ _('Cuenta contable') }}</label><p>{{ registro.gl_account_id or '-' }}</p></div>
     </div>
   </div>
+
+  <div class="p-3 border-top">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h6 class="mb-0"><i class="bi bi-gear me-1"></i>{{ _('Configuracion de Numeracion') }}</h6>
+      <button class="btn btn-outline-primary btn-sm" x-show="!editing" @click="startEdit" type="button">
+        <i class="bi bi-pencil me-1"></i>{{ _('Editar') }}
+      </button>
+      <div x-show="editing" class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" @click="save" type="button" :disabled="saving">
+          <i class="bi bi-check-lg me-1"></i>{{ _('Guardar') }}
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" @click="cancelEdit" type="button">
+          <i class="bi bi-x-lg me-1"></i>{{ _('Cancelar') }}
+        </button>
+      </div>
+    </div>
+
+    <div x-show="savedMessage" class="alert alert-success alert-dismissible fade show py-2" role="alert">
+      <span x-text="savedMessage"></span>
+      <button type="button" class="btn-close py-2" @click="savedMessage = ''"></button>
+    </div>
+
+    <table class="ca-table">
+      <thead>
+        <tr>
+          <th scope="col">{{ _('Tipo de Transaccion') }}</th>
+          <th scope="col">{{ _('Serie Interna') }}</th>
+          <th scope="col">{{ _('Usa Contador Externo') }}</th>
+          <th scope="col">{{ _('Contador Externo') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cfg in numbering_configs %}
+        <tr>
+          <td><span class="fw-medium">{{ _(cfg.label) }}</span></td>
+          <td>
+            <template x-if="!editing">
+              <span>{{ cfg.naming_series_name or _('(predeterminado)') }}</span>
+            </template>
+            <template x-if="editing">
+              <select class="form-select form-select-sm" x-model="configs['{{ cfg.payment_type }}'].naming_series_id">
+                <option value="">{{ _('(predeterminado del sistema)') }}</option>
+                {% for opt in naming_series_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+            </template>
+          </td>
+          <td>
+            <template x-if="!editing">
+              <span>{% if cfg.use_external_counter %}<i class="bi bi-check-lg text-success"></i>{{ _('Si') }}{% else %}<i class="bi bi-x-lg text-secondary"></i>{{ _('No') }}{% endif %}</span>
+            </template>
+            <template x-if="editing">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" x-model="configs['{{ cfg.payment_type }}'].use_external_counter" id="use_ext_{{ cfg.payment_type }}">
+              </div>
+            </template>
+          </td>
+          <td>
+            <template x-if="!editing">
+              <span>{{ cfg.counter_name or '-' }}</span>
+            </template>
+            <template x-if="editing">
+              <select class="form-select form-select-sm" x-model="configs['{{ cfg.payment_type }}'].external_counter_id" :disabled="!configs['{{ cfg.payment_type }}'].use_external_counter">
+                <option value="">{{ _('(ninguno)') }}</option>
+                {% for opt in external_counter_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+            </template>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-muted small mt-2 mb-0">
+      <i class="bi bi-info-circle me-1"></i>{{ _('La serie predeterminada se define desde Administracion > Series e Identificadores.') }}
+    </p>
+  </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function numberingConfig() {
+  return {
+    editing: false,
+    saving: false,
+    savedMessage: '',
+    configs: {},
+    init() {
+      {% for cfg in numbering_configs %}
+      this.configs['{{ cfg.payment_type }}'] = {
+        payment_type: '{{ cfg.payment_type }}',
+        naming_series_id: '{{ cfg.naming_series_id or "" }}',
+        use_external_counter: {{ 'true' if cfg.use_external_counter else 'false' }},
+        external_counter_id: '{{ cfg.external_counter_id or "" }}'
+      };
+      {% endfor %}
+    },
+    startEdit() {
+      this.editing = true;
+    },
+    cancelEdit() {
+      this.editing = false;
+      this.init();
+    },
+    async save() {
+      this.saving = true;
+      try {
+        const payload = Object.values(this.configs);
+        const response = await fetch('{{ url_for("bancos.bancos_cuenta_bancaria_numbering_config", account_id=registro.id) }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ configs: payload })
+        });
+        if (!response.ok) throw new Error('Error al guardar');
+        this.editing = false;
+        this.savedMessage = '{{ _("Configuracion guardada correctamente.") }}';
+        setTimeout(() => { this.savedMessage = ''; }, 3000);
+      } catch (e) {
+        alert('{{ _("Error al guardar la configuracion.") }}');
+      } finally {
+        this.saving = false;
+      }
+    }
+  };
+}
+</script>
 {% endblock %}
