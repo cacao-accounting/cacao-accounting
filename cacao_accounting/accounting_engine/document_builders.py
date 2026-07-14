@@ -24,6 +24,9 @@ from cacao_accounting.database import (
     CompanyDefaultAccount,
     CompanyParty,
     Entity,
+    ImportLandedCost,
+    ImportLandedCostCharge,
+    ImportLandedCostItem,
     ItemAccount,
     PartyAccount,
     PaymentEntry,
@@ -114,6 +117,8 @@ def build_calculation_context(document: Any) -> CalculationContext | None:
         return _build_sales_invoice_context(document)
     if isinstance(document, PaymentEntry):
         return _build_payment_context(document)
+    if isinstance(document, ImportLandedCost):
+        return _build_import_landed_cost_context(document)
     return None
 
 
@@ -300,6 +305,113 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         tax_rules=tax_rules,
         references=_payment_accounting_references(document, company, spec, settlement_references, amounts),
         settlement_amount=amounts.settlement_amount,
+    )
+
+
+def _build_import_landed_cost_context(document: ImportLandedCost) -> CalculationContext:
+    """Build the context for an import landed cost document."""
+    company = _require_company(document.company)
+    defaults = _company_defaults(company)
+    items = list(
+        database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
+    )
+    if not items:
+        raise CalculationContextBuilderError("El costo de importacion no contiene lineas para calculo.")
+
+    charges = list(
+        database.session.execute(select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)).scalars().all()
+    )
+
+    item_contexts: list[ItemContext] = []
+    account_lines: list[AccountLineSpec] = []
+    total_charges_amount = sum((_decimal_value(c.amount) for c in charges), Decimal("0"))
+
+    for item in items:
+        amount = _decimal_value(item.amount)
+        item_contexts.append(
+            ItemContext(
+                line_id=item.id,
+                item_id=item.item_code,
+                description=item.item_name or item.item_code,
+                quantity=_decimal_value(item.qty),
+                unit_price=_decimal_value(item.rate),
+                gross_amount=amount,
+                net_amount=amount,
+                item_type="inventory",
+                uom=item.uom or "unit",
+            )
+        )
+        try:
+            inventory_account_id = inventory_account_id_for_document_line(document, item, company)
+        except Exception:
+            inventory_account_id = None
+        if inventory_account_id and amount and amount > 0:
+            description = f"{item.item_name or item.item_code} - Costo Importacion"
+            account_lines.append(
+                AccountLineSpec(
+                    account_id=inventory_account_id,
+                    amount=amount,
+                    side="debit",
+                    description=description,
+                )
+            )
+
+    tax_rules: list[TaxRuleContext] = []
+    for idx, charge in enumerate(charges):
+        tax_rules.append(
+            TaxRuleContext(
+                rule_id=f"IMPORT-CHARGE-{idx:03}",
+                name=charge.concept,
+                concept=charge.concept,
+                tax_type=charge.charge_type,
+                calculation_method="fixed",
+                rate=Decimal("0"),
+                amount=_decimal_value(charge.amount),
+                base_mode="goods",
+                order=idx + 1,
+                accounting_treatment=charge.accounting_treatment or "capitalizable_inventory_cost",
+                recognition_event="import_landed_cost_confirmed",
+                affects_inventory=True,
+                affects_document_total=True,
+                included_in_price=False,
+                allocation_method=charge.allocation_method or document.allocation_method,
+                account_id=charge.account_id,
+            )
+        )
+
+    bridge_account_id = getattr(defaults, "bridge_account_id", None)
+    if bridge_account_id and account_lines:
+        account_lines.append(
+            AccountLineSpec(
+                account_id=bridge_account_id,
+                amount=total_charges_amount,
+                side="credit",
+                description=_("Cargos de importacion - Cuenta puente"),
+                party_id=document.supplier_id,
+            )
+        )
+
+    return CalculationContext(
+        company_id=company,
+        document_type="import_landed_cost",
+        event_type="import_landed_cost_confirmed",
+        transaction_direction="purchase",
+        transaction_date=document.posting_date,
+        posting_date=document.posting_date,
+        party_type="supplier",
+        party_id=str(document.supplier_id or ""),
+        currency=_document_currency(document, company),
+        company_currency=_company_currency(document, company),
+        exchange_rate=_document_exchange_rate(document),
+        items=item_contexts,
+        tax_rules=tax_rules,
+        accounting_policy={"allocation_method": document.allocation_method or "by_value"},
+        references=_build_references(
+            company=company,
+            party_id=document.supplier_id,
+            direction="purchase",
+            account_lines=account_lines,
+        ),
     )
 
 

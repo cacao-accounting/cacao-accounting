@@ -56,6 +56,7 @@
       purchase_debit_note: 'ND',
       sales_credit_note: 'NC',
       purchase_credit_note: 'NC',
+      import_landed_cost: 'ILC',
     };
     return escHtml(map[String(doctype || '').toLowerCase()] || String(doctype || '').slice(0, 2).toUpperCase());
   }

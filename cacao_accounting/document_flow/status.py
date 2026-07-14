@@ -191,6 +191,7 @@ def _primary_flow_targets(doctype: str) -> list[str]:
     return {
         "purchase_order": ["purchase_receipt", "purchase_invoice"],
         "purchase_receipt": ["purchase_invoice"],
+        "purchase_invoice": ["import_landed_cost"],
         "purchase_request": ["purchase_order", "purchase_quotation"],
         "purchase_quotation": ["supplier_quotation"],
         "supplier_quotation": ["purchase_order"],

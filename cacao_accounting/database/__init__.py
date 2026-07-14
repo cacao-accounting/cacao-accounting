@@ -50,6 +50,7 @@ TAX_TEMPLATE_ID = "tax_template.id"
 BATCH_ID = "batch.id"
 PURCHASE_ORDER_ID = "purchase_order.id"
 PURCHASE_RECEIPT_ID = "purchase_receipt.id"
+PURCHASE_INVOICE_ID = "purchase_invoice.id"
 SALES_ORDER_ID = "sales_order.id"
 GL_ENTRY_ID = "gl_entry.id"
 BANK_ACCOUNT_ID = "bank_account.id"
@@ -1852,6 +1853,105 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
     )
     warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Import Landed Cost — Costos de Importacion.
+# <---------------------------------------------------------------------------------------------> #
+class ImportLandedCost(database.Model, DocBase):  # type: ignore[name-defined]
+    """Documento de costos de importacion.
+
+    Agrupa los cargos capitalizables (flete, seguro, aduana, DAI, ISC, etc.)
+    que deben prorratearse entre las lineas de una factura de compra de importacion.
+    """
+
+    __tablename__ = "import_landed_cost"
+    purchase_invoice_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_INVOICE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    supplier_name = database.Column(database.String(200), nullable=True)
+    document_type = database.Column(database.String(50), nullable=False, default="import_landed_cost")
+    allocation_method = database.Column(database.String(30), nullable=False, default="by_value")
+    total_base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    total_charges_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    total_inventory_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    remarks = database.Column(database.Text(), nullable=True)
+
+
+class ImportLandedCostItem(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Linea de item en documento de costos de importacion."""
+
+    __tablename__ = "import_landed_cost_item"
+    __table_args__ = (
+        database.CheckConstraint("qty > 0", name="ck_ilci_qty_positive"),
+        database.CheckConstraint("rate >= 0", name="ck_ilci_rate_non_negative"),
+        database.CheckConstraint("amount >= 0", name="ck_ilci_amount_non_negative"),
+    )
+    import_landed_cost_id = database.Column(
+        database.String(26),
+        database.ForeignKey("import_landed_cost.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    item_name = database.Column(database.String(200), nullable=True)
+    qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    final_inventory_cost = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    unit_inventory_cost = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    warehouse = database.Column(
+        database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+
+
+class ImportLandedCostCharge(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Cargo capitalizable individual en un documento de costos de importacion."""
+
+    __tablename__ = "import_landed_cost_charge"
+    __table_args__ = (database.CheckConstraint("amount >= 0", name="ck_ilcc_amount_non_negative"),)
+    import_landed_cost_id = database.Column(
+        database.String(26),
+        database.ForeignKey("import_landed_cost.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    concept = database.Column(database.String(200), nullable=False)
+    charge_type = database.Column(database.String(30), nullable=False, default="charge")
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    allocation_method = database.Column(database.String(30), nullable=True)
+    accounting_treatment = database.Column(database.String(50), nullable=False, default="capitalizable_inventory_cost")
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
 
 
