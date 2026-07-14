@@ -201,6 +201,22 @@
 
 ---
 
+### 2026-07-14 (Sesión actual)
+- **IMP-02: Doctype dedicado para import_landed_cost_confirmed**: Se creó la capa documental completa alrededor de la funcionalidad existente de landed cost engine/orchestrator:
+  - Modelos: `ImportLandedCost`, `ImportLandedCostItem`, `ImportLandedCostCharge` en `database/__init__.py`
+  - Registro en `DOCUMENT_TYPES` (document_flow/registry.py) como `import_landed_cost`
+  - Perfil en `_FISCAL_MATRIX` (fiscal_preview_service.py) con `recognition_event="import_landed_cost_confirmed"`
+  - Flujo permitido: `purchase_invoice → import_landed_cost` con `relation_type="landed_cost"`
+  - Naming series: código `ILC` en document_identifiers.py
+  - Routes: CRUD completo en compras blueprint (list, new, detail, submit, cancel)
+  - Posting engine: `post_import_landed_cost` en posting.py con integración al motor de cálculo
+  - Document builder: `_build_import_landed_cost_context` en document_builders.py
+  - UI templates: listado, detalle con cargos/artículos, formulario nuevo con grid transaccional y cargos dinámicos
+  - Cleanup references para integridad de flujo documental
+  - Primary flow target en status.py para seguimiento de progreso
+
+---
+
 ## Decisiones de Diseño Clave
 
 1. **append-only**: Cancelaciones y reversas crean entradas nuevas (con `is_cancelled=True`), nunca eliminan originales.

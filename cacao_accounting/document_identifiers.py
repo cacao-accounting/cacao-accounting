@@ -297,6 +297,7 @@ def _default_entity_code(entity_type: str) -> str:
         "purchase_order": "PO",
         "purchase_receipt": "PR",
         "purchase_invoice": "PI",
+        "import_landed_cost": "ILC",
         "sales_order": "SO",
         "sales_request": "SR",
         "delivery_note": "DN",

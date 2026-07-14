@@ -120,3 +120,24 @@ class FormularioSolicitudCotizacion(FlaskForm):
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField(FECHA_DE_PUBLICACION)
     remarks = TextAreaField("Observaciones")
+
+
+class FormularioImportLandedCost(FlaskForm):
+    """Formulario para crear un documento de costos de importación."""
+
+    company = SelectField(COMPANIA, choices=[])
+    naming_series = SelectField("Serie", choices=[])
+    posting_date = StringField(FECHA_DE_PUBLICACION)
+    purchase_invoice_id = StringField("Factura de Compra")
+    allocation_method = SelectField(
+        "Método de Prorrateo",
+        choices=[
+            ("by_value", "Por Valor"),
+            ("by_quantity", "Por Cantidad"),
+            ("by_weight", "Por Peso"),
+            ("by_volume", "Por Volumen"),
+            ("equal", "Equitativo"),
+        ],
+        default="by_value",
+    )
+    remarks = TextAreaField("Observaciones")

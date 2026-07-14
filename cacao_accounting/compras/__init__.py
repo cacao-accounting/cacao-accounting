@@ -32,6 +32,9 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 from cacao_accounting.database import (
     CompanyParty,
     DocumentRelation,
+    ImportLandedCost,
+    ImportLandedCostCharge,
+    ImportLandedCostItem,
     Item,
     Party,
     PurchaseInvoice,
@@ -127,11 +130,15 @@ LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
 LABEL_ORDEN_COMPRA = "Orden de Compra"
 LABEL_FACTURA_COMPRA_LONG = "Factura de Compra"
 
+IMPORT_LANDED_COST = "import_landed_cost"
+IMPORT_LANDED_COST_LABEL = "Costo de Importación"
+
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
     PURCHASE_RETURN: "Devolución de Compra",
+    IMPORT_LANDED_COST: IMPORT_LANDED_COST_LABEL,
 }
 
 
@@ -3503,6 +3510,359 @@ def compras_factura_compra_cancel(invoice_id: str):
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     flash(_("Factura de compra cancelada con reverso contable."), "warning")
     return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+
+
+# < --------------------------------------------------------------------------------------------- >
+# Import Landed Cost — Costos de Importacion
+# < --------------------------------------------------------------------------------------------- >
+
+
+@compras.route("/import-landed-cost/list")
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_lista():
+    """Listado de costos de importacion."""
+    consulta = _paginate_list(
+        ImportLandedCost,
+        (ImportLandedCost.document_no, ImportLandedCost.supplier_name, ImportLandedCost.remarks),
+    )
+    titulo = "Listado de Costos de Importacion - " + APPNAME
+    return render_template("compras/import_landed_cost_lista.html", consulta=consulta, titulo=titulo)
+
+
+@compras.route("/import-landed-cost/new", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_nuevo():
+    """Formulario para crear un costo de importacion."""
+    from cacao_accounting.compras.forms import FormularioImportLandedCost
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario = FormularioImportLandedCost()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+
+    selected_company = request.values.get("company") or (
+        formulario.company.choices[0][0] if formulario.company.choices else None
+    )
+    formulario.naming_series.choices = _series_choices("import_landed_cost", selected_company)
+
+    from_invoice_id = request.args.get("from_invoice") or request.form.get("from_invoice")
+    invoice_origen = None
+    if from_invoice_id:
+        invoice_origen = database.session.get(PurchaseInvoice, from_invoice_id)
+
+    titulo = f"Nuevo Costo de Importacion - {APPNAME}"
+    items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
+
+    transaction_config = {
+        "columns": [
+            {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
+            {"key": "item_name", "label": "Nombre", "type": "text", "readonly": True},
+            {"key": "qty", "label": "Cantidad", "type": "number", "required": True},
+            {"key": "uom", "label": "UOM", "type": "select"},
+            {"key": "rate", "label": "Tasa", "type": "number"},
+            {"key": "amount", "label": "Monto", "type": "number"},
+        ],
+        "source_api_url": (
+            "/api/document-flow/pending-lines"
+            "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
+        ),
+        "source_label": "Factura de Compra",
+    }
+
+    if request.method == "POST":
+        response = _create_import_landed_cost_from_request()
+        if response is not None:
+            return response
+
+    return render_template(
+        "compras/import_landed_cost_nuevo.html",
+        form=formulario,
+        titulo=titulo,
+        from_invoice_id=from_invoice_id,
+        invoice_origen=invoice_origen,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+    )
+
+
+def _create_import_landed_cost_from_request():
+    """Crea un documento de costo de importacion desde el formulario."""
+    from cacao_accounting.document_flow import create_document_relation
+
+    company = request.form.get("company", "").strip()
+    posting_date = _parse_date(request.form.get("posting_date"))
+    from_invoice_id = request.form.get("from_invoice", "").strip() or None
+    allocation_method = request.form.get("allocation_method", "by_value")
+    remarks = request.form.get("remarks", "").strip()
+
+    if not company or not posting_date:
+        flash(_("Compania y fecha son obligatorios."), "danger")
+        return None
+
+    invoice = None
+    supplier_id = None
+    supplier_name = None
+
+    if from_invoice_id:
+        invoice = database.session.get(PurchaseInvoice, from_invoice_id)
+        if invoice:
+            supplier_id = invoice.supplier_id
+            supplier_name = invoice.supplier_name
+
+    registro = ImportLandedCost(
+        company=company,
+        posting_date=posting_date,
+        document_date=posting_date,
+        document_type=IMPORT_LANDED_COST,
+        allocation_method=allocation_method,
+        purchase_invoice_id=from_invoice_id,
+        supplier_id=supplier_id,
+        supplier_name=supplier_name,
+        remarks=remarks,
+    )
+    database.session.add(registro)
+    database.session.flush()
+
+    assign_document_identifier(registro, "import_landed_cost")
+    database.session.flush()
+
+    # Save items from form
+    items_agrupados: dict[str, dict[str, Any]] = {}
+    for key, value in request.form.items():
+        if key.startswith("item_code_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["item_code"] = value
+        elif key.startswith("item_name_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["item_name"] = value
+        elif key.startswith("qty_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["qty"] = value
+        elif key.startswith("uom_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["uom"] = value
+        elif key.startswith("rate_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["rate"] = value
+        elif key.startswith("amount_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["amount"] = value
+        elif key.startswith("warehouse_"):
+            idx = key.split("_")[-1]
+            items_agrupados[idx] = items_agrupados.get(idx, {})
+            items_agrupados[idx]["warehouse"] = value
+
+    total_item_amount = Decimal("0")
+    for idx, data in items_agrupados.items():
+        item_code = data.get("item_code", "").strip()
+        if not item_code:
+            continue
+        qty = Decimal(str(data.get("qty", "1")))
+        rate = Decimal(str(data.get("rate", "0")))
+        amount = Decimal(str(data.get("amount", str(qty * rate))))
+        total_item_amount += amount
+        item_obj = ImportLandedCostItem(
+            import_landed_cost_id=registro.id,
+            item_code=item_code,
+            item_name=data.get("item_name", ""),
+            qty=qty,
+            uom=data.get("uom", ""),
+            rate=rate,
+            amount=amount,
+            base_rate=rate,
+            base_amount=amount,
+            warehouse=data.get("warehouse", ""),
+        )
+        database.session.add(item_obj)
+
+    registro.total_base_amount = total_item_amount
+    registro.grand_total = total_item_amount
+
+    # Save charges from form
+    cargos_agrupados: dict[str, dict[str, Any]] = {}
+    for key, value in request.form.items():
+        if key.startswith("charge_concept_"):
+            idx = key.split("_")[-1]
+            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
+            cargos_agrupados[idx]["concept"] = value
+        elif key.startswith("charge_amount_"):
+            idx = key.split("_")[-1]
+            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
+            cargos_agrupados[idx]["amount"] = value
+        elif key.startswith("charge_type_"):
+            idx = key.split("_")[-1]
+            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
+            cargos_agrupados[idx]["charge_type"] = value
+        elif key.startswith("charge_account_id_"):
+            idx = key.split("_")[-1]
+            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
+            cargos_agrupados[idx]["account_id"] = value
+
+    total_charges = Decimal("0")
+    for data in cargos_agrupados.values():
+        concept = data.get("concept", "").strip()
+        if not concept:
+            continue
+        amount = Decimal(str(data.get("amount", "0")))
+        total_charges += amount
+        charge = ImportLandedCostCharge(
+            import_landed_cost_id=registro.id,
+            concept=concept,
+            charge_type=data.get("charge_type", "charge"),
+            amount=amount,
+            base_amount=amount,
+            allocation_method=None,
+            account_id=data.get("account_id"),
+        )
+        database.session.add(charge)
+
+    registro.total_charges_amount = total_charges
+    registro.total_inventory_value = total_item_amount + total_charges
+    registro.grand_total = total_item_amount + total_charges
+
+    # Create document relation
+    if from_invoice_id:
+        invoice_items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=from_invoice_id))
+            .scalars()
+            .all()
+        )
+        for item in invoice_items:
+            # Find our corresponding item
+            our_item = (
+                database.session.execute(
+                    database.select(ImportLandedCostItem).filter_by(
+                        import_landed_cost_id=registro.id, item_code=item.item_code
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if our_item:
+                create_document_relation(
+                    source_type="purchase_invoice",
+                    source_id=from_invoice_id,
+                    source_item_id=item.id,
+                    target_type="import_landed_cost",
+                    target_id=registro.id,
+                    target_item_id=our_item.id,
+                    qty=item.qty,
+                    company=company,
+                    relation_type="landed_cost",
+                )
+
+    database.session.commit()
+    log_create(registro)
+    flash(_("Costo de importacion creado exitosamente."), "success")
+    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=registro.id))
+
+
+def _get_import_landed_cost_items(landed_cost_id: str):
+    """Devuelve las lineas de item de un costo de importacion."""
+    return (
+        database.session.execute(database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=landed_cost_id))
+        .scalars()
+        .all()
+    )
+
+
+def _get_import_landed_cost_charges(landed_cost_id: str):
+    """Devuelve los cargos de un costo de importacion."""
+    return (
+        database.session.execute(database.select(ImportLandedCostCharge).filter_by(import_landed_cost_id=landed_cost_id))
+        .scalars()
+        .all()
+    )
+
+
+@compras.route("/import-landed-cost/<landed_cost_id>")
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost(landed_cost_id: str):
+    """Detalle de un costo de importacion."""
+    registro = database.session.get(ImportLandedCost, landed_cost_id)
+    if not registro:
+        abort(404)
+    items = _get_import_landed_cost_items(landed_cost_id)
+    cargos = _get_import_landed_cost_charges(landed_cost_id)
+    titulo = f"Costo de Importacion {registro.document_no or registro.id} - {APPNAME}"
+    return render_template(
+        "compras/import_landed_cost.html",
+        registro=registro,
+        items=items,
+        cargos=cargos,
+        titulo=titulo,
+        document_type_label=IMPORT_LANDED_COST_LABEL,
+    )
+
+
+@compras.route("/import-landed-cost/<landed_cost_id>/submit", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_submit(landed_cost_id: str):
+    """Aprueba un costo de importacion."""
+    registro = database.session.get(ImportLandedCost, landed_cost_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 0:
+        abort(400)
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.handle_submission(registro, current_user, "Costo de importacion"):
+            return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+        submit_document(registro)
+        log_submit(registro)
+        database.session.commit()
+    except PostingError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+    flash(_("Costo de importacion aprobado y contabilizado."), "success")
+    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+
+
+@compras.route("/import-landed-cost/<landed_cost_id>/cancel", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_cancel(landed_cost_id: str):
+    """Cancela un costo de importacion."""
+    registro = database.session.get(ImportLandedCost, landed_cost_id)
+    if not registro:
+        abort(404)
+    if registro.docstatus != 1:
+        abort(400)
+    try:
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.is_enabled(registro.company):
+            ApprovalEngine.request_cancellation(registro)
+            database.session.commit()
+            flash(_("Solicitud de cancelacion enviada para aprobacion."), "info")
+            return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+    except Exception as exc:
+        database.session.rollback()
+        flash_error(exc)
+    try:
+        cancel_document(registro)
+        log_cancel(registro)
+        revert_relations_for_target("import_landed_cost", landed_cost_id)
+        refresh_source_caches_for_target("import_landed_cost", landed_cost_id)
+        database.session.commit()
+    except PostingError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+        return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+    flash(_("Costo de importacion cancelado."), "warning")
+    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
 
 
 @compras.route("/supplier/<supplier_id>/habilitar-cliente", methods=["POST"])

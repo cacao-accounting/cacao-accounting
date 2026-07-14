@@ -26,6 +26,8 @@ from cacao_accounting.database import (
     DocumentRelation,
     ExchangeRate,
     GLEntry,
+    ImportLandedCost,
+    ImportLandedCostItem,
     Item,
     ItemAccount,
     LandedCostAllocation,
@@ -936,6 +938,26 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     _update_purchase_grand_total(document, amount_total)
     _emit_purchase_invoice_event(document, company)
     return result
+
+
+def post_import_landed_cost(document: ImportLandedCost, ledger_code: str | None = None) -> list[GLEntry]:
+    """Genera GL para un costo de importacion aprobado."""
+    if _has_active_gl_entries(document):
+        raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
+    if getattr(document, "docstatus", 0) != 1:
+        raise PostingError("Solo se puede contabilizar un costo de importacion aprobado.")
+    payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
+    if payload is None:
+        raise PostingError("El motor de calculo no pudo procesar el costo de importacion.")
+    items = list(
+        database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
+    )
+    _persist_landed_cost_allocations(
+        document=document,
+        items=items,
+        landed_cost_result=payload.results.get("landed_cost"),
+    )
+    return payload.entries
 
 
 def _create_purchase_invoice_gl_entries(
@@ -2701,6 +2723,8 @@ def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[G
         return post_bank_transaction(document, ledger_code=ledger_code)
     if isinstance(document, ComprobanteContable):
         return post_comprobante_contable(document, ledger_code=ledger_code)
+    if isinstance(document, ImportLandedCost):
+        return post_import_landed_cost(document, ledger_code=ledger_code)
     raise PostingError("Tipo de documento no soportado para posting contable.")
 
 

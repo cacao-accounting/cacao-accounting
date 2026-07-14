@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "detail_view_macros.html" as dv_macros %}
+
+{%- if TESTING -%}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/import_landed_cost.html">
+</div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_import_landed_cost_lista') }}"
+        class="link-dark">Costos de Importacion</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+{% set buttons %}
+{% if registro.docstatus == 0 %}
+<a class="btn btn-sm btn-outline-secondary"
+  href="{{ url_for('compras.compras_import_landed_cost_nuevo', landed_cost_id=registro.id) }}">
+  <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
+</a>
+{% endif %}
+{{ macros.workflow_buttons(
+            registro.docstatus,
+            url_for('compras.compras_import_landed_cost_submit', landed_cost_id=registro.id),
+            url_for('compras.compras_import_landed_cost_cancel', landed_cost_id=registro.id),
+            _('Aprobar'),
+            _('Anular')) }}
+{{ macros.detail_nav_buttons(
+            url_for('compras.compras_import_landed_cost_lista'),
+            url_for('compras.compras_import_landed_cost_nuevo')) }}
+{% endset %}
+
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    document_type_label,
+    registro.docstatus,
+    buttons,
+    [
+      (_('Número'), registro.document_no),
+      (_('Compañía'), registro.company),
+      (_('Fecha'), registro.posting_date),
+      (_('Proveedor'), registro.supplier_name or registro.supplier_id),
+      (_('Factura de Importacion'), registro.purchase_invoice_id),
+      (_('Metodo de Prorrateo'), registro.allocation_method),
+      (_('Total Base'), registro.total_base_amount),
+      (_('Total Cargos'), registro.total_charges_amount),
+      (_('Valor Inventario'), registro.total_inventory_value),
+      (_('Total'), registro.grand_total),
+    ],
+    'bi-truck'
+) }}
+
+<h5 class="mt-4 mb-2"><i class="bi bi-box-seam me-1"></i> Articulos</h5>
+<div class="table-responsive">
+  <table class="ca-table">
+    <thead>
+      <tr>
+        <th scope="col">Articulo</th>
+        <th scope="col">Nombre</th>
+        <th scope="col">Cantidad</th>
+        <th scope="col">UOM</th>
+        <th scope="col">Tasa</th>
+        <th scope="col">Monto</th>
+        <th scope="col">Costo Asignado</th>
+        <th scope="col">Costo Final</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items -%}
+      <tr>
+        <td>{{ item.item_code }}</td>
+        <td>{{ item.item_name or "" }}</td>
+        <td>{{ item.qty }}</td>
+        <td>{{ item.uom or "" }}</td>
+        <td>{{ item.rate or "" }}</td>
+        <td>{{ item.amount or "" }}</td>
+        <td>{{ item.allocated_amount or "" }}</td>
+        <td>{{ item.final_inventory_cost or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h5 class="mt-4 mb-2"><i class="bi bi-receipt me-1"></i> Cargos</h5>
+<div class="table-responsive">
+  <table class="ca-table">
+    <thead>
+      <tr>
+        <th scope="col">Concepto</th>
+        <th scope="col">Tipo</th>
+        <th scope="col">Monto</th>
+        <th scope="col">Cuenta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cargo in cargos -%}
+      <tr>
+        <td>{{ cargo.concept }}</td>
+        <td>{{ cargo.charge_type }}</td>
+        <td>{{ cargo.amount }}</td>
+        <td>{{ cargo.account_id or "" }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{{ macros.document_flow_tree("import_landed_cost", registro) }}
+
+{% endblock %}
