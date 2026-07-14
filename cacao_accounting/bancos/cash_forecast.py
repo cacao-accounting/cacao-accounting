@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.bancos import bancos
 from cacao_accounting.database import (
     database,
@@ -26,6 +27,10 @@ from cacao_accounting.bancos.cash_forecast_service import (
 )
 from cacao_accounting.document_flow.status import _
 
+CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
+BANCOS_PREFIX = "bancos.bancos_"
+PRONOSTICO_NO_MODIFICABLE_MSG = "No se pueden modificar pronósticos aprobados o cerrados."
+
 
 def _check_desktop_mode():
     """Check if desktop mode is active and redirect with a warning if so."""
@@ -41,7 +46,7 @@ def _check_desktop_mode():
 def cash_forecast_list():
     """Listado de pronósticos de flujo de caja."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
@@ -68,7 +73,7 @@ def cash_forecast_list():
 def cash_forecast_new():
     """Crea un nuevo pronóstico de flujo de caja (Draft)."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     companies = obtener_lista_entidades_por_id_razonsocial()
     company = request.args.get("company") or request.form.get("company")
@@ -110,7 +115,7 @@ def cash_forecast_new():
                 database.session.add(forecast)
                 database.session.commit()
                 flash("Pronóstico de flujo de caja creado correctamente.", "success")
-                return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+                return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     return render_template(
         "bancos/cash_forecast_nuevo.html",
@@ -127,7 +132,7 @@ def cash_forecast_new():
 def cash_forecast_detail(forecast_id):
     """Muestra la matriz YTD y permite gestionar las proyecciones manuales."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
@@ -164,21 +169,21 @@ def cash_forecast_detail(forecast_id):
 def cash_forecast_approve(forecast_id):
     """Aprueba el pronóstico y lo hace inmutable."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Draft":
         flash("Sólo los pronósticos en estado Borrador pueden ser aprobados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Approved"
     forecast.approved_by = getattr(current_user, "id", None)
     forecast.approved_at = database.func.now()
     database.session.commit()
     flash("Pronóstico de flujo de caja aprobado con éxito.", "success")
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>/close", methods=["POST"])
@@ -187,19 +192,19 @@ def cash_forecast_approve(forecast_id):
 def cash_forecast_close(forecast_id):
     """Cierra el pronóstico."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Approved":
         flash("Sólo los pronósticos en estado Aprobado pueden ser cerrados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Closed"
     database.session.commit()
     flash("Pronóstico de flujo de caja cerrado con éxito.", "success")
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>/archive", methods=["POST"])
@@ -208,19 +213,19 @@ def cash_forecast_close(forecast_id):
 def cash_forecast_archive(forecast_id):
     """Archiva el pronóstico."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status not in ("Approved", "Closed"):
         flash("Sólo los pronósticos Aprobados o Cerrados pueden ser archivados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Archived"
     database.session.commit()
     flash("Pronóstico de flujo de caja archivado con éxito.", "success")
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>/delete", methods=["POST"])
@@ -229,14 +234,14 @@ def cash_forecast_archive(forecast_id):
 def cash_forecast_delete(forecast_id):
     """Elimina el pronóstico de flujo de caja si está en Borrador."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Draft":
         flash("Sólo los pronósticos en estado Borrador pueden ser eliminados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     company = forecast.company
     database.session.delete(forecast)
@@ -251,14 +256,14 @@ def cash_forecast_delete(forecast_id):
 def cash_forecast_entry_add(forecast_id):
     """Añade un movimiento proyectado manual al pronóstico."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Draft":
-        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     try:
         type_ = request.form.get("type")
@@ -284,14 +289,14 @@ def cash_forecast_entry_add(forecast_id):
             database.session.add(entry)
             database.session.commit()
             flash("Proyección manual agregada correctamente.", "success")
-    except Exception as exc:
+    except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al agregar proyección: {str(exc)}", "danger")
 
     next_url = request.args.get("next")
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
         return redirect(next_url)
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>/entry/<entry_id>/delete", methods=["POST"])
@@ -300,14 +305,14 @@ def cash_forecast_entry_add(forecast_id):
 def cash_forecast_entry_delete(forecast_id, entry_id):
     """Elimina un movimiento proyectado manual del pronóstico."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Draft":
-        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)
     if entry and entry.forecast_id == forecast.id:
@@ -318,7 +323,7 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
     next_url = request.args.get("next")
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
         return redirect(next_url)
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>/entry/import", methods=["POST"])
@@ -339,7 +344,7 @@ def cash_forecast_entry_import(forecast_id):
 def cash_forecast_compare():
     """Formulario y resultado de comparación de pronósticos."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
@@ -385,7 +390,7 @@ def cash_forecast_compare():
 def cash_forecast_manual_entries():
     """Vista dedicada para gestionar el Forecast de Entradas manuales."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
@@ -435,14 +440,14 @@ def cash_forecast_manual_entries():
 def cash_forecast_entry_edit(forecast_id, entry_id):
     """Edita un movimiento proyectado manual del pronóstico."""
     if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
+        return redirect(url_for(BANCOS_PREFIX))
 
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
     if forecast.status != "Draft":
-        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)
     if not entry or entry.forecast_id != forecast.id:
@@ -467,11 +472,11 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
             entry.notes = notes
             database.session.commit()
             flash("Proyección manual actualizada correctamente.", "success")
-    except Exception as exc:
+    except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al actualizar la proyección: {str(exc)}", "danger")
 
     next_url = request.args.get("next")
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
         return redirect(next_url)
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))

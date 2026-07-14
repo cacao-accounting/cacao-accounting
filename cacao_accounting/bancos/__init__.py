@@ -80,6 +80,7 @@ BANCOS_TRANSACCION_LISTA_HTML = "bancos/transaccion_lista.html"
 BANCOS_BANCO_CUENTA_NUEVO_HTML = "bancos/banco_cuenta_nuevo.html"
 BANCOS_PAGO_LISTA_HTML = "bancos/pago_lista.html"
 BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
+BANCOS_CONCILIACION_ENDPOINT = "bancos.bancos_conciliacion_bancaria"
 COMPRAS_FACTURA_COMPRA_ROUTE = "compras.compras_factura_compra"
 VENTAS_FACTURA_VENTA_ROUTE = "ventas.ventas_factura_venta"
 LABEL_FACTURA_COMPRA = "Factura de Compra"
@@ -590,7 +591,7 @@ def bancos_transaccion_reconciliar():
     except BankReconciliationError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("bancos.bancos_conciliacion_bancaria"))
+        return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT))
 
     database.session.commit()
     flash(_("Transacciones bancarias conciliadas correctamente."), "success")
@@ -668,7 +669,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
         )
         if any(txn.is_reconciled for txn in transactions):
             flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
-            return redirect(url_for("bancos.bancos_conciliacion_bancaria", company=company))
+            return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
     matches: list[BankReconciliationMatch] = []
     for transaction_id in transaction_ids:
         target = request.form.get(f"target_{transaction_id}") or ""
@@ -691,7 +692,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     except BankReconciliationError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-    return redirect(url_for("bancos.bancos_conciliacion_bancaria", company=company))
+    return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
 
 
 @bancos.route("/bank-statement/import", methods=["GET", "POST"])
