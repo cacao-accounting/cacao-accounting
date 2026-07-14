@@ -2355,12 +2355,14 @@ def ver_plantilla_recurrente(identifier: str):
         .all()
     )
 
+    audit_timeline = format_document_timeline("recurring_journal_template", plantilla.id)
     return render_template(
         "contabilidad/recurring_journal_ver.html",
         plantilla=plantilla,
         lineas=lineas,
         aplicaciones=aplicaciones,
         titulo="Detalle de Plantilla Recurrente - " + APPNAME,
+        audit_timeline=audit_timeline,
     )
 
 
