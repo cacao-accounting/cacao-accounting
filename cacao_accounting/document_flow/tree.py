@@ -11,6 +11,7 @@ de profundidad configurable.
 from __future__ import annotations
 
 from typing import Any
+from werkzeug.routing import BuildError
 
 from cacao_accounting.database import DocumentRelation, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
@@ -328,7 +329,7 @@ def _build_detail_url(spec: Any, document_id: str) -> str | None:
 
         kwargs: dict[str, str] = {spec.detail_arg: document_id}
         return url_for(spec.detail_endpoint, **kwargs)  # type: ignore[arg-type]
-    except Exception:  # noqa: BLE001
+    except (BuildError, RuntimeError):
         return None
 
 

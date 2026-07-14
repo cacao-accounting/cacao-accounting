@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.accounting_engine.common.context import (
     AccountingReferences,
@@ -343,7 +344,7 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
         )
         try:
             inventory_account_id = inventory_account_id_for_document_line(document, item, company)
-        except Exception:
+        except SQLAlchemyError:
             inventory_account_id = None
         if inventory_account_id and amount and amount > 0:
             description = f"{item.item_name or item.item_code} - Costo Importacion"

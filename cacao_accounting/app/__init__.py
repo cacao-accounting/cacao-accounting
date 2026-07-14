@@ -14,6 +14,7 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 from flask import Blueprint, current_app, jsonify, make_response, render_template
 from flask_login import login_required
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -146,5 +147,5 @@ def ready():
     try:
         database.session.execute(text("SELECT 1"))
         return make_response("ready", 200)
-    except Exception:
+    except SQLAlchemyError:
         return make_response("service unavailable", 503)

@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from jwt import decode
+from jwt.exceptions import PyJWTError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -106,7 +107,7 @@ def token_requerido(f):  # pragma: no cover
             if not current_user or not current_user.is_authenticated:
                 login_user(identidad, remember=False, force=False)
 
-        except Exception as e:
+        except (KeyError, PyJWTError) as e:
             return {
                 "message": "Something went wrong",
                 "data": None,

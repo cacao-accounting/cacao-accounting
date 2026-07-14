@@ -7,6 +7,7 @@ import threading
 from datetime import datetime
 from typing import Dict, Type, List, Any
 from flask import current_app
+from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.database import database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.csv_reader import CSVReader
@@ -123,7 +124,7 @@ class ImportService:
             batch.import_status = 2 if business_errors_count > 0 else 3
             database.session.commit()
 
-        except Exception as e:
+        except (SQLAlchemyError, ValueError, OSError) as e:
             self._handle_validation_error(batch, batch_id, e)
 
     def _validate_accounting_book_rule(self, batch: ImportBatch) -> bool:
@@ -330,7 +331,7 @@ class ImportService:
                 success_count, error_count = self._process_all_documents(batch, batch_id, adapter, docs, context)
                 self._finalize_execution(batch, batch_id, success_count, error_count)
 
-            except Exception as e:
+            except (SQLAlchemyError, ValueError, OSError) as e:
                 self._handle_execution_error(batch, batch_id, e)
 
     def _process_all_documents(
@@ -348,7 +349,7 @@ class ImportService:
                 s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
                 success_count += s
                 error_count += e
-            except Exception as exc:
+            except (ValueError, SQLAlchemyError) as exc:
                 error_count = self._handle_document_error(batch_id, batch, ref, exc, error_count)
 
             self._update_batch_progress(batch, batch_id, success_count, error_count)

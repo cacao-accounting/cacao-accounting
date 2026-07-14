@@ -19,6 +19,7 @@ import sys
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 import click
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -312,7 +313,7 @@ def db_seed() -> None:
         try:
             dev_data()
             _mensaje_exito("Datos de ejemplo insertados.")
-        except Exception as exc:  # noqa: BLE001
+        except SQLAlchemyError as exc:
             log.exception("Error al insertar datos de ejemplo.")
             _mensaje_error(f"No fue posible insertar los datos de ejemplo: {exc}")
             raise click.exceptions.Exit(1)
@@ -344,7 +345,7 @@ def serve() -> None:
 
     try:
         server()
-    except Exception as exc:  # noqa: BLE001
+    except (OSError, ValueError, ImportError, SQLAlchemyError) as exc:
         _mensaje_error(f"No fue posible iniciar el servidor: {exc}")
         raise click.exceptions.Exit(1)
 
@@ -407,7 +408,7 @@ def routes() -> None:
         try:
             click.echo("")
             click.secho(f"Motor: {db_version()}", fg=COLOR_INFO)
-        except Exception:  # noqa: BLE001
+        except SQLAlchemyError:
             pass
 
 

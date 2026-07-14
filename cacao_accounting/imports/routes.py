@@ -28,6 +28,14 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+try:
+    import magic
+
+    _MAGIC_EXCEPTION: type[BaseException] = magic.MagicException
+except ImportError:
+    magic = None
+    _MAGIC_EXCEPTION = ImportError
+
 imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
@@ -171,13 +179,13 @@ def upload(batch_id):
         # Check MIME type of the file using python-magic only if not in desktop mode
         if not is_desktop_mode():
             try:
-                import magic
-
+                if magic is None:
+                    raise ImportError("python-magic no está disponible")
                 # Read first 2048 bytes to detect the MIME type
                 chunk = file.read(2048)
                 file.seek(0)  # Reset pointer
                 mime = magic.from_buffer(chunk, mime=True)
-            except Exception:
+            except (ImportError, OSError, _MAGIC_EXCEPTION):
                 flash("Error al validar el tipo de archivo", "danger")
                 return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
@@ -305,6 +313,6 @@ def download_template(record_type):
                 f.write(content)
             return send_file(template_path, as_attachment=True, download_name=output_name)
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
         flash_error(e)
         return redirect(url_for("imports.index"))
