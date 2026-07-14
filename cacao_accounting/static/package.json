@@ -14,15 +14,15 @@
   },
   "homepage": "https://github.com/cacao-accounting/cacao-accounting#readme",
   "dependencies": {
-    "bootstrap": "^5.3.3",
-    "bootstrap-icons": "^1.11.3",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
     "chart.js": "^4.5.1",
     "exceljs": "^4.4.0"
   },
   "devDependencies": {
-    "chai": "^5.1.2",
+    "chai": "^6.2.2",
     "jsdom": "^29.1.1",
-    "mocha": "^11.7.5",
-    "playwright": "^1.60.0"
+    "mocha": "^11.7.6",
+    "playwright": "^1.61.1"
   }
 }
