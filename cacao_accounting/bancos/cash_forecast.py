@@ -3,8 +3,6 @@
 
 """Controlador de rutas para el Pronóstico de Flujo de Caja."""
 
-import csv
-import openpyxl
 from datetime import date
 from decimal import Decimal
 from flask import abort, flash, redirect, render_template, request, url_for
@@ -26,6 +24,7 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
+from cacao_accounting.document_flow.status import _
 
 
 def _check_desktop_mode():
@@ -326,116 +325,12 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
 @modulo_activo("cash")
 @login_required
 def cash_forecast_entry_import(forecast_id):
-    """Importa proyecciones manuales desde un archivo CSV o XLSX."""
-    if _check_desktop_mode():
-        return redirect(url_for("bancos.bancos_"))
-
-    forecast = database.session.get(CashForecast, forecast_id)
-    if not forecast:
-        abort(404)
-    if forecast.status != "Draft":
-        flash("No se pueden modificar pronósticos aprobados o cerrados.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
-
-    file = request.files.get("file")
-    if not file or not file.filename:
-        flash("Debe seleccionar un archivo válido.", "danger")
-        return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
-
-    filename = file.filename.lower()
-    entries_to_add = []
-
-    try:
-        if filename.endswith(".csv"):
-            # Parse CSV
-            stream = file.stream.read().decode("utf-8-sig").splitlines()
-            reader = csv.DictReader(stream)
-            for row in reader:
-                if not row.get("type") or not row.get("concept") or not row.get("amount"):
-                    continue
-                entries_to_add.append(
-                    CashForecastEntry(
-                        forecast_id=forecast.id,
-                        type=row.get("type").strip(),
-                        concept=row.get("concept").strip(),
-                        currency=row.get("currency", "NIO").strip(),
-                        amount=Decimal(row.get("amount").strip()),
-                        estimated_date=date.fromisoformat(row.get("estimated_date").strip()),
-                        notes=row.get("notes", "").strip(),
-                        created_by=getattr(current_user, "id", None),
-                    )
-                )
-        elif filename.endswith(".xlsx"):
-            # Parse Excel using openpyxl
-            wb = openpyxl.load_workbook(file)
-            ws = wb.active
-            headers = [str(cell.value).strip().lower() if cell.value else "" for cell in ws[1]]
-
-            try:
-                col_type = headers.index("type")
-                col_concept = headers.index("concept")
-                col_currency = headers.index("currency")
-                col_amount = headers.index("amount")
-                col_date = headers.index("estimated_date")
-                col_notes = headers.index("notes") if "notes" in headers else -1
-            except ValueError:
-                flash(
-                    "Encabezados de columna incorrectos. Se requiere: type, concept, currency, amount, estimated_date",
-                    "danger",
-                )
-                return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
-
-            for r_idx in range(2, ws.max_row + 1):
-                row_cells = ws[r_idx]
-                r_type = str(row_cells[col_type].value or "").strip()
-                r_concept = str(row_cells[col_concept].value or "").strip()
-                r_currency = str(row_cells[col_currency].value or "NIO").strip()
-                r_amount_val = row_cells[col_amount].value
-                r_date_val = row_cells[col_date].value
-                r_notes = str(row_cells[col_notes].value or "").strip() if col_notes != -1 else ""
-
-                if not r_type or not r_concept or r_amount_val is None or r_date_val is None:
-                    continue
-
-                if isinstance(r_date_val, date):
-                    estimated_date = r_date_val
-                else:
-                    estimated_date = date.fromisoformat(str(r_date_val).strip()[:10])
-
-                entries_to_add.append(
-                    CashForecastEntry(
-                        forecast_id=forecast.id,
-                        type=r_type,
-                        concept=r_concept,
-                        currency=r_currency,
-                        amount=Decimal(str(r_amount_val)),
-                        estimated_date=estimated_date,
-                        notes=r_notes,
-                        created_by=getattr(current_user, "id", None),
-                    )
-                )
-        else:
-            flash("Formato de archivo no soportado. Suba un archivo CSV o XLSX.", "danger")
-            return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
-
-        if entries_to_add:
-            database.session.add_all(entries_to_add)
-            database.session.commit()
-            flash(
-                f"Se importaron {len(entries_to_add)} proyecciones manuales con éxito.",
-                "success",
-            )
-        else:
-            flash("No se encontraron registros válidos para importar.", "warning")
-
-    except Exception as exc:
-        database.session.rollback()
-        flash(f"Error al importar archivo: {str(exc)}", "danger")
-
-    next_url = request.args.get("next")
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
-        return redirect(next_url)
-    return redirect(url_for("bancos.cash_forecast_detail", forecast_id=forecast.id))
+    """Redirige al asistente de importación compartido."""
+    flash(
+        _("La importación de proyecciones manuales ahora se realiza a través del asistente de importación compartido."),
+        "info",
+    )
+    return redirect(url_for("imports.new"))
 
 
 @bancos.route("/cash-forecast/compare", methods=["GET"])

@@ -124,6 +124,13 @@ def new():
                 {"value": "vendor", "label": "Proveedores"},
             ],
         },
+        {
+            "label": "Caja y Bancos",
+            "items": [
+                {"value": "bank_statement", "label": "Extractos Bancarios"},
+                {"value": "cash_forecast_entry", "label": "Entradas de Pronóstico de Caja"},
+            ],
+        },
     ]
     return render_template(
         "imports/new.html",
