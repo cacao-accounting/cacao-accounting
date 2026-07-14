@@ -59,6 +59,11 @@ BOOK_ID = "book.id"
 WORKFLOW_STATE_ID = "workflow_state.id"
 ACCOUNTING_PERIOD_ID = "accounting_period.id"
 
+ROLES_ID_COLUMN = "roles.id"
+AMOUNT_NON_NEGATIVE_CHECK = "amount >= 0"
+RATE_NON_NEGATIVE_CHECK = "rate >= 0"
+QTY_POSITIVE_CHECK = "qty > 0"
+
 # < ---------------------------------------------------------------------------------------------> #
 # Foreign key cascade policies — referential integrity configuration.
 #
@@ -299,7 +304,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                 cached_token = cache.get(f"jwt_token:{self.id}")
                 if cached_token:
                     return str(cached_token)
-            except Exception:
+            except (ImportError, AttributeError, OSError):
                 pass
         return getattr(self, "_token_volatile", None)
 
@@ -315,7 +320,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                     cache.delete(f"jwt_token:{self.id}")
                 else:
                     cache.set(f"jwt_token:{self.id}", value, timeout=8 * 3600)
-            except Exception:
+            except (ImportError, AttributeError, OSError):
                 pass
 
 
@@ -329,7 +334,9 @@ class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Los roles definen una cantidad de permisos."""
 
-    rol_id = database.Column(database.String(26), database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    rol_id = database.Column(
+        database.String(26), database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
+    )
     module_id = database.Column(
         database.String(26), database.ForeignKey("modules.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
     )
@@ -354,7 +361,9 @@ class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles dan permisos a los usuarios del sistema."""
 
     user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
-    role_id = database.Column(database.String(26), database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    role_id = database.Column(
+        database.String(26), database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
+    )
     active = database.Column(database.Boolean, nullable=True)
 
 
@@ -1272,7 +1281,7 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Linea de una entrada de almacen."""
 
     __tablename__ = "stock_entry_item"
-    __table_args__ = (database.CheckConstraint("amount >= 0", name="ck_sei_amount_non_negative"),)
+    __table_args__ = (database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_sei_amount_non_negative"),)
     stock_entry_id = database.Column(
         database.String(26),
         database.ForeignKey("stock_entry.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
@@ -1399,7 +1408,7 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     """Capa de valuacion de inventario para FIFO y Promedio Movil."""
 
     __tablename__ = "stock_valuation_layer"
-    __table_args__ = (database.CheckConstraint("rate >= 0", name="ck_svl_rate_non_negative"),)
+    __table_args__ = (database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_svl_rate_non_negative"),)
     id = database.Column(
         database.String(26),
         primary_key=True,
@@ -1513,9 +1522,9 @@ class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined
 
     __tablename__ = "purchase_order_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_poi_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_poi_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_poi_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_poi_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_poi_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_poi_amount_non_negative"),
     )
     purchase_order_id = database.Column(
         database.String(26),
@@ -1569,9 +1578,9 @@ class PurchaseQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
 
     __tablename__ = "purchase_quotation_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_pqi_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_pqi_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_pqi_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_pqi_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_pqi_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_pqi_amount_non_negative"),
     )
     purchase_quotation_id = database.Column(
         database.String(26),
@@ -1617,7 +1626,7 @@ class PurchaseRequestItem(database.Model, BaseTabla):  # type: ignore[name-defin
     """Linea de una solicitud de compra."""
 
     __tablename__ = "purchase_request_item"
-    __table_args__ = (database.CheckConstraint("qty > 0", name="ck_preqi_qty_positive"),)
+    __table_args__ = (database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_preqi_qty_positive"),)
     purchase_request_id = database.Column(
         database.String(26),
         database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -1674,9 +1683,9 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
 
     __tablename__ = "supplier_quotation_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_sqi_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_sqi_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_sqi_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_sqi_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_sqi_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_sqi_amount_non_negative"),
     )
     supplier_quotation_id = database.Column(
         database.String(26),
@@ -1734,9 +1743,9 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
 
     __tablename__ = "purchase_receipt_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_prci_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_prci_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_prci_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_prci_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_prci_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_prci_amount_non_negative"),
     )
     purchase_receipt_id = database.Column(
         database.String(26),
@@ -1823,13 +1832,13 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
 
     __tablename__ = "purchase_invoice_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_pii_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_pii_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_pii_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_pii_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_pii_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_pii_amount_non_negative"),
     )
     purchase_invoice_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_INVOICE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -1897,9 +1906,9 @@ class ImportLandedCostItem(database.Model, BaseTabla):  # type: ignore[name-defi
 
     __tablename__ = "import_landed_cost_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_ilci_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_ilci_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_ilci_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_ilci_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_ilci_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_ilci_amount_non_negative"),
     )
     import_landed_cost_id = database.Column(
         database.String(26),
@@ -1934,7 +1943,7 @@ class ImportLandedCostCharge(database.Model, BaseTabla):  # type: ignore[name-de
     """Cargo capitalizable individual en un documento de costos de importacion."""
 
     __tablename__ = "import_landed_cost_charge"
-    __table_args__ = (database.CheckConstraint("amount >= 0", name="ck_ilcc_amount_non_negative"),)
+    __table_args__ = (database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_ilcc_amount_non_negative"),)
     import_landed_cost_id = database.Column(
         database.String(26),
         database.ForeignKey("import_landed_cost.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2014,9 +2023,9 @@ class SalesRequestItem(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "sales_request_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_sri_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_sri_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_sri_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_sri_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_sri_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_sri_amount_non_negative"),
     )
     sales_request_id = database.Column(
         database.String(26),
@@ -2074,9 +2083,9 @@ class SalesQuotationItem(database.Model, BaseTabla):  # type: ignore[name-define
 
     __tablename__ = "sales_quotation_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_sqti_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_sqti_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_sqti_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_sqti_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_sqti_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_sqti_amount_non_negative"),
     )
     sales_quotation_id = database.Column(
         database.String(26),
@@ -2112,9 +2121,9 @@ class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "sales_order_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_soi_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_soi_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_soi_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_soi_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_soi_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_soi_amount_non_negative"),
     )
     sales_order_id = database.Column(
         database.String(26),
@@ -2181,9 +2190,9 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "delivery_note_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_dni_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_dni_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_dni_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_dni_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_dni_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_dni_amount_non_negative"),
     )
     delivery_note_id = database.Column(
         database.String(26),
@@ -2268,9 +2277,9 @@ class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     __tablename__ = "sales_invoice_item"
     __table_args__ = (
-        database.CheckConstraint("qty > 0", name="ck_sii_qty_positive"),
-        database.CheckConstraint("rate >= 0", name="ck_sii_rate_non_negative"),
-        database.CheckConstraint("amount >= 0", name="ck_sii_amount_non_negative"),
+        database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_sii_qty_positive"),
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_sii_rate_non_negative"),
+        database.CheckConstraint(AMOUNT_NON_NEGATIVE_CHECK, name="ck_sii_amount_non_negative"),
     )
     sales_invoice_id = database.Column(
         database.String(26),
@@ -3533,7 +3542,7 @@ class PurchaseReconciliation(database.Model, BaseTabla):  # type: ignore[name-de
     )
     purchase_invoice_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_invoice.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_INVOICE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -4413,7 +4422,7 @@ class ApprovalMatrix(database.Model, BaseTabla):  # type: ignore[name-defined]
     document_type = database.Column(database.String(50), nullable=False, index=True)
     role_id = database.Column(
         database.String(26),
-        database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -4473,7 +4482,7 @@ class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     role_id = database.Column(
         database.String(26),
-        database.ForeignKey("roles.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
