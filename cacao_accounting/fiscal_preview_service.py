@@ -92,6 +92,16 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
         supports_line_modal=True,
         required_fields=("company", "posting_date", "party_id"),
     ),
+    "import_landed_cost": FiscalDocumentProfile(
+        document_type="import_landed_cost",
+        label=_("Costo de importación"),
+        applies_to="purchase",
+        recognition_event="import_landed_cost_confirmed",
+        supports_taxes=False,
+        supports_charges=True,
+        supports_line_modal=True,
+        required_fields=("company", "posting_date", "purchase_invoice_id"),
+    ),
     "sales_request": FiscalDocumentProfile(
         document_type="sales_request",
         label=_("Solicitud de venta"),

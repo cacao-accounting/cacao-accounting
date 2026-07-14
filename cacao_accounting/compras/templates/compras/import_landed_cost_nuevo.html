@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros %}
+
+{%- if TESTING -%}
+<div
+  data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/import_landed_cost_nuevo.html">
+</div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_import_landed_cost_lista') }}"
+        class="link-dark">Costos de Importacion</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Nuevo Costo de Importacion</li>
+  </ol>
+</nav>
+
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
+  {{ form.csrf_token }}
+  {% if from_invoice_id %}<input type="hidden" name="from_invoice" value="{{ from_invoice_id }}">{% endif %}
+  <input type="hidden" name="document_type" value="import_landed_cost">
+  {{ tf_macros.transaction_form_header(
+      'Costo de Importacion',
+      cancel_url=url_for('compras.compras_import_landed_cost_lista')
+    ) }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+        {{ form.company(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="posting_date">{{ _('Fecha de Contabilización') }} <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" id="posting_date" name="posting_date" value="{{ request.form.get('posting_date', '') }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="allocation_method">{{ _('Método de Prorrateo') }}</label>
+        {{ form.allocation_method(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        {% if invoice_origen %}
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-1"></i>
+          Costos de importacion para factura: {{ invoice_origen.document_no or invoice_origen.id }}
+          ({{ invoice_origen.supplier_name or "" }})
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-md-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="2">{{ request.form.get('remarks', '') }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  {% if from_invoice_id %}
+  <div class="ca-card p-3 mb-3">
+    <h6><i class="bi bi-box-seam me-1"></i> Articulos de la Factura</h6>
+    {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+           source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" ~ from_invoice_id,
+           source_label="Factura de Compra") }}
+  </div>
+  {% else %}
+  <div class="ca-card p-3 mb-3">
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Seleccione una factura de compra como origen para los costos de importacion.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ca-card p-3 mb-3">
+    <h6><i class="bi bi-receipt me-1"></i> Cargos a Prorratear</h6>
+    <div class="table-responsive">
+      <table class="ca-table" id="charges-table">
+        <thead>
+          <tr>
+            <th scope="col">Concepto</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Monto</th>
+            <th scope="col">Cuenta</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody id="charges-body">
+          <tr>
+            <td><input type="text" class="form-control form-control-sm" name="charge_concept_0" placeholder="Flete, Seguro, Aduana..."></td>
+            <td>
+              <select class="form-select form-select-sm" name="charge_type_0">
+                <option value="charge">Cargo</option>
+                <option value="tax">Impuesto</option>
+              </select>
+            </td>
+            <td><input type="number" class="form-control form-control-sm" name="charge_amount_0" step="0.0001" min="0"></td>
+            <td><input type="text" class="form-control form-control-sm" name="charge_account_id_0" placeholder="Cuenta"></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger remove-charge-row"><i class="bi bi-trash"></i></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="add-charge-row">
+      <i class="bi bi-plus-circle me-1"></i>Agregar Cargo
+    </button>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let chargeIdx = 1;
+  document.getElementById('add-charge-row').addEventListener('click', function() {
+    const tbody = document.getElementById('charges-body');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" class="form-control form-control-sm" name="charge_concept_${chargeIdx}" placeholder="Flete, Seguro, Aduana..."></td>
+      <td>
+        <select class="form-select form-select-sm" name="charge_type_${chargeIdx}">
+          <option value="charge">Cargo</option>
+          <option value="tax">Impuesto</option>
+        </select>
+      </td>
+      <td><input type="number" class="form-control form-control-sm" name="charge_amount_${chargeIdx}" step="0.0001" min="0"></td>
+      <td><input type="text" class="form-control form-control-sm" name="charge_account_id_${chargeIdx}" placeholder="Cuenta"></td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger remove-charge-row"><i class="bi bi-trash"></i></button></td>
+    `;
+    tbody.appendChild(tr);
+    chargeIdx++;
+  });
+  document.getElementById('charges-body').addEventListener('click', function(e) {
+    if (e.target.closest('.remove-charge-row')) {
+      e.target.closest('tr').remove();
+    }
+  });
+});
+</script>
+
+{% endblock %}
