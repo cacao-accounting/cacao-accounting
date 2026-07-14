@@ -30,6 +30,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
@@ -87,6 +88,7 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 _LABEL_PEDIDO_VENTA = "Pedido de Venta"
 _LABEL_ORDEN_VENTA = "Orden de Venta"
+SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -619,7 +621,7 @@ def ventas_pedido_venta_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
         registro.docstatus = 2
@@ -627,7 +629,7 @@ def ventas_pedido_venta_cancel(request_id: str):
         revert_relations_for_target("sales_request", request_id)
         refresh_source_caches_for_target("sales_request", request_id)
         database.session.commit()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
     flash("Pedido de venta cancelado.", "warning")
@@ -1509,7 +1511,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
-    except Exception as exc:  # noqa: BLE001
+    except SQLAlchemyError as exc:
         database.session.rollback()
         flash(_("Error inesperado al crear la orden de venta: ") + str(exc), "danger")
 
@@ -2038,7 +2040,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
         registro.docstatus = 2
@@ -2046,7 +2048,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
         revert_relations_for_target("sales_quotation", quotation_id)
         refresh_source_caches_for_target("sales_quotation", quotation_id)
         database.session.commit()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
     flash("Cotización de venta cancelada.", "warning")
@@ -2105,7 +2107,7 @@ def ventas_orden_venta_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
         _release_reservation_for_sales_order(registro)
@@ -2114,7 +2116,7 @@ def ventas_orden_venta_cancel(order_id: str):
         revert_relations_for_target("sales_order", order_id)
         refresh_source_caches_for_target("sales_order", order_id)
         database.session.commit()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
     flash("Orden de venta cancelada y reserva liberada.", "warning")
@@ -2443,7 +2445,7 @@ def ventas_entrega_cancel(note_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
         cancel_document(registro)
@@ -2847,7 +2849,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         if registro.update_inventory and registro.delivery_note_id:
