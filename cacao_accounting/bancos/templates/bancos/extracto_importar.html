@@ -1,24 +1,37 @@
 {% extends "base.html" %}
 {% block contenido %}
-<div class="ca-page-header"><h4>{{ _("Importar Extracto Bancario") }}</h4></div>
-<form method="post" enctype="multipart/form-data" class="mb-4">
-  <div class="row g-2">
-    <div class="col-md-3"><select class="form-select" name="bank_account_id">{% for account in accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}</select></div>
-    <div class="col-md-3"><input class="form-control" type="file" name="statement_file" accept=".csv" required></div>
-    <div class="col-md-1"><input class="form-control" name="date_column" value="date"></div>
-    <div class="col-md-1"><input class="form-control" name="reference_column" value="reference"></div>
-    <div class="col-md-1"><input class="form-control" name="description_column" value="description"></div>
-    <div class="col-md-1"><input class="form-control" name="deposit_column" value="deposit"></div>
-    <div class="col-md-1"><input class="form-control" name="withdrawal_column" value="withdrawal"></div>
-    <div class="col-md-1"><button class="btn btn-outline-primary" name="action" value="preview">{{ _("Vista") }}</button></div>
-    <div class="col-md-1"><button class="btn btn-primary" name="action" value="import">{{ _("Importar") }}</button></div>
-  </div>
-</form>
-{% if result %}
-<table class="table table-sm">
-  <caption>{{ _("Vista previa de transacciones a importar") }}</caption>
-  <thead><tr><th>{{ _("Fecha") }}</th><th>{{ _("Referencia") }}</th><th>{{ _("Descripción") }}</th><th>{{ _("Depósito") }}</th><th>{{ _("Retiro") }}</th><th>{{ _("Duplicado") }}</th></tr></thead>
-  <tbody>{% for row in result.rows %}<tr><td>{{ row.posting_date }}</td><td>{{ row.reference_number or "" }}</td><td>{{ row.description or "" }}</td><td>{{ row.deposit or "" }}</td><td>{{ row.withdrawal or "" }}</td><td>{{ row.duplicate }}</td></tr>{% endfor %}</tbody>
-</table>
-{% endif %}
+{% set acceso = permisos(modulo=id_modulo("imports"), usuario=usuario.id) %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb lh-sm">
+            <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Caja y Bancos') }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ _('Importar Extracto Bancario') }}</li>
+        </ol>
+    </nav>
+
+    <div class="ca-page-header">
+        <h4><i class="bi bi-file-earmark-arrow-up me-2"></i>{{ _('Importar Extracto Bancario') }}</h4>
+    </div>
+
+    <div class="ca-card mt-3" style="max-width: 640px;">
+        <div class="ca-card-body text-center py-5">
+            <i class="bi bi-arrow-up-circle display-3 text-primary"></i>
+            <h5 class="mt-3">{{ _('Use el asistente de importación') }}</h5>
+            <p class="text-muted mb-4">
+                {{ _('La importación de extractos bancarios ahora se realiza a través del asistente compartido de importación, que ofrece plantilla descargable, vista previa y validación.') }}
+            </p>
+            {% if acceso.crear %}
+            <a href="{{ url_for('imports.new') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-file-earmark-arrow-up me-2"></i>{{ _('Ir al Asistente de Importación') }}
+            </a>
+            {% endif %}
+            <div class="mt-3">
+                <a href="{{ url_for('bancos.bancos_transaccion_lista') }}" class="btn btn-outline-secondary">
+                    {{ _('Volver a Transacciones') }}
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
