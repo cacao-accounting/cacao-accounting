@@ -41,6 +41,10 @@ jobs:
           # Remove unused test directories to prevent packaging them
           rm -rf cacao_accounting/static/test
           rm -rf cacao_accounting/query_tools/tests
+          rm -rf tests/
+          rm -rf docs/
+          rm -rf modulos/
+          rm -rf scripts/
           python -m build --sdist --wheel --outdir dist/ .
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
