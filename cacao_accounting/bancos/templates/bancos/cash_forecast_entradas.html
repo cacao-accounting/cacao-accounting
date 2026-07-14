@@ -100,25 +100,16 @@
   <!-- Formulario para importar proyecciones (colapsable) -->
   {% if selected_forecast.status == "Draft" %}
   <div class="collapse p-4 border-bottom bg-light" id="importEntryForm">
-    <h6 class="fw-bold mb-3">Importar Proyecciones Manuales desde Archivo</h6>
+    <h6 class="fw-bold mb-3">{{ _('Importar Proyecciones Manuales desde Archivo') }}</h6>
     <p class="text-muted small">
-      Seleccione un archivo <strong>CSV</strong> o <strong>XLSX</strong>. El archivo debe contener exactamente la siguiente cabecera de columnas:<br>
-      <code>type</code> (Income / Expense), <code>concept</code>, <code>currency</code>, <code>amount</code>, <code>estimated_date</code> (AAAA-MM-DD), y opcionalmente <code>notes</code>.
+      {{ _('Use el asistente de importación compartido con plantilla descargable, vista previa y validación.') }}
     </p>
-    <form method="POST" enctype="multipart/form-data" action="{{ url_for('bancos.cash_forecast_entry_import', forecast_id=selected_forecast.id, next=request.full_path) }}" class="row g-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="col-md-6">
-        <input type="file" name="file" id="import_file" class="form-control form-control-sm" accept=".csv, .xlsx" required>
-      </div>
-      <div class="col-md-6 d-flex align-items-end gap-2">
-        <button type="submit" class="btn btn-sm btn-primary">
-          <i class="bi bi-upload me-1"></i>Subir e Importar
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#importEntryForm">
-          Cancelar
-        </button>
-      </div>
-    </form>
+    <a href="{{ url_for('imports.new') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-file-earmark-arrow-up me-1"></i>{{ _('Ir al Asistente de Importación') }}
+    </a>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#importEntryForm">
+      {{ _('Cancelar') }}
+    </button>
   </div>
   {% endif %}
 

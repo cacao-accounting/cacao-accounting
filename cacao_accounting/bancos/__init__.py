@@ -32,7 +32,6 @@ from cacao_accounting.bancos.reconciliation_service import (
 from cacao_accounting.bancos.statement_service import (
     BankStatementError,
     apply_bank_matching_rule,
-    import_bank_statement,
 )
 from cacao_accounting.database import (
     Accounts,
@@ -699,38 +698,12 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
 @modulo_activo("cash")
 @login_required
 def bancos_extracto_importar():
-    """Importa extractos bancarios CSV con preview."""
-    accounts = (
-        database.session.execute(database.select(BankAccount).filter_by(is_active=True).order_by(BankAccount.account_name))
-        .scalars()
-        .all()
+    """Redirige al asistente de importación compartido."""
+    flash(
+        _("La importación de extractos bancarios ahora se realiza a través del asistente de importación compartido."),
+        "info",
     )
-    result = None
-    if request.method == "POST":
-        mapping = {
-            "date": request.form.get("date_column") or "date",
-            "reference": request.form.get("reference_column") or "reference",
-            "description": request.form.get("description_column") or "description",
-            "deposit": request.form.get("deposit_column") or "deposit",
-            "withdrawal": request.form.get("withdrawal_column") or "withdrawal",
-        }
-        try:
-            result = import_bank_statement(
-                request.files["statement_file"],
-                mapping,
-                request.form.get("bank_account_id") or "",
-                preview=request.form.get("action") == "preview",
-            )
-            if request.form.get("action") == "import":
-                database.session.commit()
-                flash(_("Extracto importado correctamente."), "success")
-                return redirect(url_for("bancos.bancos_transaccion_lista"))
-        except (BankStatementError, KeyError) as exc:
-            database.session.rollback()
-            flash(_(str(exc)), "danger")
-    return render_template(
-        "bancos/extracto_importar.html", accounts=accounts, result=result, titulo=_("Importar Extracto Bancario")
-    )
+    return redirect(url_for("imports.new"))
 
 
 @bancos.route("/bank-matching-rules", methods=["GET", "POST"])

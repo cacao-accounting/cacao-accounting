@@ -17,6 +17,8 @@ from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
 from cacao_accounting.imports.adapters.customer import CustomerAdapter
 from cacao_accounting.imports.adapters.vendor import VendorAdapter
 from cacao_accounting.imports.adapters.chart_of_accounts import ChartOfAccountsAdapter
+from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
 from cacao_accounting.imports.adapters.transaction_documents import (
     DeliveryNoteAdapter,
     PurchaseInvoiceAdapter,
@@ -45,6 +47,8 @@ class ImportService:
         "customer": CustomerAdapter,
         "vendor": VendorAdapter,
         "chart_of_accounts": ChartOfAccountsAdapter,
+        "bank_statement": BankStatementAdapter,
+        "cash_forecast_entry": CashForecastEntryAdapter,
         "purchase_request": PurchaseRequestAdapter,
         "purchase_quotation": PurchaseQuotationAdapter,
         "supplier_quotation": SupplierQuotationAdapter,
