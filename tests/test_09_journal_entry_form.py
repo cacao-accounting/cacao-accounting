@@ -250,7 +250,7 @@ def test_journal_new_route_renders_new_backend_form(app_ctx):
     assert "journalImportLinesModal" in html
     assert "/api/line-import/schema?doctype=journal_entry" in html
     assert "Subir XLSX" in html
-    assert "Descargar plantilla" in html
+    assert "Descargar Plantilla" in html
     assert 'accept=".xlsx"' in html
     assert "Actualizar Elementos" not in html
     assert 'name="csrf_token"' in html
