@@ -327,7 +327,7 @@ def test_payment_creation_uses_bank_account_numbering_defaults(app_ctx):
     from cacao_accounting.bancos import bancos_pago_nuevo
     from cacao_accounting.database import ExternalNumberUsage, PaymentEntry, database
 
-    series = _make_payment_series()
+    series = _make_payment_series(entity_type="bank_payment")
     counter_nio = _make_checkbook()
     counter_usd = _make_checkbook()
     account_nio = _make_bank_account(series, counter_nio, "NIO")
@@ -374,8 +374,8 @@ def test_payment_creation_explicit_values_override_bank_account_defaults(app_ctx
     from cacao_accounting.bancos import bancos_pago_nuevo
     from cacao_accounting.database import PaymentEntry, database
 
-    default_series = _make_payment_series()
-    explicit_series = _make_payment_series()
+    default_series = _make_payment_series(entity_type="bank_payment")
+    explicit_series = _make_payment_series(entity_type="bank_payment")
     default_counter = _make_checkbook()
     explicit_counter = _make_checkbook()
     account = _make_bank_account(default_series, default_counter, "NIO")
@@ -406,7 +406,7 @@ def test_payment_creation_rolls_back_when_fiscal_payload_is_invalid(app_ctx):
     from cacao_accounting.bancos import bancos_pago_nuevo
     from cacao_accounting.database import PaymentEntry, database
 
-    series = _make_payment_series()
+    series = _make_payment_series(entity_type="bank_payment")
     counter = _make_checkbook()
     account = _make_bank_account(series, counter, "NIO")
     database.session.commit()

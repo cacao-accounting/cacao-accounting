@@ -1805,13 +1805,21 @@ def _create_payment_from_request():
         payment_type = payment.payment_type or payload.get("payment_type") or "pay"
         config = _resolve_bank_account_numbering_config(payment.bank_account_id, payment_type)
         entity_type = _payment_type_to_entity_type(payment_type)
-        naming_series_id = cast(str | None, payload.get("naming_series_id") or (config.naming_series_id if config else None))
+        naming_series_id = cast(str | None, payload.get("naming_series_id"))
+        if naming_series_id is None:
+            if config and config.naming_series_id:
+                naming_series_id = config.naming_series_id
+            else:
+                legacy_series_id, _legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+                naming_series_id = legacy_series_id
         external_counter_id: str | None = None
-        if config and config.use_external_counter:
-            if mode_of_payment == "check":
-                external_counter_id = cast(str | None, payload.get("external_counter_id") or config.external_counter_id)
-        elif mode_of_payment == "check":
+        if mode_of_payment == "check":
             external_counter_id = cast(str | None, payload.get("external_counter_id"))
+            if external_counter_id is None and config and config.use_external_counter:
+                external_counter_id = config.external_counter_id
+            if external_counter_id is None:
+                _legacy_series_id, legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+                external_counter_id = legacy_counter_id
         assign_document_identifier(
             document=payment,
             entity_type=entity_type,
