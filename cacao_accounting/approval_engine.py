@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 from flask_login import current_user
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import (
     ApprovalMatrix,
@@ -21,6 +22,9 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.document_flow.registry import normalize_doctype
+
+PENDING_APPROVAL_STATUS = "Pending Approval"
+PENDING_CANCELLATION_STATUS = "Pending Cancellation"
 
 
 class ApprovalEngine:
@@ -206,7 +210,7 @@ class ApprovalEngine:
             requested_by=user_id,
             current_level=1,
             required_level=req_level,
-            status="Pending Approval",
+            status=PENDING_APPROVAL_STATUS,
         )
         database.session.add(req)
         database.session.flush()
@@ -241,7 +245,7 @@ class ApprovalEngine:
             requested_by=user_id,
             current_level=1,
             required_level=req_level,
-            status="Pending Cancellation",
+            status=PENDING_CANCELLATION_STATUS,
         )
         database.session.add(req)
         database.session.flush()
@@ -261,7 +265,7 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
+                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
             )
         ).scalar_one_or_none()
         if not req:
@@ -271,7 +275,7 @@ class ApprovalEngine:
 
         if req.status == "Approved":
             return True
-        if req.status not in {"Pending Approval", "Pending Cancellation"}:
+        if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError("La solicitud de aprobación no está en estado pendiente.")
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
@@ -350,7 +354,7 @@ class ApprovalEngine:
             submit_document(document)
             try:
                 _release_reservation_for_delivery_note(document)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 import logging
 
                 logging.getLogger(__name__).warning("Error al liberar reserva: %s", e)
@@ -364,7 +368,7 @@ class ApprovalEngine:
             if document.update_inventory and not document.delivery_note_id:
                 try:
                     _create_delivery_note_from_invoice(document)
-                except Exception as e:
+                except (SQLAlchemyError, ValueError) as e:
                     import logging
 
                     logging.getLogger(__name__).warning("Error al crear nota de entrega para factura: %s", e)
@@ -428,13 +432,13 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
+                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
             )
         ).scalar_one_or_none()
         if not req:
             raise ValueError("No existe ninguna solicitud de aprobación para este documento.")
 
-        if req.status not in {"Pending Approval", "Pending Cancellation"}:
+        if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError("La solicitud de aprobación no está pendiente.")
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
@@ -467,10 +471,10 @@ class ApprovalEngine:
             select(ApprovalRequest).filter(
                 ApprovalRequest.document_id == document.id,
                 ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
+                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
             )
         ).scalar_one_or_none()
-        if not req or req.status not in {"Pending Approval", "Pending Cancellation"}:
+        if not req or req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             return {}
 
         amount = cls.get_document_amount(document)
