@@ -21,6 +21,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.contabilidad.budget_service import BudgetError
+from sqlalchemy.exc import SQLAlchemyError
 
 _LABEL_CENTRO_COSTO = "Centro de Costo"
 _LABEL_UNIDAD_NEGOCIO = "Unidad de Negocio"
@@ -409,7 +410,7 @@ class BudgetImportService:
             # Limpiar staging
             database.session.query(BudgetImportLine).filter_by(import_id=import_id).delete()
             database.session.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             database.session.rollback()
             failed_batch = database.session.get(BudgetImport, import_id)
             if failed_batch:

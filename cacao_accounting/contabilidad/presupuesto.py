@@ -27,6 +27,7 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.version import APPNAME
+from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
     obtener_lista_monedas,
@@ -398,7 +399,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
             BudgetImportService().insert_lines(import_id, str(current_user.id))
             flash("Importación completada exitosamente.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
-        except Exception as e:
+        except (BudgetError, SQLAlchemyError) as e:
             flash(f"Error al procesar la importación: {str(e)}", "danger")
     else:
         file = request.files.get("file")
@@ -421,7 +422,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
                         import_id=import_obj.id,
                         titulo="Previsualizar Importación - " + APPNAME,
                     )
-                except Exception as e:
+                except (BudgetError, ValueError, KeyError, SQLAlchemyError) as e:
                     flash(f"Error al procesar el archivo: {str(e)}", "danger")
     return render_template(
         _TEMPLATE_PRESUPUESTO_IMPORTAR,
@@ -478,7 +479,7 @@ def reporte():
         if all([filters["company"], filters["budget_id"], filters["ledger_id"], filters["fiscal_year_id"]]):
             try:
                 report_data = BudgetReportService().get_real_vs_budget_report(filters)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 flash(f"Error al generar reporte: {str(e)}", "danger")
 
     return render_template(
