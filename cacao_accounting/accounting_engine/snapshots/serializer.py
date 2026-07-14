@@ -54,7 +54,7 @@ class SnapshotSerializer:
         try:
             canonized = json.dumps(snapshot, cls=EngineJSONEncoder, sort_keys=True)
             snapshot["metadata"]["fingerprint"] = hashlib.sha256(canonized.encode()).hexdigest()
-        except Exception as e:
+        except (TypeError, ValueError) as e:
             snapshot["errors"] = [f"Serialization error: {str(e)}"]
         return snapshot
 

@@ -907,7 +907,7 @@ def _maybe_settle_advance_against_invoice(
     """S2P-07: netea el anticipo contra la cuenta por pagar/cobrar."""
     from cacao_accounting.contabilidad.default_accounts import get_company_default_accounts
     from cacao_accounting.contabilidad.posting import post_comprobante_contable
-    from cacao_accounting.document_identifiers import assign_document_identifier
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
     company = invoice.company
     defaults = get_company_default_accounts(company)
@@ -950,7 +950,7 @@ def _maybe_settle_advance_against_invoice(
             naming_series_id=None,
             allow_closing=True,
         )
-    except Exception:
+    except IdentifierConfigurationError:
         journal.document_no = f"{company}-ADV-{journal.id[-8:]}"
     if is_purchase:
         debit_account, credit_account = party_account_id, advance_account_id
