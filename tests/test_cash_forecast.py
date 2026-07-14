@@ -287,9 +287,7 @@ def test_routes_list_and_details():
 
         with test_app.app_context():
             # Verify entry was saved
-            entry = (
-                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).first()
-            )
+            entry = db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).first()
             assert entry is not None
             assert entry.concept == "Cobro Extraordinario"
             assert entry.amount == Decimal("800.00")
@@ -327,7 +325,9 @@ def test_routes_list_and_details():
 
 @pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
 def test_routes_import_entries():
-    """Test importing manual entries from CSV and XLSX file."""
+    """Test importing manual entries from CSV and XLSX via the shared import wizard."""
+    from cacao_accounting.imports.models import ImportBatch
+
     with test_app.test_client() as client:
         # Simulate login
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -347,26 +347,42 @@ def test_routes_import_entries():
             db.session.commit()
             forecast_id = forecast.id
 
+        def _create_batch():
+            with test_app.app_context():
+                batch = ImportBatch(
+                    record_type="cash_forecast_entry",
+                    company_id="cacao",
+                    import_status=0,
+                    created_by=1,
+                )
+                db.session.add(batch)
+                db.session.commit()
+                return str(batch.id)
+
+        def _run_import(batch_id, file_tuple):
+            client.post(
+                f"/imports/{batch_id}/upload",
+                data={"file": file_tuple},
+                content_type="multipart/form-data",
+                follow_redirects=True,
+            )
+            client.post(f"/imports/{batch_id}/validate", follow_redirects=True)
+            client.post(f"/imports/{batch_id}/execute", follow_redirects=True)
+
         # 1. Test CSV Import
         csv_data = (
-            "type,concept,currency,amount,estimated_date,notes\n"
-            "Income,Inyeccion Capital,NIO,25000.00,2026-05-15,Socio A\n"
-            "Expense,Prestamo Banco,NIO,5000.00,2026-05-20,Cuota 1"
+            "forecast_id,type,concept,currency,amount,estimated_date,notes\n"
+            f"{forecast_id},Income,Inyeccion Capital,NIO,25000.00,2026-05-15,Socio A\n"
+            f"{forecast_id},Expense,Prestamo Banco,NIO,5000.00,2026-05-20,Cuota 1"
         )
-        data = {"file": (io.BytesIO(csv_data.encode("utf-8")), "test_forecast.csv")}
-        response = client.post(
-            f"/cash_management/cash-forecast/{forecast_id}/entry/import",
-            data=data,
-            content_type="multipart/form-data",
-            follow_redirects=True,
+        csv_batch_id = _create_batch()
+        _run_import(
+            csv_batch_id,
+            (io.BytesIO(csv_data.encode("utf-8")), "test_forecast.csv"),
         )
-        assert response.status_code == 200
-        assert b"Se importaron 2 proyecciones manuales con" in response.data
 
         with test_app.app_context():
-            entries = (
-                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
-            )
+            entries = db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
             assert len(entries) == 2
             # Check fields
             entries_by_concept = {e.concept: e for e in entries}
@@ -380,28 +396,21 @@ def test_routes_import_entries():
 
         wb = openpyxl.Workbook()
         ws = wb.active
-        # Write headers
-        ws.append(["type", "concept", "currency", "amount", "estimated_date", "notes"])
-        ws.append(["Income", "Excel Income", "NIO", 12000.00, "2026-06-01", "From Excel"])
+        ws.append(["forecast_id", "type", "concept", "currency", "amount", "estimated_date", "notes"])
+        ws.append([forecast_id, "Income", "Excel Income", "NIO", 12000.00, "2026-06-01", "From Excel"])
 
         file_stream = io.BytesIO()
         wb.save(file_stream)
         file_stream.seek(0)
 
-        data_xlsx = {"file": (file_stream, "test_forecast.xlsx")}
-        response = client.post(
-            f"/cash_management/cash-forecast/{forecast_id}/entry/import",
-            data=data_xlsx,
-            content_type="multipart/form-data",
-            follow_redirects=True,
+        xlsx_batch_id = _create_batch()
+        _run_import(
+            xlsx_batch_id,
+            (file_stream, "test_forecast.xlsx"),
         )
-        assert response.status_code == 200
-        assert b"Se importaron 1 proyecciones manuales con" in response.data
 
         with test_app.app_context():
-            entries = (
-                db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
-            )
+            entries = db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).all()
             # 2 from CSV + 1 from XLSX = 3
             assert len(entries) == 3
             xlsx_entry = [e for e in entries if e.concept == "Excel Income"][0]
@@ -431,9 +440,7 @@ def test_desktop_mode_redirect(monkeypatch):
         response = client.get("/cash_management/cash-forecast/list", follow_redirects=True)
         assert response.status_code == 200
         # Check that we redirected back to bancos dashboard and warning is flashed
-        assert (
-            b"Proyecci\xc3\xb3n de flujo de caja no disponible en modo DESKTOP" in response.data
-        )
+        assert b"Proyecci\xc3\xb3n de flujo de caja no disponible en modo DESKTOP" in response.data
 
 
 @pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
@@ -556,6 +563,4 @@ def test_budget_desktop_mode_redirect(monkeypatch):
         response = client.get("/accounting/presupuestos/list", follow_redirects=True)
         assert response.status_code == 200
         # Check that we redirected back to contabilidad dashboard and warning is flashed
-        assert (
-            b"Gesti\xc3\xb3n de presupuesto no disponible en modo DESKTOP" in response.data
-        )
+        assert b"Gesti\xc3\xb3n de presupuesto no disponible en modo DESKTOP" in response.data
