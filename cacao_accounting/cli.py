@@ -486,6 +486,42 @@ def config() -> None:
 config.group = "System"  # type: ignore[attr-defined]
 
 
+# <---------------------------------------------------------------------------------------------> #
+# Comando de autocompletado para shell.
+@linea_comandos.command(
+    name="completion",
+    help="Genera script de autocompletado para el shell.",
+    hidden=True,
+)
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default="bash")
+@click.pass_context
+def completion(ctx: click.Context, shell: str) -> None:
+    """Muestra las instrucciones para instalar el autocompletado de cacaoctl."""
+    comando = f'eval "$(_CACAOCTL_COMPLETE={shell}_source cacaoctl)"'
+    archivo = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/completions/cacaoctl.fish"}
+
+    click.echo("")
+    if shell == "fish":
+        click.echo(f"  {comando}")
+        click.echo("")
+        click.echo(f"  Agrega la linea anterior a {archivo[shell]}:")
+        click.echo(f"  echo '{comando}' >> {archivo[shell]}")
+    else:
+        click.echo(f"  Agrega la siguiente linea a tu {archivo[shell]}:")
+        click.echo("")
+        click.echo(f"  {comando}")
+    click.echo("")
+    click.echo("  Vuelve a cargar tu configuracion o reinicia el terminal.")
+    click.echo(f"  source {archivo[shell]}")
+
+    # Muestra tambien las opciones de shell disponibles.
+    click.echo("")
+    click.echo("  Shells disponibles: bash, zsh, fish")
+
+
+completion.group = "System"  # type: ignore[attr-defined]
+
+
 def linea_comandos_main(as_module: bool = False) -> None:  # pragma: no cover
     """Ejecuta la linea de comandos con identidad propia de Cacao Accounting."""
     linea_comandos.main(prog_name=NOMBRE_PROGRAMA, args=sys.argv[1:])
