@@ -46,6 +46,32 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 - Para habilitar características en la nube (como validación MIME segura en la subida de archivos), instale las dependencias opcionales: `pip install cacao-accounting[cloud]`
 - Ejecutar pruebas: `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
 
+## CLI - cacaoctl
+
+`cacaoctl` es la interfaz de línea de comandos oficial para administrar Cacao Accounting.
+
+```bash
+# Inicializar la base de datos
+cacaoctl db init
+
+# Iniciar servidor de desarrollo
+cacaoctl run
+
+# Iniciar servidor de producción (Waitress)
+cacaoctl serve
+
+# Ver estado del sistema
+cacaoctl status
+
+# Ver configuración activa
+cacaoctl config
+
+# Consola interactiva con contexto de la aplicación
+cacaoctl shell
+```
+
+Para más detalles, consulta la [documentación de cacaoctl](docs/cacaoctl.md).
+
 ## Demo online
 
 ```

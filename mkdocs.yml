@@ -48,6 +48,7 @@ nav:
       - FAQ: faq.md
       - Dependecies: dependencies.md
       - Changelog: changelog.md
+  - CLI: cacaoctl.md
   - Api: api.md
 
 plugins:
