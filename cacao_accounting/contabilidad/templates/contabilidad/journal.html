@@ -51,7 +51,7 @@
             <a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a>
         </li>
         <li class="breadcrumb-item active" aria-current="page">
-            {{ registro.document_no or registro.serie or _('Comprobante') }}</li>
+            {{ display_name }}</li>
     </ol>
 </nav>
 
@@ -69,7 +69,7 @@
     <div class="ca-card-header">
         <div>
             <h5 class="ca-card-title mb-0">
-                <i class="bi bi-receipt"></i> {{ registro.document_no or registro.serie or _('Comprobante contable') }}
+                <i class="bi bi-receipt"></i> {{ display_name }}
                 <span class="badge {{ status_badge }} ms-2">{{ _(status_value) }}</span>
             </h5>
             <small class="text-muted">{{ _('Comprobante manual') }}</small>

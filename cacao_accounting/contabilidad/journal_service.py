@@ -395,9 +395,11 @@ def journal_display_document_name(journal: ComprobanteContable) -> str:
         return str(journal.document_no)
     if journal.serie:
         return str(journal.serie)
-    if journal.reference and (
-        str(journal.memo or "").startswith("Reversión de ") or str(journal.memo or "").startswith("Duplicado de ")
-    ):
+    memo = str(journal.memo or "")
+    if memo.startswith("Reversión de "):
+        date_str = journal.date.isoformat() if journal.date else ""
+        return f"Borrador de reversión — {date_str}" if date_str else "Borrador de reversión"
+    if journal.reference and memo.startswith("Duplicado de "):
         return str(journal.reference)
     return "Borrador sin numerar"
 

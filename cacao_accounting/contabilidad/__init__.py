@@ -3237,8 +3237,11 @@ def ver_comprobante(identifier: str):
     account_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in account_rows}
     cost_center_labels = {row.code: f"{row.code} - {row.name}" if row.name else row.code for row in cost_center_rows}
 
+    from cacao_accounting.contabilidad.journal_service import journal_display_document_name
+
     lineas = _build_journal_lineas(lineas_raw, account_labels, cost_center_labels)
     audit_timeline = format_document_timeline("journal_entry", journal.id)
+    display_name = journal_display_document_name(journal)
 
     return render_template(
         "contabilidad/journal.html",
@@ -3248,6 +3251,7 @@ def ver_comprobante(identifier: str):
         currency_label=currency_label,
         creator_nickname=creator_nickname,
         audit_timeline=audit_timeline,
+        display_name=display_name,
         titulo="Comprobante Contable - " + APPNAME,
     )
 
