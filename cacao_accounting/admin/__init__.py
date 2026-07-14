@@ -16,7 +16,7 @@ from datetime import date
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import delete
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -96,6 +96,9 @@ ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
 LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
 BUDGET_CONTROL_VALID_ACTIONS = ("do_nothing", "notify", "block")
+ADMIN_APPROVAL_MATRIX_ENDPOINT = "admin.config_approval_matrix"
+ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT = "admin.config_control_presupuestario"
+DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
 
 
 def _require_system_admin() -> None:
@@ -224,7 +227,7 @@ def configuracion_valuacion_inventario():
 
     if request.method == "POST":
         if not selected_company:
-            flash(_("Debe seleccionar una compania."), "danger")
+            flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for(LISTA_VALUACION_INVENTARIO))
         try:
             update_company_valuation_method(selected_company, request.form.get("valuation_method") or "")
@@ -534,7 +537,7 @@ def config_conciliacion_compras():
     if request.method == "POST":
         company = request.form.get("company") or ""
         if not company:
-            flash(_("Debe seleccionar una compania."), "danger")
+            flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_compras"))
 
         config = database.session.execute(
@@ -583,7 +586,7 @@ def config_conciliacion_ventas():
     if request.method == "POST":
         company = request.form.get("company") or ""
         if not company:
-            flash(_("Debe seleccionar una compania."), "danger")
+            flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas"))
 
         config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company=company)).scalar_one_or_none()
@@ -628,21 +631,21 @@ def config_control_presupuestario():
         company = request.form.get("company") or ""
         if not company:
             flash(_("Debe seleccionar una compañía."), "danger")
-            return redirect(url_for("admin.config_control_presupuestario"))
+            return redirect(url_for(ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT))
 
         enabled = request.form.get("enabled") == "on"
         action = request.form.get("action_on_exceeded") or "do_nothing"
 
         if action not in BUDGET_CONTROL_VALID_ACTIONS:
             flash(_("Política de control presupuestario no válida."), "danger")
-            return redirect(url_for("admin.config_control_presupuestario", company=company))
+            return redirect(url_for(ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT, company=company))
 
         set_setup_value(f"budget_control_enabled_{company}", "1" if enabled else "0")
         set_setup_value(f"budget_control_action_{company}", action)
 
         database.session.commit()
         flash(_("Configuración de control presupuestario guardada correctamente."), "success")
-        return redirect(url_for("admin.config_control_presupuestario", company=company))
+        return redirect(url_for(ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT, company=company))
 
     enabled_val = get_setup_value(f"budget_control_enabled_{selected_company}", "0") == "1"
     action_val = get_setup_value(f"budget_control_action_{selected_company}", "do_nothing")
@@ -682,7 +685,7 @@ def cuentas_predeterminadas():
     if request.method == "POST":
         action = request.form.get("action") or "save"
         if not selected_company:
-            flash(_("Debe seleccionar una compania."), "danger")
+            flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for(CUENTAS_PREDETERMINADAS))
 
         if action == "delete":
@@ -1119,7 +1122,7 @@ def config_approval_matrix():
         set_setup_value(f"approval_engine_enabled_{company}", "1" if enabled else "0")
         database.session.commit()
         flash(_("Configuración global de aprobación guardada correctamente."), "success")
-        return redirect(url_for("admin.config_approval_matrix", company=company))
+        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
 
     if request.method == "POST" and request.form.get("action") == "add_rule":
         company = request.form.get("company") or ""
@@ -1144,7 +1147,7 @@ def config_approval_matrix():
         database.session.add(rule)
         database.session.commit()
         flash(_("Regla de aprobación creada correctamente."), "success")
-        return redirect(url_for("admin.config_approval_matrix", company=company))
+        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
 
     if request.method == "POST" and request.form.get("action") == "delete_rule":
         rule_id = request.form.get("rule_id")
@@ -1153,7 +1156,7 @@ def config_approval_matrix():
             database.session.delete(rule)
             database.session.commit()
             flash(_("Regla de aprobación eliminada."), "success")
-        return redirect(url_for("admin.config_approval_matrix", company=selected_company))
+        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=selected_company))
 
     global_enabled = get_setup_value(f"approval_engine_enabled_{selected_company}", "0") == "1"
     stmt = (
@@ -1206,7 +1209,7 @@ def pending_approvals():
                         ApprovalEngine.approve(document, current_user, comments)
                         database.session.commit()
                         flash(_("Documento aprobado con éxito."), "success")
-                    except Exception as exc:
+                    except (SQLAlchemyError, ValueError) as exc:
                         database.session.rollback()
                         flash_error(exc)
                 elif action == "reject":
@@ -1214,7 +1217,7 @@ def pending_approvals():
                         ApprovalEngine.reject(document, current_user, comments)
                         database.session.commit()
                         flash(_("Documento rechazado con éxito."), "warning")
-                    except Exception as exc:
+                    except (SQLAlchemyError, ValueError) as exc:
                         database.session.rollback()
                         flash_error(exc)
         return redirect(url_for("admin.pending_approvals"))
@@ -1253,7 +1256,7 @@ def pending_approvals():
                             "doc_no": doc_no_val,
                         }
                     )
-        except Exception:
+        except (SQLAlchemyError, AttributeError, KeyError):
             continue
 
     return render_template(

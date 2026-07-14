@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from flask import has_request_context, request
@@ -77,7 +77,7 @@ def _current_actor() -> tuple[str | None, str | None]:
                 getattr(current_user, "user", "") or actor_id
             )
             return actor_id, actor_name
-    except Exception:
+    except (AttributeError, TypeError):
         return None, None
     return None, None
 
@@ -263,7 +263,7 @@ def _format_timeline_value(value: Any) -> str:
                         if "." in s:
                             s = s.rstrip("0").rstrip(".")
                         return s
-                    except Exception:
+                    except InvalidOperation:
                         return str(v)
 
                 rate = item.get("rate") or item.get("basic_rate") or item.get("price") or ""
