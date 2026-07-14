@@ -17,6 +17,7 @@ from typing import Any
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from sqlalchemy.exc import SQLAlchemyError
 from flask_login import current_user, login_required
 
 # ---------------------------------------------------------------------------------------
@@ -107,7 +108,12 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 PURCHASE_RETURN = "purchase_return"
 
-FACTURA_DE_COMPRA = "Factura de Compra"
+FACTURA_COMPRA_LABEL = "Factura de Compra"
+COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
+COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
+SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+
+FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
 COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML = "compras/factura_compra_devolucion_lista.html"
 COMPRAS_PROVEEDOR_NUEVO_TEMPLATE = "compras/proveedor_nuevo.html"
 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
@@ -124,11 +130,11 @@ FORMKEY_PURCHASE_INVOICE = "purchases.purchase_invoice"
 ROUTE_COMPRAS_SOLICITUD_COMPRA = "compras.compras_solicitud_compra"
 ROUTE_COMPRAS_SOLICITUD_COTIZACION = "compras.compras_solicitud_cotizacion"
 ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
-ROUTE_COMPRAS_PROVEEDOR = "compras.compras_proveedor"
+ROUTE_COMPRAS_PROVEEDOR = COMPRAS_PROVEEDOR_ENDPOINT
 LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
 LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
 LABEL_ORDEN_COMPRA = "Orden de Compra"
-LABEL_FACTURA_COMPRA_LONG = "Factura de Compra"
+LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
 IMPORT_LANDED_COST_LABEL = "Costo de Importación"
@@ -514,9 +520,9 @@ def compras_solicitud_compra_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     registro.docstatus = 2
@@ -998,9 +1004,9 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     registro.docstatus = 2
@@ -2357,9 +2363,9 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     registro.docstatus = 2
@@ -2431,9 +2437,9 @@ def compras_orden_compra_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     registro.docstatus = 2
@@ -2877,9 +2883,9 @@ def compras_recepcion_cancel(receipt_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     try:
@@ -3505,9 +3511,9 @@ def compras_factura_compra_cancel(invoice_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
+            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
-    except Exception as exc:
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     try:
@@ -3579,7 +3585,7 @@ def compras_import_landed_cost_nuevo():
             "/api/document-flow/pending-lines"
             "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
         ),
-        "source_label": "Factura de Compra",
+        "source_label": FACTURA_COMPRA_LABEL,
     }
 
     if request.method == "POST":
@@ -3774,7 +3780,7 @@ def _create_import_landed_cost_from_request():
     database.session.commit()
     log_create(registro)
     flash(_("Costo de importacion creado exitosamente."), "success")
-    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=registro.id))
+    return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=registro.id))
 
 
 def _get_import_landed_cost_items(landed_cost_id: str):
@@ -3832,16 +3838,16 @@ def compras_import_landed_cost_submit(landed_cost_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Costo de importacion"):
-            return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+            return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
         submit_document(registro)
         log_submit(registro)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
         flash_error(exc)
-        return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+        return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     flash(_("Costo de importacion aprobado y contabilizado."), "success")
-    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+    return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
 
 
 @compras.route("/import-landed-cost/<landed_cost_id>/cancel", methods=["POST"])
@@ -3861,8 +3867,8 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
             flash(_("Solicitud de cancelacion enviada para aprobacion."), "info")
-            return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
-    except Exception as exc:
+            return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
+    except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     try:
@@ -3874,9 +3880,9 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
     except PostingError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-        return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+        return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     flash(_("Costo de importacion cancelado."), "warning")
-    return redirect(url_for("compras.compras_import_landed_cost", landed_cost_id=landed_cost_id))
+    return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
 
 
 @compras.route("/supplier/<supplier_id>/habilitar-cliente", methods=["POST"])
@@ -3891,7 +3897,7 @@ def compras_proveedor_habilitar_cliente(supplier_id: str):
     except PartyRoleToggleError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(COMPRAS_PROVEEDOR_ENDPOINT, supplier_id=supplier_id))
 
 
 @compras.route("/supplier/<supplier_id>/deshabilitar-cliente", methods=["POST"])
@@ -3906,7 +3912,7 @@ def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     except PartyRoleToggleError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
-    return redirect(url_for("compras.compras_proveedor", supplier_id=supplier_id))
+    return redirect(url_for(COMPRAS_PROVEEDOR_ENDPOINT, supplier_id=supplier_id))
 
 
 def check_budget_control(
