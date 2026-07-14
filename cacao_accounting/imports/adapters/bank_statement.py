@@ -43,14 +43,16 @@ class BankStatementAdapter(BaseImportAdapter):
                     posting_date = date.fromisoformat(posting_date)
                 except ValueError:
                     posting_date = datetime.now().date()
-            transactions.append({
-                "bank_account_id": str(row.get("bank_account_id", "")),
-                "posting_date": posting_date,
-                "reference_number": str(row.get("reference_number", "")),
-                "description": str(row.get("description", "")),
-                "deposit": Decimal(str(row.get("deposit") or 0)),
-                "withdrawal": Decimal(str(row.get("withdrawal") or 0)),
-            })
+            transactions.append(
+                {
+                    "bank_account_id": str(row.get("bank_account_id", "")),
+                    "posting_date": posting_date,
+                    "reference_number": str(row.get("reference_number", "")),
+                    "description": str(row.get("description", "")),
+                    "deposit": Decimal(str(row.get("deposit") or 0)),
+                    "withdrawal": Decimal(str(row.get("withdrawal") or 0)),
+                }
+            )
         return transactions
 
     def persist_document(self, document: Any) -> None:
