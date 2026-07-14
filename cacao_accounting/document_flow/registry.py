@@ -41,6 +41,7 @@ from cacao_accounting.database import (
 
 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
 CREAR_FACTURA = "Crear Factura"
+CREAR_REEMBOLSO_LABEL = "Crear Reembolso"
 VENTAS_VENTAS_FACTURA_VENTA_NUEVO = "ventas.ventas_factura_venta_nuevo"
 
 _ACTION_CREAR_PAGO = "Crear Pago"
@@ -379,7 +380,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "docstatus",
         ),
         create_actions=(
-            DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_credit_note"),
+            DocumentAction(CREAR_REEMBOLSO_LABEL, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_credit_note"),
         ),
     ),
     "purchase_debit_note": DocumentType(
@@ -580,7 +581,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "outstanding_amount",
             "docstatus",
         ),
-        create_actions=(DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_credit_note"),),
+        create_actions=(
+            DocumentAction(CREAR_REEMBOLSO_LABEL, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_credit_note"),
+        ),
     ),
     "sales_debit_note": DocumentType(
         key="sales_debit_note",
@@ -632,7 +635,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "outstanding_amount",
             "docstatus",
         ),
-        create_actions=(DocumentAction("Crear Reembolso", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_return"),),
+        create_actions=(DocumentAction(CREAR_REEMBOLSO_LABEL, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_return"),),
     ),
     "payment_entry": DocumentType(
         key="payment_entry",

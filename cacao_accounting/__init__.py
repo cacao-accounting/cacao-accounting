@@ -13,6 +13,7 @@ WSGI.
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from secrets import token_urlsafe
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -67,6 +68,8 @@ from flask_babel import Babel
 alembic = Alembic()
 babel = Babel()
 
+DEFAULT_TIMEZONE = "America/Managua"
+
 
 def command() -> None:  # pragma: no cover
     """Interfaz de linea de commandos."""
@@ -90,18 +93,18 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
                 from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
 
                 return get_setup_value(SETUP_LANGUAGE, "es")
-            except Exception:
+            except SQLAlchemyError:
                 return "es"
 
         def get_timezone():
             if not (has_app_context() or has_request_context()):
-                return "America/Managua"
+                return DEFAULT_TIMEZONE
             try:
                 from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
 
-                return get_setup_value(SETUP_TIMEZONE, "America/Managua")
-            except Exception:
-                return "America/Managua"
+                return get_setup_value(SETUP_TIMEZONE, DEFAULT_TIMEZONE)
+            except SQLAlchemyError:
+                return DEFAULT_TIMEZONE
 
         csrf = CSRFProtect()
         csrf.init_app(app)
@@ -300,7 +303,7 @@ def pending_approval_count() -> int:
             .all()
         )
         return len(count)
-    except Exception:
+    except SQLAlchemyError:
         return 0
 
 
@@ -347,7 +350,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
     with cacao_app.app_context():
         try:
             recover_crashed_batches()
-        except Exception as e:
+        except SQLAlchemyError as e:
             log.error("Error al recuperar lotes de importación: {}", e)
 
     return cacao_app
