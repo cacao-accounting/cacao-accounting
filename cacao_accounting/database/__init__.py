@@ -2268,9 +2268,7 @@ class BankAccountNumberingConfig(database.Model, BaseTabla):  # type: ignore[nam
     """
 
     __tablename__ = "bank_account_numbering_config"
-    __table_args__ = (
-        database.UniqueConstraint("bank_account_id", "payment_type", name="uq_bank_numbering_config"),
-    )
+    __table_args__ = (database.UniqueConstraint("bank_account_id", "payment_type", name="uq_bank_numbering_config"),)
     bank_account_id = database.Column(
         database.String(26),
         database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
