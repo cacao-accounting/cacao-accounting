@@ -3643,7 +3643,12 @@ def _create_import_landed_cost_from_request():
     database.session.add(registro)
     database.session.flush()
 
-    assign_document_identifier(registro, "import_landed_cost")
+    assign_document_identifier(
+        document=registro,
+        entity_type="import_landed_cost",
+        posting_date_raw=registro.posting_date,
+        naming_series_id=request.form.get("naming_series") or None,
+    )
     database.session.flush()
 
     # Save items from form
