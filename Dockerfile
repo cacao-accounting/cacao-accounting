@@ -5,7 +5,9 @@ RUN microdnf install -y --nodocs --best nodejs npm \
 
 WORKDIR /build
 COPY cacao_accounting/static/package.json cacao_accounting/static/package-lock.json ./
-RUN npm install --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund \
+    && find node_modules -type d \( -name "test" -o -name "tests" -o -name "doc" -o -name "docs" -o -name "examples" -o -name "icons" -o -name "scss" -o -name "ts" \) -exec rm -rf {} + \
+    && find node_modules -type f \( -name "*.md" -o -name "*.ts" -o -name "*.map" -o -name "LICENSE" -o -name "README" -o -name "*.yml" -o -name "*.yaml" \) -exec rm -f {} +
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275 AS python-builder
 
@@ -16,7 +18,9 @@ RUN microdnf install -y --nodocs --best --refresh \
 WORKDIR /build
 COPY requirements.txt .
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
-RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0" "python-magic>=0.4.27" "redis>=7.4.0" "pg8000>=1.31.5" "PyMySQL>=1.1.3"
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0" "python-magic>=0.4.27" "redis>=7.4.0" "pg8000>=1.31.5" "PyMySQL>=1.1.3" \
+    && find /install -type d \( -name "test" -o -name "tests" -o -name "testing" -o -name "benchmark" -o -name "benchmarks" -o -name "examples" -o -name "__pycache__" \) -exec rm -rf {} + \
+    && find /install -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.pyd" -o -name "*.exe" -o -name "*.md" -o -name "README*" -o -name "LICENSE*" -o -name "COPYING*" -o -name "CHANGELOG*" \) -exec rm -f {} +
 
 FROM caddy:2-alpine AS caddy
 

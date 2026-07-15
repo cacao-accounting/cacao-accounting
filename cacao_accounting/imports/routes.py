@@ -28,6 +28,9 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+from typing import Any
+
+magic: Any = None
 try:
     import magic
 

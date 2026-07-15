@@ -34,9 +34,17 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: |
           cd cacao_accounting/static
-          npm install
-          cd ..
-          cd ..
+          npm install --omit=dev --ignore-scripts --no-audit --no-fund
+          find node_modules -type d \( -name "test" -o -name "tests" -o -name "doc" -o -name "docs" -o -name "examples" -o -name "icons" -o -name "scss" -o -name "ts" \) -exec rm -rf {} +
+          find node_modules -type f \( -name "*.md" -o -name "*.ts" -o -name "*.map" -o -name "LICENSE" -o -name "README" -o -name "*.yml" -o -name "*.yaml" \) -exec rm -f {} +
+          cd ../..
+          # Remove unused test directories to prevent packaging them
+          rm -rf cacao_accounting/static/test
+          rm -rf cacao_accounting/query_tools/tests
+          rm -rf tests/
+          rm -rf docs/
+          rm -rf modulos/
+          rm -rf scripts/
           python -m build --sdist --wheel --outdir dist/ .
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
