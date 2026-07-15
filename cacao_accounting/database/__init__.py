@@ -472,16 +472,19 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def parent(self):
+        """Return the parent Unit or None if this is a root node."""
         if not self.parent_id:
             return None
         return database.session.get(Unit, self.parent_id)
 
     @property
     def children(self):
+        """Return the list of direct child Unit records."""
         return database.session.execute(database.select(Unit).filter_by(parent_id=self.id)).scalars().all()
 
     @property
     def ancestors(self):
+        """Return the ordered list of ancestor Unit records from closest to farthest."""
         res = []
         curr = self.parent
         visited = set()
@@ -495,6 +498,7 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def descendants(self):
+        """Return the flat list of all descendant Unit records (recursive)."""
         res = []
         stack = list(self.children)
         visited = set()
@@ -668,16 +672,19 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def parent(self):
+        """Return the parent BusinessUnit or None if this is a root node."""
         if not self.parent_id:
             return None
         return database.session.get(BusinessUnit, self.parent_id)
 
     @property
     def children(self):
+        """Return the list of direct child BusinessUnit records."""
         return database.session.execute(database.select(BusinessUnit).filter_by(parent_id=self.id)).scalars().all()
 
     @property
     def ancestors(self):
+        """Return the ordered list of ancestor BusinessUnit records from closest to farthest."""
         res = []
         curr = self.parent
         visited = set()
@@ -691,6 +698,7 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def descendants(self):
+        """Return the flat list of all descendant BusinessUnit records (recursive)."""
         res = []
         stack = list(self.children)
         visited = set()
@@ -730,16 +738,19 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def parent(self):
+        """Return the parent Project or None if this is a root node."""
         if not self.parent_id:
             return None
         return database.session.get(Project, self.parent_id)
 
     @property
     def children(self):
+        """Return the list of direct child Project records."""
         return database.session.execute(database.select(Project).filter_by(parent_id=self.id)).scalars().all()
 
     @property
     def ancestors(self):
+        """Return the ordered list of ancestor Project records from closest to farthest."""
         res = []
         curr = self.parent
         visited = set()
@@ -753,6 +764,7 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def descendants(self):
+        """Return the flat list of all descendant Project records (recursive)."""
         res = []
         stack = list(self.children)
         visited = set()

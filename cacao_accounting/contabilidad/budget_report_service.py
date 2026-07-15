@@ -195,8 +195,8 @@ class BudgetReportService:
         cost_center_id: Optional[str],
         business_unit_id: Optional[str],
         project_id: Optional[str],
-        bu_ids: List[str] = None,
-        p_ids: List[str] = None,
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> List[Any]:
         """Query budget lines with filters."""
         query = database.session.query(
@@ -282,8 +282,8 @@ class BudgetReportService:
         cc_map: Dict[str, str],
         u_map: Dict[str, str],
         p_map: Dict[str, str],
-        bu_ids: List[str] = None,
-        p_ids: List[str] = None,
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> Dict[tuple, Dict[str, Decimal]]:
         """Populate the data map with budget and actual amounts."""
         data_map: Dict[tuple, Dict[str, Decimal]] = {}
@@ -357,8 +357,8 @@ class BudgetReportService:
         actual_cost_center_id: str | None,
         actual_business_unit_id: str | None,
         actual_project_id: str | None,
-        bu_ids: List[str] = None,
-        p_ids: List[str] = None,
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> bool:
         """Check whether an actual entry matches the requested dimension filters."""
         if cost_center_id and actual_cost_center_id != cost_center_id:
@@ -386,8 +386,8 @@ class BudgetReportService:
         cc_map: Dict[str, str],
         u_map: Dict[str, str],
         p_map: Dict[str, str],
-        bu_ids: List[str] = None,
-        p_ids: List[str] = None,
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> None:
         """Accumulate the actual amount for a GL entry."""
         actual_group = period_to_group.get(actual_entry.accounting_period_id)
