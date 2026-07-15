@@ -1,6 +1,7 @@
 {% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
 {% extends "base.html" %}
 {% block contenido %}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html"></div>
 {% from "contabilidad/tree_macros.html" import tree_toolbar, tree_toolbar_close, render_tree with context %}
 
 <nav aria-label="breadcrumb">
