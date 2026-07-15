@@ -47,6 +47,10 @@
         {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="include_descendants" value="1" {% if report_filters.include_descendants %}checked{% endif %}>
+          <span class="form-check-label">{{ _("Incluir descendientes") }}</span>
+        </label>
+        <label class="form-check">
           <input class="form-check-input" type="checkbox" name="show_cancellations" value="1" {% if report_filters.include_cancellations %}checked{% endif %}>
           <span class="form-check-label">{{ _("Mostrar anulaciones y reversas") }}</span>
         </label>
@@ -80,6 +84,8 @@
             <select class="form-select" name="group_by">
               <option value="">{{ _("Sin agrupación") }}</option>
               <option value="account_code" {% if group_by == 'account_code' %}selected{% endif %}>{{ _("Cuenta") }}</option>
+              <option value="unit_code" {% if group_by == 'unit_code' %}selected{% endif %}>{{ _("Unidad de negocio") }}</option>
+              <option value="project_code" {% if group_by == 'project_code' %}selected{% endif %}>{{ _("Proyecto") }}</option>
               <option value="voucher_type" {% if group_by == 'voucher_type' %}selected{% endif %}>{{ _("Tipo de comprobante") }}</option>
               <option value="document_no" {% if group_by == 'document_no' %}selected{% endif %}>{{ _("Comprobante") }}</option>
               <option value="cost_center" {% if group_by == 'cost_center' %}selected{% endif %}>{{ _("Centro de costo") }}</option>

@@ -109,6 +109,96 @@ def obtener_entidad(ent=None):
     return _entidad
 
 
+def obtener_arbol_cuentas(entidad_=None):
+    """Devuelve todas las cuentas contables como objetos modelo para rendering de árbol."""
+    from cacao_accounting.database import Accounts, Entity
+
+    if entidad_:
+        return list(
+            database.session.execute(
+                database.select(Accounts).filter(Accounts.entity == entidad_).order_by(Accounts.code)
+            ).scalars()
+        )
+    return list(
+        database.session.execute(
+            database.select(Accounts).join(Entity).filter(Entity.status == "default").order_by(Accounts.code)
+        ).scalars()
+    )
+
+
+def obtener_arbol_ccostos(entidad_=None):
+    """Devuelve todos los centros de costo como objetos modelo para rendering de árbol."""
+    from cacao_accounting.database import CostCenter, Entity
+
+    if entidad_:
+        return list(
+            database.session.execute(
+                database.select(CostCenter).filter(CostCenter.entity == entidad_).order_by(CostCenter.code)
+            ).scalars()
+        )
+    return list(
+        database.session.execute(
+            database.select(CostCenter).join(Entity).filter(Entity.status == "default").order_by(CostCenter.code)
+        ).scalars()
+    )
+
+
+def obtener_arbol_unidades(entidad_=None):
+    """Devuelve todas las unidades de negocio como objetos modelo para rendering de árbol."""
+    from cacao_accounting.database import Unit, Entity
+
+    if entidad_:
+        return list(
+            database.session.execute(database.select(Unit).filter(Unit.entity == entidad_).order_by(Unit.code)).scalars()
+        )
+    return list(
+        database.session.execute(
+            database.select(Unit).join(Entity).filter(Entity.status == "default").order_by(Unit.code)
+        ).scalars()
+    )
+
+
+def obtener_arbol_proyectos(entidad_=None):
+    """Devuelve todos los proyectos como objetos modelo para rendering de árbol."""
+    from cacao_accounting.database import Project, Entity
+
+    if entidad_:
+        return list(
+            database.session.execute(
+                database.select(Project).filter(Project.entity == entidad_).order_by(Project.code)
+            ).scalars()
+        )
+    return list(
+        database.session.execute(
+            database.select(Project).join(Entity).filter(Entity.status == "default").order_by(Project.code)
+        ).scalars()
+    )
+
+
+def build_tree_data(nodes, parent_field, id_field, get_url_func, get_badges_func=None):
+    """Convierte una lista plana de nodos en estructura de árbol para el template.
+
+    Returns:
+        roots: lista de nodos raíz (donde parent_field es None)
+        all_nodes: lista de dicts con 'obj', 'url', 'badges' para cada nodo
+    """
+    all_items = []
+    for node in nodes:
+        item = {
+            "obj": node,
+            "code": getattr(node, "code"),
+            "name": getattr(node, "name"),
+            "parent": getattr(node, parent_field, None),
+            "id": getattr(node, id_field),
+            "url": get_url_func(node),
+            "badges": get_badges_func(node) if get_badges_func else [],
+        }
+        all_items.append(item)
+
+    roots = [item for item in all_items if item["parent"] is None]
+    return roots, all_items
+
+
 def obtener_lista_monedas():
     """Devuelve la lista de monedas disponibles en la base de datos."""
     from cacao_accounting.database import Currency

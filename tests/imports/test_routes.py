@@ -167,6 +167,7 @@ def test_upload_mime_type_validation():
 
     try:
         import magic
+
         has_magic = True
     except ImportError:
         has_magic = False

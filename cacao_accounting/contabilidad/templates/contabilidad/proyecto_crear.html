@@ -22,7 +22,7 @@
     </div>
   </div>
   <div class="p-4">
-    <form method="post" id="form-proyecto" class="row g-3" x-data='{ budgetCurrency: {{ (budget_currency_code or "")|tojson }} }'>
+    <form method="post" id="form-proyecto" class="row g-3" x-data="{ budgetCurrency: {{ (budget_currency_code or '')|tojson }}, isCapitalizable: {{ 'true' if form.capitalizable.data else 'false' }} }">
       {{ form.csrf_token }}
       <div class="col-md-4">
         <label class="form-label" for="id-proyecto">{{ _('Código') }} <span class="text-danger">*</span></label>
@@ -61,6 +61,10 @@
           </div>
         </div>
       </div>
+      <div class="col-md-12">
+        <label class="form-label" for="parent_id">{{ _('Proyecto Padre') }}</label>
+        {{ form.parent_id(class="form-select form-select-sm", id="parent_id") }}
+      </div>
       <div class="col-md-6">
         <label class="form-label" for="presupuesto">{{ _('Presupuesto') }}</label>
         {{ form.presupuesto(class="form-control form-control-sm", id="presupuesto", type="number", step="0.01") }}
@@ -80,6 +84,16 @@
       <div class="col-md-6">
         <label class="form-label" for="fin">{{ _('Fecha Fin') }}</label>
         {{ form.fin(class="form-control form-control-sm", id="fin", type="date") }}
+      </div>
+      <div class="col-12 mt-3">
+        <div class="form-check">
+          {{ form.capitalizable(class="form-check-input", id="capitalizable", **{"@change": "isCapitalizable = $event.target.checked"}) }}
+          <label class="form-check-label" for="capitalizable">{{ _('Capitalizable') }}</label>
+        </div>
+      </div>
+      <div class="col-md-12" x-show="isCapitalizable" x-cloak>
+        <label class="form-label" for="capitalization_account_id">{{ _('Cuenta de Activo de Capitalización') }} <span class="text-danger">*</span></label>
+        {{ form.capitalization_account_id(class="form-select form-select-sm", id="capitalization_account_id") }}
       </div>
       <div class="col-12 mt-3">
         <div class="form-check">

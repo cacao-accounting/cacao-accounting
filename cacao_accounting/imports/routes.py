@@ -36,6 +36,7 @@ try:
 
     _MAGIC_EXCEPTION: type[BaseException] = magic.MagicException
 except ImportError:
+    magic = None  # type: ignore[assignment]
     _MAGIC_EXCEPTION = ImportError
 
 imports = Blueprint("imports", __name__, template_folder="templates")

@@ -42,6 +42,13 @@
         <p>{{ registro.budget_currency_code or '' }} {{ registro.budget or 0 }}</p>
       </div>
       <div class="ca-kv-item"><label>{{ _('Habilitado') }}</label><p>{{ _('Sí') if registro.enabled else _('No') }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Proyecto Padre') }}</label><p>{{ registro.parent.name if registro.parent else '—' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Ruta (Path)') }}</label><p>{{ registro.path or '—' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Nivel') }}</label><p>{{ registro.level or 0 }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Capitalizable') }}</label><p>{{ _('Sí') if registro.capitalizable else _('No') }}</p></div>
+      {% if registro.capitalizable %}
+      <div class="ca-kv-item"><label>{{ _('Cuenta de Capitalización') }}</label><p>{{ registro.capitalization_account_id or '—' }}</p></div>
+      {% endif %}
     </div>
   </div>
 </div>

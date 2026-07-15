@@ -6,6 +6,7 @@
 
 import sys
 from unittest import mock
+
 # Mock email_validator module to avoid environment dependency errors in WTForms Email validator
 sys.modules["email_validator"] = mock.MagicMock()
 
@@ -26,6 +27,7 @@ from cacao_accounting.database import (
 )
 import sys
 import os
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 from cacao_accounting.auth import proteger_passwd
 from z_func import init_test_db
@@ -46,9 +48,7 @@ def app_instance():
     with _app.app_context():
         init_test_db(_app)
         # Ensure our default 'cacao' user is admin classification
-        cacao_user = database.session.execute(
-            database.select(User).filter_by(user="cacao")
-        ).scalar_one_or_none()
+        cacao_user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one_or_none()
         if cacao_user:
             cacao_user.classification = "admin"
             database.session.commit()
@@ -112,9 +112,7 @@ def test_lista_modulos(app_instance):
 
         # POST try to toggle administrative module (should fail)
         with app_instance.app_context():
-            admin_module = database.session.execute(
-                database.select(Modules).filter_by(module="admin")
-            ).scalar_one()
+            admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one()
             admin_module_id = admin_module.id
 
         response = client.post(
@@ -126,9 +124,9 @@ def test_lista_modulos(app_instance):
 
         # POST toggle another module
         with app_instance.app_context():
-            other_module = database.session.execute(
-                database.select(Modules).filter(Modules.module != "admin")
-            ).scalars().first()
+            other_module = (
+                database.session.execute(database.select(Modules).filter(Modules.module != "admin")).scalars().first()
+            )
             other_module_id = other_module.id
             orig_enabled = other_module.enabled
 
@@ -176,6 +174,7 @@ def test_configuracion_valuacion_inventario(app_instance):
 
         # POST empty company using execute mock to simulate empty companies list
         original_execute = database.session.execute
+
         def mock_execute(query, *args, **kwargs):
             if "entity" in str(query):
                 m_res = mock.MagicMock()
@@ -444,9 +443,7 @@ def test_lista_precios_y_precios_item(app_instance):
         assert response.status_code == 200
 
         with app_instance.app_context():
-            price_list = database.session.execute(
-                database.select(PriceList).filter_by(name="Lista Precios Test")
-            ).scalar_one()
+            price_list = database.session.execute(database.select(PriceList).filter_by(name="Lista Precios Test")).scalar_one()
             price_list_id = price_list.id
 
         # POST create item price
@@ -564,6 +561,7 @@ def test_cuentas_predeterminadas(app_instance):
 
         # POST empty company using execute mock to simulate empty companies list
         original_execute = database.session.execute
+
         def mock_execute(query, *args, **kwargs):
             if "entity" in str(query):
                 m_res = mock.MagicMock()

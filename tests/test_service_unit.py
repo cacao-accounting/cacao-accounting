@@ -64,9 +64,7 @@ def app_ctx():
 
 
 def _get_supplier():
-    return database.session.execute(
-        database.select(Party).filter(Party.is_supplier.is_(True))
-    ).scalars().first()
+    return database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
 
 
 def _create_purchase_order(supplier, qty=Decimal("10"), rate=Decimal("100")):

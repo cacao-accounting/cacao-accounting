@@ -365,9 +365,7 @@ def test_cancellation_rejection(app):
         ApprovalEngine.reject(po, user_juan, "No autorizado")
 
         req = database.session.execute(
-            select(ApprovalRequest).filter_by(
-                document_type="cancel_purchase_order", document_id="po_rej_cancel"
-            )
+            select(ApprovalRequest).filter_by(document_type="cancel_purchase_order", document_id="po_rej_cancel")
         ).scalar_one()
         assert req.status == "Rejected"
         assert po.docstatus == 1  # Sigue activo
@@ -577,9 +575,7 @@ def test_approval_action_on_approve(app):
         ApprovalEngine.approve(po, user_juan, "Aprobado con comentario")
         database.session.commit()
 
-        action = database.session.execute(
-            select(ApprovalAction).filter_by(approved_by=user_juan.id)
-        ).scalar_one()
+        action = database.session.execute(select(ApprovalAction).filter_by(approved_by=user_juan.id)).scalar_one()
         assert action.action == "approve"
         assert action.comments == "Aprobado con comentario"
         assert action.document_amount == Decimal("12000")
@@ -603,9 +599,7 @@ def test_approval_action_on_reject(app):
         ApprovalEngine.reject(po, user_juan, "Rechazado por política")
         database.session.commit()
 
-        action = database.session.execute(
-            select(ApprovalAction).filter_by(approved_by=user_juan.id)
-        ).scalar_one()
+        action = database.session.execute(select(ApprovalAction).filter_by(approved_by=user_juan.id)).scalar_one()
         assert action.action == "reject"
         assert action.comments == "Rechazado por política"
         assert action.document_amount == Decimal("4000")

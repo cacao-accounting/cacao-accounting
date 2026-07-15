@@ -406,12 +406,9 @@ def test_release_reservation_is_idempotent(app_ctx):
     from cacao_accounting.ventas import _release_reservation_for_delivery_note
     from cacao_accounting.document_identifiers import assign_document_identifier
 
-    bin_row = (
-        database.session.execute(
-            database.select(StockBin).filter_by(item_code="ART-RESERVE", warehouse="WH-RESERVE")
-        )
-        .scalar_one_or_none()
-    )
+    bin_row = database.session.execute(
+        database.select(StockBin).filter_by(item_code="ART-RESERVE", warehouse="WH-RESERVE")
+    ).scalar_one_or_none()
     assert bin_row is not None
     bin_row.reserved_qty = Decimal("10")
     database.session.flush()
@@ -425,9 +422,7 @@ def test_release_reservation_is_idempotent(app_ctx):
     )
     database.session.add(dn)
     database.session.flush()
-    assign_document_identifier(
-        document=dn, entity_type="delivery_note", posting_date_raw=date.today(), naming_series_id=None
-    )
+    assign_document_identifier(document=dn, entity_type="delivery_note", posting_date_raw=date.today(), naming_series_id=None)
     database.session.add(
         DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART-RESERVE", qty=Decimal("3"), warehouse="WH-RESERVE")
     )

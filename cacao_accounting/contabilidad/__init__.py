@@ -42,6 +42,11 @@ else:
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.contabilidad.presupuesto import presupuestos
 from cacao_accounting.contabilidad.auxiliares import (
+    build_tree_data,
+    obtener_arbol_cuentas,
+    obtener_arbol_ccostos,
+    obtener_arbol_proyectos,
+    obtener_arbol_unidades,
     obtener_catalogo,
     obtener_catalogo_base,
     obtener_catalogo_centros_costo_base,
@@ -581,25 +586,23 @@ def predeterminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def unidades():
     """Listado de unidades de negocios."""
-    from cacao_accounting.database import Unit, database
-
-    query = database.select(Unit)
-    search = request.args.get("search")
-    if search:
-        query = query.filter(or_(Unit.code.ilike(f"%{search}%"), Unit.name.ilike(f"%{search}%")))
-
-    CONSULTA = database.paginate(
-        query,
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    entidad_arg = request.args.get("entidad", None)
+    arbol = obtener_arbol_unidades(entidad_=entidad_arg)
+    tree_roots, tree_all = build_tree_data(
+        arbol,
+        parent_field="parent_id",
+        id_field="id",
+        get_url_func=lambda n: url_for("contabilidad.unidad", id_unidad=n.code),
     )
 
     TITULO = "Contabilidad | Unidades de Negocio - " + APPNAME
     return render_template(
         "contabilidad/unidad_lista.html",
         titulo=TITULO,
-        consulta=CONSULTA,
+        tree_roots=tree_roots,
+        tree_all=tree_all,
+        entidades=obtener_entidades(),
+        entidad=obtener_entidad(ent=entidad_arg),
         statusweb=STATUS,
     )
 
@@ -629,6 +632,9 @@ def eliminar_unidad(id_unidad):
 
     unidad = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if unidad:
+        if len(unidad.children) > 0:
+            flash("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006).", "danger")
+            return redirect(url_for(CONTABILIDAD_UNIDADES))
         database.session.delete(unidad)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -642,13 +648,21 @@ def nueva_unidad():
     """Formulario para crear una nueva unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
     from cacao_accounting.database import Unit
+    from cacao_accounting.database.helpers import check_hierarchy_cycle, update_hierarchy_attributes
 
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.parent_id.choices = [("", "— Ninguna —")] + [
+        (u.id, f"{u.code} - {u.name}")
+        for u in database.session.execute(database.select(Unit).order_by(Unit.code)).scalars().all()
+    ]
     TITULO = "Contabilidad | Nueva Unidad de Negocio - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
+            parent_id = request.form.get("parent_id") or None
+            if parent_id:
+                check_hierarchy_cycle(Unit, None, parent_id)
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -662,8 +676,11 @@ def nueva_unidad():
             entity=request.form.get("entidad", None),
             status="activo",
             enabled=bool(formulario.habilitado.data),
+            parent_id=parent_id,
         )
         database.session.add(DATA)
+        database.session.flush()
+        update_hierarchy_attributes(DATA)
         database.session.commit()
 
         return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -682,23 +699,35 @@ def editar_unidad(id_unidad):
     """Editar una unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
     from cacao_accounting.database import Unit
+    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
 
     registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if registro is None:
         return redirect(url_for(CONTABILIDAD_UNIDADES))
 
+    exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.parent_id.choices = [("", "— Ninguna —")] + [
+        (u.id, f"{u.code} - {u.name}")
+        for u in database.session.execute(database.select(Unit).where(Unit.id.notin_(exclude_ids)).order_by(Unit.code))
+        .scalars()
+        .all()
+    ]
     formulario.id.data = registro.code
     if request.method != "POST":
         formulario.nombre.data = registro.name
         formulario.entidad.data = registro.entity
         formulario.habilitado.data = bool(registro.enabled)
+        formulario.parent_id.data = registro.parent_id or ""
     entity_initial_label = _company_label(registro.entity) if registro.entity else ""
 
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
+            parent_id = request.form.get("parent_id") or None
+            if parent_id:
+                check_hierarchy_cycle(Unit, registro.id, parent_id)
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -711,6 +740,8 @@ def editar_unidad(id_unidad):
         registro.name = formulario.nombre.data
         registro.entity = formulario.entidad.data
         registro.enabled = bool(formulario.habilitado.data)
+        registro.parent_id = parent_id
+        update_hierarchy_attributes(registro)
         database.session.commit()
         return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
 
@@ -964,12 +995,22 @@ def cuentas():
     """Catalogo de cuentas contables."""
     TITULO = "Catalogo de Cuentas Contables - " + APPNAME
 
+    entidad_arg = request.args.get("entidad", None)
+    arbol = obtener_arbol_cuentas(entidad_=entidad_arg)
+    tree_roots, tree_all = build_tree_data(
+        arbol,
+        parent_field="parent",
+        id_field="code",
+        get_url_func=lambda n: url_for("contabilidad.cuenta", entity=n.entity, id_cta=n.code),
+    )
     return render_template(
         "contabilidad/cuenta_lista.html",
-        base_cuentas=obtener_catalogo_base(entidad_=request.args.get("entidad", None)),
-        cuentas=obtener_catalogo(entidad_=request.args.get("entidad", None)),
+        base_cuentas=obtener_catalogo_base(entidad_=entidad_arg),
+        cuentas=obtener_catalogo(entidad_=entidad_arg),
+        tree_roots=tree_roots,
+        tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=request.args.get("entidad")),
+        entidad=obtener_entidad(ent=entidad_arg),
         titulo=TITULO,
     )
 
@@ -1265,12 +1306,22 @@ def ccostos():
     """Catalogo de centros de costos."""
     TITULO = "Catalogo de Centros de Costos - " + APPNAME
 
+    entidad_arg = request.args.get("entidad", None)
+    arbol = obtener_arbol_ccostos(entidad_=entidad_arg)
+    tree_roots, tree_all = build_tree_data(
+        arbol,
+        parent_field="parent",
+        id_field="code",
+        get_url_func=lambda n: url_for("contabilidad.centro_costo", id_cc=n.code),
+    )
     return render_template(
         "contabilidad/centro-costo_lista.html",
-        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=request.args.get("entidad", None)),
-        ccostos=obtener_centros_costos(entidad_=request.args.get("entidad", None)),
+        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=entidad_arg),
+        ccostos=obtener_centros_costos(entidad_=entidad_arg),
+        tree_roots=tree_roots,
+        tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=request.args.get("entidad", None)),
+        entidad=obtener_entidad(ent=entidad_arg),
         titulo=TITULO,
     )
 
@@ -1523,23 +1574,22 @@ def eliminar_centro_costo(id_cc):
 @verifica_acceso("accounting")
 def proyectos():
     """Listado de proyectos."""
-    from cacao_accounting.database import Project
-
-    query = database.select(Project)
-    search = request.args.get("search")
-    if search:
-        query = query.filter(or_(Project.code.ilike(f"%{search}%"), Project.name.ilike(f"%{search}%")))
-
-    consulta = database.paginate(
-        query,
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    entidad_arg = request.args.get("entidad", None)
+    arbol = obtener_arbol_proyectos(entidad_=entidad_arg)
+    tree_roots, tree_all = build_tree_data(
+        arbol,
+        parent_field="parent_id",
+        id_field="id",
+        get_url_func=lambda n: url_for("contabilidad.proyecto", project_id=n.code),
+        get_badges_func=lambda n: [{"class": "bg-success", "label": _("Capitalizable")}] if n.capitalizable else [],
     )
 
     return render_template(
         "contabilidad/proyecto_lista.html",
-        consulta=consulta,
+        tree_roots=tree_roots,
+        tree_all=tree_all,
+        entidades=obtener_entidades(),
+        entidad=obtener_entidad(ent=entidad_arg),
         titulo="Listado de Proyectos - " + APPNAME,
         statusweb=STATUS,
     )
@@ -1552,15 +1602,34 @@ def proyectos():
 def nuevo_proyecto():
     """Formulario para crear un nuevo proyecto."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
-    from cacao_accounting.database import Project
+    from cacao_accounting.database import Project, Accounts
+    from cacao_accounting.database.helpers import check_hierarchy_cycle, update_hierarchy_attributes
 
     formulario = FormularioProyecto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.parent_id.choices = [("", "— Ninguno —")] + [
+        (p.id, f"{p.code} - {p.name}")
+        for p in database.session.execute(database.select(Project).order_by(Project.code)).scalars().all()
+    ]
+    formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
+        (a.id, f"{a.code} - {a.name}")
+        for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
+    ]
     TITULO = "Contabilidad | Nuevo Proyecto - " + APPNAME
 
-    if formulario.validate_on_submit():
+    if formulario.validate_on_submit() or request.method == "POST":
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
+            parent_id = request.form.get("parent_id") or None
+            if parent_id:
+                check_hierarchy_cycle(Project, None, parent_id)
+
+            capitalizable = bool(formulario.capitalizable.data)
+            capitalization_account_id = request.form.get("capitalization_account_id") or None
+            if capitalizable and not capitalization_account_id:
+                raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+            if not capitalizable:
+                capitalization_account_id = None
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -1592,8 +1661,13 @@ def nuevo_proyecto():
             budget_currency_code=budget_currency,
             enabled=bool(formulario.habilitado.data),
             status=formulario.status.data or "open",
+            parent_id=parent_id,
+            capitalizable=capitalizable,
+            capitalization_account_id=capitalization_account_id,
         )
         database.session.add(DATA)
+        database.session.flush()
+        update_hierarchy_attributes(DATA)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
@@ -1633,15 +1707,30 @@ def proyecto(project_id):
 def editar_proyecto(project_id):
     """Editar un proyecto existente."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
-    from cacao_accounting.database import Project
+    from cacao_accounting.database import Project, Accounts
+    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids
 
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto is None:
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
+    exclude_ids = {proyecto.id, *get_descendant_ids(Project, proyecto.id)}
     formulario = FormularioProyecto(obj=proyecto)
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.parent_id.choices = [("", "— Ninguno —")] + [
+        (p.id, f"{p.code} - {p.name}")
+        for p in database.session.execute(
+            database.select(Project).where(Project.id.notin_(exclude_ids)).order_by(Project.code)
+        )
+        .scalars()
+        .all()
+    ]
+    formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
+        (a.id, f"{a.code} - {a.name}")
+        for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
+    ]
+
     if request.method != "POST":
         formulario.nombre.data = proyecto.name
         formulario.entidad.data = proyecto.entity
@@ -1650,12 +1739,25 @@ def editar_proyecto(project_id):
         formulario.presupuesto.data = proyecto.budget
         formulario.habilitado.data = bool(proyecto.enabled)
         formulario.status.data = proyecto.status or "open"
+        formulario.parent_id.data = proyecto.parent_id or ""
+        formulario.capitalizable.data = bool(proyecto.capitalizable)
+        formulario.capitalization_account_id.data = proyecto.capitalization_account_id or ""
     entity_initial_label = _company_label(proyecto.entity) if proyecto.entity else ""
     TITULO = "Contabilidad | Editar Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
+            parent_id = request.form.get("parent_id") or None
+            if parent_id:
+                check_hierarchy_cycle(Project, proyecto.id, parent_id)
+
+            capitalizable = bool(formulario.capitalizable.data)
+            capitalization_account_id = request.form.get("capitalization_account_id") or None
+            if capitalizable and not capitalization_account_id:
+                raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+            if not capitalizable:
+                capitalization_account_id = None
         except ValueError as error:
             flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
@@ -1706,6 +1808,15 @@ def _update_project_from_form(
     proyecto.budget_currency_code = budget_currency
     proyecto.enabled = bool(formulario.habilitado.data)
     proyecto.status = formulario.status.data or "open"
+    proyecto.parent_id = request.form.get("parent_id") or None
+    proyecto.capitalizable = bool(formulario.capitalizable.data)
+    proyecto.capitalization_account_id = request.form.get("capitalization_account_id") or None
+    if not proyecto.capitalizable:
+        proyecto.capitalization_account_id = None
+
+    from cacao_accounting.database.helpers import update_hierarchy_attributes
+
+    update_hierarchy_attributes(proyecto)
 
 
 @contabilidad.route("/project/<project_id>/delete")
@@ -1718,6 +1829,9 @@ def eliminar_proyecto(project_id):
 
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto:
+        if len(proyecto.children) > 0:
+            flash("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006).", "danger")
+            return redirect(url_for(CONTABILIDAD_PROYECTOS))
         database.session.delete(proyecto)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_PROYECTOS))
@@ -2463,6 +2577,60 @@ def nuevo_cierre_mensual():
     database.session.add(close_run)
     database.session.commit()
     flash("Cierre mensual creado.", "success")
+    return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+
+@contabilidad.route("/period-close/monthly/<identifier>/project-capitalization", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def ejecutar_capitalizacion_cierre(identifier: str):
+    """Ejecuta la capitalización automática de proyectos desde el asistente de cierre mensual."""
+    from cacao_accounting.contabilidad.project_capitalization_service import ProjectCapitalizationService
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun, PeriodCloseCheck
+
+    close_run = database.session.get(PeriodCloseRun, identifier)
+    if not close_run:
+        flash(CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE, "danger")
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
+
+    period = database.session.get(AccountingPeriod, close_run.period_id)
+    if not period:
+        flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    try:
+        success_count, errors = ProjectCapitalizationService().run_capitalization(
+            company=close_run.company, period_id=str(period.id), user_id=str(current_user.id)
+        )
+    except Exception as exc:
+        database.session.rollback()
+        database.session.add(
+            PeriodCloseCheck(
+                close_run_id=close_run.id, check_type="project_capitalization", check_status="failed", message=str(exc)
+            )
+        )
+        database.session.commit()
+        flash_error(exc)
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    close_run.run_status = "in_progress"
+    check_status = "passed" if not errors else "failed"
+    message = f"Proyectos capitalizados: {success_count}."
+    if errors:
+        message += f" Errores: {' | '.join(errors)}"
+
+    database.session.add(
+        PeriodCloseCheck(
+            close_run_id=close_run.id, check_type="project_capitalization", check_status=check_status, message=message
+        )
+    )
+    database.session.commit()
+    flash(f"La capitalización automática de proyectos finalizó con {success_count} registros procesados.", "success")
+    if errors:
+        for err in errors:
+            flash(err, "danger")
+
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 
@@ -3322,6 +3490,9 @@ def editar_comprobante(identifier: str):
     if journal is None:
         flash("El comprobante contable indicado no existe.", "warning")
         return redirect(url_for("contabilidad.listar_comprobantes"))
+    if journal.voucher_type == "Capitalización Automática de Proyecto":
+        flash("No se puede editar un comprobante de capitalización automática.", "warning")
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
     if journal.status != "draft":
         flash("Solo se puede editar un comprobante en borrador.", "warning")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
