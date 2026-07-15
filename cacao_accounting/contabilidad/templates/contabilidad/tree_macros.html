@@ -1,0 +1,110 @@
+{# Macro recursivo reutilizable para renderizar árboles jerárquicos. #}
+{# Datos: lista de dicts con {code, name, parent, id, url, badges} #}
+{# #}
+{# Uso: #}
+{#   {% from "contabilidad/tree_macros.html" import tree_toolbar, tree_toolbar_close, render_tree with context %} #}
+{#   {{ tree_toolbar(entidades, current_entity_code) }} #}
+{#   <div class="ca-tree-panel"> #}
+{#     {{ render_tree(roots, all_nodes, parent_field, id_field, icon) }} #}
+{#   </div> #}
+{#   {{ tree_toolbar_close() }} #}
+
+{# ── Toolbar del árbol (entidad + expandir/colapsar) ────────────────────── #}
+{% macro tree_toolbar(entidades, current_entity_code, entity_field='entidad', new_url='#', new_label=_('Nuevo')) %}
+<div class="ca-tree-layout">
+  <div class="ca-tree-toolbar">
+    <div class="ca-tree-toolbar-main">
+      {% if entidades %}
+      <form class="ca-tree-entity-form" method="get">
+        <div class="ca-tree-entity-field">
+          <label class="form-label" for="entidad">{{ _('Entidad') }}</label>
+          <select class="form-select form-select-sm" id="entidad" name="{{ entity_field }}">
+            {%- for item_entidad in entidades -%}
+            {%- set ent_obj = item_entidad[0] if item_entidad is sequence else item_entidad -%}
+            <option value="{{ ent_obj.code }}" {% if ent_obj.code == current_entity_code %}selected{% endif %}>{{ ent_obj.company_name }}</option>
+            {%- endfor -%}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-arrow-clockwise me-1"></i>{{ _('Actualizar') }}
+        </button>
+      </form>
+      <div class="ca-tree-context">
+        <i class="bi bi-building" aria-hidden="true"></i>
+        {%- set ns = namespace(current_entity_name=current_entity_code) -%}
+        {%- for _ent in entidades -%}
+          {%- set _eobj = _ent[0] if _ent is sequence else _ent -%}
+          {%- if _eobj.code == current_entity_code -%}
+            {%- set ns.current_entity_name = _eobj.company_name -%}
+          {%- endif -%}
+        {%- endfor -%}
+        <span><strong>{{ _('Entidad:') }}</strong> {{ ns.current_entity_name }}</span>
+      </div>
+      {% endif %}
+    </div>
+    <div class="ca-tree-action-group">
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+        @click.prevent="$dispatch('tree-toggle', { open: true })" x-data>
+        <i class="bi bi-arrows-expand me-1"></i>{{ _('Expandir todos') }}
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+        @click.prevent="$dispatch('tree-toggle', { open: false })" x-data>
+        <i class="bi bi-arrows-collapse me-1"></i>{{ _('Colapsar todos') }}
+      </button>
+      {% if new_url and new_url != '#' %}
+      <a href="{{ new_url }}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>{{ new_label }}</a>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{# ── Cierre del toolbar ────────────────────────────────────────────────── #}
+{% macro tree_toolbar_close() %}
+</div>
+{% endmacro %}
+
+{# ── Árbol recursivo completo ──────────────────────────────────────────── #}
+{# #}
+{# Parámetros: #}
+{#   roots      – lista de dicts raíz (donde 'parent' es None) #}
+{#   all_nodes  – lista plana de TODOS los dicts de nodos #}
+{#   parent_key – nombre de la key en el dict para el padre ('parent') #}
+{#   id_key     – nombre de la key identificadora ('id' o 'code') #}
+{#   icon       – clase de icono Bootstrap Icons #}
+{# #}
+{% macro render_tree(roots, all_nodes, parent_key='parent', id_key='id', icon='bi-folder') %}
+
+  {%- macro _tree_node(_node, _all, _pk, _ik, _icon) -%}
+    {%- set nid = _node[_ik] -%}
+    {%- set kids = _all | selectattr(_pk, 'equalto', nid) | list -%}
+    {%- set has_kids = kids | length > 0 -%}
+    <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
+      <span @click="{% if has_kids %}open = !open{% endif %}" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
+        {% if has_kids %}
+        <i class="bi me-1" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'" style="font-size:.7rem;color:#94a3b8;"></i>
+        {% else %}
+        <i class="bi {{ _icon }} me-1" style="font-size:.7rem;color:#94a3b8;"></i>
+        {% endif %}
+        <a href="{{ _node.url }}">
+          <strong>{{ _node.code }}</strong>&nbsp;{{ _node.name }}
+        </a>
+        {%- for b in _node.badges -%}
+        <span class="badge {{ b.class }}" style="font-size:.65rem;">{{ b.label }}</span>
+        {%- endfor -%}
+      </span>
+      {% if has_kids %}
+      <ul x-show="open">
+        {%- for child in kids -%}
+          {{ _tree_node(child, _all, _pk, _ik, _icon) }}
+        {%- endfor -%}
+      </ul>
+      {% endif %}
+    </li>
+  {%- endmacro -%}
+
+  <ul class="ca-tree">
+    {%- for root in roots -%}
+      {{ _tree_node(root, all_nodes, parent_key, id_key, icon) }}
+    {%- endfor -%}
+  </ul>
+{% endmacro %}

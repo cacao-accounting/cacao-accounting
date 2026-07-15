@@ -58,14 +58,41 @@ class BudgetReportService:
         all_periods = self._get_all_periods(fiscal_year_id)
         period_range_ids = self._get_period_range_ids(all_periods, period_from_id, period_to_id)
 
-        budget_lines = self._get_budget_lines(budget_id, period_range_ids, cost_center_id, business_unit_id, project_id)
+        include_descendants = filters.get("include_descendants") == "true" or filters.get("include_descendants") is True
+        from cacao_accounting.database import Unit as DBUnit, Project as DBProject
+
+        bu_ids = [business_unit_id] if business_unit_id else []
+        if business_unit_id and include_descendants:
+            node = database.session.get(DBUnit, business_unit_id)
+            if node:
+                bu_ids = [node.id] + [d.id for d in node.descendants]
+
+        p_ids = [project_id] if project_id else []
+        if project_id and include_descendants:
+            node = database.session.get(DBProject, project_id)
+            if node:
+                p_ids = [node.id] + [d.id for d in node.descendants]
+
+        budget_lines = self._get_budget_lines(
+            budget_id, period_range_ids, cost_center_id, business_unit_id, project_id, bu_ids=bu_ids, p_ids=p_ids
+        )
         actual_entries = self._get_actual_gl_entries(company, ledger_id, period_range_ids, account_from, account_to)
 
         account_info = {a.id: a for a in database.session.query(Accounts).filter_by(entity=company).all()}
         period_to_group = self._build_period_to_group(all_periods, granularity)
 
         data_map = self._populate_data_map(
-            budget_lines, actual_entries, period_to_group, cost_center_id, business_unit_id, project_id, cc_map, u_map, p_map
+            budget_lines,
+            actual_entries,
+            period_to_group,
+            cost_center_id,
+            business_unit_id,
+            project_id,
+            cc_map,
+            u_map,
+            p_map,
+            bu_ids=bu_ids,
+            p_ids=p_ids,
         )
 
         rows, total_budget, total_actual = self._build_report_rows(data_map, account_info, cc_names, u_names, p_names, filters)
@@ -168,6 +195,8 @@ class BudgetReportService:
         cost_center_id: Optional[str],
         business_unit_id: Optional[str],
         project_id: Optional[str],
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> List[Any]:
         """Query budget lines with filters."""
         query = database.session.query(
@@ -180,9 +209,13 @@ class BudgetReportService:
         ).filter(BudgetLine.budget_id == budget_id, BudgetLine.period_id.in_(period_range_ids))
         if cost_center_id:
             query = query.filter(BudgetLine.cost_center_id == cost_center_id)
-        if business_unit_id:
+        if bu_ids:
+            query = query.filter(BudgetLine.business_unit_id.in_(bu_ids))
+        elif business_unit_id:
             query = query.filter(BudgetLine.business_unit_id == business_unit_id)
-        if project_id:
+        if p_ids:
+            query = query.filter(BudgetLine.project_id.in_(p_ids))
+        elif project_id:
             query = query.filter(BudgetLine.project_id == project_id)
         return query.all()
 
@@ -249,6 +282,8 @@ class BudgetReportService:
         cc_map: Dict[str, str],
         u_map: Dict[str, str],
         p_map: Dict[str, str],
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> Dict[tuple, Dict[str, Decimal]]:
         """Populate the data map with budget and actual amounts."""
         data_map: Dict[tuple, Dict[str, Decimal]] = {}
@@ -266,6 +301,8 @@ class BudgetReportService:
                 cc_map,
                 u_map,
                 p_map,
+                bu_ids=bu_ids,
+                p_ids=p_ids,
             )
         return data_map
 
@@ -320,13 +357,21 @@ class BudgetReportService:
         actual_cost_center_id: str | None,
         actual_business_unit_id: str | None,
         actual_project_id: str | None,
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> bool:
         """Check whether an actual entry matches the requested dimension filters."""
         if cost_center_id and actual_cost_center_id != cost_center_id:
             return False
-        if business_unit_id and actual_business_unit_id != business_unit_id:
+        if bu_ids:
+            if actual_business_unit_id not in bu_ids:
+                return False
+        elif business_unit_id and actual_business_unit_id != business_unit_id:
             return False
-        if project_id and actual_project_id != project_id:
+        if p_ids:
+            if actual_project_id not in p_ids:
+                return False
+        elif project_id and actual_project_id != project_id:
             return False
         return True
 
@@ -341,6 +386,8 @@ class BudgetReportService:
         cc_map: Dict[str, str],
         u_map: Dict[str, str],
         p_map: Dict[str, str],
+        bu_ids: Optional[List[str]] = None,
+        p_ids: Optional[List[str]] = None,
     ) -> None:
         """Accumulate the actual amount for a GL entry."""
         actual_group = period_to_group.get(actual_entry.accounting_period_id)
@@ -356,6 +403,8 @@ class BudgetReportService:
             actual_cost_center_id,
             actual_business_unit_id,
             actual_project_id,
+            bu_ids=bu_ids,
+            p_ids=p_ids,
         ):
             return
         key = (

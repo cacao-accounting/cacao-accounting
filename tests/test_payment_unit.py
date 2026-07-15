@@ -1174,14 +1174,18 @@ class TestCreatePaymentTarget:
                 ],
             }
         )
-        rels = database.session.execute(
-            database.select(DocumentRelation).filter_by(
-                source_type="sales_invoice",
-                source_id=si.id,
-                target_type="payment_entry",
-                target_id=result["target_id"],
+        rels = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    source_type="sales_invoice",
+                    source_id=si.id,
+                    target_type="payment_entry",
+                    target_id=result["target_id"],
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(rels) == 1
         assert rels[0].status == "active"
 

@@ -239,9 +239,24 @@
   </div>
 </section>
 
+<section class="ca-card mb-3">
+  <div class="ca-card-header d-flex justify-content-between align-items-center">
+    <h5 class="ca-card-title mb-0">{{ _('Paso 3: capitalización automática de proyectos') }}</h5>
+    <form action="{{ url_for('contabilidad.ejecutar_capitalizacion_cierre', identifier=close_run.id) }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-kanban"></i> {{ _('Ejecutar paso') }}
+      </button>
+    </form>
+  </div>
+  <div class="p-3 text-muted">
+    {{ _('Busca movimientos elegibles con proyectos capitalizables, cuentas de gastos y genera sus comprobantes de capitalización automática.') }}
+  </div>
+</section>
+
 <section class="ca-card">
   <div class="ca-card-header d-flex justify-content-between align-items-center">
-    <h5 class="ca-card-title mb-0">{{ _('Paso 3: finalizar cierre y cerrar periodo') }}</h5>
+    <h5 class="ca-card-title mb-0">{{ _('Paso 4: finalizar cierre y cerrar periodo') }}</h5>
     <form action="{{ url_for('contabilidad.finalizar_cierre_mensual', identifier=close_run.id) }}" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-sm btn-danger">

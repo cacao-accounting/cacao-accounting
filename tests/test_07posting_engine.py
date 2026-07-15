@@ -3531,7 +3531,16 @@ def test_operational_posting_multimoneda_real(app_ctx):
     """Verifica que los modulos operativos manejen multimoneda real, convirtiendo
     valores a la moneda base del libro/compania en debit/credit, y guardando el original."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
-    from cacao_accounting.database import Accounts, Book, GLEntry, PartyAccount, SalesInvoice, SalesInvoiceItem, ExchangeRate, database
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        GLEntry,
+        PartyAccount,
+        SalesInvoice,
+        SalesInvoiceItem,
+        ExchangeRate,
+        database,
+    )
     from decimal import Decimal
 
     receivable_account = Accounts(
@@ -3557,12 +3566,7 @@ def test_operational_posting_multimoneda_real(app_ctx):
     database.session.flush()
 
     # Agregar tipo de cambio de USD a NIO
-    exchange_rate_record = ExchangeRate(
-        origin="USD",
-        destination="NIO",
-        rate=Decimal("36.50"),
-        date=date(2026, 5, 4)
-    )
+    exchange_rate_record = ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.50"), date=date(2026, 5, 4))
     database.session.add(exchange_rate_record)
     database.session.flush()
 

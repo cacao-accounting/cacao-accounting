@@ -539,3 +539,55 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
         contrasena = contrasena or "cacao"
 
     return usuario, contrasena
+
+
+def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
+    """Valida que no existan ciclos en la jerarquía (RN-003)."""
+    if not proposed_parent_id:
+        return
+    if proposed_parent_id == node_id:
+        raise ValueError("Un registro no puede ser padre de sí mismo.")
+
+    curr_id = proposed_parent_id
+    visited = {node_id} if node_id else set()
+    while curr_id:
+        if curr_id in visited:
+            raise ValueError("No se permiten ciclos en la jerarquía (RN-003).")
+        visited.add(curr_id)
+        parent_node = database.session.get(node_class, curr_id)
+        if parent_node:
+            curr_id = parent_node.parent_id
+        else:
+            break
+
+
+def update_hierarchy_attributes(node) -> None:
+    """Calcula y actualiza recursivamente nivel y path (RN-004)."""
+    if not node.parent_id:
+        node.level = 0
+        node.path = node.name
+    else:
+        parent = node.parent
+        if parent:
+            node.level = parent.level + 1
+            node.path = f"{parent.path} / {node.name}"
+        else:
+            node.level = 0
+            node.path = node.name
+    database.session.flush()
+    for child in node.children:
+        update_hierarchy_attributes(child)
+
+
+def get_descendant_ids(node_class, node_id) -> list[str]:
+    """Devuelve todos los IDs descendientes de un nodo (excluyendo el nodo mismo)."""
+    descendants: list[str] = []
+    pending = [node_id]
+    while pending:
+        current_id = pending.pop()
+        children = database.session.execute(database.select(node_class.id).filter_by(parent_id=current_id)).scalars()
+        for child_id in children:
+            if child_id not in descendants:
+                descendants.append(child_id)
+                pending.append(child_id)
+    return descendants

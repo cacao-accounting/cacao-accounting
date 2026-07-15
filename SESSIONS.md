@@ -199,6 +199,16 @@
 - **Fallback legacy**: las cuentas existentes sin `BankAccountNumberingConfig` siguen funcionando con los defaults legacy del modelo `BankAccount`.
 - **Seed actualizado**: datos demo crean configuraciones por tipo de transacción para las chequeras NIO y USD.
 
+### 2026-07-15
+- **Macro recursivo de árbol reutilizable**: Se creó `tree_macros.html` con macros `render_tree`, `tree_toolbar` y `tree_toolbar_close` para renderizar árboles jerárquicos de profundidad ilimitada con Alpine.js expand/collapse. Reemplaza el nesting hardcodeado de 8 niveles en Cuentas y Centros de Costo.
+- **Vista árbol para Unidades de Negocio y Proyectos**: Los listados `unidad_lista.html` y `proyecto_lista.html` ahora usan el macro recursivo con `build_tree_data()` en lugar de tablas planas.
+- **Funciones auxiliares de árbol**: `obtener_arbol_cuentas/ccostos/unidades/proyectos()` y `build_tree_data()` en `auxiliares.py` normalizan datos para el template.
+- **Helper `get_descendant_ids()`**: En `database/helpers.py`, calcula recursivamente todos los IDs descendientes de un nodo. Se usa en las rutas de edición para excluir descendientes del select de padre.
+- **Edición jerarquica mejorada**: Las rutas `editar_unidad` y `editar_proyecto` ahora excluyen el nodo actual y todos sus descendientes del selector de padre, previniendo selecciones inválidas.
+- **Reportes: group-by por Unidad/Proyecto**: Se agregaron `unit_code` y `project_code` como opciones de agrupación en el dropdown del reporte financiero.
+- **Reportes: filtros en sección principal**: Los filtros de Unidad de Negocio y Proyecto se movieron de filtros avanzados a la sección principal, junto con el checkbox "Incluir descendientes".
+- **Enlaces de capitalización en comprobante**: Se agregaron propiedades `capitalized_by_ref` y `capitalization_origin_ref` al modelo `ComprobanteContable`. El template `journal.html` muestra enlaces bidireccionales "Capitalización de" y "Capitalizado por" con links a los comprobantes relacionados.
+
 ---
 
 ### 2026-07-14 (Sesión actual)
@@ -218,6 +228,12 @@
 ### 2026-07-14 (Corrección de tests)
 - **Corrección test_journal_new_route_renders_new_backend_form**: Se restauró el botón "Descargar Plantilla" en el tab de subir archivo del modal de importación de comprobantes contables. El botón previamente fue reemplazado por un enlace al asistente de importación compartido, pero el test verificaba la presencia del texto "Descargar Plantilla" en el HTML renderizado. Se mantuvo el enlace al asistente como referencia adicional.
 - **Corrección test_routes_import_entries**: Se migró el test de importación de proyecciones de flujo de caja del endpoint directo `/cash-forecast/{id}/entry/import` (eliminado) al flujo del asistente de importación compartido (`ImportBatch` → upload → validate → execute). El test ahora crea lotes de importación, sube archivos CSV/XLSX, y ejecuta el pipeline completo de importación del módulo `imports`.
+
+### 2026-07-14 (Jerarquías de Unidad/Proyecto y Capitalización Automática)
+- **Jerarquías para Unidad de Negocio y Proyectos**: Se implementó una estructura de árbol recursiva de profundidad ilimitada para `Unit` (alias `Unidad`), `BusinessUnit`, y `Project` con soporte para propiedades `parent`, `children`, `ancestors`, y `descendants`.
+- **Prevención de Ciclos y Validación**: Se implementaron validaciones contra ciclos (`check_hierarchy_cycle`) y propagación automática de rutas (`update_hierarchy_attributes`) en `database/helpers.py`. Se restringió la eliminación de nodos padre con hijos activos.
+- **Consolidación en Reportes**: Se actualizaron las consultas de reportes (general ledger y presupuesto) para incluir opcionalmente descendientes (`include_descendants`) y consolidar sus saldos.
+- **Capitalización Automática de Proyectos**: Se implementó el servicio `ProjectCapitalizationService` para identificar gastos no capitalizados de proyectos marcados como capitalizables y generar comprobantes `ComprobanteContable` de tipo `"Capitalización Automática de Proyecto"` con enlace bidireccional, restricciones de cancelación/edición, y soporte para reversas automáticas.
 
 ---
 

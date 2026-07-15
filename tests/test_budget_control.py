@@ -58,25 +58,32 @@ def test_budget_control_validate_transaction(app_ctx):
         book = database.session.query(Book).filter_by(entity="cacao").first()
 
     # Create approved budget
-    budget = service.create_budget({
-        "company": "cacao",
-        "ledger_id": book.id,
-        "fiscal_year_id": fy.id,
-        "budget_code": "CTRL-2026",
-        "name": "Budget Control test",
-        "currency_id": "NIO",
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "CTRL-2026",
+            "name": "Budget Control test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
     acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
     cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    service.add_budget_line(budget.id, {
-        "account_id": acc.id,
-        "cost_center_id": cc.id,
-        "period_id": per.id,
-        "amount": 1000,
-    }, str(admin_user.id))
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 1000,
+        },
+        str(admin_user.id),
+    )
 
     service.approve_budget(budget.id, str(admin_user.id))
 
@@ -109,7 +116,7 @@ def test_budget_control_validate_transaction(app_ctx):
         cost_center_id=cc.id,
         amount=Decimal("500"),
         document_id="DOC1",
-        document_type="purchase_order"
+        document_type="purchase_order",
     )
 
     assert res["exceeded"] is False
@@ -127,7 +134,7 @@ def test_budget_control_validate_transaction(app_ctx):
         cost_center_id=cc.id,
         amount=Decimal("800"),
         document_id="DOC2",
-        document_type="purchase_order"
+        document_type="purchase_order",
     )
 
     assert res_exceeded["exceeded"] is True
@@ -148,11 +155,9 @@ def test_budget_control_config_views(app_ctx):
         assert b"Configuraci\xc3\xb3n de Control Presupuestario" in response.data
 
         # POST config to enable block
-        response_post = client.post("/settings/budget-control", data={
-            "company": "cacao",
-            "enabled": "on",
-            "action_on_exceeded": "block"
-        })
+        response_post = client.post(
+            "/settings/budget-control", data={"company": "cacao", "enabled": "on", "action_on_exceeded": "block"}
+        )
         assert response_post.status_code == 302
 
         # GET again to verify
@@ -170,38 +175,41 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         book = database.session.query(Book).filter_by(entity="cacao").first()
 
     # Create approved budget with 1000 NIO
-    budget = service.create_budget({
-        "company": "cacao",
-        "ledger_id": book.id,
-        "fiscal_year_id": fy.id,
-        "budget_code": "SCENARIOS-2026",
-        "name": "Budget Scenarios",
-        "currency_id": "NIO",
-    }, str(admin_user.id))
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "SCENARIOS-2026",
+            "name": "Budget Scenarios",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
 
     acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
     cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    service.add_budget_line(budget.id, {
-        "account_id": acc.id,
-        "cost_center_id": cc.id,
-        "period_id": per.id,
-        "amount": 1000,
-    }, str(admin_user.id))
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 1000,
+        },
+        str(admin_user.id),
+    )
 
     service.approve_budget(budget.id, str(admin_user.id))
 
     # Resolve items, make sure we have a mapping to the budgeted account/cost center
     from cacao_accounting.database import Item, ItemAccount
+
     item = database.session.query(Item).filter_by(is_active=True).first()
     # Map item to budgeted account and cost center
-    item_acc = ItemAccount(
-        item_code=item.code,
-        company="cacao",
-        expense_account_id=acc.id,
-        cost_center_code=cc.code
-    )
+    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
     database.session.add(item_acc)
 
     # Supplier
@@ -216,7 +224,7 @@ def test_budget_control_scenarios_po_pr(app_ctx):
             company="cacao",
             party_id=supplier.id,
             allow_purchase_invoice_without_order=True,
-            allow_purchase_invoice_without_receipt=True
+            allow_purchase_invoice_without_receipt=True,
         )
         database.session.add(cp)
     database.session.commit()
@@ -234,17 +242,13 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         supplier_name=supplier.name,
         posting_date=per.start,
         docstatus=0,
-        grand_total=Decimal("1500")
+        grand_total=Decimal("1500"),
     )
     database.session.add(po)
     database.session.flush()
 
     po_item = PurchaseOrderItem(
-        purchase_order_id=po.id,
-        item_code=item.code,
-        qty=Decimal("1"),
-        rate=Decimal("1500"),
-        amount=Decimal("1500")
+        purchase_order_id=po.id, item_code=item.code, qty=Decimal("1"), rate=Decimal("1500"), amount=Decimal("1500")
     )
     database.session.add(po_item)
     database.session.commit()
@@ -257,7 +261,7 @@ def test_budget_control_scenarios_po_pr(app_ctx):
             supplier_id=po.supplier_id,
             document_id=po.id,
             document_type="purchase_order",
-            items=[po_item]
+            items=[po_item],
         )
 
     # Test Case 2: Budget Control is ON, Mode = do_nothing
@@ -272,14 +276,14 @@ def test_budget_control_scenarios_po_pr(app_ctx):
             supplier_id=po.supplier_id,
             document_id=po.id,
             document_type="purchase_order",
-            items=[po_item]
+            items=[po_item],
         )
     # Check Audit Trail log
-    audit = database.session.query(AuditTrail).filter_by(
-        document_type="purchase_order",
-        document_id=po.id,
-        action="budget_exceeded"
-    ).first()
+    audit = (
+        database.session.query(AuditTrail)
+        .filter_by(document_type="purchase_order", document_id=po.id, action="budget_exceeded")
+        .first()
+    )
     assert audit is not None
     assert "do_nothing" in audit.comment
 
@@ -295,7 +299,7 @@ def test_budget_control_scenarios_po_pr(app_ctx):
             supplier_id=po.supplier_id,
             document_id=po.id,
             document_type="purchase_order",
-            items=[po_item]
+            items=[po_item],
         )
 
     # Test Case 4: Budget Control is ON, Mode = block
@@ -311,13 +315,14 @@ def test_budget_control_scenarios_po_pr(app_ctx):
                 supplier_id=po.supplier_id,
                 document_id=po.id,
                 document_type="purchase_order",
-                items=[po_item]
+                items=[po_item],
             )
 
     # Verify that the audit trail entry was actually committed/persisted
-    audit4 = database.session.query(AuditTrail).filter_by(
-        document_type="purchase_order",
-        document_id=po.id,
-        action="budget_exceeded"
-    ).filter(AuditTrail.comment.contains("block")).first()
+    audit4 = (
+        database.session.query(AuditTrail)
+        .filter_by(document_type="purchase_order", document_id=po.id, action="budget_exceeded")
+        .filter(AuditTrail.comment.contains("block"))
+        .first()
+    )
     assert audit4 is not None

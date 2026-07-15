@@ -241,7 +241,7 @@ def test_set_entity_inactive(request):
                 tax_id="TAX-T-INAC",
                 currency="NIO",
                 enabled=True,
-                status="activo"
+                status="activo",
             )
             database.session.add(temp_entity)
             database.session.commit()
@@ -273,7 +273,7 @@ def test_set_entity_active(request):
                 tax_id="TAX-T-ACT",
                 currency="NIO",
                 enabled=False,
-                status="inactivo"
+                status="inactivo",
             )
             database.session.add(temp_entity)
             database.session.commit()
@@ -305,7 +305,7 @@ def test_default_entity(request):
                 tax_id="TAX-T-DEF",
                 currency="NIO",
                 enabled=True,
-                status="activo"
+                status="activo",
             )
             database.session.add(temp_entity)
             database.session.commit()
@@ -337,7 +337,7 @@ def test_delete_entity(request):
                 tax_id="TAX-T-DEL",
                 currency="NIO",
                 enabled=True,
-                status="activo"
+                status="activo",
             )
             database.session.add(temp_entity)
             database.session.commit()
@@ -658,7 +658,9 @@ def test_setup_wizard_advances_between_steps(request, monkeypatch):
             with client.session_transaction() as session_:
                 session_["setup_step"] = 2
 
-            response = client.post("/setup/", data={"pais": "NI", "moneda": "NIO", "zona_horaria": "America/Managua"}, follow_redirects=False)
+            response = client.post(
+                "/setup/", data={"pais": "NI", "moneda": "NIO", "zona_horaria": "America/Managua"}, follow_redirects=False
+            )
             assert response.status_code == 302
             with client.session_transaction() as session_:
                 assert session_["setup_step"] == 3
@@ -877,9 +879,9 @@ def test_transaccional_full_transition_routes_get_post(request):
 
                 from cacao_accounting.database import Party
 
-                supplier = database.session.execute(
-                    database.select(Party).filter(Party.is_supplier.is_(True))
-                ).scalars().first()
+                supplier = (
+                    database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+                )
                 if supplier is None:
                     supplier = Party(
                         id="SUP-TEST",
@@ -890,9 +892,9 @@ def test_transaccional_full_transition_routes_get_post(request):
                     )
                     database.session.add(supplier)
                     database.session.flush()
-                customer = database.session.execute(
-                    database.select(Party).filter(Party.is_customer.is_(True))
-                ).scalars().first()
+                customer = (
+                    database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+                )
                 if customer is None:
                     customer = Party(
                         id="CUST-TEST",
@@ -1147,6 +1149,7 @@ def test_transaccional_full_transition_routes_get_post(request):
 
                 # Add stock to warehouse PRINCIPAL for ART-TEST so that O2C-03 reservation succeeds during sales order submit
                 from cacao_accounting.database import StockEntryItem
+
                 se_stock = StockEntry(
                     purpose="material_receipt",
                     company="cacao",
@@ -1170,6 +1173,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 )
                 database.session.flush()
                 from cacao_accounting.contabilidad.posting import submit_document
+
                 submit_document(se_stock)
                 database.session.commit()
 
@@ -1539,6 +1543,7 @@ def test_logout_invalidates_session_and_token(request):
     if request.config.getoption("--slow") == "True":
         with app.app_context():
             from flask_login import current_user
+
             with app.test_client() as client:
                 # Login first
                 response = client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})

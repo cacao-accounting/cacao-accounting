@@ -112,6 +112,7 @@ def test_create_app_generates_secret_key_when_missing(monkeypatch):
 
 def test_falla_verificar_conn_db(request):
     import pytest
+
     pytest.importorskip("pg8000")
     from cacao_accounting import create_app
 
@@ -125,6 +126,7 @@ def test_falla_verificar_conn_db(request):
 
 def test_usuarios_compañias_no_creados(request):
     import pytest
+
     pytest.importorskip("pg8000")
     from cacao_accounting import create_app
 

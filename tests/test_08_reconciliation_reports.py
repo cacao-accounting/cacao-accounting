@@ -2948,6 +2948,7 @@ def test_unlinked_purchase_receipts_summary(app_ctx):
 
 def test_purchase_reconciliation_web_view_and_tabs(app_ctx):
     from cacao_accounting.database import User, Modules, database
+
     app_ctx.config["SECRET_KEY"] = "testing-reconc"
     client = app_ctx.test_client()
 
@@ -2971,7 +2972,10 @@ def test_purchase_reconciliation_web_view_and_tabs(app_ctx):
 
 
 def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
-    from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice, PurchaseReconciliationError
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        reconcile_purchase_invoice,
+        PurchaseReconciliationError,
+    )
     from cacao_accounting.database import (
         Item,
         PurchaseInvoice,
@@ -2993,11 +2997,7 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
     database.session.flush()
 
     receipt = PurchaseReceipt(
-        company="cacao",
-        posting_date=date(2026, 5, 1),
-        supplier_id="SUPP-CURR",
-        transaction_currency="USD",
-        docstatus=1
+        company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-CURR", transaction_currency="USD", docstatus=1
     )
     database.session.add(receipt)
     database.session.flush()

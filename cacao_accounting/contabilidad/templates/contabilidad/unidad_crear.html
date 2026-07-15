@@ -59,6 +59,10 @@
           </div>
         </div>
       </div>
+      <div class="col-md-12">
+        <label class="form-label" for="parent_id">{{ _('Unidad Padre') }}</label>
+        {{ form.parent_id(class="form-select form-select-sm", id="parent_id") }}
+      </div>
       <div class="col-12 mt-3">
         <div class="form-check">
           {{ form.habilitado(class="form-check-input", id="habilitado") }}
