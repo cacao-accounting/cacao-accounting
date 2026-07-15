@@ -644,3 +644,69 @@ def document_flow_related_list(doctype: str):
         related_label=related_label,
         titulo=f"Documentos relacionados — {spec.label}",
     )
+
+
+@api.route("/api/business-unit/<id_or_code>/hierarchy")
+@login_required
+def api_business_unit_hierarchy(id_or_code: str):
+    """Devuelve la jerarquía completa de una Unidad de Negocio."""
+    from cacao_accounting.database import BusinessUnit
+
+    node = database.session.get(BusinessUnit, id_or_code)
+    if not node:
+        node = database.session.execute(database.select(BusinessUnit).filter_by(code=id_or_code)).scalar_one_or_none()
+    if not node:
+        abort(404)
+
+    return jsonify(
+        {
+            "parent": {"id": node.parent.id, "code": node.parent.code, "name": node.parent.name} if node.parent else None,
+            "children": [{"id": c.id, "code": c.code, "name": c.name} for c in node.children],
+            "ancestors": [{"id": a.id, "code": a.code, "name": a.name} for a in node.ancestors],
+            "descendants": [{"id": d.id, "code": d.code, "name": d.name} for d in node.descendants],
+        }
+    )
+
+
+@api.route("/api/unit/<id_or_code>/hierarchy")
+@login_required
+def api_unit_hierarchy(id_or_code: str):
+    """Devuelve la jerarquía completa de una Unidad de Negocio (Unit)."""
+    from cacao_accounting.database import Unit
+
+    node = database.session.get(Unit, id_or_code)
+    if not node:
+        node = database.session.execute(database.select(Unit).filter_by(code=id_or_code)).scalar_one_or_none()
+    if not node:
+        abort(404)
+
+    return jsonify(
+        {
+            "parent": {"id": node.parent.id, "code": node.parent.code, "name": node.parent.name} if node.parent else None,
+            "children": [{"id": c.id, "code": c.code, "name": c.name} for c in node.children],
+            "ancestors": [{"id": a.id, "code": a.code, "name": a.name} for a in node.ancestors],
+            "descendants": [{"id": d.id, "code": d.code, "name": d.name} for d in node.descendants],
+        }
+    )
+
+
+@api.route("/api/project/<id_or_code>/hierarchy")
+@login_required
+def api_project_hierarchy(id_or_code: str):
+    """Devuelve la jerarquía completa de un Proyecto."""
+    from cacao_accounting.database import Project
+
+    node = database.session.get(Project, id_or_code)
+    if not node:
+        node = database.session.execute(database.select(Project).filter_by(code=id_or_code)).scalar_one_or_none()
+    if not node:
+        abort(404)
+
+    return jsonify(
+        {
+            "parent": {"id": node.parent.id, "code": node.parent.code, "name": node.parent.name} if node.parent else None,
+            "children": [{"id": c.id, "code": c.code, "name": c.name} for c in node.children],
+            "ancestors": [{"id": a.id, "code": a.code, "name": a.name} for a in node.ancestors],
+            "descendants": [{"id": d.id, "code": d.code, "name": d.name} for d in node.descendants],
+        }
+    )

@@ -229,8 +229,46 @@
                     </p>
                     <div class="alert alert-light border mb-0" id="reversal-period-guidance">
                         {{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') }}
-                    </div>
-                </div>
+    </div>
+    {% if registro.capitalization_origin_id or registro.capitalized_by_id %}
+    <div class="row px-3 pb-2">
+      <div class="col-12">
+        <div class="ca-kv-list">
+          {% if registro.capitalization_origin_id %}
+          <div class="ca-kv-item">
+            <label>{{ _('Capitalización de') }}</label>
+            <p>
+              {% set origin = registro.capitalization_origin_ref %}
+              {% if origin %}
+              <a href="{{ url_for('contabilidad.ver_comprobante', identifier=origin.id) }}" class="fw-bold">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ origin.document_no or origin.id }}
+              </a>
+              {% else %}
+              {{ registro.capitalization_origin_id }}
+              {% endif %}
+            </p>
+          </div>
+          {% endif %}
+          {% if registro.capitalized_by_id %}
+          <div class="ca-kv-item">
+            <label>{{ _('Capitalizado por') }}</label>
+            <p>
+              {% set cap = registro.capitalized_by_ref %}
+              {% if cap %}
+              <a href="{{ url_for('contabilidad.ver_comprobante', identifier=cap.id) }}" class="fw-bold">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ cap.document_no or cap.id }}
+              </a>
+              {% else %}
+              {{ registro.capitalized_by_id }}
+              {% endif %}
+            </p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+</div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
                     <button class="btn btn-outline-warning" type="submit">

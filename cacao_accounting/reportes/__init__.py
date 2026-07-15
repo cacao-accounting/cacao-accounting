@@ -728,6 +728,7 @@ def _financial_filters() -> FinancialReportFilters:
         sort_by=request.args.get("sort_by", "posting_date"),
         sort_dir=request.args.get("sort_dir", "asc"),
         export_all=False,
+        include_descendants=_bool_arg("include_descendants"),
     )
 
 

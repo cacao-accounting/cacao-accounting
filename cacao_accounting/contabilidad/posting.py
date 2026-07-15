@@ -2757,6 +2757,14 @@ def cancel_document(document: Any) -> list[GLEntry]:
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede cancelar un documento aprobado.")
 
+    if type(document).__name__ == "ComprobanteContable":
+        if getattr(document, "voucher_type", None) == "Capitalización Automática de Proyecto":
+            raise PostingError("No se puede anular un comprobante de capitalización automática.")
+        if getattr(document, "capitalized_by_id", None) is not None:
+            raise PostingError(
+                "No se puede anular una transacción que ya ha sido capitalizada. Bloquear anular pero permitir revertir."
+            )
+
     company = _company_for(document)
     _validate_cancel_accounting_period(document, company)
     voucher_type = _get_voucher_type(document)

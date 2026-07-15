@@ -36,6 +36,7 @@ def app_instance():
         database.create_all()
         # Initialize default currencies
         from cacao_accounting.database import Currency
+
         nio = Currency(code="NIO", name="Córdoba Nicaragüense", decimals=2, active=True, default=True)
         usd = Currency(code="USD", name="Dólar Estadounidense", decimals=2, active=True, default=False)
         database.session.add(nio)
