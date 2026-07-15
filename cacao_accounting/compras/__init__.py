@@ -3647,7 +3647,7 @@ def _create_import_landed_cost_from_request():
         document=registro,
         entity_type="import_landed_cost",
         posting_date_raw=registro.posting_date,
-        naming_series_id=None,
+        naming_series_id=request.form.get("naming_series") or None,
     )
     database.session.flush()
 
