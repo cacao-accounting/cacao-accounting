@@ -41,7 +41,7 @@ _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 MAX_RECONCILIATION_LINES = 100
 
 
-def _document_flow_error(message: str, status_code: int = 400) -> Exception:
+def _document_flow_error(message: str, status_code: int = 400) -> ValueError:
     """Resuelve DocumentFlowError via import tardio para evitar circular."""
     from cacao_accounting.document_flow.service import DocumentFlowError as _DFE
 
@@ -906,8 +906,6 @@ def _maybe_settle_advance_against_invoice(
 ) -> None:
     """S2P-07: netea el anticipo contra la cuenta por pagar/cobrar."""
     from cacao_accounting.contabilidad.default_accounts import get_company_default_accounts
-    from cacao_accounting.contabilidad.posting import post_comprobante_contable
-    from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
     company = invoice.company
     defaults = get_company_default_accounts(company)
@@ -921,6 +919,31 @@ def _maybe_settle_advance_against_invoice(
     advance_account_id = defaults.supplier_advance_account_id if is_purchase else defaults.customer_advance_account_id
     if not party_account_id or not advance_account_id:
         return
+
+    _post_advance_settlement_journal(
+        company=company,
+        is_purchase=is_purchase,
+        party_account_id=party_account_id,
+        advance_account_id=advance_account_id,
+        payment=payment,
+        amount=amount,
+        allocation_date=allocation_date,
+    )
+
+
+def _post_advance_settlement_journal(
+    *,
+    company: str,
+    is_purchase: bool,
+    party_account_id: str,
+    advance_account_id: str,
+    payment: PaymentEntry,
+    amount: Decimal,
+    allocation_date: date,
+) -> None:
+    """Crea y publica el asiento de neteo de anticipo contra factura."""
+    from cacao_accounting.contabilidad.posting import post_comprobante_contable
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
     book = (
         database.session.execute(select(Book).filter_by(entity=company).order_by(Book.is_primary.desc(), Book.code))
@@ -952,10 +975,34 @@ def _maybe_settle_advance_against_invoice(
         )
     except IdentifierConfigurationError:
         journal.document_no = f"{company}-ADV-{journal.id[-8:]}"
-    if is_purchase:
-        debit_account, credit_account = party_account_id, advance_account_id
-    else:
-        debit_account, credit_account = advance_account_id, party_account_id
+    debit_account, credit_account = (
+        (party_account_id, advance_account_id) if is_purchase else (advance_account_id, party_account_id)
+    )
+    _resolve_and_create_journal_lines(
+        company=company,
+        journal=journal,
+        debit_account=debit_account,
+        credit_account=credit_account,
+        amount=amount,
+        allocation_date=allocation_date,
+        book=book,
+    )
+    post_comprobante_contable(journal)
+    journal.status = "submitted"
+    database.session.add(journal)
+
+
+def _resolve_and_create_journal_lines(
+    *,
+    company: str,
+    journal: ComprobanteContable,
+    debit_account: str,
+    credit_account: str,
+    amount: Decimal,
+    allocation_date: date,
+    book: Any,
+) -> None:
+    """Resuelve codigos de cuenta y crea las lineas del comprobante."""
     from cacao_accounting.database import Accounts as _Accounts
 
     _debit_code = database.session.execute(select(_Accounts).filter_by(id=debit_account)).scalars().first()
@@ -990,9 +1037,6 @@ def _maybe_settle_advance_against_invoice(
             voucher_type="journal_entry",
         )
     )
-    post_comprobante_contable(journal)
-    journal.status = "submitted"
-    database.session.add(journal)
 
 
 def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
