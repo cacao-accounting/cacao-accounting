@@ -144,3 +144,23 @@ def test_settlement_partial_payment_calculates_unrealized_exchange_difference():
     assert result.exchange_difference == Decimal("12.00")
     assert result.remaining_balance == Decimal("2190.00")
     assert result.unrealized_exchange_difference == Decimal("18.00")
+
+
+def test_settlement_discount_partial_gap_maintains_invariant():
+    """When the eligible discount is smaller than the cash gap, cash_amount must adjust to keep the components balanced."""
+    engine = SettlementEngine()
+    rules = [MockRule("IR", Decimal("5"), "payment", "withholding_payable")]
+
+    result = engine.calculate(
+        document_total=Decimal("100"),
+        open_balance=Decimal("100"),
+        settlement_amount=Decimal("100"),
+        withholding_rules=rules,
+        actual_cash_amount=Decimal("90"),
+        eligible_discount_amount=Decimal("3"),
+    )
+
+    assert result.cash_amount == Decimal("92")
+    assert result.withholding_amount == Decimal("5")
+    assert result.payment_discount_amount == Decimal("3")
+    assert result.cash_amount + result.withholding_amount + result.payment_discount_amount == result.gross_settlement_amount
