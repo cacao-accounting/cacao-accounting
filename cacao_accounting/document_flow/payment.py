@@ -867,7 +867,7 @@ def apply_advance_to_invoice(
         reference_id=invoice.id,
         reference_document_no=getattr(invoice, "document_no", None) or invoice.id,
         reference_date=getattr(invoice, "posting_date", None),
-        party_type="Customer" if reference_type == "sales_invoice" else "Supplier",
+        party_type="customer" if reference_type == "sales_invoice" else "supplier",
         party_id=party_id,
         company=invoice.company,
         currency=getattr(invoice, "currency", None) or getattr(payment, "currency", None),

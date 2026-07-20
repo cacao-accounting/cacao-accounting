@@ -1276,3 +1276,48 @@ class TestComputeCashConsumedFromReference:
             "ref-1", "sales_invoice", "sales_invoice", Decimal("50"), Decimal("30"), Decimal("30"), "active"
         )
         assert consumed == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# apply_advance_to_invoice - party_type casing
+# ---------------------------------------------------------------------------
+
+
+class TestApplyAdvancePartyTypeCasing:
+    """PaymentReference.party_type must use lowercase ('customer'/'supplier')
+    to be consistent with the rest of the codebase.  Capitalised values
+    ('Customer'/'Supplier') break case-sensitive comparisons downstream."""
+
+    def test_sales_advance_party_type_is_lowercase_customer(self, app_ctx):
+        """Applying an advance to a SalesInvoice stores party_type='customer'."""
+        from cacao_accounting.document_flow.payment import apply_advance_to_invoice
+
+        si = _make_customer_invoice(grand_total=Decimal("500"))
+        payment = _make_open_payment(
+            party=database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first(),
+            payment_type="receive",
+            amount=Decimal("200"),
+        )
+
+        reference = apply_advance_to_invoice(payment.id, si.id, Decimal("100"), date.today())
+
+        assert reference.party_type == "customer", (
+            f"Expected lowercase 'customer', got '{reference.party_type}'"
+        )
+
+    def test_purchase_advance_party_type_is_lowercase_supplier(self, app_ctx):
+        """Applying an advance to a PurchaseInvoice stores party_type='supplier'."""
+        from cacao_accounting.document_flow.payment import apply_advance_to_invoice
+
+        pi = _make_supplier_invoice(grand_total=Decimal("800"))
+        payment = _make_open_payment(
+            party=database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first(),
+            payment_type="pay",
+            amount=Decimal("300"),
+        )
+
+        reference = apply_advance_to_invoice(payment.id, pi.id, Decimal("150"), date.today())
+
+        assert reference.party_type == "supplier", (
+            f"Expected lowercase 'supplier', got '{reference.party_type}'"
+        )
