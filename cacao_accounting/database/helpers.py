@@ -141,7 +141,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             else:
                 base_data(user, passwd, carga_rapida=True)
             DB_ESQUEMA = True
-        except (SQLAlchemyError, OperationalError, ProgrammingError, InterfaceError):
+        except SQLAlchemyError:
             log.exception("No se pudo inicializar esquema de base de datos.")
             DB_ESQUEMA = False
 

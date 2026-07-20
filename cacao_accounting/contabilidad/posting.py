@@ -381,9 +381,7 @@ def _create_gl_entry(
     credit_in_ac = params.credit_in_account_currency
     exchange_rate = context.exchange_rate
 
-    if params.is_reversal:
-        pass
-    elif (
+    if not params.is_reversal and (
         context.transaction_currency and context.company_currency and context.transaction_currency != context.company_currency
     ):
         if debit_in_ac is None and credit_in_ac is None:

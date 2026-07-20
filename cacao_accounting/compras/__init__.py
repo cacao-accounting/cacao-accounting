@@ -3991,7 +3991,7 @@ def check_budget_control(
 
             action_label = "Approval allowed" if action_policy != "block" else "Approval rejected"
 
-            comment_str = f"Budget exceeded\n\n" f"Mode:\n{action_policy}\n\n" f"Action:\n{action_label}"
+            comment_str = f"Budget exceeded\n\nMode:\n{action_policy}\n\nAction:\n{action_label}"
 
             # Save audit trail
             log_entry = AuditTrail(
