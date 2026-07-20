@@ -318,6 +318,7 @@ class BudgetService:
         amount: Decimal,
         document_id: str,
         document_type: str,
+        ledger_id: str | None = None,
     ) -> Dict[str, Any]:
         """Valida si una transacción excede el presupuesto disponible de la cuenta y centro de costo.
 
@@ -331,7 +332,7 @@ class BudgetService:
         Retorna un diccionario indicando si excede el presupuesto, el presupuesto,
         lo comprometido, disponible, lo solicitado y el exceso.
         """
-        from cacao_accounting.database import AccountingPeriod, Accounts, Budget, BudgetLine, CostCenter, GLEntry
+        from cacao_accounting.database import AccountingPeriod, Accounts, Book, Budget, BudgetLine, CostCenter, GLEntry
 
         if hasattr(date_val, "date"):
             date_val = date_val.date()  # type: ignore
@@ -374,12 +375,29 @@ class BudgetService:
         )
         resolved_cost_center_id = cc.id if cc else cost_center_id
 
+        # Resolve Ledger/Book to prevent cross-ledger summing, using the same active-book predicate as posting._active_books
+        resolved_ledger_id = ledger_id
+        if not resolved_ledger_id:
+            from sqlalchemy import or_
+
+            primary_book = (
+                database.session.query(Book)
+                .filter(
+                    Book.entity == company,
+                    or_(Book.status == "activo", Book.status.is_(None)),
+                )
+                .order_by(Book.is_primary.desc(), Book.code)
+                .first()
+            )
+            resolved_ledger_id = primary_book.id if primary_book else None
+
         # 4. Resolve Approved Budgets
-        budgets = (
-            database.session.query(Budget)
-            .filter_by(company=company, fiscal_year_id=period.fiscal_year_id, status="approved")
-            .all()
+        budgets_query = database.session.query(Budget).filter_by(
+            company=company, fiscal_year_id=period.fiscal_year_id, status="approved"
         )
+        if resolved_ledger_id:
+            budgets_query = budgets_query.filter_by(ledger_id=resolved_ledger_id)
+        budgets = budgets_query.all()
         budget_ids = [b.id for b in budgets]
 
         # 5. Get Budget Amount
@@ -408,6 +426,8 @@ class BudgetService:
                 GLEntry.is_cancelled.is_(False),
             )
         )
+        if resolved_ledger_id:
+            gl_query = gl_query.filter(GLEntry.ledger_id == resolved_ledger_id)
         if cc:
             gl_query = gl_query.filter(GLEntry.cost_center_code == cc.code)
         actual_entries = gl_query.all()
