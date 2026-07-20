@@ -1234,28 +1234,27 @@ def pending_approvals():
         try:
             doc_cls = get_model_class(req.document_type)
             document = database.session.get(doc_cls, req.document_id)
-            if document:
-                if ApprovalEngine.can_approve(document, current_user):
-                    doc_info = DOCUMENT_TYPES.get(req.document_type)
-                    detail_url = "#"
-                    if doc_info and doc_info.detail_endpoint:
-                        detail_url = url_for(doc_info.detail_endpoint, **{doc_info.detail_arg: req.document_id})
+            if document and ApprovalEngine.can_approve(document, current_user):
+                doc_info = DOCUMENT_TYPES.get(req.document_type)
+                detail_url = "#"
+                if doc_info and doc_info.detail_endpoint:
+                    detail_url = url_for(doc_info.detail_endpoint, **{doc_info.detail_arg: req.document_id})
 
-                    requester = database.session.get(User, req.requested_by)
-                    requester_name = requester.name or requester.user if requester else req.requested_by
+                requester = database.session.get(User, req.requested_by)
+                requester_name = requester.name or requester.user if requester else req.requested_by
 
-                    doc_no_val = getattr(document, "document_no", None) or getattr(document, "id", None) or req.document_id
-                    my_pending.append(
-                        {
-                            "request": req,
-                            "document": document,
-                            "label": doc_info.label if doc_info else req.document_type,
-                            "detail_url": detail_url,
-                            "requester_name": requester_name,
-                            "amount": ApprovalEngine.get_document_amount(document),
-                            "doc_no": doc_no_val,
-                        }
-                    )
+                doc_no_val = getattr(document, "document_no", None) or getattr(document, "id", None) or req.document_id
+                my_pending.append(
+                    {
+                        "request": req,
+                        "document": document,
+                        "label": doc_info.label if doc_info else req.document_type,
+                        "detail_url": detail_url,
+                        "requester_name": requester_name,
+                        "amount": ApprovalEngine.get_document_amount(document),
+                        "doc_no": doc_no_val,
+                    }
+                )
         except (SQLAlchemyError, AttributeError, KeyError):
             continue
 

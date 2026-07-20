@@ -62,7 +62,7 @@ class ApprovalEngine:
         req = cls.request_approval(document)
         if not req:
             flask_flash(
-                "No existe una regla de aprobación que cubra este monto. " "El documento permanece en borrador.",
+                "No existe una regla de aprobación que cubra este monto. El documento permanece en borrador.",
                 "warning",
             )
             database.session.commit()
@@ -378,7 +378,6 @@ class ApprovalEngine:
         if doctype in {"purchase_receipt", "purchase_invoice", "payment_entry", "stock_entry"}:
             submit_document(document)
             log_submit(document)
-            return
 
     @classmethod
     def _execute_cancel(cls, doctype: str, document: Any, user: Any) -> None:
@@ -418,7 +417,6 @@ class ApprovalEngine:
         if doctype in {"payment_entry", "stock_entry"}:
             cancel_document(document)
             log_cancel(document)
-            return
 
     @classmethod
     def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:
