@@ -86,7 +86,7 @@
         <i class="bi {{ _icon }} me-1" style="font-size:.7rem;color:#94a3b8;"></i>
         {% endif %}
         <a href="{{ _node.url }}">
-          <strong>{{ _node.code }}</strong> — {{ _node.name }}
+          <strong>{{ _node.code }}</strong>&nbsp;{{ _node.name }}
         </a>
         {%- for b in _node.badges -%}
         <span class="badge {{ b.class }}" style="font-size:.65rem;">{{ b.label }}</span>
