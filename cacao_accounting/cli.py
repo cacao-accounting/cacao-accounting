@@ -138,6 +138,7 @@ def _entorno_actual() -> str:
         "  cacaoctl run\n"
         "  cacaoctl serve\n"
         "  cacaoctl db init\n"
+        "  cacaoctl db migrate\n"
         "  cacaoctl db reset\n"
         "  cacaoctl status\n"
         "  cacaoctl version\n"
@@ -193,11 +194,16 @@ db.group = "Database"  # type: ignore[attr-defined,method-assign,assignment]
 linea_comandos.add_command(db)
 
 
-@db.command(name="init", help="Crea una nueva base de datos.")
+@db.command(name="init", help="Crea o verifica la base de datos (idempotente).")
 @click.option("--force", is_flag=True, help="Elimina una base existente antes de crear la nueva.")
 @click.option("--seed", is_flag=True, help="Inserta datos de ejemplo después de crear la base.")
 def db_init(force: bool, seed: bool) -> None:
-    """Crea el esquema de base de datos e inserta los datos base."""
+    """Crea el esquema de base de datos e inserta los datos base.
+
+    Este comando es idempotente: si la base de datos ya existe, imprime un
+    mensaje informativo y termina con éxito (código 0). Esto permite
+    ejecutarlo de forma segura en el inicio de un contenedor Docker.
+    """
     from cacao_accounting.database import database
     from cacao_accounting.database.helpers import (
         entidades_creadas,
@@ -219,8 +225,8 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_advertencia("La base de datos existente será reemplazada.")
             database.drop_all()
         elif existe and not force:
-            _mensaje_error("La base de datos ya existe, use --force para sobrescribirla.")
-            raise click.exceptions.Exit(1)
+            _mensaje_info("La base de datos ya existe, nada que hacer.")
+            raise click.exceptions.Exit(0)
 
         if usuario == "cacao" and contrasena == "cacao":
             _mensaje_advertencia("Se están usando usuario y contraseña predeterminados para el setup inicial.")
@@ -229,6 +235,29 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_exito("Base de datos creada.")
         else:
             _mensaje_error("No fue posible crear la base de datos.")
+            raise click.exceptions.Exit(1)
+
+
+@db.command(name="migrate", help="Aplica migraciones pendientes de Alembic (idempotente).")
+@click.option("--head", default="head", help="Revisión destino (por defecto: head).")
+@click.option("--revision", default=None, help="Revisión específica a aplicar.")
+def db_migrate(head: str, revision: str | None) -> None:
+    """Aplica migraciones pendientes de Alembic de forma idempotente.
+
+    Si no hay migraciones pendientes, imprime un mensaje informativo y
+    termina con éxito (código 0). Esto permite ejecutarlo de forma segura
+    en el inicio de un contenedor Docker.
+    """
+    from cacao_accounting import alembic
+
+    app = _obtener_aplicacion()
+    with app.app_context():
+        try:
+            target = revision or head
+            alembic.upgrade(target=target)
+            _mensaje_exito("Migraciones aplicadas correctamente.")
+        except Exception as exc:
+            _mensaje_error(f"No fue posible aplicar las migraciones: {exc}")
             raise click.exceptions.Exit(1)
 
 
