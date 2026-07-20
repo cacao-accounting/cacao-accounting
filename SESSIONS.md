@@ -95,6 +95,7 @@
 ## Hitos Principales (orden cronológico inverso)
 
 ### 2026-07-20
+- **Bug Fix Settlement Engine**: Corregido violación de invariante `cash_amount + withholding_amount + payment_discount_amount == gross_settlement_amount` en `settlement/engine.py`. Cuando `eligible_discount_amount < gap_after_withholdings`, el `cash_amount` no se ajustaba, causando un desbalance de 2 unidades monetarias que impedía el posteo contable (`PostingError: "El asiento pro-forma no balancea"`). Fix: `cash_amount = settlement_amount - withholding_total - payment_discount_amount`. Prueba unitaria `test_settlement_discount_partial_gap_maintains_invariant` que valida el invariante.
 - **CLI idempotente**: `db init` ahora es idempotente (exit 0 si la DB ya existe). Nuevo comando `db migrate` que aplica migraciones Alembic de forma idempotente. Alembic activado (`alembic.init_app(app)` habilitado). Docker entrypoint ejecuta ambos comandos al inicio.
 
 ### 2026-07-13
