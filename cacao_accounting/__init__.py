@@ -108,7 +108,7 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
 
         csrf = CSRFProtect()
         csrf.init_app(app)
-        # alembic.init_app(app)
+        alembic.init_app(app)
         database.init_app(app)
         administrador_sesion.init_app(app)
         babel.init_app(app, locale_selector=get_locale, timezone_selector=get_timezone)
