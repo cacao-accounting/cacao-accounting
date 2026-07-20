@@ -86,13 +86,16 @@
 
 ### CLI (`cacaoctl`)
 - Click-based con `CacaoGroup` propio. `prog_name="cacaoctl"`.
-- Subcomandos: `db init|reset|clean|seed`, `run`, `serve`, `shell`, `routes`, `version`, `status`, `config`.
+- Subcomandos: `db init|migrate|reset|clean|seed`, `run`, `serve`, `shell`, `routes`, `version`, `status`, `config`.
 - Confirmaciones interactivas para operaciones destructivas, `--force` para omitir.
-- Alembic importado pero no activado (`init_app` comentado, sin migration files).
+- `db init` y `db migrate` son idempotentes: ejecutables al inicio de Docker sin bloquear.
 
 ---
 
 ## Hitos Principales (orden cronológico inverso)
+
+### 2026-07-20
+- **CLI idempotente**: `db init` ahora es idempotente (exit 0 si la DB ya existe). Nuevo comando `db migrate` que aplica migraciones Alembic de forma idempotente. Alembic activado (`alembic.init_app(app)` habilitado). Docker entrypoint ejecuta ambos comandos al inicio.
 
 ### 2026-07-13
 - **Caddy**: reverse proxy sirve assets estáticos, gzip, Cache-Control 24h, proxy a Waitress:8080.
