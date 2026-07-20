@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import (
@@ -720,6 +720,16 @@ def _payment_has_references(payment_id: str) -> bool:
     return database.session.execute(select(PaymentReference.id).filter_by(payment_id=payment_id)).scalars().first() is not None
 
 
+def _payment_total_allocated(payment_id: str) -> Decimal:
+    """Retorna la suma de allocated_amount de las referencias de un pago."""
+    from cacao_accounting.database import PaymentReference
+
+    result = database.session.execute(
+        select(func.coalesce(func.sum(PaymentReference.allocated_amount), Decimal("0"))).filter_by(payment_id=payment_id)
+    ).scalar()
+    return result or Decimal("0")
+
+
 def _signed_tax_delta(document: Any, tax_result: TaxCalculationResult | None) -> Decimal:
     if tax_result is None:
         return Decimal("0")
@@ -1085,14 +1095,47 @@ def _create_payment_pay_entries(
     defaults = _company_defaults(company)
     party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
     advance_account_id = defaults.supplier_advance_account_id if defaults else None
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=False),
+        "El pago no tiene una cuenta bancaria de origen configurada.",
+    )
+
+    allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
+
+    if party_account_id and allocated > Decimal("0") and amount > allocated:
+        entries: list[GLEntry] = []
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=party_account_id,
+                credit_account_id=bank_account_id,
+                amount=allocated,
+                party_type="supplier",
+                party_id=document.party_id,
+                debit_remarks="Pago a proveedor",
+                credit_remarks="Cuenta bancaria de pago",
+            )
+        )
+        if advance_account_id:
+            excess = amount - allocated
+            entries.extend(
+                _normal_entries_for_amount(
+                    context=context,
+                    debit_account_id=advance_account_id,
+                    credit_account_id=bank_account_id,
+                    amount=excess,
+                    party_type="supplier",
+                    party_id=document.party_id,
+                    debit_remarks="Anticipo a proveedor",
+                    credit_remarks="Cuenta bancaria de pago",
+                )
+            )
+        return entries
+
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
     payable_account_id = _require_account(
         account_id,
         "No existe cuenta por pagar o anticipo configurada para el proveedor.",
-    )
-    bank_account_id = _require_account(
-        _resolve_bank_gl_account_id(document, destination=False),
-        "El pago no tiene una cuenta bancaria de origen configurada.",
     )
     return _normal_entries_for_amount(
         context=context,
