@@ -494,3 +494,101 @@ def test_budget_control_multi_ledger(app_ctx):
     assert default_val["budget"] == Decimal("1000")
     assert default_val["committed"] == Decimal("300")
     assert default_val["available"] == Decimal("700")
+
+
+def test_budget_control_inactive_ledger_resolution(app_ctx):
+    """Test that inactive books are ignored when resolving the implicit validation ledger."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+
+    # Get/Create Primary Book (NIO)
+    primary_book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    if not primary_book:
+        primary_book = Book(
+            code="NIO-P2",
+            name="Primary NIO Book 2",
+            entity="cacao",
+            currency="NIO",
+            is_primary=True,
+            default=True,
+        )
+        database.session.add(primary_book)
+        database.session.flush()
+
+    # Deactivate the primary book and any other pre-existing books of "cacao" to ensure our new book is resolved
+    primary_book.status = "inactivo"
+    for other_b in database.session.query(Book).filter_by(entity="cacao").all():
+        if other_b.id != primary_book.id:
+            other_b.status = "inactivo"
+    database.session.commit()
+
+    secondary_book = database.session.query(Book).filter_by(entity="cacao", code="USD-S2").first()
+    if not secondary_book:
+        secondary_book = Book(
+            code="USD-S2",
+            name="Secondary USD Book 2",
+            entity="cacao",
+            currency="USD",
+            is_primary=False,
+            default=False,
+            status="activo",
+        )
+        database.session.add(secondary_book)
+    else:
+        secondary_book.status = "activo"
+    database.session.commit()
+
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    # Create budget on the active secondary book
+    usd_budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": secondary_book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "USD-BGT-INACTIVE-TEST",
+            "name": "USD Budget Inactive Test",
+            "currency_id": "USD",
+        },
+        str(admin_user.id),
+    )
+    service.add_budget_line(
+        usd_budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 250,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(usd_budget.id, str(admin_user.id))
+    database.session.commit()
+
+    # Call validate_transaction without ledger_id.
+    # Since the primary book is deactivated, it must fall back to the active secondary book.
+    val_res = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("50"),
+        document_id="DOC-INACTIVE-TEST",
+        document_type="purchase_order",
+    )
+
+    # Budget of active secondary book is 250
+    print("DEBUG TEST INFO:")
+    from sqlalchemy import or_
+    all_books = database.session.query(Book).filter_by(entity="cacao").all()
+    print("all_books:", [(b.code, b.status, b.is_primary) for b in all_books])
+    rli = database.session.query(Book).filter(Book.entity == "cacao", or_(Book.status == "activo", Book.status.is_(None))).order_by(Book.is_primary.desc(), Book.code).first()
+    print("resolved_ledger_id:", rli.id if rli else None)
+    print("secondary_book_id:", secondary_book.id)
+    print("val_res:", val_res)
+    assert val_res["budget"] == Decimal("250")
+    assert val_res["committed"] == Decimal("0")
+    assert val_res["available"] == Decimal("250")

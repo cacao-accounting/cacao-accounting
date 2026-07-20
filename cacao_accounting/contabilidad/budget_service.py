@@ -375,20 +375,20 @@ class BudgetService:
         )
         resolved_cost_center_id = cc.id if cc else cost_center_id
 
-        # Resolve Ledger/Book to prevent cross-ledger summing
+        # Resolve Ledger/Book to prevent cross-ledger summing, using the same active-book predicate as posting._active_books
         resolved_ledger_id = ledger_id
         if not resolved_ledger_id:
+            from sqlalchemy import or_
+
             primary_book = (
                 database.session.query(Book)
-                .filter_by(entity=company, is_primary=True)
+                .filter(
+                    Book.entity == company,
+                    or_(Book.status == "activo", Book.status.is_(None)),
+                )
+                .order_by(Book.is_primary.desc(), Book.code)
                 .first()
             )
-            if not primary_book:
-                primary_book = (
-                    database.session.query(Book)
-                    .filter_by(entity=company)
-                    .first()
-                )
             resolved_ledger_id = primary_book.id if primary_book else None
 
         # 4. Resolve Approved Budgets
