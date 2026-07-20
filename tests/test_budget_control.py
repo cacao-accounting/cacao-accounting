@@ -326,3 +326,269 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         .first()
     )
     assert audit4 is not None
+
+
+def test_budget_control_multi_ledger(app_ctx):
+    """Test that budget control avoids mixing/summing across multiple books/ledgers."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+
+    # Get/Create Primary Book (NIO)
+    primary_book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    if not primary_book:
+        primary_book = Book(
+            code="NIO-P",
+            name="Primary NIO Book",
+            entity="cacao",
+            currency="NIO",
+            is_primary=True,
+            default=True,
+        )
+        database.session.add(primary_book)
+        database.session.flush()
+
+    # Create a Secondary Book (USD)
+    secondary_book = Book(
+        code="USD-S",
+        name="Secondary USD Book",
+        entity="cacao",
+        currency="USD",
+        is_primary=False,
+        default=False,
+    )
+    database.session.add(secondary_book)
+    database.session.flush()
+
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    # 1. Create NIO budget (amount = 1000)
+    nio_budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": primary_book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "NIO-BGT-2026",
+            "name": "NIO Budget",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+    service.add_budget_line(
+        nio_budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 1000,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(nio_budget.id, str(admin_user.id))
+
+    # 2. Create USD budget (amount = 50)
+    usd_budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": secondary_book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "USD-BGT-2026",
+            "name": "USD Budget",
+            "currency_id": "USD",
+        },
+        str(admin_user.id),
+    )
+    service.add_budget_line(
+        usd_budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 50,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(usd_budget.id, str(admin_user.id))
+
+    # 3. Add a Primary Book GLEntry (amount = 300)
+    nio_entry = GLEntry(
+        company="cacao",
+        ledger_id=primary_book.id,
+        account_id=acc.id,
+        account_code=acc.code,
+        cost_center_code=cc.code,
+        accounting_period_id=per.id,
+        posting_date=per.start,
+        debit=Decimal("300"),
+        credit=Decimal("0"),
+        is_cancelled=False,
+        is_fiscal_year_closing=False,
+        voucher_type="journal_entry",
+        voucher_id="JRN-NIO",
+        document_no="cacao-JOU-NIO",
+    )
+    database.session.add(nio_entry)
+
+    # 4. Add a Secondary Book GLEntry (amount = 15)
+    usd_entry = GLEntry(
+        company="cacao",
+        ledger_id=secondary_book.id,
+        account_id=acc.id,
+        account_code=acc.code,
+        cost_center_code=cc.code,
+        accounting_period_id=per.id,
+        posting_date=per.start,
+        debit=Decimal("15"),
+        credit=Decimal("0"),
+        is_cancelled=False,
+        is_fiscal_year_closing=False,
+        voucher_type="journal_entry",
+        voucher_id="JRN-USD",
+        document_no="cacao-JOU-USD",
+    )
+    database.session.add(usd_entry)
+    database.session.commit()
+
+    # Test Validation on NIO ledger explicitly
+    nio_val = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("100"),
+        document_id="DOC1",
+        document_type="purchase_order",
+        ledger_id=primary_book.id,
+    )
+    assert nio_val["budget"] == Decimal("1000")
+    assert nio_val["committed"] == Decimal("300")
+    assert nio_val["available"] == Decimal("700")
+
+    # Test Validation on USD ledger explicitly
+    usd_val = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("10"),
+        document_id="DOC2",
+        document_type="purchase_order",
+        ledger_id=secondary_book.id,
+    )
+    assert usd_val["budget"] == Decimal("50")
+    assert usd_val["committed"] == Decimal("15")
+    assert usd_val["available"] == Decimal("35")
+
+    # Test Validation without specifying ledger_id (should default to primary book)
+    default_val = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("100"),
+        document_id="DOC3",
+        document_type="purchase_order",
+    )
+    assert default_val["budget"] == Decimal("1000")
+    assert default_val["committed"] == Decimal("300")
+    assert default_val["available"] == Decimal("700")
+
+
+def test_budget_control_inactive_ledger_resolution(app_ctx):
+    """Test that inactive books are ignored when resolving the implicit validation ledger."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+
+    # Get/Create Primary Book (NIO)
+    primary_book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    if not primary_book:
+        primary_book = Book(
+            code="NIO-P2",
+            name="Primary NIO Book 2",
+            entity="cacao",
+            currency="NIO",
+            is_primary=True,
+            default=True,
+        )
+        database.session.add(primary_book)
+        database.session.flush()
+
+    # Deactivate the primary book and any other pre-existing books of "cacao" to ensure our new book is resolved
+    primary_book.status = "inactivo"
+    for other_b in database.session.query(Book).filter_by(entity="cacao").all():
+        if other_b.id != primary_book.id:
+            other_b.status = "inactivo"
+    database.session.commit()
+
+    secondary_book = database.session.query(Book).filter_by(entity="cacao", code="USD-S2").first()
+    if not secondary_book:
+        secondary_book = Book(
+            code="USD-S2",
+            name="Secondary USD Book 2",
+            entity="cacao",
+            currency="USD",
+            is_primary=False,
+            default=False,
+            status="activo",
+        )
+        database.session.add(secondary_book)
+    else:
+        secondary_book.status = "activo"
+    database.session.commit()
+
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    # Create budget on the active secondary book
+    usd_budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": secondary_book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "USD-BGT-INACTIVE-TEST",
+            "name": "USD Budget Inactive Test",
+            "currency_id": "USD",
+        },
+        str(admin_user.id),
+    )
+    service.add_budget_line(
+        usd_budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 250,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(usd_budget.id, str(admin_user.id))
+    database.session.commit()
+
+    # Call validate_transaction without ledger_id.
+    # Since the primary book is deactivated, it must fall back to the active secondary book.
+    val_res = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("50"),
+        document_id="DOC-INACTIVE-TEST",
+        document_type="purchase_order",
+    )
+
+    # Budget of active secondary book is 250
+    print("DEBUG TEST INFO:")
+    from sqlalchemy import or_
+    all_books = database.session.query(Book).filter_by(entity="cacao").all()
+    print("all_books:", [(b.code, b.status, b.is_primary) for b in all_books])
+    rli = database.session.query(Book).filter(Book.entity == "cacao", or_(Book.status == "activo", Book.status.is_(None))).order_by(Book.is_primary.desc(), Book.code).first()
+    print("resolved_ledger_id:", rli.id if rli else None)
+    print("secondary_book_id:", secondary_book.id)
+    print("val_res:", val_res)
+    assert val_res["budget"] == Decimal("250")
+    assert val_res["committed"] == Decimal("0")
+    assert val_res["available"] == Decimal("250")
