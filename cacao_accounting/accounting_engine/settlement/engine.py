@@ -111,7 +111,7 @@ class SettlementEngine:
                 )
             )
             step_counter += 1
-        cash_amount = requested_cash_amount
+        cash_amount = settlement_amount - withholding_total - payment_discount_amount
         if self._uses_foreign_currency(document_currency, company_currency):
             exchange_difference, carried_balance_company = self._calculate_exchange_difference(
                 open_balance=open_balance,
