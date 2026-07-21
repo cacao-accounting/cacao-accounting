@@ -239,6 +239,40 @@
     return rows;
   }
 
+  function isItemSelected(doc) {
+    return doc.selected;
+  }
+
+  function extractSourceId(doc) {
+    return doc.source_id;
+  }
+
+  function matchesSelectedId(id) {
+    return function (match) {
+      return match.source_item_id === id;
+    };
+  }
+
+  function mapColumnHeader(col) {
+    return col.required ? `${col.label} *` : col.label;
+  }
+
+  function normalizeLineWithCb(ctx) {
+    return function (line) {
+      return ctx.normalizeLine(line);
+    };
+  }
+
+  function matchItemCode(code) {
+    return function (item) {
+      return item.code === code;
+    };
+  }
+
+  function splitTab(line) {
+    return line.split("\t");
+  }
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('transactionForm', (config) => {
       const messages = {
@@ -313,7 +347,7 @@
             if (this.formKey.startsWith('sales.')) this.header.party_type = 'customer';
             if (this.formKey.startsWith('purchases.')) this.header.party_type = 'supplier';
           }
-          this.lines = (config.initialLines || []).map((line) => this.normalizeLine(line));
+          this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           this.queueTaxPreview();
         },
@@ -384,7 +418,7 @@
         },
 
         findItem(itemCode) {
-          return this.availableItems.find((item) => item.code === itemCode) || null;
+          return this.availableItems.find(matchItemCode(itemCode)) || null;
         },
 
         getLineUoms(line) {
@@ -869,7 +903,7 @@
         },
 
         async fetchSourceItems() {
-          const selectedIds = this.sourceDocuments.filter((d) => d.selected).map((d) => d.source_id);
+          const selectedIds = this.sourceDocuments.filter(isItemSelected).map(extractSourceId);
           if (!selectedIds.length) return;
 
           const params = this.buildSourceItemsParams(selectedIds);
@@ -1066,7 +1100,7 @@
           }
 
           const lines = text.split(/\r?\n/);
-          const rows = lines.map((line) => line.split("\t"));
+          const rows = lines.map(splitTab);
           this.importModal.parsedRows = mapImportedRows(rows, this.importModal.schema);
         },
 
@@ -1190,7 +1224,7 @@
 
         async downloadTemplate() {
           if (!this.importModal.schema) return;
-          const headers = this.importModal.schema.columns.map((c) => c.required ? `${c.label} *` : c.label);
+          const headers = this.importModal.schema.columns.map(mapColumnHeader);
           const workbook = new ExcelJS.Workbook();
           const worksheet = workbook.addWorksheet("Plantilla");
           worksheet.addRow(headers);
