@@ -145,15 +145,27 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
     return bin_row
 
 
+def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:
+    """Resuelve el almacen para un item de orden de venta, creando si es necesario."""
+    warehouse = item.warehouse
+    if warehouse:
+        return warehouse
+    if not item_obj:
+        return ""
+    warehouse = item_obj.default_warehouse_id
+    if warehouse:
+        item.warehouse = warehouse
+        database.session.add(item)
+        database.session.flush()
+    return warehouse or ""
+
+
 def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
     """Valida disponibilidad y reserva inventario al aprobar una Orden de Venta.
 
     Para cada linea de la OV con almacen definido, verifica que
-    ``actual_qty - reserved_qty >= qty``. Si hay stock suficiente,
-    incrementa ``reserved_qty`` en el StockBin correspondiente.
-
-    Nota: ``stock_value`` se actualiza por ``_upsert_stock_bin`` en posting.py,
-    no aqui. Esta funcion solo gestiona ``reserved_qty``.
+    actual_qty - reserved_qty >= qty. Si hay stock suficiente,
+    incrementa reserved_qty en el StockBin correspondiente.
     """
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
@@ -162,28 +174,19 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         if item_obj and not item_obj.is_stock_item:
             continue
 
-        warehouse = item.warehouse
-        if not warehouse:
-            warehouse = item_obj.default_warehouse_id if item_obj else None
-            if warehouse:
-                item.warehouse = warehouse
-                database.session.add(item)
-                database.session.flush()
-
+        warehouse = _resolve_item_warehouse(item, item_obj)
         if not warehouse:
             raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
-        actual = Decimal(str(bin_row.actual_qty or 0))
-        reserved = Decimal(str(bin_row.reserved_qty or 0))
-        available = actual - reserved
+        available = Decimal(str(bin_row.actual_qty or 0)) - Decimal(str(bin_row.reserved_qty or 0))
 
         if available < item.qty:
             raise ValueError(
                 f"Stock insuficiente para {item.item_code} en {warehouse}: disponible {available}, requerido {item.qty}."
             )
 
-        bin_row.reserved_qty = reserved + item.qty
+        bin_row.reserved_qty = Decimal(str(bin_row.reserved_qty or 0)) + item.qty
 
 
 def _release_reservation_for_sales_order(so: SalesOrder) -> None:
@@ -2464,6 +2467,16 @@ def ventas_entrega_submit(note_id: str):
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
+def _execute_delivery_note_cancellation(registro: DeliveryNote, note_id: str) -> None:
+    """Ejecuta la cancelacion de una nota de entrega y restaura reservas."""
+    cancel_document(registro)
+    _restore_reservation_for_delivery_note(registro)
+    revert_relations_for_target("delivery_note", note_id)
+    refresh_source_caches_for_target("delivery_note", note_id)
+    log_cancel(registro)
+    database.session.commit()
+
+
 @ventas.route("/delivery-note/<note_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
@@ -2486,12 +2499,7 @@ def ventas_entrega_cancel(note_id: str):
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
-        cancel_document(registro)
-        _restore_reservation_for_delivery_note(registro)
-        revert_relations_for_target("delivery_note", note_id)
-        refresh_source_caches_for_target("delivery_note", note_id)
-        log_cancel(registro)
-        database.session.commit()
+        _execute_delivery_note_cancellation(registro, note_id)
         flash("Nota de entrega cancelada.", "warning")
     except PostingError as exc:
         database.session.rollback()
@@ -2868,6 +2876,22 @@ def ventas_factura_venta_submit(invoice_id: str):
     return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
 
+def _cancel_linked_delivery_note(invoice: SalesInvoice) -> None:
+    """Cancela la Nota de Entrega vinculada si update_inventory esta activo."""
+    if not (invoice.update_inventory and invoice.delivery_note_id):
+        return
+    dn = database.session.get(DeliveryNote, invoice.delivery_note_id)
+    if not dn or dn.docstatus != 1:
+        return
+    cancel_document(dn)
+    _restore_reservation_for_delivery_note(dn)
+    log_cancel(dn)
+    flash(
+        _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
+        "info",
+    )
+
+
 @ventas.route("/sales-invoice/<invoice_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
@@ -2890,17 +2914,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
-        if registro.update_inventory and registro.delivery_note_id:
-            dn = database.session.get(DeliveryNote, registro.delivery_note_id)
-            if dn and dn.docstatus == 1:
-                cancel_document(dn)
-                # O2C-08: Restaurar reserva de inventario al cancelar factura con update_inventory
-                _restore_reservation_for_delivery_note(dn)
-                log_cancel(dn)
-                flash(
-                    _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
-                    "info",
-                )
+        _cancel_linked_delivery_note(registro)
         cancel_document(registro)
         log_cancel(registro)
         revert_relations_for_target("sales_invoice", invoice_id)
