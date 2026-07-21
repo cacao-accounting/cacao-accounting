@@ -1186,6 +1186,28 @@ def config_approval_matrix():
     )
 
 
+def _process_approval_action(action, document, comments):
+    """Procesar acción de aprobación o rechazo de un documento."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    if action == "approve":
+        try:
+            ApprovalEngine.approve(document, current_user, comments)
+            database.session.commit()
+            flash(_("Documento aprobado con éxito."), "success")
+        except (SQLAlchemyError, ValueError) as exc:
+            database.session.rollback()
+            flash_error(exc)
+    elif action == "reject":
+        try:
+            ApprovalEngine.reject(document, current_user, comments)
+            database.session.commit()
+            flash(_("Documento rechazado con éxito."), "warning")
+        except (SQLAlchemyError, ValueError) as exc:
+            database.session.rollback()
+            flash_error(exc)
+
+
 @admin.route("/me/pending-approvals", methods=["GET", "POST"])
 @login_required
 def pending_approvals():
@@ -1204,22 +1226,7 @@ def pending_approvals():
             doc_cls = get_model_class(req.document_type)
             document = database.session.get(doc_cls, req.document_id)
             if document:
-                if action == "approve":
-                    try:
-                        ApprovalEngine.approve(document, current_user, comments)
-                        database.session.commit()
-                        flash(_("Documento aprobado con éxito."), "success")
-                    except (SQLAlchemyError, ValueError) as exc:
-                        database.session.rollback()
-                        flash_error(exc)
-                elif action == "reject":
-                    try:
-                        ApprovalEngine.reject(document, current_user, comments)
-                        database.session.commit()
-                        flash(_("Documento rechazado con éxito."), "warning")
-                    except (SQLAlchemyError, ValueError) as exc:
-                        database.session.rollback()
-                        flash_error(exc)
+                _process_approval_action(action, document, comments)
         return redirect(url_for("admin.pending_approvals"))
 
     stmt_all = (
