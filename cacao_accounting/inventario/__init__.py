@@ -366,32 +366,45 @@ def inventario_articulo_nuevo():
 
 def _item_params_from_form(form) -> ItemParams:
     """Construye ItemParams desde los datos del formulario."""
+
+    def text(name: str, default: str = "") -> str:
+        """Obtiene y normaliza un texto del formulario."""
+        return str(form.get(name) or default).strip()
+
+    def optional_text(name: str) -> str | None:
+        """Obtiene un texto opcional del formulario."""
+        return text(name) or None
+
+    def checked(name: str) -> bool:
+        """Indica si el checkbox del formulario fue enviado."""
+        return form.get(name) is not None
+
     return ItemParams(
-        name=str(form.get("name") or "").strip(),
-        description=(form.get("description") or "").strip() or None,
-        item_type=str(form.get("item_type") or "goods").strip(),
-        is_stock_item=form.get("is_stock_item") is not None,
-        is_purchase_item=form.get("is_purchase_item") is not None,
-        is_sale_item=form.get("is_sale_item") is not None,
-        item_category_id=(form.get("item_category_id") or "").strip() or None,
-        default_uom=str(form.get("default_uom") or "").strip(),
-        purchase_uom=(form.get("purchase_uom") or "").strip() or None,
-        sale_uom=(form.get("sale_uom") or "").strip() or None,
-        default_warehouse_id=(form.get("default_warehouse_id") or "").strip() or None,
-        default_supplier_id=(form.get("default_supplier_id") or "").strip() or None,
-        allow_negative_stock=form.get("allow_negative_stock") is not None,
+        name=text("name"),
+        description=optional_text("description"),
+        item_type=text("item_type", "goods"),
+        is_stock_item=checked("is_stock_item"),
+        is_purchase_item=checked("is_purchase_item"),
+        is_sale_item=checked("is_sale_item"),
+        item_category_id=optional_text("item_category_id"),
+        default_uom=text("default_uom"),
+        purchase_uom=optional_text("purchase_uom"),
+        sale_uom=optional_text("sale_uom"),
+        default_warehouse_id=optional_text("default_warehouse_id"),
+        default_supplier_id=optional_text("default_supplier_id"),
+        allow_negative_stock=checked("allow_negative_stock"),
         min_stock_qty=_form_decimal("min_stock_qty"),
         max_stock_qty=_form_decimal("max_stock_qty"),
         reorder_level=_form_decimal("reorder_level"),
         standard_rate=_form_decimal("standard_rate"),
         last_purchase_rate=_form_decimal("last_purchase_rate"),
-        currency=(form.get("currency") or "").strip() or None,
-        brand=(form.get("brand") or "").strip() or None,
-        model_name=(form.get("model_name") or "").strip() or None,
-        barcode=(form.get("barcode") or "").strip() or None,
-        has_batch=form.get("has_batch") is not None,
-        has_serial_no=form.get("has_serial_no") is not None,
-        has_expiry_date=form.get("has_expiry_date") is not None,
+        currency=optional_text("currency"),
+        brand=optional_text("brand"),
+        model_name=optional_text("model_name"),
+        barcode=optional_text("barcode"),
+        has_batch=checked("has_batch"),
+        has_serial_no=checked("has_serial_no"),
+        has_expiry_date=checked("has_expiry_date"),
         uom_rows=parse_item_uom_rows(form),
         account_rows=parse_item_account_rows(form),
     )
@@ -445,21 +458,9 @@ def inventario_articulo_editar(item_id):
     if request.method == "POST":
         uom_rows = _item_uom_rows_for_template(request.form)
         account_rows = _item_account_rows_for_template(request.form)
-        if formulario.validate():
-            try:
-                params = _item_params_from_form(request.form)
-                update_item_with_uoms(item_code=item.code, params=params)
-                database.session.commit()
-                flash("Artículo actualizado correctamente.", "success")
-                return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
-            except InventoryServiceError as exc:
-                database.session.rollback()
-                flash_error(exc)
-            except ValueError as exc:
-                database.session.rollback()
-                flash_error(exc)
-        else:
-            flash("Revise los datos del formulario de artículo.", "danger")
+        response = _process_item_edit(item, formulario)
+        if response is not None:
+            return response
 
     return render_template(
         "inventario/articulo_nuevo.html",
@@ -476,6 +477,22 @@ def inventario_articulo_editar(item_id):
         category_choices=_item_category_choices(),
         currency_choices=_currency_choices(),
     )
+
+
+def _process_item_edit(item, formulario):
+    """Procesa el POST de edición de un artículo."""
+    if not formulario.validate():
+        flash("Revise los datos del formulario de artículo.", "danger")
+        return None
+    try:
+        update_item_with_uoms(item_code=item.code, params=_item_params_from_form(request.form))
+        database.session.commit()
+        flash("Artículo actualizado correctamente.", "success")
+        return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
+    except (InventoryServiceError, ValueError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None
 
 
 @inventario.route("/item/<item_id>")

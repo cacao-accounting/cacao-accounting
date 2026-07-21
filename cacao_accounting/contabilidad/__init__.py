@@ -1808,7 +1808,7 @@ def editar_proyecto(project_id):
 
     if formulario.validate_on_submit():
         try:
-            parent_id, capitalization_account_id = _validate_project_edit_form(formulario, proyecto)
+            _validate_project_edit_form(formulario, proyecto)
         except ValueError as error:
             flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
