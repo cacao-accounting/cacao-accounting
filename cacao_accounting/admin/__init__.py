@@ -1116,47 +1116,9 @@ def config_approval_matrix():
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     selected_company = request.values.get("company") or (companies[0].code if companies else "")
 
-    if request.method == "POST" and request.form.get("action") == "save_global":
-        company = request.form.get("company") or ""
-        enabled = request.form.get("enabled") == "on"
-        set_setup_value(f"approval_engine_enabled_{company}", "1" if enabled else "0")
-        database.session.commit()
-        flash(_("Configuración global de aprobación guardada correctamente."), "success")
-        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
-
-    if request.method == "POST" and request.form.get("action") == "add_rule":
-        company = request.form.get("company") or ""
-        doc_type = request.form.get("document_type") or ""
-        role_id = request.form.get("role_id") or None
-        user_id = request.form.get("user_id") or None
-        min_amount = Decimal(request.form.get("min_amount") or "0")
-        max_amount_str = request.form.get("max_amount")
-        max_amount = Decimal(max_amount_str) if max_amount_str and max_amount_str.strip() else None
-        level = int(request.form.get("approval_level") or "1")
-
-        rule = ApprovalMatrix(
-            company_id=company,
-            document_type=doc_type,
-            role_id=role_id if role_id != "" else None,
-            user_id=user_id if user_id != "" else None,
-            min_amount=min_amount,
-            max_amount=max_amount,
-            approval_level=level,
-            enabled=True,
-        )
-        database.session.add(rule)
-        database.session.commit()
-        flash(_("Regla de aprobación creada correctamente."), "success")
-        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
-
-    if request.method == "POST" and request.form.get("action") == "delete_rule":
-        rule_id = request.form.get("rule_id")
-        rule = database.session.get(ApprovalMatrix, rule_id)
-        if rule:
-            database.session.delete(rule)
-            database.session.commit()
-            flash(_("Regla de aprobación eliminada."), "success")
-        return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=selected_company))
+    redirect_response = _handle_approval_matrix_post(set_setup_value, selected_company)
+    if redirect_response is not None:
+        return redirect_response
 
     global_enabled = get_setup_value(f"approval_engine_enabled_{selected_company}", "0") == "1"
     stmt = (
@@ -1183,6 +1145,46 @@ def config_approval_matrix():
         users=users,
         doc_types=doc_types,
         titulo=_("Matriz de Aprobaciones"),
+    )
+
+
+def _handle_approval_matrix_post(set_setup_value, selected_company: str):
+    """Procesa las acciones POST de la matriz de aprobaciones."""
+    action = request.form.get("action")
+    company = request.form.get("company") or selected_company
+    if request.method != "POST":
+        return None
+    if action == "save_global":
+        set_setup_value(f"approval_engine_enabled_{company}", "1" if request.form.get("enabled") == "on" else "0")
+        database.session.commit()
+        flash(_("Configuración global de aprobación guardada correctamente."), "success")
+    elif action == "add_rule":
+        database.session.add(_approval_rule_from_form(company))
+        database.session.commit()
+        flash(_("Regla de aprobación creada correctamente."), "success")
+    elif action == "delete_rule":
+        rule = database.session.get(ApprovalMatrix, request.form.get("rule_id"))
+        if rule:
+            database.session.delete(rule)
+            database.session.commit()
+            flash(_("Regla de aprobación eliminada."), "success")
+    else:
+        return None
+    return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
+
+
+def _approval_rule_from_form(company: str) -> ApprovalMatrix:
+    """Construye una regla de aprobación desde el formulario administrativo."""
+    max_amount = request.form.get("max_amount")
+    return ApprovalMatrix(
+        company_id=company,
+        document_type=request.form.get("document_type") or "",
+        role_id=request.form.get("role_id") or None,
+        user_id=request.form.get("user_id") or None,
+        min_amount=Decimal(request.form.get("min_amount") or "0"),
+        max_amount=Decimal(max_amount) if max_amount and max_amount.strip() else None,
+        approval_level=int(request.form.get("approval_level") or "1"),
+        enabled=True,
     )
 
 
@@ -1217,16 +1219,7 @@ def pending_approvals():
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
     if request.method == "POST":
-        action = request.form.get("action")
-        req_id = request.form.get("request_id")
-        comments = request.form.get("comments") or None
-
-        req = database.session.get(ApprovalRequest, req_id)
-        if req:
-            doc_cls = get_model_class(req.document_type)
-            document = database.session.get(doc_cls, req.document_id)
-            if document:
-                _process_approval_action(action, document, comments)
+        _process_pending_approval_post(ApprovalRequest, get_model_class)
         return redirect(url_for("admin.pending_approvals"))
 
     stmt_all = (
@@ -1236,37 +1229,47 @@ def pending_approvals():
     )
     all_pending = database.session.execute(stmt_all).scalars().all()
 
-    my_pending = []
-    for req in all_pending:
-        try:
-            doc_cls = get_model_class(req.document_type)
-            document = database.session.get(doc_cls, req.document_id)
-            if document and ApprovalEngine.can_approve(document, current_user):
-                doc_info = DOCUMENT_TYPES.get(req.document_type)
-                detail_url = "#"
-                if doc_info and doc_info.detail_endpoint:
-                    detail_url = url_for(doc_info.detail_endpoint, **{doc_info.detail_arg: req.document_id})
-
-                requester = database.session.get(User, req.requested_by)
-                requester_name = requester.name or requester.user if requester else req.requested_by
-
-                doc_no_val = getattr(document, "document_no", None) or getattr(document, "id", None) or req.document_id
-                my_pending.append(
-                    {
-                        "request": req,
-                        "document": document,
-                        "label": doc_info.label if doc_info else req.document_type,
-                        "detail_url": detail_url,
-                        "requester_name": requester_name,
-                        "amount": ApprovalEngine.get_document_amount(document),
-                        "doc_no": doc_no_val,
-                    }
-                )
-        except (SQLAlchemyError, AttributeError, KeyError):
-            continue
+    my_pending = [_pending_approval_info(req, get_model_class, ApprovalEngine, User, DOCUMENT_TYPES) for req in all_pending]
+    my_pending = [item for item in my_pending if item is not None]
 
     return render_template(
         "admin/pending_approvals.html",
         pending_list=my_pending,
         titulo=_("Mis Aprobaciones Pendientes"),
     )
+
+
+def _process_pending_approval_post(approval_request, get_model_class) -> None:
+    """Procesa la acción enviada desde el listado de aprobaciones."""
+    req = database.session.get(approval_request, request.form.get("request_id"))
+    if not req:
+        return
+    document = database.session.get(get_model_class(req.document_type), req.document_id)
+    if document:
+        _process_approval_action(request.form.get("action"), document, request.form.get("comments") or None)
+
+
+def _pending_approval_info(req, get_model_class, approval_engine, user_model, document_types):
+    """Construye la información visible de una solicitud aprobable."""
+    try:
+        document = database.session.get(get_model_class(req.document_type), req.document_id)
+        if not document or not approval_engine.can_approve(document, current_user):
+            return None
+        doc_info = document_types.get(req.document_type)
+        detail_url = (
+            url_for(doc_info.detail_endpoint, **{doc_info.detail_arg: req.document_id})
+            if doc_info and doc_info.detail_endpoint
+            else "#"
+        )
+        requester = database.session.get(user_model, req.requested_by)
+        return {
+            "request": req,
+            "document": document,
+            "label": doc_info.label if doc_info else req.document_type,
+            "detail_url": detail_url,
+            "requester_name": (requester.name or requester.user) if requester else req.requested_by,
+            "amount": approval_engine.get_document_amount(document),
+            "doc_no": getattr(document, "document_no", None) or getattr(document, "id", None) or req.document_id,
+        }
+    except (SQLAlchemyError, AttributeError, KeyError):
+        return None

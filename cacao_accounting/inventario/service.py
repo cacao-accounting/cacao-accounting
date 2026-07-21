@@ -495,30 +495,31 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     cost_centers = _request_values(form, "cost_center_code")
     rows: list[ItemAccountRow] = []
     for index, company in enumerate(companies):
-        expense_account_id = expense_accounts[index] if index < len(expense_accounts) else ""
-        income_account_id = income_accounts[index] if index < len(income_accounts) else ""
-        cogs_account_id = cogs_accounts[index] if index < len(cogs_accounts) else ""
-        stock_adjustment_account_id = stock_adjustment_accounts[index] if index < len(stock_adjustment_accounts) else ""
-        cost_center_code = cost_centers[index] if index < len(cost_centers) else ""
+        values = [
+            _clean_row_value(values, index)
+            for values in (expense_accounts, income_accounts, cogs_accounts, stock_adjustment_accounts, cost_centers)
+        ]
         cleaned_company = str(company or "").strip()
-        cleaned_expense = str(expense_account_id or "").strip() or None
-        cleaned_income = str(income_account_id or "").strip() or None
-        cleaned_cogs = str(cogs_account_id or "").strip() or None
-        cleaned_stock_adjustment = str(stock_adjustment_account_id or "").strip() or None
-        cleaned_cost_center = str(cost_center_code or "").strip() or None
-        if not cleaned_company and not cleaned_expense and not cleaned_cost_center:
+        if not cleaned_company and not values[0] and not values[-1]:
             continue
         rows.append(
             ItemAccountRow(
                 company=cleaned_company,
-                expense_account_id=cleaned_expense,
-                income_account_id=cleaned_income,
-                cogs_account_id=cleaned_cogs,
-                stock_adjustment_account_id=cleaned_stock_adjustment,
-                cost_center_code=cleaned_cost_center,
+                expense_account_id=values[0],
+                income_account_id=values[1],
+                cogs_account_id=values[2],
+                stock_adjustment_account_id=values[3],
+                cost_center_code=values[4],
             )
         )
     return rows
+
+
+def _clean_row_value(values: list[Any], index: int) -> str | None:
+    """Obtiene y normaliza un valor de una columna repetible."""
+    if index >= len(values):
+        return None
+    return str(values[index] or "").strip() or None
 
 
 def validate_item_account_rows(
@@ -535,27 +536,30 @@ def validate_item_account_rows(
 
     seen_companies: set[str] = set()
     for row in rows:
-        if not row.company:
-            raise InventoryServiceError("Cada fila contable del item debe indicar una compañia.")
-        if row.company in seen_companies:
-            raise InventoryServiceError("No se puede repetir la misma compañia en la configuracion contable del item.")
-        company = database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none()
-        if company is None:
-            raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
-        _validate_item_account(row.company, row.expense_account_id, "expense", "gasto")
-        _validate_item_account(row.company, row.income_account_id, "income", "ingreso")
-        _validate_item_account(row.company, row.cogs_account_id, "cogs", "costo de venta")
-        _validate_item_account(row.company, row.stock_adjustment_account_id, "stock_adjustment", "ajuste de inventario")
-        _validate_cost_center(row.company, row.cost_center_code)
-        if requires_expense_by_company and not row.expense_account_id:
-            raise InventoryServiceError(
-                "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
-            )
-        if requires_expense_by_company and not row.cost_center_code:
-            raise InventoryServiceError(
-                "Los servicios y articulos no inventariables requieren centro de costo predeterminado por compañia."
-            )
+        _validate_single_item_account_row(row, requires_expense_by_company, seen_companies)
         seen_companies.add(row.company)
+
+
+def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: bool, seen_companies: set[str]) -> None:
+    """Valida una fila contable individual del item."""
+    if not row.company:
+        raise InventoryServiceError("Cada fila contable del item debe indicar una compañia.")
+    if row.company in seen_companies:
+        raise InventoryServiceError("No se puede repetir la misma compañia en la configuracion contable del item.")
+    if database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none() is None:
+        raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
+    for account_id, account_type, label in (
+        (row.expense_account_id, "expense", "gasto"),
+        (row.income_account_id, "income", "ingreso"),
+        (row.cogs_account_id, "cogs", "costo de venta"),
+        (row.stock_adjustment_account_id, "stock_adjustment", "ajuste de inventario"),
+    ):
+        _validate_item_account(row.company, account_id, account_type, label)
+    _validate_cost_center(row.company, row.cost_center_code)
+    if requires_expense and (not row.expense_account_id or not row.cost_center_code):
+        raise InventoryServiceError(
+            "Los servicios y articulos no inventariables requieren cuenta de gasto y centro de costo por compañia."
+        )
 
 
 def _validate_item_account(company: str, account_id: str | None, expected_type: str, label: str) -> None:
