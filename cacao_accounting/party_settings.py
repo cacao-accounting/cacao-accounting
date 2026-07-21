@@ -48,6 +48,20 @@ class PartyCompanySettings:
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
     default_currency: str | None
+    default_income_account_id: str | None = None
+    default_income_account_label: str = ""
+    default_expense_account_id: str | None = None
+    default_expense_account_label: str = ""
+    default_purchase_account_id: str | None = None
+    default_purchase_account_label: str = ""
+    default_advance_account_id: str | None = None
+    default_advance_account_label: str = ""
+    default_cost_center: str | None = None
+    default_business_unit: str | None = None
+    default_bank_name: str | None = None
+    default_bank_account_no: str | None = None
+    default_bank_iban: str | None = None
+    block_overdue: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,29 +78,19 @@ class PartyCompanySettingsParams:
     allow_purchase_invoice_without_receipt: bool
     default_currency: str | None = None
     default_income_account_id: str | None = None
+    default_income_account_label: str = ""
     default_expense_account_id: str | None = None
+    default_expense_account_label: str = ""
     default_purchase_account_id: str | None = None
+    default_purchase_account_label: str = ""
     default_advance_account_id: str | None = None
+    default_advance_account_label: str = ""
     default_cost_center: str | None = None
     default_business_unit: str | None = None
     default_bank_name: str | None = None
     default_bank_account_no: str | None = None
     default_bank_iban: str | None = None
     block_overdue: bool = False
-    default_income_account_id: str | None
-    default_income_account_label: str
-    default_expense_account_id: str | None
-    default_expense_account_label: str
-    default_purchase_account_id: str | None
-    default_purchase_account_label: str
-    default_advance_account_id: str | None
-    default_advance_account_label: str
-    default_cost_center: str | None
-    default_business_unit: str | None
-    default_bank_name: str | None
-    default_bank_account_no: str | None
-    default_bank_iban: str | None
-    block_overdue: bool
 
 
 def _account_by_id(account_id: str | None) -> Accounts | None:
