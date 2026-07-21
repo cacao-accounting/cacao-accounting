@@ -247,12 +247,6 @@
     return doc.source_id;
   }
 
-  function matchesSelectedId(id) {
-    return function (match) {
-      return match.source_item_id === id;
-    };
-  }
-
   function mapColumnHeader(col) {
     return col.required ? `${col.label} *` : col.label;
   }
