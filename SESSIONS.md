@@ -287,3 +287,14 @@ Segundo lote de refactorización de 8 funciones con complejidad cognitiva > 15 (
 | `compras/purchase_reconciliation_service.py` | `get_unlinked_purchase_receipts_summary` | 23 | `_aggregate_pending_by_receipt`, `_resolve_po_number`, `_resolve_supplier_name` |
 
 **Técnicas aplicadas**: Early returns con guard clauses, extracción de helpers compartidos entre funciones hermanas (`_resolve_po_number`, `_resolve_supplier_name`), separación de lógica de persistencia, eliminación de lógica duplicada de resolución de proveedor/PO.
+
+### 2026-07-21 (Issues abiertos de SonarCloud)
+
+La API pública de SonarCloud (`/api/issues/search`, proyecto `cacao-accounting_cacao-accounting`, `resolved=false`) reportó 34 issues abiertos: 22 de complejidad cognitiva, 8 de seguridad de GitHub Actions y 2 variables locales sin uso. Se implementó un tercer lote de correcciones:
+
+- Extracción de helpers para aprobación administrativa, creación de facturas/recepciones, validaciones de cantidades de compras/ventas, crédito de clientes, conciliación bancaria, relaciones documentales y conciliación de inventario.
+- Simplificación del parseo de artículos, cuentas por compañía, configuración de terceros y serialización de líneas contables.
+- Eliminación de las variables no utilizadas en edición de proyectos.
+- El workflow de CI instala dependencias con `--only-binary=:all:` y versiones explícitas; `odfpy==1.4.1` conserva una instalación aislada desde fuente por no disponer de wheel compatible.
+
+Validación realizada: Ruff y compilación Python pasan. La suite completa se ejecutó en segundo plano con salida en `/tmp/sonar-open-issues-pytest.log`; debe revisarse su resultado antes de integrar los commits.
