@@ -1129,9 +1129,31 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     return report_rows
 
 
+def _resolve_po_number(purchase_order_id: str | None) -> str:
+    """Resolve the document number from a purchase order ID."""
+    from cacao_accounting.database import PurchaseOrder
+
+    if not purchase_order_id:
+        return ""
+    po = database.session.get(PurchaseOrder, purchase_order_id)
+    return po.document_no or po.id if po else ""
+
+
+def _resolve_supplier_name(supplier_id: str | None, fallback_name: str | None) -> str:
+    """Resolve supplier name, loading from Party if not provided."""
+    from cacao_accounting.database import Party
+
+    if fallback_name:
+        return fallback_name
+    if not supplier_id:
+        return ""
+    supp = database.session.get(Party, supplier_id)
+    return supp.name if supp else ""
+
+
 def get_unlinked_purchase_invoices(company: str) -> list[dict[str, Any]]:
     """Retorna las facturas de compra aprobadas que no tienen recepcion asociada."""
-    from cacao_accounting.database import PurchaseInvoice, PurchaseOrder, Party
+    from cacao_accounting.database import PurchaseInvoice
 
     invoices = (
         database.session.execute(
@@ -1146,40 +1168,27 @@ def get_unlinked_purchase_invoices(company: str) -> list[dict[str, Any]]:
 
     report_rows = []
     for inv in invoices:
-        po_no = ""
-        if inv.purchase_order_id:
-            po = database.session.get(PurchaseOrder, inv.purchase_order_id)
-            if po:
-                po_no = po.document_no or po.id
-
-        supplier_name = inv.supplier_name
-        if not supplier_name and inv.supplier_id:
-            supp = database.session.get(Party, inv.supplier_id)
-            if supp:
-                supplier_name = supp.name
-
         report_rows.append(
             {
                 "id": inv.id,
                 "document_no": inv.document_no or inv.id,
                 "posting_date": inv.posting_date,
                 "supplier_id": inv.supplier_id,
-                "supplier_name": supplier_name or "",
+                "supplier_name": _resolve_supplier_name(inv.supplier_id, inv.supplier_name),
                 "grand_total": inv.grand_total or Decimal("0"),
                 "purchase_order_id": inv.purchase_order_id,
-                "purchase_order_no": po_no,
+                "purchase_order_no": _resolve_po_number(inv.purchase_order_id),
             }
         )
 
     return report_rows
 
 
-def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]:
-    """Retorna un resumen de recepciones de compra aprobadas que tienen cantidades pendientes de facturar."""
-    from cacao_accounting.database import PurchaseReceipt, PurchaseOrder, Party
-
-    pending_items = get_purchase_reconciliation_pending(company)
-    pending_by_receipt = {}
+def _aggregate_pending_by_receipt(
+    pending_items: list[Any],
+) -> dict[str, dict[str, Decimal]]:
+    """Aggregate pending qty/amount by receipt ID."""
+    pending_by_receipt: dict[str, dict[str, Decimal]] = {}
     for pending in pending_items:
         rec_id = pending.purchase_receipt_id
         if rec_id not in pending_by_receipt:
@@ -1189,6 +1198,15 @@ def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]
             }
         pending_by_receipt[rec_id]["pending_qty"] += pending.pending_qty
         pending_by_receipt[rec_id]["pending_amount"] += pending.pending_amount
+    return pending_by_receipt
+
+
+def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]:
+    """Retorna un resumen de recepciones de compra aprobadas que tienen cantidades pendientes de facturar."""
+    from cacao_accounting.database import PurchaseReceipt
+
+    pending_items = get_purchase_reconciliation_pending(company)
+    pending_by_receipt = _aggregate_pending_by_receipt(pending_items)
 
     report_rows = []
     for rec_id, totals in pending_by_receipt.items():
@@ -1196,33 +1214,20 @@ def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]
         if not receipt or receipt.docstatus != 1:
             continue
 
-        po_no = ""
-        if receipt.purchase_order_id:
-            po = database.session.get(PurchaseOrder, receipt.purchase_order_id)
-            if po:
-                po_no = po.document_no or po.id
-
-        supplier_name = receipt.supplier_name
-        if not supplier_name and receipt.supplier_id:
-            supp = database.session.get(Party, receipt.supplier_id)
-            if supp:
-                supplier_name = supp.name
-
         report_rows.append(
             {
                 "id": receipt.id,
                 "document_no": receipt.document_no or receipt.id,
                 "posting_date": receipt.posting_date,
                 "supplier_id": receipt.supplier_id,
-                "supplier_name": supplier_name or "",
+                "supplier_name": _resolve_supplier_name(receipt.supplier_id, receipt.supplier_name),
                 "grand_total": receipt.grand_total or Decimal("0"),
                 "purchase_order_id": receipt.purchase_order_id,
-                "purchase_order_no": po_no,
+                "purchase_order_no": _resolve_po_number(receipt.purchase_order_id),
                 "pending_qty": totals["pending_qty"],
                 "pending_amount": totals["pending_amount"],
             }
         )
 
-    # Sort by posting date desc
     report_rows.sort(key=lambda x: (x["posting_date"] or date.min, x["id"]), reverse=True)
     return report_rows
