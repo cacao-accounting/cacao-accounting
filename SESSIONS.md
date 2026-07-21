@@ -298,3 +298,5 @@ La API pública de SonarCloud (`/api/issues/search`, proyecto `cacao-accounting_
 - El workflow de CI instala dependencias con `--only-binary=:all:` y versiones explícitas; `odfpy==1.4.1` conserva una instalación aislada desde fuente por no disponer de wheel compatible.
 
 Validación realizada: Ruff y compilación Python pasan. La suite completa se ejecutó en segundo plano con salida en `/tmp/sonar-open-issues-pytest.log`; el primer resultado fue 1508 pasadas, 8 omitidas y dos fallos. Se corrigió el contrato de mensajes de cuentas contables y se hizo tolerante la validación MIME cuando `python-magic` no está disponible, rechazando HTML y conservando el aviso de validación degradada. Las pruebas focalizadas de imports, flujo de caja e inventario pasan (15 pasadas).
+
+Por solicitud de continuidad, la verificación final se limitó a los módulos afectados: `254 passed` en 2:42 usando aprobación, inventario, crédito de ventas, flujo documental, posting, conciliación bancaria, ventas, compras, pagos, servicios e imports. No se ejecutó nuevamente la suite completa.
