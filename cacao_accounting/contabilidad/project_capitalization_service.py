@@ -69,7 +69,7 @@ def _create_capitalization_journal(
         status="draft",
         transaction_currency=entry.account_currency or "NIO",
         exchange_rate=entry.exchange_rate or Decimal("1.0"),
-        voucher_type="Capitalizacion Automatica de Proyecto",
+        voucher_type="Capitalización Automática de Proyecto",
         document_no=doc_no,
         capitalization_origin_id=entry.voucher_id,
     )
