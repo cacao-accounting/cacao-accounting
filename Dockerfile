@@ -5,7 +5,7 @@ RUN microdnf install -y --nodocs --best nodejs npm \
 
 WORKDIR /build
 COPY cacao_accounting/static/package.json cacao_accounting/static/package-lock.json ./
-RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund \
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
     && find node_modules -type d \( \
         -name "test" -o -name "tests" -o -name "doc" -o -name "docs" \
         -o -name "examples" -o -name "icons" -o -name "scss" -o -name "ts" \
