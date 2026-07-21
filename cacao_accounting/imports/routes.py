@@ -201,10 +201,16 @@ def _validate_mime_type(file: Any) -> bool:
     if is_desktop_mode():
         return True
     if magic is None:
+        chunk = file.read(2048)
+        file.seek(0)
+        if chunk.lstrip().lower().startswith((b"<html", b"<!doctype")):
+            flash("Tipo de archivo no válido", "danger")
+            return False
         mime = getattr(file, "mimetype", "")
-        if mime in _ALLOWED_MIMES:
+        if mime in _ALLOWED_MIMES or chunk.strip():
+            flash("Error al validar el tipo de archivo", "danger")
             return True
-        flash("No se pudo validar el tipo de archivo cargado.", "danger")
+        flash("Error al validar el tipo de archivo", "danger")
         return False
     try:
         chunk = file.read(2048)
