@@ -3904,44 +3904,139 @@ def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     return redirect(url_for(COMPRAS_PROVEEDOR_ENDPOINT, supplier_id=supplier_id))
 
 
-def check_budget_control(
-    company: str, posting_date: Any, supplier_id: str | None, document_id: str, document_type: str, items: Any
-) -> None:
-    """Valida el control presupuestario de las líneas del documento según la política de la compañía."""
-    from cacao_accounting.setup.repository import get_setup_value
+def _group_items_by_budget_dimensions(
+    items: Any, company: str, supplier_id: str | None
+) -> dict[tuple, Decimal]:
+    """Agrupa los montos solicitados por combinacion de cuenta y centro de costo."""
     from cacao_accounting.contabilidad.budget_service import BudgetService
-    from cacao_accounting.database import AuditTrail
-    from flask_login import current_user
-    import json
-    from datetime import datetime
 
-    # 1. Check if budget control is enabled for this company
-    enabled = get_setup_value(f"budget_control_enabled_{company}", "0") == "1"
-    if not enabled:
-        return
-
-    action_policy = get_setup_value(f"budget_control_action_{company}", "do_nothing")
-
-    # 2. Group item requested amounts by (account_id, cost_center_id)
     budget_service = BudgetService()
     groups: dict[tuple, Decimal] = {}
     for item in items:
         item_code = getattr(item, "item_code", None) or ""
         amount = getattr(item, "base_amount", None) or getattr(item, "amount", None) or Decimal("0")
-
         acc = budget_service.resolve_expense_account(item_code, company)
         cc = budget_service.resolve_cost_center(item_code, company, supplier_id)
-
-        acc_id = acc.id if acc else ""
-        cc_id = cc.id if cc else ""
-
-        key = (acc_id, cc_id)
+        key = (acc.id if acc else "", cc.id if cc else "")
         groups[key] = groups.get(key, Decimal("0")) + Decimal(str(amount))
+    return groups
 
-    # 3. Validate each group against the budget
+
+def _resolve_document_no_for_budget(document_type: str, document_id: str) -> str | None:
+    """Resuelve el numero de documento para el registro de auditoria presupuestaria."""
+    model_map = {
+        "purchase_request": "PurchaseRequest",
+        "purchase_order": "PurchaseOrder",
+    }
+    model_name = model_map.get(document_type)
+    if not model_name:
+        return None
+    from cacao_accounting.database import PurchaseOrder, PurchaseRequest
+
+    model_classes = {"PurchaseRequest": PurchaseRequest, "PurchaseOrder": PurchaseOrder}
+    doc = database.session.get(model_classes[model_name], document_id)
+    return doc.document_no if doc else None
+
+
+def _build_budget_exceeded_message(result: dict, action_policy: str) -> str:
+    """Construye el mensaje de exceso de presupuesto segun la politica."""
+    base = (
+        f"El monto solicitado excede el presupuesto disponible.\n\n"
+        f"Presupuesto:\n{result['budget']:,.2f}\n\n"
+        f"Disponible:\n{result['available']:,.2f}\n\n"
+        f"Solicitud:\n{result['requested']:,.2f}\n\n"
+        f"Exceso:\n{result['excess']:,.2f}"
+    )
+    if action_policy == "block":
+        return f"No es posible aprobar el documento.\n\n{base}"
+    if action_policy == "notify":
+        return f"{base}\n\nLa aprobacion continuara de acuerdo con la configuracion de la compania."
+    return base
+
+
+def _log_budget_exceeded(
+    company: str,
+    document_type: str,
+    document_id: str,
+    doc_no: str | None,
+    posting_date: Any,
+    acc_id: str,
+    cc_id: str,
+    result: dict,
+    action_policy: str,
+) -> None:
+    """Registra un evento de exceso de presupuesto en la auditoria."""
+    import json
+    from datetime import datetime
+    from cacao_accounting.database import AuditTrail
+    from flask_login import current_user
+
+    user_id = None
+    user_name = "System"
+    if current_user and current_user.is_authenticated:
+        user_id = current_user.id
+        user_name = getattr(current_user, "name", "") or current_user.user
+
+    action_label = "Approval allowed" if action_policy != "block" else "Approval rejected"
+    comment_str = f"Budget exceeded\n\nMode:\n{action_policy}\n\nAction:\n{action_label}"
+
+    log_entry = AuditTrail(
+        document_type=document_type,
+        document_id=document_id,
+        document_no=doc_no,
+        company=company,
+        action="budget_exceeded",
+        actor_user_id=user_id,
+        actor_name=user_name,
+        comment=comment_str,
+        timestamp=datetime.now(),
+        changes_json=json.dumps(
+            {
+                "date": str(posting_date),
+                "user": user_name,
+                "company": company,
+                "document": doc_no or document_id,
+                "account_id": acc_id,
+                "cost_center_id": cc_id,
+                "budget": float(result["budget"]),
+                "available": float(result["available"]),
+                "requested": float(result["requested"]),
+                "excess": float(result["excess"]),
+                "action_executed": action_policy,
+            },
+            ensure_ascii=False,
+        ),
+    )
+    database.session.add(log_entry)
+    database.session.commit()
+
+
+def _execute_budget_policy(action_policy: str, message: str) -> None:
+    """Ejecuta la politica de control presupuestario (block/notify/do_nothing)."""
+    if action_policy == "block":
+        raise ValueError(message)
+    if action_policy == "notify":
+        flash(message, "warning")
+
+
+def check_budget_control(
+    company: str, posting_date: Any, supplier_id: str | None, document_id: str, document_type: str, items: Any
+) -> None:
+    """Valida el control presupuestario de las lineas del documento segun la politica de la compania."""
+    from cacao_accounting.setup.repository import get_setup_value
+    from cacao_accounting.contabilidad.budget_service import BudgetService
+
+    enabled = get_setup_value(f"budget_control_enabled_{company}", "0") == "1"
+    if not enabled:
+        return
+
+    action_policy = get_setup_value(f"budget_control_action_{company}", "do_nothing")
+    groups = _group_items_by_budget_dimensions(items, company, supplier_id)
+    budget_service = BudgetService()
+
     for (acc_id, cc_id), total_requested in groups.items():
         if not acc_id:
-            continue  # Skip if no account can be resolved
+            continue
 
         result = budget_service.validate_transaction(
             company=company,
@@ -3953,84 +4048,10 @@ def check_budget_control(
             document_type=document_type,
         )
 
-        if result["exceeded"]:
-            # Audit log details
-            user_id = None
-            user_name = "System"
-            if current_user and current_user.is_authenticated:
-                user_id = current_user.id
-                user_name = getattr(current_user, "name", "") or current_user.user
+        if not result["exceeded"]:
+            continue
 
-            doc_no = None
-            if document_type == "purchase_request":
-                from cacao_accounting.database import PurchaseRequest
-
-                doc = database.session.get(PurchaseRequest, document_id)
-                doc_no = doc.document_no if doc else None
-            elif document_type == "purchase_order":
-                from cacao_accounting.database import PurchaseOrder
-
-                doc = database.session.get(PurchaseOrder, document_id)
-                doc_no = doc.document_no if doc else None
-
-            action_label = "Approval allowed" if action_policy != "block" else "Approval rejected"
-
-            comment_str = f"Budget exceeded\n\nMode:\n{action_policy}\n\nAction:\n{action_label}"
-
-            # Save audit trail
-            log_entry = AuditTrail(
-                document_type=document_type,
-                document_id=document_id,
-                document_no=doc_no,
-                company=company,
-                action="budget_exceeded",
-                actor_user_id=user_id,
-                actor_name=user_name,
-                comment=comment_str,
-                timestamp=datetime.now(),
-                changes_json=json.dumps(
-                    {
-                        "date": str(posting_date),
-                        "user": user_name,
-                        "company": company,
-                        "document": doc_no or document_id,
-                        "account_id": acc_id,
-                        "cost_center_id": cc_id,
-                        "budget": float(result["budget"]),
-                        "available": float(result["available"]),
-                        "requested": float(result["requested"]),
-                        "excess": float(result["excess"]),
-                        "action_executed": action_policy,
-                    },
-                    ensure_ascii=False,
-                ),
-            )
-            database.session.add(log_entry)
-            database.session.commit()
-
-            # Execute configured policy action
-            if action_policy == "block":
-                msg = (
-                    f"No es posible aprobar el documento.\n\n"
-                    f"El monto solicitado excede el presupuesto disponible.\n\n"
-                    f"Presupuesto:\n{result['budget']:,.2f}\n\n"
-                    f"Disponible:\n{result['available']:,.2f}\n\n"
-                    f"Solicitud:\n{result['requested']:,.2f}\n\n"
-                    f"Exceso:\n{result['excess']:,.2f}"
-                )
-                raise ValueError(msg)
-
-            elif action_policy == "notify":
-                msg = (
-                    f"El monto solicitado excede el presupuesto disponible.\n\n"
-                    f"Presupuesto:\n{result['budget']:,.2f}\n\n"
-                    f"Disponible:\n{result['available']:,.2f}\n\n"
-                    f"Solicitud:\n{result['requested']:,.2f}\n\n"
-                    f"Exceso:\n{result['excess']:,.2f}\n\n"
-                    f"La aprobación continuará de acuerdo con la configuración de la compañía."
-                )
-                flash(msg, "warning")
-
-            elif action_policy == "do_nothing":
-                # Save and proceed silently
-                pass
+        doc_no = _resolve_document_no_for_budget(document_type, document_id)
+        _log_budget_exceeded(company, document_type, document_id, doc_no, posting_date, acc_id, cc_id, result, action_policy)
+        message = _build_budget_exceeded_message(result, action_policy)
+        _execute_budget_policy(action_policy, message)
