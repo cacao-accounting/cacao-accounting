@@ -78,6 +78,7 @@
     {%- set nid = _node[_ik] -%}
     {%- set kids = _all | selectattr(_pk, 'equalto', nid) | list -%}
     {%- set has_kids = kids | length > 0 -%}
+    {# sonicloud:exclude ItemTagNotWithinContainerTagCheck — este macro se invoca dentro de <ul> en render_tree #}
     <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
       <span @click="{% if has_kids %}open = !open{% endif %}" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
         {% if has_kids %}
