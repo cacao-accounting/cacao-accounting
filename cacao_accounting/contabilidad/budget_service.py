@@ -309,6 +309,117 @@ class BudgetService:
         cc = database.session.query(CostCenter).filter_by(entity=company, code="MAIN").first()
         return cc
 
+    @staticmethod
+    def _no_budget_result(amount: Decimal) -> Dict[str, Any]:
+        """Retorna resultado cuando no hay período presupuestario activo."""
+        return {
+            "exceeded": False,
+            "budget": Decimal("0"),
+            "committed": Decimal("0"),
+            "available": Decimal("0"),
+            "requested": amount,
+            "excess": Decimal("0"),
+        }
+
+    @staticmethod
+    def _resolve_account_id(company: str, account_id: str) -> str:
+        """Resuelve el ID de cuenta por código o ID."""
+        from cacao_accounting.database import Accounts
+
+        acc = (
+            database.session.query(Accounts)
+            .filter(Accounts.entity == company, (Accounts.id == account_id) | (Accounts.code == account_id))
+            .first()
+        )
+        return acc.id if acc else account_id
+
+    @staticmethod
+    def _resolve_cost_center_id(company: str, cost_center_id: str) -> str:
+        """Resuelve el ID de centro de costo por código o ID."""
+        from cacao_accounting.database import CostCenter
+
+        cc = (
+            database.session.query(CostCenter)
+            .filter(CostCenter.entity == company, (CostCenter.id == cost_center_id) | (CostCenter.code == cost_center_id))
+            .first()
+        )
+        return cc.id if cc else cost_center_id
+
+    @staticmethod
+    def _resolve_primary_ledger(company: str, ledger_id: str | None) -> str | None:
+        """Resuelve el ledger primario si no se proporciona uno explícito."""
+        if ledger_id:
+            return ledger_id
+        from cacao_accounting.database import Book
+        from sqlalchemy import or_
+
+        primary_book = (
+            database.session.query(Book)
+            .filter(
+                Book.entity == company,
+                or_(Book.status == "activo", Book.status.is_(None)),
+            )
+            .order_by(Book.is_primary.desc(), Book.code)
+            .first()
+        )
+        return primary_book.id if primary_book else None
+
+    @staticmethod
+    def _sum_budget_amount(
+        budget_ids: list, resolved_account_id: str, resolved_cost_center_id: str, period_id: str
+    ) -> Decimal:
+        """Suma los montos de las líneas de presupuesto para una combinación dada."""
+        if not budget_ids:
+            return Decimal("0")
+        from cacao_accounting.database import BudgetLine
+
+        lines = (
+            database.session.query(BudgetLine)
+            .filter(
+                BudgetLine.budget_id.in_(budget_ids),
+                BudgetLine.account_id == resolved_account_id,
+                BudgetLine.cost_center_id == resolved_cost_center_id,
+                BudgetLine.period_id == period_id,
+            )
+            .all()
+        )
+        return sum(line.amount for line in lines)
+
+    @staticmethod
+    def _compute_committed_amount(
+        company: str,
+        period_id: str,
+        resolved_account_id: str,
+        resolved_ledger_id: str | None,
+        cost_center_code: str | None,
+    ) -> Decimal:
+        """Calcula el monto comprometido a partir de asientos contables reales."""
+        from cacao_accounting.database import Accounts, GLEntry
+
+        gl_query = (
+            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification)
+            .join(Accounts, GLEntry.account_id == Accounts.id)
+            .filter(
+                GLEntry.company == company,
+                GLEntry.accounting_period_id == period_id,
+                GLEntry.account_id == resolved_account_id,
+                GLEntry.is_cancelled.is_(False),
+            )
+        )
+        if resolved_ledger_id:
+            gl_query = gl_query.filter(GLEntry.ledger_id == resolved_ledger_id)
+        if cost_center_code:
+            gl_query = gl_query.filter(GLEntry.cost_center_code == cost_center_code)
+
+        committed = Decimal("0")
+        for entry in gl_query.all():
+            classif = (entry.classification or "").lower()
+            if classif in ("gastos", "activo", "expense", "asset"):
+                committed += entry.debit - entry.credit
+            else:
+                committed += entry.credit - entry.debit
+        return committed
+
     def validate_transaction(
         self,
         company: str,
@@ -320,24 +431,15 @@ class BudgetService:
         document_type: str,
         ledger_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Valida si una transacción excede el presupuesto disponible de la cuenta y centro de costo.
+        """Valida si una transacción excede el presupuesto disponible.
 
-        Considera:
-        - compañía
-        - cuenta contable
-        - centro de costo
-        - período presupuestario
-        - monto solicitado
-
-        Retorna un diccionario indicando si excede el presupuesto, el presupuesto,
-        lo comprometido, disponible, lo solicitado y el exceso.
+        Retorna un diccionario con exceeded, budget, committed, available, requested y excess.
         """
-        from cacao_accounting.database import AccountingPeriod, Accounts, Book, Budget, BudgetLine, CostCenter, GLEntry
+        from cacao_accounting.database import AccountingPeriod, Budget
 
         if hasattr(date_val, "date"):
             date_val = date_val.date()  # type: ignore
 
-        # 1. Resolve AccountingPeriod
         period = (
             database.session.query(AccountingPeriod)
             .filter(
@@ -348,100 +450,28 @@ class BudgetService:
             )
             .first()
         )
-
         if not period:
-            return {
-                "exceeded": False,
-                "budget": Decimal("0"),
-                "committed": Decimal("0"),
-                "available": Decimal("0"),
-                "requested": amount,
-                "excess": Decimal("0"),
-            }
+            return self._no_budget_result(amount)
 
-        # 2. Resolve Account ID
-        acc = (
-            database.session.query(Accounts)
-            .filter(Accounts.entity == company, (Accounts.id == account_id) | (Accounts.code == account_id))
-            .first()
-        )
-        resolved_account_id = acc.id if acc else account_id
+        resolved_account_id = self._resolve_account_id(company, account_id)
+        resolved_cost_center_id = self._resolve_cost_center_id(company, cost_center_id)
+        resolved_ledger_id = self._resolve_primary_ledger(company, ledger_id)
 
-        # 3. Resolve Cost Center ID
-        cc = (
-            database.session.query(CostCenter)
-            .filter(CostCenter.entity == company, (CostCenter.id == cost_center_id) | (CostCenter.code == cost_center_id))
-            .first()
-        )
-        resolved_cost_center_id = cc.id if cc else cost_center_id
-
-        # Resolve Ledger/Book to prevent cross-ledger summing, using the same active-book predicate as posting._active_books
-        resolved_ledger_id = ledger_id
-        if not resolved_ledger_id:
-            from sqlalchemy import or_
-
-            primary_book = (
-                database.session.query(Book)
-                .filter(
-                    Book.entity == company,
-                    or_(Book.status == "activo", Book.status.is_(None)),
-                )
-                .order_by(Book.is_primary.desc(), Book.code)
-                .first()
-            )
-            resolved_ledger_id = primary_book.id if primary_book else None
-
-        # 4. Resolve Approved Budgets
-        budgets_query = database.session.query(Budget).filter_by(
-            company=company, fiscal_year_id=period.fiscal_year_id, status="approved"
+        budgets = (
+            database.session.query(Budget)
+            .filter_by(company=company, fiscal_year_id=period.fiscal_year_id, status="approved")
         )
         if resolved_ledger_id:
-            budgets_query = budgets_query.filter_by(ledger_id=resolved_ledger_id)
-        budgets = budgets_query.all()
-        budget_ids = [b.id for b in budgets]
+            budgets = budgets.filter_by(ledger_id=resolved_ledger_id)
+        budget_ids = [b.id for b in budgets.all()]
 
-        # 5. Get Budget Amount
-        budget_amount = Decimal("0")
-        if budget_ids:
-            lines = (
-                database.session.query(BudgetLine)
-                .filter(
-                    BudgetLine.budget_id.in_(budget_ids),
-                    BudgetLine.account_id == resolved_account_id,
-                    BudgetLine.cost_center_id == resolved_cost_center_id,
-                    BudgetLine.period_id == period.id,
-                )
-                .all()
-            )
-            budget_amount = sum(line.amount for line in lines)
+        budget_amount = self._sum_budget_amount(budget_ids, resolved_account_id, resolved_cost_center_id, period.id)
 
-        # 6. Calculate Committed Amount (from GLEntry actuals)
-        gl_query = (
-            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification)
-            .join(Accounts, GLEntry.account_id == Accounts.id)
-            .filter(
-                GLEntry.company == company,
-                GLEntry.accounting_period_id == period.id,
-                GLEntry.account_id == resolved_account_id,
-                GLEntry.is_cancelled.is_(False),
-            )
+        cc = database.session.get(CostCenter, resolved_cost_center_id)
+        committed_amount = self._compute_committed_amount(
+            company, period.id, resolved_account_id, resolved_ledger_id, cc.code if cc else None
         )
-        if resolved_ledger_id:
-            gl_query = gl_query.filter(GLEntry.ledger_id == resolved_ledger_id)
-        if cc:
-            gl_query = gl_query.filter(GLEntry.cost_center_code == cc.code)
-        actual_entries = gl_query.all()
 
-        committed_amount = Decimal("0")
-        for entry in actual_entries:
-            classif = entry.classification.lower() if entry.classification else ""
-            if classif in ("gastos", "activo", "expense", "asset"):
-                val = entry.debit - entry.credit
-            else:
-                val = entry.credit - entry.debit
-            committed_amount += val
-
-        # 7. Compute results
         available_amount = budget_amount - committed_amount
         exceeded = amount > available_amount
         excess = (amount - available_amount) if exceeded else Decimal("0")
