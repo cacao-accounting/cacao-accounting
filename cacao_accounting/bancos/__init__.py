@@ -1053,7 +1053,7 @@ def _build_numbering_config_response(bank_account: BankAccount) -> dict[str, lis
         .all()
     )
 
-    return {"configs": [_build_single_config_entry(pt, configs, ENTITY_MAP) for pt in PAYMENT_TYPES]}
+    return {"configs": [_build_single_config_entry(pt, list(configs), ENTITY_MAP) for pt in PAYMENT_TYPES]}
 
 
 def _build_single_config_entry(

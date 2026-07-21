@@ -3715,8 +3715,6 @@ def _link_landed_cost_to_invoice(
                 target_id=registro.id,
                 target_item_id=our_item.id,
                 qty=item.qty,
-                company=company,
-                relation_type="landed_cost",
             )
 
 
