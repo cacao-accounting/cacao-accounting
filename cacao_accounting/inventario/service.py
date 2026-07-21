@@ -336,7 +336,7 @@ def update_item_with_uoms(
             ItemUOMConversion(
                 item_code=item.code,
                 from_uom=uom_row.uom_code,
-                to_uom=default_uom,
+                to_uom=params.default_uom,
                 conversion_factor=uom_row.conversion_factor,
             )
         )
