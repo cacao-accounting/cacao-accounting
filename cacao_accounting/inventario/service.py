@@ -556,9 +556,13 @@ def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: boo
     ):
         _validate_item_account(row.company, account_id, account_type, label)
     _validate_cost_center(row.company, row.cost_center_code)
-    if requires_expense and (not row.expense_account_id or not row.cost_center_code):
+    if requires_expense and not row.expense_account_id:
         raise InventoryServiceError(
-            "Los servicios y articulos no inventariables requieren cuenta de gasto y centro de costo por compañia."
+            "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+        )
+    if requires_expense and not row.cost_center_code:
+        raise InventoryServiceError(
+            "Los servicios y articulos no inventariables requieren centro de costo predeterminado por compañia."
         )
 
 
