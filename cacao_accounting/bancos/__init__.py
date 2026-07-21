@@ -1789,29 +1789,68 @@ def bancos_pago_nuevo():
     )
 
 
+def _resolve_payment_numbering(
+    payload: PaymentPayload,
+    payment: PaymentEntry,
+    mode_of_payment: str,
+) -> tuple[str | None, str | None]:
+    """Resolve naming_series_id and external_counter_id for a payment."""
+    config = _resolve_bank_account_numbering_config(payment.bank_account_id, payment.payment_type or "pay")
+    naming_series_id = cast(str | None, payload.get("naming_series_id"))
+    if naming_series_id is None:
+        if config and config.naming_series_id:
+            naming_series_id = config.naming_series_id
+        else:
+            legacy_series_id, _legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+            naming_series_id = legacy_series_id
+
+    external_counter_id: str | None = None
+    if mode_of_payment == "check":
+        external_counter_id = cast(str | None, payload.get("external_counter_id"))
+        if external_counter_id is None and config and config.use_external_counter:
+            external_counter_id = config.external_counter_id
+        if external_counter_id is None:
+            _legacy_series_id, legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
+            external_counter_id = legacy_counter_id
+
+    return naming_series_id, external_counter_id
+
+
+def _finalize_and_commit_payment(
+    payment: PaymentEntry,
+    payload: PaymentPayload,
+    amount: Decimal,
+) -> Any:
+    """Validate references, persist fiscal snapshot, log, and commit."""
+    ref_totals = _save_payment_references(
+        payment,
+        payload.get("lines") or [],
+        allow_order_references=bool(payload.get("advance_mode")),
+    )
+    _validate_payment_reference_totals(amount, ref_totals)
+    _warn_duplicate_payment(payment)
+    persist_document_fiscal_snapshot(
+        company=str(payment.company or ""),
+        document_type="payment_entry",
+        document_id=payment.id,
+        currency=payment.currency,
+        tax_lines=payload.get("tax_lines"),
+        tax_summary=payload.get("tax_summary"),
+    )
+    log_create(payment)
+    database.session.commit()
+    flash(_("Pago registrado correctamente."), "success")
+    return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
+
+
 def _create_payment_from_request():
     """Create a payment from the submitted request payload."""
     try:
         payload = _payment_payload_from_request()
         payment, amount, mode_of_payment = _build_payment_from_payload(payload)
-        payment_type = payment.payment_type or payload.get("payment_type") or "pay"
-        config = _resolve_bank_account_numbering_config(payment.bank_account_id, payment_type)
-        entity_type = _payment_type_to_entity_type(payment_type)
-        naming_series_id = cast(str | None, payload.get("naming_series_id"))
-        if naming_series_id is None:
-            if config and config.naming_series_id:
-                naming_series_id = config.naming_series_id
-            else:
-                legacy_series_id, _legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
-                naming_series_id = legacy_series_id
-        external_counter_id: str | None = None
-        if mode_of_payment == "check":
-            external_counter_id = cast(str | None, payload.get("external_counter_id"))
-            if external_counter_id is None and config and config.use_external_counter:
-                external_counter_id = config.external_counter_id
-            if external_counter_id is None:
-                _legacy_series_id, legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
-                external_counter_id = legacy_counter_id
+        payment.payment_type = payment.payment_type or payload.get("payment_type") or "pay"
+        entity_type = _payment_type_to_entity_type(payment.payment_type)
+        naming_series_id, external_counter_id = _resolve_payment_numbering(payload, payment, mode_of_payment)
         assign_document_identifier(
             document=payment,
             entity_type=entity_type,
@@ -1821,25 +1860,7 @@ def _create_payment_from_request():
             external_number=None,
             external_context=_payment_identifier_context(payment, mode_of_payment),
         )
-        ref_totals = _save_payment_references(
-            payment,
-            payload.get("lines") or [],
-            allow_order_references=bool(payload.get("advance_mode")),
-        )
-        _validate_payment_reference_totals(amount, ref_totals)
-        _warn_duplicate_payment(payment)
-        persist_document_fiscal_snapshot(
-            company=str(payment.company or ""),
-            document_type="payment_entry",
-            document_id=payment.id,
-            currency=payment.currency,
-            tax_lines=payload.get("tax_lines"),
-            tax_summary=payload.get("tax_summary"),
-        )
-        log_create(payment)
-        database.session.commit()
-        flash(_("Pago registrado correctamente."), "success")
-        return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment.id))
+        return _finalize_and_commit_payment(payment, payload, amount)
     except (ValueError, ArithmeticError) as exc:
         database.session.rollback()
         flash_error(exc)
