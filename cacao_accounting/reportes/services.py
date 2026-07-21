@@ -852,6 +852,15 @@ def _apply_base_filters(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
+def _apply_hierarchical_filter(query: Any, column, code_value: str, model_class, database) -> Any:
+    """Aplica filtro jerarquico con soporte de descendientes."""
+    node = database.session.execute(database.select(model_class).filter_by(code=code_value)).scalar_one_or_none()
+    if node:
+        codes_list = [node.code] + [d.code for d in node.descendants]
+        return query.where(column.in_(codes_list))
+    return query.where(column == code_value)
+
+
 def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
     from cacao_accounting.database import Unit, Project, database
 
@@ -865,22 +874,12 @@ def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
         query = query.where(GLEntry.cost_center_code == filters.cost_center_code)
     if filters.unit_code:
         if filters.include_descendants:
-            node = database.session.execute(database.select(Unit).filter_by(code=filters.unit_code)).scalar_one_or_none()
-            if node:
-                codes_list = [node.code] + [d.code for d in node.descendants]
-                query = query.where(GLEntry.unit_code.in_(codes_list))
-            else:
-                query = query.where(GLEntry.unit_code == filters.unit_code)
+            query = _apply_hierarchical_filter(query, GLEntry.unit_code, filters.unit_code, Unit, database)
         else:
             query = query.where(GLEntry.unit_code == filters.unit_code)
     if filters.project_code:
         if filters.include_descendants:
-            node = database.session.execute(database.select(Project).filter_by(code=filters.project_code)).scalar_one_or_none()
-            if node:
-                codes_list = [node.code] + [d.code for d in node.descendants]
-                query = query.where(GLEntry.project_code.in_(codes_list))
-            else:
-                query = query.where(GLEntry.project_code == filters.project_code)
+            query = _apply_hierarchical_filter(query, GLEntry.project_code, filters.project_code, Project, database)
         else:
             query = query.where(GLEntry.project_code == filters.project_code)
     return query

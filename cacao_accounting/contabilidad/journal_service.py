@@ -634,6 +634,20 @@ def _selected_books_for_journal(journal: ComprobanteContable) -> list[str] | Non
     return None
 
 
+def _safe_str(value: Any, default: str = "") -> str:
+    """Convierte un valor a string o retorna valor por defecto si es None."""
+    return str(value) if value is not None else default
+
+
+def _safe_attr(obj: Any, *attrs: str, default: Any = "") -> Any:
+    """Busca el primer atributo no-None en un objeto."""
+    for attr in attrs:
+        val = getattr(obj, attr, None)
+        if val is not None:
+            return val
+    return default
+
+
 def _serialize_journal_line(
     line: ComprobanteContableDetalle,
     account_labels: dict[str, str],
@@ -644,7 +658,7 @@ def _serialize_journal_line(
     cost_center_code = line.cost_center or ""
     debit = str(value) if value > 0 else ""
     credit = str(abs(value)) if value < 0 else ""
-    reference_name = getattr(line, "internal_reference_id", None) or getattr(line, "reference", None) or ""
+    reference_name = _safe_attr(line, "internal_reference_id", "reference")
     return {
         "order": line.order or 0,
         "account": account_code,
@@ -658,7 +672,7 @@ def _serialize_journal_line(
         "unit": line.unit or "",
         "project": line.project or "",
         "currency": line.currency_id or "",
-        "exchange_rate": str(line.exchange_rate) if line.exchange_rate is not None else "",
+        "exchange_rate": _safe_str(line.exchange_rate),
         "reference_type": line.internal_reference or "",
         "reference_name": reference_name,
         "reference1": line.reference1 or "",

@@ -26,6 +26,17 @@ from cacao_accounting.reportes.services import ReportRow, PaginatedReport
 class BudgetReportService:
     """Servicio para el reporte comparativo Real vs Presupuesto."""
 
+    def _resolve_descendant_ids(self, entity_id: str | None, model_class: type, include_descendants: bool) -> list[str]:
+        """Resuelve IDs de descendientes jerarquicos si aplica."""
+        if not entity_id:
+            return []
+        ids = [entity_id]
+        if include_descendants:
+            node = database.session.get(model_class, entity_id)
+            if node:
+                ids = [node.id] + [d.id for d in node.descendants]
+        return ids
+
     def get_real_vs_budget_report(self, filters: Dict[str, Any]) -> PaginatedReport:
         """Genera el reporte Real vs Presupuesto integrando con la infraestructura de reportes."""
         company: Optional[str] = filters.get("company")
@@ -61,17 +72,8 @@ class BudgetReportService:
         include_descendants = filters.get("include_descendants") == "true" or filters.get("include_descendants") is True
         from cacao_accounting.database import Unit as DBUnit, Project as DBProject
 
-        bu_ids = [business_unit_id] if business_unit_id else []
-        if business_unit_id and include_descendants:
-            node = database.session.get(DBUnit, business_unit_id)
-            if node:
-                bu_ids = [node.id] + [d.id for d in node.descendants]
-
-        p_ids = [project_id] if project_id else []
-        if project_id and include_descendants:
-            node = database.session.get(DBProject, project_id)
-            if node:
-                p_ids = [node.id] + [d.id for d in node.descendants]
+        bu_ids = self._resolve_descendant_ids(business_unit_id, DBUnit, include_descendants)
+        p_ids = self._resolve_descendant_ids(project_id, DBProject, include_descendants)
 
         budget_lines = self._get_budget_lines(
             budget_id, period_range_ids, cost_center_id, business_unit_id, project_id, bu_ids=bu_ids, p_ids=p_ids
