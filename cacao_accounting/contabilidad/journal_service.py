@@ -653,33 +653,40 @@ def _serialize_journal_line(
     account_labels: dict[str, str],
     cost_center_labels: dict[str, str],
 ) -> dict[str, Any]:
-    value = Decimal(str(line.value or 0))
-    account_code = line.account or ""
-    cost_center_code = line.cost_center or ""
-    debit = str(value) if value > 0 else ""
-    credit = str(abs(value)) if value < 0 else ""
-    reference_name = _safe_attr(line, "internal_reference_id", "reference")
+    values = _journal_line_values(line)
     return {
         "order": line.order or 0,
-        "account": account_code,
-        "account_label": account_labels.get(account_code, account_code),
-        "cost_center": cost_center_code,
-        "cost_center_label": cost_center_labels.get(cost_center_code, cost_center_code),
+        "account": values["account"],
+        "account_label": account_labels.get(values["account"], values["account"]),
+        "cost_center": values["cost_center"],
+        "cost_center_label": cost_center_labels.get(values["cost_center"], values["cost_center"]),
         "party_type": line.third_type or "",
         "party": line.third_code or "",
-        "debit": debit,
-        "credit": credit,
+        "debit": values["debit"],
+        "credit": values["credit"],
         "unit": line.unit or "",
         "project": line.project or "",
         "currency": line.currency_id or "",
         "exchange_rate": _safe_str(line.exchange_rate),
         "reference_type": line.internal_reference or "",
-        "reference_name": reference_name,
+        "reference_name": values["reference_name"],
         "reference1": line.reference1 or "",
         "reference2": line.reference2 or "",
         "remarks": line.memo or line.line_memo or "",
         "is_advance": bool(getattr(line, "is_advance", False)),
         "bank_account": getattr(line, "bank_account_id", "") or "",
+    }
+
+
+def _journal_line_values(line: ComprobanteContableDetalle) -> dict[str, Any]:
+    """Normaliza los valores derivados de una línea contable."""
+    value = Decimal(str(line.value or 0))
+    return {
+        "account": line.account or "",
+        "cost_center": line.cost_center or "",
+        "debit": str(value) if value > 0 else "",
+        "credit": str(abs(value)) if value < 0 else "",
+        "reference_name": _safe_attr(line, "internal_reference_id", "reference"),
     }
 
 

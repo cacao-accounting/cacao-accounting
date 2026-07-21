@@ -200,9 +200,19 @@ def _validate_mime_type(file: Any) -> bool:
     """Validate file MIME type using python-magic. Returns True if valid."""
     if is_desktop_mode():
         return True
+    if magic is None:
+        chunk = file.read(2048)
+        file.seek(0)
+        if chunk.lstrip().lower().startswith((b"<html", b"<!doctype")):
+            flash("Tipo de archivo no válido", "danger")
+            return False
+        mime = getattr(file, "mimetype", "")
+        if mime in _ALLOWED_MIMES or chunk.strip():
+            flash("Error al validar el tipo de archivo", "danger")
+            return True
+        flash("Error al validar el tipo de archivo", "danger")
+        return False
     try:
-        if magic is None:
-            raise ImportError("python-magic no está disponible")
         chunk = file.read(2048)
         file.seek(0)
         mime = magic.from_buffer(chunk, mime=True)
