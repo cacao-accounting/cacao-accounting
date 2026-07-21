@@ -3605,10 +3605,121 @@ def compras_import_landed_cost_nuevo():
     )
 
 
-def _create_import_landed_cost_from_request():
-    """Crea un documento de costo de importacion desde el formulario."""
+def _resolve_supplier_from_invoice(from_invoice_id: str | None) -> tuple[str | None, str | None]:
+    """Resuelve proveedor y nombre desde una factura de compra referenciada."""
+    if not from_invoice_id:
+        return None, None
+    invoice = database.session.get(PurchaseInvoice, from_invoice_id)
+    if not invoice:
+        return None, None
+    return invoice.supplier_id, invoice.supplier_name
+
+
+def _parse_grid_rows_from_form(prefix: str, fields: list[str]) -> dict[str, dict[str, Any]]:
+    """Parsea filas de una grilla HTML agrupadas por prefijo e índice."""
+    grouped: dict[str, dict[str, Any]] = {}
+    for key, value in request.form.items():
+        for field in fields:
+            token = f"{prefix}_{field}_"
+            if key.startswith(token):
+                idx = key[len(token) :]
+                grouped.setdefault(idx, {})[field] = value
+                break
+    return grouped
+
+
+def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
+    """Guarda las lineas de items del costo de importacion desde el formulario."""
+    items_agrupados = _parse_grid_rows_from_form("item", ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"])
+    total = Decimal("0")
+    for data in items_agrupados.values():
+        item_code = data.get("item_code", "").strip()
+        if not item_code:
+            continue
+        qty = Decimal(str(data.get("qty", "1")))
+        rate = Decimal(str(data.get("rate", "0")))
+        amount = Decimal(str(data.get("amount", str(qty * rate))))
+        total += amount
+        database.session.add(
+            ImportLandedCostItem(
+                import_landed_cost_id=registro.id,
+                item_code=item_code,
+                item_name=data.get("item_name", ""),
+                qty=qty,
+                uom=data.get("uom", ""),
+                rate=rate,
+                amount=amount,
+                base_rate=rate,
+                base_amount=amount,
+                warehouse=data.get("warehouse", ""),
+            )
+        )
+    return total
+
+
+def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
+    """Guarda los cargos del costo de importacion desde el formulario."""
+    cargos_agrupados = _parse_grid_rows_from_form("charge", ["concept", "amount", "charge_type", "account_id"])
+    total = Decimal("0")
+    for data in cargos_agrupados.values():
+        concept = data.get("concept", "").strip()
+        if not concept:
+            continue
+        amount = Decimal(str(data.get("amount", "0")))
+        total += amount
+        database.session.add(
+            ImportLandedCostCharge(
+                import_landed_cost_id=registro.id,
+                concept=concept,
+                charge_type=data.get("charge_type", "charge"),
+                amount=amount,
+                base_amount=amount,
+                allocation_method=None,
+                account_id=data.get("account_id"),
+            )
+        )
+    return total
+
+
+def _link_landed_cost_to_invoice(
+    registro: ImportLandedCost,
+    from_invoice_id: str,
+    company: str,
+) -> None:
+    """Crea relaciones documentales entre la factura de compra y el costo de importacion."""
     from cacao_accounting.document_flow import create_document_relation
 
+    invoice_items = (
+        database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=from_invoice_id))
+        .scalars()
+        .all()
+    )
+    for item in invoice_items:
+        our_item = (
+            database.session.execute(
+                database.select(ImportLandedCostItem).filter_by(
+                    import_landed_cost_id=registro.id, item_code=item.item_code
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if our_item:
+            create_document_relation(
+                source_type="purchase_invoice",
+                source_id=from_invoice_id,
+                source_item_id=item.id,
+                target_type="import_landed_cost",
+                target_id=registro.id,
+                target_item_id=our_item.id,
+                qty=item.qty,
+                company=company,
+                relation_type="landed_cost",
+            )
+
+
+def _create_import_landed_cost_from_request():
+    """Crea un documento de costo de importacion desde el formulario."""
     company = request.form.get("company", "").strip()
     posting_date = _parse_date(request.form.get("posting_date"))
     from_invoice_id = request.form.get("from_invoice", "").strip() or None
@@ -3619,15 +3730,7 @@ def _create_import_landed_cost_from_request():
         flash(_("Compania y fecha son obligatorios."), "danger")
         return None
 
-    invoice = None
-    supplier_id = None
-    supplier_name = None
-
-    if from_invoice_id:
-        invoice = database.session.get(PurchaseInvoice, from_invoice_id)
-        if invoice:
-            supplier_id = invoice.supplier_id
-            supplier_name = invoice.supplier_name
+    supplier_id, supplier_name = _resolve_supplier_from_invoice(from_invoice_id)
 
     registro = ImportLandedCost(
         company=company,
@@ -3651,136 +3754,17 @@ def _create_import_landed_cost_from_request():
     )
     database.session.flush()
 
-    # Save items from form
-    items_agrupados: dict[str, dict[str, Any]] = {}
-    for key, value in request.form.items():
-        if key.startswith("item_code_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["item_code"] = value
-        elif key.startswith("item_name_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["item_name"] = value
-        elif key.startswith("qty_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["qty"] = value
-        elif key.startswith("uom_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["uom"] = value
-        elif key.startswith("rate_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["rate"] = value
-        elif key.startswith("amount_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["amount"] = value
-        elif key.startswith("warehouse_"):
-            idx = key.split("_")[-1]
-            items_agrupados[idx] = items_agrupados.get(idx, {})
-            items_agrupados[idx]["warehouse"] = value
-
-    total_item_amount = Decimal("0")
-    for idx, data in items_agrupados.items():
-        item_code = data.get("item_code", "").strip()
-        if not item_code:
-            continue
-        qty = Decimal(str(data.get("qty", "1")))
-        rate = Decimal(str(data.get("rate", "0")))
-        amount = Decimal(str(data.get("amount", str(qty * rate))))
-        total_item_amount += amount
-        item_obj = ImportLandedCostItem(
-            import_landed_cost_id=registro.id,
-            item_code=item_code,
-            item_name=data.get("item_name", ""),
-            qty=qty,
-            uom=data.get("uom", ""),
-            rate=rate,
-            amount=amount,
-            base_rate=rate,
-            base_amount=amount,
-            warehouse=data.get("warehouse", ""),
-        )
-        database.session.add(item_obj)
-
+    total_item_amount = _save_import_landed_cost_items(registro)
     registro.total_base_amount = total_item_amount
     registro.grand_total = total_item_amount
 
-    # Save charges from form
-    cargos_agrupados: dict[str, dict[str, Any]] = {}
-    for key, value in request.form.items():
-        if key.startswith("charge_concept_"):
-            idx = key.split("_")[-1]
-            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
-            cargos_agrupados[idx]["concept"] = value
-        elif key.startswith("charge_amount_"):
-            idx = key.split("_")[-1]
-            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
-            cargos_agrupados[idx]["amount"] = value
-        elif key.startswith("charge_type_"):
-            idx = key.split("_")[-1]
-            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
-            cargos_agrupados[idx]["charge_type"] = value
-        elif key.startswith("charge_account_id_"):
-            idx = key.split("_")[-1]
-            cargos_agrupados[idx] = cargos_agrupados.get(idx, {})
-            cargos_agrupados[idx]["account_id"] = value
-
-    total_charges = Decimal("0")
-    for data in cargos_agrupados.values():
-        concept = data.get("concept", "").strip()
-        if not concept:
-            continue
-        amount = Decimal(str(data.get("amount", "0")))
-        total_charges += amount
-        charge = ImportLandedCostCharge(
-            import_landed_cost_id=registro.id,
-            concept=concept,
-            charge_type=data.get("charge_type", "charge"),
-            amount=amount,
-            base_amount=amount,
-            allocation_method=None,
-            account_id=data.get("account_id"),
-        )
-        database.session.add(charge)
-
+    total_charges = _save_import_landed_cost_charges(registro)
     registro.total_charges_amount = total_charges
     registro.total_inventory_value = total_item_amount + total_charges
     registro.grand_total = total_item_amount + total_charges
 
-    # Create document relation
     if from_invoice_id:
-        invoice_items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=from_invoice_id))
-            .scalars()
-            .all()
-        )
-        for item in invoice_items:
-            # Find our corresponding item
-            our_item = (
-                database.session.execute(
-                    database.select(ImportLandedCostItem).filter_by(
-                        import_landed_cost_id=registro.id, item_code=item.item_code
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if our_item:
-                create_document_relation(
-                    source_type="purchase_invoice",
-                    source_id=from_invoice_id,
-                    source_item_id=item.id,
-                    target_type="import_landed_cost",
-                    target_id=registro.id,
-                    target_item_id=our_item.id,
-                    qty=item.qty,
-                    company=company,
-                    relation_type="landed_cost",
-                )
+        _link_landed_cost_to_invoice(registro, from_invoice_id, company)
 
     database.session.commit()
     log_create(registro)
