@@ -1729,22 +1729,43 @@ def proyecto(project_id):
     )
 
 
-@contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def editar_proyecto(project_id):
-    """Editar un proyecto existente."""
-    from cacao_accounting.contabilidad.forms import FormularioProyecto
-    from cacao_accounting.database import Project, Accounts
-    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids
+def _populate_project_edit_form(formulario: Any, proyecto: Any) -> None:
+    """Puebla los campos del formulario con los datos actuales del proyecto."""
+    formulario.nombre.data = proyecto.name
+    formulario.entidad.data = proyecto.entity
+    formulario.inicio.data = proyecto.start
+    formulario.fin.data = proyecto.end
+    formulario.presupuesto.data = proyecto.budget
+    formulario.habilitado.data = bool(proyecto.enabled)
+    formulario.status.data = proyecto.status or "open"
+    formulario.parent_id.data = proyecto.parent_id or ""
+    formulario.capitalizable.data = bool(proyecto.capitalizable)
+    formulario.capitalization_account_id.data = proyecto.capitalization_account_id or ""
 
-    proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
-    if proyecto is None:
-        return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
+def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | None, str | None]:
+    """Valida los campos del formulario de edicion de proyecto.
+
+    Retorna (parent_id, capitalization_account_id).
+    """
+    _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
+    parent_id = request.form.get("parent_id") or None
+    if parent_id:
+        check_hierarchy_cycle(Project, proyecto.id, parent_id)
+
+    capitalizable = bool(formulario.capitalizable.data)
+    capitalization_account_id = request.form.get("capitalization_account_id") or None
+    if capitalizable and not capitalization_account_id:
+        raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+    if not capitalizable:
+        capitalization_account_id = None
+
+    return parent_id, capitalization_account_id
+
+
+def _setup_project_edit_form(formulario: Any, proyecto: Any) -> None:
+    """Configura las choices del formulario de edicion."""
     exclude_ids = {proyecto.id, *get_descendant_ids(Project, proyecto.id)}
-    formulario = FormularioProyecto(obj=proyecto)
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.parent_id.choices = [("", "— Ninguno —")] + [
@@ -1760,33 +1781,33 @@ def editar_proyecto(project_id):
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
     ]
 
+
+@contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def editar_proyecto(project_id):
+    """Editar un proyecto existente."""
+    from cacao_accounting.contabilidad.forms import FormularioProyecto
+    from cacao_accounting.database import Project, Accounts
+    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids
+
+    proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    if proyecto is None:
+        return redirect(url_for(CONTABILIDAD_PROYECTOS))
+
+    formulario = FormularioProyecto(obj=proyecto)
+    _setup_project_edit_form(formulario, proyecto)
+
     if request.method != "POST":
-        formulario.nombre.data = proyecto.name
-        formulario.entidad.data = proyecto.entity
-        formulario.inicio.data = proyecto.start
-        formulario.fin.data = proyecto.end
-        formulario.presupuesto.data = proyecto.budget
-        formulario.habilitado.data = bool(proyecto.enabled)
-        formulario.status.data = proyecto.status or "open"
-        formulario.parent_id.data = proyecto.parent_id or ""
-        formulario.capitalizable.data = bool(proyecto.capitalizable)
-        formulario.capitalization_account_id.data = proyecto.capitalization_account_id or ""
+        _populate_project_edit_form(formulario, proyecto)
+
     entity_initial_label = _company_label(proyecto.entity) if proyecto.entity else ""
     TITULO = "Contabilidad | Editar Proyecto - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
-            parent_id = request.form.get("parent_id") or None
-            if parent_id:
-                check_hierarchy_cycle(Project, proyecto.id, parent_id)
-
-            capitalizable = bool(formulario.capitalizable.data)
-            capitalization_account_id = request.form.get("capitalization_account_id") or None
-            if capitalizable and not capitalization_account_id:
-                raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
-            if not capitalizable:
-                capitalization_account_id = None
+            parent_id, capitalization_account_id = _validate_project_edit_form(formulario, proyecto)
         except ValueError as error:
             flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
