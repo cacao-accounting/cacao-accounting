@@ -998,32 +998,50 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
         abort(404)
 
     if request.method == "POST":
-        data = request.get_json(force=True) or {}
-        configs = data.get("configs") if isinstance(data, dict) else None
-        if configs and isinstance(configs, list):
-            for entry in configs:
-                if not isinstance(entry, dict):
-                    continue
-                payment_type = entry.get("payment_type")
-                if payment_type not in PAYMENT_TYPES:
-                    continue
-                config = database.session.execute(
-                    database.select(BankAccountNumberingConfig).filter_by(
-                        bank_account_id=bank_account.id,
-                        payment_type=payment_type,
-                    )
-                ).scalar_one_or_none()
-                if not config:
-                    config = BankAccountNumberingConfig(
-                        bank_account_id=bank_account.id,
-                        payment_type=payment_type,
-                    )
-                    database.session.add(config)
-                config.naming_series_id = entry.get("naming_series_id") or None
-                config.use_external_counter = bool(entry.get("use_external_counter"))
-                config.external_counter_id = entry.get("external_counter_id") or None if config.use_external_counter else None
-            database.session.commit()
+        return _save_numbering_configs(bank_account)
+
+    return _build_numbering_config_response(bank_account)
+
+
+def _save_numbering_configs(bank_account: BankAccount) -> dict[str, str]:
+    """Guarda las configuraciones de numeracion enviadas en el request JSON."""
+    data = request.get_json(force=True) or {}
+    configs = data.get("configs") if isinstance(data, dict) else None
+    if not configs or not isinstance(configs, list):
         return {"status": "ok"}
+
+    for entry in configs:
+        if not isinstance(entry, dict):
+            continue
+        payment_type = entry.get("payment_type")
+        if payment_type not in PAYMENT_TYPES:
+            continue
+        config = _get_or_create_numbering_config(bank_account.id, payment_type)
+        config.naming_series_id = entry.get("naming_series_id") or None
+        config.use_external_counter = bool(entry.get("use_external_counter"))
+        config.external_counter_id = entry.get("external_counter_id") or None if config.use_external_counter else None
+
+    database.session.commit()
+    return {"status": "ok"}
+
+
+def _get_or_create_numbering_config(bank_account_id: str, payment_type: str) -> BankAccountNumberingConfig:
+    """Obtiene o crea una configuracion de numeracion para un tipo de pago."""
+    config = database.session.execute(
+        database.select(BankAccountNumberingConfig).filter_by(
+            bank_account_id=bank_account_id,
+            payment_type=payment_type,
+        )
+    ).scalar_one_or_none()
+    if not config:
+        config = BankAccountNumberingConfig(bank_account_id=bank_account_id, payment_type=payment_type)
+        database.session.add(config)
+    return config
+
+
+def _build_numbering_config_response(bank_account: BankAccount) -> dict[str, list[dict[str, Any]]]:
+    """Construye la respuesta GET con configuraciones de numeracion por tipo de pago."""
+    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
 
     configs = (
         database.session.execute(
@@ -1034,33 +1052,33 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
         .scalars()
         .all()
     )
-    from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
 
-    result = []
-    for payment_type in PAYMENT_TYPES:
-        cfg = next((c for c in configs if c.payment_type == payment_type), None)
-        entity_type = ENTITY_MAP.get(payment_type, "payment_entry")
-        if cfg:
-            result.append(
-                {
-                    "payment_type": cfg.payment_type,
-                    "naming_series_id": cfg.naming_series_id,
-                    "use_external_counter": cfg.use_external_counter,
-                    "external_counter_id": cfg.external_counter_id,
-                    "entity_type": entity_type,
-                }
-            )
-        else:
-            result.append(
-                {
-                    "payment_type": payment_type,
-                    "naming_series_id": None,
-                    "use_external_counter": payment_type in ("pay", "receive"),
-                    "external_counter_id": None,
-                    "entity_type": entity_type,
-                }
-            )
-    return {"configs": result}
+    return {"configs": [_build_single_config_entry(pt, configs, ENTITY_MAP) for pt in PAYMENT_TYPES]}
+
+
+def _build_single_config_entry(
+    payment_type: str,
+    configs: list[BankAccountNumberingConfig],
+    entity_map: dict[str, str],
+) -> dict[str, Any]:
+    """Construye un diccionario de configuracion para un tipo de pago."""
+    cfg = next((c for c in configs if c.payment_type == payment_type), None)
+    entity_type = entity_map.get(payment_type, "payment_entry")
+    if cfg:
+        return {
+            "payment_type": cfg.payment_type,
+            "naming_series_id": cfg.naming_series_id,
+            "use_external_counter": cfg.use_external_counter,
+            "external_counter_id": cfg.external_counter_id,
+            "entity_type": entity_type,
+        }
+    return {
+        "payment_type": payment_type,
+        "naming_series_id": None,
+        "use_external_counter": payment_type in ("pay", "receive"),
+        "external_counter_id": None,
+        "entity_type": entity_type,
+    }
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
