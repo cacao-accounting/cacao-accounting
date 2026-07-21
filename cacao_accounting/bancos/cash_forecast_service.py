@@ -21,47 +21,60 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
+_EPOCH_DATE = date(1900, 1, 1)
+
+
+def _generate_monthly_periods(start: date, end: date) -> list[dict]:
+    """Genera períodos mensuales dentro de un rango de fechas."""
+    periods: list[dict] = []
+    current_start = start
+    while current_start <= end:
+        _, last_day = calendar.monthrange(current_start.year, current_start.month)
+        current_end = date(current_start.year, current_start.month, last_day)
+        if current_end > end:
+            current_end = end
+        periods.append(
+            {
+                "name": current_start.strftime("%B %Y"),
+                "start_date": current_start,
+                "end_date": current_end,
+            }
+        )
+        if current_start.month == 12:
+            current_start = date(current_start.year + 1, 1, 1)
+        else:
+            current_start = date(current_start.year, current_start.month + 1, 1)
+    return periods
+
+
+def _generate_weekly_periods(start: date, end: date) -> list[dict]:
+    """Genera períodos semanales dentro de un rango de fechas."""
+    periods: list[dict] = []
+    current_start = start
+    week_num = 1
+    while current_start <= end:
+        current_end = current_start + timedelta(days=6)
+        if current_end > end:
+            current_end = end
+        periods.append(
+            {
+                "name": f"Semana {week_num} ({current_start.strftime('%d/%m')} - {current_end.strftime('%d/%m')})",
+                "start_date": current_start,
+                "end_date": current_end,
+            }
+        )
+        current_start = current_end + timedelta(days=1)
+        week_num += 1
+    return periods
+
 
 def generate_periods(fiscal_year, periodicity):
     """Divide un año fiscal en períodos semanales o mensuales."""
     start = fiscal_year.year_start_date
     end = fiscal_year.year_end_date
-    periods = []
     if periodicity == "monthly":
-        current_start = start
-        while current_start <= end:
-            _, last_day = calendar.monthrange(current_start.year, current_start.month)
-            current_end = date(current_start.year, current_start.month, last_day)
-            if current_end > end:
-                current_end = end
-            periods.append(
-                {
-                    "name": current_start.strftime("%B %Y"),
-                    "start_date": current_start,
-                    "end_date": current_end,
-                }
-            )
-            if current_start.month == 12:
-                current_start = date(current_start.year + 1, 1, 1)
-            else:
-                current_start = date(current_start.year, current_start.month + 1, 1)
-    else:
-        current_start = start
-        week_num = 1
-        while current_start <= end:
-            current_end = current_start + timedelta(days=6)
-            if current_end > end:
-                current_end = end
-            periods.append(
-                {
-                    "name": f"Semana {week_num} ({current_start.strftime('%d/%m')} - {current_end.strftime('%d/%m')})",
-                    "start_date": current_start,
-                    "end_date": current_end,
-                }
-            )
-            current_start = current_end + timedelta(days=1)
-            week_num += 1
-    return periods
+        return _generate_monthly_periods(start, end)
+    return _generate_weekly_periods(start, end)
 
 
 def get_base_amount(amount, currency_code, company_currency, target_date):
@@ -85,6 +98,175 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
     return Decimal(str(amount))
 
 
+def _resolve_company_currency(company: str) -> str:
+    """Resuelve la moneda base de una compañía."""
+    entity = database.session.query(Entity).filter_by(code=company).first()
+    return entity.currency if entity else "NIO"
+
+
+def _get_cash_bank_account_ids(company: str) -> list[str]:
+    """Obtiene los IDs de cuentas de efectivo y banco activas de una compañía."""
+    rows = (
+        database.session.query(Accounts.id)
+        .filter(
+            Accounts.entity == company,
+            Accounts.account_type.in_(["cash", "bank"]),
+            Accounts.enabled.is_(True),
+        )
+        .all()
+    )
+    return [a[0] for a in rows]
+
+
+def _compute_initial_balance(company: str, account_ids: list[str], first_start: date) -> Decimal:
+    """Calcula el saldo inicial de efectivo/banco antes del primer período."""
+    if not account_ids:
+        return Decimal("0")
+    init_val = (
+        database.session.query(func.sum(GLEntry.debit - GLEntry.credit))
+        .filter(
+            GLEntry.company == company,
+            GLEntry.account_id.in_(account_ids),
+            GLEntry.posting_date < first_start,
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
+        )
+        .scalar()
+    )
+    return Decimal(str(init_val)) if init_val is not None else Decimal("0")
+
+
+def _query_gl_sum(
+    company: str,
+    account_ids: list[str],
+    start_date: date,
+    limit_end: date,
+    party_type_filter: str | None = None,
+    exclude_party_types: bool = False,
+    use_debit_credit: bool = True,
+) -> Decimal:
+    """Consulta la suma de GLEntry para un filtro de party_type dado."""
+    base_filters = [
+        GLEntry.company == company,
+        GLEntry.account_id.in_(account_ids),
+        GLEntry.posting_date >= start_date,
+        GLEntry.posting_date <= limit_end,
+        GLEntry.is_cancelled.is_(False),
+        GLEntry.is_reversal.is_(False),
+    ]
+    if party_type_filter:
+        base_filters.append(GLEntry.party_type == party_type_filter)
+    elif exclude_party_types:
+        base_filters.append(
+            or_(GLEntry.party_type.is_(None), ~GLEntry.party_type.in_(["customer", "supplier"]))
+        )
+    expr = func.sum(GLEntry.debit - GLEntry.credit) if use_debit_credit else func.sum(GLEntry.credit - GLEntry.debit)
+    val = database.session.query(expr).filter(*base_filters).scalar()
+    return Decimal(str(val)) if val else Decimal("0")
+
+
+def _compute_real_movements(
+    company: str, account_ids: list[str], start_date: date, limit_end: date
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Calcula flujos reales (ingreso, egreso, otros) para un período."""
+    if not account_ids:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    real_inflow = _query_gl_sum(company, account_ids, start_date, limit_end, party_type_filter="customer")
+    real_outflow = _query_gl_sum(
+        company, account_ids, start_date, limit_end, party_type_filter="supplier", use_debit_credit=False
+    )
+    real_other = _query_gl_sum(company, account_ids, start_date, limit_end, exclude_party_types=True)
+    return real_inflow, real_outflow, real_other
+
+
+def _sum_invoice_amount(invoices: list, start_date: date, end_date: date) -> Decimal:
+    """Suma montos pendientes de facturas dentro de un rango de fechas."""
+    total = Decimal("0")
+    for inv in invoices:
+        if start_date <= inv.posting_date <= end_date:
+            amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
+            total += Decimal(str(amt))
+    return total
+
+
+def _compute_ar_ap_projections(
+    zone: str,
+    ar_invoices: list,
+    ap_invoices: list,
+    start_date: date,
+    end_date: date,
+) -> tuple[Decimal, Decimal]:
+    """Calcula proyecciones AR/AP según la zona temporal."""
+    if zone == "Current":
+        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date)
+        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date)
+        return ar_total, ap_total
+    if zone == "Projected":
+        return _sum_invoice_amount(ar_invoices, start_date, end_date), _sum_invoice_amount(
+            ap_invoices, start_date, end_date
+        )
+    return Decimal("0"), Decimal("0")
+
+
+def _compute_manual_projections(
+    manual_entries: list,
+    start_date: date,
+    end_date: date,
+    zone: str,
+    today_date: date,
+    company_currency: str,
+) -> tuple[Decimal, Decimal]:
+    """Calcula proyecciones manuales de ingreso y egreso para un período."""
+    manual_inflow = Decimal("0")
+    manual_outflow = Decimal("0")
+    for entry in manual_entries:
+        if not (start_date <= entry.estimated_date <= end_date):
+            continue
+        if zone == "Current" and entry.estimated_date <= today_date:
+            continue
+        base_amt = get_base_amount(entry.amount, entry.currency, company_currency, entry.estimated_date)
+        if entry.type == "Income":
+            manual_inflow += base_amt
+        else:
+            manual_outflow += base_amt
+    return manual_inflow, manual_outflow
+
+
+def _update_cumulatives(
+    zone: str,
+    real_inflow: Decimal,
+    real_outflow: Decimal,
+    real_other: Decimal,
+    proj_ar: Decimal,
+    proj_ap: Decimal,
+    manual_inflow: Decimal,
+    manual_outflow: Decimal,
+    cumulatives: dict,
+) -> None:
+    """Actualiza los saldos acumulados YTD según la zona temporal."""
+    real_delta = real_inflow - real_outflow + real_other
+    if zone == "Real":
+        cumulatives["real"] += real_delta
+        cumulatives["current"] = cumulatives["real"]
+        cumulatives["projected"] = cumulatives["real"]
+    elif zone == "Current":
+        cumulatives["real"] += real_delta
+        cumulatives["current"] = cumulatives["real"] + (proj_ar - proj_ap)
+        cumulatives["projected"] = cumulatives["current"] + (manual_inflow - manual_outflow)
+    else:
+        cumulatives["current"] += proj_ar - proj_ap
+        cumulatives["projected"] += (proj_ar - proj_ap) + (manual_inflow - manual_outflow)
+
+
+def _determine_zone(start_date: date, end_date: date, today_date: date) -> str:
+    """Determina la zona temporal de un período."""
+    if end_date < today_date:
+        return "Real"
+    if start_date <= today_date <= end_date:
+        return "Current"
+    return "Projected"
+
+
 def get_cash_forecast_matrix(company, forecast_id, today_date=None):
     """Calcula la matriz de flujo de caja YTD (Real, Current, Projected) para un pronóstico."""
     if today_date is None:
@@ -98,44 +280,14 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
     if not fiscal_year:
         return []
 
-    entity = database.session.query(Entity).filter_by(code=company).first()
-    company_currency = entity.currency if entity else "NIO"
-
+    company_currency = _resolve_company_currency(company)
     periods = generate_periods(fiscal_year, forecast.periodicity)
     if not periods:
         return []
 
-    # Obtener cuentas de caja/banco
-    cash_bank_accounts = (
-        database.session.query(Accounts.id)
-        .filter(
-            Accounts.entity == company,
-            Accounts.account_type.in_(["cash", "bank"]),
-            Accounts.enabled.is_(True),
-        )
-        .all()
-    )
-    account_ids = [a[0] for a in cash_bank_accounts]
-
-    # Saldo Inicial (antes del primer período)
-    first_start = periods[0]["start_date"]
-    init_balance = Decimal("0")
-    if account_ids:
-        bal_query = database.session.query(func.sum(GLEntry.debit - GLEntry.credit)).filter(
-            GLEntry.company == company,
-            GLEntry.account_id.in_(account_ids),
-            GLEntry.posting_date < first_start,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
-        init_val = bal_query.scalar()
-        if init_val is not None:
-            init_balance = Decimal(str(init_val))
-
-    # Obtener todas las proyecciónes manuales para este forecast
+    account_ids = _get_cash_bank_account_ids(company)
+    init_balance = _compute_initial_balance(company, account_ids, periods[0]["start_date"])
     manual_entries = database.session.query(CashForecastEntry).filter_by(forecast_id=forecast.id).all()
-
-    # Obtener facturas pendientes (AR/AP)
     ar_invoices = (
         database.session.query(SalesInvoice)
         .filter(
@@ -145,7 +297,6 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         )
         .all()
     )
-
     ap_invoices = (
         database.session.query(PurchaseInvoice)
         .filter(
@@ -156,146 +307,27 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         .all()
     )
 
-    cumulative_real = init_balance
-    cumulative_current = init_balance
-    cumulative_projected = init_balance
-
+    cumulatives: dict[str, Decimal] = {"real": init_balance, "current": init_balance, "projected": init_balance}
     matrix = []
 
     for p in periods:
         start_date = p["start_date"]
         end_date = p["end_date"]
+        zone = _determine_zone(start_date, end_date, today_date)
 
-        # Determinar zona temporal
-        if end_date < today_date:
-            zone = "Real"
-        elif start_date <= today_date <= end_date:
-            zone = "Current"
-        else:
-            zone = "Projected"
-
-        # 1. Movimientos Reales en este período (solo hasta hoy)
-        real_inflow = Decimal("0")
-        real_outflow = Decimal("0")
-        real_other = Decimal("0")
-
+        real_inflow, real_outflow, real_other = Decimal("0"), Decimal("0"), Decimal("0")
         if account_ids and start_date <= today_date:
             limit_end = min(end_date, today_date)
-            # Clientes (debit - credit)
-            in_val = (
-                database.session.query(func.sum(GLEntry.debit - GLEntry.credit))
-                .filter(
-                    GLEntry.company == company,
-                    GLEntry.account_id.in_(account_ids),
-                    GLEntry.posting_date >= start_date,
-                    GLEntry.posting_date <= limit_end,
-                    GLEntry.party_type == "customer",
-                    GLEntry.is_cancelled.is_(False),
-                    GLEntry.is_reversal.is_(False),
-                )
-                .scalar()
+            real_inflow, real_outflow, real_other = _compute_real_movements(
+                company, account_ids, start_date, limit_end
             )
-            if in_val:
-                real_inflow = Decimal(str(in_val))
 
-            # Proveedores (credit - debit)
-            out_val = (
-                database.session.query(func.sum(GLEntry.credit - GLEntry.debit))
-                .filter(
-                    GLEntry.company == company,
-                    GLEntry.account_id.in_(account_ids),
-                    GLEntry.posting_date >= start_date,
-                    GLEntry.posting_date <= limit_end,
-                    GLEntry.party_type == "supplier",
-                    GLEntry.is_cancelled.is_(False),
-                    GLEntry.is_reversal.is_(False),
-                )
-                .scalar()
-            )
-            if out_val:
-                real_outflow = Decimal(str(out_val))
+        proj_ar, proj_ap = _compute_ar_ap_projections(zone, ar_invoices, ap_invoices, start_date, end_date)
+        manual_inflow, manual_outflow = _compute_manual_projections(
+            manual_entries, start_date, end_date, zone, today_date, company_currency
+        )
 
-            # Otros (debit - credit)
-            other_val = (
-                database.session.query(func.sum(GLEntry.debit - GLEntry.credit))
-                .filter(
-                    GLEntry.company == company,
-                    GLEntry.account_id.in_(account_ids),
-                    GLEntry.posting_date >= start_date,
-                    GLEntry.posting_date <= limit_end,
-                    or_(
-                        GLEntry.party_type.is_(None),
-                        ~GLEntry.party_type.in_(["customer", "supplier"]),
-                    ),
-                    GLEntry.is_cancelled.is_(False),
-                    GLEntry.is_reversal.is_(False),
-                )
-                .scalar()
-            )
-            if other_val:
-                real_other = Decimal(str(other_val))
-
-        # 2. Proyecciones AR/AP del ERP
-        proj_ar = Decimal("0")
-        proj_ap = Decimal("0")
-
-        if zone == "Current":
-            # AR: incluir facturas con posting_date <= end_date
-            for inv in ar_invoices:
-                if inv.posting_date <= end_date:
-                    amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
-                    proj_ar += Decimal(str(amt))
-            # AP: incluir facturas con posting_date <= end_date
-            for inv in ap_invoices:
-                if inv.posting_date <= end_date:
-                    amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
-                    proj_ap += Decimal(str(amt))
-        elif zone == "Projected":
-            # AR: incluir facturas en este período
-            for inv in ar_invoices:
-                if start_date <= inv.posting_date <= end_date:
-                    amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
-                    proj_ar += Decimal(str(amt))
-            # AP: incluir facturas en este período
-            for inv in ap_invoices:
-                if start_date <= inv.posting_date <= end_date:
-                    amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
-                    proj_ap += Decimal(str(amt))
-
-        # 3. Proyecciones Manuales (CashForecastEntry)
-        manual_inflow = Decimal("0")
-        manual_outflow = Decimal("0")
-
-        # Se consideran sólo a partir de mañana en zona Current, o todas en zona Projected
-        for entry in manual_entries:
-            if start_date <= entry.estimated_date <= end_date:
-                # Si es Current, sólo se consideran si estimated_date > today
-                if zone == "Current" and entry.estimated_date <= today_date:
-                    continue
-                base_amt = get_base_amount(
-                    entry.amount,
-                    entry.currency,
-                    company_currency,
-                    entry.estimated_date,
-                )
-                if entry.type == "Income":
-                    manual_inflow += base_amt
-                else:
-                    manual_outflow += base_amt
-
-        # Actualizar saldos YTD
-        if zone == "Real":
-            cumulative_real += real_inflow - real_outflow + real_other
-            cumulative_current = cumulative_real
-            cumulative_projected = cumulative_real
-        elif zone == "Current":
-            real_delta = real_inflow - real_outflow + real_other
-            cumulative_real += real_delta
-            cumulative_current = cumulative_real + (proj_ar - proj_ap)
-            cumulative_projected = cumulative_current + (manual_inflow - manual_outflow)
-        else:  # Projected
-            cumulative_current += proj_ar - proj_ap
-            cumulative_projected += (proj_ar - proj_ap) + (manual_inflow - manual_outflow)
+        _update_cumulatives(zone, real_inflow, real_outflow, real_other, proj_ar, proj_ap, manual_inflow, manual_outflow, cumulatives)
 
         matrix.append(
             {
@@ -310,9 +342,9 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                 "proj_ap": proj_ap,
                 "manual_inflow": manual_inflow,
                 "manual_outflow": manual_outflow,
-                "real_balance": cumulative_real,
-                "current_balance": cumulative_current,
-                "projected_balance": cumulative_projected,
+                "real_balance": cumulatives["real"],
+                "current_balance": cumulatives["current"],
+                "projected_balance": cumulatives["projected"],
             }
         )
 
