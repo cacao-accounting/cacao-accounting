@@ -309,23 +309,19 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
     )
 
 
-def _build_import_landed_cost_context(document: ImportLandedCost) -> CalculationContext:
-    """Build the context for an import landed cost document."""
-    company = _require_company(document.company)
-    defaults = _company_defaults(company)
+def _build_landed_cost_item_contexts(
+    document: ImportLandedCost,
+    company: str,
+) -> tuple[list[ItemContext], list[AccountLineSpec]]:
+    """Build item contexts and inventory debit account lines for landed cost items."""
     items = list(
         database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
     )
     if not items:
         raise CalculationContextBuilderError("El costo de importacion no contiene lineas para calculo.")
 
-    charges = list(
-        database.session.execute(select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)).scalars().all()
-    )
-
     item_contexts: list[ItemContext] = []
     account_lines: list[AccountLineSpec] = []
-    total_charges_amount = sum((_decimal_value(c.amount) for c in charges), Decimal("0"))
 
     for item in items:
         amount = _decimal_value(item.amount)
@@ -347,16 +343,23 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
         except SQLAlchemyError:
             inventory_account_id = None
         if inventory_account_id and amount and amount > 0:
-            description = f"{item.item_name or item.item_code} - Costo Importacion"
             account_lines.append(
                 AccountLineSpec(
                     account_id=inventory_account_id,
                     amount=amount,
                     side="debit",
-                    description=description,
+                    description=f"{item.item_name or item.item_code} - Costo Importacion",
                 )
             )
 
+    return item_contexts, account_lines
+
+
+def _build_landed_cost_tax_rules(
+    charges: list[ImportLandedCostCharge],
+    allocation_method: str | None,
+) -> list[TaxRuleContext]:
+    """Build tax rule contexts from import landed cost charges."""
     tax_rules: list[TaxRuleContext] = []
     for idx, charge in enumerate(charges):
         tax_rules.append(
@@ -375,10 +378,25 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
                 affects_inventory=True,
                 affects_document_total=True,
                 included_in_price=False,
-                allocation_method=charge.allocation_method or document.allocation_method,
+                allocation_method=charge.allocation_method or allocation_method,
                 account_id=charge.account_id,
             )
         )
+    return tax_rules
+
+
+def _build_import_landed_cost_context(document: ImportLandedCost) -> CalculationContext:
+    """Build the context for an import landed cost document."""
+    company = _require_company(document.company)
+    defaults = _company_defaults(company)
+
+    item_contexts, account_lines = _build_landed_cost_item_contexts(document, company)
+
+    charges = list(
+        database.session.execute(select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)).scalars().all()
+    )
+    total_charges_amount = sum((_decimal_value(c.amount) for c in charges), Decimal("0"))
+    tax_rules = _build_landed_cost_tax_rules(charges, document.allocation_method)
 
     bridge_account_id = getattr(defaults, "bridge_account_id", None)
     if bridge_account_id and account_lines:
