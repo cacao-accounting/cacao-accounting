@@ -276,36 +276,11 @@ def create_document_relation(
     """Crea una relacion entre lineas validando parcialidad y compania."""
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
-    if not is_allowed_flow(source_key, target_key):
-        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
-
-    source_spec = get_document_type(source_key)
-    source_item = get_document_item(source_key, source_item_id) if source_item_id else None
-    target_item = get_document_item(target_key, target_item_id) if target_item_id else None
-
-    if source_item_id and not source_item:
-        raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
-    if target_item_id and not target_item:
-        raise DocumentFlowError("Linea destino no encontrada.", 404)
-
-    if source_item:
-        real_source_id = get_item_parent_id(source_spec, source_item)
-        if real_source_id != source_id:
-            raise DocumentFlowError("La linea origen no pertenece al documento indicado.", 409)
-
+    source_item, target_item = _validate_relation_documents(
+        source_key, source_id, source_item_id, target_key, target_id, target_item_id
+    )
     _assert_same_company(source_key, source_id, target_key, target_id)
-
-    source_doc = get_document(source_key, source_id)
-    target_doc = get_document(target_key, target_id)
-    if source_doc is not None:
-        source_status = getattr(source_doc, "docstatus", None)
-        if source_status != 1:
-            raise DocumentFlowError("El documento origen debe estar aprobado (docstatus=1) para crear la relacion.", 409)
-    if target_doc is not None:
-        target_status = getattr(target_doc, "docstatus", None)
-        if target_status == 2:
-            raise DocumentFlowError("No se puede crear una relacion hacia un documento cancelado (docstatus=2).", 409)
-
+    _validate_relation_status(source_key, source_id, target_key, target_id)
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
         raise DocumentFlowError("La cantidad relacionada debe ser mayor que cero.", 409)
@@ -344,6 +319,31 @@ def create_document_relation(
         recompute_line_flow_state(source_key, source_id, source_item_id, target_key, relation.company)
         _update_source_cache(source_key, source_id, source_item_id, target_key)
     return relation
+
+
+def _validate_relation_documents(source_key, source_id, source_item_id, target_key, target_id, target_item_id):
+    """Valida el flujo y las líneas asociadas a una relación."""
+    if not is_allowed_flow(source_key, target_key):
+        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
+    source_item = get_document_item(source_key, source_item_id) if source_item_id else None
+    target_item = get_document_item(target_key, target_item_id) if target_item_id else None
+    if source_item_id and not source_item:
+        raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
+    if target_item_id and not target_item:
+        raise DocumentFlowError("Linea destino no encontrada.", 404)
+    if source_item and get_item_parent_id(get_document_type(source_key), source_item) != source_id:
+        raise DocumentFlowError("La linea origen no pertenece al documento indicado.", 409)
+    return source_item, target_item
+
+
+def _validate_relation_status(source_key: str, source_id: str, target_key: str, target_id: str) -> None:
+    """Valida estados de documentos en una relación."""
+    source_doc = get_document(source_key, source_id)
+    target_doc = get_document(target_key, target_id)
+    if source_doc is not None and getattr(source_doc, "docstatus", None) != 1:
+        raise DocumentFlowError("El documento origen debe estar aprobado (docstatus=1) para crear la relacion.", 409)
+    if target_doc is not None and getattr(target_doc, "docstatus", None) == 2:
+        raise DocumentFlowError("No se puede crear una relacion hacia un documento cancelado (docstatus=2).", 409)
 
 
 def revert_relations_for_target(target_type: str, target_id: str, reason: str = "target_cancelled") -> int:
