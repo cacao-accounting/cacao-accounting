@@ -2798,7 +2798,7 @@ def _validate_purchase_invoice_relation(relation: DocumentRelation) -> None:
     source = sources.get(relation.source_type)
     if not source or not relation.source_item_id:
         return
-    item = database.session.get(source[0], relation.source_item_id)
+    item: Any = database.session.get(source[0], relation.source_item_id)
     if not item:
         return
     consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "purchase_invoice")
