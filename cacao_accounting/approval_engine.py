@@ -251,6 +251,38 @@ class ApprovalEngine:
         database.session.flush()
         return req
 
+    @staticmethod
+    def _find_applicable_rule(
+        rules: list[ApprovalMatrix],
+        amount: Decimal,
+        user: Any,
+        req_level: int,
+    ) -> ApprovalMatrix | None:
+        """Find the first rule covering the given amount, or fallback for admin users."""
+        for r in rules:
+            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
+                return r
+
+        if getattr(user, "classification", None) == "admin":
+            return ApprovalMatrix(
+                approval_level=req_level,
+                max_amount=amount,
+                enabled=True,
+            )
+        return None
+
+    @classmethod
+    def _finalize_approval(cls, req: ApprovalRequest, document: Any, user: Any) -> bool:
+        """Mark request as approved and execute submit or cancel. Returns True if fully approved."""
+        if req.document_type.startswith("cancel_"):
+            actual_doc_type = req.document_type[7:]
+            actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
+            cls._execute_cancel(actual_doc_type, actual_doc, user)
+        else:
+            cls._execute_submit(req.document_type, document, user)
+        database.session.flush()
+        return True
+
     @classmethod
     def approve(cls, document: Any, user: Any, comments: str | None = None) -> bool:
         """Aprueba el documento para el nivel actual."""
@@ -279,19 +311,7 @@ class ApprovalEngine:
             raise ValueError("La solicitud de aprobación no está en estado pendiente.")
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
-        applicable_rule = None
-        for r in rules:
-            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
-                applicable_rule = r
-                break
-
-        if not applicable_rule and getattr(user, "classification", None) == "admin":
-            applicable_rule = ApprovalMatrix(
-                approval_level=req.required_level,
-                max_amount=amount,
-                enabled=True,
-            )
-
+        applicable_rule = cls._find_applicable_rule(rules, amount, user, req.required_level)
         if not applicable_rule:
             raise ValueError("El usuario no tiene límites autorizados suficientes para aprobar este documento.")
 
@@ -310,18 +330,11 @@ class ApprovalEngine:
 
         if applicable_rule.approval_level >= req.required_level:
             req.status = "Approved"
-            if req.document_type.startswith("cancel_"):
-                actual_doc_type = req.document_type[7:]
-                actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
-                cls._execute_cancel(actual_doc_type, actual_doc, user)
-            else:
-                cls._execute_submit(req.document_type, document, user)
-            database.session.flush()
-            return True
-        else:
-            req.current_level = applicable_rule.approval_level + 1
-            database.session.flush()
-            return False
+            return cls._finalize_approval(req, document, user)
+
+        req.current_level = applicable_rule.approval_level + 1
+        database.session.flush()
+        return False
 
     @classmethod
     def _execute_submit(cls, doctype: str, document: Any, user: Any) -> None:
@@ -457,6 +470,28 @@ class ApprovalEngine:
         req.status = "Rejected"
         database.session.flush()
 
+    @staticmethod
+    def _collect_approvers_from_rules(
+        rules: list[ApprovalMatrix],
+        amount: Decimal,
+    ) -> tuple[list[str], list[str]]:
+        """Collect unique role names and user names from matching approval rules."""
+        roles: list[str] = []
+        users: list[str] = []
+        for r in rules:
+            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
+                if r.user_id:
+                    u = database.session.get(User, r.user_id)
+                    if u and u.name:
+                        users.append(u.name)
+                elif r.role_id:
+                    from cacao_accounting.database import Roles
+
+                    rol = database.session.get(Roles, r.role_id)
+                    if rol:
+                        roles.append(rol.note or rol.name)
+        return list(set(roles)), list(set(users))
+
     @classmethod
     def next_approver(cls, document: Any) -> dict[str, list[str]]:
         """Devuelve nombres de roles y usuarios que pueden realizar la siguiente aprobación."""
@@ -489,22 +524,8 @@ class ApprovalEngine:
             .all()
         )
 
-        roles = []
-        users = []
-        for r in rules:
-            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
-                if r.user_id:
-                    u = database.session.get(User, r.user_id)
-                    if u and u.name:
-                        users.append(u.name)
-                elif r.role_id:
-                    from cacao_accounting.database import Roles
-
-                    rol = database.session.get(Roles, r.role_id)
-                    if rol:
-                        roles.append(rol.note or rol.name)
-
-        return {"roles": list(set(roles)), "users": list(set(users))}
+        roles, users = cls._collect_approvers_from_rules(rules, amount)
+        return {"roles": roles, "users": users}
 
 
 def get_model_class(doctype: str) -> Any:
