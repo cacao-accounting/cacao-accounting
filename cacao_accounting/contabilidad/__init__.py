@@ -1595,6 +1595,45 @@ def proyectos():
     )
 
 
+def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | None, bool]:
+    """Valida los campos del formulario de creacion de proyecto.
+
+    Retorna (parent_id, capitalization_account_id, error_flag).
+    """
+    _validate_active_entity_submission(request.form.get("entidad", ""))
+    parent_id = request.form.get("parent_id") or None
+    if parent_id:
+        check_hierarchy_cycle(Project, None, parent_id)
+
+    capitalizable = bool(formulario.capitalizable.data)
+    capitalization_account_id = request.form.get("capitalization_account_id") or None
+    if capitalizable and not capitalization_account_id:
+        raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+    if not capitalizable:
+        capitalization_account_id = None
+
+    return parent_id, capitalization_account_id, capitalizable
+
+
+def _build_project_from_form(formulario: Any, budget_currency: str | None) -> Project:
+    """Construye un objeto Project desde los datos del formulario."""
+    budget_amount = formulario.presupuesto.data
+    return Project(
+        code=request.form.get("id", None),
+        name=request.form.get("nombre", None),
+        entity=request.form.get("entidad", None),
+        start=formulario.inicio.data,
+        end=formulario.fin.data,
+        budget=Decimal(str(budget_amount or 0)),
+        budget_currency_code=budget_currency,
+        enabled=bool(formulario.habilitado.data),
+        status=formulario.status.data or "open",
+        parent_id=request.form.get("parent_id") or None,
+        capitalizable=bool(formulario.capitalizable.data),
+        capitalization_account_id=request.form.get("capitalization_account_id") or None,
+    )
+
+
 @contabilidad.route("/project/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -1619,17 +1658,7 @@ def nuevo_proyecto():
 
     if formulario.validate_on_submit() or request.method == "POST":
         try:
-            _validate_active_entity_submission(request.form.get("entidad", ""))
-            parent_id = request.form.get("parent_id") or None
-            if parent_id:
-                check_hierarchy_cycle(Project, None, parent_id)
-
-            capitalizable = bool(formulario.capitalizable.data)
-            capitalization_account_id = request.form.get("capitalization_account_id") or None
-            if capitalizable and not capitalization_account_id:
-                raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
-            if not capitalizable:
-                capitalization_account_id = None
+            parent_id, capitalization_account_id, capitalizable = _validate_project_creation_form(formulario)
         except ValueError as error:
             flash_error(error)
             return render_template(
