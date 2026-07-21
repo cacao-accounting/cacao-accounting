@@ -270,3 +270,20 @@ Se refactorizaron 6 funciones con complejidad cognitiva superior a 15, extrayend
 | `contabilidad/__init__.py` | `editar_proyecto` | 20 | ~8 | `_populate_project_edit_form`, `_validate_project_edit_form`, `_setup_project_edit_form` |
 
 **Técnicas aplicadas**: Early returns, extracción de helpers, guard clauses, eliminación de duplicación de lógica (e.g., parseo de grid HTML).
+
+### 2026-07-21 (Segundo lote - SonarCloud remainder)
+
+Segundo lote de refactorización de 8 funciones con complejidad cognitiva > 15 (restantes de SonarCloud):
+
+| Archivo | Función original | Complejidad original | Funciones extraídas |
+|---|---|---|---|
+| `imports/routes.py` | `upload` | 17 | `_extract_file_extension`, `_validate_mime_type`, `_persist_uploaded_file` |
+| `accounting_engine/document_builders.py` | `_build_import_landed_cost_context` | 17 | `_build_landed_cost_item_contexts`, `_build_landed_cost_tax_rules` |
+| `bancos/__init__.py` | `_create_payment_from_request` | 20 | `_resolve_payment_numbering`, `_finalize_and_commit_payment` |
+| `contabilidad/__init__.py` | `external_counter_edit` | 19 | `_update_counter_from_form`, `_sync_counter_naming_series_map` |
+| `approval_engine.py` | `approve` | 22 | `_find_applicable_rule`, `_finalize_approval` |
+| `approval_engine.py` | `next_approver` | 24 | `_collect_approvers_from_rules` |
+| `compras/purchase_reconciliation_service.py` | `get_unlinked_purchase_invoices` | 16 | `_resolve_po_number`, `_resolve_supplier_name` |
+| `compras/purchase_reconciliation_service.py` | `get_unlinked_purchase_receipts_summary` | 23 | `_aggregate_pending_by_receipt`, `_resolve_po_number`, `_resolve_supplier_name` |
+
+**Técnicas aplicadas**: Early returns con guard clauses, extracción de helpers compartidos entre funciones hermanas (`_resolve_po_number`, `_resolve_supplier_name`), separación de lógica de persistencia, eliminación de lógica duplicada de resolución de proveedor/PO.
