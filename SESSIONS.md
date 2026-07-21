@@ -253,3 +253,20 @@
 8. **Docker**: Internet → Caddy:80 → Waitress:8080 → Flask. Caddy maneja static + compresión + proxy.
 9. **Document Flow naming**: `flow_source_type` (lógico, ej. `purchase_credit_note`), `model_type` (físico SQLAlchemy, ej. `purchase_invoice`), `document_id` (identificador). DB columns sin cambios, solo Python variables.
 10. **Document Flow modules**: `payment.py` para lógica de pagos/conciliación AR/AP; `service.py` para relaciones documentales y creación de documentos; `registry.py` para tipos/flows permitidos.
+
+---
+
+## Refactorización de Complejidad Cognitiva (2026-07-21)
+
+Se refactorizaron 6 funciones con complejidad cognitiva superior a 15, extrayendo funciones auxiliares para reducir la carga cognitiva:
+
+| Archivo | Función original | Complejidad original | Complejidad final | Funciones extraídas |
+|---|---|---|---|---|
+| `compras/__init__.py` | `_create_import_landed_cost_from_request` | 34 | ~12 | `_resolve_supplier_from_invoice`, `_parse_grid_rows_from_form`, `_save_import_landed_cost_items`, `_save_import_landed_cost_charges`, `_link_landed_cost_to_invoice` |
+| `bancos/__init__.py` | `bancos_cuenta_bancaria_numbering_config` | 33 | ~8 | `_save_numbering_configs`, `_get_or_create_numbering_config`, `_build_numbering_config_response`, `_build_single_config_entry` |
+| `contabilidad/project_capitalization_service.py` | `run_capitalization` | 32 | ~10 | `_is_eligible_capitalization_entry`, `_find_capitalizable_project`, `_is_already_capitalized`, `_resolve_capitalization_accounts`, `_create_capitalization_journal`, `_query_eligible_entries`, `_process_single_entry` |
+| `ventas/__init__.py` | `_validate_invoice_prices_against_source` | 35 | ~10 | `_load_sales_tolerance_config`, `_calculate_price_variance`, `_validate_single_item_price`, `_resolve_source_item_rate` |
+| `contabilidad/__init__.py` | `nuevo_proyecto` | 20 | ~12 | `_validate_project_creation_form`, `_build_project_from_form` |
+| `contabilidad/__init__.py` | `editar_proyecto` | 20 | ~8 | `_populate_project_edit_form`, `_validate_project_edit_form`, `_setup_project_edit_form` |
+
+**Técnicas aplicadas**: Early returns, extracción de helpers, guard clauses, eliminación de duplicación de lógica (e.g., parseo de grid HTML).
