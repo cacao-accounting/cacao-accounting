@@ -78,44 +78,51 @@ def command() -> None:  # pragma: no cover
     linea_comandos_main()
 
 
+def _get_locale():
+    """Retorna el idioma configurado para la aplicacion."""
+    from flask import has_app_context, has_request_context
+
+    if not (has_app_context() or has_request_context()):
+        return "es"
+    try:
+        from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
+
+        return get_setup_value(SETUP_LANGUAGE, "es")
+    except SQLAlchemyError:
+        return "es"
+
+
+def _get_timezone():
+    """Retorna la zona horaria configurada para la aplicacion."""
+    from flask import has_app_context, has_request_context
+
+    if not (has_app_context() or has_request_context()):
+        return DEFAULT_TIMEZONE
+    try:
+        from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
+
+        return get_setup_value(SETUP_TIMEZONE, DEFAULT_TIMEZONE)
+    except SQLAlchemyError:
+        return DEFAULT_TIMEZONE
+
+
 def iniciar_extenciones(app: Flask | None = None) -> None:
     """Inicializa extenciones."""
-    if app and isinstance(app, Flask):
-        from flask_wtf.csrf import CSRFProtect
-        from cacao_accounting.limiter import init_limiter
-        from cacao_accounting.cache import init_cache
-        from flask import has_app_context, has_request_context
-
-        def get_locale():
-            if not (has_app_context() or has_request_context()):
-                return "es"
-            try:
-                from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
-
-                return get_setup_value(SETUP_LANGUAGE, "es")
-            except SQLAlchemyError:
-                return "es"
-
-        def get_timezone():
-            if not (has_app_context() or has_request_context()):
-                return DEFAULT_TIMEZONE
-            try:
-                from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
-
-                return get_setup_value(SETUP_TIMEZONE, DEFAULT_TIMEZONE)
-            except SQLAlchemyError:
-                return DEFAULT_TIMEZONE
-
-        csrf = CSRFProtect()
-        csrf.init_app(app)
-        alembic.init_app(app)
-        database.init_app(app)
-        administrador_sesion.init_app(app)
-        babel.init_app(app, locale_selector=get_locale, timezone_selector=get_timezone)
-        init_cache(app)
-        init_limiter(app)
-    else:
+    if not (app and isinstance(app, Flask)):
         raise RuntimeError(ERROR2)
+
+    from flask_wtf.csrf import CSRFProtect
+    from cacao_accounting.limiter import init_limiter
+    from cacao_accounting.cache import init_cache
+
+    csrf = CSRFProtect()
+    csrf.init_app(app)
+    alembic.init_app(app)
+    database.init_app(app)
+    administrador_sesion.init_app(app)
+    babel.init_app(app, locale_selector=_get_locale, timezone_selector=_get_timezone)
+    init_cache(app)
+    init_limiter(app)
 
 
 def registrar_rutas_predeterminadas(app: Flask | None = None) -> None:

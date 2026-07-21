@@ -245,6 +245,43 @@ def _parse_timeline_changes(changes_json: str | None) -> dict[str, dict[str, Any
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _clean_decimal_value(v: Any) -> str:
+    """Limpia un valor decimal para mostrar sin ceros triviales."""
+    try:
+        dec = Decimal(str(v)).normalize()
+        s = f"{dec:f}"
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s
+    except InvalidOperation:
+        return str(v)
+
+
+def _format_single_item(item: dict) -> str:
+    """Formatea un solo item de diccionario para la linea de tiempo."""
+    code = item.get("item_code") or item.get("item") or "?"
+    qty = item.get("qty") or item.get("quantity") or "0"
+    rate = item.get("rate") or item.get("basic_rate") or item.get("price") or ""
+    amount = item.get("amount") or ""
+    uom = item.get("uom") or ""
+
+    qty_str = _clean_decimal_value(qty)
+    if rate is not None and rate != "":
+        rate = _clean_decimal_value(rate)
+    if amount is not None and amount != "":
+        amount = _clean_decimal_value(amount)
+
+    parts = [qty_str]
+    if uom:
+        parts.append(f" {uom}")
+    parts.append(f" de {code}")
+    if rate:
+        parts.append(f" a {rate}")
+    if amount:
+        parts.append(f" (Total: {amount})")
+    return "".join(parts)
+
+
 def _format_timeline_value(value: Any) -> str:
     """Format a timeline value for display."""
     if value in (None, "", [], {}):
@@ -253,41 +290,7 @@ def _format_timeline_value(value: Any) -> str:
         formatted_items = []
         for item in value:
             if isinstance(item, dict):
-                code = item.get("item_code") or item.get("item") or "?"
-                qty = item.get("qty") or item.get("quantity") or "0"
-
-                def _clean_dec(v: Any) -> str:
-                    try:
-                        dec = Decimal(str(v)).normalize()
-                        s = f"{dec:f}"
-                        if "." in s:
-                            s = s.rstrip("0").rstrip(".")
-                        return s
-                    except InvalidOperation:
-                        return str(v)
-
-                rate = item.get("rate") or item.get("basic_rate") or item.get("price") or ""
-                if rate is not None and rate != "":
-                    rate = _clean_dec(rate)
-
-                amount = item.get("amount") or ""
-                if amount is not None and amount != "":
-                    amount = _clean_dec(amount)
-
-                qty_str = _clean_dec(qty)
-
-                uom = item.get("uom") or ""
-
-                parts = []
-                parts.append(qty_str)
-                if uom:
-                    parts.append(f" {uom}")
-                parts.append(f" de {code}")
-                if rate:
-                    parts.append(f" a {rate}")
-                if amount:
-                    parts.append(f" (Total: {amount})")
-                formatted_items.append("".join(parts))
+                formatted_items.append(_format_single_item(item))
             else:
                 formatted_items.append(str(item))
         return "; ".join(formatted_items)
