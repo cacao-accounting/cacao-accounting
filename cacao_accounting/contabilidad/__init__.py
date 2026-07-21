@@ -65,7 +65,16 @@ from cacao_accounting.setup.service import (
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.contabilidad.gl import gl
 from cacao_accounting.audit_trail_service import format_document_timeline, log_submit
-from cacao_accounting.database import STATUS, ComprobanteContable, ExchangeRevaluation, RecurringJournalTemplate, database
+from cacao_accounting.database import (
+    STATUS,
+    Accounts,
+    ComprobanteContable,
+    ExchangeRevaluation,
+    Project,
+    RecurringJournalTemplate,
+    database,
+)
+from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
@@ -648,7 +657,6 @@ def nueva_unidad():
     """Formulario para crear una nueva unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
     from cacao_accounting.database import Unit
-    from cacao_accounting.database.helpers import check_hierarchy_cycle, update_hierarchy_attributes
 
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -699,7 +707,6 @@ def editar_unidad(id_unidad):
     """Editar una unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
     from cacao_accounting.database import Unit
-    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
 
     registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if registro is None:
@@ -1641,8 +1648,6 @@ def _build_project_from_form(formulario: Any, budget_currency: str | None) -> Pr
 def nuevo_proyecto():
     """Formulario para crear un nuevo proyecto."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
-    from cacao_accounting.database import Project, Accounts
-    from cacao_accounting.database.helpers import check_hierarchy_cycle, update_hierarchy_attributes
 
     formulario = FormularioProyecto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -1714,7 +1719,6 @@ def nuevo_proyecto():
 @verifica_acceso("accounting")
 def proyecto(project_id):
     """Vista de un proyecto."""
-    from cacao_accounting.database import Project
 
     registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if registro is None:
@@ -1789,8 +1793,6 @@ def _setup_project_edit_form(formulario: Any, proyecto: Any) -> None:
 def editar_proyecto(project_id):
     """Editar un proyecto existente."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
-    from cacao_accounting.database import Project, Accounts
-    from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids
 
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto is None:
@@ -1864,8 +1866,6 @@ def _update_project_from_form(
     if not proyecto.capitalizable:
         proyecto.capitalization_account_id = None
 
-    from cacao_accounting.database.helpers import update_hierarchy_attributes
-
     update_hierarchy_attributes(proyecto)
 
 
@@ -1875,7 +1875,6 @@ def _update_project_from_form(
 @verifica_acceso("accounting")
 def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
-    from cacao_accounting.database import Project
 
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto:
@@ -4044,7 +4043,7 @@ def external_counter_toggle_active(counter_id: str):
 def external_counter_edit(counter_id: str):
     """Edita los datos de un contador externo."""
     from cacao_accounting.contabilidad.forms import FormularioExternalCounter
-    from cacao_accounting.database import Entity, ExternalCounter, NamingSeries, SeriesExternalCounterMap
+    from cacao_accounting.database import Entity, ExternalCounter, NamingSeries
 
     counter = database.session.get(ExternalCounter, counter_id)
     if not counter:

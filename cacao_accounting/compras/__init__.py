@@ -3630,7 +3630,9 @@ def _parse_grid_rows_from_form(prefix: str, fields: list[str]) -> dict[str, dict
 
 def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
     """Guarda las lineas de items del costo de importacion desde el formulario."""
-    items_agrupados = _parse_grid_rows_from_form("item", ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"])
+    items_agrupados = _parse_grid_rows_from_form(
+        "item", ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"],
+    )
     total = Decimal("0")
     for data in items_agrupados.values():
         item_code = data.get("item_code", "").strip()

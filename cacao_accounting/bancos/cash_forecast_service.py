@@ -327,7 +327,10 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             manual_entries, start_date, end_date, zone, today_date, company_currency
         )
 
-        _update_cumulatives(zone, real_inflow, real_outflow, real_other, proj_ar, proj_ap, manual_inflow, manual_outflow, cumulatives)
+        _update_cumulatives(
+            zone, real_inflow, real_outflow, real_other, proj_ar,
+            proj_ap, manual_inflow, manual_outflow, cumulatives,
+        )
 
         matrix.append(
             {
