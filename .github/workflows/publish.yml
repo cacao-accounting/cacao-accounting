@@ -30,11 +30,11 @@ jobs:
           node-version: "20"
       - name: Install build
         run: |
-          python -m pip install build wheel
+          python -m pip install --only-binary :all: build wheel
       - name: Build a binary wheel and a source tarball
         run: |
           cd cacao_accounting/static
-          npm install --omit=dev --ignore-scripts --no-audit --no-fund
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
           find node_modules -type d \( -name "test" -o -name "tests" -o -name "doc" -o -name "docs" -o -name "examples" -o -name "icons" -o -name "scss" -o -name "ts" \) -exec rm -rf {} +
           find node_modules -type f \( -name "*.md" -o -name "*.ts" -o -name "*.map" -o -name "LICENSE" -o -name "README" -o -name "*.yml" -o -name "*.yaml" \) -exec rm -f {} +
           cd ../..
