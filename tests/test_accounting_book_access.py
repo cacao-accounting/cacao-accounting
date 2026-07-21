@@ -3,7 +3,7 @@
 
 import pytest
 
-from cacao_accounting import create_app
+from cacao_accounting import create_app, tiene_acceso_bi_empresa
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import Book, Entity, Modules, Roles, RolesAccess, RolesUser, User, UserBookAccess, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -55,6 +55,16 @@ def test_accounting_book_selector_only_returns_authorized_books(client):
     assert [row["value"] for row in response.get_json()["results"]] == ["FISC"]
 
 
+def test_enterprise_sidebar_requires_bi_and_company_book_access(app):
+    """Enterprise links require BI plus at least one readable company book."""
+    with app.app_context():
+        assert tiene_acceso_bi_empresa("mcp", "USER-ACCOUNTING") is True
+
+        database.session.query(UserBookAccess).delete()
+        database.session.commit()
+        assert tiene_acceso_bi_empresa("mcp", "USER-ACCOUNTING") is False
+
+
 def test_operational_modules_do_not_validate_ledger_access(client):
     """Los modulos operativos no se bloquean por parametros ledger accidentales."""
     _login(client)
@@ -69,6 +79,7 @@ def _seed_book_access_data() -> None:
         [
             Modules(id="MOD-ACCOUNTING", module="accounting", default=True, enabled=True),
             Modules(id="MOD-CASH", module="cash", default=True, enabled=True),
+            Modules(id="MOD-MCP", module="mcp", default=False, enabled=True),
             Roles(id="ROLE-ACCOUNTING", name="accounting_user", note="Accounting user"),
             User(id="USER-ACCOUNTING", user="accounting", password=b"test", active=True),
             Entity(id="cacao", code="cacao", company_name="Cacao", tax_id="J000", currency="NIO"),
@@ -82,6 +93,7 @@ def _seed_book_access_data() -> None:
         [
             RolesAccess(rol_id="ROLE-ACCOUNTING", module_id="MOD-ACCOUNTING", access=True, view=True),
             RolesAccess(rol_id="ROLE-ACCOUNTING", module_id="MOD-CASH", access=True, view=True),
+            RolesAccess(rol_id="ROLE-ACCOUNTING", module_id="MOD-MCP", access=True, bi=True),
             UserBookAccess(user_id="USER-ACCOUNTING", book_id="BOOK-FISC", can_read=True),
         ]
     )

@@ -178,6 +178,25 @@ def registrar_blueprints(app: Flask | None = None) -> None:
         raise RuntimeError(ERROR2)
 
 
+def tiene_acceso_bi_empresa(modulo: str, usuario: str | None) -> bool:
+    """Return whether a user may access enterprise analytics for any company.
+
+    The sidebar must use the same upstream RBAC decision as the APIs: a role
+    needs the BI action on the module and at least one readable accounting
+    book.  Checking the book scope prevents a global BI module permission from
+    exposing a link to a user with no company access.
+    """
+    if not modulo or not usuario:
+        return False
+    module_id = obtener_id_modulo_por_nombre(modulo)
+    if not module_id:
+        return False
+    permisos_modulo = Permisos(modulo=module_id, usuario=usuario)
+    if not permisos_modulo.autorizado or not permisos_modulo.bi:
+        return False
+    return bool(permisos_modulo.obtener_libros_autorizados(accion="can_read"))
+
+
 def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
     """Utilidad para asegurar que varios opciones globales esten dispinibles en Jinja2."""
     if app and isinstance(app, Flask):
@@ -186,6 +205,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.lstrip_blocks = True
             app.jinja_env.globals.update(validar_modulo_activo=validar_modulo_activo)
             app.jinja_env.globals.update(permisos=Permisos)
+            app.jinja_env.globals.update(tiene_acceso_bi_empresa=tiene_acceso_bi_empresa)
             app.jinja_env.globals.update(_=_)
             app.jinja_env.globals.update(MODO_ESCRITORIO=is_desktop_mode())
             app.jinja_env.globals.update(is_desktop_mode=is_desktop_mode)
