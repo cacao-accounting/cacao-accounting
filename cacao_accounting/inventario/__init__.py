@@ -336,35 +336,7 @@ def inventario_articulo_nuevo():
         account_rows = _item_account_rows_for_template(request.form)
         if formulario.validate():
             try:
-                params = ItemParams(
-                    name=str(request.form.get("name") or "").strip(),
-                    description=(request.form.get("description") or "").strip() or None,
-                    item_type=str(request.form.get("item_type") or "goods").strip(),
-                    is_stock_item=request.form.get("is_stock_item") is not None,
-                    is_purchase_item=request.form.get("is_purchase_item") is not None,
-                    is_sale_item=request.form.get("is_sale_item") is not None,
-                    item_category_id=(request.form.get("item_category_id") or "").strip() or None,
-                    default_uom=str(request.form.get("default_uom") or "").strip(),
-                    purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
-                    sale_uom=(request.form.get("sale_uom") or "").strip() or None,
-                    default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
-                    default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
-                    allow_negative_stock=request.form.get("allow_negative_stock") is not None,
-                    min_stock_qty=_form_decimal("min_stock_qty"),
-                    max_stock_qty=_form_decimal("max_stock_qty"),
-                    reorder_level=_form_decimal("reorder_level"),
-                    standard_rate=_form_decimal("standard_rate"),
-                    last_purchase_rate=_form_decimal("last_purchase_rate"),
-                    currency=(request.form.get("currency") or "").strip() or None,
-                    brand=(request.form.get("brand") or "").strip() or None,
-                    model_name=(request.form.get("model_name") or "").strip() or None,
-                    barcode=(request.form.get("barcode") or "").strip() or None,
-                    has_batch=request.form.get("has_batch") is not None,
-                    has_serial_no=request.form.get("has_serial_no") is not None,
-                    has_expiry_date=request.form.get("has_expiry_date") is not None,
-                    uom_rows=parse_item_uom_rows(request.form),
-                    account_rows=parse_item_account_rows(request.form),
-                )
+                params = _item_params_from_form(request.form)
                 create_item_with_uoms(params)
                 database.session.commit()
                 return redirect("/inventory/item/list")
@@ -389,6 +361,39 @@ def inventario_articulo_nuevo():
         cost_center_choices=_cost_center_choices(),
         category_choices=_item_category_choices(),
         currency_choices=_currency_choices(),
+    )
+
+
+def _item_params_from_form(form) -> ItemParams:
+    """Construye ItemParams desde los datos del formulario."""
+    return ItemParams(
+        name=str(form.get("name") or "").strip(),
+        description=(form.get("description") or "").strip() or None,
+        item_type=str(form.get("item_type") or "goods").strip(),
+        is_stock_item=form.get("is_stock_item") is not None,
+        is_purchase_item=form.get("is_purchase_item") is not None,
+        is_sale_item=form.get("is_sale_item") is not None,
+        item_category_id=(form.get("item_category_id") or "").strip() or None,
+        default_uom=str(form.get("default_uom") or "").strip(),
+        purchase_uom=(form.get("purchase_uom") or "").strip() or None,
+        sale_uom=(form.get("sale_uom") or "").strip() or None,
+        default_warehouse_id=(form.get("default_warehouse_id") or "").strip() or None,
+        default_supplier_id=(form.get("default_supplier_id") or "").strip() or None,
+        allow_negative_stock=form.get("allow_negative_stock") is not None,
+        min_stock_qty=_form_decimal("min_stock_qty"),
+        max_stock_qty=_form_decimal("max_stock_qty"),
+        reorder_level=_form_decimal("reorder_level"),
+        standard_rate=_form_decimal("standard_rate"),
+        last_purchase_rate=_form_decimal("last_purchase_rate"),
+        currency=(form.get("currency") or "").strip() or None,
+        brand=(form.get("brand") or "").strip() or None,
+        model_name=(form.get("model_name") or "").strip() or None,
+        barcode=(form.get("barcode") or "").strip() or None,
+        has_batch=form.get("has_batch") is not None,
+        has_serial_no=form.get("has_serial_no") is not None,
+        has_expiry_date=form.get("has_expiry_date") is not None,
+        uom_rows=parse_item_uom_rows(form),
+        account_rows=parse_item_account_rows(form),
     )
 
 
@@ -442,35 +447,7 @@ def inventario_articulo_editar(item_id):
         account_rows = _item_account_rows_for_template(request.form)
         if formulario.validate():
             try:
-                params = ItemParams(
-                    name=str(request.form.get("name") or "").strip(),
-                    description=(request.form.get("description") or "").strip() or None,
-                    item_type=str(request.form.get("item_type") or "goods").strip(),
-                    is_stock_item=request.form.get("is_stock_item") is not None,
-                    is_purchase_item=request.form.get("is_purchase_item") is not None,
-                    is_sale_item=request.form.get("is_sale_item") is not None,
-                    item_category_id=(request.form.get("item_category_id") or "").strip() or None,
-                    default_uom=str(request.form.get("default_uom") or "").strip(),
-                    purchase_uom=(request.form.get("purchase_uom") or "").strip() or None,
-                    sale_uom=(request.form.get("sale_uom") or "").strip() or None,
-                    default_warehouse_id=(request.form.get("default_warehouse_id") or "").strip() or None,
-                    default_supplier_id=(request.form.get("default_supplier_id") or "").strip() or None,
-                    allow_negative_stock=request.form.get("allow_negative_stock") is not None,
-                    min_stock_qty=_form_decimal("min_stock_qty"),
-                    max_stock_qty=_form_decimal("max_stock_qty"),
-                    reorder_level=_form_decimal("reorder_level"),
-                    standard_rate=_form_decimal("standard_rate"),
-                    last_purchase_rate=_form_decimal("last_purchase_rate"),
-                    currency=(request.form.get("currency") or "").strip() or None,
-                    brand=(request.form.get("brand") or "").strip() or None,
-                    model_name=(request.form.get("model_name") or "").strip() or None,
-                    barcode=(request.form.get("barcode") or "").strip() or None,
-                    has_batch=request.form.get("has_batch") is not None,
-                    has_serial_no=request.form.get("has_serial_no") is not None,
-                    has_expiry_date=request.form.get("has_expiry_date") is not None,
-                    uom_rows=parse_item_uom_rows(request.form),
-                    account_rows=parse_item_account_rows(request.form),
-                )
+                params = _item_params_from_form(request.form)
                 update_item_with_uoms(item_code=item.code, params=params)
                 database.session.commit()
                 flash("Artículo actualizado correctamente.", "success")
