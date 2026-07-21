@@ -164,6 +164,66 @@ def detail(batch_id):
     return render_template("imports/detail.html", batch=batch, preview=preview_data)
 
 
+_ALLOWED_MIMES = {
+    "text/csv",
+    "text/plain",
+    "application/csv",
+    "text/x-csv",
+    "application/x-csv",
+    "text/comma-separated-values",
+    "text/x-comma-separated-values",
+    "application/vnd.ms-excel",
+    "application/msexcel",
+    "application/x-msexcel",
+    "application/x-ms-excel",
+    "application/x-excel",
+    "application/x-dos_ms_excel",
+    "application/xls",
+    "application/x-xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/zip",
+    "application/x-zip",
+    "application/x-zip-compressed",
+    "application/octet-stream",
+    "application/x-empty",
+}
+
+
+def _extract_file_extension(filename: str) -> str:
+    """Extract lowercase file extension, or empty string if none."""
+    return filename.rsplit(".", 1)[1].lower() if "." in filename else ""
+
+
+def _validate_mime_type(file: Any) -> bool:
+    """Validate file MIME type using python-magic. Returns True if valid."""
+    if is_desktop_mode():
+        return True
+    try:
+        if magic is None:
+            raise ImportError("python-magic no está disponible")
+        chunk = file.read(2048)
+        file.seek(0)
+        mime = magic.from_buffer(chunk, mime=True)
+    except (ImportError, OSError, _MAGIC_EXCEPTION):
+        flash("Error al validar el tipo de archivo", "danger")
+        return False
+    if mime not in _ALLOWED_MIMES:
+        flash("Tipo de archivo no válido", "danger")
+        return False
+    return True
+
+
+def _persist_uploaded_file(file: Any, batch_id: str, filename: str) -> str:
+    """Save file to the imports directory and return the full path."""
+    safe_batch_id = secure_filename(str(batch_id))
+    import_dir = os.path.join(current_app.instance_path, "imports", safe_batch_id)
+    os.makedirs(import_dir, exist_ok=True)
+    file_path = os.path.join(import_dir, filename)
+    file.save(file_path)
+    return file_path
+
+
 @imports.route("/<batch_id>/upload", methods=["POST"])
 @modulo_activo("imports")
 @login_required
@@ -172,68 +232,27 @@ def upload(batch_id):
     check_permission("actualizar")
     batch = ImportBatch.query.get_or_404(batch_id)
     file = request.files.get("file")
-    if file and file.filename:
-        filename = secure_filename(file.filename)
-        extension = filename.rsplit(".", 1)[1].lower() if "." in filename else ""
-        if extension not in ["csv", "xls", "xlsx", "ods"]:
-            flash("Formato de archivo no soportado", "danger")
-            return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+    if not file or not file.filename:
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
-        # Check MIME type of the file using python-magic only if not in desktop mode
-        if not is_desktop_mode():
-            try:
-                if magic is None:
-                    raise ImportError("python-magic no está disponible")
-                # Read first 2048 bytes to detect the MIME type
-                chunk = file.read(2048)
-                file.seek(0)  # Reset pointer
-                mime = magic.from_buffer(chunk, mime=True)
-            except (ImportError, OSError, _MAGIC_EXCEPTION):
-                flash("Error al validar el tipo de archivo", "danger")
-                return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+    filename = secure_filename(file.filename)
+    extension = _extract_file_extension(filename)
+    if extension not in ["csv", "xls", "xlsx", "ods"]:
+        flash("Formato de archivo no soportado", "danger")
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
-            allowed_mimes = {
-                "text/csv",
-                "text/plain",
-                "application/csv",
-                "text/x-csv",
-                "application/x-csv",
-                "text/comma-separated-values",
-                "text/x-comma-separated-values",
-                "application/vnd.ms-excel",
-                "application/msexcel",
-                "application/x-msexcel",
-                "application/x-ms-excel",
-                "application/x-excel",
-                "application/x-dos_ms_excel",
-                "application/xls",
-                "application/x-xls",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.oasis.opendocument.spreadsheet",
-                "application/zip",
-                "application/x-zip",
-                "application/x-zip-compressed",
-                "application/octet-stream",
-                "application/x-empty",
-            }
+    if not _validate_mime_type(file):
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
-            if mime not in allowed_mimes:
-                flash("Tipo de archivo no válido", "danger")
-                return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+    file_path = _persist_uploaded_file(file, batch.id, filename)
 
-        safe_batch_id = secure_filename(str(batch.id))
-        import_dir = os.path.join(current_app.instance_path, "imports", safe_batch_id)
-        os.makedirs(import_dir, exist_ok=True)
-        file_path = os.path.join(import_dir, filename)
-        file.save(file_path)
+    batch.source_filename = filename
+    batch.source_format = extension
+    batch.source_path = file_path
+    batch.import_status = 1
+    database.session.commit()
 
-        batch.source_filename = filename
-        batch.source_format = extension
-        batch.source_path = file_path
-        batch.import_status = 1  # Archivo cargado
-        database.session.commit()
-
-        flash("Archivo cargado correctamente", "success")
+    flash("Archivo cargado correctamente", "success")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
