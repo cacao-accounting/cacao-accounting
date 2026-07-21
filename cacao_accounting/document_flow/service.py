@@ -617,7 +617,7 @@ def _process_target_line(
     target: Any,
     target_spec: Any,
     target_type: str,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Procesa una linea individual del documento destino."""
     source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
     source_id = str(selected.get("source_document_id") or selected.get("source_id") or "")

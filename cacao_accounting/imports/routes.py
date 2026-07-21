@@ -32,9 +32,10 @@ from typing import Any
 
 magic: Any = None
 try:
-    import magic
+    import magic as _magic_mod
 
-    _MAGIC_EXCEPTION: type[BaseException] = magic.MagicException
+    magic = _magic_mod
+    _MAGIC_EXCEPTION: type[BaseException] = _magic_mod.MagicException
 except ImportError:
     magic = None  # type: ignore[assignment]
     _MAGIC_EXCEPTION = ImportError
