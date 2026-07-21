@@ -479,17 +479,19 @@ class ApprovalEngine:
         roles: list[str] = []
         users: list[str] = []
         for r in rules:
-            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
-                if r.user_id:
-                    u = database.session.get(User, r.user_id)
-                    if u and u.name:
-                        users.append(u.name)
-                elif r.role_id:
-                    from cacao_accounting.database import Roles
+            if not r.min_amount <= amount or (r.max_amount is not None and r.max_amount < amount):
+                continue
+            if r.user_id:
+                user = database.session.get(User, r.user_id)
+                if user and user.name:
+                    users.append(user.name)
+                continue
+            if r.role_id:
+                from cacao_accounting.database import Roles
 
-                    rol = database.session.get(Roles, r.role_id)
-                    if rol:
-                        roles.append(rol.note or rol.name)
+                role = database.session.get(Roles, r.role_id)
+                if role:
+                    roles.append(role.note or role.name)
         return list(set(roles)), list(set(users))
 
     @classmethod

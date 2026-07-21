@@ -287,40 +287,15 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     existing_source_allocations: dict[str, Decimal] = {}
     existing_target_allocations: dict[tuple[str, str], Decimal] = {}
     for match in request.matches:
-        transaction = _validate_reconciliation_match(match=match, company=request.company)
-        target_key = (match.target_type, match.target_id)
-        source_pending, target_pending = _reconciliation_pending_amounts(
-            transaction=transaction,
-            target_type=match.target_type,
-            target_id=match.target_id,
-            source_totals=source_totals,
-            target_totals=target_totals,
-            existing_source_allocations=existing_source_allocations,
-            existing_target_allocations=existing_target_allocations,
+        _add_reconciliation_match(
+            request,
+            reconciliation,
+            match,
+            source_totals,
+            target_totals,
+            existing_source_allocations,
+            existing_target_allocations,
         )
-        if match.allocated_amount > source_pending:
-            raise BankReconciliationError("El monto excede el saldo bancario pendiente de conciliar.")
-        if match.allocated_amount > target_pending:
-            raise BankReconciliationError("El monto excede el saldo pendiente del documento destino.")
-
-        status = "reconciled" if match.allocated_amount == source_pending == target_pending else "partial"
-        database.session.add(
-            ReconciliationItem(
-                reconciliation_id=reconciliation.id,
-                reference_type="bank_transaction",
-                reference_id=transaction.id,
-                amount=match.allocated_amount,
-                allocated_amount=match.allocated_amount,
-                reconciliation_date=request.reconciliation_date,
-                status=status,
-                source_type="bank_transaction",
-                source_id=transaction.id,
-                target_type=match.target_type,
-                target_id=match.target_id,
-            )
-        )
-        source_totals[transaction.id] = source_totals.get(transaction.id, Decimal("0")) + match.allocated_amount
-        target_totals[target_key] = target_totals.get(target_key, Decimal("0")) + match.allocated_amount
 
     database.session.flush()
     for bank_transaction_id in source_totals:
@@ -335,6 +310,45 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
                     bank_transaction.payment_entry_id = match.target_id
 
     return reconciliation
+
+
+def _add_reconciliation_match(
+    request, reconciliation, match, source_totals, target_totals, existing_source_allocations, existing_target_allocations
+) -> None:
+    """Valida y persiste una línea de conciliación bancaria."""
+    transaction = _validate_reconciliation_match(match=match, company=request.company)
+    target_key = (match.target_type, match.target_id)
+    source_pending, target_pending = _reconciliation_pending_amounts(
+        transaction=transaction,
+        target_type=match.target_type,
+        target_id=match.target_id,
+        source_totals=source_totals,
+        target_totals=target_totals,
+        existing_source_allocations=existing_source_allocations,
+        existing_target_allocations=existing_target_allocations,
+    )
+    if match.allocated_amount > source_pending:
+        raise BankReconciliationError("El monto excede el saldo bancario pendiente de conciliar.")
+    if match.allocated_amount > target_pending:
+        raise BankReconciliationError("El monto excede el saldo pendiente del documento destino.")
+    status = "reconciled" if match.allocated_amount == source_pending == target_pending else "partial"
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation.id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=match.allocated_amount,
+            allocated_amount=match.allocated_amount,
+            reconciliation_date=request.reconciliation_date,
+            status=status,
+            source_type="bank_transaction",
+            source_id=transaction.id,
+            target_type=match.target_type,
+            target_id=match.target_id,
+        )
+    )
+    source_totals[transaction.id] = source_totals.get(transaction.id, Decimal("0")) + match.allocated_amount
+    target_totals[target_key] = target_totals.get(target_key, Decimal("0")) + match.allocated_amount
 
 
 def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: str) -> BankTransaction:
