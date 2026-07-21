@@ -2,22 +2,22 @@
 -r requirements.txt
 
 # Crear tarball y wheel
-build
-twine
-wheel
-packaging>=26.2
+build==1.5.0
+twine==6.2.0
+wheel==0.47.0
+packaging==26.2
 
 # Control de calidad python
-black
-flake8
-ruff
-bandit
-pydocstyle
+black==26.5.1
+flake8==7.3.0
+ruff==0.15.22
+bandit==1.9.4
+pydocstyle==6.3.0
 
 # Cobertura de código
-coverage
-pytest-cov
-pytest-xdist
+coverage==7.15.2
+pytest-cov==7.1.0
+pytest-xdist==3.8.0
 
 # Verificación de tipos
-mypy
+mypy==2.3.0
