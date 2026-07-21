@@ -25,8 +25,8 @@ WORKDIR /build
 COPY requirements.txt .
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
-        "Flask-Limiter[redis]>=3.8.0" "flask-caching>=2.4.0" \
-        "python-magic>=0.4.27" "redis>=7.4.0" "pg8000>=1.31.5" "PyMySQL>=1.1.3" \
+        "Flask-Limiter[redis]==3.8.0" "flask-caching==2.4.0" \
+        "python-magic==0.4.27" "redis==7.4.0" "pg8000==1.31.5" "PyMySQL==1.1.3" \
     && find /install -type d \( \
         -name "test" -o -name "tests" -o -name "testing" \
         -o -name "benchmark" -o -name "benchmarks" -o -name "examples" \
