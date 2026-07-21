@@ -113,4 +113,5 @@ norecursedirs = [
     "dist",
     "*.egg-info",
     "cacao_accounting-*",
+    ".cache",
 ]
