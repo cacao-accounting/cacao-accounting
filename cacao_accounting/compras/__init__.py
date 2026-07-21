@@ -1579,14 +1579,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
             warehouse_code = request.form.get(f"warehouse_{i}") or None
-            if warehouse_code:
-                from cacao_accounting.database import Warehouse
-
-                wh = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
-                if wh is None:
-                    raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
-                if not wh.is_active:
-                    raise DocumentFlowError(f"Almacén '{warehouse_code}' está inactivo.", 409)
+            _validate_receipt_warehouse(warehouse_code)
             linea = PurchaseReceiptItem(
                 purchase_receipt_id=receipt_id,
                 item_code=item_code,
@@ -1604,6 +1597,19 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             total += amount
         i += 1
     return total_qty, total
+
+
+def _validate_receipt_warehouse(warehouse_code: str | None) -> None:
+    """Valida la bodega indicada en una recepción."""
+    if not warehouse_code:
+        return
+    from cacao_accounting.database import Warehouse
+
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+    if warehouse is None:
+        raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
+    if not warehouse.is_active:
+        raise DocumentFlowError(f"Almacén '{warehouse_code}' está inactivo.", 409)
 
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
@@ -1710,14 +1716,7 @@ def compras_orden_compra_nuevo():
         response = _create_purchase_order_from_request(request.form)
         if response is not None:
             return response
-    if from_request_id:
-        initial_source_type = "purchase_request"
-    elif from_rfq_id:
-        initial_source_type = "purchase_quotation"
-    elif from_supplier_quotation_id:
-        initial_source_type = "supplier_quotation"
-    else:
-        initial_source_type = ""
+    initial_source_type = _purchase_order_source_type(from_request_id, from_rfq_id, from_supplier_quotation_id)
 
     source_origen = solicitud_origen or rfq_origen or supplier_quotation_origen
     transaction_config = _build_purchase_order_transaction_config(
@@ -1737,6 +1736,17 @@ def compras_orden_compra_nuevo():
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _purchase_order_source_type(request_id: str | None, rfq_id: str | None, quotation_id: str | None) -> str:
+    """Resuelve el tipo de documento fuente de una orden de compra."""
+    if request_id:
+        return "purchase_request"
+    if rfq_id:
+        return "purchase_quotation"
+    if quotation_id:
+        return "supplier_quotation"
+    return ""
 
 
 @compras.route("/purchase-order/<order_id>")
@@ -2494,42 +2504,9 @@ def compras_recepcion_nuevo():
         "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
     }
     if request.method == "POST":
-        try:
-            posting_date = _parse_date(request.form.get("posting_date"))
-            supplier_id = request.form.get("supplier_id") or None
-            supplier = database.session.get(Party, supplier_id) if supplier_id else None
-            recepcion = PurchaseReceipt(
-                supplier_id=supplier_id,
-                supplier_name=supplier.name if supplier else None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                purchase_order_id=request.form.get("from_order") or None,
-                remarks=request.form.get("remarks"),
-                transaction_currency=request.form.get("transaction_currency") or None,
-                docstatus=0,
-            )
-            database.session.add(recepcion)
-            database.session.flush()
-            assign_document_identifier(
-                document=recepcion,
-                entity_type="purchase_receipt",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_purchase_receipt_items(recepcion.id)
-            recepcion.total = total
-            recepcion.grand_total = total
-            recepcion.exchange_rate = _purchase_exchange_rate(
-                request.form.get("company"), posting_date, request.form.get("transaction_currency")
-            )
-            recepcion.base_total = (total * recepcion.exchange_rate).quantize(Decimal("0.0001"))
-            log_create(recepcion)
-            database.session.commit()
-            flash("Recepción de compra creada correctamente.", "success")
-            return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=recepcion.id))
-        except (DocumentFlowError, IdentifierConfigurationError) as exc:
-            database.session.rollback()
-            flash_error(exc)
+        response = _create_purchase_receipt_from_form()
+        if response is not None:
+            return response
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
@@ -2541,6 +2518,46 @@ def compras_recepcion_nuevo():
         bodegas_disponibles=bodegas_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _create_purchase_receipt_from_form():
+    """Crea una recepción de compra desde el formulario."""
+    try:
+        posting_date = _parse_date(request.form.get("posting_date"))
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        receipt = PurchaseReceipt(
+            supplier_id=supplier_id,
+            supplier_name=supplier.name if supplier else None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            purchase_order_id=request.form.get("from_order") or None,
+            remarks=request.form.get("remarks"),
+            transaction_currency=request.form.get("transaction_currency") or None,
+            docstatus=0,
+        )
+        database.session.add(receipt)
+        database.session.flush()
+        assign_document_identifier(
+            document=receipt,
+            entity_type="purchase_receipt",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        _total_qty, total = _save_purchase_receipt_items(receipt.id)
+        receipt.total = receipt.grand_total = total
+        receipt.exchange_rate = _purchase_exchange_rate(
+            request.form.get("company"), posting_date, request.form.get("transaction_currency")
+        )
+        receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
+        log_create(receipt)
+        database.session.commit()
+        flash("Recepción de compra creada correctamente.", "success")
+        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
+    except (DocumentFlowError, IdentifierConfigurationError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None
 
 
 @compras.route("/purchase-receipt/<receipt_id>")
@@ -2771,32 +2788,27 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
         )
     ).scalars()
     for rel in relations:
-        if not rel.source_item_id:
-            continue
-        if rel.source_type == "purchase_receipt":
-            receipt_item = database.session.get(PurchaseReceiptItem, rel.source_item_id)
-            if not receipt_item:
-                continue
-            consumed = consumed_qty_for_source("purchase_receipt", rel.source_id, rel.source_item_id, "purchase_invoice")
-            received = Decimal(str(receipt_item.qty or 0))
-            if consumed > received:
-                raise ValueError(
-                    _("Sobre-facturación: cantidad facturada {} excede la recibida {} para el artículo {}.").format(
-                        consumed, received, receipt_item.item_code
-                    )
-                )
-        elif rel.source_type == "purchase_order":
-            po_item = database.session.get(PurchaseOrderItem, rel.source_item_id)
-            if not po_item:
-                continue
-            consumed = consumed_qty_for_source("purchase_order", rel.source_id, rel.source_item_id, "purchase_invoice")
-            ordered = Decimal(str(po_item.qty or 0))
-            if consumed > ordered:
-                raise ValueError(
-                    _("Sobre-facturación: cantidad facturada {} excede la ordenada {} para el artículo {}.").format(
-                        consumed, ordered, po_item.item_code
-                    )
-                )
+        if rel.source_item_id:
+            _validate_purchase_invoice_relation(rel)
+
+
+def _validate_purchase_invoice_relation(relation: DocumentRelation) -> None:
+    """Valida una relación de factura de compra contra su fuente."""
+    sources = {"purchase_receipt": (PurchaseReceiptItem, "recibida"), "purchase_order": (PurchaseOrderItem, "ordenada")}
+    source = sources.get(relation.source_type)
+    if not source or not relation.source_item_id:
+        return
+    item: Any = database.session.get(source[0], relation.source_item_id)
+    if not item:
+        return
+    consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "purchase_invoice")
+    available = Decimal(str(item.qty or 0))
+    if consumed > available:
+        raise ValueError(
+            _("Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}.").format(
+                consumed, source[1], item.item_code
+            )
+        )
 
 
 def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
@@ -3631,7 +3643,8 @@ def _parse_grid_rows_from_form(prefix: str, fields: list[str]) -> dict[str, dict
 def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
     """Guarda las lineas de items del costo de importacion desde el formulario."""
     items_agrupados = _parse_grid_rows_from_form(
-        "item", ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"],
+        "item",
+        ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"],
     )
     total = Decimal("0")
     for data in items_agrupados.values():
@@ -3699,9 +3712,7 @@ def _link_landed_cost_to_invoice(
     for item in invoice_items:
         our_item = (
             database.session.execute(
-                database.select(ImportLandedCostItem).filter_by(
-                    import_landed_cost_id=registro.id, item_code=item.item_code
-                )
+                database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=registro.id, item_code=item.item_code)
             )
             .scalars()
             .first()
@@ -3904,9 +3915,7 @@ def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     return redirect(url_for(COMPRAS_PROVEEDOR_ENDPOINT, supplier_id=supplier_id))
 
 
-def _group_items_by_budget_dimensions(
-    items: Any, company: str, supplier_id: str | None
-) -> dict[tuple, Decimal]:
+def _group_items_by_budget_dimensions(items: Any, company: str, supplier_id: str | None) -> dict[tuple, Decimal]:
     """Agrupa los montos solicitados por combinacion de cuenta y centro de costo."""
     from cacao_accounting.contabilidad.budget_service import BudgetService
 

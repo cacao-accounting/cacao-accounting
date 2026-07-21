@@ -287,3 +287,20 @@ Segundo lote de refactorización de 8 funciones con complejidad cognitiva > 15 (
 | `compras/purchase_reconciliation_service.py` | `get_unlinked_purchase_receipts_summary` | 23 | `_aggregate_pending_by_receipt`, `_resolve_po_number`, `_resolve_supplier_name` |
 
 **Técnicas aplicadas**: Early returns con guard clauses, extracción de helpers compartidos entre funciones hermanas (`_resolve_po_number`, `_resolve_supplier_name`), separación de lógica de persistencia, eliminación de lógica duplicada de resolución de proveedor/PO.
+
+### 2026-07-21 (Issues abiertos de SonarCloud)
+
+La API pública de SonarCloud (`/api/issues/search`, proyecto `cacao-accounting_cacao-accounting`, `resolved=false`) reportó 34 issues abiertos: 22 de complejidad cognitiva, 8 de seguridad de GitHub Actions y 2 variables locales sin uso. Se implementó un tercer lote de correcciones:
+
+- Extracción de helpers para aprobación administrativa, creación de facturas/recepciones, validaciones de cantidades de compras/ventas, crédito de clientes, conciliación bancaria, relaciones documentales y conciliación de inventario.
+- Simplificación del parseo de artículos, cuentas por compañía, configuración de terceros y serialización de líneas contables.
+- Eliminación de las variables no utilizadas en edición de proyectos.
+- El workflow de CI instala dependencias con `--only-binary=:all:` y versiones explícitas; `odfpy==1.4.1` conserva una instalación aislada desde fuente por no disponer de wheel compatible.
+
+Validación realizada: Ruff y compilación Python pasan. La suite completa se ejecutó en segundo plano con salida en `/tmp/sonar-open-issues-pytest.log`; el primer resultado fue 1508 pasadas, 8 omitidas y dos fallos. Se corrigió el contrato de mensajes de cuentas contables y se hizo tolerante la validación MIME cuando `python-magic` no está disponible, rechazando HTML y conservando el aviso de validación degradada. Las pruebas focalizadas de imports, flujo de caja e inventario pasan (15 pasadas).
+
+Por solicitud de continuidad, la verificación final se limitó a los módulos afectados: `254 passed` en 2:42 usando aprobación, inventario, crédito de ventas, flujo documental, posting, conciliación bancaria, ventas, compras, pagos, servicios e imports. No se ejecutó nuevamente la suite completa.
+
+### 2026-07-21 (Corrección de CI del PR #266)
+
+El análisis del PR en SonarCloud reportó 0 issues, pero GitHub Actions falló en Mypy por inferir `BaseTabla` para los items dinámicos de las validaciones de cantidades de ventas y compras. Se anotaron explícitamente como `Any` los resultados de esos lookups, preservando el comportamiento y satisfaciendo los atributos `qty` e `item_code` usados por la validación.

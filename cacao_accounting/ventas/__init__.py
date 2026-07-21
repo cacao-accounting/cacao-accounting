@@ -1293,9 +1293,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
 def _load_sales_tolerance_config(company: str) -> tuple[str, Decimal, bool]:
     """Carga la configuracion de tolerancia de precios para una compania."""
-    config = database.session.execute(
-        database.select(SalesMatchingConfig).filter_by(company=company)
-    ).scalar_one_or_none()
+    config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company=company)).scalar_one_or_none()
 
     if config is None:
         return "percentage", Decimal("0"), False
@@ -1440,32 +1438,27 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
         )
     ).scalars()
     for rel in relations:
-        if not rel.source_item_id:
-            continue
-        if rel.source_type == "delivery_note":
-            dn_item = database.session.get(DeliveryNoteItem, rel.source_item_id)
-            if not dn_item:
-                continue
-            consumed = consumed_qty_for_source("delivery_note", rel.source_id, rel.source_item_id, "sales_invoice")
-            delivered = Decimal(str(dn_item.qty or 0))
-            if consumed > delivered:
-                raise ValueError(
-                    _("Sobre-facturación: cantidad facturada {} excede la entregada {} para el artículo {}.").format(
-                        consumed, delivered, dn_item.item_code
-                    )
-                )
-        elif rel.source_type == "sales_order":
-            so_item = database.session.get(SalesOrderItem, rel.source_item_id)
-            if not so_item:
-                continue
-            consumed = consumed_qty_for_source("sales_order", rel.source_id, rel.source_item_id, "sales_invoice")
-            ordered = Decimal(str(so_item.qty or 0))
-            if consumed > ordered:
-                raise ValueError(
-                    _("Sobre-facturación: cantidad facturada {} excede la ordenada {} para el artículo {}.").format(
-                        consumed, ordered, so_item.item_code
-                    )
-                )
+        if rel.source_item_id:
+            _validate_sales_invoice_relation(rel)
+
+
+def _validate_sales_invoice_relation(relation: DocumentRelation) -> None:
+    """Valida una relación de factura contra su documento fuente."""
+    sources = {"delivery_note": (DeliveryNoteItem, "entregada"), "sales_order": (SalesOrderItem, "ordenada")}
+    source = sources.get(relation.source_type)
+    if not source or not relation.source_item_id:
+        return
+    item: Any = database.session.get(source[0], relation.source_item_id)
+    if not item:
+        return
+    consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "sales_invoice")
+    available = Decimal(str(item.qty or 0))
+    if consumed > available:
+        raise ValueError(
+            _("Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}.").format(
+                consumed, source[1], item.item_code
+            )
+        )
 
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
@@ -2559,56 +2552,7 @@ def ventas_factura_venta_nuevo():
         ],
     }
     if request.method == "POST":
-        try:
-            document_type = request.form.get("document_type") or "sales_invoice"
-            posting_date = _parse_date(request.form.get("posting_date"))
-            reversal_of = (
-                (request.form.get("from_invoice") or request.form.get("from_return"))
-                if document_type in ("sales_credit_note", "sales_debit_note")
-                else None
-            )
-            if reversal_of:
-                _validate_reversal_of(
-                    reversal_of,
-                    request.form.get("customer_id"),
-                    request.form.get("company"),
-                )
-            factura = SalesInvoice(
-                customer_id=request.form.get("customer_id") or None,
-                company=request.form.get("company") or None,
-                posting_date=posting_date,
-                document_type=document_type,
-                sales_order_id=request.form.get("from_order") or None,
-                delivery_note_id=request.form.get("from_note") or None,
-                update_inventory=bool(request.form.get("update_inventory")),
-                is_return=document_type in ("sales_credit_note", "sales_return"),
-                reversal_of=reversal_of,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            database.session.add(factura)
-            database.session.flush()
-            assign_document_identifier(
-                document=factura,
-                entity_type="sales_invoice",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_sales_invoice_items(factura.id)
-            factura.total = total
-            factura.base_total = total
-            factura.grand_total = total
-            factura.base_grand_total = total
-            factura.outstanding_amount = total
-            factura.base_outstanding_amount = total
-            _persist_sales_invoice_fiscal_snapshot(factura)
-            database.session.commit()
-            flash("Factura de venta creada correctamente.", "success")
-            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
-        except ValueError as exc:
-            database.session.rollback()
-            flash_error(exc)
-            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
+        return _create_sales_invoice_from_form()
     return render_template(
         "ventas/factura_venta_nuevo.html",
         form=formulario,
@@ -2626,6 +2570,56 @@ def ventas_factura_venta_nuevo():
         transaction_config=transaction_config,
         update_inventory_checked=formulario.update_inventory.data,
     )
+
+
+def _create_sales_invoice_from_form():
+    """Crea una factura de venta desde los datos del formulario."""
+    factura = None
+    try:
+        document_type = request.form.get("document_type") or "sales_invoice"
+        posting_date = _parse_date(request.form.get("posting_date"))
+        reversal_of = _sales_reversal_source(document_type)
+        if reversal_of:
+            _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
+        factura = SalesInvoice(
+            customer_id=request.form.get("customer_id") or None,
+            company=request.form.get("company") or None,
+            posting_date=posting_date,
+            document_type=document_type,
+            sales_order_id=request.form.get("from_order") or None,
+            delivery_note_id=request.form.get("from_note") or None,
+            update_inventory=bool(request.form.get("update_inventory")),
+            is_return=document_type in ("sales_credit_note", "sales_return"),
+            reversal_of=reversal_of,
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        database.session.add(factura)
+        database.session.flush()
+        assign_document_identifier(
+            document=factura,
+            entity_type="sales_invoice",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        _total_qty, total = _save_sales_invoice_items(factura.id)
+        factura.total = factura.base_total = factura.grand_total = factura.base_grand_total = total
+        factura.outstanding_amount = factura.base_outstanding_amount = total
+        _persist_sales_invoice_fiscal_snapshot(factura)
+        database.session.commit()
+        flash("Factura de venta creada correctamente.", "success")
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id if factura else ""))
+
+
+def _sales_reversal_source(document_type: str) -> str | None:
+    """Obtiene la factura origen para una nota de crédito o débito."""
+    if document_type not in ("sales_credit_note", "sales_debit_note"):
+        return None
+    return request.form.get("from_invoice") or request.form.get("from_return") or None
 
 
 @ventas.route("/sales-invoice/<invoice_id>")
@@ -2948,9 +2942,8 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
     if not customer_id or not company:
         return
 
-    from cacao_accounting.database import CompanyParty, PaymentTerms, SalesInvoice
+    from cacao_accounting.database import CompanyParty
     from cacao_accounting.document_flow.service import compute_outstanding_amount
-    from datetime import date, timedelta
 
     company_party = database.session.execute(
         database.select(CompanyParty).filter_by(company=company, party_id=customer_id)
@@ -2959,58 +2952,43 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
     if not company_party:
         return
 
-    # 1. Validación de facturas vencidas (block_overdue)
+    invoices = _approved_customer_invoices(company, customer_id)
     if company_party.block_overdue:
-        # Buscar facturas aprobadas con saldo pendiente
-        invoices = (
-            database.session.execute(
-                database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
-            )
-            .scalars()
-            .all()
-        )
-
-        due_days = 0
-        if company_party.payment_terms_id:
-            payment_terms = database.session.get(PaymentTerms, company_party.payment_terms_id)
-            if payment_terms:
-                due_days = payment_terms.due_days or 0
-
-        today = date.today()
-        for inv in invoices:
-            if compute_outstanding_amount(inv) <= 0:
-                continue
-            if inv.posting_date:
-                due_date = inv.posting_date + timedelta(days=due_days)
-                if today > due_date:
-                    raise ValueError(
-                        f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
-                        f"Factura vencida: {inv.document_no or inv.id} (Vencimiento: {due_date})."
-                    )
-
-    # 2. Validación de límite de crédito (credit_limit)
+        _reject_overdue_invoices(invoices, company_party.payment_terms_id, compute_outstanding_amount)
     if company_party.credit_limit is not None:
-        # Calcular saldo pendiente total de facturas aprobadas
-        invoices = (
-            database.session.execute(
-                database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
-            )
-            .scalars()
-            .all()
-        )
-
-        total_outstanding = Decimal("0")
-        for inv in invoices:
-            total_outstanding += compute_outstanding_amount(inv)
-
-        total_exposure = total_outstanding + current_doc_total
+        outstanding = sum((compute_outstanding_amount(inv) for inv in invoices), Decimal("0"))
+        exposure = outstanding + current_doc_total
         limit = Decimal(str(company_party.credit_limit))
-
-        if total_exposure > limit:
+        if exposure > limit:
             raise ValueError(
-                f"El límite de crédito para el cliente ha sido excedido. "
-                f"Límite: {limit}, Saldo actual: {total_outstanding}, "
-                f"Monto del documento: {current_doc_total}, Exposición total: {total_exposure}."
+                f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
+                f"Saldo actual: {outstanding}, Monto del documento: {current_doc_total}, "
+                f"Exposición total: {exposure}."
+            )
+
+
+def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInvoice]:
+    """Obtiene facturas aprobadas del cliente y compañía."""
+    query = database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+    return list(database.session.execute(query).scalars().all())
+
+
+def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> None:
+    """Rechaza si existe una factura pendiente y vencida."""
+    from cacao_accounting.database import PaymentTerms
+    from datetime import date, timedelta
+
+    terms = database.session.get(PaymentTerms, payment_terms_id) if payment_terms_id else None
+    due_days = terms.due_days or 0 if terms else 0
+    today = date.today()
+    for invoice in invoices:
+        if outstanding_getter(invoice) <= 0 or not invoice.posting_date:
+            continue
+        due_date = invoice.posting_date + timedelta(days=due_days)
+        if today > due_date:
+            raise ValueError(
+                f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
+                f"Factura vencida: {invoice.document_no or invoice.id} (Vencimiento: {due_date})."
             )
 
 
