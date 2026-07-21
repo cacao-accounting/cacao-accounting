@@ -54,6 +54,7 @@ PURCHASE_INVOICE_ID = "purchase_invoice.id"
 SALES_ORDER_ID = "sales_order.id"
 GL_ENTRY_ID = "gl_entry.id"
 BANK_ACCOUNT_ID = "bank_account.id"
+VOUCHER_ID = "comprobante_contable.id"
 RECURRING_JOURNAL_TEMPLATE_ID = "recurring_journal_template.id"
 BOOK_ID = "book.id"
 WORKFLOW_STATE_ID = "workflow_state.id"
@@ -596,7 +597,7 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
     financial_closed = database.Column(database.Boolean(), default=False, nullable=False)
     closing_voucher_id = database.Column(
         database.String(26),
-        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
         nullable=True,
     )
 
@@ -2840,12 +2841,12 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     )
     capitalized_by_id = database.Column(
         database.String(26),
-        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
         nullable=True,
     )
     capitalization_origin_id = database.Column(
         database.String(26),
-        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
         nullable=True,
     )
 
@@ -2963,7 +2964,7 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     status = database.Column(database.String(20), default="applied", nullable=False, index=True)
     journal_id = database.Column(
         database.String(26),
-        database.ForeignKey("comprobante_contable.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
         nullable=True,
     )
     applied_by = database.Column(
