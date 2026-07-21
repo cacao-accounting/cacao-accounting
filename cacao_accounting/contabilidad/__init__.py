@@ -1719,7 +1719,6 @@ def nuevo_proyecto():
 @verifica_acceso("accounting")
 def proyecto(project_id):
     """Vista de un proyecto."""
-
     registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if registro is None:
         flash(_("El proyecto indicado no existe."), "warning")
@@ -1875,7 +1874,6 @@ def _update_project_from_form(
 @verifica_acceso("accounting")
 def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
-
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto:
         if len(proyecto.children) > 0:
