@@ -297,4 +297,4 @@ La API pública de SonarCloud (`/api/issues/search`, proyecto `cacao-accounting_
 - Eliminación de las variables no utilizadas en edición de proyectos.
 - El workflow de CI instala dependencias con `--only-binary=:all:` y versiones explícitas; `odfpy==1.4.1` conserva una instalación aislada desde fuente por no disponer de wheel compatible.
 
-Validación realizada: Ruff y compilación Python pasan. La suite completa se ejecutó en segundo plano con salida en `/tmp/sonar-open-issues-pytest.log`; debe revisarse su resultado antes de integrar los commits.
+Validación realizada: Ruff y compilación Python pasan. La suite completa se ejecutó en segundo plano con salida en `/tmp/sonar-open-issues-pytest.log`; el primer resultado fue 1508 pasadas, 8 omitidas y dos fallos. Se corrigió el contrato de mensajes de cuentas contables y se hizo tolerante la validación MIME cuando `python-magic` no está disponible, verificando ambos casos con pruebas focalizadas.
