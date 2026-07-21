@@ -167,7 +167,7 @@
     {%- endif %}
     {% if modulos_extra -%}
     {% for modulo in modulos_extra -%}
-    {% if validar_modulo_activo(modulo.nombre_modulo) and permisos(modulo=id_modulo(modulo.nombre_modulo), usuario=usuario.id).autorizado -%}
+    {% if validar_modulo_activo(modulo.nombre_modulo) and tiene_acceso_bi_empresa(modulo.nombre_modulo, usuario.id) -%}
     <li class="nav-item">
       <a href="{{ url_for( modulo.url ) }}" class="nav-link">
         {{ modulo.icon}}
