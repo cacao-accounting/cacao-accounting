@@ -1288,6 +1288,64 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     return dn
 
 
+def _load_sales_tolerance_config(company: str) -> tuple[str, Decimal, bool]:
+    """Carga la configuracion de tolerancia de precios para una compania."""
+    config = database.session.execute(
+        database.select(SalesMatchingConfig).filter_by(company=company)
+    ).scalar_one_or_none()
+
+    if config is None:
+        return "percentage", Decimal("0"), False
+
+    return (
+        config.price_tolerance_type or "percentage",
+        config.price_tolerance_value or Decimal("0"),
+        config.allow_price_difference,
+    )
+
+
+def _calculate_price_variance(so_rate: Decimal, si_rate: Decimal, tolerance_type: str) -> Decimal:
+    """Calcula la varianza de precio entre orden de venta y factura."""
+    if tolerance_type == "absolute":
+        return abs(si_rate - so_rate)
+    return abs(si_rate - so_rate) / so_rate * Decimal("100")
+
+
+def _validate_single_item_price(
+    si_item: SalesInvoiceItem,
+    so_rate: Decimal,
+    tolerance_type: str,
+    tolerance_value: Decimal,
+    allow_diff: bool,
+    raise_on_violation: bool,
+) -> str | None:
+    """Valida el precio de un item individual contra la orden de venta.
+
+    Retorna un mensaje de advertencia/error o None si es valido.
+    """
+    si_rate = Decimal(str(si_item.rate or 0))
+
+    if so_rate <= 0:
+        return None
+
+    variance = _calculate_price_variance(so_rate, si_rate, tolerance_type)
+    if variance <= tolerance_value:
+        return None
+
+    unit = "%" if tolerance_type == "percentage" else ""
+    msg = (
+        f"El precio del item {si_item.item_code} (${si_rate}) "
+        f"difiere del precio en la Orden de Venta (${so_rate}) "
+        f"en {variance:.2f}{unit}. "
+        f"Tolerancia permitida: {tolerance_value}{unit}."
+    )
+    if allow_diff:
+        return msg
+    if raise_on_violation:
+        raise ValueError(msg)
+    return msg
+
+
 def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_violation: bool = True) -> list[str]:
     """Valida precios de factura contra la Orden de Venta origen.
 
@@ -1297,18 +1355,7 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     que ``raise_on_violation`` sea ``False`` (p.ej. al guardar un borrador), en
     cuyo caso se agrega a las advertencias sin bloquear el guardado.
     """
-    config = database.session.execute(
-        database.select(SalesMatchingConfig).filter_by(company=invoice.company)
-    ).scalar_one_or_none()
-
-    if config is None:
-        tolerance_type = "percentage"
-        tolerance_value = Decimal("0")
-        allow_diff = False
-    else:
-        tolerance_type = config.price_tolerance_type or "percentage"
-        tolerance_value = config.price_tolerance_value or Decimal("0")
-        allow_diff = config.allow_price_difference
+    tolerance_type, tolerance_value, allow_diff = _load_sales_tolerance_config(invoice.company)
 
     invoice_items = (
         database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
@@ -1316,52 +1363,43 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
 
     warnings: list[str] = []
     for si_item in invoice_items:
-        relation = (
-            database.session.execute(
-                database.select(DocumentRelation).filter_by(
-                    target_type="sales_invoice",
-                    target_id=invoice.id,
-                    target_item_id=si_item.id,
-                    status="active",
-                )
-            )
-            .scalars()
-            .first()
+        so_rate = _resolve_source_item_rate(si_item, invoice.id)
+        if so_rate is None:
+            continue
+
+        warning = _validate_single_item_price(
+            si_item, so_rate, tolerance_type, tolerance_value, allow_diff, raise_on_violation
         )
-        if not relation or not relation.source_item_id:
-            continue
-        if relation.source_type != "sales_order":
-            continue
+        if warning:
+            warnings.append(warning)
 
-        so_item = database.session.get(SalesOrderItem, relation.source_item_id)
-        if not so_item:
-            continue
-
-        so_rate = Decimal(str(so_item.rate or 0))
-        si_rate = Decimal(str(si_item.rate or 0))
-
-        if so_rate <= 0:
-            continue
-
-        if tolerance_type == "absolute":
-            variance = abs(si_rate - so_rate)
-        else:
-            variance = abs(si_rate - so_rate) / so_rate * Decimal("100")
-
-        if variance > tolerance_value:
-            msg = (
-                f"El precio del ítem {si_item.item_code} (${si_rate}) "
-                f"difiere del precio en la Orden de Venta (${so_rate}) "
-                f"en {variance:.2f}{'%' if tolerance_type == 'percentage' else ''}. "
-                f"Tolerancia permitida: {tolerance_value}{'%' if tolerance_type == 'percentage' else ''}."
-            )
-            if allow_diff:
-                warnings.append(msg)
-            else:
-                if raise_on_violation:
-                    raise ValueError(msg)
-                warnings.append(msg)
     return warnings
+
+
+def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:
+    """Resuelve la tasa del item fuente (Orden de Venta) para un item de factura."""
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="sales_invoice",
+                target_id=invoice_id,
+                target_item_id=si_item.id,
+                status="active",
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if not relation or not relation.source_item_id:
+        return None
+    if relation.source_type != "sales_order":
+        return None
+
+    so_item = database.session.get(SalesOrderItem, relation.source_item_id)
+    if not so_item:
+        return None
+
+    return Decimal(str(so_item.rate or 0))
 
 
 def _validate_delivery_quantities_against_so(note_id: str) -> None:
