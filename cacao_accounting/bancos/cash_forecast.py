@@ -86,36 +86,9 @@ def cash_forecast_new():
     fiscal_years = database.session.query(FiscalYear).filter_by(entity=company).all()
 
     if request.method == "POST":
-        version = request.form.get("version", "").strip()
-        description = request.form.get("description", "").strip()
-        fiscal_year_id = request.form.get("fiscal_year_id")
-        periodicity = request.form.get("periodicity")
-
-        if not version or not fiscal_year_id or not periodicity:
-            flash("Todos los campos obligatorios deben ser completados.", "danger")
-        else:
-            # Check unique version for this company and fiscal year
-            existing = (
-                database.session.query(CashForecast)
-                .filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version)
-                .first()
-            )
-            if existing:
-                flash(f"La versión '{version}' ya existe para este año fiscal.", "danger")
-            else:
-                forecast = CashForecast(
-                    version=version,
-                    description=description,
-                    fiscal_year_id=fiscal_year_id,
-                    company=company,
-                    periodicity=periodicity,
-                    status="Draft",
-                    created_by=getattr(current_user, "id", None),
-                )
-                database.session.add(forecast)
-                database.session.commit()
-                flash("Pronóstico de flujo de caja creado correctamente.", "success")
-                return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
+        result = _handle_cash_forecast_new_post(company)
+        if result is not None:
+            return result
 
     return render_template(
         "bancos/cash_forecast_nuevo.html",
@@ -124,6 +97,41 @@ def cash_forecast_new():
         fiscal_years=fiscal_years,
         titulo="Nuevo Pronóstico de Flujo de Caja",
     )
+
+
+def _handle_cash_forecast_new_post(company: str):
+    """Procesa el POST del formulario de nuevo pronostico. Retorna redirect o None."""
+    version = request.form.get("version", "").strip()
+    description = request.form.get("description", "").strip()
+    fiscal_year_id = request.form.get("fiscal_year_id")
+    periodicity = request.form.get("periodicity")
+
+    if not version or not fiscal_year_id or not periodicity:
+        flash("Todos los campos obligatorios deben ser completados.", "danger")
+        return None
+
+    existing = (
+        database.session.query(CashForecast)
+        .filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version)
+        .first()
+    )
+    if existing:
+        flash(f"La version '{version}' ya existe para este ao fiscal.", "danger")
+        return None
+
+    forecast = CashForecast(
+        version=version,
+        description=description,
+        fiscal_year_id=fiscal_year_id,
+        company=company,
+        periodicity=periodicity,
+        status="Draft",
+        created_by=getattr(current_user, "id", None),
+    )
+    database.session.add(forecast)
+    database.session.commit()
+    flash("Pronostico de flujo de caja creado correctamente.", "success")
+    return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
 @bancos.route("/cash-forecast/<forecast_id>", methods=["GET"])
