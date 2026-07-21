@@ -211,13 +211,13 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
     from cacao_accounting.database import database
     from cacao_accounting.inventario.service import (
         ItemAccountRow,
+        ItemParams,
         ItemUOMRow,
         create_item_with_uoms,
         list_item_uom_conversions,
     )
 
-    create_item_with_uoms(
-        code="UOM-ITEM-001",
+    params = ItemParams(
         name="Item con conversiones",
         description="",
         item_type="goods",
@@ -229,6 +229,7 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
         ],
         account_rows=[],
     )
+    create_item_with_uoms(params, code="UOM-ITEM-001")
     database.session.commit()
 
     conversions = list_item_uom_conversions("UOM-ITEM-001")
@@ -239,24 +240,24 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
 
 
 def test_service_item_requires_company_expense_account(app_ctx):
-    from cacao_accounting.inventario.service import ItemUOMRow, create_item_with_uoms
+    from cacao_accounting.inventario.service import ItemParams, ItemUOMRow, create_item_with_uoms
 
+    params = ItemParams(
+        name="Servicio sin cuenta",
+        description="",
+        item_type="service",
+        is_stock_item=False,
+        default_uom="SERV",
+        uom_rows=[],
+        account_rows=[],
+    )
     with pytest.raises(ValueError, match="cuenta de gasto predeterminada por compañia"):
-        create_item_with_uoms(
-            code="SERV-ITEM-001",
-            name="Servicio sin cuenta",
-            description="",
-            item_type="service",
-            is_stock_item=False,
-            default_uom="SERV",
-            uom_rows=[],
-            account_rows=[],
-        )
+        create_item_with_uoms(params, code="SERV-ITEM-001")
 
 
 def test_service_item_requires_company_cost_center(app_ctx):
     from cacao_accounting.database import Accounts, database
-    from cacao_accounting.inventario.service import ItemAccountRow, create_item_with_uoms
+    from cacao_accounting.inventario.service import ItemAccountRow, ItemParams, create_item_with_uoms
 
     expense_account = (
         database.session.execute(
@@ -267,28 +268,28 @@ def test_service_item_requires_company_cost_center(app_ctx):
     )
     assert expense_account is not None
 
+    params = ItemParams(
+        name="Servicio sin centro de costo",
+        description="",
+        item_type="service",
+        is_stock_item=False,
+        default_uom="SERV",
+        uom_rows=[],
+        account_rows=[
+            ItemAccountRow(
+                company="cacao",
+                expense_account_id=expense_account.id,
+                cost_center_code=None,
+            )
+        ],
+    )
     with pytest.raises(ValueError, match="centro de costo predeterminado por compañia"):
-        create_item_with_uoms(
-            code="SERV-ITEM-003",
-            name="Servicio sin centro de costo",
-            description="",
-            item_type="service",
-            is_stock_item=False,
-            default_uom="SERV",
-            uom_rows=[],
-            account_rows=[
-                ItemAccountRow(
-                    company="cacao",
-                    expense_account_id=expense_account.id,
-                    cost_center_code=None,
-                )
-            ],
-        )
+        create_item_with_uoms(params, code="SERV-ITEM-003")
 
 
 def test_service_item_persists_company_accounts(app_ctx):
     from cacao_accounting.database import Accounts, CostCenter, ItemAccount, database
-    from cacao_accounting.inventario.service import ItemAccountRow, create_item_with_uoms
+    from cacao_accounting.inventario.service import ItemAccountRow, ItemParams, create_item_with_uoms
 
     expense_account = (
         database.session.execute(
@@ -300,8 +301,7 @@ def test_service_item_persists_company_accounts(app_ctx):
     cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="cacao", code="MAIN")).scalar_one()
     assert expense_account is not None
 
-    create_item_with_uoms(
-        code="SERV-ITEM-002",
+    params = ItemParams(
         name="Servicio con cuenta",
         description="",
         item_type="service",
@@ -316,6 +316,7 @@ def test_service_item_persists_company_accounts(app_ctx):
             )
         ],
     )
+    create_item_with_uoms(params, code="SERV-ITEM-002")
     database.session.commit()
 
     mapping = database.session.execute(

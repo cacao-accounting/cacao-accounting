@@ -39,6 +39,7 @@ from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.inventario.service import (
     InventoryServiceError,
+    ItemParams,
     convert_item_qty,
     create_item_with_uoms,
     list_item_account_rows,
@@ -335,7 +336,7 @@ def inventario_articulo_nuevo():
         account_rows = _item_account_rows_for_template(request.form)
         if formulario.validate():
             try:
-                create_item_with_uoms(
+                params = ItemParams(
                     name=str(request.form.get("name") or "").strip(),
                     description=(request.form.get("description") or "").strip() or None,
                     item_type=str(request.form.get("item_type") or "goods").strip(),
@@ -364,6 +365,7 @@ def inventario_articulo_nuevo():
                     uom_rows=parse_item_uom_rows(request.form),
                     account_rows=parse_item_account_rows(request.form),
                 )
+                create_item_with_uoms(params)
                 database.session.commit()
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:
@@ -440,8 +442,7 @@ def inventario_articulo_editar(item_id):
         account_rows = _item_account_rows_for_template(request.form)
         if formulario.validate():
             try:
-                update_item_with_uoms(
-                    item_code=item.code,
+                params = ItemParams(
                     name=str(request.form.get("name") or "").strip(),
                     description=(request.form.get("description") or "").strip() or None,
                     item_type=str(request.form.get("item_type") or "goods").strip(),
@@ -470,6 +471,7 @@ def inventario_articulo_editar(item_id):
                     uom_rows=parse_item_uom_rows(request.form),
                     account_rows=parse_item_account_rows(request.form),
                 )
+                update_item_with_uoms(item_code=item.code, params=params)
                 database.session.commit()
                 flash("Artículo actualizado correctamente.", "success")
                 return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
