@@ -69,6 +69,39 @@ class ItemAccountRow:
     stock_adjustment_account_id: str | None = None
 
 
+@dataclass(frozen=True)
+class ItemParams:
+    """Parametros para crear o actualizar un item de inventario."""
+
+    name: str
+    description: str | None = None
+    item_type: str = "goods"
+    is_stock_item: bool = False
+    is_purchase_item: bool = True
+    is_sale_item: bool = True
+    item_category_id: str | None = None
+    default_uom: str = ""
+    purchase_uom: str | None = None
+    sale_uom: str | None = None
+    default_warehouse_id: str | None = None
+    default_supplier_id: str | None = None
+    allow_negative_stock: bool = False
+    min_stock_qty: Decimal | None = None
+    max_stock_qty: Decimal | None = None
+    reorder_level: Decimal | None = None
+    standard_rate: Decimal | None = None
+    last_purchase_rate: Decimal | None = None
+    currency: str | None = None
+    brand: str | None = None
+    model_name: str | None = None
+    barcode: str | None = None
+    has_batch: bool = False
+    has_serial_no: bool = False
+    has_expiry_date: bool = False
+    uom_rows: list[ItemUOMRow] | None = None
+    account_rows: list[ItemAccountRow] | None = None
+
+
 def _decimal_value(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -253,34 +286,7 @@ def rebuild_stock_valuation_layers(
 
 def update_item_with_uoms(
     item_code: str,
-    *,
-    name: str,
-    description: str | None = None,
-    item_type: str = "goods",
-    is_stock_item: bool = False,
-    is_purchase_item: bool = True,
-    is_sale_item: bool = True,
-    item_category_id: str | None = None,
-    default_uom: str,
-    purchase_uom: str | None = None,
-    sale_uom: str | None = None,
-    default_warehouse_id: str | None = None,
-    default_supplier_id: str | None = None,
-    allow_negative_stock: bool = False,
-    min_stock_qty: Decimal | None = None,
-    max_stock_qty: Decimal | None = None,
-    reorder_level: Decimal | None = None,
-    standard_rate: Decimal | None = None,
-    last_purchase_rate: Decimal | None = None,
-    currency: str | None = None,
-    brand: str | None = None,
-    model_name: str | None = None,
-    barcode: str | None = None,
-    has_batch: bool = False,
-    has_serial_no: bool = False,
-    has_expiry_date: bool = False,
-    uom_rows: list[ItemUOMRow] | None = None,
-    account_rows: list[ItemAccountRow] | None = None,
+    params: ItemParams,
 ) -> Item:
     """Actualiza un item existente junto con sus conversiones de UOM.
 
@@ -289,39 +295,39 @@ def update_item_with_uoms(
     item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
     if item is None:
         raise InventoryServiceError(f"El item '{item_code}' no existe.")
-    if not default_uom_change_allowed(item_code, default_uom):
+    if not default_uom_change_allowed(item_code, params.default_uom):
         raise InventoryServiceError("No se puede cambiar la UOM base si el item tiene transacciones.")
-    resolved_uom_rows = uom_rows or []
-    resolved_account_rows = account_rows or []
-    resolved_item_type = item_type or "goods"
-    resolved_stock_flag = is_stock_item if resolved_item_type != "service" else False
-    validate_item_uom_rows(default_uom, resolved_uom_rows)
+    resolved_uom_rows = params.uom_rows or []
+    resolved_account_rows = params.account_rows or []
+    resolved_item_type = params.item_type or "goods"
+    resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
+    validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_item_account_rows(resolved_item_type, resolved_stock_flag, resolved_account_rows)
-    item.name = name
-    item.description = description
+    item.name = params.name
+    item.description = params.description
     item.item_type = resolved_item_type
     item.is_stock_item = resolved_stock_flag
-    item.is_purchase_item = is_purchase_item
-    item.is_sale_item = is_sale_item
-    item.item_category_id = item_category_id
-    item.default_uom = default_uom
-    item.purchase_uom = purchase_uom
-    item.sale_uom = sale_uom
-    item.default_warehouse_id = default_warehouse_id
-    item.default_supplier_id = default_supplier_id
-    item.allow_negative_stock = allow_negative_stock
-    item.min_stock_qty = min_stock_qty
-    item.max_stock_qty = max_stock_qty
-    item.reorder_level = reorder_level
-    item.standard_rate = standard_rate
-    item.last_purchase_rate = last_purchase_rate
-    item.currency = currency
-    item.brand = brand
-    item.model_name = model_name
-    item.barcode = barcode
-    item.has_batch = has_batch
-    item.has_serial_no = has_serial_no
-    item.has_expiry_date = has_expiry_date
+    item.is_purchase_item = params.is_purchase_item
+    item.is_sale_item = params.is_sale_item
+    item.item_category_id = params.item_category_id
+    item.default_uom = params.default_uom
+    item.purchase_uom = params.purchase_uom
+    item.sale_uom = params.sale_uom
+    item.default_warehouse_id = params.default_warehouse_id
+    item.default_supplier_id = params.default_supplier_id
+    item.allow_negative_stock = params.allow_negative_stock
+    item.min_stock_qty = params.min_stock_qty
+    item.max_stock_qty = params.max_stock_qty
+    item.reorder_level = params.reorder_level
+    item.standard_rate = params.standard_rate
+    item.last_purchase_rate = params.last_purchase_rate
+    item.currency = params.currency
+    item.brand = params.brand
+    item.model_name = params.model_name
+    item.barcode = params.barcode
+    item.has_batch = params.has_batch
+    item.has_serial_no = params.has_serial_no
+    item.has_expiry_date = params.has_expiry_date
     database.session.flush()
     for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code)).scalars():
         database.session.delete(old)
@@ -394,46 +400,20 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
 
 
 def create_item_with_uoms(
+    params: ItemParams,
     *,
     code: str | None = None,
-    name: str,
-    description: str | None = None,
-    item_type: str = "goods",
-    is_stock_item: bool = False,
-    is_purchase_item: bool = True,
-    is_sale_item: bool = True,
-    item_category_id: str | None = None,
-    default_uom: str,
-    purchase_uom: str | None = None,
-    sale_uom: str | None = None,
-    default_warehouse_id: str | None = None,
-    default_supplier_id: str | None = None,
-    allow_negative_stock: bool = False,
-    min_stock_qty: Decimal | None = None,
-    max_stock_qty: Decimal | None = None,
-    reorder_level: Decimal | None = None,
-    standard_rate: Decimal | None = None,
-    last_purchase_rate: Decimal | None = None,
-    currency: str | None = None,
-    brand: str | None = None,
-    model_name: str | None = None,
-    barcode: str | None = None,
-    has_batch: bool = False,
-    has_serial_no: bool = False,
-    has_expiry_date: bool = False,
-    uom_rows: list[ItemUOMRow] | None = None,
-    account_rows: list[ItemAccountRow] | None = None,
 ) -> Item:
     """Crea un item junto con sus conversiones de UOM.
 
     Si ``code`` no se proporciona, se genera automaticamente mediante
     :func:`~cacao_accounting.database.helpers.generate_identifier`.
     """
-    resolved_uom_rows = uom_rows or []
-    resolved_account_rows = account_rows or []
-    validate_item_uom_rows(default_uom, resolved_uom_rows)
-    resolved_item_type = item_type or "goods"
-    resolved_stock_flag = is_stock_item if resolved_item_type != "service" else False
+    resolved_uom_rows = params.uom_rows or []
+    resolved_account_rows = params.account_rows or []
+    validate_item_uom_rows(params.default_uom, resolved_uom_rows)
+    resolved_item_type = params.item_type or "goods"
+    resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,
@@ -447,31 +427,31 @@ def create_item_with_uoms(
     item = Item(
         id=item_id,
         code=code,
-        name=name,
-        description=description,
+        name=params.name,
+        description=params.description,
         item_type=resolved_item_type,
         is_stock_item=resolved_stock_flag,
-        is_purchase_item=is_purchase_item,
-        is_sale_item=is_sale_item,
-        item_category_id=item_category_id,
-        default_uom=default_uom,
-        purchase_uom=purchase_uom,
-        sale_uom=sale_uom,
-        default_warehouse_id=default_warehouse_id,
-        default_supplier_id=default_supplier_id,
-        allow_negative_stock=allow_negative_stock,
-        min_stock_qty=min_stock_qty,
-        max_stock_qty=max_stock_qty,
-        reorder_level=reorder_level,
-        standard_rate=standard_rate,
-        last_purchase_rate=last_purchase_rate,
-        currency=currency,
-        brand=brand,
-        model_name=model_name,
-        barcode=barcode,
-        has_batch=has_batch,
-        has_serial_no=has_serial_no,
-        has_expiry_date=has_expiry_date,
+        is_purchase_item=params.is_purchase_item,
+        is_sale_item=params.is_sale_item,
+        item_category_id=params.item_category_id,
+        default_uom=params.default_uom,
+        purchase_uom=params.purchase_uom,
+        sale_uom=params.sale_uom,
+        default_warehouse_id=params.default_warehouse_id,
+        default_supplier_id=params.default_supplier_id,
+        allow_negative_stock=params.allow_negative_stock,
+        min_stock_qty=params.min_stock_qty,
+        max_stock_qty=params.max_stock_qty,
+        reorder_level=params.reorder_level,
+        standard_rate=params.standard_rate,
+        last_purchase_rate=params.last_purchase_rate,
+        currency=params.currency,
+        brand=params.brand,
+        model_name=params.model_name,
+        barcode=params.barcode,
+        has_batch=params.has_batch,
+        has_serial_no=params.has_serial_no,
+        has_expiry_date=params.has_expiry_date,
     )
     database.session.add(item)
     database.session.flush()
@@ -480,7 +460,7 @@ def create_item_with_uoms(
             ItemUOMConversion(
                 item_code=item.code,
                 from_uom=uom_row.uom_code,
-                to_uom=default_uom,
+                to_uom=params.default_uom,
                 conversion_factor=uom_row.conversion_factor,
             )
         )
