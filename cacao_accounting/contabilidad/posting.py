@@ -60,6 +60,7 @@ JOURNAL_TRANSACTION_TYPE = "journal_entry"
 _ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."
 _ERROR_YA_TIENE_ENTRADAS_GL = "Este documento ya tiene entradas GL contabilizadas."
 _DOCUMENTO_YA_CONTABILIZADO_MSG = "El documento ya tiene asientos contables activos; no se puede contabilizar dos veces."
+_REMARKS_CUENTA_BANCARIA_PAGO = "Cuenta bancaria de pago"
 
 
 class PostingError(ValueError):
@@ -381,24 +382,28 @@ def _create_gl_entry(
     credit_in_ac = params.credit_in_account_currency
     exchange_rate = context.exchange_rate
 
-    if not params.is_reversal and (
-        context.transaction_currency and context.company_currency and context.transaction_currency != context.company_currency
+    if (
+        not params.is_reversal
+        and context.transaction_currency
+        and context.company_currency
+        and context.transaction_currency != context.company_currency
+        and debit_in_ac is None
+        and credit_in_ac is None
     ):
-        if debit_in_ac is None and credit_in_ac is None:
-            if exchange_rate is None or exchange_rate == 0:
-                try:
-                    exchange_rate = _lookup_exchange_rate(
-                        context.transaction_currency,
-                        context.company_currency,
-                        context.posting_date,
-                    )
-                except (PostingError, SQLAlchemyError) as exc:
-                    raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
+        if exchange_rate is None or exchange_rate == 0:
+            try:
+                exchange_rate = _lookup_exchange_rate(
+                    context.transaction_currency,
+                    context.company_currency,
+                    context.posting_date,
+                )
+            except (PostingError, SQLAlchemyError) as exc:
+                raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
 
-            debit_in_ac = debit
-            credit_in_ac = credit
-            debit = _to_company_currency(debit, exchange_rate)
-            credit = _to_company_currency(credit, exchange_rate)
+        debit_in_ac = debit
+        credit_in_ac = credit
+        debit = _to_company_currency(debit, exchange_rate)
+        credit = _to_company_currency(credit, exchange_rate)
 
     resolved_debit_in_ac = _resolve_currency_amount(debit_in_ac, params.debit, bool(context.transaction_currency))
     resolved_credit_in_ac = _resolve_currency_amount(credit_in_ac, params.credit, bool(context.transaction_currency))
@@ -1113,7 +1118,7 @@ def _create_payment_pay_entries(
                 party_type="supplier",
                 party_id=document.party_id,
                 debit_remarks="Pago a proveedor",
-                credit_remarks="Cuenta bancaria de pago",
+                credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
             )
         )
         if advance_account_id:
@@ -1127,7 +1132,7 @@ def _create_payment_pay_entries(
                     party_type="supplier",
                     party_id=document.party_id,
                     debit_remarks="Anticipo a proveedor",
-                    credit_remarks="Cuenta bancaria de pago",
+                    credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
                 )
             )
         return entries
