@@ -4062,36 +4062,8 @@ def external_counter_edit(counter_id: str):
     form.naming_series_id.choices = [("", "— Sin asociar —")] + [(s.id, f"{s.name} ({s.entity_type})") for s in series_list]
 
     if form.validate_on_submit():
-        counter.company = form.company.data
-        counter.name = form.nombre.data
-        counter.counter_type = form.counter_type.data or None
-        counter.prefix = form.prefix.data or None
-        counter.last_used = form.last_used.data or 0
-        counter.padding = form.padding.data or 5
-        counter.is_active = bool(form.is_active.data)
-        counter.description = form.description.data or None
-
-        new_naming_series_id = form.naming_series_id.data or None
-        if counter.naming_series_id != new_naming_series_id:
-            counter.naming_series_id = new_naming_series_id
-            existing_map = database.session.execute(
-                database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)
-            ).scalar_one_or_none()
-            if new_naming_series_id:
-                if existing_map:
-                    existing_map.naming_series_id = new_naming_series_id
-                else:
-                    database.session.add(
-                        SeriesExternalCounterMap(
-                            naming_series_id=new_naming_series_id,
-                            external_counter_id=counter.id,
-                            priority=0,
-                            condition_json=None,
-                        )
-                    )
-            elif existing_map:
-                database.session.delete(existing_map)
-
+        _update_counter_from_form(counter, form)
+        _sync_counter_naming_series_map(counter, form.naming_series_id.data or None)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_EXTERNAL_COUNTER_LIST))
 
@@ -4102,6 +4074,46 @@ def external_counter_edit(counter_id: str):
         titulo="Editar Contador Externo - " + APPNAME,
         modo_edicion=True,
     )
+
+
+def _update_counter_from_form(counter: Any, form: Any) -> None:
+    """Apply form field values to an ExternalCounter instance."""
+    counter.company = form.company.data
+    counter.name = form.nombre.data
+    counter.counter_type = form.counter_type.data or None
+    counter.prefix = form.prefix.data or None
+    counter.last_used = form.last_used.data or 0
+    counter.padding = form.padding.data or 5
+    counter.is_active = bool(form.is_active.data)
+    counter.description = form.description.data or None
+
+
+def _sync_counter_naming_series_map(counter: Any, new_naming_series_id: str | None) -> None:
+    """Synchronize the SeriesExternalCounterMap for a counter."""
+    from cacao_accounting.database import SeriesExternalCounterMap
+
+    if counter.naming_series_id == new_naming_series_id:
+        return
+
+    counter.naming_series_id = new_naming_series_id
+    existing_map = database.session.execute(
+        database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)
+    ).scalar_one_or_none()
+
+    if new_naming_series_id:
+        if existing_map:
+            existing_map.naming_series_id = new_naming_series_id
+        else:
+            database.session.add(
+                SeriesExternalCounterMap(
+                    naming_series_id=new_naming_series_id,
+                    external_counter_id=counter.id,
+                    priority=0,
+                    condition_json=None,
+                )
+            )
+    elif existing_map:
+        database.session.delete(existing_map)
 
 
 @contabilidad.route("/fiscal_year_closing/list")
