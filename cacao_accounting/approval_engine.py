@@ -9,7 +9,6 @@ from decimal import Decimal
 from typing import Any
 from flask_login import current_user
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import (
     ApprovalMatrix,
@@ -374,12 +373,7 @@ class ApprovalEngine:
             from cacao_accounting.ventas import _release_reservation_for_delivery_note
 
             submit_document(document)
-            try:
-                _release_reservation_for_delivery_note(document)
-            except SQLAlchemyError as e:
-                import logging
-
-                logging.getLogger(__name__).warning("Error al liberar reserva: %s", e)
+            _release_reservation_for_delivery_note(document)
             log_submit(document)
             return
 
@@ -388,12 +382,7 @@ class ApprovalEngine:
 
             submit_document(document)
             if document.update_inventory and not document.delivery_note_id:
-                try:
-                    _create_delivery_note_from_invoice(document)
-                except (SQLAlchemyError, ValueError) as e:
-                    import logging
-
-                    logging.getLogger(__name__).warning("Error al crear nota de entrega para factura: %s", e)
+                _create_delivery_note_from_invoice(document)
             log_submit(document)
             return
 
@@ -423,6 +412,10 @@ class ApprovalEngine:
             "sales_quotation",
             "sales_order",
         }:
+            if doctype == "sales_order":
+                from cacao_accounting.ventas import _release_reservation_for_sales_order
+
+                _release_reservation_for_sales_order(document)
             document.docstatus = 2
             log_cancel(document)
             revert_relations_for_target(doctype, document.id)
@@ -430,6 +423,14 @@ class ApprovalEngine:
             return
 
         if doctype in {"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"}:
+            if doctype == "delivery_note":
+                from cacao_accounting.ventas import _restore_reservation_for_delivery_note
+
+                _restore_reservation_for_delivery_note(document)
+            elif doctype == "sales_invoice":
+                from cacao_accounting.ventas import _cancel_linked_delivery_note
+
+                _cancel_linked_delivery_note(document)
             cancel_document(document)
             log_cancel(document)
             revert_relations_for_target(doctype, document.id)
