@@ -26,6 +26,12 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.reportes.services import (
+    OperationalReportFilters,
+    get_inventory_turnover,
+    get_negative_stock,
+    get_slow_moving_items,
+)
 
 
 def _decimal(value: Any) -> Decimal:
@@ -180,10 +186,7 @@ def get_settlement_analysis(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return payment applications at their allocation grain (N:N safe)."""
-    query = (
-        select(PaymentReference, PaymentEntry)
-        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
-    )
+    query = select(PaymentReference, PaymentEntry).join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
     if company:
         query = query.where(
             PaymentEntry.company == company,
@@ -261,3 +264,52 @@ def get_audit_events(
         }
         for event in database.session.execute(query).scalars().all()
     ]
+
+
+def _report_items(report: Any, company: str) -> list[dict[str, Any]]:
+    return [{"company_code": company, **row.values} for row in report.rows]
+
+
+def get_inventory_slow_moving_analysis(
+    company: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict[str, Any]]:
+    if not company:
+        return []
+    rows = _report_items(
+        get_slow_moving_items(OperationalReportFilters(company=company, date_to=date_to), as_of_date=date_to), company
+    )
+    return rows[(offset or 0) : (offset or 0) + limit] if limit is not None else rows[(offset or 0) :]
+
+
+def get_inventory_negative_analysis(
+    company: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict[str, Any]]:
+    if not company:
+        return []
+    rows = _report_items(get_negative_stock(OperationalReportFilters(company=company)), company)
+    return rows[(offset or 0) : (offset or 0) + limit] if limit is not None else rows[(offset or 0) :]
+
+
+def get_inventory_turnover_analysis(
+    company: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict[str, Any]]:
+    if not company:
+        return []
+    end = date_to or date.today()
+    start = date_from or (end - timedelta(days=365))
+    rows = _report_items(
+        get_inventory_turnover(OperationalReportFilters(company=company, date_from=start, date_to=end)), company
+    )
+    return rows[(offset or 0) : (offset or 0) + limit] if limit is not None else rows[(offset or 0) :]
