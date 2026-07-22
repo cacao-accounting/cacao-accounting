@@ -322,7 +322,14 @@ def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app
 
 
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
-    from cacao_accounting.database import PaymentReference, SalesInvoice, StockLedgerEntry, database
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PaymentEntry,
+        PaymentReference,
+        SalesInvoice,
+        StockLedgerEntry,
+        database,
+    )
     from cacao_accounting.reportes.services import (
         AgingFilters,
         KardexFilters,
@@ -333,16 +340,46 @@ def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
         get_reconciliation_report,
     )
 
-    invoice = SalesInvoice(company="cacao", posting_date=date(2026, 4, 1), customer_id="CUST-R", grand_total=Decimal("100.00"))
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 4, 1),
+        customer_id="CUST-R",
+        grand_total=Decimal("100.00"),
+        docstatus=1,
+    )
     database.session.add(invoice)
     database.session.flush()
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 4, 15),
+        payment_type="receive",
+        paid_amount=Decimal("25.00"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+
+    ref = PaymentReference(
+        payment_id=payment.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        allocated_amount=Decimal("25.00"),
+        allocation_date=date(2026, 4, 15),
+    )
+    database.session.add(ref)
+    database.session.flush()
     database.session.add(
-        PaymentReference(
-            payment_id="PAY-R",
-            reference_type="sales_invoice",
-            reference_id=invoice.id,
-            allocated_amount=Decimal("25.00"),
-            allocation_date=date(2026, 4, 15),
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=ref.id,
+            qty=Decimal("1"),
+            amount=Decimal("25"),
+            relation_type="payment_reference",
+            status="active",
         )
     )
     database.session.add(
@@ -471,6 +508,7 @@ def test_cancelled_pairs_are_hidden_from_bank_and_stock_reports_but_rebuild_to_n
                 stock_value=Decimal("0"),
                 voucher_type="purchase_receipt",
                 voucher_id="PR-CANCELLED",
+                is_cancelled=True,
             ),
             StockLedgerEntry(
                 posting_date=date(2026, 5, 2),
@@ -1810,7 +1848,7 @@ def test_search_select_item_requires_registered_company_filter(app_ctx):
 
 
 def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx):
-    from cacao_accounting.database import Accounts, User, database
+    from cacao_accounting.database import Accounts, Modules, User, database
 
     bank = Accounts(
         entity="cacao", code="BANK-API", name="Banco API", active=True, enabled=True, group=False, account_type="bank"
@@ -1819,7 +1857,8 @@ def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx)
         entity="cacao", code="BANK-EXP", name="Gasto Banco", active=True, enabled=True, group=False, account_type="expense"
     )
     user = User(user="api-admin", name="API Admin", password=b"x", classification="admin", active=True)
-    database.session.add_all([bank, expense, user])
+    module = Modules(module="accounting", default=True, enabled=True)
+    database.session.add_all([bank, expense, user, module])
     database.session.commit()
 
     app_ctx.config["SECRET_KEY"] = "testing"
@@ -1843,7 +1882,7 @@ def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx)
 
 
 def test_search_select_api_supports_account_id_and_cost_center_id(app_ctx):
-    from cacao_accounting.database import Accounts, CostCenter, User, database
+    from cacao_accounting.database import Accounts, CostCenter, Modules, User, database
 
     account = Accounts(entity="cacao", code="1", name="Activo", active=True, enabled=True, group=True, classification="activo")
     cost_center = CostCenter(entity="cacao", code="ADM", name="Administracion", active=True, enabled=True, group=True)
@@ -1856,7 +1895,8 @@ def test_search_select_api_supports_account_id_and_cost_center_id(app_ctx):
             "active": True,
         }
     )
-    database.session.add_all([account, cost_center, user])
+    module = Modules(module="accounting", default=True, enabled=True)
+    database.session.add_all([account, cost_center, user, module])
     database.session.commit()
 
     app_ctx.config["SECRET_KEY"] = "testing"

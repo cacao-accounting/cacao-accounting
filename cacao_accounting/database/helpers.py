@@ -597,18 +597,18 @@ def get_descendant_ids(node_class, node_id) -> list[str]:
 
 def _validate_and_fix_stock_bin_reserved_qty() -> None:
     """Validates and corrects any StockBin records with negative reserved_qty.
-    
+
     CheckConstraint 'ck_stock_bin_reserved_non_negative' requires reserved_qty >= 0.
     This function ensures no data violates this constraint before the schema is fully applied.
     """
     try:
         from cacao_accounting.database import StockBin
-        
+
         # Check for any negative reserved_qty values
         negative_bins = database.session.execute(
             database.select(StockBin).where(StockBin.reserved_qty < 0)
         ).scalars().all()
-        
+
         if negative_bins:
             log.warning(
                 "Found {} StockBin records with negative reserved_qty. Correcting to 0.",
