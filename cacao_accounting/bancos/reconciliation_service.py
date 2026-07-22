@@ -21,6 +21,7 @@ from cacao_accounting.database import (
     ReconciliationItem,
     database,
 )
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries
 
 
 class BankReconciliationError(ValueError):
@@ -239,11 +240,12 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
 
     bank_gl_account_id = _bank_gl_account_id(transaction)
     if bank_gl_account_id:
+        gl_entries_query = exclude_cancelled_gl_entries(
+            select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id)
+        )
         gl_entries = (
             database.session.execute(
-                select(GLEntry)
-                .filter_by(company=company, account_id=bank_gl_account_id, is_cancelled=False)
-                .where(GLEntry.posting_date >= date_from)
+                gl_entries_query.where(GLEntry.posting_date >= date_from)
                 .where(GLEntry.posting_date <= date_to)
                 .where(or_(GLEntry.debit <= amount, GLEntry.credit <= amount))
             )

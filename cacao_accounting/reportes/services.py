@@ -46,6 +46,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries
 
 
 @dataclass(frozen=True)
@@ -383,7 +384,7 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
 
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
-    query = select(StockLedgerEntry).filter_by(company=filters.company, is_cancelled=False)
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -446,7 +447,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
 def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
     """Devuelve existencias de inventario a una fecha clave desde stock ledger."""
     as_of_date = filters.date_to or filters.date_from
-    query = select(StockLedgerEntry).filter_by(company=filters.company, is_cancelled=False)
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -600,9 +601,8 @@ def get_slow_moving_items(
     if inactivity_days < 1 or inactivity_days > 3650:
         raise ValueError("inactivity_days debe estar entre 1 y 3650")
     cutoff = as_of_date or filters.date_to or date.today()
-    query = select(StockLedgerEntry).where(
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
         StockLedgerEntry.company == filters.company,
-        StockLedgerEntry.is_cancelled.is_(False),
         StockLedgerEntry.posting_date <= cutoff,
     )
     if filters.item_code:
@@ -647,9 +647,8 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     """Calcula rotación por artículo/almacén como salidas sobre stock promedio."""
     if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
         raise ValueError("date_from y date_to válidos son obligatorios para calcular rotación")
-    query = select(StockLedgerEntry).where(
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
         StockLedgerEntry.company == filters.company,
-        StockLedgerEntry.is_cancelled.is_(False),
         StockLedgerEntry.posting_date >= filters.date_from,
         StockLedgerEntry.posting_date <= filters.date_to,
     )
@@ -1102,10 +1101,9 @@ def _transfer_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Dec
 
 
 def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
-    gl_balance_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+    gl_balance_query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
-        GLEntry.is_cancelled.is_(False),
     )
     if as_of_date is not None:
         gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= as_of_date)
@@ -2039,7 +2037,7 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     """Margen bruto basado en GL: ingresos menos COGS."""
-    query = select(GLEntry).filter_by(company=filters.company, is_cancelled=False)
+    query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=filters.company))
     if filters.date_from:
         query = query.where(GLEntry.posting_date >= filters.date_from)
     if filters.date_to:

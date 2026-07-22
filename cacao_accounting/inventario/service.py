@@ -193,9 +193,7 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
 
 def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: str | None = None) -> StockRebuildResult:
     """Reconstruye StockBin desde StockLedgerEntry append-only."""
-    query = select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse).filter_by(
-        company=company, is_cancelled=False
-    )
+    query = select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse).filter_by(company=company)
     if item_code:
         query = query.filter_by(item_code=item_code)
     if warehouse:
@@ -208,7 +206,7 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
             select(
                 func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
                 func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse, is_cancelled=False)
+            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
         ).one()
         qty = _decimal_value(totals[0])
         value = _decimal_value(totals[1])
@@ -251,9 +249,7 @@ def rebuild_stock_valuation_layers(
     database.session.flush()
 
     entries_query = (
-        select(StockLedgerEntry)
-        .filter_by(company=company, is_cancelled=False)
-        .order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
+        select(StockLedgerEntry).filter_by(company=company).order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
     )
     if item_code:
         entries_query = entries_query.filter_by(item_code=item_code)

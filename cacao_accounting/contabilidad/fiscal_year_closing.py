@@ -45,6 +45,7 @@ def calculate_closing_balances(company: str, fiscal_year: FiscalYear) -> list[di
             GLEntry.posting_date <= fiscal_year.year_end_date,
             GLEntry.is_fiscal_year_closing.is_(False),
             GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
             Accounts.classification.in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
         )
         .group_by(

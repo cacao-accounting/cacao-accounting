@@ -5,6 +5,47 @@
 
 ---
 
+## 2026-07-22 — Contrato de anulación y reversión reconciliable
+
+### Contexto y decisión contable
+
+Se auditó el tratamiento de anulaciones en R2R, bancos e inventario partiendo de cuatro invariantes del producto:
+
+- `GLEntry` es la única fuente de verdad financiera; bancos, AP, AR e inventario son capas reconciliables contra ella.
+- Una **anulación** corrige dentro del período original. Solo se permite mientras ese período permanezca abierto, genera el contrasiento con la misma fecha contable y los reportes ordinarios ocultan tanto el asiento original como su contrasiento. El usuario puede incluir ambos para auditoría.
+- Una **reversión** corrige en un período posterior. El comprobante original permanece vivo en el período anterior y un nuevo comprobante invertido permanece vivo en el período actual; ambos deben aparecer en reportes históricos y “as of”.
+- El sistema es multilibro y multimoneda real: las capas operativas postean atómicamente en todos los libros activos, conservando moneda original, moneda funcional y tasa histórica. Solo Contabilidad puede seleccionar libros.
+
+La auditoría confirmó que el reporting financiero general ya implementaba correctamente el primer contrato mediante `is_cancelled=False AND is_reversal=False`. El problema no era conservar `is_cancelled` como metadato del asiento original, sino aplicar solo la mitad del contrato en consumidores especializados.
+
+### Causa raíz
+
+El resumen bancario y varios cálculos derivados filtraban únicamente `GLEntry.is_cancelled=False`. Después de anular un cobro de 100, eso eliminaba el débito original pero conservaba el crédito de reversa, produciendo un saldo bancario de -100 en lugar de cero.
+
+`StockLedgerEntry` no posee `is_reversal`. Al cancelar una recepción, el movimiento original queda marcado como cancelado y se agrega un contramovimiento con el mismo `(company, voucher_type, voucher_id)`. Los reportes y reconstrucciones filtraban solo el original, dejando vivo el contramovimiento. Como consecuencia, `StockBin` podía ser correcto inmediatamente después de cancelar pero reconstruirse con una cantidad y valoración incorrectas.
+
+### Implementación
+
+- Se creó `ledger_queries.py` como contrato compartido de consultas:
+  - GL ordinario excluye originales cancelados y reversas del mismo período.
+  - Stock ordinario excluye el grupo completo de un voucher cuando existe un movimiento original cancelado.
+- Reportes bancarios, candidatos de conciliación, margen bruto, presupuesto y cierre fiscal aplican consistentemente el filtro GL completo.
+- Kardex, existencias, rotación, slow-moving items y dashboard excluyen ambos lados de una anulación de stock sin requerir una migración de esquema.
+- `rebuild_stock_bins()` y `rebuild_stock_valuation_layers()` suman el ledger físico completo, incluyendo original y contramovimiento. El par se neutraliza algebraicamente y la reconstrucción vuelve a ser reconciliable con el estado inmediatamente posterior a la cancelación.
+
+### Pruebas y criterio de aceptación
+
+La regresión integrada construye simultáneamente:
+
+1. Un asiento bancario original cancelado y su reversa, más un movimiento activo.
+2. Un movimiento de stock cancelado y su contramovimiento, más una recepción activa.
+
+Se exige que el saldo bancario contenga solo el movimiento activo, Kardex omita el par cancelado y la reconstrucción de `StockBin` produzca cantidad y valor iguales al neto algebraico del ledger completo. Las pruebas existentes de creación de reversas GL, cancelación de recepción y preservación de reservas durante rebuild permanecen como protección complementaria.
+
+### Alcance deliberado
+
+No se cambió la semántica de “Revertir” del módulo contable: continúa creando un comprobante nuevo en un período distinto y no debe clasificarse como una anulación interna que los reportes oculten. Tampoco se agregó una columna a `StockLedgerEntry`; la identidad del voucher permite reconocer el grupo cancelado sin introducir una migración de esquema incompleta.
+
 ## Arquitectura y Patrones de Diseño
 
 ### Stack
