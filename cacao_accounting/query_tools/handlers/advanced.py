@@ -24,6 +24,7 @@ from cacao_accounting.reportes.services import (
     get_kardex,
     get_inventory_existence as get_inventory_existence_report,
     get_bank_balance_summary,
+    get_unreconciled_bank_transactions,
     get_reconciliation_report,
     get_ar_ap_subledger,
     get_batch_report,
@@ -449,6 +450,35 @@ def get_banking_reconciliation_status(
     report = get_reconciliation_report(company_id, _date(as_of_date))
     filters = SimpleNamespace(as_of_date=as_of_date, page=page, page_size=page_size)
     return _report_result(report, company_id, filters)
+
+
+@query_tool(
+    "banking.get_unreconciled_transactions",
+    "Lista movimientos de extracto pendientes de conciliación.",
+    required_module="cash",
+    required_permission="banking.reports.read",
+    parameters_schema=_operational_schema(),
+)
+def get_banking_unreconciled_transactions(
+    *,
+    context: QueryContext,
+    company_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    bank_account_id: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "banking.reports.read", "cash", company_id)
+    filters = BankingFilters(
+        company=company_id,
+        bank_account_id=bank_account_id,
+        date_from=_date(date_from),
+        date_to=_date(date_to),
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_unreconciled_bank_transactions(filters), company_id, filters)
 
 
 _SUBLEDGER_SCHEMA = {

@@ -42,6 +42,7 @@ def test_discovery_and_composite_tools_are_published():
         "treasury.get_cash_forecast",
         "treasury.compare_forecasts",
         "banking.get_reconciliation_status",
+        "banking.get_unreconciled_transactions",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
