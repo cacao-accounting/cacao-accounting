@@ -44,7 +44,12 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso, verifica_permiso  # noqa: F401
+from cacao_accounting.decorators import (  # noqa: F401
+    exige_acceso_compania,
+    modulo_activo,
+    verifica_acceso as verifica_acceso,
+    verifica_permiso,
+)
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
@@ -2098,6 +2103,7 @@ def ventas_orden_venta_submit(order_id: str):
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2132,6 +2138,7 @@ def ventas_orden_venta_cancel(order_id: str):
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_order", order_id):
@@ -2831,6 +2838,7 @@ def ventas_factura_venta_submit(invoice_id: str):
     registro = database.session.get(SalesInvoice, invoice_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2898,6 +2906,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
     registro = database.session.get(SalesInvoice, invoice_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_invoice", invoice_id):
