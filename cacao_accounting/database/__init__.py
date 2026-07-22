@@ -1521,7 +1521,10 @@ class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Snapshot de stock por item y almacen (optimizacion de performance)."""
 
     __tablename__ = "stock_bin"
-    __table_args__ = (UniqueConstraint("item_code", "warehouse", name="uq_stock_bin"),)
+    __table_args__ = (
+        UniqueConstraint("item_code", "warehouse", name="uq_stock_bin"),
+        database.CheckConstraint("reserved_qty >= 0", name="ck_stock_bin_reserved_non_negative"),
+    )
     item_code = database.Column(
         database.String(50),
         database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),

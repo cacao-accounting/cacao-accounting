@@ -1591,9 +1591,11 @@ def _upsert_stock_bin(
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
     bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
 
-    # INV-10: Ajustar reserved_qty para que no supere actual_qty
-    if bin_row.reserved_qty and bin_row.reserved_qty > bin_row.actual_qty:
-        bin_row.reserved_qty = bin_row.actual_qty
+    # INV-10: una reserva nunca puede superar stock disponible ni ser negativa.
+    # El stock puede ser negativo cuando la compañía lo permite, pero eso no
+    # convierte una deuda de stock en una reserva negativa.
+    reserved_qty = _decimal_value(bin_row.reserved_qty)
+    bin_row.reserved_qty = max(Decimal("0"), min(reserved_qty, max(bin_row.actual_qty, Decimal("0"))))
 
     if bin_row.actual_qty > 0:
         bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
