@@ -246,6 +246,24 @@ class ApprovalEngine:
             database as db,
         )
 
+        if doctype == "payment_entry":
+            from cacao_accounting.bancos import _validate_payment_header
+
+            payment_type = str(getattr(document, "payment_type", "") or "")
+            amount = Decimal(str(getattr(document, "paid_amount", None) or getattr(document, "received_amount", None) or 0))
+            posting_date = getattr(document, "posting_date", None)
+            _validate_payment_header(
+                payment_type=payment_type,
+                company=getattr(document, "company", None),
+                bank_account_id=getattr(document, "bank_account_id", None),
+                posting_date_raw=posting_date.isoformat() if posting_date else None,
+                amount=amount,
+                party_type=getattr(document, "party_type", None),
+                party_id=getattr(document, "party_id", None),
+                target_bank_account_id=getattr(document, "target_bank_account_id", None),
+            )
+            return
+
         item_models = {
             "sales_order": (SalesOrderItem, "sales_order_id"),
             "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
