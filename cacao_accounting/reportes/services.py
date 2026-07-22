@@ -21,6 +21,9 @@ from cacao_accounting.database import (
     BankAccount,
     BankTransaction,
     Book,
+    Budget,
+    BudgetLine,
+    CostCenter,
     GLEntry,
     Item,
     PaymentReference,
@@ -128,6 +131,7 @@ class FinancialReportFilters:
     sort_dir: str = "asc"
     export_all: bool = False
     include_descendants: bool = False
+    budget_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1335,6 +1339,70 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
         total_rows=total_rows,
         page=page,
         page_size=page_size,
+        ledger_currency=selected_ledger.currency,
+    )
+
+
+def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
+    """Compara presupuesto aprobado contra GL para un período contable."""
+    period_start, period_end, period = _period_bounds(filters.company, filters.accounting_period)
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if period is None or selected_ledger is None:
+        return PaginatedReport(rows=[], totals={"budget": Decimal("0"), "actual": Decimal("0"), "variance": Decimal("0")})
+
+    query = (
+        select(BudgetLine, Budget, Accounts, CostCenter)
+        .join(Budget, Budget.id == BudgetLine.budget_id)
+        .join(Accounts, Accounts.id == BudgetLine.account_id, isouter=True)
+        .join(CostCenter, CostCenter.id == BudgetLine.cost_center_id, isouter=True)
+        .where(
+            Budget.company == filters.company,
+            Budget.ledger_id == selected_ledger.id,
+            BudgetLine.period_id == period.id,
+            Budget.status == "approved",
+        )
+    )
+    if filters.budget_code:
+        query = query.where(Budget.budget_code == filters.budget_code)
+    rows: list[ReportRow] = []
+    total_budget = Decimal("0")
+    total_actual = Decimal("0")
+    for line, budget, account, cost_center in database.session.execute(query).all():
+        actual_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+            GLEntry.company == filters.company,
+            GLEntry.ledger_id == selected_ledger.id,
+            GLEntry.account_id == line.account_id,
+            GLEntry.posting_date >= period_start,
+            GLEntry.posting_date <= period_end,
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
+        )
+        if cost_center and cost_center.code:
+            actual_query = actual_query.where(GLEntry.cost_center_code == cost_center.code)
+        actual = _decimal_value(database.session.execute(actual_query).scalar())
+        planned = _decimal_value(line.amount)
+        variance = actual - planned
+        total_budget += planned
+        total_actual += actual
+        rows.append(
+            ReportRow(
+                values={
+                    "budget_code": budget.budget_code,
+                    "account_code": account.code if account else None,
+                    "account_name": account.name if account else None,
+                    "cost_center": cost_center.code if cost_center else None,
+                    "period": period.name,
+                    "budget_amount": planned,
+                    "actual_amount": actual,
+                    "variance": variance,
+                    "utilization_pct": (actual / planned * Decimal("100")) if planned else None,
+                }
+            )
+        )
+    return PaginatedReport(
+        rows=rows,
+        totals={"budget": total_budget, "actual": total_actual, "variance": total_actual - total_budget},
+        columns=list(rows[0].values.keys()) if rows else [],
         ledger_currency=selected_ledger.currency,
     )
 
