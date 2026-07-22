@@ -577,6 +577,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
 @ventas.route("/sales-request/<request_id>/submit", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "autorizar")
 def ventas_pedido_venta_submit(request_id: str):
     """Aprueba un pedido de venta.
 
@@ -587,6 +588,7 @@ def ventas_pedido_venta_submit(request_id: str):
     registro = database.session.get(SalesRequest, request_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -613,11 +615,13 @@ def ventas_pedido_venta_submit(request_id: str):
 @ventas.route("/sales-request/<request_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "anular")
 def ventas_pedido_venta_cancel(request_id: str):
     """Cancela un pedido de venta."""
     registro = database.session.get(SalesRequest, request_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_request", request_id):
@@ -2034,11 +2038,13 @@ def ventas_cotizacion_duplicar(quotation_id: str):
 @ventas.route("/sales-quotation/<quotation_id>/submit", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "autorizar")
 def ventas_cotizacion_submit(quotation_id: str):
     """Aprueba una cotizacion de venta."""
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2069,11 +2075,13 @@ def ventas_cotizacion_submit(quotation_id: str):
 @ventas.route("/sales-quotation/<quotation_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "anular")
 def ventas_cotizacion_cancel(quotation_id: str):
     """Cancela una cotización de venta."""
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_quotation", quotation_id):
@@ -2439,6 +2447,7 @@ def ventas_entrega_duplicar(note_id: str):
 @ventas.route("/delivery-note/<note_id>/submit", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "autorizar")
 def ventas_entrega_submit(note_id: str):
     """Aprueba una nota de entrega y libera la reserva de inventario.
 
@@ -2450,6 +2459,7 @@ def ventas_entrega_submit(note_id: str):
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2494,11 +2504,13 @@ def _execute_delivery_note_cancellation(registro: DeliveryNote, note_id: str) ->
 @ventas.route("/delivery-note/<note_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "anular")
 def ventas_entrega_cancel(note_id: str):
     """Cancela una nota de entrega y restaura la reserva de inventario."""
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("delivery_note", note_id):
