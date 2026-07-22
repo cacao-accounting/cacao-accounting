@@ -18,6 +18,7 @@ from cacao_accounting.reportes.services import (
     SubledgerFilters,
     get_account_summary_report,
     get_account_movement_detail,
+    get_budget_variance,
     get_balance_sheet_report,
     get_gross_margin,
     get_income_statement_report,
@@ -245,6 +246,39 @@ def get_account_movement_detail_handler(
         page_size=page_size,
     )
     return _report_result(get_account_movement_detail(filters), company_id, filters)
+
+
+@query_tool(
+    "accounting.get_budget_variance",
+    "Compara presupuesto aprobado contra ejecución real por cuenta y período.",
+    required_module="accounting",
+    required_permission="accounting.reports.read",
+    parameters_schema={
+        **_FINANCIAL_SCHEMA,
+        "properties": {**_FINANCIAL_SCHEMA["properties"], "budget_code": {"type": "string"}},
+        "required": ["company_id", "accounting_period"],
+    },
+)
+def get_budget_variance_handler(
+    *,
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None = None,
+    accounting_period: str,
+    budget_code: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    filters = FinancialReportFilters(
+        company=company_id,
+        ledger=ledger_id,
+        accounting_period=accounting_period,
+        budget_code=budget_code,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_budget_variance(filters), company_id, filters)
 
 
 def _operational_schema() -> dict[str, Any]:
