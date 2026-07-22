@@ -699,6 +699,13 @@ def document_flow_related_list(doctype: str):
                 database.session.execute(database.select(spec.header_model).where(pk_col.in_(target_ids))).scalars().all()
             )
 
+    # The related document is protected above, but every returned target is a
+    # separate company-scoped resource and must pass the same read boundary.
+    module = _module_for_document_type(doctype_key)
+    if module:
+        for document in documents:
+            exige_acceso_compania(module, getattr(document, "company", None), "consultar")
+
     return render_template(
         "document_flow_related_list.html",
         spec=spec,
