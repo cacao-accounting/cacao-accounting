@@ -355,8 +355,17 @@ class ApprovalEngine:
             "purchase_order",
             "sales_request",
             "sales_quotation",
-            "sales_order",
         }:
+            document.docstatus = 1
+            log_submit(document)
+            return
+
+        if doctype == "sales_order":
+            # Reservation is a submit hook, never a pre-approval side effect.
+            # This path runs only once the final approval has been granted.
+            from cacao_accounting.ventas import _validate_and_reserve_stock_for_sales_order
+
+            _validate_and_reserve_stock_for_sales_order(document)
             document.docstatus = 1
             log_submit(document)
             return
