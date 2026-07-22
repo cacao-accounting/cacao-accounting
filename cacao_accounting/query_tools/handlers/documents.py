@@ -115,7 +115,10 @@ def get_document_flow(
 )
 def get_related_documents(**kwargs: Any) -> dict[str, Any]:
     """Alias semántico estable para clientes que preguntan por relacionados."""
-    return get_document_flow(**kwargs)
+    handler = get_document_flow.handler
+    if handler is None:
+        raise RuntimeError("documents.get_flow handler is not configured")
+    return handler(**kwargs)
 
 
 _DOCUMENT_SCHEMA = {
