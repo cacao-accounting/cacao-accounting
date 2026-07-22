@@ -52,6 +52,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "inventory.get_serials": "inventory.read",
     "banking.get_balance_summary": "banking.read",
     "banking.get_reconciliation_status": "banking.read",
+    "banking.get_unreconciled_transactions": "banking.read",
     "receivables.get_subledger": "receivables.read",
     "payables.get_subledger": "payables.read",
     "payments.search": "banking.read",

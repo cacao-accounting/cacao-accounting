@@ -685,6 +685,49 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     )
 
 
+def get_unreconciled_bank_transactions(filters: BankingFilters) -> PaginatedReport:
+    """Devuelve extractos bancarios pendientes de conciliación, sin mutar datos."""
+    bank_accounts = {
+        account.id: account
+        for account in database.session.execute(select(BankAccount).where(BankAccount.company == filters.company)).scalars()
+    }
+    query = (
+        select(BankTransaction)
+        .join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
+        .where(BankAccount.company == filters.company, BankTransaction.is_reconciled.is_(False))
+    )
+    if filters.bank_account_id:
+        query = query.where(BankTransaction.bank_account_id == filters.bank_account_id)
+    if filters.date_from is not None:
+        query = query.where(BankTransaction.posting_date >= filters.date_from)
+    if filters.date_to is not None:
+        query = query.where(BankTransaction.posting_date <= filters.date_to)
+    rows = [
+        ReportRow(values=_build_transaction_row_values(transaction, bank_accounts.get(transaction.bank_account_id)))
+        for transaction in database.session.execute(
+            query.order_by(BankTransaction.posting_date.asc(), BankTransaction.created.asc())
+        ).scalars()
+    ]
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "incoming_amount": sum((_decimal_value(row.values["incoming_amount"]) for row in rows), Decimal("0")),
+            "outgoing_amount": sum((_decimal_value(row.values["outgoing_amount"]) for row in rows), Decimal("0")),
+            "transaction_count": Decimal(len(rows)),
+        },
+        columns=[
+            "posting_date",
+            "document_no",
+            "bank_account",
+            "incoming_amount",
+            "outgoing_amount",
+            "currency",
+            "status",
+            "remarks",
+        ],
+    )
+
+
 def _compute_account_receipts_and_payments(
     bank_account_id: str,
     company: str,
