@@ -63,7 +63,7 @@ from ulid import ULID
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.database.helpers import get_active_naming_series
-from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
+from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso, verifica_permiso  # noqa: F401
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
@@ -3454,6 +3454,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
 @compras.route("/purchase-invoice/<invoice_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_factura_compra_submit(invoice_id: str):
     """Aprueba una factura de compra."""
     registro = database.session.get(PurchaseInvoice, invoice_id)
@@ -3500,6 +3501,7 @@ def compras_factura_compra_submit(invoice_id: str):
 @compras.route("/purchase-invoice/<invoice_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_factura_compra_cancel(invoice_id: str):
     """Cancela una factura de compra."""
     registro = database.session.get(PurchaseInvoice, invoice_id)
@@ -3507,15 +3509,20 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(404)
     if registro.docstatus != 1:
         abort(400)
-    active_payment = database.select(PaymentReference.id).join(
-        DocumentRelation,
-        (DocumentRelation.target_item_id == PaymentReference.id)
-        & (DocumentRelation.target_type == "payment_entry")
-        & (DocumentRelation.status == "active"),
-    ).join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id).where(
-        PaymentReference.reference_type == "purchase_invoice",
-        PaymentReference.reference_id == invoice_id,
-        PaymentEntry.docstatus == 1,
+    active_payment = (
+        database.select(PaymentReference.id)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.status == "active"),
+        )
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentReference.reference_type == "purchase_invoice",
+            PaymentReference.reference_id == invoice_id,
+            PaymentEntry.docstatus == 1,
+        )
     )
     if database.session.execute(active_payment).scalars().first() is not None:
         flash(_("No se puede cancelar la factura de compra porque tiene pagos activos."), "danger")
