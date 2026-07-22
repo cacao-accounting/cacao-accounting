@@ -52,7 +52,7 @@ def get_document_timeline_handler(
 
     _page, _page_size = paginate(page, page_size)
 
-    entries = get_document_timeline(document_type, document_id)
+    entries = get_document_timeline(document_type, document_id, company_id)
 
     start = (_page - 1) * _page_size
     end = start + _page_size
