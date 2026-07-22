@@ -68,7 +68,7 @@ from cacao_accounting.document_identifiers import (
     PAYMENT_TYPE_TO_ENTITY_TYPE,
     assign_document_identifier,
 )
-from cacao_accounting.decorators import modulo_activo, verifica_permiso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
@@ -2168,6 +2168,7 @@ def bancos_pago_submit(payment_id: str):
     registro = database.session.get(PaymentEntry, payment_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("cash", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2203,6 +2204,7 @@ def bancos_pago_cancel(payment_id: str):
     registro = database.session.get(PaymentEntry, payment_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("cash", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     try:

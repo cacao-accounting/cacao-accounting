@@ -33,7 +33,7 @@ from cacao_accounting.contabilidad.posting import PostingError, cancel_document,
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
-from cacao_accounting.decorators import modulo_activo, verifica_permiso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
@@ -1381,6 +1381,7 @@ def inventario_entrada_submit(entry_id: str):
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("inventory", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -1411,6 +1412,7 @@ def inventario_entrada_cancel(entry_id: str):
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("inventory", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     try:

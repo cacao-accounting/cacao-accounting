@@ -63,7 +63,12 @@ from ulid import ULID
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.database.helpers import get_active_naming_series
-from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso, verifica_permiso  # noqa: F401
+from cacao_accounting.decorators import (  # noqa: F401
+    exige_acceso_compania,
+    modulo_activo,
+    verifica_acceso as verifica_acceso,
+    verifica_permiso,
+)
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
@@ -3460,6 +3465,7 @@ def compras_factura_compra_submit(invoice_id: str):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -3507,6 +3513,7 @@ def compras_factura_compra_cancel(invoice_id: str):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     active_payment = (
