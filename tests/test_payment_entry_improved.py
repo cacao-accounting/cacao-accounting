@@ -1657,6 +1657,43 @@ def test_payment_ignores_exchange_rate_and_external_counter_for_transfer(app_ctx
     assert payment.external_number is None
 
 
+def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeypatch):
+    """Una transferencia USD→NIO conserva ambos nominales y la tasa cruzada."""
+    from cacao_accounting.bancos import _build_payment_from_payload
+
+    source = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    )
+    target = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+    )
+    assert source is not None
+    assert target is not None
+
+    monkeypatch.setattr(
+        "cacao_accounting.bancos._lookup_exchange_rate",
+        lambda currency, company_currency, posting_date: Decimal("36"),
+    )
+    payment, amount, _ = _build_payment_from_payload(
+        {
+            "payment_type": "internal_transfer",
+            "company": "cacao",
+            "bank_account_id": source.id,
+            "target_bank_account_id": target.id,
+            "posting_date": "2026-05-05",
+            "paid_amount": "100",
+            "exchange_rate": "36",
+        }
+    )
+
+    assert amount == Decimal("100")
+    assert payment.currency == "USD"
+    assert payment.paid_amount == Decimal("100")
+    assert payment.received_amount == Decimal("3600.0000")
+    assert payment.base_paid_amount == Decimal("3600.0000")
+    assert payment.base_received_amount is None
+
+
 def test_payment_uses_default_external_counter_for_check(app_ctx):
     """Cheque usa la chequera default de la cuenta bancaria cuando no se envía una explícita."""
     client = app_ctx.test_client()
