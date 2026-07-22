@@ -1938,9 +1938,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
 
     company_entity = (
-        database.session.execute(database.select(Entity).filter(Entity.code == company)).scalars().first()
-        if company
-        else None
+        database.session.execute(database.select(Entity).filter(Entity.code == company)).scalars().first() if company else None
     )
     company_currency = company_entity.currency if company_entity else None
     posting_date_raw = payload.get("posting_date")

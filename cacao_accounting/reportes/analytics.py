@@ -111,9 +111,7 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
     ).scalars()
     ar = sum((_decimal(compute_outstanding_amount(row, as_of_date=end)) for row in ar_rows), Decimal("0"))
     ap = sum((_decimal(compute_outstanding_amount(row, as_of_date=end)) for row in ap_rows), Decimal("0"))
-    inventory = database.session.execute(
-        select(StockBin.stock_value).where(StockBin.company == company)
-    ).scalars()
+    inventory = database.session.execute(select(StockBin.stock_value).where(StockBin.company == company)).scalars()
     inventory_value = sum((_decimal(value) for value in inventory), Decimal("0"))
     return {
         "company_id": company,

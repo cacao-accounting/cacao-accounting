@@ -249,12 +249,12 @@ def _party_company_values(company_party: CompanyParty | None) -> dict[str, Any]:
     values.update(
         {
             "is_active": bool(company_party.is_active) if company_party else True,
-            "allow_purchase_invoice_without_order": bool(company_party.allow_purchase_invoice_without_order)
-            if company_party
-            else False,
-            "allow_purchase_invoice_without_receipt": bool(company_party.allow_purchase_invoice_without_receipt)
-            if company_party
-            else False,
+            "allow_purchase_invoice_without_order": (
+                bool(company_party.allow_purchase_invoice_without_order) if company_party else False
+            ),
+            "allow_purchase_invoice_without_receipt": (
+                bool(company_party.allow_purchase_invoice_without_receipt) if company_party else False
+            ),
             "block_overdue": bool(company_party.block_overdue) if company_party else False,
         }
     )
