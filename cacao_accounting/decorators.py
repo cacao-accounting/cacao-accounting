@@ -46,6 +46,9 @@ def verifica_acceso(modulo):  # pragma: no cover
     def decorator_verifica_acceso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash("No se encuentra autorizado a acceder al recurso solicitado.")
+                return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             libros = _libros_contables_solicitados(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
@@ -66,6 +69,9 @@ def verifica_permiso(modulo: str, accion: str):  # pragma: no cover
     def decorator_verifica_permiso(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash("No se encuentra autorizado para ejecutar esta acción.")
+                return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
             if getattr(permisos, accion, False):
@@ -85,6 +91,8 @@ def exige_acceso_compania(modulo: str, company: str | None, accion: str = "consu
     ACL. Company access is therefore derived from the user's authorized books;
     administrators retain global access.
     """
+    if not current_user.is_authenticated:
+        abort(403)
     module_id = obtener_id_modulo_por_nombre(modulo)
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
     if permisos.administrador:
