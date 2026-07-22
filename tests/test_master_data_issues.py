@@ -174,6 +174,36 @@ def test_entity_search_select_can_include_inactive_for_admin(app_ctx):
     assert "ina2" in values
 
 
+def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeypatch):
+    """La búsqueda de compañías no devuelve entidades fuera del alcance del usuario."""
+    from cacao_accounting.database import Entity, User, database
+
+    database.session.add(
+        Entity(
+            code="other-company",
+            name="Other",
+            company_name="Other Company",
+            tax_id="J2200",
+            currency="NIO",
+            enabled=True,
+        )
+    )
+    database.session.commit()
+
+    monkeypatch.setattr(
+        "cacao_accounting.api.dashboard.user_can_access_company",
+        lambda user, company: company.code == "cacao",
+    )
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+    response = client.get("/api/search-select?doctype=company&q=&limit=20&include_inactive=true")
+
+    assert response.status_code == 200
+    values = {item["value"] for item in response.get_json()["results"]}
+    assert "cacao" in values
+    assert "other-company" not in values
+
+
 def test_backend_rejects_inactive_entity_submission(app_ctx):
     from cacao_accounting.database import Entity, User, database
 

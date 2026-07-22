@@ -573,7 +573,13 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
 SEARCH_SELECT_REGISTRY = MappingProxyType(_SEARCH_SELECT_REGISTRY)
 
 
-def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit: int | None = None) -> dict[str, Any]:
+def search_select(
+    doctype: str,
+    query: str,
+    filters: dict[str, list[str]],
+    limit: int | None = None,
+    company_scope: set[str] | None = None,
+) -> dict[str, Any]:
     """Busca opciones para un doctype registrado y devuelve un payload uniforme."""
     if doctype in _STATIC_SEARCH_SELECT_OPTIONS:
         if filters:
@@ -598,6 +604,8 @@ def search_select(doctype: str, query: str, filters: dict[str, list[str]], limit
     normalized_query = query.strip()
 
     statement = select(spec.model)
+    if spec.model is Entity and company_scope is not None:
+        statement = statement.where(Entity.code.in_(sorted(company_scope)))
     if spec.model is Party and normalized_filters.get("company"):
         statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
         statement = statement.where(CompanyParty.is_active.is_(True))
