@@ -201,6 +201,20 @@ def test_cloud_comment_and_task_flow_records_audit_trail(app_ctx) -> None:
     assert "task_cancelled" in actions
 
 
+def test_collaboration_service_enforces_document_company_acl(app_ctx, monkeypatch) -> None:
+    """Los servicios internos de colaboración no saltan la ACL de compañía."""
+    from cacao_accounting import collaboration_service
+    from werkzeug.exceptions import Forbidden
+
+    def deny_company_access(module: str, company: str | None, action: str = "consultar") -> None:
+        raise Forbidden()
+
+    monkeypatch.setattr(collaboration_service, "exige_acceso_compania", deny_company_access)
+
+    with pytest.raises(Forbidden):
+        collaboration_service._document_for_collaboration("journal_entry", "journal-id", "admin-id")
+
+
 def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
     """Comments and tasks redirect to referrer safely, avoiding Open Redirect."""
     client = app_ctx.test_client()
