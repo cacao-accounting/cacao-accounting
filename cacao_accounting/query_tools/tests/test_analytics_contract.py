@@ -53,6 +53,10 @@ def test_discovery_and_composite_tools_are_published():
         "documents.get_related_documents",
         "accounting.get_account_movement_detail",
         "accounting.get_budget_variance",
+        "dimensions.list",
+        "dimension_values.search",
+        "cost_centers.list",
+        "uoms.list",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
