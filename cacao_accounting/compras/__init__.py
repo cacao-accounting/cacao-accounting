@@ -1784,6 +1784,12 @@ def compras_orden_compra_editar(order_id: str):
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -2606,6 +2612,12 @@ def compras_recepcion_editar(receipt_id: str):
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -3274,6 +3286,12 @@ def compras_factura_compra_editar(invoice_id: str):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
