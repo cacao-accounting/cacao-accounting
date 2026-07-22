@@ -18,12 +18,12 @@ def primary_ledger_id(company: str) -> str | None:
 
     Operational/reporting consumers must never aggregate every active book.
     The accounting module is the only place where a user explicitly selects a
-    book; all other consumers use the primary (then default) active book.
+    book; all other consumers use the system default (then primary) active book.
     """
     book = database.session.execute(
         select(Book)
         .where(Book.entity == company, Book.status == "activo")
-        .order_by(Book.is_primary.desc(), Book.default.desc(), Book.code.asc())
+        .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
     ).scalars().first()
     return book.id if book else None
 
