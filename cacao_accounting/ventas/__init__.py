@@ -2106,12 +2106,12 @@ def ventas_orden_venta_submit(order_id: str):
         )
         if not getattr(registro, "is_return", False):
             _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
-        _validate_and_reserve_stock_for_sales_order(registro)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Orden de venta"):
             return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
+        _validate_and_reserve_stock_for_sales_order(registro)
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
