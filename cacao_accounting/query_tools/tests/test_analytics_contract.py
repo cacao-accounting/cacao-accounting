@@ -43,6 +43,10 @@ def test_discovery_and_composite_tools_are_published():
         "treasury.compare_forecasts",
         "banking.get_reconciliation_status",
         "banking.get_unreconciled_transactions",
+        "inventory.get_negative_stock",
+        "inventory.get_slow_moving_items",
+        "inventory.get_turnover",
+        "audit.get_user_activity_summary",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
