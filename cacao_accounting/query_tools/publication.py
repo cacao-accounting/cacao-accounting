@@ -59,6 +59,10 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "documents.search_relations": "documents.read",
     "audit.search_events": "audit.read",
     "accounting.get_revaluations": "accounting.read",
+    "analytics.get_kpi_snapshot": "accounting.read",
+    "analytics.compare_periods": "accounting.read",
+    "analytics.get_trend": "accounting.read",
+    "analytics.get_concentration": "accounting.read",
 }
 
 

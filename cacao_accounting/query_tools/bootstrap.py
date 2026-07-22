@@ -13,6 +13,7 @@ _HANDLER_MODULES = (
     "documents",
     "audit_trail",
     "advanced",
+    "analytics",
     "operational",
 )
 
