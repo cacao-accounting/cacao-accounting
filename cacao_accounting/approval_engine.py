@@ -203,6 +203,35 @@ class ApprovalEngine:
         if pending:
             raise ValueError("El documento tiene una solicitud de aprobación pendiente y no puede editarse.")
 
+    @staticmethod
+    def _validate_final_cancellation(doctype: str, document: Any) -> None:
+        """Recheck downstream dependencies at the moment cancellation executes."""
+        if doctype in {"sales_order", "delivery_note", "sales_invoice", "purchase_order", "purchase_receipt"}:
+            from cacao_accounting.document_flow.repository import has_active_source_relations
+
+            if has_active_source_relations(doctype, document.id):
+                raise ValueError("El documento adquirió relaciones activas mientras esperaba aprobación.")
+        if doctype == "purchase_invoice":
+            from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference
+
+            active_payment = (
+                database.select(PaymentReference.id)
+                .join(
+                    DocumentRelation,
+                    (DocumentRelation.target_item_id == PaymentReference.id)
+                    & (DocumentRelation.target_type == "payment_entry")
+                    & (DocumentRelation.status == "active"),
+                )
+                .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+                .where(
+                    PaymentReference.reference_type == "purchase_invoice",
+                    PaymentReference.reference_id == document.id,
+                    PaymentEntry.docstatus == 1,
+                )
+            )
+            if database.session.execute(active_payment).scalars().first() is not None:
+                raise ValueError("La factura adquirió una aplicación de pago activa mientras esperaba aprobación.")
+
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
         """Crea una solicitud de aprobación para el documento si no existe."""
@@ -298,6 +327,7 @@ class ApprovalEngine:
         if req.document_type.startswith("cancel_"):
             actual_doc_type = req.document_type[7:]
             actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
+            cls._validate_final_cancellation(actual_doc_type, actual_doc)
             cls._execute_cancel(actual_doc_type, actual_doc, user)
         else:
             cls._execute_submit(req.document_type, document, user)
