@@ -640,6 +640,10 @@ def document_flow_related_list(doctype: str):
     related_id = request.args.get("related_id", "")
 
     related_doc = get_document(related_doctype, related_id) if related_doctype and related_id else None
+    if related_doc:
+        module = _module_for_document_type(related_doctype)
+        if module:
+            exige_acceso_compania(module, getattr(related_doc, "company", None), "consultar")
     related_no = getattr(related_doc, "document_no", related_id) if related_doc else related_id
 
     related_spec = DOCUMENT_TYPES.get(related_doctype, None)
