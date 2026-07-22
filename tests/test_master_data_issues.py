@@ -204,6 +204,33 @@ def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeyp
     assert "other-company" not in values
 
 
+def test_search_select_rejects_company_filter_outside_acl(app_ctx, monkeypatch):
+    """Los doctypes con filtro company no permiten enumerar otra entidad."""
+    from cacao_accounting.database import Entity, User, database
+
+    database.session.add(
+        Entity(
+            code="blocked-company",
+            name="Blocked",
+            company_name="Blocked Company",
+            tax_id="J2201",
+            currency="NIO",
+            enabled=True,
+        )
+    )
+    database.session.commit()
+    monkeypatch.setattr(
+        "cacao_accounting.api.dashboard.user_can_access_company",
+        lambda user, company: company.code == "cacao",
+    )
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    response = client.get("/api/search-select?doctype=account&company=blocked-company&q=")
+
+    assert response.status_code == 403
+
+
 def test_backend_rejects_inactive_entity_submission(app_ctx):
     from cacao_accounting.database import Entity, User, database
 
