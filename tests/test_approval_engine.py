@@ -3,6 +3,7 @@
 
 """Pruebas unitarias para el Approval Engine (Motor de Aprobaciones)."""
 
+from datetime import date
 from decimal import Decimal
 import pytest
 from sqlalchemy import select
@@ -10,7 +11,6 @@ from sqlalchemy import select
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
-    Entity,
     Roles,
     RolesUser,
     User,
@@ -21,10 +21,7 @@ from cacao_accounting.database import (
     ComprobanteContable,
     PurchaseOrder,
     PurchaseRequest,
-    PurchaseInvoice,
-    SalesOrder,
     PaymentEntry,
-    StockEntry,
 )
 from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -565,7 +562,7 @@ def test_approval_action_on_approve(app):
     with app.app_context():
         _enable_engine()
         user_juan = _create_user("juan")
-        rule = _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
+        _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
 
         po = PurchaseOrder(id="po_audit", company="comp_test", grand_total=Decimal("12000"), docstatus=0)
         database.session.add(po)
@@ -756,3 +753,42 @@ def test_get_required_level_selects_minimum(app):
         assert ApprovalEngine._get_required_level("comp_test", "purchase_order", Decimal("30000")) == 2
         # Para 300,000: solo nivel 3 cubre → nivel = 3
         assert ApprovalEngine._get_required_level("comp_test", "purchase_order", Decimal("300000")) == 3
+
+
+def test_deferred_approval_rejects_changed_payment_snapshot(app):
+    """El hash persistido detecta cambios aunque el timestamp no avance."""
+    with app.app_context():
+        _enable_engine()
+        user = _create_user("snapshot_user")
+        _create_rule("comp_test", "payment_entry", user_id=user.id, max_amount=Decimal("5000"))
+        payment = PaymentEntry(
+            id="payment_snapshot",
+            company="comp_test",
+            posting_date=date(2026, 6, 1),
+            payment_type="pay",
+            bank_account_id="bank-1",
+            paid_amount=Decimal("100.00"),
+            docstatus=0,
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        request = ApprovalEngine.request_approval(payment)
+        assert request is not None
+        payment.paid_amount = Decimal("250.00")
+        with pytest.raises(ValueError, match="cambió después"):
+            ApprovalEngine._assert_approval_snapshot(request, payment)
+
+
+def test_final_payment_submission_revalidates_header(app):
+    """Un pago diferido no puede aprobarse con encabezado inválido."""
+    with app.app_context():
+        payment = PaymentEntry(
+            company="comp_test",
+            posting_date=date(2026, 6, 1),
+            payment_type="pay",
+            paid_amount=Decimal("0"),
+            docstatus=0,
+        )
+        with pytest.raises(ValueError, match="monto del pago"):
+            ApprovalEngine._validate_final_submission("payment_entry", payment)
