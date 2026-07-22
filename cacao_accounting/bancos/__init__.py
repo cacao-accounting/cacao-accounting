@@ -1530,7 +1530,12 @@ def _validate_payment_header(
     validated_company = cast(str, company)
     validated_bank_account_id = cast(str, bank_account_id)
     _validate_payment_bank_account(company=validated_company, bank_account_id=validated_bank_account_id)
-    _validate_payment_target_bank_account(company=validated_company, target_bank_account_id=target_bank_account_id)
+    _validate_payment_target_bank_account(
+        company=validated_company,
+        bank_account_id=validated_bank_account_id,
+        payment_type=payment_type,
+        target_bank_account_id=target_bank_account_id,
+    )
     _validate_payment_party(payment_type=payment_type, party_type=party_type, party_id=party_id)
 
 
@@ -1561,7 +1566,9 @@ def _validate_payment_bank_account(*, company: str, bank_account_id: str) -> Non
         raise ValueError(_("La cuenta bancaria no pertenece a la misma compañía del pago."))
 
 
-def _validate_payment_target_bank_account(*, company: str, target_bank_account_id: str | None) -> None:
+def _validate_payment_target_bank_account(
+    *, company: str, bank_account_id: str, payment_type: str, target_bank_account_id: str | None
+) -> None:
     """Validate that the target bank account exists and belongs to the company."""
     if not target_bank_account_id:
         return
@@ -1570,6 +1577,10 @@ def _validate_payment_target_bank_account(*, company: str, target_bank_account_i
         raise ValueError(_("La cuenta bancaria destino no existe."))
     if target_bank_account.company != company:
         raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
+    if payment_type == "internal_transfer":
+        source_bank_account = database.session.get(BankAccount, bank_account_id)
+        if source_bank_account and source_bank_account.id == target_bank_account.id:
+            raise ValueError(_("La cuenta bancaria de origen y destino deben ser distintas."))
 
 
 def _validate_payment_party(*, payment_type: str, party_type: str | None, party_id: str | None) -> None:
@@ -1923,6 +1934,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     )
     reference_date = _parse_reference_date(payload.get("reference_date"))
     payment_currency = _get_payment_currency(bank_account_id)
+    target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
     mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
 
     company_entity = database.session.get(Entity, company) if company else None
@@ -1948,6 +1960,13 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         exchange_rate=exchange_rate,
     )
     _update_payment_amounts(payment, payment_type, amount)
+    if payment_type == "internal_transfer":
+        transfer_rate = Decimal(str(payload.get("exchange_rate") or "0"))
+        if transfer_rate <= 0:
+            raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+        if target_bank and target_bank.currency:
+            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
+            payment.base_received_amount = None
     database.session.add(payment)
     database.session.flush()
     return payment, amount, mode_of_payment
