@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting.reportes import analytics
+from cacao_accounting.query_tools import TOOL_EXTERNAL_SCOPES, load_query_tools, registry
 
 
 def test_metric_vocabulary_is_closed(monkeypatch):
@@ -22,3 +23,21 @@ def test_trend_uses_monthly_buckets(monkeypatch):
     assert [row["period"] for row in rows] == ["2026-01", "2026-02", "2026-03"]
     assert rows[0]["date_from"] == date(2026, 1, 15)
     assert rows[-1]["date_to"] == date(2026, 3, 2)
+
+
+def test_discovery_and_composite_tools_are_published():
+    load_query_tools()
+    expected = {
+        "ledgers.list",
+        "parties.search",
+        "items.search",
+        "warehouses.list",
+        "bank_accounts.search",
+        "currencies.list",
+        "analytics.get_kpi_snapshot",
+        "analytics.compare_periods",
+        "analytics.get_trend",
+        "analytics.get_concentration",
+    }
+    assert expected.issubset(TOOL_EXTERNAL_SCOPES)
+    assert expected.issubset(registry.list_tools())
