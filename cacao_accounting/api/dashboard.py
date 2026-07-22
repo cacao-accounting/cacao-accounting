@@ -88,12 +88,22 @@ def get_dashboard_data():
 
 
 def user_can_access_company(user: Any, company: Entity | None) -> bool:
-    """Valida acceso temporal del usuario a una compañía."""
+    """Validate authenticated access to a company through authorized books."""
     if company is None or not getattr(user, "is_authenticated", False):
         return False
     if getattr(user, "active", False) is not True:
         return False
-    return getattr(company, "enabled", None) is not False
+    if getattr(company, "enabled", None) is False:
+        return False
+    company_code = str(company.code)
+    for module_name in (MODULE_ACCOUNTING, MODULE_BANKS, MODULE_PURCHASES, MODULE_INVENTORY, MODULE_SALES):
+        module_id = obtener_id_modulo_por_nombre(module_name)
+        permissions = Permisos(modulo=module_id, usuario=user.id)
+        if permissions.administrador or (
+            permissions.autorizado and permissions.obtener_libros_autorizados("can_read", company=company_code)
+        ):
+            return True
+    return False
 
 
 def _resolve_period(period_id: str | None, company: Entity) -> AccountingPeriod | None:
@@ -126,30 +136,35 @@ def _dashboard_sections(
     return {
         "accounting": _section_or_hidden(
             MODULE_ACCOUNTING,
+            company_code,
             "Contabilidad",
             "Resumen financiero del periodo seleccionado.",
             lambda: get_accounting_data(company_code, currency, start_date, end_date),
         ),
         "banks": _section_or_hidden(
             MODULE_BANKS,
+            company_code,
             "Bancos",
             "Saldos, conciliaciones y pagos en proceso.",
             lambda: get_banks_data(company_code, currency, start_date, end_date),
         ),
         "purchases": _section_or_hidden(
             MODULE_PURCHASES,
+            company_code,
             "Compras",
             "Facturas, órdenes abiertas y cuentas por pagar.",
             lambda: get_purchases_data(company_code, currency, start_date, end_date),
         ),
         "inventory": _section_or_hidden(
             MODULE_INVENTORY,
+            company_code,
             "Inventario",
             "Existencias, bodegas y movimientos recientes.",
             lambda: get_inventory_data(company_code, currency, start_date, end_date),
         ),
         "sales": _section_or_hidden(
             MODULE_SALES,
+            company_code,
             "Ventas",
             "Facturación, cobranza y comportamiento comercial.",
             lambda: get_sales_data(company_code, currency, start_date, end_date),
@@ -159,12 +174,13 @@ def _dashboard_sections(
 
 def _section_or_hidden(
     module_name: str,
+    company: str,
     title: str,
     subtitle: str,
     loader: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
     """Devuelve una sección visible o una sección oculta uniforme."""
-    if not _has_module_access(module_name):
+    if not _has_module_access(module_name, company):
         return _hidden_section(title, subtitle)
     section = loader()
     section["visible"] = True
@@ -174,10 +190,15 @@ def _section_or_hidden(
     return section
 
 
-def _has_module_access(module_name: str) -> bool:
+def _has_module_access(module_name: str, company: str | None = None) -> bool:
     """Indica si el usuario actual puede consultar un módulo."""
     module_id = obtener_id_modulo_por_nombre(module_name)
-    return Permisos(modulo=module_id, usuario=current_user.id).autorizado
+    permissions = Permisos(modulo=module_id, usuario=current_user.id)
+    if not permissions.autorizado:
+        return False
+    if permissions.administrador:
+        return True
+    return bool(permissions.obtener_libros_autorizados("can_read", company=company))
 
 
 def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:
