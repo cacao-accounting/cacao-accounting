@@ -656,7 +656,7 @@ def test_api_document_flow_tree_devuelve_arbol(app):
 
 def test_lista_de_relaciones_revalida_acl_de_documentos_destino(app, monkeypatch):
     """La lista relacionada no expone destinos sin validar su compañía."""
-    from cacao_accounting import api as api_module
+    import cacao_accounting.api as api_module
     from cacao_accounting.database import User, database
 
     _seed_entity(database)
