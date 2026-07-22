@@ -19,10 +19,16 @@ from cacao_accounting.database import (
     ApprovalAction,
     CacaoConfig,
     ComprobanteContable,
+    Item,
+    Party,
     PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseRequest,
+    PurchaseRequestItem,
     PaymentEntry,
     SalesOrder,
+    SalesOrderItem,
+    UOM,
 )
 from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -79,6 +85,50 @@ def _assign_role(user: User, role: Roles) -> RolesUser:
     database.session.add(ru)
     database.session.flush()
     return ru
+
+
+def _seed_party() -> Party:
+    """Crea un proveedor/cliente de prueba para documentos."""
+    party = Party(id="PARTY-TEST", code="PARTY-TEST", name="Test Party", is_supplier=True, is_customer=True, is_active=True)
+    database.session.add(party)
+    database.session.flush()
+    return party
+
+
+def _seed_item() -> None:
+    """Crea un articulo y UOM de prueba para lineas de documentos."""
+    uom = UOM(id="UOM-EA", code="EA", name="Each", is_active=True)
+    item = Item(id="ITEM-TEST", code="ITEM-TEST", name="Test Item", item_type="goods", is_stock_item=True, default_uom="EA")
+    database.session.add_all([uom, item])
+    database.session.flush()
+
+
+def _add_po_item(document_id: str, rate: Decimal = Decimal("1000")) -> PurchaseOrderItem:
+    """Agrega una linea a una orden de compra."""
+    item = PurchaseOrderItem(
+        purchase_order_id=document_id,
+        item_code="ITEM-TEST",
+        qty=Decimal("1"),
+        rate=rate,
+        amount=rate,
+    )
+    database.session.add(item)
+    database.session.flush()
+    return item
+
+
+def _add_so_item(document_id: str, rate: Decimal = Decimal("1000")) -> SalesOrderItem:
+    """Agrega una linea a una orden de venta."""
+    item = SalesOrderItem(
+        sales_order_id=document_id,
+        item_code="ITEM-TEST",
+        qty=Decimal("1"),
+        rate=rate,
+        amount=rate,
+    )
+    database.session.add(item)
+    database.session.flush()
+    return item
 
 
 def _create_rule(
@@ -155,10 +205,14 @@ def test_approval_flow_draft_to_approved(app):
     with app.app_context():
         _enable_engine()
         user_juan = _create_user("juan")
+        _seed_party()
+        _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
 
-        po = PurchaseOrder(id="po10025", company="comp_test", grand_total=Decimal("12000"), docstatus=0)
+        po = PurchaseOrder(id="po10025", company="comp_test", grand_total=Decimal("12000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po10025", rate=Decimal("12000"))
         database.session.commit()
 
         req = ApprovalEngine.request_approval(po)
@@ -176,6 +230,8 @@ def test_pending_sales_order_does_not_reserve_inventory(app, monkeypatch):
     """Una orden pendiente no ejecuta el hook de reserva de inventario."""
     with app.app_context():
         _enable_engine("comp_test")
+        _seed_party()
+        _seed_item()
         requester = _create_user("requester")
         approver = _create_user("approver")
         _create_rule("comp_test", "sales_order", user_id=approver.id, max_amount=Decimal("5000"))
@@ -185,8 +241,12 @@ def test_pending_sales_order_does_not_reserve_inventory(app, monkeypatch):
             company="comp_test",
             grand_total=Decimal("1000"),
             docstatus=0,
+            posting_date=date(2026, 1, 1),
+            customer_id="PARTY-TEST",
         )
         database.session.add(order)
+        database.session.flush()
+        _add_so_item("so-pending-reservation", rate=Decimal("1000"))
         database.session.commit()
 
         reservation_calls: list[str] = []
@@ -194,10 +254,17 @@ def test_pending_sales_order_does_not_reserve_inventory(app, monkeypatch):
         def reserve(_document):
             reservation_calls.append(str(_document.id))
 
-        monkeypatch.setattr("cacao_accounting.ventas._validate_and_reserve_stock_for_sales_order", reserve)
+        import sys
+
+        monkeypatch.setattr(
+            sys.modules["cacao_accounting.ventas"],
+            "_validate_and_reserve_stock_for_sales_order",
+            reserve,
+        )
         monkeypatch.setattr(ApprovalEngine, "can_approve", staticmethod(lambda document, user: False))
 
-        assert ApprovalEngine.handle_submission(order, requester, "Orden de venta") is True
+        with app.test_request_context():
+            assert ApprovalEngine.handle_submission(order, requester, "Orden de venta") is True
         request = database.session.execute(
             select(ApprovalRequest).filter_by(document_type="sales_order", document_id=order.id)
         ).scalar_one()
@@ -259,6 +326,8 @@ def test_multilevel_approval_three_levels(app):
     """Prueba aprobación multi-nivel: Buyer(1) < PM(2) < CFO(3)."""
     with app.app_context():
         _enable_engine()
+        _seed_party()
+        _seed_item()
 
         rol_buyer = _create_role("Buyer", "Comprador")
         rol_pm = _create_role("Purchase Manager", "Gerente de Compras")
@@ -275,8 +344,10 @@ def test_multilevel_approval_three_levels(app):
         _create_rule("comp_test", "purchase_order", role_id=rol_pm.id, max_amount=Decimal("50000"), approval_level=2)
         _create_rule("comp_test", "purchase_order", role_id=rol_cfo.id, max_amount=None, approval_level=3)
 
-        po = PurchaseOrder(id="po_multi", company="comp_test", grand_total=Decimal("42000"), docstatus=0)
+        po = PurchaseOrder(id="po_multi", company="comp_test", grand_total=Decimal("42000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po_multi", rate=Decimal("42000"))
         database.session.commit()
 
         req = ApprovalEngine.request_approval(po)
@@ -299,6 +370,8 @@ def test_multilevel_approval_tiers(app):
     """Prueba que distintos montos requieren distintos niveles de aprobación."""
     with app.app_context():
         _enable_engine()
+        _seed_party()
+        _seed_item()
 
         rol_pm = _create_role("PM", "Gerente")
         rol_cfo = _create_role("CFO", "Director")
@@ -311,8 +384,10 @@ def test_multilevel_approval_tiers(app):
         _create_rule("comp_test", "purchase_order", role_id=rol_pm.id, max_amount=Decimal("50000"), approval_level=1)
         _create_rule("comp_test", "purchase_order", role_id=rol_cfo.id, max_amount=None, approval_level=2)
 
-        po_low = PurchaseOrder(id="po_low", company="comp_test", grand_total=Decimal("30000"), docstatus=0)
+        po_low = PurchaseOrder(id="po_low", company="comp_test", grand_total=Decimal("30000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po_low)
+        database.session.flush()
+        _add_po_item("po_low", rate=Decimal("30000"))
         database.session.commit()
 
         req_low = ApprovalEngine.request_approval(po_low)
@@ -323,8 +398,10 @@ def test_multilevel_approval_tiers(app):
         assert result is True
         assert req_low.status == "Approved"
 
-        po_high = PurchaseOrder(id="po_high", company="comp_test", grand_total=Decimal("100000"), docstatus=0)
+        po_high = PurchaseOrder(id="po_high", company="comp_test", grand_total=Decimal("100000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po_high)
+        database.session.flush()
+        _add_po_item("po_high", rate=Decimal("100000"))
         database.session.commit()
 
         req_high = ApprovalEngine.request_approval(po_high)
@@ -522,10 +599,14 @@ def test_approve_already_approved_request(app):
     with app.app_context():
         _enable_engine()
         user_juan = _create_user("juan")
+        _seed_party()
+        _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("50000"))
 
-        po = PurchaseOrder(id="po_already", company="comp_test", grand_total=Decimal("5000"), docstatus=0)
+        po = PurchaseOrder(id="po_already", company="comp_test", grand_total=Decimal("5000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po_already", rate=Decimal("5000"))
         database.session.commit()
 
         ApprovalEngine.request_approval(po)
@@ -598,10 +679,14 @@ def test_approval_action_on_approve(app):
     with app.app_context():
         _enable_engine()
         user_juan = _create_user("juan")
+        _seed_party()
+        _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
 
-        po = PurchaseOrder(id="po_audit", company="comp_test", grand_total=Decimal("12000"), docstatus=0)
+        po = PurchaseOrder(id="po_audit", company="comp_test", grand_total=Decimal("12000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po_audit", rate=Decimal("12000"))
         database.session.commit()
 
         ApprovalEngine.request_approval(po)
@@ -647,8 +732,10 @@ def test_execute_submit_purchase_request(app):
     """Prueba que _execute_submit para purchase_request hace docstatus=1 directo."""
     with app.app_context():
         user_juan = _create_user("juan")
-        pr = PurchaseRequest(id="pr_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0)
-        database.session.add(pr)
+        _seed_item()
+        pr = PurchaseRequest(id="pr_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1))
+        pr_item = PurchaseRequestItem(purchase_request_id="pr_exec", item_code="ITEM-TEST", qty=Decimal("1"), rate=Decimal("1000"), amount=Decimal("1000"))
+        database.session.add_all([pr, pr_item])
         database.session.commit()
 
         ApprovalEngine._execute_submit("purchase_request", pr, user_juan)
@@ -659,8 +746,12 @@ def test_execute_submit_purchase_order(app):
     """Prueba que _execute_submit para purchase_order hace docstatus=1 directo."""
     with app.app_context():
         user_juan = _create_user("juan")
-        po = PurchaseOrder(id="po_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0)
+        _seed_party()
+        _seed_item()
+        po = PurchaseOrder(id="po_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po_exec", rate=Decimal("1000"))
         database.session.commit()
 
         ApprovalEngine._execute_submit("purchase_order", po, user_juan)
@@ -727,10 +818,14 @@ def test_handle_submission_auto_approve(app):
     with app.app_context():
         _enable_engine()
         user_juan = _create_user("juan")
+        _seed_party()
+        _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("50000"))
 
-        po = PurchaseOrder(id="po_hs_auto", company="comp_test", grand_total=Decimal("5000"), docstatus=0)
+        po = PurchaseOrder(id="po_hs_auto", company="comp_test", grand_total=Decimal("5000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
         database.session.add(po)
+        database.session.flush()
+        _add_po_item("po_hs_auto", rate=Decimal("5000"))
         database.session.commit()
 
         with app.test_request_context():
@@ -819,11 +914,20 @@ def test_deferred_approval_rejects_changed_payment_snapshot(app):
 def test_final_payment_submission_revalidates_header(app):
     """Un pago diferido no puede aprobarse con encabezado inválido."""
     with app.app_context():
+        from cacao_accounting.database import Bank, BankAccount
+
+        bank = Bank(name="Bank Test")
+        database.session.add(bank)
+        database.session.flush()
+        bank_account = BankAccount(bank_id=bank.id, company="comp_test", account_name="Cuenta Test", currency="NIO")
+        database.session.add(bank_account)
+        database.session.flush()
         payment = PaymentEntry(
             company="comp_test",
             posting_date=date(2026, 6, 1),
             payment_type="pay",
             paid_amount=Decimal("0"),
+            bank_account_id=bank_account.id,
             docstatus=0,
         )
         with pytest.raises(ValueError, match="monto del pago"):

@@ -1686,7 +1686,14 @@ def test_cancel_document_rejects_closed_accounting_period(app_ctx):
 
 def test_compute_outstanding_amount_from_payment_references(app_ctx):
     from cacao_accounting.document_flow.service import compute_outstanding_amount
-    from cacao_accounting.database import PaymentReference, PurchaseInvoice, SalesInvoice, database
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PaymentEntry,
+        PaymentReference,
+        PurchaseInvoice,
+        SalesInvoice,
+        database,
+    )
 
     purchase_invoice = PurchaseInvoice(
         company="cacao",
@@ -1708,28 +1715,56 @@ def test_compute_outstanding_amount_from_payment_references(app_ctx):
     )
     database.session.add_all([purchase_invoice, sales_invoice])
     database.session.flush()
-    database.session.add_all(
-        [
-            PaymentReference(
-                payment_id="PAY-001",
-                reference_type="purchase_invoice",
-                reference_id=purchase_invoice.id,
-                total_amount=Decimal("100.00"),
-                outstanding_amount=Decimal("100.00"),
-                allocated_amount=Decimal("30.00"),
-                allocation_date=date(2026, 5, 4),
-            ),
-            PaymentReference(
-                payment_id="PAY-002",
-                reference_type="sales_invoice",
-                reference_id=sales_invoice.id,
-                total_amount=Decimal("150.00"),
-                outstanding_amount=Decimal("150.00"),
-                allocated_amount=Decimal("50.00"),
-                allocation_date=date(2026, 5, 4),
-            ),
-        ]
+
+    pay1 = PaymentEntry(company="cacao", posting_date=date(2026, 5, 4), payment_type="pay", docstatus=1)
+    pay2 = PaymentEntry(company="cacao", posting_date=date(2026, 5, 4), payment_type="receive", docstatus=1)
+    database.session.add_all([pay1, pay2])
+    database.session.flush()
+
+    ref1 = PaymentReference(
+        payment_id=pay1.id,
+        reference_type="purchase_invoice",
+        reference_id=purchase_invoice.id,
+        total_amount=Decimal("100.00"),
+        outstanding_amount=Decimal("100.00"),
+        allocated_amount=Decimal("30.00"),
+        allocation_date=date(2026, 5, 4),
     )
+    ref2 = PaymentReference(
+        payment_id=pay2.id,
+        reference_type="sales_invoice",
+        reference_id=sales_invoice.id,
+        total_amount=Decimal("150.00"),
+        outstanding_amount=Decimal("150.00"),
+        allocated_amount=Decimal("50.00"),
+        allocation_date=date(2026, 5, 4),
+    )
+    database.session.add_all([ref1, ref2])
+    database.session.flush()
+    database.session.add_all([
+        DocumentRelation(
+            source_type="purchase_invoice",
+            source_id=purchase_invoice.id,
+            target_type="payment_entry",
+            target_id=pay1.id,
+            target_item_id=ref1.id,
+            qty=Decimal("1"),
+            amount=Decimal("30"),
+            relation_type="payment_reference",
+            status="active",
+        ),
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=sales_invoice.id,
+            target_type="payment_entry",
+            target_id=pay2.id,
+            target_item_id=ref2.id,
+            qty=Decimal("1"),
+            amount=Decimal("50"),
+            relation_type="payment_reference",
+            status="active",
+        ),
+    ])
     database.session.commit()
 
     assert compute_outstanding_amount(purchase_invoice) == Decimal("70.00")
@@ -1738,7 +1773,13 @@ def test_compute_outstanding_amount_from_payment_references(app_ctx):
 
 def test_compute_outstanding_amount_as_of_date_filters_allocations(app_ctx):
     from cacao_accounting.document_flow.service import compute_outstanding_amount
-    from cacao_accounting.database import PaymentReference, SalesInvoice, database
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PaymentEntry,
+        PaymentReference,
+        SalesInvoice,
+        database,
+    )
 
     invoice = SalesInvoice(
         company="cacao",
@@ -1749,28 +1790,56 @@ def test_compute_outstanding_amount_as_of_date_filters_allocations(app_ctx):
     )
     database.session.add(invoice)
     database.session.flush()
-    database.session.add_all(
-        [
-            PaymentReference(
-                payment_id="PAY-001",
-                reference_type="sales_invoice",
-                reference_id=invoice.id,
-                total_amount=Decimal("200.00"),
-                outstanding_amount=Decimal("200.00"),
-                allocated_amount=Decimal("50.00"),
-                allocation_date=date(2026, 5, 1),
-            ),
-            PaymentReference(
-                payment_id="PAY-002",
-                reference_type="sales_invoice",
-                reference_id=invoice.id,
-                total_amount=Decimal("200.00"),
-                outstanding_amount=Decimal("150.00"),
-                allocated_amount=Decimal("25.00"),
-                allocation_date=date(2026, 5, 10),
-            ),
-        ]
+
+    pay1 = PaymentEntry(company="cacao", posting_date=date(2026, 5, 1), payment_type="receive", docstatus=1)
+    pay2 = PaymentEntry(company="cacao", posting_date=date(2026, 5, 10), payment_type="receive", docstatus=1)
+    database.session.add_all([pay1, pay2])
+    database.session.flush()
+
+    ref1 = PaymentReference(
+        payment_id=pay1.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        total_amount=Decimal("200.00"),
+        outstanding_amount=Decimal("200.00"),
+        allocated_amount=Decimal("50.00"),
+        allocation_date=date(2026, 5, 1),
     )
+    ref2 = PaymentReference(
+        payment_id=pay2.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        total_amount=Decimal("200.00"),
+        outstanding_amount=Decimal("150.00"),
+        allocated_amount=Decimal("25.00"),
+        allocation_date=date(2026, 5, 10),
+    )
+    database.session.add_all([ref1, ref2])
+    database.session.flush()
+    database.session.add_all([
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=pay1.id,
+            target_item_id=ref1.id,
+            qty=Decimal("1"),
+            amount=Decimal("50"),
+            relation_type="payment_reference",
+            status="active",
+        ),
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=pay2.id,
+            target_item_id=ref2.id,
+            qty=Decimal("1"),
+            amount=Decimal("25"),
+            relation_type="payment_reference",
+            status="active",
+        ),
+    ])
     database.session.commit()
 
     assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 4)) == Decimal("150.00")
@@ -1804,7 +1873,7 @@ def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_c
         outstanding_amount=Decimal("80.00"),
         docstatus=1,
     )
-    payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="receive")
+    payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", docstatus=1)
     database.session.add_all([purchase_credit_note, sales_debit_note, payment])
     database.session.flush()
 
@@ -2889,8 +2958,6 @@ def test_manual_stock_receipt_uses_adjustment_account_not_bridge(app_ctx):
         ItemAccount,
         StockEntry,
         StockEntryItem,
-        StockLedgerEntry,
-        StockValuationLayer,
         UOM,
         Warehouse,
         WarehouseCompanyAccount,

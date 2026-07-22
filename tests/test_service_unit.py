@@ -24,9 +24,7 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseReceipt,
-    PurchaseReceiptItem,
     Party,
-    DocumentRelation,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.document_flow.service import (
@@ -526,7 +524,6 @@ class TestListSourceDocuments:
 
 class TestRefreshSourceCachesForTarget:
     def test_updates_received_qty_for_purchase_receipt(self, app_ctx):
-        from cacao_accounting.document_flow.registry import normalize_doctype
 
         supplier = _get_supplier()
         po, item = _create_purchase_order(supplier, qty=Decimal("10"))
