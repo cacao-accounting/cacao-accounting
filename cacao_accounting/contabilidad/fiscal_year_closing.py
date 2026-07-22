@@ -17,8 +17,10 @@ from cacao_accounting.database import (
     ComprobanteContable,
     FiscalYear,
     GLEntry,
+    Book,
     database,
 )
+from cacao_accounting.ledger_queries import primary_ledger_id
 
 
 class FiscalYearClosingError(ValueError):
@@ -56,6 +58,9 @@ def calculate_closing_balances(company: str, fiscal_year: FiscalYear) -> list[di
             GLEntry.project_code,
         )
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        query = query.where(GLEntry.ledger_id == ledger_id)
 
     results = database.session.execute(query).all()
     balances = []
@@ -156,6 +161,15 @@ def _build_closing_voucher_payload(
 
     return {
         "company": company,
+        # Fiscal closing is an accounting operation, but it must explicitly
+        # post the same closing to every active book. The balance calculation
+        # above uses one canonical book to avoid multiplying N identical books.
+        "books": [
+            book.code
+            for book in database.session.execute(
+                select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
+            ).scalars()
+        ],
         "posting_date": fiscal_year.year_end_date.isoformat(),
         "reference": f"CIERRE-{fiscal_year.name}",
         "memo": f"Cierre contable automático del año fiscal {fiscal_year.name}",
