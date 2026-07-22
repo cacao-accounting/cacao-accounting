@@ -84,18 +84,26 @@ def verifica_permiso(modulo: str, accion: str):  # pragma: no cover
     return decorator_verifica_permiso
 
 
-def exige_acceso_compania(modulo: str, company: str | None, accion: str = "consultar") -> None:
+def exige_acceso_compania(
+    modulo: str, company: str | None, accion: str = "consultar", allow_unauthenticated: bool = False
+) -> None:
     """Enforce module/action access to at least one book of a company.
 
     Operational documents carry a company but not a user-specific company
     ACL. Company access is therefore derived from the user's authorized books;
     administrators retain global access.
+
+    Args:
+        modulo: Module name (e.g., "sales", "purchases", "accounting")
+        company: Company code to check access against
+        accion: Action type (consultar, crear, editar, autorizar, anular)
+        allow_unauthenticated: If True, allows internal services without authentication.
+                               Must be explicitly set; default is False to prevent
+                               accidental privilege escalation.
     """
-    # Public routes must apply ``login_required``/``verifica_acceso`` before
-    # calling this helper.  Domain tests and internal services can invoke the
-    # undecorated operation without a request user; there is no ACL to resolve
-    # in that context, so leave authentication to the route boundary.
     if not current_user.is_authenticated:
+        if not allow_unauthenticated:
+            abort(403)
         return
     module_id = obtener_id_modulo_por_nombre(modulo)
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
