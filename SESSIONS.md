@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-22 — Sincronización de README y script de desarrollo con cacaoctl
+
+### Petición
+
+Se solicitó actualizar `README.md` y `scripts/run_server.sh`, que todavía
+documentaban y ejecutaban los comandos retirados `cleandb`, `setupdb` y
+`flask run`.
+
+### Implementación
+
+- Se documentó el estado actual del núcleo contable, los módulos operativos,
+  los reportes, el flujo documental, Docker y la CLI `cacaoctl`.
+- Se actualizó el inventario de comandos a `db init|migrate|reset|clean|seed`,
+  `run`, `serve`, `shell`, `routes`, `version`, `status` y `config`.
+- `scripts/run_server.sh` ahora usa `cacaoctl --env test`, limpia y recrea la
+  base de datos con seed, conserva variables configurables y ejecuta el
+  servidor de desarrollo mediante `exec`.
+- Se mantuvo explícito que el script es destructivo y solo debe usarse con
+  datos locales/de prueba.
+
 ## 2026-07-22 — Contrato de anulación y reversión reconciliable
 
 ### Contexto y decisión contable
