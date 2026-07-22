@@ -101,7 +101,10 @@ def _module_for_document_type(document_type: str) -> str | None:
 def _require_document_read_access(document_type: str, document_id: str) -> Any:
     """Load a document and enforce its company-scoped read permission."""
     normalized_type = normalize_doctype(document_type)
-    document = get_document(normalized_type, document_id)
+    try:
+        document = get_document(normalized_type, document_id)
+    except (KeyError, ValueError):
+        abort(400)
     if not document:
         abort(404)
     module = _module_for_document_type(normalized_type)
