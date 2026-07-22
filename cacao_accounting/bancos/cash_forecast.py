@@ -111,9 +111,7 @@ def _handle_cash_forecast_new_post(company: str):
         return None
 
     existing = (
-        database.session.query(CashForecast)
-        .filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version)
-        .first()
+        database.session.query(CashForecast).filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version).first()
     )
     if existing:
         flash(f"La version '{version}' ya existe para este ao fiscal.", "danger")

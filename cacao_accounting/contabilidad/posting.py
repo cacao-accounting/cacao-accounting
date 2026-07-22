@@ -466,9 +466,7 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
                 # Allow tolerance for potential FX rounding when mixing multiple currencies
                 if len(currency_groups) == 1:
                     # Single currency must balance perfectly
-                    raise PostingError(
-                        "Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency)
-                    )
+                    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
                 # Multi-currency: each side must at least have entries
                 if (curr_debit == Decimal("0") and curr_credit == Decimal("0")) or (
                     (curr_debit > Decimal("0") and curr_credit == Decimal("0"))
@@ -476,9 +474,7 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
                 ):
                     pass  # Legitimate in cross-currency with FX entries
                 else:
-                    raise PostingError(
-                        "Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency)
-                    )
+                    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:

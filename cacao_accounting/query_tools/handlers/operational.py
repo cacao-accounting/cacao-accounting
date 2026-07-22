@@ -116,11 +116,15 @@ def search_payments(
     if payment_type:
         query = query.where(PaymentEntry.payment_type == payment_type)
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-    rows = database.session.execute(
-        query.order_by(PaymentEntry.posting_date.desc(), PaymentEntry.created.desc())
-        .offset((current_page - 1) * size)
-        .limit(size)
-    ).scalars().all()
+    rows = (
+        database.session.execute(
+            query.order_by(PaymentEntry.posting_date.desc(), PaymentEntry.created.desc())
+            .offset((current_page - 1) * size)
+            .limit(size)
+        )
+        .scalars()
+        .all()
+    )
     return _with_provenance(
         PaginatedResult(page=current_page, page_size=size, total_items=total, items=_payment_items(rows)).to_dict(),
         company_id,
@@ -223,9 +227,13 @@ def get_payment_applications(
     if document_id:
         query = query.where(PaymentReference.reference_id == document_id)
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-    rows = database.session.execute(
-        query.order_by(PaymentReference.allocation_date.desc()).offset((current_page - 1) * size).limit(size)
-    ).scalars().all()
+    rows = (
+        database.session.execute(
+            query.order_by(PaymentReference.allocation_date.desc()).offset((current_page - 1) * size).limit(size)
+        )
+        .scalars()
+        .all()
+    )
     items = [
         {
             "id": row.id,
@@ -285,9 +293,11 @@ def search_document_relations(
     if relation_type:
         query = query.where(DocumentRelation.relation_type == relation_type)
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-    rows = database.session.execute(
-        query.order_by(DocumentRelation.created.desc()).offset((current_page - 1) * size).limit(size)
-    ).scalars().all()
+    rows = (
+        database.session.execute(query.order_by(DocumentRelation.created.desc()).offset((current_page - 1) * size).limit(size))
+        .scalars()
+        .all()
+    )
     items = [
         {
             "id": row.id,
@@ -354,9 +364,11 @@ def search_audit_events(
     if end:
         query = query.where(func.date(AuditTrail.timestamp) <= end)
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-    rows = database.session.execute(
-        query.order_by(AuditTrail.timestamp.desc()).offset((current_page - 1) * size).limit(size)
-    ).scalars().all()
+    rows = (
+        database.session.execute(query.order_by(AuditTrail.timestamp.desc()).offset((current_page - 1) * size).limit(size))
+        .scalars()
+        .all()
+    )
     items = [
         {
             "id": row.id,
@@ -417,9 +429,13 @@ def get_revaluations(
     if currency:
         query = query.where(ExchangeRevaluation.currency == currency)
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-    rows = database.session.execute(
-        query.order_by(ExchangeRevaluation.run_date.desc()).offset((current_page - 1) * size).limit(size)
-    ).scalars().all()
+    rows = (
+        database.session.execute(
+            query.order_by(ExchangeRevaluation.run_date.desc()).offset((current_page - 1) * size).limit(size)
+        )
+        .scalars()
+        .all()
+    )
     items = [
         {
             "id": row.id,
