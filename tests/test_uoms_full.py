@@ -210,7 +210,6 @@ def test_uom_conversion_cycle(app_ctx):
 def test_item_uom_rows_persist_against_default_uom(app_ctx):
     from cacao_accounting.database import database
     from cacao_accounting.inventario.service import (
-        ItemAccountRow,
         ItemParams,
         ItemUOMRow,
         create_item_with_uoms,
@@ -240,7 +239,7 @@ def test_item_uom_rows_persist_against_default_uom(app_ctx):
 
 
 def test_service_item_requires_company_expense_account(app_ctx):
-    from cacao_accounting.inventario.service import ItemParams, ItemUOMRow, create_item_with_uoms
+    from cacao_accounting.inventario.service import ItemParams, create_item_with_uoms
 
     params = ItemParams(
         name="Servicio sin cuenta",

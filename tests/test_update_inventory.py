@@ -11,7 +11,6 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
-    CompanyDefaultAccount,
     DeliveryNote,
     Item,
     Party,
@@ -136,7 +135,7 @@ def test_submit_with_update_inventory_creates_delivery_note(app_ctx):
     database.session.add_all([invoice, invoice_item])
     database.session.commit()
 
-    response = client.post(f"/sales/sales-invoice/SI-INV-01/submit", follow_redirects=True)
+    response = client.post("/sales/sales-invoice/SI-INV-01/submit", follow_redirects=True)
     assert response.status_code == 200
 
     database.session.refresh(invoice)
@@ -184,7 +183,7 @@ def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
     database.session.add_all([invoice, invoice_item])
     database.session.commit()
 
-    response = client.post(f"/sales/sales-invoice/SI-INV-02/submit", follow_redirects=True)
+    response = client.post("/sales/sales-invoice/SI-INV-02/submit", follow_redirects=True)
     assert response.status_code == 200
 
     database.session.refresh(invoice)
@@ -227,12 +226,12 @@ def test_cancel_with_update_inventory_cancels_linked_dn(app_ctx):
     database.session.add_all([invoice, invoice_item])
     database.session.commit()
 
-    client.post(f"/sales/sales-invoice/SI-INV-03/submit", follow_redirects=True)
+    client.post("/sales/sales-invoice/SI-INV-03/submit", follow_redirects=True)
     database.session.refresh(invoice)
     dn_id = invoice.delivery_note_id
     assert dn_id is not None
 
-    response = client.post(f"/sales/sales-invoice/SI-INV-03/cancel", follow_redirects=True)
+    response = client.post("/sales/sales-invoice/SI-INV-03/cancel", follow_redirects=True)
     assert response.status_code == 200
 
     database.session.refresh(invoice)
@@ -277,7 +276,7 @@ def test_submit_fails_when_item_has_no_default_warehouse(app_ctx):
     database.session.add_all([invoice, invoice_item])
     database.session.commit()
 
-    response = client.post(f"/sales/sales-invoice/SI-INV-04/submit", follow_redirects=True)
+    response = client.post("/sales/sales-invoice/SI-INV-04/submit", follow_redirects=True)
     assert response.status_code == 200
 
     database.session.refresh(invoice)

@@ -176,6 +176,8 @@ def test_entity_search_select_can_include_inactive_for_admin(app_ctx):
 
 def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeypatch):
     """La búsqueda de compañías no devuelve entidades fuera del alcance del usuario."""
+    import sys
+
     from cacao_accounting.database import Entity, User, database
 
     database.session.add(
@@ -188,14 +190,17 @@ def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeyp
             enabled=True,
         )
     )
+    non_admin = User(id="USER-NON-ADMIN", user="nonadmin", name="Non Admin", password=b"x", classification="user", active=True)
+    database.session.add(non_admin)
     database.session.commit()
 
     monkeypatch.setattr(
-        "cacao_accounting.api.dashboard.user_can_access_company",
+        sys.modules["cacao_accounting.api.dashboard"],
+        "user_can_access_company",
         lambda user, company: company.code == "cacao",
     )
     client = app_ctx.test_client()
-    _login(client, User.query.filter_by(user="admin").first().id)
+    _login(client, non_admin.id)
     response = client.get("/api/search-select?doctype=company&q=&limit=20&include_inactive=true")
 
     assert response.status_code == 200
@@ -206,6 +211,8 @@ def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeyp
 
 def test_search_select_rejects_company_filter_outside_acl(app_ctx, monkeypatch):
     """Los doctypes con filtro company no permiten enumerar otra entidad."""
+    import sys
+
     from cacao_accounting.database import Entity, User, database
 
     database.session.add(
@@ -220,7 +227,8 @@ def test_search_select_rejects_company_filter_outside_acl(app_ctx, monkeypatch):
     )
     database.session.commit()
     monkeypatch.setattr(
-        "cacao_accounting.api.dashboard.user_can_access_company",
+        sys.modules["cacao_accounting.api.dashboard"],
+        "user_can_access_company",
         lambda user, company: company.code == "cacao",
     )
     client = app_ctx.test_client()

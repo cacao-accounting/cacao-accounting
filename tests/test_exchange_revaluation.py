@@ -224,6 +224,7 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
             party_type="customer",
             party_id="CUST-1",
             paid_amount=Decimal("100.00") - open_amount,
+            docstatus=1,
         )
         database.session.add(payment)
         database.session.flush()
