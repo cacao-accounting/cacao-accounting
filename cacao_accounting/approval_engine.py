@@ -181,6 +181,14 @@ class ApprovalEngine:
 
         return min(r.approval_level for r in covering_rules)
 
+    @staticmethod
+    def _assert_approval_snapshot(req: ApprovalRequest, document: Any) -> None:
+        """Reject approval when the document changed after its request."""
+        requested_at = getattr(req, "created_at", None)
+        modified_at = getattr(document, "modified", None)
+        if requested_at and modified_at and modified_at > requested_at:
+            raise ValueError("El documento cambió después de solicitar aprobación; debe enviarse nuevamente.")
+
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
         """Crea una solicitud de aprobación para el documento si no existe."""
@@ -308,6 +316,8 @@ class ApprovalEngine:
             return True
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError("La solicitud de aprobación no está en estado pendiente.")
+
+        cls._assert_approval_snapshot(req, document)
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
         applicable_rule = cls._find_applicable_rule(rules, amount, user, req.required_level)
