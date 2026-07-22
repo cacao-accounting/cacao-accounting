@@ -404,6 +404,7 @@ class BudgetService:
                 GLEntry.accounting_period_id == period_id,
                 GLEntry.account_id == resolved_account_id,
                 GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
             )
         )
         if resolved_ledger_id:
@@ -457,9 +458,8 @@ class BudgetService:
         resolved_cost_center_id = self._resolve_cost_center_id(company, cost_center_id)
         resolved_ledger_id = self._resolve_primary_ledger(company, ledger_id)
 
-        budgets = (
-            database.session.query(Budget)
-            .filter_by(company=company, fiscal_year_id=period.fiscal_year_id, status="approved")
+        budgets = database.session.query(Budget).filter_by(
+            company=company, fiscal_year_id=period.fiscal_year_id, status="approved"
         )
         if resolved_ledger_id:
             budgets = budgets.filter_by(ledger_id=resolved_ledger_id)
