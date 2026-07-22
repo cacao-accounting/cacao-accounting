@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseRequest,
     PaymentEntry,
+    SalesOrder,
 )
 from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -169,6 +170,41 @@ def test_approval_flow_draft_to_approved(app):
         assert is_fully_approved
         assert req.status == "Approved"
         assert po.docstatus == 1
+
+
+def test_pending_sales_order_does_not_reserve_inventory(app, monkeypatch):
+    """Una orden pendiente no ejecuta el hook de reserva de inventario."""
+    with app.app_context():
+        _enable_engine("comp_test")
+        requester = _create_user("requester")
+        approver = _create_user("approver")
+        _create_rule("comp_test", "sales_order", user_id=approver.id, max_amount=Decimal("5000"))
+
+        order = SalesOrder(
+            id="so-pending-reservation",
+            company="comp_test",
+            grand_total=Decimal("1000"),
+            docstatus=0,
+        )
+        database.session.add(order)
+        database.session.commit()
+
+        reservation_calls: list[str] = []
+
+        def reserve(_document):
+            reservation_calls.append(str(_document.id))
+
+        monkeypatch.setattr("cacao_accounting.ventas._validate_and_reserve_stock_for_sales_order", reserve)
+        monkeypatch.setattr(ApprovalEngine, "can_approve", staticmethod(lambda document, user: False))
+
+        assert ApprovalEngine.handle_submission(order, requester, "Orden de venta") is True
+        request = database.session.execute(
+            select(ApprovalRequest).filter_by(document_type="sales_order", document_id=order.id)
+        ).scalar_one()
+
+        assert request.status == "Pending Approval"
+        assert order.docstatus == 0
+        assert reservation_calls == []
 
 
 def test_approval_flow_rejection(app):
