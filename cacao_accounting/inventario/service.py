@@ -192,14 +192,14 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
 
 
 def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: str | None = None) -> StockRebuildResult:
-    """Reconstruye StockBin desde StockLedgerEntry append-only.
-    
-    Solo incluye entradas no canceladas para reflejar el estado actual del inventario.
-    Las entradas canceladas y sus contramovimientos se excluyen del cálculo.
+    """Reconstruye StockBin desde el ledger físico completo.
+
+    El cálculo suma tanto los movimientos originales como sus contramovimientos
+    de cancelación para obtener el neto algebraico real del inventario.
     """
     query = (
         select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse)
-        .filter_by(company=company, is_cancelled=False)
+        .filter_by(company=company)
     )
     if item_code:
         query = query.filter_by(item_code=item_code)
@@ -213,7 +213,7 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
             select(
                 func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
                 func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse, is_cancelled=False)
+            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
         ).one()
         qty = _decimal_value(totals[0])
         value = _decimal_value(totals[1])
