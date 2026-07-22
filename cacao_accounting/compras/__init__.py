@@ -465,6 +465,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
 @compras.route("/purchase-request/<request_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_solicitud_compra_submit(request_id: str):
     """Aprueba una solicitud de compra.
 
@@ -475,6 +476,7 @@ def compras_solicitud_compra_submit(request_id: str):
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -511,11 +513,13 @@ def compras_solicitud_compra_submit(request_id: str):
 @compras.route("/purchase-request/<request_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_solicitud_compra_cancel(request_id: str):
     """Cancela una solicitud de compra."""
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_request", request_id):
@@ -962,11 +966,13 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
 @compras.route("/supplier-quotation/<quotation_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_cotizacion_proveedor_submit(quotation_id: str):
     """Aprueba una cotizacion de proveedor."""
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -995,11 +1001,13 @@ def compras_cotizacion_proveedor_submit(quotation_id: str):
 @compras.route("/supplier-quotation/<quotation_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_cotizacion_proveedor_cancel(quotation_id: str):
     """Cancela una cotizacion de proveedor."""
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("supplier_quotation", quotation_id):
@@ -2332,6 +2340,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
 @compras.route("/request-for-quotation/<quotation_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_solicitud_cotizacion_submit(quotation_id: str):
     """Aprueba una solicitud de cotizacion.
 
@@ -2342,6 +2351,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2370,11 +2380,13 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
 @compras.route("/request-for-quotation/<quotation_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_solicitud_cotizacion_cancel(quotation_id: str):
     """Cancela una solicitud de cotizacion."""
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_quotation", quotation_id):
@@ -2403,11 +2415,13 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
 @compras.route("/purchase-order/<order_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_orden_compra_submit(order_id: str):
     """Aprueba una orden de compra."""
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2444,11 +2458,13 @@ def compras_orden_compra_submit(order_id: str):
 @compras.route("/purchase-order/<order_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_orden_compra_cancel(order_id: str):
     """Cancela una orden de compra."""
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_order", order_id):
@@ -2865,11 +2881,13 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_recepcion_submit(receipt_id: str):
     """Aprueba una recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2898,11 +2916,13 @@ def compras_recepcion_submit(receipt_id: str):
 @compras.route("/purchase-receipt/<receipt_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_recepcion_cancel(receipt_id: str):
     """Cancela una recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_receipt", receipt_id):
@@ -3862,11 +3882,13 @@ def compras_import_landed_cost(landed_cost_id: str):
 @compras.route("/import-landed-cost/<landed_cost_id>/submit", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "autorizar")
 def compras_import_landed_cost_submit(landed_cost_id: str):
     """Aprueba un costo de importacion."""
     registro = database.session.get(ImportLandedCost, landed_cost_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -3888,11 +3910,13 @@ def compras_import_landed_cost_submit(landed_cost_id: str):
 @compras.route("/import-landed-cost/<landed_cost_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "anular")
 def compras_import_landed_cost_cancel(landed_cost_id: str):
     """Cancela un costo de importacion."""
     registro = database.session.get(ImportLandedCost, landed_cost_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     try:
