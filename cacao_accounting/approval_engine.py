@@ -232,6 +232,41 @@ class ApprovalEngine:
             if database.session.execute(active_payment).scalars().first() is not None:
                 raise ValueError("La factura adquirió una aplicación de pago activa mientras esperaba aprobación.")
 
+    @staticmethod
+    def _validate_final_submission(doctype: str, document: Any) -> None:
+        """Repeat common document prerequisites immediately before submit."""
+        from cacao_accounting.document_flow.validation import validate_submit_prerequisites
+        from cacao_accounting.database import (
+            DeliveryNoteItem,
+            PurchaseInvoiceItem,
+            PurchaseReceiptItem,
+            SalesInvoiceItem,
+            SalesOrderItem,
+            StockEntryItem,
+            database as db,
+        )
+
+        item_models = {
+            "sales_order": (SalesOrderItem, "sales_order_id"),
+            "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
+            "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+            "purchase_receipt": (PurchaseReceiptItem, "purchase_receipt_id"),
+            "purchase_invoice": (PurchaseInvoiceItem, "purchase_invoice_id"),
+            "stock_entry": (StockEntryItem, "stock_entry_id"),
+        }
+        if doctype not in item_models:
+            return
+        item_model, foreign_key = item_models[doctype]
+        items = db.session.execute(db.select(item_model).filter_by(**{foreign_key: document.id})).scalars().all()
+        validate_submit_prerequisites(
+            document,
+            items=items,
+            require_party=doctype not in {"stock_entry", "delivery_note"},
+            require_rate_positive=doctype not in {"delivery_note", "stock_entry"},
+            require_amount_nonzero=doctype in {"sales_invoice", "purchase_invoice"},
+            require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
+        )
+
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
         """Crea una solicitud de aprobación para el documento si no existe."""
@@ -394,6 +429,8 @@ class ApprovalEngine:
         """Ejecuta de manera segura la submision de un documento con todos sus hooks."""
         from cacao_accounting.contabilidad.posting import submit_document
         from cacao_accounting.audit_trail_service import log_submit
+
+        cls._validate_final_submission(doctype, document)
 
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
