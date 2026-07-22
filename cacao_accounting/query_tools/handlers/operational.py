@@ -31,6 +31,20 @@ def _decimal(value: Any) -> str:
     return str(Decimal(str(value or 0)))
 
 
+def _with_provenance(result: dict[str, Any], company_id: str, **filters: Any) -> dict[str, Any]:
+    page = result.get("page") or {}
+    result["provenance"] = {
+        "company_id": company_id,
+        "filters": {key: value for key, value in filters.items() if value is not None},
+        "completeness": {
+            "truncated": bool(page.get("has_more")),
+            "returned_items": len(result.get("items", [])),
+            "total_items": page.get("total_items", len(result.get("items", []))),
+        },
+    }
+    return result
+
+
 _PAYMENT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -107,7 +121,14 @@ def search_payments(
         .offset((current_page - 1) * size)
         .limit(size)
     ).scalars().all()
-    return PaginatedResult(page=current_page, page_size=size, total_items=total, items=_payment_items(rows)).to_dict()
+    return _with_provenance(
+        PaginatedResult(page=current_page, page_size=size, total_items=total, items=_payment_items(rows)).to_dict(),
+        company_id,
+        date_from=date_from,
+        date_to=date_to,
+        party_id=party_id,
+        payment_type=payment_type,
+    )
 
 
 @query_tool(
@@ -151,12 +172,19 @@ def get_unapplied_payments(
         items.append(item)
     total = len(items)
     start_index = (current_page - 1) * size
-    return PaginatedResult(
-        page=current_page,
-        page_size=size,
-        total_items=total,
-        items=items[start_index : start_index + size],
-    ).to_dict()
+    return _with_provenance(
+        PaginatedResult(
+            page=current_page,
+            page_size=size,
+            total_items=total,
+            items=items[start_index : start_index + size],
+        ).to_dict(),
+        company_id,
+        date_from=date_from,
+        date_to=date_to,
+        party_id=party_id,
+        payment_type=payment_type,
+    )
 
 
 @query_tool(
@@ -216,7 +244,12 @@ def get_payment_applications(
         }
         for row in rows
     ]
-    return PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict()
+    return _with_provenance(
+        PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict(),
+        company_id,
+        payment_id=payment_id,
+        document_id=document_id,
+    )
 
 
 @query_tool(
@@ -271,7 +304,12 @@ def search_document_relations(
         }
         for row in rows
     ]
-    return PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict()
+    return _with_provenance(
+        PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict(),
+        company_id,
+        document_id=document_id,
+        relation_type=relation_type,
+    )
 
 
 @query_tool(
@@ -335,7 +373,14 @@ def search_audit_events(
         }
         for row in rows
     ]
-    return PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict()
+    return _with_provenance(
+        PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict(),
+        company_id,
+        document_id=document_id,
+        action=action,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @query_tool(
@@ -392,4 +437,9 @@ def get_revaluations(
         }
         for row in rows
     ]
-    return PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict()
+    return _with_provenance(
+        PaginatedResult(page=current_page, page_size=size, total_items=total, items=items).to_dict(),
+        company_id,
+        year=year,
+        currency=currency,
+    )
