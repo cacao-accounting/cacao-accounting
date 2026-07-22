@@ -596,7 +596,7 @@ def get_descendant_ids(node_class, node_id) -> list[str]:
 
 
 def _validate_and_fix_stock_bin_reserved_qty() -> None:
-    """Validates and corrects any StockBin records with negative reserved_qty.
+    """Validate and correct StockBin records with negative reserved_qty.
 
     CheckConstraint 'ck_stock_bin_reserved_non_negative' requires reserved_qty >= 0.
     This function ensures no data violates this constraint before the schema is fully applied.
