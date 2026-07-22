@@ -68,7 +68,7 @@ from cacao_accounting.document_identifiers import (
     PAYMENT_TYPE_TO_ENTITY_TYPE,
     assign_document_identifier,
 )
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import modulo_activo, verifica_permiso
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
@@ -2162,6 +2162,7 @@ def bancos_pago(payment_id):
 @bancos.route("/payment/<payment_id>/submit", methods=["POST"])
 @modulo_activo("cash")
 @login_required
+@verifica_permiso("cash", "autorizar")
 def bancos_pago_submit(payment_id: str):
     """Aprueba y contabiliza un pago."""
     registro = database.session.get(PaymentEntry, payment_id)
@@ -2189,6 +2190,7 @@ def bancos_pago_submit(payment_id: str):
 @bancos.route("/payment/<payment_id>/cancel", methods=["POST"])
 @modulo_activo("cash")
 @login_required
+@verifica_permiso("cash", "anular")
 def bancos_pago_cancel(payment_id: str):
     """Cancela un pago con reverso contable.
 

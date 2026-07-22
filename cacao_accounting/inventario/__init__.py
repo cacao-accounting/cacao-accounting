@@ -33,7 +33,7 @@ from cacao_accounting.contabilidad.posting import PostingError, cancel_document,
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import modulo_activo, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
@@ -1370,6 +1370,7 @@ def inventario_entrada_duplicar(entry_id: str):
 @inventario.route("/stock-entry/<entry_id>/submit", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "autorizar")
 def inventario_entrada_submit(entry_id: str):
     """Aprueba una entrada de almacen y genera Stock Ledger/GL.
 
@@ -1404,6 +1405,7 @@ def inventario_entrada_submit(entry_id: str):
 @inventario.route("/stock-entry/<entry_id>/cancel", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "anular")
 def inventario_entrada_cancel(entry_id: str):
     """Cancela una entrada de almacen."""
     registro = database.session.get(StockEntry, entry_id)

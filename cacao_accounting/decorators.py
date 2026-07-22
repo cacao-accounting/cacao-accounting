@@ -60,6 +60,24 @@ def verifica_acceso(modulo):  # pragma: no cover
     return decorator_verifica_acceso
 
 
+def verifica_permiso(modulo: str, accion: str):  # pragma: no cover
+    """Require a concrete action permission for a state-changing route."""
+
+    def decorator_verifica_permiso(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            module_id = obtener_id_modulo_por_nombre(modulo)
+            permisos = Permisos(modulo=module_id, usuario=current_user.id)
+            if getattr(permisos, accion, False):
+                return func(*args, **kwargs)
+            flash("No se encuentra autorizado para ejecutar esta acción.")
+            return abort(403)
+
+        return wrapper
+
+    return decorator_verifica_permiso
+
+
 def _libros_contables_solicitados(modulo: str) -> list[str]:
     """Extrae libros de la peticion solo para rutas del modulo contable."""
     if modulo != "accounting":
