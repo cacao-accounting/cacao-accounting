@@ -18,12 +18,13 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 
 ## Estado actual
 
-- En desarrollo activo en la rama `main` con base en Python 3.12, Flask y SQLAlchemy.
-- Arquitectura basada en blueprints por módulo: `auth`, `bancos`, `compras`, `ventas`, `inventario`, `contabilidad`, `document_flow`, `imports` y más.
-- Soporte inicial de AR/AP, pagos/cobros, conciliación, inventario con valuación, impuestos y reglas fiscales, documentos operativos, importaciones masivas y trazabilidad documental.
-- UI con Alpine.js, `smart-select` y diseño de formularios transaccionales compartidos.
-- Internacionalización preparada para `es` y `en`.
-- Calidad integrada con `black`, `ruff`, `flake8`, `mypy`, `pydocstyle` y `pytest`.
+- En desarrollo activo sobre Python 3.12+, Flask, SQLAlchemy y Alpine.js.
+- Arquitectura basada en blueprints por módulo, con servicios y repositorios para la lógica de negocio y el acceso a datos.
+- El núcleo contable usa `GLEntry` como fuente única de verdad, soporta múltiples libros, multimoneda, reversas y cierre de períodos.
+- Están integrados los flujos de compras (S2P), ventas (O2C), bancos, inventario, impuestos, AR/AP, importaciones masivas y trazabilidad documental.
+- La interfaz usa formularios transaccionales compartidos, `smart-select`, reportes financieros/operativos y acciones derivadas administradas por `document_flow`.
+- La CLI oficial `cacaoctl` administra base de datos, servidor, diagnóstico y desarrollo.
+- El proyecto sigue en desarrollo y no está listo para uso en producción.
 
 > Nota: el proyecto sigue siendo de desarrollo y no está listo para uso en producción.
 
@@ -37,6 +38,8 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 - Motor fiscal unificado para preview y persistencia de reglas fiscales.
 - Proceso de importación masiva de datos y documentos operativos.
 - Revalorización cambiaria auditada y soporte para múltiples libros/ledgers.
+- Cancelaciones y reversas append-only, con reportes que excluyen los movimientos anulados por defecto.
+- Docker con Caddy como proxy, Waitress como servidor WSGI y migraciones Alembic idempotentes.
 
 ## Uso recomendado para desarrolladores
 
@@ -44,15 +47,27 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 - Activar el entorno: `source .venv/bin/activate`
 - Instalar dependencias: `pip install -r requirements.txt`
 - Para habilitar características en la nube (como validación MIME segura en la subida de archivos), instale las dependencias opcionales: `pip install cacao-accounting[cloud]`
-- Ejecutar pruebas: `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest -v -s --exitfirst --slow=True`
+- Ejecutar pruebas: `CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --tb=line --quiet --disable-warnings --slow=True`
 
 ## CLI - cacaoctl
 
 `cacaoctl` es la interfaz de línea de comandos oficial para administrar Cacao Accounting.
 
 ```bash
-# Inicializar la base de datos
+# Crear la base de datos (idempotente)
 cacaoctl db init
+
+# Aplicar migraciones pendientes (idempotente)
+cacaoctl db migrate
+
+# Crear la base de datos con datos de ejemplo
+cacaoctl db init --seed
+
+# Recrear la base de datos; solicita confirmación si no se usa --force
+cacaoctl db reset
+
+# Eliminar la base de datos solo en desarrollo
+cacaoctl db clean
 
 # Iniciar servidor de desarrollo
 cacaoctl run
@@ -68,9 +83,27 @@ cacaoctl config
 
 # Consola interactiva con contexto de la aplicación
 cacaoctl shell
+
+# Listar rutas registradas
+cacaoctl routes
 ```
 
-Para más detalles, consulta la [documentación de cacaoctl](docs/cacaoctl.md).
+Las opciones globales `--env dev|test|prod`, `--verbose` y `--quiet` deben
+colocarse antes del comando, por ejemplo `cacaoctl --env test db init --seed`.
+`db reset` y `db clean` son operaciones destructivas; `--force` omite la
+confirmación. Para el detalle completo, consulta la [documentación de cacaoctl](docs/cacaoctl.md).
+
+### Arranque local rápido
+
+El script [`scripts/run_server.sh`](scripts/run_server.sh) está destinado
+únicamente al desarrollo local: reinicia la base de datos de prueba, carga
+datos de ejemplo y ejecuta `cacaoctl run` en `127.0.0.1:8080`. Se pueden
+personalizar `CACAO_HOST`, `CACAO_PORT`, `CACAO_USER`, `CACAO_PSWD` y
+`SECRET_KEY` mediante variables de entorno.
+
+Para un servidor WSGI usa `cacaoctl serve`. En Docker, el entrypoint ejecuta
+`cacaoctl db init` y `cacaoctl db migrate` de forma idempotente antes de
+arrancar la aplicación.
 
 ## Demo online
 
