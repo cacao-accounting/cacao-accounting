@@ -102,8 +102,7 @@ def test_validate_company_access_denied_by_context(app_instance):
 
 def test_validate_company_access_nonexistent(app_instance):
     with app_instance.app_context():
-        # company_ids is empty (has access to all), but company does not exist in DB
-        ctx = QueryContext(user_id="user1", company_ids=[])
+        ctx = QueryContext(user_id="user1", company_ids=[], allow_all_companies=True)
         with pytest.raises(QueryToolError) as exc:
             validate_company_access(ctx, "nonexistent_company_code")
         assert exc.value.code == ErrorCode.COMPANY_ACCESS_DENIED
@@ -112,9 +111,17 @@ def test_validate_company_access_nonexistent(app_instance):
 
 def test_validate_company_access_success(app_instance):
     with app_instance.app_context():
-        ctx = QueryContext(user_id="user1", company_ids=[])
+        ctx = QueryContext(user_id="user1", company_ids=["cacao"])
         # "cacao" company exists from init_test_db/setup
         validate_company_access(ctx, "cacao")
+
+
+def test_empty_company_scope_is_fail_closed(app_instance):
+    with app_instance.app_context():
+        ctx = QueryContext(user_id="user1", company_ids=[])
+        with pytest.raises(QueryToolError) as exc:
+            validate_company_access(ctx, "cacao")
+        assert exc.value.code == ErrorCode.COMPANY_ACCESS_DENIED
 
 
 def test_validate_module_active_not_available(app_instance):

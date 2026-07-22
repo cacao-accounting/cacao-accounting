@@ -36,7 +36,9 @@ def list_companies(
 
     query = database.select(Entity)
 
-    if context.company_ids:
+    if context.allow_all_companies:
+        query = query.where(Entity.enabled.is_(True))
+    else:
         query = query.where(Entity.code.in_(context.company_ids))
 
     total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar() or 0
