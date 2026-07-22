@@ -187,10 +187,25 @@ def api_search_select():
     filters = {
         key: request.args.getlist(key) for key in request.args if key not in reserved_params and request.args.getlist(key)
     }
+    from cacao_accounting.api.dashboard import user_can_access_company
+
+    requested_companies = {str(value) for value in filters.get("company", []) if str(value).strip()}
+    if requested_companies:
+        companies = (
+            database.session.execute(
+                database.select(Entity).where(Entity.code.in_(requested_companies) | Entity.id.in_(requested_companies))
+            )
+            .scalars()
+            .all()
+        )
+        all_known = all(
+            any(str(company.code) == value or str(company.id) == value for company in companies)
+            for value in requested_companies
+        )
+        if not all_known or any(not user_can_access_company(current_user, company) for company in companies):
+            abort(403)
     company_scope: set[str] | None = None
     if doctype == "company":
-        from cacao_accounting.api.dashboard import user_can_access_company
-
         include_inactive = any(
             value.strip().lower() in {"1", "true", "yes", "on"} for value in filters.get("include_inactive", [])
         )
