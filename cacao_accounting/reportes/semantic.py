@@ -23,6 +23,8 @@ from cacao_accounting.database import (
     PurchaseInvoiceItem,
     SalesInvoice,
     SalesInvoiceItem,
+    StockEntry,
+    StockEntryItem,
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
@@ -313,3 +315,40 @@ def get_inventory_turnover_analysis(
         get_inventory_turnover(OperationalReportFilters(company=company, date_from=start, date_to=end)), company
     )
     return rows[(offset or 0) : (offset or 0) + limit] if limit is not None else rows[(offset or 0) :]
+
+
+def get_inventory_transfer_analysis(
+    company: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return one governed row per material-transfer line."""
+    if not company:
+        return []
+    query = (
+        select(StockEntry, StockEntryItem)
+        .join(StockEntryItem, StockEntryItem.stock_entry_id == StockEntry.id)
+        .where(StockEntry.company == company, StockEntry.purpose == "material_transfer", StockEntry.docstatus != 2)
+    )
+    if date_from:
+        query = query.where(StockEntry.posting_date >= date_from)
+    if date_to:
+        query = query.where(StockEntry.posting_date <= date_to)
+    query = _bounded(query.order_by(StockEntry.posting_date, StockEntry.id, StockEntryItem.id), limit, offset)
+    return [
+        {
+            "transfer_id": entry.id,
+            "document_number": entry.document_no or entry.id,
+            "date": entry.posting_date,
+            "company_code": entry.company,
+            "item_code": line.item_code,
+            "from_warehouse": line.source_warehouse or entry.from_warehouse,
+            "to_warehouse": line.target_warehouse or entry.to_warehouse,
+            "quantity": _decimal(line.qty_in_base_uom or line.qty),
+            "uom": line.uom,
+            "status": {0: "draft", 1: "submitted", 2: "cancelled"}.get(entry.docstatus, "unknown"),
+        }
+        for entry, line in database.session.execute(query).all()
+    ]
