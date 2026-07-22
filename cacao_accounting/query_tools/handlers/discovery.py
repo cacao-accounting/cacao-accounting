@@ -6,7 +6,20 @@ from typing import Any
 
 from sqlalchemy import or_
 
-from cacao_accounting.database import BankAccount, Book, CompanyParty, Currency, Item, Party, Warehouse, database
+from cacao_accounting.database import (
+    BankAccount,
+    Book,
+    CompanyParty,
+    CostCenter,
+    Currency,
+    DimensionType,
+    DimensionValue,
+    Item,
+    Party,
+    UOM,
+    Warehouse,
+    database,
+)
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
@@ -217,3 +230,105 @@ def list_currencies(*, context: QueryContext, company_id: str, page: int = 1, pa
         total,
         company_id,
     )
+
+
+@query_tool(
+    "dimensions.list",
+    "Lista tipos de dimensión analítica activos.",
+    required_module="accounting",
+    required_permission="accounting.reports.read",
+    parameters_schema=_SCHEMA,
+)
+def list_dimensions(
+    *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
+) -> dict[str, Any]:
+    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    current, size = _page(page, page_size)
+    statement = database.select(DimensionType).where(DimensionType.is_active.is_(True))
+    if query:
+        statement = statement.where(DimensionType.name.ilike(f"%{query}%"))
+    total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
+    rows = database.session.execute(statement.order_by(DimensionType.name).offset((current - 1) * size).limit(size)).scalars()
+    return _result(current, size, [{"id": row.id, "name": row.name} for row in rows], total, company_id)
+
+
+@query_tool(
+    "dimension_values.search",
+    "Busca valores de una dimensión por compañía.",
+    required_module="accounting",
+    required_permission="accounting.reports.read",
+    parameters_schema={
+        **_SCHEMA,
+        "properties": {**_SCHEMA["properties"], "dimension_type_id": {"type": "string"}},
+        "required": ["company_id", "dimension_type_id"],
+    },
+)
+def search_dimension_values(
+    *,
+    context: QueryContext,
+    company_id: str,
+    dimension_type_id: str,
+    query: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    current, size = _page(page, page_size)
+    statement = database.select(DimensionValue).where(
+        DimensionValue.dimension_type_id == dimension_type_id,
+        DimensionValue.is_active.is_(True),
+        or_(DimensionValue.company.is_(None), DimensionValue.company == company_id),
+    )
+    if query:
+        statement = statement.where(DimensionValue.value.ilike(f"%{query}%"))
+    total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
+    rows = database.session.execute(
+        statement.order_by(DimensionValue.value).offset((current - 1) * size).limit(size)
+    ).scalars()
+    return _result(
+        current,
+        size,
+        [{"id": row.id, "dimension_type_id": row.dimension_type_id, "value": row.value} for row in rows],
+        total,
+        company_id,
+    )
+
+
+@query_tool(
+    "cost_centers.list",
+    "Lista centros de costo activos de una compañía.",
+    required_module="accounting",
+    required_permission="accounting.reports.read",
+    parameters_schema=_SCHEMA,
+)
+def list_cost_centers(
+    *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
+) -> dict[str, Any]:
+    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    current, size = _page(page, page_size)
+    statement = database.select(CostCenter).where(CostCenter.entity == company_id, CostCenter.enabled.is_(True))
+    if query:
+        statement = statement.where(or_(CostCenter.code.ilike(f"%{query}%"), CostCenter.name.ilike(f"%{query}%")))
+    total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
+    rows = database.session.execute(statement.order_by(CostCenter.code).offset((current - 1) * size).limit(size)).scalars()
+    return _result(current, size, [{"id": row.id, "code": row.code, "name": row.name} for row in rows], total, company_id)
+
+
+@query_tool(
+    "uoms.list",
+    "Lista unidades de medida activas.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema=_SCHEMA,
+)
+def list_uoms(
+    *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
+) -> dict[str, Any]:
+    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    current, size = _page(page, page_size)
+    statement = database.select(UOM).where(UOM.is_active.is_(True))
+    if query:
+        statement = statement.where(or_(UOM.code.ilike(f"%{query}%"), UOM.name.ilike(f"%{query}%")))
+    total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
+    rows = database.session.execute(statement.order_by(UOM.code).offset((current - 1) * size).limit(size)).scalars()
+    return _result(current, size, [{"id": row.id, "code": row.code, "name": row.name} for row in rows], total, company_id)
