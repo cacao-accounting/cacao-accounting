@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from cacao_accounting.query_tools.context import QueryContext
@@ -23,6 +24,7 @@ from cacao_accounting.reportes.services import (
     get_kardex,
     get_inventory_existence as get_inventory_existence_report,
     get_bank_balance_summary,
+    get_reconciliation_report,
     get_ar_ap_subledger,
     get_batch_report,
     get_serial_report,
@@ -416,6 +418,36 @@ def get_banking_balance_summary(
         page_size=page_size,
     )
     report = get_bank_balance_summary(filters)
+    return _report_result(report, company_id, filters)
+
+
+@query_tool(
+    "banking.get_reconciliation_status",
+    "Obtiene el estado de conciliaciones bancarias y pendientes de compras.",
+    required_module="cash",
+    required_permission="banking.reports.read",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "company_id": {"type": "string"},
+            "as_of_date": {"type": "string", "format": "date"},
+            "page": {"type": "integer", "minimum": 1, "default": 1},
+            "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
+        },
+        "required": ["company_id"],
+    },
+)
+def get_banking_reconciliation_status(
+    *,
+    context: QueryContext,
+    company_id: str,
+    as_of_date: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "banking.reports.read", "cash", company_id)
+    report = get_reconciliation_report(company_id, _date(as_of_date))
+    filters = SimpleNamespace(as_of_date=as_of_date, page=page, page_size=page_size)
     return _report_result(report, company_id, filters)
 
 
