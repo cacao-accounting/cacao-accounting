@@ -12,6 +12,7 @@ from cacao_accounting.audit_trail_service import log_comment, log_task_event
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import DocumentTask, User, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -242,6 +243,9 @@ def _document_for_collaboration(document_type: str, document_id: str, user_id: s
     if document is None:
         raise CollaborationError("Documento no encontrado.", 404)
     _require_document_permission(doctype, user_id)
+    spec = DOCUMENT_TYPES[doctype]
+    module_name = spec.permission_module or spec.module
+    exige_acceso_compania(module_name, _document_company(document), "consultar")
     return document
 
 
