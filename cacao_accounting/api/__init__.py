@@ -75,7 +75,14 @@ def _require_flow_company_access(payload: dict[str, Any], action: str = "crear")
     source = get_document(source_type, source_id) if source_type and source_id else None
     if not source:
         abort(404)
-    module = {
+    module = _module_for_document_type(source_type)
+    if module:
+        exige_acceso_compania(module, getattr(source, "company", None), action)
+
+
+def _module_for_document_type(document_type: str) -> str | None:
+    """Map a document-flow type to its operational ACL module."""
+    return {
         "sales_request": "sales",
         "sales_quotation": "sales",
         "sales_order": "sales",
@@ -88,9 +95,7 @@ def _require_flow_company_access(payload: dict[str, Any], action: str = "crear")
         "purchase_receipt": "purchases",
         "purchase_invoice": "purchases",
         "stock_entry": "inventory",
-    }.get(source_type)
-    if module:
-        exige_acceso_compania(module, getattr(source, "company", None), action)
+    }.get(document_type)
 
 
 def token_requerido(f):  # pragma: no cover
@@ -492,6 +497,7 @@ def api_inventory_stock_bin_snapshot():
     warehouse = request.args.get("warehouse") or ""
     if not company or not item_code or not warehouse:
         abort(400)
+    exige_acceso_compania("inventory", company, "consultar")
     bin_row = (
         database.session.execute(
             database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
@@ -607,6 +613,12 @@ def api_document_flow_tree():
 def _source_items_or_abort(source_type: str, source_id: str):
     """Get source items or abort with error status."""
     try:
+        source = get_document(normalize_doctype(source_type), source_id)
+        if not source:
+            abort(404)
+        module = _module_for_document_type(normalize_doctype(source_type))
+        if module:
+            exige_acceso_compania(module, getattr(source, "company", None), "consultar")
         return get_source_items(source_type, source_id, request.args.get("target_type"))
     except DocumentFlowError as exc:
         abort(exc.status_code)
