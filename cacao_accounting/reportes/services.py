@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
@@ -420,6 +420,47 @@ def get_negative_stock(filters: OperationalReportFilters) -> PaginatedReport:
         rows=rows,
         totals={"shortage_qty": sum((row.values["shortage_qty"] for row in rows), Decimal("0"))},
         columns=["item_code", "warehouse", "actual_qty", "shortage_qty", "valuation_rate", "stock_value"],
+    )
+
+
+def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
+    """Detecta existencias por debajo del mínimo o punto de reorden configurado."""
+    query = (
+        select(StockBin, Item)
+        .join(Item, Item.code == StockBin.item_code)
+        .where(
+            StockBin.company == filters.company,
+            Item.is_active.is_(True),
+            or_(
+                and_(Item.reorder_level.is_not(None), StockBin.actual_qty <= Item.reorder_level),
+                and_(Item.min_stock_qty.is_not(None), StockBin.actual_qty <= Item.min_stock_qty),
+            ),
+        )
+    )
+    if filters.item_code:
+        query = query.where(StockBin.item_code == filters.item_code)
+    if filters.warehouse:
+        query = query.where(StockBin.warehouse == filters.warehouse)
+    rows = []
+    for stock, item in database.session.execute(query.order_by(StockBin.item_code, StockBin.warehouse)).all():
+        reorder_level = item.reorder_level if item.reorder_level is not None else item.min_stock_qty
+        rows.append(
+            ReportRow(
+                values={
+                    "item_code": stock.item_code,
+                    "item_name": item.name,
+                    "warehouse": stock.warehouse,
+                    "actual_qty": _decimal_value(stock.actual_qty),
+                    "reorder_level": _decimal_value(reorder_level),
+                    "shortage_qty": max(_decimal_value(reorder_level) - _decimal_value(stock.actual_qty), Decimal("0")),
+                    "stock_value": _decimal_value(stock.stock_value),
+                }
+            )
+        )
+    return PaginatedReport(
+        rows=rows,
+        totals={"shortage_qty": sum((row.values["shortage_qty"] for row in rows), Decimal("0"))},
+        columns=["item_code", "item_name", "warehouse", "actual_qty", "reorder_level", "shortage_qty", "stock_value"],
     )
 
 

@@ -24,6 +24,7 @@ from cacao_accounting.reportes.services import (
     get_income_statement_report,
     get_inventory_valuation,
     get_negative_stock,
+    get_reorder_alerts,
     get_slow_moving_items,
     get_inventory_turnover,
     get_kardex,
@@ -506,6 +507,37 @@ def get_inventory_negative_stock(
         page_size=page_size,
     )
     return _report_result(get_negative_stock(filters), company_id, filters)
+
+
+@query_tool(
+    "inventory.get_reorder_alerts",
+    "Detecta artículos por debajo del mínimo o punto de reorden configurado.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema=_operational_schema(),
+)
+def get_inventory_reorder_alerts(
+    *,
+    context: QueryContext,
+    company_id: str,
+    item_code: str | None = None,
+    warehouse: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    filters = _operational(
+        context,
+        company_id,
+        "inventory.reports.read",
+        "inventory",
+        None,
+        None,
+        item_code=item_code,
+        warehouse=warehouse,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_reorder_alerts(filters), company_id, filters)
 
 
 @query_tool(
