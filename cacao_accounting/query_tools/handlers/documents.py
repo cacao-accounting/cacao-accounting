@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import func
 
 from cacao_accounting.database import DocumentRelation, database
+from cacao_accounting.reportes.documentos import get_document_details, get_document_lines, get_document_status
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import (
@@ -94,3 +95,65 @@ def get_document_flow(
         items=items,
     )
     return result.to_dict()
+
+
+_DOCUMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "company_id": {"type": "string"},
+        "document_type": {"type": "string", "enum": ["sales_invoice", "purchase_invoice", "payment_entry"]},
+        "document_id": {"type": "string"},
+    },
+    "required": ["company_id", "document_type", "document_id"],
+}
+
+
+def _document_context(context: QueryContext, company_id: str) -> None:
+    validate_permission(context, "documents.reports.read", "documents", company_id)
+
+
+@query_tool(
+    "documents.get_details",
+    "Obtiene un DTO controlado de una factura o pago.",
+    required_permission="documents.reports.read",
+    parameters_schema=_DOCUMENT_SCHEMA,
+)
+def get_document_details_handler(
+    *, context: QueryContext, company_id: str, document_type: str, document_id: str
+) -> dict[str, Any]:
+    _document_context(context, company_id)
+    item = get_document_details(company_id, document_type, document_id)
+    return {"item": item, "found": item is not None, "provenance": {"company_id": company_id}}
+
+
+@query_tool(
+    "documents.get_lines",
+    "Obtiene líneas controladas de una factura; los pagos no tienen líneas.",
+    required_permission="documents.reports.read",
+    parameters_schema=_DOCUMENT_SCHEMA,
+)
+def get_document_lines_handler(
+    *, context: QueryContext, company_id: str, document_type: str, document_id: str
+) -> dict[str, Any]:
+    _document_context(context, company_id)
+    items = get_document_lines(company_id, document_type, document_id)
+    return {
+        "items": items or [],
+        "found": items is not None,
+        "page": {"number": 1, "size": len(items or []), "total_items": len(items or []), "has_more": False},
+        "provenance": {"company_id": company_id},
+    }
+
+
+@query_tool(
+    "documents.get_status",
+    "Obtiene el estado contable controlado de una factura o pago.",
+    required_permission="documents.reports.read",
+    parameters_schema=_DOCUMENT_SCHEMA,
+)
+def get_document_status_handler(
+    *, context: QueryContext, company_id: str, document_type: str, document_id: str
+) -> dict[str, Any]:
+    _document_context(context, company_id)
+    item = get_document_status(company_id, document_type, document_id)
+    return {"item": item, "found": item is not None, "provenance": {"company_id": company_id}}
