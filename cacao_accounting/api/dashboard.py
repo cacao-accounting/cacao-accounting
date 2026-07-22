@@ -40,7 +40,7 @@ from cacao_accounting.modulos import (
     MODULE_PURCHASES,
     MODULE_SALES,
 )
-from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
+from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries, primary_ledger_id
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -382,6 +382,9 @@ def get_sales_data(
 def _gl_query(company: str, start_date: date | None, end_date: date | None):
     """Crea query base de GL filtrada por compañía y fechas."""
     query = database.session.query(GLEntry).filter_by(company=company)
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
     return query
@@ -415,6 +418,9 @@ def _income_expense_balances(
         .filter(GLEntry.company == company, Accounts.entity == company)
         .filter(Accounts.classification.in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
     results = query.group_by(Accounts.classification).all()
@@ -445,6 +451,9 @@ def _accounting_monthly_result(
         .filter(GLEntry.company == company, Accounts.entity == company)
         .filter(Accounts.classification.in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
     rows = query.group_by("month", Accounts.classification).order_by("month").all()
@@ -469,8 +478,11 @@ def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None
         database.session.query(GLEntry.account_id, func.sum(GLEntry.debit - GLEntry.credit))
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
         .group_by(GLEntry.account_id)
-        .all()
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        results = results.filter(GLEntry.ledger_id == ledger_id)
+    results = results.all()
     return {row[0]: float(row[1] or 0) for row in results}
 
 

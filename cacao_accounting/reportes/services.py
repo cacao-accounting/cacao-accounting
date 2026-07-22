@@ -46,7 +46,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
 
 
 @dataclass(frozen=True)
@@ -1105,6 +1105,9 @@ def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | N
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        gl_balance_query = gl_balance_query.where(GLEntry.ledger_id == ledger_id)
     if as_of_date is not None:
         gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= as_of_date)
     return _decimal_value(database.session.execute(gl_balance_query).scalar_one())
