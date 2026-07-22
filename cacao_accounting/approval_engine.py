@@ -305,10 +305,16 @@ class ApprovalEngine:
         from cacao_accounting.database import (
             DeliveryNoteItem,
             PurchaseInvoiceItem,
+            PurchaseOrderItem,
+            PurchaseQuotationItem,
+            PurchaseRequestItem,
             PurchaseReceiptItem,
             SalesInvoiceItem,
+            SalesQuotationItem,
+            SalesRequestItem,
             SalesOrderItem,
             StockEntryItem,
+            SupplierQuotationItem,
             database as db,
         )
 
@@ -331,9 +337,15 @@ class ApprovalEngine:
             return
 
         item_models = {
+            "sales_request": (SalesRequestItem, "sales_request_id"),
+            "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
             "sales_order": (SalesOrderItem, "sales_order_id"),
             "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
             "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+            "purchase_request": (PurchaseRequestItem, "purchase_request_id"),
+            "purchase_quotation": (PurchaseQuotationItem, "purchase_quotation_id"),
+            "supplier_quotation": (SupplierQuotationItem, "supplier_quotation_id"),
+            "purchase_order": (PurchaseOrderItem, "purchase_order_id"),
             "purchase_receipt": (PurchaseReceiptItem, "purchase_receipt_id"),
             "purchase_invoice": (PurchaseInvoiceItem, "purchase_invoice_id"),
             "stock_entry": (StockEntryItem, "stock_entry_id"),
@@ -345,8 +357,8 @@ class ApprovalEngine:
         validate_submit_prerequisites(
             document,
             items=items,
-            require_party=doctype not in {"stock_entry", "delivery_note"},
-            require_rate_positive=doctype not in {"delivery_note", "stock_entry"},
+            require_party=doctype not in {"stock_entry", "delivery_note", "purchase_request"},
+            require_rate_positive=doctype not in {"delivery_note", "stock_entry", "sales_request", "purchase_request"},
             require_amount_nonzero=doctype in {"sales_invoice", "purchase_invoice"},
             require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
         )
