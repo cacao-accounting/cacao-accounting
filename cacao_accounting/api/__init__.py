@@ -44,6 +44,7 @@ from cacao_accounting.collaboration_service import (
     update_task_status,
 )
 from cacao_accounting.database import StockBin, database
+from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.service import get_source_items
@@ -65,6 +66,31 @@ api.register_blueprint(dashboard_api)
 rate_limit_blueprint(api)
 rate_limit_blueprint(line_import_bp)
 rate_limit_blueprint(dashboard_api)
+
+
+def _require_flow_company_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Authorize document-flow mutations against the source document company."""
+    source_type = normalize_doctype(str(payload.get("source_document_type") or payload.get("source_type") or ""))
+    source_id = str(payload.get("source_document_id") or payload.get("source_id") or "")
+    source = get_document(source_type, source_id) if source_type and source_id else None
+    if not source:
+        abort(404)
+    module = {
+        "sales_request": "sales",
+        "sales_quotation": "sales",
+        "sales_order": "sales",
+        "delivery_note": "sales",
+        "sales_invoice": "sales",
+        "purchase_request": "purchases",
+        "purchase_quotation": "purchases",
+        "supplier_quotation": "purchases",
+        "purchase_order": "purchases",
+        "purchase_receipt": "purchases",
+        "purchase_invoice": "purchases",
+        "stock_entry": "inventory",
+    }.get(source_type)
+    if module:
+        exige_acceso_compania(module, getattr(source, "company", None), action)
 
 
 def token_requerido(f):  # pragma: no cover
@@ -492,6 +518,7 @@ def api_document_flow_create_target():
     """Crea un documento destino desde lineas fuente seleccionadas."""
     try:
         payload = request.get_json(silent=True) or {}
+        _require_flow_company_access(payload, "crear")
         result = create_target_document(payload)
     except DocumentFlowError as exc:
         abort(exc.status_code)
@@ -505,6 +532,7 @@ def api_document_flow_create_target():
 def api_document_flow_close_line():
     """Cierra manualmente el saldo de una linea fuente."""
     payload = request.get_json(silent=True) or request.form.to_dict()
+    _require_flow_company_access(payload, "editar")
     try:
         state = close_line_balance(
             source_type=str(payload.get("source_document_type") or payload.get("source_type") or ""),
@@ -524,6 +552,7 @@ def api_document_flow_close_line():
 def api_document_flow_close_document():
     """Cierra saldos pendientes de un documento fuente completo."""
     payload = request.get_json(silent=True) or request.form.to_dict()
+    _require_flow_company_access(payload, "editar")
     try:
         states = close_document_balances(
             source_type=str(payload.get("source_document_type") or payload.get("source_type") or ""),
