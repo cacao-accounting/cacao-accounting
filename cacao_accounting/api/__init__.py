@@ -98,6 +98,18 @@ def _module_for_document_type(document_type: str) -> str | None:
     }.get(document_type)
 
 
+def _require_document_read_access(document_type: str, document_id: str) -> Any:
+    """Load a document and enforce its company-scoped read permission."""
+    normalized_type = normalize_doctype(document_type)
+    document = get_document(normalized_type, document_id)
+    if not document:
+        abort(404)
+    module = _module_for_document_type(normalized_type)
+    if module:
+        exige_acceso_compania(module, getattr(document, "company", None), "consultar")
+    return document
+
+
 def token_requerido(f):  # pragma: no cover
     """Decorador para proteger el acceso a la API vía tokens."""
 
@@ -587,6 +599,7 @@ def api_document_flow_close_document():
 @login_required
 def api_document_flow_recalculate_status(document_type: str, document_id: str):
     """Devuelve el estado documental calculado."""
+    _require_document_read_access(document_type, document_id)
     return jsonify({"status": document_status_payload(document_type, document_id)})
 
 
@@ -607,6 +620,7 @@ def api_document_flow_tree():
     document_id = request.args.get("document_id", "")
     if not document_type or not document_id:
         abort(400)
+    _require_document_read_access(document_type, document_id)
     if (request.args.get("legacy") or "").lower() in {"1", "true"}:
         return jsonify(document_flow_tree(document_type, document_id))
     direction = request.args.get("direction", "all")
@@ -625,12 +639,7 @@ def api_document_flow_tree():
 def _source_items_or_abort(source_type: str, source_id: str):
     """Get source items or abort with error status."""
     try:
-        source = get_document(normalize_doctype(source_type), source_id)
-        if not source:
-            abort(404)
-        module = _module_for_document_type(normalize_doctype(source_type))
-        if module:
-            exige_acceso_compania(module, getattr(source, "company", None), "consultar")
+        _require_document_read_access(source_type, source_id)
         return get_source_items(source_type, source_id, request.args.get("target_type"))
     except DocumentFlowError as exc:
         abort(exc.status_code)
@@ -651,11 +660,7 @@ def document_flow_related_list(doctype: str):
     related_doctype = normalize_doctype(request.args.get("related_doctype", ""))
     related_id = request.args.get("related_id", "")
 
-    related_doc = get_document(related_doctype, related_id) if related_doctype and related_id else None
-    if related_doc:
-        module = _module_for_document_type(related_doctype)
-        if module:
-            exige_acceso_compania(module, getattr(related_doc, "company", None), "consultar")
+    related_doc = _require_document_read_access(related_doctype, related_id) if related_doctype and related_id else None
     related_no = getattr(related_doc, "document_no", related_id) if related_doc else related_id
 
     related_spec = DOCUMENT_TYPES.get(related_doctype, None)
