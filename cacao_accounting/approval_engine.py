@@ -266,6 +266,44 @@ class ApprovalEngine:
             require_amount_nonzero=doctype in {"sales_invoice", "purchase_invoice"},
             require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
         )
+        if doctype == "sales_order" and not getattr(document, "is_return", False):
+            from cacao_accounting.ventas import _validate_credit_limit_and_overdue
+
+            _validate_credit_limit_and_overdue(document.company, document.customer_id, document.grand_total or Decimal("0"))
+        elif doctype == "sales_invoice":
+            from cacao_accounting.ventas import (
+                _validate_credit_limit_and_overdue,
+                _validate_invoice_prices_against_source,
+                _validate_sales_invoice_quantities,
+            )
+
+            if not getattr(document, "is_return", False):
+                _validate_credit_limit_and_overdue(
+                    document.company, document.customer_id, document.grand_total or Decimal("0")
+                )
+            _validate_sales_invoice_quantities(document.id)
+            _validate_invoice_prices_against_source(document)
+        elif doctype == "purchase_invoice":
+            from cacao_accounting.compras import (
+                _validate_duplicate_supplier_invoice,
+                _validate_invoice_requires_supplier_link,
+                _validate_invoice_quantities_against_receipt,
+                _validate_supplier_invoice_flags,
+            )
+
+            _validate_invoice_quantities_against_receipt(document.id)
+            _validate_invoice_requires_supplier_link(document.id)
+            _validate_supplier_invoice_flags(
+                document.supplier_id,
+                document.company,
+                document.purchase_order_id,
+                document.purchase_receipt_id,
+            )
+            _validate_duplicate_supplier_invoice(
+                document.supplier_id,
+                document.supplier_invoice_no,
+                exclude_id=document.id,
+            )
 
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
