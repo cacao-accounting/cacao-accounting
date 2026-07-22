@@ -38,6 +38,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "documents.get_details": "documents.read",
     "documents.get_lines": "documents.read",
     "documents.get_status": "documents.read",
+    "documents.get_related_documents": "documents.read",
     "audit.get_document_timeline": "audit.read",
     "accounting.get_income_statement": "accounting.read",
     "accounting.get_balance_sheet": "accounting.read",
