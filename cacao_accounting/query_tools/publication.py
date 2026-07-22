@@ -105,6 +105,7 @@ def permissions_for_scopes(scopes: set[str] | list[str]) -> set[str]:
 
 
 def published_tool_scope(tool_name: str) -> str | None:
+    """Return the external scope assigned to a published tool."""
     return TOOL_EXTERNAL_SCOPES.get(tool_name)
 
 

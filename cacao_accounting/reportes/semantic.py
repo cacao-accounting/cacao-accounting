@@ -219,6 +219,7 @@ def get_document_relations(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Return document relations visible to the requested company and range."""
     query = select(DocumentRelation)
     if company:
         query = query.where(DocumentRelation.company == company)
@@ -246,6 +247,7 @@ def get_audit_events(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Return audit events visible to the requested company and range."""
     query = select(AuditTrail)
     if company:
         query = query.where(AuditTrail.company == company)
@@ -279,6 +281,7 @@ def get_inventory_slow_moving_analysis(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Return bounded slow-moving inventory analysis for a company."""
     if not company:
         return []
     rows = _report_items(
@@ -294,6 +297,7 @@ def get_inventory_negative_analysis(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Return bounded negative-stock analysis for a company."""
     if not company:
         return []
     rows = _report_items(get_negative_stock(OperationalReportFilters(company=company)), company)
@@ -307,6 +311,7 @@ def get_inventory_turnover_analysis(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Return bounded inventory-turnover analysis for a company."""
     if not company:
         return []
     end = date_to or date.today()

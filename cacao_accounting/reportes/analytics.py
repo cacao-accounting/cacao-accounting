@@ -71,6 +71,7 @@ def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
 
 
 def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
+    """Calculate one approved metric for a company and date range."""
     if metric not in ALLOWED_METRICS:
         raise ValueError(f"Métrica no permitida: {metric}")
     if metric == "sales":
@@ -86,6 +87,7 @@ def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
 
 
 def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
+    """Build a read-only KPI snapshot for a company and date range."""
     gl = _gl_totals(company, start, end)
     sales = _invoice_total(SalesInvoice, company, start, end)
     purchases = _invoice_total(PurchaseInvoice, company, start, end)
@@ -138,6 +140,7 @@ def compare_periods(
     compare_start: date,
     compare_end: date,
 ) -> dict[str, Any]:
+    """Compare one approved metric across two date ranges."""
     current = metric_value(company, metric, base_start, base_end)
     previous = metric_value(company, metric, compare_start, compare_end)
     return {
@@ -151,6 +154,7 @@ def compare_periods(
 
 
 def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[str, Any]]:
+    """Return monthly values for one approved metric."""
     if metric not in ALLOWED_METRICS:
         raise ValueError(f"Métrica no permitida: {metric}")
     buckets: list[tuple[date, date]] = []
@@ -173,6 +177,7 @@ def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[st
 
 
 def get_concentration(company: str, dimension: str, start: date, end: date, limit: int = 10) -> list[dict[str, Any]]:
+    """Return the largest contributors for an approved dimension."""
     if dimension not in ALLOWED_DIMENSIONS:
         raise ValueError(f"Dimensión no permitida: {dimension}")
     totals: defaultdict[str, Decimal] = defaultdict(Decimal)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import func
 
@@ -60,7 +60,7 @@ _PAYMENT_SCHEMA = {
 }
 
 
-def _payment_items(rows: list[PaymentEntry]) -> list[dict[str, Any]]:
+def _payment_items(rows: list[PaymentEntry] | Sequence[PaymentEntry]) -> list[dict[str, Any]]:
     return [
         {
             "id": row.id,

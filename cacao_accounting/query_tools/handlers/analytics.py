@@ -44,7 +44,7 @@ def _envelope(payload: dict[str, Any], company_id: str, **filters: Any) -> dict[
     return payload
 
 
-_PERIOD_SCHEMA = {
+_PERIOD_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
