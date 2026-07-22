@@ -260,6 +260,67 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app_ctx):
+    """AP/AR solo concilia facturas contabilizadas y pagos vivos."""
+    from cacao_accounting.database import (
+        DocumentRelation,
+        PaymentEntry,
+        PaymentReference,
+        PurchaseInvoice,
+        database,
+    )
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    draft = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 1), grand_total=Decimal("40"), docstatus=0)
+    cancelled = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 1), grand_total=Decimal("60"), docstatus=2)
+    active = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        grand_total=Decimal("100"),
+        supplier_id="SUP-REPORT",
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        payment_type="pay",
+        paid_amount=Decimal("20"),
+        docstatus=2,
+    )
+    database.session.add_all([draft, cancelled, active, payment])
+    database.session.flush()
+    reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="purchase_invoice",
+        reference_id=active.id,
+        allocated_amount=Decimal("20"),
+        allocation_date=date(2026, 5, 2),
+        company="cacao",
+    )
+    database.session.add(reference)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_invoice",
+            source_id=active.id,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=reference.id,
+            company="cacao",
+            qty=Decimal("1"),
+            amount=Decimal("20"),
+            relation_type="payment_reference",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="supplier"))
+    assert [row.values["document_id"] for row in report.rows] == [active.id]
+    assert report.rows[0].values["paid_amount"] == Decimal("0")
+    assert report.rows[0].values["outstanding_amount"] == Decimal("100")
+
+
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     from cacao_accounting.database import PaymentReference, SalesInvoice, StockLedgerEntry, database
     from cacao_accounting.reportes.services import (
@@ -840,7 +901,8 @@ def test_financial_report_view_persistence_and_column_selection(app_ctx):
         session["_fresh"] = True
 
     response_save = client.get(
-        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=save&visible_columns=posting_date&visible_columns=account_code"
+        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=save&"
+        "visible_columns=posting_date&visible_columns=account_code"
     )
     assert response_save.status_code == 200
     preference = database.session.execute(
