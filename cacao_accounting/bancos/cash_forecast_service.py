@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     Entity,
 )
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+from cacao_accounting.ledger_queries import primary_ledger_id
 
 _EPOCH_DATE = date(1900, 1, 1)
 
@@ -131,8 +132,11 @@ def _compute_initial_balance(company: str, account_ids: list[str], first_start: 
             GLEntry.is_cancelled.is_(False),
             GLEntry.is_reversal.is_(False),
         )
-        .scalar()
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        init_val = init_val.filter(GLEntry.ledger_id == ledger_id)
+    init_val = init_val.scalar()
     return Decimal(str(init_val)) if init_val is not None else Decimal("0")
 
 
@@ -154,6 +158,9 @@ def _query_gl_sum(
         GLEntry.is_cancelled.is_(False),
         GLEntry.is_reversal.is_(False),
     ]
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        base_filters.append(GLEntry.ledger_id == ledger_id)
     if party_type_filter:
         base_filters.append(GLEntry.party_type == party_type_filter)
     elif exclude_party_types:

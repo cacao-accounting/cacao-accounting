@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.ledger_queries import primary_ledger_id
 
 ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
 ALLOWED_DIMENSIONS = frozenset({"customer", "supplier", "item"})
@@ -56,6 +57,9 @@ def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
             GLEntry.is_reversal.is_(False),
         )
     )
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        query = query.where(GLEntry.ledger_id == ledger_id)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():
         classification = (getattr(account, "classification", "") or "").lower()
