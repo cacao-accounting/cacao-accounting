@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     BudgetLine,
     CompanyParty,
     CostCenter,
+    DocumentRelation,
     GLEntry,
     Item,
     PaymentReference,
@@ -210,7 +211,23 @@ def _normalize_account_classification(account: Accounts | None) -> str:
 
 
 def _payment_allocations(reference_type: str, reference_id: str, as_of_date: date | None) -> Decimal:
-    query = select(PaymentReference).filter_by(reference_type=reference_type, reference_id=reference_id)
+    query = (
+        select(PaymentReference)
+        .join(
+            DocumentRelation,
+            and_(
+                DocumentRelation.target_type == "payment_entry",
+                DocumentRelation.target_item_id == PaymentReference.id,
+                DocumentRelation.status == "active",
+            ),
+        )
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentReference.reference_type == reference_type,
+            PaymentReference.reference_id == reference_id,
+            PaymentEntry.docstatus == 1,
+        )
+    )
     if as_of_date is not None:
         query = query.where(PaymentReference.allocation_date <= as_of_date)
     return sum(
@@ -224,13 +241,13 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     if filters.party_type == "customer":
         document_type = "sales_invoice"
         document_model = SalesInvoice
-        query = select(SalesInvoice).filter_by(company=filters.company)
+        query = select(SalesInvoice).filter_by(company=filters.company, docstatus=1)
         if filters.party_id:
             query = query.filter_by(customer_id=filters.party_id)
     elif filters.party_type == "supplier":
         document_type = "purchase_invoice"
         document_model = PurchaseInvoice
-        query = select(PurchaseInvoice).filter_by(company=filters.company)
+        query = select(PurchaseInvoice).filter_by(company=filters.company, docstatus=1)
         if filters.party_id:
             query = query.filter_by(supplier_id=filters.party_id)
     else:
