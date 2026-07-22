@@ -38,6 +38,9 @@ def test_discovery_and_composite_tools_are_published():
         "analytics.compare_periods",
         "analytics.get_trend",
         "analytics.get_concentration",
+        "treasury.forecasts.list",
+        "treasury.get_cash_forecast",
+        "treasury.compare_forecasts",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
