@@ -49,6 +49,8 @@ class SubledgerFilters:
     party_type: str
     party_id: str | None = None
     as_of_date: date | None = None
+    page: int = 1
+    page_size: int = 100
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,8 @@ class BankingFilters:
     date_from: date | None = None
     date_to: date | None = None
     as_of_date: date | None = None
+    page: int = 1
+    page_size: int = 100
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,8 @@ class OperationalReportFilters:
     party_id: str | None = None
     item_code: str | None = None
     warehouse: str | None = None
+    page: int = 1
+    page_size: int = 100
 
 
 @dataclass(frozen=True)
