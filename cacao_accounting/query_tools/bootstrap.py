@@ -16,6 +16,7 @@ _HANDLER_MODULES = (
     "advanced",
     "analytics",
     "operational",
+    "treasury",
 )
 
 
