@@ -132,6 +132,7 @@ class ProjectCapitalizationService:
                 GLEntry.company == company,
                 GLEntry.accounting_period_id == period_id,
                 GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
                 GLEntry.project_code.isnot(None),
                 Accounts.classification.in_(["Gastos", "expense", "gastos", "EXPENSE"]),
             )
