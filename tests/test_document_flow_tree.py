@@ -654,6 +654,35 @@ def test_api_document_flow_tree_devuelve_arbol(app):
     assert "meta" in data
 
 
+def test_lista_de_relaciones_revalida_acl_de_documentos_destino(app, monkeypatch):
+    """La lista relacionada no expone destinos sin validar su compañía."""
+    from cacao_accounting import api as api_module
+    from cacao_accounting.database import User, database
+
+    _seed_entity(database)
+    _seed_purchase_chain(database)
+    user = User(id="U-RELATED-ACL", user="relatedacl", name="Related ACL", password=b"x", classification="admin", active=True)
+    database.session.add(user)
+    database.session.commit()
+
+    checked: list[tuple[str, str, str]] = []
+
+    def record_access(module: str, company: str | None, action: str) -> None:
+        checked.append((module, str(company), action))
+
+    monkeypatch.setattr(api_module, "exige_acceso_compania", record_access)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "U-RELATED-ACL"
+        sess["_fresh"] = True
+
+    response = client.get("/document-flow/list/purchase_order?related_doctype=purchase_request&related_id=REQ-001")
+
+    assert response.status_code == 200
+    assert ("purchases", "TEST", "consultar") in checked
+    assert checked.count(("purchases", "TEST", "consultar")) >= 2
+
+
 def test_vista_comprobante_contable_renderiza_flujo_documental(app):
     """La vista de journal incluye la sección reusable de flujo documental."""
     from cacao_accounting.database import Modules, User, database
