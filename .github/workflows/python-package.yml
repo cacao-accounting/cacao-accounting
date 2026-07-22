@@ -55,7 +55,6 @@ jobs:
         run: npm test
 
   databases:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,7 +126,6 @@ jobs:
           SECRET_KEY=ASD123klj+aAddS LOGURU_LEVEL=WARNING CACAO_DB=postgresql+pg8000://cacao:cacao@localhost/cacao cacaoctl db init --seed
 
   desktop:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +161,6 @@ jobs:
           python -m pytest -qq -s --exitfirst --slow=True --tb=line
 
   coverage:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
