@@ -149,6 +149,7 @@ def _operational_schema() -> dict[str, Any]:
             "party_id": {"type": "string"},
             "item_code": {"type": "string"},
             "warehouse": {"type": "string"},
+            "bank_account_id": {"type": "string"},
         },
         "required": ["company_id"],
     }
