@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
@@ -457,7 +457,10 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
         for currency, curr_entries in currency_groups.items():
             curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
             curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
-            if abs(curr_debit - curr_credit) > Decimal("0.01"):
+            # A cross-currency transfer legitimately has one currency on the
+            # source side and another on the destination side; company-currency
+            # balancing (plus an explicit FX line) is authoritative there.
+            if curr_debit and curr_credit and abs(curr_debit - curr_credit) > Decimal("0.01"):
                 raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
 
 
@@ -1211,14 +1214,69 @@ def _create_payment_transfer_entries(
         _resolve_bank_gl_account_id(document, destination=True),
         "La transferencia interna requiere cuenta bancaria de destino.",
     )
-    return _normal_entries_for_amount(
-        context=context,
-        debit_account_id=to_account_id,
-        credit_account_id=from_account_id,
-        amount=amount,
-        debit_remarks="Transferencia interna entrada",
-        credit_remarks="Transferencia interna salida",
-    )
+    source_bank = database.session.get(BankAccount, document.bank_account_id)
+    target_bank = database.session.get(BankAccount, document.target_bank_account_id)
+    if not source_bank or not target_bank:
+        raise PostingError("La transferencia interna requiere cuentas bancarias válidas.")
+    source_currency = source_bank.currency
+    target_currency = target_bank.currency
+    if not source_currency or not target_currency:
+        raise PostingError("Ambas cuentas bancarias deben tener moneda configurada.")
+    company_currency = context.company_currency or source_currency
+    source_rate = _lookup_exchange_rate(source_currency, company_currency, context.posting_date)
+    target_rate = _lookup_exchange_rate(target_currency, company_currency, context.posting_date)
+    target_amount = _decimal_value(document.received_amount or amount)
+    source_company_amount = _to_company_currency(amount, source_rate)
+    target_company_amount = _to_company_currency(target_amount, target_rate)
+    debit_context = replace(context, transaction_currency=target_currency, exchange_rate=target_rate)
+    credit_context = replace(context, transaction_currency=source_currency, exchange_rate=source_rate)
+    entries = [
+        _create_gl_entry(
+            context=debit_context,
+            params=GLEntryParams(
+                account_id=to_account_id,
+                debit=target_company_amount,
+                credit=Decimal("0"),
+                debit_in_account_currency=target_amount,
+                bank_account_id=document.target_bank_account_id,
+                entry_remarks="Transferencia interna entrada",
+            ),
+        ),
+        _create_gl_entry(
+            context=credit_context,
+            params=GLEntryParams(
+                account_id=from_account_id,
+                debit=Decimal("0"),
+                credit=source_company_amount,
+                credit_in_account_currency=amount,
+                bank_account_id=document.bank_account_id,
+                entry_remarks="Transferencia interna salida",
+            ),
+        ),
+    ]
+    difference = source_company_amount - target_company_amount
+    if difference:
+        defaults = _company_defaults(context.company)
+        account_id = (
+            (defaults.exchange_loss_account_id if difference > 0 else defaults.exchange_gain_account_id) if defaults else None
+        )
+        account_id = _require_account(
+            account_id,
+            "La transferencia multimoneda requiere cuentas de ganancia/pérdida cambiaria configuradas.",
+        )
+        fx_context = replace(context, transaction_currency=context.company_currency, exchange_rate=Decimal("1"))
+        entries.append(
+            _create_gl_entry(
+                context=fx_context,
+                params=GLEntryParams(
+                    account_id=account_id,
+                    debit=difference if difference > 0 else Decimal("0"),
+                    credit=-difference if difference < 0 else Decimal("0"),
+                    entry_remarks="Diferencia cambiaria de transferencia interna",
+                ),
+            )
+        )
+    return entries
 
 
 def _create_bank_debit_note_entries(
