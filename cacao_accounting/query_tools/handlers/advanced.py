@@ -21,6 +21,9 @@ from cacao_accounting.reportes.services import (
     get_gross_margin,
     get_income_statement_report,
     get_inventory_valuation,
+    get_negative_stock,
+    get_slow_moving_items,
+    get_inventory_turnover,
     get_kardex,
     get_inventory_existence as get_inventory_existence_report,
     get_bank_balance_summary,
@@ -390,6 +393,112 @@ def get_inventory_serials(
     page_size: int = 100,
 ) -> dict[str, Any]:
     return _inventory_operational(context, company_id, get_serial_report, item_code, warehouse, page, page_size)
+
+
+@query_tool(
+    "inventory.get_negative_stock",
+    "Detecta existencias negativas por artículo y almacén.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema=_operational_schema(),
+)
+def get_inventory_negative_stock(
+    *,
+    context: QueryContext,
+    company_id: str,
+    item_code: str | None = None,
+    warehouse: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    filters = _operational(
+        context,
+        company_id,
+        "inventory.reports.read",
+        "inventory",
+        None,
+        None,
+        item_code=item_code,
+        warehouse=warehouse,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_negative_stock(filters), company_id, filters)
+
+
+@query_tool(
+    "inventory.get_slow_moving_items",
+    "Lista inventario con existencias y sin salidas durante un umbral.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema={
+        **_operational_schema(),
+        "properties": {
+            **_operational_schema()["properties"],
+            "inactivity_days": {"type": "integer", "minimum": 1, "maximum": 3650},
+        },
+    },
+)
+def get_inventory_slow_moving_items(
+    *,
+    context: QueryContext,
+    company_id: str,
+    date_to: str | None = None,
+    item_code: str | None = None,
+    warehouse: str | None = None,
+    inactivity_days: int = 90,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    filters = _operational(
+        context,
+        company_id,
+        "inventory.reports.read",
+        "inventory",
+        None,
+        date_to,
+        item_code=item_code,
+        warehouse=warehouse,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_slow_moving_items(filters, inactivity_days), company_id, filters)
+
+
+@query_tool(
+    "inventory.get_turnover",
+    "Calcula rotación de inventario por artículo y almacén.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema={
+        **_operational_schema(),
+        "required": ["company_id", "date_from", "date_to"],
+    },
+)
+def get_inventory_turnover_report(
+    *,
+    context: QueryContext,
+    company_id: str,
+    date_from: str,
+    date_to: str,
+    item_code: str | None = None,
+    warehouse: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    filters = _operational(
+        context,
+        company_id,
+        "inventory.reports.read",
+        "inventory",
+        date_from,
+        date_to,
+        item_code=item_code,
+        warehouse=warehouse,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_inventory_turnover(filters), company_id, filters)
 
 
 @query_tool(
