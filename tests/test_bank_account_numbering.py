@@ -325,13 +325,14 @@ def test_bank_account_new_rejects_cross_company_or_non_checkbook_counter(app_ctx
 
 def test_payment_creation_uses_bank_account_numbering_defaults(app_ctx):
     from cacao_accounting.bancos import bancos_pago_nuevo
-    from cacao_accounting.database import ExternalNumberUsage, PaymentEntry, database
+    from cacao_accounting.database import ExchangeRate, ExternalNumberUsage, PaymentEntry, database
 
     series = _make_payment_series(entity_type="bank_payment")
     counter_nio = _make_checkbook()
     counter_usd = _make_checkbook()
     account_nio = _make_bank_account(series, counter_nio, "NIO")
     account_usd = _make_bank_account(series, counter_usd, "USD")
+    database.session.add(ExchangeRate(origin="USD", destination="NIO", rate="36.00", date=date(2026, 5, 13)))
     database.session.commit()
 
     for account, counter in ((account_nio, counter_nio), (account_usd, counter_usd)):
