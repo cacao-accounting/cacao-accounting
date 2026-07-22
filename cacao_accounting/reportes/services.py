@@ -37,6 +37,8 @@ from cacao_accounting.database import (
     SalesInvoiceItem,
     SerialNumber,
     StockBin,
+    StockEntry,
+    StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
     database,
@@ -461,6 +463,46 @@ def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
         rows=rows,
         totals={"shortage_qty": sum((row.values["shortage_qty"] for row in rows), Decimal("0"))},
         columns=["item_code", "item_name", "warehouse", "actual_qty", "reorder_level", "shortage_qty", "stock_value"],
+    )
+
+
+def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedReport:
+    """Consulta traslados de material contabilizados entre almacenes."""
+    query = (
+        select(StockEntry, StockEntryItem)
+        .join(StockEntryItem, StockEntryItem.stock_entry_id == StockEntry.id)
+        .where(StockEntry.company == filters.company, StockEntry.purpose == "material_transfer", StockEntry.docstatus != 2)
+    )
+    if filters.item_code:
+        query = query.where(StockEntryItem.item_code == filters.item_code)
+    if filters.warehouse:
+        query = query.where(or_(StockEntry.from_warehouse == filters.warehouse, StockEntry.to_warehouse == filters.warehouse))
+    if filters.date_from:
+        query = query.where(StockEntry.posting_date >= filters.date_from)
+    if filters.date_to:
+        query = query.where(StockEntry.posting_date <= filters.date_to)
+    rows = [
+        ReportRow(
+            values={
+                "transfer_id": entry.id,
+                "document_no": entry.document_no or entry.id,
+                "posting_date": entry.posting_date,
+                "item_code": line.item_code,
+                "from_warehouse": line.source_warehouse or entry.from_warehouse,
+                "to_warehouse": line.target_warehouse or entry.to_warehouse,
+                "qty": _decimal_value(line.qty_in_base_uom or line.qty),
+                "uom": line.uom,
+                "status": {0: "draft", 1: "submitted", 2: "cancelled"}.get(entry.docstatus, "unknown"),
+            }
+        )
+        for entry, line in database.session.execute(
+            query.order_by(StockEntry.posting_date.desc(), StockEntry.id, StockEntryItem.id)
+        ).all()
+    ]
+    return PaginatedReport(
+        rows=rows,
+        totals={"qty": sum((_decimal_value(row.values["qty"]) for row in rows), Decimal("0"))},
+        columns=list(rows[0].values.keys()) if rows else [],
     )
 
 
