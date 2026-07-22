@@ -25,6 +25,7 @@ from cacao_accounting.reportes.services import (
     get_inventory_valuation,
     get_negative_stock,
     get_reorder_alerts,
+    get_inventory_transfers,
     get_slow_moving_items,
     get_inventory_turnover,
     get_kardex,
@@ -538,6 +539,39 @@ def get_inventory_reorder_alerts(
         page_size=page_size,
     )
     return _report_result(get_reorder_alerts(filters), company_id, filters)
+
+
+@query_tool(
+    "inventory.get_transfers",
+    "Consulta traslados de material entre almacenes.",
+    required_module="inventory",
+    required_permission="inventory.reports.read",
+    parameters_schema=_operational_schema(),
+)
+def get_inventory_transfer_report(
+    *,
+    context: QueryContext,
+    company_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    item_code: str | None = None,
+    warehouse: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    filters = _operational(
+        context,
+        company_id,
+        "inventory.reports.read",
+        "inventory",
+        date_from,
+        date_to,
+        item_code=item_code,
+        warehouse=warehouse,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_inventory_transfers(filters), company_id, filters)
 
 
 @query_tool(
