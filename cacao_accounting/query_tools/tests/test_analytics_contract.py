@@ -47,6 +47,9 @@ def test_discovery_and_composite_tools_are_published():
         "inventory.get_slow_moving_items",
         "inventory.get_turnover",
         "audit.get_user_activity_summary",
+        "documents.get_details",
+        "documents.get_lines",
+        "documents.get_status",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
