@@ -134,6 +134,8 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
+            # Validate and correct any StockBin with negative reserved_qty before constraint applies
+            _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
                 log.trace("Creando datos de prueba.")
                 base_data(user, passwd, carga_rapida=False)
@@ -591,3 +593,33 @@ def get_descendant_ids(node_class, node_id) -> list[str]:
                 descendants.append(child_id)
                 pending.append(child_id)
     return descendants
+
+
+def _validate_and_fix_stock_bin_reserved_qty() -> None:
+    """Validates and corrects any StockBin records with negative reserved_qty.
+    
+    CheckConstraint 'ck_stock_bin_reserved_non_negative' requires reserved_qty >= 0.
+    This function ensures no data violates this constraint before the schema is fully applied.
+    """
+    try:
+        from cacao_accounting.database import StockBin
+        
+        # Check for any negative reserved_qty values
+        negative_bins = database.session.execute(
+            database.select(StockBin).where(StockBin.reserved_qty < 0)
+        ).scalars().all()
+        
+        if negative_bins:
+            log.warning(
+                "Found {} StockBin records with negative reserved_qty. Correcting to 0.",
+                len(negative_bins)
+            )
+            for bin_record in negative_bins:
+                bin_record.reserved_qty = 0
+            database.session.commit()
+            log.info("StockBin reserved_qty validation and correction completed successfully.")
+    except (OperationalError, ProgrammingError, InterfaceError):
+        # Table doesn't exist yet or other DB errors - safe to ignore during initialization
+        pass
+    except Exception as exc:
+        log.warning("Could not validate StockBin.reserved_qty during initialization: {}", exc)
