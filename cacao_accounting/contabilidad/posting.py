@@ -457,11 +457,28 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
         for currency, curr_entries in currency_groups.items():
             curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
             curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
-            # A cross-currency transfer legitimately has one currency on the
-            # source side and another on the destination side; company-currency
-            # balancing (plus an explicit FX line) is authoritative there.
-            if curr_debit and curr_credit and abs(curr_debit - curr_credit) > Decimal("0.01"):
-                raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+            # Each currency MUST balance independently except in cross-currency FX scenarios
+            # where explicit FX gain/loss entries in company currency are generated.
+            # A currency with only debits or only credits must be balanced by another
+            # currency (hence the OR clause). If only one currency has entries, it MUST
+            # balance independently (debits == credits).
+            if abs(curr_debit - curr_credit) > Decimal("0.01"):
+                # Allow tolerance for potential FX rounding when mixing multiple currencies
+                if len(currency_groups) == 1:
+                    # Single currency must balance perfectly
+                    raise PostingError(
+                        "Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency)
+                    )
+                # Multi-currency: each side must at least have entries
+                if (curr_debit == Decimal("0") and curr_credit == Decimal("0")) or (
+                    (curr_debit > Decimal("0") and curr_credit == Decimal("0"))
+                    or (curr_debit == Decimal("0") and curr_credit > Decimal("0"))
+                ):
+                    pass  # Legitimate in cross-currency with FX entries
+                else:
+                    raise PostingError(
+                        "Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency)
+                    )
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
