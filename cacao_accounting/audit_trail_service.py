@@ -203,18 +203,16 @@ def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
     return _log(action, document, after=document, comment=comment)
 
 
-def get_document_timeline(document_type: str, document_id: str) -> list[AuditTrail]:
+def get_document_timeline(document_type: str, document_id: str, company: str | None = None) -> list[AuditTrail]:
     """Devuelve historial cronológico ascendente de un documento."""
-    return list(
-        database.session.execute(
-            database.select(AuditTrail)
-            .where(AuditTrail.document_type == document_type)
-            .where(AuditTrail.document_id == document_id)
-            .order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
-        )
-        .scalars()
-        .all()
+    query = (
+        database.select(AuditTrail)
+        .where(AuditTrail.document_type == document_type)
+        .where(AuditTrail.document_id == document_id)
     )
+    if company is not None:
+        query = query.where(AuditTrail.company == company)
+    return list(database.session.execute(query.order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())).scalars().all())
 
 
 _NOISE_FIELDS: frozenset[str] = frozenset(
