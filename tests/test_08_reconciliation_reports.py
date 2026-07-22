@@ -312,6 +312,138 @@ def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     assert reconciliations.totals["bank_reconciled_amount"] == Decimal("0")
 
 
+def test_cancelled_pairs_are_hidden_from_bank_and_stock_reports_but_rebuild_to_net(app_ctx):
+    """Una anulación interna no altera saldos ni agrega ruido a reportes ordinarios."""
+    from cacao_accounting.database import (
+        Bank,
+        BankAccount,
+        GLEntry,
+        Item,
+        StockBin,
+        StockLedgerEntry,
+        UOM,
+        Warehouse,
+        database,
+    )
+    from cacao_accounting.inventario.service import rebuild_stock_bins
+    from cacao_accounting.reportes.services import BankingFilters, KardexFilters, get_bank_balance_summary, get_kardex
+
+    bank = Bank(name="Banco cancelaciones")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta cancelaciones")
+    database.session.add(bank_account)
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                debit=Decimal("100"),
+                credit=Decimal("0"),
+                bank_account_id=bank_account.id,
+                voucher_type="payment_entry",
+                voucher_id="PAY-CANCELLED",
+                is_cancelled=True,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                debit=Decimal("0"),
+                credit=Decimal("100"),
+                bank_account_id=bank_account.id,
+                voucher_type="payment_entry",
+                voucher_id="PAY-CANCELLED",
+                is_reversal=True,
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 2),
+                company="cacao",
+                debit=Decimal("25"),
+                credit=Decimal("0"),
+                bank_account_id=bank_account.id,
+                voucher_type="payment_entry",
+                voucher_id="PAY-ACTIVE",
+            ),
+        ]
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-CAN", name="Unidad cancelaciones"),
+            Item(
+                code="ITEM-CAN",
+                name="Item cancelaciones",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA-CAN",
+            ),
+            Warehouse(code="WH-CAN", name="Bodega cancelaciones", company="cacao"),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-CAN",
+                warehouse="WH-CAN",
+                company="cacao",
+                qty_change=Decimal("10"),
+                qty_after_transaction=Decimal("10"),
+                valuation_rate=Decimal("2"),
+                stock_value_difference=Decimal("20"),
+                stock_value=Decimal("20"),
+                voucher_type="purchase_receipt",
+                voucher_id="PR-CANCELLED",
+                is_cancelled=True,
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-CAN",
+                warehouse="WH-CAN",
+                company="cacao",
+                qty_change=Decimal("-10"),
+                qty_after_transaction=Decimal("0"),
+                valuation_rate=Decimal("2"),
+                stock_value_difference=Decimal("-20"),
+                stock_value=Decimal("0"),
+                voucher_type="purchase_receipt",
+                voucher_id="PR-CANCELLED",
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 2),
+                item_code="ITEM-CAN",
+                warehouse="WH-CAN",
+                company="cacao",
+                qty_change=Decimal("5"),
+                qty_after_transaction=Decimal("5"),
+                valuation_rate=Decimal("3"),
+                stock_value_difference=Decimal("15"),
+                stock_value=Decimal("15"),
+                voucher_type="purchase_receipt",
+                voucher_id="PR-ACTIVE",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    bank_report = get_bank_balance_summary(BankingFilters(company="cacao", bank_account_id=bank_account.id))
+    kardex = get_kardex(KardexFilters(company="cacao", item_code="ITEM-CAN", warehouse="WH-CAN"))
+    rebuild_stock_bins("cacao", item_code="ITEM-CAN", warehouse="WH-CAN")
+    database.session.commit()
+    stock_bin = database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code="ITEM-CAN", warehouse="WH-CAN")
+    ).scalar_one()
+
+    assert bank_report.totals["ending_balance"] == Decimal("25")
+    assert len(kardex.rows) == 1
+    assert kardex.totals["incoming_qty"] == Decimal("5")
+    assert kardex.totals["outgoing_qty"] == Decimal("0")
+    assert stock_bin.actual_qty == Decimal("5")
+    assert stock_bin.stock_value == Decimal("15")
+
+
 def test_financial_reports_framework_uses_gl_and_supports_export(app_ctx):
     from cacao_accounting.database import (
         AccountingPeriod,

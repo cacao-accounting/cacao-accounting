@@ -248,6 +248,7 @@ class BudgetReportService:
                 GLEntry.ledger_id == ledger_id,
                 GLEntry.accounting_period_id.in_(period_range_ids),
                 GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
             )
         )
         if account_from:

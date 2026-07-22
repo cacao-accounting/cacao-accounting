@@ -40,6 +40,7 @@ from cacao_accounting.modulos import (
     MODULE_PURCHASES,
     MODULE_SALES,
 )
+from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -396,7 +397,7 @@ def _document_query(model: Any, company: str, start_date: date | None, end_date:
 
 def _stock_movements_query(company: str, start_date: date | None, end_date: date | None):
     """Crea query base de movimientos de inventario."""
-    query = database.session.query(StockLedgerEntry).filter_by(company=company, is_cancelled=False)
+    query = exclude_cancelled_stock_entries(database.session.query(StockLedgerEntry).filter_by(company=company))
     if start_date and end_date:
         query = query.filter(StockLedgerEntry.posting_date >= start_date, StockLedgerEntry.posting_date <= end_date)
     return query
