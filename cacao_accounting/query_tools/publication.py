@@ -43,6 +43,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "accounting.get_income_statement": "accounting.read",
     "accounting.get_balance_sheet": "accounting.read",
     "accounting.get_account_summary": "accounting.read",
+    "accounting.get_account_movement_detail": "accounting.read",
     "sales.get_by_customer": "receivables.read",
     "sales.get_by_item": "receivables.read",
     "sales.get_gross_margin": "receivables.read",
