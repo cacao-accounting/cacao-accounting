@@ -78,6 +78,29 @@ def verifica_permiso(modulo: str, accion: str):  # pragma: no cover
     return decorator_verifica_permiso
 
 
+def exige_acceso_compania(modulo: str, company: str | None, accion: str = "consultar") -> None:
+    """Enforce module/action access to at least one book of a company.
+
+    Operational documents carry a company but not a user-specific company
+    ACL. Company access is therefore derived from the user's authorized books;
+    administrators retain global access.
+    """
+    module_id = obtener_id_modulo_por_nombre(modulo)
+    permisos = Permisos(modulo=module_id, usuario=current_user.id)
+    if permisos.administrador:
+        return
+    granular_action = {
+        "autorizar": "can_approve",
+        "anular": "can_cancel",
+        "crear": "can_write",
+        "editar": "can_write",
+        "consultar": "can_read",
+    }.get(accion, "can_read")
+    if permisos.autorizado and permisos.obtener_libros_autorizados(granular_action, company=company):
+        return
+    abort(403)
+
+
 def _libros_contables_solicitados(modulo: str) -> list[str]:
     """Extrae libros de la peticion solo para rutas del modulo contable."""
     if modulo != "accounting":
