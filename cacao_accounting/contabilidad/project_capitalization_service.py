@@ -2,13 +2,23 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Servicio para la Capitalización Automática de Proyectos."""
 
+import json
 from decimal import Decimal
 from datetime import date
 from typing import Any
 from uuid import uuid4
 
-from cacao_accounting.database import database, GLEntry, Project, Accounts, ComprobanteContable, ComprobanteContableDetalle
+from cacao_accounting.database import (
+    database,
+    GLEntry,
+    Project,
+    Accounts,
+    ComprobanteContable,
+    ComprobanteContableDetalle,
+    Book,
+)
 from cacao_accounting.contabilidad.journal_service import submit_journal
+from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.logs import log
 
 
@@ -21,11 +31,7 @@ def _is_eligible_capitalization_entry(entry: GLEntry) -> bool:
 
 def _find_capitalizable_project(company: str, project_code: str) -> Project | None:
     """Busca un proyecto capitalizable activo para el codigo dado."""
-    proj = (
-        database.session.execute(database.select(Project).filter_by(entity=company, code=project_code))
-        .scalars()
-        .first()
-    )
+    proj = database.session.execute(database.select(Project).filter_by(entity=company, code=project_code)).scalars().first()
     if not proj or not proj.capitalizable or not proj.capitalization_account_id:
         return None
     return proj
@@ -37,9 +43,7 @@ def _is_already_capitalized(entry: GLEntry) -> bool:
     return bool(orig_journal and orig_journal.capitalized_by_id)
 
 
-def _resolve_capitalization_accounts(
-    entry: GLEntry, proj: Project
-) -> tuple[str, str, Decimal]:
+def _resolve_capitalization_accounts(entry: GLEntry, proj: Project) -> tuple[str, str, Decimal]:
     """Resuelve las cuentas de debito y credito y el monto para la capitalizacion."""
     cap_account = database.session.get(Accounts, proj.capitalization_account_id)
     if not cap_account:
@@ -68,10 +72,19 @@ def _create_capitalization_journal(
         date=entry.posting_date,
         status="draft",
         transaction_currency=entry.account_currency or "NIO",
-        exchange_rate=entry.exchange_rate or Decimal("1.0"),
+        # Resolve the rate independently for each active book at posting time.
+        exchange_rate=None,
         voucher_type="Capitalización Automática de Proyecto",
         document_no=doc_no,
         capitalization_origin_id=entry.voucher_id,
+        book_codes=json.dumps(
+            [
+                book.code
+                for book in database.session.execute(
+                    database.select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
+                ).scalars()
+            ]
+        ),
     )
     database.session.add(cap_journal)
     database.session.flush()
@@ -88,7 +101,7 @@ def _create_capitalization_journal(
         "date": entry.posting_date,
         "memo": memo_text,
         "currency_id": entry.account_currency or "NIO",
-        "exchange_rate": entry.exchange_rate or Decimal("1.0"),
+        "exchange_rate": None,
     }
 
     database.session.add(ComprobanteContableDetalle(account=deb_acc_code, value=val, **common_kwargs))
@@ -125,7 +138,7 @@ class ProjectCapitalizationService:
     @staticmethod
     def _query_eligible_entries(company: str, period_id: str) -> list[GLEntry]:
         """Consulta las entradas GL elegibles para capitalizacion."""
-        return (
+        query = (
             database.session.query(GLEntry)
             .join(Accounts, GLEntry.account_id == Accounts.id)
             .filter(
@@ -136,8 +149,11 @@ class ProjectCapitalizationService:
                 GLEntry.project_code.isnot(None),
                 Accounts.classification.in_(["Gastos", "expense", "gastos", "EXPENSE"]),
             )
-            .all()
         )
+        ledger_id = primary_ledger_id(company)
+        if ledger_id:
+            query = query.filter(GLEntry.ledger_id == ledger_id)
+        return query.all()
 
     @staticmethod
     def _process_single_entry(company: str, entry: GLEntry) -> None:
