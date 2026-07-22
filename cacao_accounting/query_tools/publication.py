@@ -57,6 +57,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "inventory.get_batches": "inventory.read",
     "inventory.get_serials": "inventory.read",
     "inventory.get_negative_stock": "inventory.read",
+    "inventory.get_reorder_alerts": "inventory.read",
     "inventory.get_slow_moving_items": "inventory.read",
     "inventory.get_turnover": "inventory.read",
     "banking.get_balance_summary": "banking.read",
