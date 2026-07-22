@@ -11,7 +11,9 @@ from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 
 def validate_company_access(context: QueryContext, company_id: str) -> None:
     """Verifica que el contexto tenga acceso a la compañía indicada y que esta exista."""
-    if context.company_ids and company_id not in context.company_ids:
+    # Empty company scopes are deliberately fail-closed.  A missing scope must
+    # never be interpreted as access to every tenant.
+    if not context.allow_all_companies and company_id not in context.company_ids:
         raise QueryToolError(
             code=ErrorCode.COMPANY_ACCESS_DENIED,
             message="No tiene acceso a la compañía solicitada.",
@@ -69,13 +71,14 @@ def validate_permission(
                 request_id=context.request_id,
             )
 
-        permisos = Permisos(modulo=module_id, usuario=context.user_id)
-        if not permisos.autorizado:
-            raise QueryToolError(
-                code=ErrorCode.PERMISSION_DENIED,
-                message="No tiene permisos para consultar este recurso.",
-                request_id=context.request_id,
-            )
+        if not context.is_service_principal:
+            permisos = Permisos(modulo=module_id, usuario=context.user_id)
+            if not permisos.autorizado:
+                raise QueryToolError(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tiene permisos para consultar este recurso.",
+                    request_id=context.request_id,
+                )
 
     if company_id:
         validate_company_access(context, company_id)
