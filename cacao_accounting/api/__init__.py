@@ -43,7 +43,7 @@ from cacao_accounting.collaboration_service import (
     open_task_count,
     update_task_status,
 )
-from cacao_accounting.database import StockBin, database
+from cacao_accounting.database import Entity, StockBin, database
 from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
@@ -187,9 +187,31 @@ def api_search_select():
     filters = {
         key: request.args.getlist(key) for key in request.args if key not in reserved_params and request.args.getlist(key)
     }
+    company_scope: set[str] | None = None
+    if doctype == "company":
+        from cacao_accounting.api.dashboard import user_can_access_company
+
+        include_inactive = any(
+            value.strip().lower() in {"1", "true", "yes", "on"} for value in filters.get("include_inactive", [])
+        )
+        entity_query = database.select(Entity)
+        if not include_inactive or getattr(current_user, "classification", None) != "admin":
+            entity_query = entity_query.where(Entity.enabled.is_(True))
+        companies = database.session.execute(entity_query).scalars().all()
+        company_scope = {
+            str(company.code)
+            for company in companies
+            if getattr(current_user, "classification", None) == "admin" or user_can_access_company(current_user, company)
+        }
     try:
         limit = int(raw_limit) if raw_limit else None
-        payload = search_select(doctype=doctype, query=query, filters=filters, limit=limit)
+        payload = search_select(
+            doctype=doctype,
+            query=query,
+            filters=filters,
+            limit=limit,
+            company_scope=company_scope,
+        )
     except ValueError as exc:
         if not isinstance(exc, SearchSelectError):
             return jsonify({"error": _("Parametro invalido."), "message": str(exc)}), 400
