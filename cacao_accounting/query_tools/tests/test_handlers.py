@@ -133,7 +133,7 @@ class TestPaginatedResultIntegration:
 def test_list_companies_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, company_ids=[])
+        ctx = QueryContext(user_id=user.id, company_ids=[], allow_all_companies=True)
 
         # Test success list all (call handler function of the QueryTool instance)
         res = h_companies.list_companies.handler(context=ctx, page=1, page_size=10)
@@ -150,7 +150,7 @@ def test_list_companies_handler(app_instance):
 def test_list_accounting_periods_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
 
         # Seed an accounting period
         period = AccountingPeriod(
@@ -183,7 +183,7 @@ def test_list_accounting_periods_handler(app_instance):
 def test_search_accounts_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
 
         # Seed an account
         acc = Accounts(
@@ -216,7 +216,7 @@ def test_search_accounts_handler(app_instance):
 def test_get_trial_balance_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
 
         # Seed account and GLEntries
         acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao")).scalars().first()
@@ -248,7 +248,7 @@ def test_get_trial_balance_handler(app_instance):
 def test_get_general_ledger_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
 
         acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao")).scalars().first()
         if acc:
@@ -266,7 +266,7 @@ def test_get_general_ledger_handler(app_instance):
 def test_get_document_timeline_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"audit.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"audit.reports.read"}, company_ids=["cacao"])
 
         res = h_audit_trail.get_document_timeline_handler.handler(
             context=ctx,
@@ -280,7 +280,7 @@ def test_get_document_timeline_handler(app_instance):
 def test_get_banking_accounts_and_transactions_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["cacao"])
 
         # Seed bank first
         bank = Bank(id="test_bank_id", name="BAC Test", swift_code="BAC", is_active=True)
@@ -333,7 +333,7 @@ def test_get_banking_accounts_and_transactions_handlers(app_instance):
 def test_get_document_flow_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"documents.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"documents.reports.read"}, company_ids=["cacao"])
 
         # Seed a DocumentRelation
         relation = DocumentRelation(
@@ -361,7 +361,7 @@ def test_get_document_flow_handler(app_instance):
 def test_payables_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"payables.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"payables.reports.read"}, company_ids=["cacao"])
 
         # Seed active purchase invoice with docstatus=1
         invoice = PurchaseInvoice(
@@ -403,7 +403,7 @@ def test_payables_handlers(app_instance):
 def test_receivables_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"receivables.reports.read"}, company_ids=[])
+        ctx = QueryContext(user_id=user.id, permissions={"receivables.reports.read"}, company_ids=["cacao"])
 
         # Seed active sales invoice with docstatus=1
         invoice = SalesInvoice(
