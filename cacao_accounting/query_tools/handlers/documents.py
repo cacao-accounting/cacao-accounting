@@ -97,6 +97,27 @@ def get_document_flow(
     return result.to_dict()
 
 
+@query_tool(
+    name="documents.get_related_documents",
+    description="Obtiene documentos relacionados y sus líneas de flujo.",
+    required_permission="documents.reports.read",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "company_id": {"type": "string"},
+            "document_type": {"type": "string"},
+            "document_id": {"type": "string"},
+            "page": {"type": "integer", "default": 1},
+            "page_size": {"type": "integer", "default": 100, "maximum": 500},
+        },
+        "required": ["company_id", "document_type", "document_id"],
+    },
+)
+def get_related_documents(**kwargs: Any) -> dict[str, Any]:
+    """Alias semántico estable para clientes que preguntan por relacionados."""
+    return get_document_flow(**kwargs)
+
+
 _DOCUMENT_SCHEMA = {
     "type": "object",
     "properties": {
