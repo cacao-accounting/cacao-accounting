@@ -59,6 +59,7 @@ def test_discovery_and_composite_tools_are_published():
         "dimension_values.search",
         "cost_centers.list",
         "uoms.list",
+        "treasury.get_maturity_schedule",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
