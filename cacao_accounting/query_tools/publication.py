@@ -90,6 +90,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "treasury.forecasts.list": "banking.read",
     "treasury.get_cash_forecast": "banking.read",
     "treasury.compare_forecasts": "banking.read",
+    "treasury.get_maturity_schedule": "banking.read",
 }
 
 
