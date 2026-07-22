@@ -10,7 +10,22 @@ from typing import Any
 from sqlalchemy import exists, select
 from sqlalchemy.orm import aliased
 
-from cacao_accounting.database import GLEntry, StockLedgerEntry
+from cacao_accounting.database import Book, GLEntry, StockLedgerEntry, database
+
+
+def primary_ledger_id(company: str) -> str | None:
+    """Resolve the deterministic read ledger for non-accounting modules.
+
+    Operational/reporting consumers must never aggregate every active book.
+    The accounting module is the only place where a user explicitly selects a
+    book; all other consumers use the primary (then default) active book.
+    """
+    book = database.session.execute(
+        select(Book)
+        .where(Book.entity == company, Book.status == "activo")
+        .order_by(Book.is_primary.desc(), Book.default.desc(), Book.code.asc())
+    ).scalars().first()
+    return book.id if book else None
 
 
 def exclude_cancelled_gl_entries(query: Any) -> Any:
