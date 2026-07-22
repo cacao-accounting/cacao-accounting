@@ -2061,6 +2061,9 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     """Margen bruto basado en GL: ingresos menos COGS."""
     query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=filters.company))
+    ledger_id = primary_ledger_id(filters.company)
+    if ledger_id:
+        query = query.where(GLEntry.ledger_id == ledger_id)
     if filters.date_from:
         query = query.where(GLEntry.posting_date >= filters.date_from)
     if filters.date_to:
