@@ -35,6 +35,15 @@ def _validate(context: QueryContext, company_id: str) -> None:
     validate_permission(context, "accounting.reports.read", "accounting", company_id)
 
 
+def _envelope(payload: dict[str, Any], company_id: str, **filters: Any) -> dict[str, Any]:
+    payload["provenance"] = {
+        "company_id": company_id,
+        "filters": {key: value for key, value in filters.items() if value is not None},
+        "complete": bool(payload.get("complete", True)),
+    }
+    return payload
+
+
 _PERIOD_SCHEMA = {
     "type": "object",
     "properties": {
@@ -55,7 +64,12 @@ _PERIOD_SCHEMA = {
 )
 def get_kpi_snapshot_tool(*, context: QueryContext, company_id: str, date_from: str, date_to: str) -> dict[str, Any]:
     _validate(context, company_id)
-    return _json(get_kpi_snapshot(company_id, _date(date_from), _date(date_to)))
+    return _envelope(
+        _json(get_kpi_snapshot(company_id, _date(date_from), _date(date_to))),
+        company_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @query_tool(
@@ -87,15 +101,23 @@ def compare_periods_tool(
     compare_date_to: str,
 ) -> dict[str, Any]:
     _validate(context, company_id)
-    return _json(
-        compare_periods(
-            company_id,
-            metric,
-            _date(base_date_from),
-            _date(base_date_to),
-            _date(compare_date_from),
-            _date(compare_date_to),
-        )
+    return _envelope(
+        _json(
+            compare_periods(
+                company_id,
+                metric,
+                _date(base_date_from),
+                _date(base_date_to),
+                _date(compare_date_from),
+                _date(compare_date_to),
+            )
+        ),
+        company_id,
+        metric=metric,
+        base_date_from=base_date_from,
+        base_date_to=base_date_to,
+        compare_date_from=compare_date_from,
+        compare_date_to=compare_date_to,
     )
 
 
@@ -112,7 +134,13 @@ def compare_periods_tool(
 )
 def get_trend_tool(*, context: QueryContext, company_id: str, metric: str, date_from: str, date_to: str) -> dict[str, Any]:
     _validate(context, company_id)
-    return {"items": _json(get_trend(company_id, metric, _date(date_from), _date(date_to))), "complete": True}
+    return _envelope(
+        {"items": _json(get_trend(company_id, metric, _date(date_from), _date(date_to))), "complete": True},
+        company_id,
+        metric=metric,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @query_tool(
@@ -134,7 +162,11 @@ def get_concentration_tool(
     *, context: QueryContext, company_id: str, dimension: str, date_from: str, date_to: str, limit: int = 10
 ) -> dict[str, Any]:
     _validate(context, company_id)
-    return {
-        "items": _json(get_concentration(company_id, dimension, _date(date_from), _date(date_to), limit)),
-        "complete": True,
-    }
+    return _envelope(
+        {"items": _json(get_concentration(company_id, dimension, _date(date_from), _date(date_to), limit)), "complete": True},
+        company_id,
+        dimension=dimension,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
