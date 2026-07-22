@@ -449,6 +449,10 @@ class ApprovalEngine:
 
         if doctype in {"payment_entry", "stock_entry"}:
             cancel_document(document)
+            if doctype == "payment_entry":
+                from cacao_accounting.bancos import _apply_payment_cancellation_hooks
+
+                _apply_payment_cancellation_hooks(document)
             log_cancel(document)
 
     @classmethod
