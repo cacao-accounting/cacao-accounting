@@ -2113,7 +2113,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
 @login_required
 @verifica_permiso("sales", "autorizar")
 def ventas_orden_venta_submit(order_id: str):
-    """Aprueba una orden de venta y reserva inventario."""
+    """Aprueba una orden de venta y reserva inventario de forma atómica."""
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
@@ -2132,9 +2132,11 @@ def ventas_orden_venta_submit(order_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Orden de venta"):
             return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
-        _validate_and_reserve_stock_for_sales_order(registro)
-        registro.docstatus = 1
-        log_submit(registro)
+        # Atomic transaction: stock reservation must succeed or entire submission rolls back
+        with database.session.begin_nested():
+            _validate_and_reserve_stock_for_sales_order(registro)
+            registro.docstatus = 1
+            log_submit(registro)
         database.session.commit()
         flash("Orden de venta aprobada con reserva de inventario.", "success")
     except ValueError as exc:
