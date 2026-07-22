@@ -8,6 +8,7 @@ from typing import Any
 
 from cacao_accounting.bancos.cash_forecast_service import get_cash_forecast_matrix, get_forecast_comparison
 from cacao_accounting.database import CashForecast, database
+from cacao_accounting.reportes.services import MaturityFilters, get_maturity_schedule
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
@@ -52,9 +53,7 @@ _LIST_SCHEMA = {
     required_permission="banking.reports.read",
     parameters_schema=_LIST_SCHEMA,
 )
-def list_cash_forecasts(
-    *, context: QueryContext, company_id: str, page: int = 1, page_size: int = 50
-) -> dict[str, Any]:
+def list_cash_forecasts(*, context: QueryContext, company_id: str, page: int = 1, page_size: int = 50) -> dict[str, Any]:
     validate_permission(context, "banking.reports.read", "cash", company_id)
     current, size = paginate(page, page_size)
     query = database.select(CashForecast).where(CashForecast.company == company_id)
@@ -92,9 +91,7 @@ _FORECAST_SCHEMA = {
     required_permission="banking.reports.read",
     parameters_schema=_FORECAST_SCHEMA,
 )
-def get_cash_forecast(
-    *, context: QueryContext, company_id: str, forecast_id: str
-) -> dict[str, Any]:
+def get_cash_forecast(*, context: QueryContext, company_id: str, forecast_id: str) -> dict[str, Any]:
     _verify_forecast(context, company_id, forecast_id)
     items = _json(get_cash_forecast_matrix(company_id, forecast_id))
     return {
@@ -132,5 +129,64 @@ def compare_cash_forecasts(
             "company_id": company_id,
             "filters": {"base_forecast_id": base_forecast_id, "compare_forecast_id": compare_forecast_id},
             "complete": True,
+        },
+    }
+
+
+@query_tool(
+    "treasury.get_maturity_schedule",
+    "Obtiene vencimientos de cartera y proveedores calculados desde términos de pago.",
+    required_module="cash",
+    required_permission="banking.reports.read",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "company_id": {"type": "string"},
+            "as_of_date": {"type": "string", "format": "date"},
+            "party_type": {"type": "string", "enum": ["customer", "supplier"]},
+            "party_id": {"type": "string"},
+            "horizon_days": {"type": "integer", "minimum": 0, "maximum": 3650, "default": 365},
+            "page": {"type": "integer", "minimum": 1, "default": 1},
+            "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
+        },
+        "required": ["company_id", "as_of_date"],
+    },
+)
+def get_maturity_schedule_handler(
+    *,
+    context: QueryContext,
+    company_id: str,
+    as_of_date: str,
+    party_type: str | None = None,
+    party_id: str | None = None,
+    horizon_days: int = 365,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "banking.reports.read", "cash", company_id)
+    report = get_maturity_schedule(
+        MaturityFilters(
+            company=company_id,
+            as_of_date=date.fromisoformat(as_of_date),
+            party_type=party_type,
+            party_id=party_id,
+            horizon_days=horizon_days,
+            page=page,
+            page_size=page_size,
+        )
+    )
+    items = [_json(row.values) for row in report.rows]
+    return {
+        "items": items,
+        "summary": _json(report.totals),
+        "page": {
+            "number": page,
+            "size": page_size,
+            "total_items": report.total_rows,
+            "has_more": page * page_size < report.total_rows,
+        },
+        "provenance": {
+            "company_id": company_id,
+            "filters": {"as_of_date": as_of_date, "party_type": party_type, "horizon_days": horizon_days},
         },
     }

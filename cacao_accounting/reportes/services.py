@@ -23,11 +23,13 @@ from cacao_accounting.database import (
     Book,
     Budget,
     BudgetLine,
+    CompanyParty,
     CostCenter,
     GLEntry,
     Item,
     PaymentReference,
     PaymentEntry,
+    PaymentTerms,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
@@ -66,6 +68,19 @@ class AgingFilters:
     party_type: str
     as_of_date: date
     party_id: str | None = None
+
+
+@dataclass(frozen=True)
+class MaturityFilters:
+    """Filtros para cronograma de vencimientos calculado desde términos de pago."""
+
+    company: str
+    as_of_date: date
+    party_type: str | None = None
+    party_id: str | None = None
+    horizon_days: int = 365
+    page: int = 1
+    page_size: int = 100
 
 
 @dataclass(frozen=True)
@@ -292,6 +307,76 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
         values["bucket"] = bucket
         rows.append(ReportRow(values=values))
     return AgingReport(rows=rows, totals=bucket_totals)
+
+
+def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
+    """Calcula vencimientos de cartera usando términos de pago por tercero."""
+    if filters.horizon_days < 0 or filters.horizon_days > 3650:
+        raise ValueError("horizon_days debe estar entre 0 y 3650")
+    party_terms = {
+        party_id: terms.due_days
+        for party_id, terms in database.session.execute(
+            select(CompanyParty.party_id, PaymentTerms)
+            .join(PaymentTerms, PaymentTerms.id == CompanyParty.payment_terms_id, isouter=True)
+            .where(CompanyParty.company == filters.company, CompanyParty.is_active.is_(True))
+        ).all()
+        if terms is not None
+    }
+    documents: list[tuple[Any, str, str | None]] = []
+    if filters.party_type in (None, "customer"):
+        query = select(SalesInvoice).where(SalesInvoice.company == filters.company, SalesInvoice.docstatus == 1)
+        if filters.party_id:
+            query = query.where(SalesInvoice.customer_id == filters.party_id)
+        documents.extend((doc, "customer", doc.customer_id) for doc in database.session.execute(query).scalars())
+    if filters.party_type in (None, "supplier"):
+        query = select(PurchaseInvoice).where(PurchaseInvoice.company == filters.company, PurchaseInvoice.docstatus == 1)
+        if filters.party_id:
+            query = query.where(PurchaseInvoice.supplier_id == filters.party_id)
+        documents.extend((doc, "supplier", doc.supplier_id) for doc in database.session.execute(query).scalars())
+
+    cutoff = filters.as_of_date + timedelta(days=filters.horizon_days)
+    rows: list[ReportRow] = []
+    for document, party_type, party_id in documents:
+        outstanding = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
+        if outstanding <= 0 or not document.posting_date:
+            continue
+        due_date = document.posting_date + timedelta(days=party_terms.get(party_id, 0))
+        if due_date > cutoff:
+            continue
+        days = (due_date - filters.as_of_date).days
+        bucket = (
+            "overdue" if days < 0 else "0_7" if days <= 7 else "8_30" if days <= 30 else "31_90" if days <= 90 else "over_90"
+        )
+        rows.append(
+            ReportRow(
+                values={
+                    "document_type": "sales_invoice" if party_type == "customer" else "purchase_invoice",
+                    "document_id": document.id,
+                    "document_no": document.document_no or document.id,
+                    "party_type": party_type,
+                    "party_id": party_id,
+                    "posting_date": document.posting_date,
+                    "due_date": due_date,
+                    "days_to_due": days,
+                    "bucket": bucket,
+                    "outstanding_amount": outstanding,
+                    "currency": document.transaction_currency,
+                }
+            )
+        )
+    rows.sort(key=lambda row: (row.values["due_date"], str(row.values["document_no"])))
+    page = max(filters.page, 1)
+    size = max(filters.page_size, 1)
+    total = len(rows)
+    page_rows = rows[(page - 1) * size : page * size]
+    return PaginatedReport(
+        rows=page_rows,
+        totals={"outstanding_amount": sum((_decimal_value(row.values["outstanding_amount"]) for row in rows), Decimal("0"))},
+        columns=list(rows[0].values.keys()) if rows else [],
+        total_rows=total,
+        page=page,
+        page_size=size,
+    )
 
 
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
