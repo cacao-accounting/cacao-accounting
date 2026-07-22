@@ -32,6 +32,8 @@ ALLOWED_ACTIONS = {
     "task_completed",
     "task_cancelled",
     "task_status_changed",
+    "approval_requested",
+    "cancellation_requested",
 }
 
 
@@ -161,6 +163,18 @@ def capture_lines_snapshot(registro: Any, item_cls: Any, fk_name: str) -> list[d
 def log_submit(document: Any) -> AuditTrail:
     """Log that a document was submitted."""
     return _log("submitted", document, after=document)
+
+
+def log_approval_requested(
+    document: Any,
+    snapshot: Mapping[str, Any],
+    snapshot_hash: str,
+    *,
+    cancellation: bool = False,
+) -> AuditTrail:
+    """Persist the immutable payload used by a deferred approval decision."""
+    action = "cancellation_requested" if cancellation else "approval_requested"
+    return _log(action, document, after=snapshot, comment=f"snapshot_sha256:{snapshot_hash}")
 
 
 def log_approve(document: Any) -> AuditTrail:

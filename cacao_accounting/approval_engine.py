@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from decimal import Decimal
 from typing import Any
 from flask_login import current_user
@@ -14,6 +16,7 @@ from cacao_accounting.database import (
     ApprovalMatrix,
     ApprovalRequest,
     ApprovalAction,
+    AuditTrail,
     CacaoConfig,
     RolesUser,
     User,
@@ -93,6 +96,46 @@ class ApprovalEngine:
             if val is not None:
                 return Decimal(str(val))
         return Decimal("0")
+
+    @classmethod
+    def _approval_snapshot(cls, document: Any) -> tuple[dict[str, Any], str]:
+        """Build a canonical header/lines payload and its persistent hash."""
+        doctype = cls._resolve_doctype(document)
+        excluded = {"modified", "modified_by"}
+        document_table = getattr(document, "__table__", None)
+        header = (
+            {
+                str(column.name): getattr(document, column.name)
+                for column in document_table.columns
+                if str(column.name) not in excluded
+            }
+            if document_table is not None
+            else {}
+        )
+        lines: list[dict[str, Any]] = []
+        try:
+            from cacao_accounting.document_flow.registry import get_document_type
+
+            spec = get_document_type(doctype)
+            parent_field = spec.parent_field
+            rows = database.session.execute(select(spec.item_model).filter_by(**{parent_field: document.id})).scalars().all()
+            for row in sorted(rows, key=lambda value: str(getattr(value, "id", ""))):
+                row_table = getattr(row, "__table__", None)
+                if row_table is None:
+                    continue
+                lines.append(
+                    {
+                        str(column.name): getattr(row, column.name)
+                        for column in row_table.columns
+                        if str(column.name) not in {"id", "created", "modified", "created_by", "modified_by"}
+                    }
+                )
+        except (KeyError, AttributeError):
+            # Some accounting documents do not participate in document flow.
+            lines = []
+        payload = {"header": header, "lines": lines}
+        serialized = json.dumps(payload, default=str, ensure_ascii=False, sort_keys=True)
+        return payload, hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _get_user_rules(user_id: str, company_id: str, document_type: str) -> list[ApprovalMatrix]:
@@ -183,7 +226,30 @@ class ApprovalEngine:
 
     @staticmethod
     def _assert_approval_snapshot(req: ApprovalRequest, document: Any) -> None:
-        """Reject approval when the document changed after its request."""
+        """Reject approval when the persisted document payload changed."""
+        from sqlalchemy import desc
+
+        expected_action = "cancellation_requested" if str(req.document_type).startswith("cancel_") else "approval_requested"
+        snapshot_entry = (
+            database.session.execute(
+                select(AuditTrail)
+                .where(AuditTrail.document_id == document.id, AuditTrail.action == expected_action)
+                .order_by(desc(AuditTrail.timestamp), desc(AuditTrail.id))
+            )
+            .scalars()
+            .first()
+        )
+        if snapshot_entry and snapshot_entry.comment:
+            marker = "snapshot_sha256:"
+            expected_hash = next(
+                (part[len(marker) :] for part in snapshot_entry.comment.split() if part.startswith(marker)),
+                None,
+            )
+            if expected_hash:
+                _, actual_hash = ApprovalEngine._approval_snapshot(document)
+                if actual_hash != expected_hash:
+                    raise ValueError("El documento cambió después de solicitar aprobación; debe enviarse nuevamente.")
+                return
         requested_at = getattr(req, "created_at", None)
         modified_at = getattr(document, "modified", None)
         if requested_at and modified_at and modified_at > requested_at:
@@ -355,6 +421,10 @@ class ApprovalEngine:
         )
         database.session.add(req)
         database.session.flush()
+        from cacao_accounting.audit_trail_service import log_approval_requested
+
+        snapshot, snapshot_hash = cls._approval_snapshot(document)
+        log_approval_requested(document, snapshot, snapshot_hash)
         return req
 
     @classmethod
@@ -390,6 +460,10 @@ class ApprovalEngine:
         )
         database.session.add(req)
         database.session.flush()
+        from cacao_accounting.audit_trail_service import log_approval_requested
+
+        snapshot, snapshot_hash = cls._approval_snapshot(document)
+        log_approval_requested(document, snapshot, snapshot_hash, cancellation=True)
         return req
 
     @staticmethod
