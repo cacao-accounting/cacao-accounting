@@ -639,6 +639,7 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
 
     bancos_module = importlib.import_module("cacao_accounting.bancos")
     monkeypatch.setattr(bancos_module, "cancel_document", lambda document: setattr(document, "docstatus", 2))
+    monkeypatch.setattr(bancos_module, "exige_acceso_compania", lambda *args, **kwargs: None)
 
     with app_ctx.test_request_context(f"/cash_management/payment/{payment.id}/cancel", method="POST"):
         response = unwrap(bancos_pago_cancel)(payment.id)
