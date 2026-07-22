@@ -123,15 +123,12 @@ def _compute_initial_balance(company: str, account_ids: list[str], first_start: 
     """Calcula el saldo inicial de efectivo/banco antes del primer período."""
     if not account_ids:
         return Decimal("0")
-    init_val = (
-        database.session.query(func.sum(GLEntry.debit - GLEntry.credit))
-        .filter(
-            GLEntry.company == company,
-            GLEntry.account_id.in_(account_ids),
-            GLEntry.posting_date < first_start,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
+    init_val = database.session.query(func.sum(GLEntry.debit - GLEntry.credit)).filter(
+        GLEntry.company == company,
+        GLEntry.account_id.in_(account_ids),
+        GLEntry.posting_date < first_start,
+        GLEntry.is_cancelled.is_(False),
+        GLEntry.is_reversal.is_(False),
     )
     ledger_id = primary_ledger_id(company)
     if ledger_id:
@@ -164,9 +161,7 @@ def _query_gl_sum(
     if party_type_filter:
         base_filters.append(GLEntry.party_type == party_type_filter)
     elif exclude_party_types:
-        base_filters.append(
-            or_(GLEntry.party_type.is_(None), ~GLEntry.party_type.in_(["customer", "supplier"]))
-        )
+        base_filters.append(or_(GLEntry.party_type.is_(None), ~GLEntry.party_type.in_(["customer", "supplier"])))
     expr = func.sum(GLEntry.debit - GLEntry.credit) if use_debit_credit else func.sum(GLEntry.credit - GLEntry.debit)
     val = database.session.query(expr).filter(*base_filters).scalar()
     return Decimal(str(val)) if val else Decimal("0")
@@ -209,9 +204,7 @@ def _compute_ar_ap_projections(
         ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date)
         return ar_total, ap_total
     if zone == "Projected":
-        return _sum_invoice_amount(ar_invoices, start_date, end_date), _sum_invoice_amount(
-            ap_invoices, start_date, end_date
-        )
+        return _sum_invoice_amount(ar_invoices, start_date, end_date), _sum_invoice_amount(ap_invoices, start_date, end_date)
     return Decimal("0"), Decimal("0")
 
 
@@ -325,9 +318,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         real_inflow, real_outflow, real_other = Decimal("0"), Decimal("0"), Decimal("0")
         if account_ids and start_date <= today_date:
             limit_end = min(end_date, today_date)
-            real_inflow, real_outflow, real_other = _compute_real_movements(
-                company, account_ids, start_date, limit_end
-            )
+            real_inflow, real_outflow, real_other = _compute_real_movements(company, account_ids, start_date, limit_end)
 
         proj_ar, proj_ap = _compute_ar_ap_projections(zone, ar_invoices, ap_invoices, start_date, end_date)
         manual_inflow, manual_outflow = _compute_manual_projections(
@@ -335,8 +326,15 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         )
 
         _update_cumulatives(
-            zone, real_inflow, real_outflow, real_other, proj_ar,
-            proj_ap, manual_inflow, manual_outflow, cumulatives,
+            zone,
+            real_inflow,
+            real_outflow,
+            real_other,
+            proj_ar,
+            proj_ap,
+            manual_inflow,
+            manual_outflow,
+            cumulatives,
         )
 
         matrix.append(

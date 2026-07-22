@@ -600,20 +600,21 @@ def _validate_and_fix_stock_bin_reserved_qty() -> None:
 
     CheckConstraint 'ck_stock_bin_reserved_non_negative' requires reserved_qty >= 0.
     This function ensures no data violates this constraint before the schema is fully applied.
+    Skips execution on empty tables to avoid unnecessary queries during fresh initialization.
     """
     try:
         from cacao_accounting.database import StockBin
 
+        # Skip entirely if the table is empty (fresh database).
+        row_count = database.session.execute(database.select(database.func.count())).select_from(StockBin).scalar()
+        if not row_count:
+            return
+
         # Check for any negative reserved_qty values
-        negative_bins = database.session.execute(
-            database.select(StockBin).where(StockBin.reserved_qty < 0)
-        ).scalars().all()
+        negative_bins = database.session.execute(database.select(StockBin).where(StockBin.reserved_qty < 0)).scalars().all()
 
         if negative_bins:
-            log.warning(
-                "Found {} StockBin records with negative reserved_qty. Correcting to 0.",
-                len(negative_bins)
-            )
+            log.warning("Found {} StockBin records with negative reserved_qty. Correcting to 0.", len(negative_bins))
             for bin_record in negative_bins:
                 bin_record.reserved_qty = 0
             database.session.commit()

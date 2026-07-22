@@ -63,7 +63,7 @@ def verifica_acceso(modulo):  # pragma: no cover
     return decorator_verifica_acceso
 
 
-def verifica_permiso(modulo: str, accion: str):  # pragma: no cover
+def verifica_permiso(modulo: str, accion: str):
     """Require a concrete action permission for a state-changing route."""
 
     def decorator_verifica_permiso(func):
