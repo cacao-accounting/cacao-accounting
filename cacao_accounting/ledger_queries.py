@@ -13,18 +13,19 @@ from sqlalchemy.orm import aliased
 from cacao_accounting.database import Book, GLEntry, StockLedgerEntry, database
 
 
-def primary_ledger_id(company: str) -> str | None:
+def primary_ledger_id(company: str, requested: str | None = None) -> str | None:
     """Resolve the deterministic read ledger for non-accounting modules.
 
     Operational/reporting consumers must never aggregate every active book.
     The accounting module is the only place where a user explicitly selects a
     book; all other consumers use the system default (then primary) active book.
     """
-    book = database.session.execute(
-        select(Book)
-        .where(Book.entity == company, Book.status == "activo")
-        .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
-    ).scalars().first()
+    query = select(Book).where(Book.entity == company, Book.status == "activo")
+    if requested:
+        query = query.where((Book.id == requested) | (Book.code == requested))
+    else:
+        query = query.order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
+    book = database.session.execute(query).scalars().first()
     return book.id if book else None
 
 
