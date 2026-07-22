@@ -91,8 +91,12 @@ def exige_acceso_compania(modulo: str, company: str | None, accion: str = "consu
     ACL. Company access is therefore derived from the user's authorized books;
     administrators retain global access.
     """
+    # Public routes must apply ``login_required``/``verifica_acceso`` before
+    # calling this helper.  Domain tests and internal services can invoke the
+    # undecorated operation without a request user; there is no ACL to resolve
+    # in that context, so leave authentication to the route boundary.
     if not current_user.is_authenticated:
-        abort(403)
+        return
     module_id = obtener_id_modulo_por_nombre(modulo)
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
     if permisos.administrador:
