@@ -46,6 +46,13 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "purchases.get_by_item": "payables.read",
     "inventory.get_stock_balance": "inventory.read",
     "inventory.get_valuation": "inventory.read",
+    "inventory.get_kardex": "inventory.read",
+    "inventory.get_existence": "inventory.read",
+    "inventory.get_batches": "inventory.read",
+    "inventory.get_serials": "inventory.read",
+    "banking.get_balance_summary": "banking.read",
+    "receivables.get_subledger": "receivables.read",
+    "payables.get_subledger": "payables.read",
 }
 
 
