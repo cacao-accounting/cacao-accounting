@@ -60,6 +60,7 @@ def test_discovery_and_composite_tools_are_published():
         "cost_centers.list",
         "uoms.list",
         "treasury.get_maturity_schedule",
+        "admin.configuration.list",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())

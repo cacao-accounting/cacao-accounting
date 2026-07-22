@@ -12,6 +12,7 @@ from typing import Any
 # service credential receives the internal report permission only after the
 # external scope has been normalized here.
 EXTERNAL_SCOPE_PERMISSIONS: dict[str, frozenset[str]] = {
+    "admin.read": frozenset({"admin.config.read"}),
     "companies.read": frozenset({"companies.read"}),
     "accounting.read": frozenset({"accounting.read", "accounting.reports.read"}),
     "receivables.read": frozenset({"receivables.read", "receivables.reports.read"}),
@@ -91,6 +92,7 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "treasury.get_cash_forecast": "banking.read",
     "treasury.compare_forecasts": "banking.read",
     "treasury.get_maturity_schedule": "banking.read",
+    "admin.configuration.list": "admin.read",
 }
 
 
