@@ -2217,26 +2217,7 @@ def bancos_pago_cancel(payment_id: str):
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
 
         cancel_document(registro)
-        revert_relations_for_target("payment_entry", registro.id, reason="payment_cancelled")
-        # CAS-04: Resetear conciliación bancaria vinculada al pago cancelado.
-        # Las BankTransaction que apuntaban a este pago deben perder su enlace
-        # y marcar no reconciliadas para que puedan reasignarse.
-        linked_transactions = (
-            database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=registro.id)).scalars().all()
-        )
-        for bt in linked_transactions:
-            bt.is_reconciled = False
-            bt.payment_entry_id = None
-        references = (
-            database.session.execute(database.select(PaymentReference).filter_by(payment_id=registro.id)).scalars().all()
-        )
-        affected_docs = {
-            (ref.flow_source_type or ref.reference_type, ref.reference_id)
-            for ref in references
-            if (ref.flow_source_type or ref.reference_type) and ref.reference_id
-        }
-        for reference_type, reference_id in affected_docs:
-            _refresh_payment_reference_document(reference_type, reference_id)
+        _apply_payment_cancellation_hooks(registro)
         log_cancel(registro)
         database.session.commit()
     except PostingError as exc:
@@ -2245,6 +2226,25 @@ def bancos_pago_cancel(payment_id: str):
         return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
     flash(_("Pago cancelado con reverso contable."), "warning")
     return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
+
+
+def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
+    """Revert payment relations and bank reconciliation links atomically."""
+    revert_relations_for_target("payment_entry", payment.id, reason="payment_cancelled")
+    linked_transactions = (
+        database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=payment.id)).scalars().all()
+    )
+    for transaction in linked_transactions:
+        transaction.is_reconciled = False
+        transaction.payment_entry_id = None
+    references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
+    affected_docs = {
+        (reference.flow_source_type or reference.reference_type, reference.reference_id)
+        for reference in references
+        if (reference.flow_source_type or reference.reference_type) and reference.reference_id
+    }
+    for reference_type, reference_id in affected_docs:
+        _refresh_payment_reference_document(reference_type, reference_id)
 
 
 # Import split routes/modules
