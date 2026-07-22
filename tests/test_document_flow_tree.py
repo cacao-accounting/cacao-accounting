@@ -604,6 +604,26 @@ def test_api_document_flow_tree_requiere_parametros(app):
     assert resp.status_code == 400
 
 
+def test_api_document_flow_tree_rechaza_tipo_documental_invalido(app):
+    """Un tipo documental desconocido se rechaza antes de acceder a documentos."""
+    from cacao_accounting.database import User, database
+
+    with app.app_context():
+        user = User(
+            id="U1-INVALID", user="invalidtype", name="Invalid Type", password=b"x", classification="admin", active=True
+        )
+        database.session.add(user)
+        database.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "U1-INVALID"
+        sess["_fresh"] = True
+
+    resp = client.get("/api/document-flow/tree?document_type=not_a_document&document_id=NOPE")
+    assert resp.status_code == 400
+
+
 def test_api_document_flow_tree_devuelve_arbol(app):
     """El endpoint devuelve el árbol completo en JSON."""
     from cacao_accounting.database import database
