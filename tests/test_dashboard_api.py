@@ -96,6 +96,21 @@ def test_dashboard_returns_403_for_disabled_company(client):
     assert response.status_code == 403
 
 
+def test_dashboard_denies_inactive_user_even_with_module_access(app):
+    """El aislamiento por compañía no se puede eludir con una sesión inactiva."""
+    from cacao_accounting.api.dashboard import user_can_access_company
+
+    with app.app_context():
+        user = database.session.get(User, "USER-ACC")
+        company = database.session.get(Entity, "COMP-ID")
+        assert user is not None
+        assert company is not None
+        user.active = False
+        database.session.flush()
+
+        assert user_can_access_company(user, company) is False
+
+
 def test_dashboard_validates_period_belongs_to_company(client):
     """El periodo debe pertenecer a la compañía seleccionada."""
     _login(client, "admin")
