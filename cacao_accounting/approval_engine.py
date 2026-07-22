@@ -189,6 +189,20 @@ class ApprovalEngine:
         if requested_at and modified_at and modified_at > requested_at:
             raise ValueError("El documento cambió después de solicitar aprobación; debe enviarse nuevamente.")
 
+    @staticmethod
+    def ensure_document_editable(document: Any) -> None:
+        """Prevent edits while an approval or cancellation request is pending."""
+        doctype = ApprovalEngine._resolve_doctype(document)
+        pending = database.session.execute(
+            select(ApprovalRequest.id).where(
+                ApprovalRequest.document_id == document.id,
+                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
+            )
+        ).scalar_one_or_none()
+        if pending:
+            raise ValueError("El documento tiene una solicitud de aprobación pendiente y no puede editarse.")
+
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
         """Crea una solicitud de aprobación para el documento si no existe."""

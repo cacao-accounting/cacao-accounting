@@ -1645,6 +1645,12 @@ def ventas_orden_venta_editar(order_id: str):
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -2286,6 +2292,12 @@ def ventas_entrega_editar(note_id: str):
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -2659,6 +2671,12 @@ def ventas_factura_venta_editar(invoice_id: str):
     registro = database.session.get(SalesInvoice, invoice_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 

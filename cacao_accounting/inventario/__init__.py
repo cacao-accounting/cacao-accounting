@@ -1182,6 +1182,12 @@ def inventario_entrada_editar(entry_id: str):
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
