@@ -197,10 +197,7 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
     El cálculo suma tanto los movimientos originales como sus contramovimientos
     de cancelación para obtener el neto algebraico real del inventario.
     """
-    query = (
-        select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse)
-        .filter_by(company=company)
-    )
+    query = select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse).filter_by(company=company)
     if item_code:
         query = query.filter_by(item_code=item_code)
     if warehouse:
