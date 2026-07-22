@@ -42,18 +42,38 @@ def _json_value(value: Any) -> Any:
     return value
 
 
-def _report_result(report: Any) -> dict[str, Any]:
+def _filter_payload(filters: Any) -> dict[str, Any]:
+    values = getattr(filters, "__dict__", {})
+    return {key: _json_value(value) for key, value in values.items() if value is not None}
+
+
+def _report_result(report: Any, company_id: str | None = None, filters: Any = None) -> dict[str, Any]:
+    page_number = getattr(filters, "page", None) or report.page or 1
+    requested_size = getattr(filters, "page_size", None)
+    page_size = requested_size or report.page_size or len(report.rows)
+    total_items = report.total_rows or len(report.rows)
+    rows = report.rows
+    if requested_size:
+        start = (page_number - 1) * page_size
+        rows = report.rows[start : start + page_size]
+    has_more = page_number * page_size < total_items
     return {
-        "items": [{key: _json_value(value) for key, value in row.values.items()} for row in report.rows],
+        "items": [{key: _json_value(value) for key, value in row.values.items()} for row in rows],
         "summary": {key: _json_value(value) for key, value in report.totals.items()},
         "page": {
-            "number": report.page or 1,
-            "size": report.page_size or len(report.rows),
-            "total_items": report.total_rows or len(report.rows),
-            "has_more": bool(report.total_rows and report.page_size and report.page * report.page_size < report.total_rows),
+            "number": page_number,
+            "size": page_size,
+            "total_items": total_items,
+            "has_more": has_more,
         },
         "currency": report.ledger_currency,
         "columns": report.columns or [],
+        "provenance": {
+            "company_id": company_id,
+            "filters": _filter_payload(filters) if filters is not None else {},
+            "currency": report.ledger_currency,
+            "completeness": {"truncated": has_more, "returned_items": len(rows), "total_items": total_items},
+        },
     }
 
 
@@ -70,10 +90,21 @@ def _aging_result(report: Any) -> dict[str, Any]:
 
 
 def _financial(
-    context: QueryContext, company_id: str, ledger_id: str | None, accounting_period: str | None
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None,
+    accounting_period: str | None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> FinancialReportFilters:
     validate_permission(context, "accounting.reports.read", "accounting", company_id)
-    return FinancialReportFilters(company=company_id, ledger=ledger_id, accounting_period=accounting_period)
+    return FinancialReportFilters(
+        company=company_id,
+        ledger=ledger_id,
+        accounting_period=accounting_period,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def _operational(
@@ -95,6 +126,8 @@ _FINANCIAL_SCHEMA = {
         "company_id": {"type": "string"},
         "ledger_id": {"type": "string"},
         "accounting_period": {"type": "string"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
     },
     "required": ["company_id"],
 }
@@ -108,9 +141,16 @@ _FINANCIAL_SCHEMA = {
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_income_statement(
-    *, context: QueryContext, company_id: str, ledger_id: str | None = None, accounting_period: str | None = None
+    *,
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None = None,
+    accounting_period: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _report_result(get_income_statement_report(_financial(context, company_id, ledger_id, accounting_period)))
+    filters = _financial(context, company_id, ledger_id, accounting_period, page, page_size)
+    return _report_result(get_income_statement_report(filters), company_id, filters)
 
 
 @query_tool(
@@ -121,9 +161,16 @@ def get_income_statement(
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_balance_sheet(
-    *, context: QueryContext, company_id: str, ledger_id: str | None = None, accounting_period: str | None = None
+    *,
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None = None,
+    accounting_period: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _report_result(get_balance_sheet_report(_financial(context, company_id, ledger_id, accounting_period)))
+    filters = _financial(context, company_id, ledger_id, accounting_period, page, page_size)
+    return _report_result(get_balance_sheet_report(filters), company_id, filters)
 
 
 @query_tool(
@@ -134,9 +181,16 @@ def get_balance_sheet(
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_account_summary(
-    *, context: QueryContext, company_id: str, ledger_id: str | None = None, accounting_period: str | None = None
+    *,
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None = None,
+    accounting_period: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _report_result(get_account_summary_report(_financial(context, company_id, ledger_id, accounting_period)))
+    filters = _financial(context, company_id, ledger_id, accounting_period, page, page_size)
+    return _report_result(get_account_summary_report(filters), company_id, filters)
 
 
 def _operational_schema() -> dict[str, Any]:
@@ -150,6 +204,8 @@ def _operational_schema() -> dict[str, Any]:
             "item_code": {"type": "string"},
             "warehouse": {"type": "string"},
             "bank_account_id": {"type": "string"},
+            "page": {"type": "integer", "minimum": 1, "default": 1},
+            "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
         },
         "required": ["company_id"],
     }
@@ -168,6 +224,8 @@ def _register_operational(name: str, description: str, permission: str, module: 
         party_id: str | None = None,
         item_code: str | None = None,
         warehouse: str | None = None,
+        page: int = 1,
+        page_size: int = 100,
     ) -> dict[str, Any]:
         filters = _operational(
             context,
@@ -179,8 +237,10 @@ def _register_operational(name: str, description: str, permission: str, module: 
             party_id=party_id,
             item_code=item_code,
             warehouse=warehouse,
+            page=page,
+            page_size=page_size,
         )
-        return _report_result(service(filters))
+        return _report_result(service(filters), company_id, filters)
 
 
 _register_operational(
@@ -196,6 +256,8 @@ _INVENTORY_SCHEMA = {
         "warehouse": {"type": "string"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
     },
     "required": ["company_id"],
 }
@@ -209,6 +271,8 @@ def _inventory_query(
     warehouse: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, "inventory.reports.read", "inventory", company_id)
     filters = KardexFilters(
@@ -217,8 +281,10 @@ def _inventory_query(
         warehouse=warehouse,
         date_from=_date(date_from),
         date_to=_date(date_to),
+        page=page,
+        page_size=page_size,
     )
-    return _report_result(service(filters))
+    return _report_result(service(filters), company_id, filters)
 
 
 @query_tool(
@@ -236,8 +302,10 @@ def get_inventory_kardex(
     warehouse: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _inventory_query(context, company_id, get_kardex, item_code, warehouse, date_from, date_to)
+    return _inventory_query(context, company_id, get_kardex, item_code, warehouse, date_from, date_to, page, page_size)
 
 
 @query_tool(
@@ -255,8 +323,12 @@ def get_inventory_existence(
     warehouse: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _inventory_query(context, company_id, get_inventory_existence_report, item_code, warehouse, date_from, date_to)
+    return _inventory_query(
+        context, company_id, get_inventory_existence_report, item_code, warehouse, date_from, date_to, page, page_size
+    )
 
 
 def _inventory_operational(
@@ -265,9 +337,14 @@ def _inventory_operational(
     service: Callable[..., Any],
     item_code: str | None,
     warehouse: str | None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, "inventory.reports.read", "inventory", company_id)
-    return _report_result(service(OperationalReportFilters(company=company_id, item_code=item_code, warehouse=warehouse)))
+    filters = OperationalReportFilters(
+        company=company_id, item_code=item_code, warehouse=warehouse, page=page, page_size=page_size
+    )
+    return _report_result(service(filters), company_id, filters)
 
 
 @query_tool(
@@ -285,8 +362,10 @@ def get_inventory_batches(
     warehouse: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _inventory_operational(context, company_id, get_batch_report, item_code, warehouse)
+    return _inventory_operational(context, company_id, get_batch_report, item_code, warehouse, page, page_size)
 
 
 @query_tool(
@@ -304,8 +383,10 @@ def get_inventory_serials(
     warehouse: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _inventory_operational(context, company_id, get_serial_report, item_code, warehouse)
+    return _inventory_operational(context, company_id, get_serial_report, item_code, warehouse, page, page_size)
 
 
 @query_tool(
@@ -322,13 +403,20 @@ def get_banking_balance_summary(
     date_from: str | None = None,
     date_to: str | None = None,
     bank_account_id: str | None = None,
-    **_: Any,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, "banking.reports.read", "cash", company_id)
-    report = get_bank_balance_summary(
-        BankingFilters(company=company_id, bank_account_id=bank_account_id, date_from=_date(date_from), date_to=_date(date_to))
+    filters = BankingFilters(
+        company=company_id,
+        bank_account_id=bank_account_id,
+        date_from=_date(date_from),
+        date_to=_date(date_to),
+        page=page,
+        page_size=page_size,
     )
-    return _report_result(report)
+    report = get_bank_balance_summary(filters)
+    return _report_result(report, company_id, filters)
 
 
 _SUBLEDGER_SCHEMA = {
@@ -338,22 +426,34 @@ _SUBLEDGER_SCHEMA = {
         "party_type": {"type": "string", "enum": ["customer", "supplier"]},
         "party_id": {"type": "string"},
         "as_of_date": {"type": "string", "format": "date"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
     },
     "required": ["company_id", "party_type"],
 }
 
 
 def _subledger(
-    context: QueryContext, company_id: str, party_type: str, party_id: str | None, as_of_date: str | None
+    context: QueryContext,
+    company_id: str,
+    party_type: str,
+    party_id: str | None,
+    as_of_date: str | None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
     permission = "receivables.reports.read" if party_type == "customer" else "payables.reports.read"
     module = "sales" if party_type == "customer" else "purchases"
     validate_permission(context, permission, module, company_id)
-    return _report_result(
-        get_ar_ap_subledger(
-            SubledgerFilters(company=company_id, party_type=party_type, party_id=party_id, as_of_date=_date(as_of_date))
-        )
+    filters = SubledgerFilters(
+        company=company_id,
+        party_type=party_type,
+        party_id=party_id,
+        as_of_date=_date(as_of_date),
+        page=page,
+        page_size=page_size,
     )
+    return _report_result(get_ar_ap_subledger(filters), company_id, filters)
 
 
 @query_tool(
@@ -370,8 +470,10 @@ def get_receivables_subledger(
     party_type: str = "customer",
     party_id: str | None = None,
     as_of_date: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _subledger(context, company_id, "customer", party_id, as_of_date)
+    return _subledger(context, company_id, "customer", party_id, as_of_date, page, page_size)
 
 
 @query_tool(
@@ -388,8 +490,10 @@ def get_payables_subledger(
     party_type: str = "supplier",
     party_id: str | None = None,
     as_of_date: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
 ) -> dict[str, Any]:
-    return _subledger(context, company_id, "supplier", party_id, as_of_date)
+    return _subledger(context, company_id, "supplier", party_id, as_of_date, page, page_size)
 
 
 _register_operational(

@@ -6,6 +6,19 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 
+_DEFAULT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": "Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia.",
+    "properties": {
+        "items": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "summary": {"type": "object", "additionalProperties": True},
+        "page": {"type": "object", "additionalProperties": True},
+        "provenance": {"type": "object", "additionalProperties": True},
+    },
+    "additionalProperties": True,
+}
+
+
 @dataclass(frozen=True)
 class QueryTool:
     """Descriptor inmutable de una herramienta de consulta."""
@@ -52,7 +65,7 @@ def query_tool(
             read_only=True,
             handler=handler,
             parameters_schema=parameters_schema or {},
-            response_schema=response_schema or {},
+            response_schema=response_schema or _DEFAULT_RESPONSE_SCHEMA,
             max_date_range_months=max_date_range_months,
             needs_company=needs_company,
         )
