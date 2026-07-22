@@ -345,3 +345,9 @@ Por solicitud de continuidad, la verificación final se limitó a los módulos a
 ### 2026-07-21 (Corrección de CI del PR #266)
 
 El análisis del PR en SonarCloud reportó 0 issues, pero GitHub Actions falló en Mypy por inferir `BaseTabla` para los items dinámicos de las validaciones de cantidades de ventas y compras. Se anotaron explícitamente como `Any` los resultados de esos lookups, preservando el comportamiento y satisfaciendo los atributos `qty` e `item_code` usados por la validación.
+
+### 2026-07-22 — Review contra `origin/main` y corrección D401
+
+Se solicitó revisar los cambios locales frente a `origin/main`. Durante la validación de calidad se detectó D401 en el docstring privado de `_validate_and_fix_stock_bin_reserved_qty`; se corrigió la primera línea a modo imperativo (`Validate and correct...`) sin modificar el comportamiento.
+
+El review continúa sobre los 52 commits divergentes, con foco en aislamiento por compañía, selección multilibro, aprobaciones y filtros de anulaciones.
