@@ -44,7 +44,7 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso  # noqa: F401
+from cacao_accounting.decorators import modulo_activo, verifica_acceso as verifica_acceso, verifica_permiso  # noqa: F401
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
@@ -2092,6 +2092,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
 @ventas.route("/sales-order/<order_id>/submit", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "autorizar")
 def ventas_orden_venta_submit(order_id: str):
     """Aprueba una orden de venta y reserva inventario."""
     registro = database.session.get(SalesOrder, order_id)
@@ -2125,6 +2126,7 @@ def ventas_orden_venta_submit(order_id: str):
 @ventas.route("/sales-order/<order_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "anular")
 def ventas_orden_venta_cancel(order_id: str):
     """Cancela una orden de venta y libera la reserva de inventario."""
     registro = database.session.get(SalesOrder, order_id)
@@ -2823,6 +2825,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
 @ventas.route("/sales-invoice/<invoice_id>/submit", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "autorizar")
 def ventas_factura_venta_submit(invoice_id: str):
     """Aprueba una factura de venta."""
     registro = database.session.get(SalesInvoice, invoice_id)
@@ -2889,6 +2892,7 @@ def _cancel_linked_delivery_note(invoice: SalesInvoice) -> None:
 @ventas.route("/sales-invoice/<invoice_id>/cancel", methods=["POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "anular")
 def ventas_factura_venta_cancel(invoice_id: str):
     """Cancela una factura de venta."""
     registro = database.session.get(SalesInvoice, invoice_id)
