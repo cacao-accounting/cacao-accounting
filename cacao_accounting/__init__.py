@@ -240,6 +240,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(document_status_info=calculate_document_status)
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
+            app.jinja_env.globals.update(getattr=getattr)
             if PRERELEASE:
                 app.jinja_env.globals.update(development=True)
 
