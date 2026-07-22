@@ -405,8 +405,11 @@ def api_document_flow_source_documents():
     company = request.args.get("company") or request.args.get("company_id")
     party_type = request.args.get("party_type")
     party_id = request.args.get("party_id") or request.args.get("party")
-    if not target_type:
+    if not target_type or not company:
         abort(400)
+    module = _module_for_document_type(normalize_doctype(target_type))
+    if module:
+        exige_acceso_compania(module, company, "consultar")
     try:
         sources = list_source_documents(
             target_type=target_type,
@@ -428,8 +431,11 @@ def api_document_flow_pending_lines():
     source_ids = request.args.getlist("source_document_ids[]") or request.args.getlist("source_document_ids")
     source_ids = source_ids or request.args.getlist("source_id")
     company = request.args.get("company") or request.args.get("company_id")
-    if not source_type or not target_type or not source_ids:
+    if not source_type or not target_type or not source_ids or not company:
         abort(400)
+    module = _module_for_document_type(normalize_doctype(source_type))
+    if module:
+        exige_acceso_compania(module, company, "consultar")
     try:
         lines = get_pending_lines(
             source_document_type=source_type,
@@ -455,6 +461,9 @@ def api_document_flow_payment_reference_candidates():
     include_orders = (request.args.get("advance_mode") or "").lower() in {"1", "true", "yes", "on"}
     if not source_types:
         abort(400)
+    module = {"supplier": "purchases", "customer": "sales"}.get(party_type)
+    if module:
+        exige_acceso_compania(module, company, "consultar")
     try:
         candidates = payment_reference_candidates(
             company=company,
@@ -476,6 +485,9 @@ def api_document_flow_payment_reconciliation_candidates():
     party_type = request.args.get("party_type") or ""
     party_id = request.args.get("party_id") or request.args.get("party") or None
     currency = request.args.get("currency") or None
+    module = {"supplier": "purchases", "customer": "sales"}.get(party_type)
+    if module:
+        exige_acceso_compania(module, company, "consultar")
     try:
         candidates = payment_reconciliation_candidates(
             company=company,
