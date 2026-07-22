@@ -36,7 +36,7 @@ def _result(page: int, size: int, items: list[dict[str, Any]], total: int, compa
     return result
 
 
-_SCHEMA = {
+_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

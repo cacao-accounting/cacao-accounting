@@ -41,6 +41,7 @@ def _resolve(document_type: str, document_id: str, company: str) -> tuple[Any, A
 
 
 def get_document_details(company: str, document_type: str, document_id: str) -> dict[str, Any] | None:
+    """Return a controlled read-only document projection."""
     resolved = _resolve(document_type, document_id, company)
     if resolved is None:
         return None
@@ -64,6 +65,7 @@ def get_document_details(company: str, document_type: str, document_id: str) -> 
 
 
 def get_document_lines(company: str, document_type: str, document_id: str) -> list[dict[str, Any]] | None:
+    """Return controlled line projections for a document."""
     resolved = _resolve(document_type, document_id, company)
     if resolved is None:
         return None
@@ -88,6 +90,7 @@ def get_document_lines(company: str, document_type: str, document_id: str) -> li
 
 
 def get_document_status(company: str, document_type: str, document_id: str) -> dict[str, Any] | None:
+    """Return the controlled status projection for a document."""
     details = get_document_details(company, document_type, document_id)
     if details is None:
         return None

@@ -130,7 +130,7 @@ def _operational(
     return OperationalReportFilters(company=company_id, date_from=_date(date_from), date_to=_date(date_to), **kwargs)
 
 
-_FINANCIAL_SCHEMA = {
+_FINANCIAL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -338,7 +338,7 @@ _register_operational(
 )
 
 
-_INVENTORY_SCHEMA = {
+_INVENTORY_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -738,7 +738,7 @@ def get_banking_unreconciled_transactions(
     return _report_result(get_unreconciled_bank_transactions(filters), company_id, filters)
 
 
-_SUBLEDGER_SCHEMA = {
+_SUBLEDGER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
