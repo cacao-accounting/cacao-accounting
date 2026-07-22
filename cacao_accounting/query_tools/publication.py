@@ -63,6 +63,12 @@ TOOL_EXTERNAL_SCOPES: dict[str, str] = {
     "analytics.compare_periods": "accounting.read",
     "analytics.get_trend": "accounting.read",
     "analytics.get_concentration": "accounting.read",
+    "ledgers.list": "accounting.read",
+    "parties.search": "documents.read",
+    "items.search": "inventory.read",
+    "warehouses.list": "inventory.read",
+    "bank_accounts.search": "banking.read",
+    "currencies.list": "accounting.read",
 }
 
 

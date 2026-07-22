@@ -6,6 +6,7 @@ from importlib import import_module
 
 _HANDLER_MODULES = (
     "companies",
+    "discovery",
     "accounting",
     "banking",
     "receivables",
