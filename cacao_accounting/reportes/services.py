@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
 
@@ -390,6 +390,125 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
         },
         columns=["item_code", "item_name", "warehouse", "balance_qty", "valuation_rate", "stock_value"],
     )
+
+
+def get_negative_stock(filters: OperationalReportFilters) -> PaginatedReport:
+    """Detecta saldos negativos actuales por artículo y almacén."""
+    query = select(StockBin).where(StockBin.company == filters.company, StockBin.actual_qty < 0)
+    if filters.item_code:
+        query = query.where(StockBin.item_code == filters.item_code)
+    if filters.warehouse:
+        query = query.where(StockBin.warehouse == filters.warehouse)
+    rows = [
+        ReportRow(
+            values={
+                "item_code": row.item_code,
+                "warehouse": row.warehouse,
+                "actual_qty": _decimal_value(row.actual_qty),
+                "shortage_qty": abs(_decimal_value(row.actual_qty)),
+                "valuation_rate": _decimal_value(row.valuation_rate),
+                "stock_value": _decimal_value(row.stock_value),
+            }
+        )
+        for row in database.session.execute(query.order_by(StockBin.item_code, StockBin.warehouse)).scalars()
+    ]
+    return PaginatedReport(
+        rows=rows,
+        totals={"shortage_qty": sum((row.values["shortage_qty"] for row in rows), Decimal("0"))},
+        columns=["item_code", "warehouse", "actual_qty", "shortage_qty", "valuation_rate", "stock_value"],
+    )
+
+
+def get_slow_moving_items(
+    filters: OperationalReportFilters, inactivity_days: int = 90, as_of_date: date | None = None
+) -> PaginatedReport:
+    """Lista existencias sin movimientos de salida durante el umbral indicado."""
+    if inactivity_days < 1 or inactivity_days > 3650:
+        raise ValueError("inactivity_days debe estar entre 1 y 3650")
+    cutoff = as_of_date or filters.date_to or date.today()
+    query = select(StockLedgerEntry).where(
+        StockLedgerEntry.company == filters.company,
+        StockLedgerEntry.is_cancelled.is_(False),
+        StockLedgerEntry.posting_date <= cutoff,
+    )
+    if filters.item_code:
+        query = query.where(StockLedgerEntry.item_code == filters.item_code)
+    if filters.warehouse:
+        query = query.where(StockLedgerEntry.warehouse == filters.warehouse)
+    latest: dict[tuple[str, str], date] = {}
+    for entry in database.session.execute(query).scalars():
+        if entry.qty_change is not None and _decimal_value(entry.qty_change) < 0:
+            key = (entry.item_code, entry.warehouse)
+            latest[key] = max(latest.get(key, date.min), entry.posting_date)
+    bins = select(StockBin).where(StockBin.company == filters.company, StockBin.actual_qty > 0)
+    if filters.item_code:
+        bins = bins.where(StockBin.item_code == filters.item_code)
+    if filters.warehouse:
+        bins = bins.where(StockBin.warehouse == filters.warehouse)
+    rows = []
+    threshold = cutoff - timedelta(days=inactivity_days)
+    for row in database.session.execute(bins.order_by(StockBin.item_code, StockBin.warehouse)).scalars():
+        last_out = latest.get((row.item_code, row.warehouse))
+        if last_out is None or last_out < threshold:
+            rows.append(
+                ReportRow(
+                    values={
+                        "item_code": row.item_code,
+                        "warehouse": row.warehouse,
+                        "actual_qty": _decimal_value(row.actual_qty),
+                        "stock_value": _decimal_value(row.stock_value),
+                        "last_outgoing_date": last_out,
+                        "inactive_days": (cutoff - last_out).days if last_out else None,
+                    }
+                )
+            )
+    return PaginatedReport(
+        rows=rows,
+        totals={"stock_value": sum((_decimal_value(row.values["stock_value"]) for row in rows), Decimal("0"))},
+        columns=["item_code", "warehouse", "actual_qty", "stock_value", "last_outgoing_date", "inactive_days"],
+    )
+
+
+def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport:
+    """Calcula rotación por artículo/almacén como salidas sobre stock promedio."""
+    if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
+        raise ValueError("date_from y date_to válidos son obligatorios para calcular rotación")
+    query = select(StockLedgerEntry).where(
+        StockLedgerEntry.company == filters.company,
+        StockLedgerEntry.is_cancelled.is_(False),
+        StockLedgerEntry.posting_date >= filters.date_from,
+        StockLedgerEntry.posting_date <= filters.date_to,
+    )
+    if filters.item_code:
+        query = query.where(StockLedgerEntry.item_code == filters.item_code)
+    if filters.warehouse:
+        query = query.where(StockLedgerEntry.warehouse == filters.warehouse)
+    grouped: dict[tuple[str, str], dict[str, Decimal]] = defaultdict(
+        lambda: {"outgoing_qty": Decimal("0"), "stock_sum": Decimal("0"), "observations": Decimal("0")}
+    )
+    for entry in database.session.execute(query).scalars():
+        key = (entry.item_code, entry.warehouse)
+        values = grouped[key]
+        qty = _decimal_value(entry.qty_change)
+        if qty < 0:
+            values["outgoing_qty"] += abs(qty)
+        values["stock_sum"] += max(_decimal_value(entry.qty_after_transaction), Decimal("0"))
+        values["observations"] += Decimal("1")
+    rows = []
+    for (item_code, warehouse), values in sorted(grouped.items()):
+        average_stock = values["stock_sum"] / values["observations"] if values["observations"] else Decimal("0")
+        rows.append(
+            ReportRow(
+                values={
+                    "item_code": item_code,
+                    "warehouse": warehouse,
+                    "outgoing_qty": values["outgoing_qty"],
+                    "average_stock_qty": average_stock,
+                    "turnover_ratio": values["outgoing_qty"] / average_stock if average_stock else None,
+                }
+            )
+        )
+    return PaginatedReport(rows=rows, totals={"outgoing_qty": sum((row.values["outgoing_qty"] for row in rows), Decimal("0"))})
 
 
 def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
