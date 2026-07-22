@@ -51,7 +51,8 @@ def get_document_flow(
     _page, _page_size = paginate(page, page_size)
 
     query = database.select(DocumentRelation).where(
-        (DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id)
+        DocumentRelation.company == company_id,
+        (DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id),
     )
 
     if document_type:
