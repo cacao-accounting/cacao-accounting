@@ -28,8 +28,6 @@ from cacao_accounting.database import (
     SalesInvoiceItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
     PaymentEntry,
     PaymentReference,
     DocumentRelation,
@@ -1131,7 +1129,7 @@ class TestCreatePaymentTarget:
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         si = _make_customer_invoice(grand_total=Decimal("500"))
 
-        create_target_document(
+        result = create_target_document(
             {
                 "target_document_type": "payment_entry",
                 "company": "cacao",
@@ -1148,6 +1146,9 @@ class TestCreatePaymentTarget:
                 ],
             }
         )
+        payment = database.session.get(PaymentEntry, result["target_id"])
+        payment.docstatus = 1
+        database.session.flush()
         remaining = compute_outstanding_amount(si)
         assert remaining == Decimal("200")
 

@@ -14,6 +14,7 @@ from cacao_accounting.database import (
     Bank,
     BankAccount,
     BankTransaction,
+    Book,
     CompanyParty,
     Currency,
     Entity,
@@ -32,6 +33,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     UOM,
     User,
+    UserBookAccess,
     Warehouse,
     database,
 )
@@ -341,6 +343,13 @@ def _seed_master_data() -> None:
 
 def _seed_financial_activity() -> None:
     """Crea movimientos y documentos para poblar KPIs."""
+    book = Book(id="BOOK-COMP", code="FISC", name="Fiscal", entity="COMP", currency="USD", is_primary=True, status="activo")
+    database.session.add(book)
+    database.session.flush()
+    database.session.add_all([
+        UserBookAccess(user_id="USER-ACC", book_id=book.id, can_read=True),
+        UserBookAccess(user_id="USER-SALES", book_id=book.id, can_read=True),
+    ])
     accounts = [
         Accounts(id="ACC-INCOME-EN", entity="COMP", code="4000", name="Income", classification="Income"),
         Accounts(id="ACC-INCOME-ES", entity="COMP", code="4001", name="Ingresos", classification="Ingresos"),
@@ -448,6 +457,7 @@ def _gl(identifier: str, account_id: str, debit: int, credit: int) -> GLEntry:
         posting_date=date(2024, 1, 15),
         voucher_type="journal_entry",
         voucher_id=f"JE-{identifier}",
+        ledger_id="BOOK-COMP",
     )
 
 

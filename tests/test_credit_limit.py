@@ -15,7 +15,6 @@ from cacao_accounting.database import (
     Item,
     Party,
     SalesInvoice,
-    SalesInvoiceItem,
     SalesOrder,
     SalesOrderItem,
     database,

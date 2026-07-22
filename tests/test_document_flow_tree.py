@@ -626,7 +626,7 @@ def test_api_document_flow_tree_rechaza_tipo_documental_invalido(app):
 
 def test_api_document_flow_tree_devuelve_arbol(app):
     """El endpoint devuelve el árbol completo en JSON."""
-    from cacao_accounting.database import database
+    from cacao_accounting.database import Modules, User, database
 
     _seed_entity(database)
     _seed_purchase_chain(database)
@@ -634,10 +634,9 @@ def test_api_document_flow_tree_devuelve_arbol(app):
     with app.test_request_context():
         pass
 
-    from cacao_accounting.database import User
-
+    module = Modules(id="MOD-PURCHASES", module="purchases", default=True, enabled=True)
     user = User(id="U2", user="treetest2", name="Test2", password=b"x", classification="admin", active=True)
-    database.session.add(user)
+    database.session.add_all([module, user])
     database.session.flush()
 
     client = app.test_client()
@@ -656,13 +655,15 @@ def test_api_document_flow_tree_devuelve_arbol(app):
 
 def test_lista_de_relaciones_revalida_acl_de_documentos_destino(app, monkeypatch):
     """La lista relacionada no expone destinos sin validar su compañía."""
-    import cacao_accounting.api as api_module
-    from cacao_accounting.database import User, database
+    import sys
+
+    from cacao_accounting.database import Modules, User, database
 
     _seed_entity(database)
     _seed_purchase_chain(database)
     user = User(id="U-RELATED-ACL", user="relatedacl", name="Related ACL", password=b"x", classification="admin", active=True)
-    database.session.add(user)
+    module = Modules(id="MOD-PURCHASES-ACL", module="purchases", default=True, enabled=True)
+    database.session.add_all([user, module])
     database.session.commit()
 
     checked: list[tuple[str, str, str]] = []
@@ -670,7 +671,7 @@ def test_lista_de_relaciones_revalida_acl_de_documentos_destino(app, monkeypatch
     def record_access(module: str, company: str | None, action: str) -> None:
         checked.append((module, str(company), action))
 
-    monkeypatch.setattr(api_module, "exige_acceso_compania", record_access)
+    monkeypatch.setattr(sys.modules["cacao_accounting.api"], "exige_acceso_compania", record_access)
     client = app.test_client()
     with client.session_transaction() as sess:
         sess["_user_id"] = "U-RELATED-ACL"

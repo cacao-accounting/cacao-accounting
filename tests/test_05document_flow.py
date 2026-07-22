@@ -738,7 +738,7 @@ def test_has_active_source_relations_false_when_children_cancelled(app_ctx):
 
 def test_receipt_submit_validates_against_po(app_ctx):
     """El submit de recepción debe rechazar si la cantidad excede la OC."""
-    from cacao_accounting.database import DocumentRelation, PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
     from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
     from cacao_accounting.compras import _validate_receipt_quantities_against_po
 
@@ -958,7 +958,7 @@ def test_invoice_edit_cleans_old_relations(app_ctx):
         PurchaseReceiptItem,
         database,
     )
-    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+    from cacao_accounting.document_flow import create_document_relation
     from cacao_accounting.document_flow.repository import consumed_qty_for_source
     from cacao_accounting.document_flow.service import get_source_items
 

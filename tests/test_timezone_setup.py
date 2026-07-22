@@ -4,7 +4,6 @@
 """Pruebas unitarias para la configuración y lógica de Zona Horaria."""
 
 import pytest
-from flask import Flask, has_request_context
 from cacao_accounting import create_app
 from cacao_accounting.database import database, CacaoConfig
 from cacao_accounting.setup.catalogs import (
@@ -16,7 +15,6 @@ from cacao_accounting.setup.forms import SetupRegionalForm
 from cacao_accounting.setup.service import (
     save_regional_settings,
     get_setup_configuration,
-    SETUP_TIMEZONE,
 )
 
 

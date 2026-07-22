@@ -522,6 +522,9 @@ def test_payment_to_multiple_invoices(app_ctx):
     )
     assert b"Pago registrado correctamente" in response.data
 
+    pe = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
+    client.post(f"/cash_management/payment/{pe.id}/submit", follow_redirects=True)
+
     database.session.refresh(si1)
     database.session.refresh(si2)
     database.session.refresh(si3)
@@ -562,6 +565,8 @@ def test_multiple_payments_to_single_invoice(app_ctx):
         "lines": [{"reference_type": "sales_invoice", "reference_id": si.id, "allocated_amount": 250}],
     }
     client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(p1)}, follow_redirects=True)
+    pe1 = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
+    client.post(f"/cash_management/payment/{pe1.id}/submit", follow_redirects=True)
 
     from cacao_accounting.document_flow.service import compute_outstanding_amount
 
@@ -573,6 +578,10 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     p2["paid_amount"] = 300
     p2["lines"] = [{"reference_type": "sales_invoice", "reference_id": si.id, "allocated_amount": 300}]
     client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(p2)}, follow_redirects=True)
+    pe2 = database.session.execute(
+        database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc())
+    ).scalars().first()
+    client.post(f"/cash_management/payment/{pe2.id}/submit", follow_redirects=True)
 
     database.session.refresh(si)
     assert compute_outstanding_amount(si) == 450
@@ -583,6 +592,10 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     p3["lines"] = [{"reference_type": "sales_invoice", "reference_id": si.id, "allocated_amount": 450}]
     response = client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(p3)}, follow_redirects=True)
     assert b"Pago registrado correctamente" in response.data
+    pe3 = database.session.execute(
+        database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc())
+    ).scalars().first()
+    client.post(f"/cash_management/payment/{pe3.id}/submit", follow_redirects=True)
     database.session.refresh(si)
     assert compute_outstanding_amount(si) == 0
 
@@ -621,13 +634,10 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
 
     from cacao_accounting.document_flow.service import compute_outstanding_amount
 
+    # Submit the payment first (required for outstanding to reflect allocation)
+    client.post(f"/cash_management/payment/{pe.id}/submit", follow_redirects=True)
     database.session.refresh(si)
     assert compute_outstanding_amount(si) == 0
-
-    # Submit the payment (required to cancel)
-    client.post(f"/cash_management/payment/{pe.id}/submit", follow_redirects=True)
-    database.session.refresh(pe)
-    assert pe.docstatus == 1
 
     # Cancel the payment
     client.post(f"/cash_management/payment/{pe.id}/cancel", follow_redirects=True)
@@ -1659,6 +1669,8 @@ def test_payment_ignores_exchange_rate_and_external_counter_for_transfer(app_ctx
 
 def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeypatch):
     """Una transferencia USD→NIO conserva ambos nominales y la tasa cruzada."""
+    import sys
+
     from cacao_accounting.bancos import _build_payment_from_payload
 
     source = (
@@ -1671,7 +1683,8 @@ def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeyp
     assert target is not None
 
     monkeypatch.setattr(
-        "cacao_accounting.bancos._lookup_exchange_rate",
+        sys.modules["cacao_accounting.bancos"],
+        "_lookup_exchange_rate",
         lambda currency, company_currency, posting_date: Decimal("36"),
     )
     payment, amount, _ = _build_payment_from_payload(

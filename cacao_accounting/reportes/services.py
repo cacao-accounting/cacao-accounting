@@ -1054,7 +1054,7 @@ def _compute_account_receipts_and_payments(
 
 def _bank_account_movements_query(bank_account_id: str, company: str, as_of_date: date | None) -> Any:
     """Construye la consulta de movimientos que afectan una cuenta bancaria.
-    
+
     Solo incluye PaymentEntry posteadas (docstatus == 1) para reportes consistentes.
     """
     movements_query = select(PaymentEntry).where(PaymentEntry.company == company, PaymentEntry.docstatus == 1)
