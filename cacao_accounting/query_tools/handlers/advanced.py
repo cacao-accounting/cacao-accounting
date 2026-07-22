@@ -17,6 +17,7 @@ from cacao_accounting.reportes.services import (
     OperationalReportFilters,
     SubledgerFilters,
     get_account_summary_report,
+    get_account_movement_detail,
     get_balance_sheet_report,
     get_gross_margin,
     get_income_statement_report,
@@ -197,6 +198,53 @@ def get_account_summary(
 ) -> dict[str, Any]:
     filters = _financial(context, company_id, ledger_id, accounting_period, page, page_size)
     return _report_result(get_account_summary_report(filters), company_id, filters)
+
+
+@query_tool(
+    "accounting.get_account_movement_detail",
+    "Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional.",
+    required_module="accounting",
+    required_permission="accounting.reports.read",
+    parameters_schema={
+        **_FINANCIAL_SCHEMA,
+        "properties": {
+            **_FINANCIAL_SCHEMA["properties"],
+            "account_code": {"type": "string"},
+            "voucher_type": {"type": "string"},
+            "party_type": {"type": "string", "enum": ["customer", "supplier"]},
+            "party_id": {"type": "string"},
+            "include_running_balance": {"type": "boolean", "default": False},
+        },
+    },
+)
+def get_account_movement_detail_handler(
+    *,
+    context: QueryContext,
+    company_id: str,
+    ledger_id: str | None = None,
+    accounting_period: str | None = None,
+    account_code: str | None = None,
+    voucher_type: str | None = None,
+    party_type: str | None = None,
+    party_id: str | None = None,
+    include_running_balance: bool = False,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    filters = FinancialReportFilters(
+        company=company_id,
+        ledger=ledger_id,
+        accounting_period=accounting_period,
+        account_code=account_code,
+        voucher_type=voucher_type,
+        party_type=party_type,
+        party_id=party_id,
+        include_running_balance=include_running_balance,
+        page=page,
+        page_size=page_size,
+    )
+    return _report_result(get_account_movement_detail(filters), company_id, filters)
 
 
 def _operational_schema() -> dict[str, Any]:

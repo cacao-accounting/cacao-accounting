@@ -51,6 +51,7 @@ def test_discovery_and_composite_tools_are_published():
         "documents.get_lines",
         "documents.get_status",
         "documents.get_related_documents",
+        "accounting.get_account_movement_detail",
     }
     assert expected.issubset(TOOL_EXTERNAL_SCOPES)
     assert expected.issubset(registry.list_tools())
