@@ -606,7 +606,7 @@ def _validate_and_fix_stock_bin_reserved_qty() -> None:
         from cacao_accounting.database import StockBin
 
         # Skip entirely if the table is empty (fresh database).
-        row_count = database.session.execute(database.select(database.func.count())).select_from(StockBin).scalar()
+        row_count = database.session.execute(database.select(database.func.count()).select_from(StockBin)).scalar()
         if not row_count:
             return
 
