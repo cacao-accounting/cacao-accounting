@@ -600,7 +600,9 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
     financial_closed = database.Column(database.Boolean(), default=False, nullable=False)
     closing_voucher_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_fiscal_year_closing_voucher"),
+        database.ForeignKey(
+            VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_fiscal_year_closing_voucher"
+        ),
         nullable=True,
     )
 
@@ -1520,7 +1522,10 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)
     batch_id = database.Column(
-        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
+        database.String(26),
+        database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
     serial_no = database.Column(database.String(100), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2870,7 +2875,9 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     )
     capitalized_by_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_comprobante_capitalized_by"),
+        database.ForeignKey(
+            VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_comprobante_capitalized_by"
+        ),
         nullable=True,
     )
     capitalization_origin_id = database.Column(
