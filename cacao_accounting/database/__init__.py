@@ -204,7 +204,7 @@ class BaseTercero(BaseTabla):
 class DocBase(BaseTabla):
     """Base para documentos transaccionales con ciclo de vida contable completo."""
 
-    docstatus = database.Column(database.Integer(), default=0, nullable=False)
+    docstatus = database.Column(database.Integer(), default=0, nullable=False, index=True)
     posting_date = database.Column(database.Date(), nullable=True, index=True)
     document_date = database.Column(database.Date(), nullable=True)
     company = database.Column(
@@ -535,7 +535,10 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     Cada transaccion genera una entrada en gl_entry por cada libro activo.
     """
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="libro_unico"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="libro_unico"),
+        database.Index("ix_book_entity_code", "entity", "code"),
+    )
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
@@ -597,7 +600,7 @@ class FiscalYear(database.Model, BaseTabla):  # type: ignore[name-defined]
     financial_closed = database.Column(database.Boolean(), default=False, nullable=False)
     closing_voucher_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_fiscal_year_closing_voucher"),
         nullable=True,
     )
 
@@ -623,14 +626,17 @@ class AccountingPeriod(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
     """La base de contabilidad es el catalogo de cuentas."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="cta_unica"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="cta_unica"),
+        database.Index("ix_accounts_entity_code", "entity", "code"),
+    )
     active = database.Column(database.Boolean(), index=True)
     enabled = database.Column(database.Boolean(), index=True)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     code = database.Column(database.String(50), index=True)
     name = database.Column(database.String(100))
     group = database.Column(database.Boolean())
-    parent = database.Column(database.String(50), nullable=True)
+    parent = database.Column(database.String(50), nullable=True, index=True)
     currency = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -645,7 +651,10 @@ class Accounts(database.Model, BaseTabla):  # type: ignore[name-defined]
 class CostCenter(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Centro de Costos — dimension analitica para clasificacion de gastos e ingresos."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="cc_unico"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="cc_unico"),
+        database.Index("ix_cost_center_entity_code", "entity", "code"),
+    )
     active = database.Column(database.Boolean(), index=True)
     default = database.Column(database.Boolean())
     enabled = database.Column(database.Boolean(), index=True)
@@ -653,7 +662,7 @@ class CostCenter(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(10), index=True)
     name = database.Column(database.String(100))
     group = database.Column(database.Boolean())
-    parent = database.Column(database.String(100), nullable=True)
+    parent = database.Column(database.String(100), nullable=True, index=True)
 
 
 class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1058,7 +1067,7 @@ class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
     legal_registration_number = database.Column(database.String(100), nullable=True)
     legal_notification_address = database.Column(database.Text(), nullable=True)
     legal_notes = database.Column(database.Text(), nullable=True)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
 class Contact(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1070,7 +1079,7 @@ class Contact(database.Model, BaseTabla):  # type: ignore[name-defined]
     email = database.Column(database.String(150), nullable=True)
     phone = database.Column(database.String(50), nullable=True)
     mobile = database.Column(database.String(50), nullable=True)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
 class Address(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1225,7 +1234,7 @@ class UOM(database.Model, BaseTabla):  # type: ignore[name-defined]
     __tablename__ = "uom"
     code = database.Column(database.String(20), unique=True, index=True, nullable=False)
     name = database.Column(database.String(100), nullable=False)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
 class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1288,7 +1297,7 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     brand = database.Column(database.String(100), nullable=True)
     model_name = database.Column(database.String(100), nullable=True)
     barcode = database.Column(database.String(100), nullable=True)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
 class ItemUOMConversion(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1329,7 +1338,7 @@ class Warehouse(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     parent_warehouse = database.Column(database.String(20), nullable=True)
     is_group = database.Column(database.Boolean(), default=False, nullable=False)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
 class WarehouseCompanyAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1398,6 +1407,7 @@ class StockEntry(database.Model, DocBase):  # type: ignore[name-defined]
     """Entrada de almacen (movimiento de inventario)."""
 
     __tablename__ = "stock_entry"
+    __table_args__ = (database.Index("ix_stock_entry_company_docstatus", "company", "docstatus"),)
     # receipt, issue, transfer, manufacture, repack
     purpose = database.Column(database.String(30), nullable=False, index=True)
     from_warehouse = database.Column(
@@ -1474,6 +1484,7 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     """Libro mayor de inventario — fuente de verdad del stock."""
 
     __tablename__ = "stock_ledger_entry"
+    __table_args__ = (database.Index("ix_stock_ledger_entry_company_item_warehouse", "company", "item_code", "warehouse"),)
     id = database.Column(
         database.String(26),
         primary_key=True,
@@ -1509,7 +1520,7 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)
     batch_id = database.Column(
-        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
     )
     serial_no = database.Column(database.String(100), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
@@ -1524,6 +1535,7 @@ class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
     __table_args__ = (
         UniqueConstraint("item_code", "warehouse", name="uq_stock_bin"),
         database.CheckConstraint("reserved_qty >= 0", name="ck_stock_bin_reserved_non_negative"),
+        database.Index("ix_stock_bin_company_item_warehouse", "company", "item_code", "warehouse"),
     )
     item_code = database.Column(
         database.String(50),
@@ -1554,7 +1566,10 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     """Capa de valuacion de inventario para FIFO y Promedio Movil."""
 
     __tablename__ = "stock_valuation_layer"
-    __table_args__ = (database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_svl_rate_non_negative"),)
+    __table_args__ = (
+        database.CheckConstraint(RATE_NON_NEGATIVE_CHECK, name="ck_svl_rate_non_negative"),
+        database.Index("ix_svl_company_item_warehouse", "company", "item_code", "warehouse"),
+    )
     id = database.Column(
         database.String(26),
         primary_key=True,
@@ -1932,6 +1947,7 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     """
 
     __tablename__ = "purchase_invoice"
+    __table_args__ = (database.Index("ix_purchase_invoice_company_docstatus", "company", "docstatus"),)
     supplier_id = database.Column(
         database.String(26),
         database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2373,6 +2389,7 @@ class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     """Factura de venta."""
 
     __tablename__ = "sales_invoice"
+    __table_args__ = (database.Index("ix_sales_invoice_company_docstatus", "company", "docstatus"),)
     customer_id = database.Column(
         database.String(26),
         database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2546,6 +2563,7 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     """Entrada de pago."""
 
     __tablename__ = "payment_entry"
+    __table_args__ = (database.Index("ix_payment_entry_company_docstatus", "company", "docstatus"),)
     # receive, pay, internal_transfer
     payment_type = database.Column(database.String(30), nullable=False, index=True)
     party_type = database.Column(database.String(20), nullable=True, index=True)
@@ -2828,7 +2846,9 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)
     fiscal_year_id = database.Column(
         database.String(26),
-        database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE, use_alter=True),
+        database.ForeignKey(
+            FISCAL_YEAR_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE, use_alter=True, name="fk_comprobante_fiscal_year"
+        ),
         nullable=True,
     )
     is_recurrent = database.Column(database.Boolean(), default=False, nullable=False)
@@ -2839,17 +2859,25 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     )
     recurrent_application_id = database.Column(
         database.String(26),
-        database.ForeignKey("recurring_journal_application.id", ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(
+            "recurring_journal_application.id",
+            ondelete=FK_SET_NULL,
+            use_alter=True,
+            onupdate=FK_CASCADE,
+            name="fk_comprobante_recurrent_application",
+        ),
         nullable=True,
     )
     capitalized_by_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_comprobante_capitalized_by"),
         nullable=True,
     )
     capitalization_origin_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(
+            VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_comprobante_capitalization_origin"
+        ),
         nullable=True,
     )
 
@@ -2967,7 +2995,9 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     status = database.Column(database.String(20), default="applied", nullable=False, index=True)
     journal_id = database.Column(
         database.String(26),
-        database.ForeignKey(VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE),
+        database.ForeignKey(
+            VOUCHER_ID, ondelete=FK_SET_NULL, use_alter=True, onupdate=FK_CASCADE, name="fk_recurring_application_journal"
+        ),
         nullable=True,
     )
     applied_by = database.Column(
