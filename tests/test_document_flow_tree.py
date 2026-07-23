@@ -798,3 +798,49 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
     assert credits[0].account_id == advance.id
     assert debits[0].debit == Decimal("500")
     assert credits[0].credit == Decimal("500")
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for code review fixes
+# ---------------------------------------------------------------------------
+
+
+def test_module_for_document_type_covers_all_flow_types(app):
+    """_module_for_document_type maps every document-flow type to an ACL module."""
+    from cacao_accounting.api import _module_for_document_type
+
+    expected = {
+        "sales_request": "sales",
+        "sales_quotation": "sales",
+        "sales_order": "sales",
+        "delivery_note": "sales",
+        "sales_invoice": "sales",
+        "purchase_request": "purchases",
+        "purchase_quotation": "purchases",
+        "supplier_quotation": "purchases",
+        "purchase_order": "purchases",
+        "purchase_receipt": "purchases",
+        "purchase_invoice": "purchases",
+        "stock_entry": "inventory",
+        "journal_entry": "accounting",
+        "payment_entry": "cash",
+    }
+    for doctype, expected_module in expected.items():
+        assert _module_for_document_type(doctype) == expected_module, f"{doctype} should map to {expected_module}"
+
+    assert _module_for_document_type("nonexistent_type") is None
+
+
+def test_deterministic_default_produces_stable_output():
+    """_deterministic_default serializes Decimal and dates deterministically."""
+    from decimal import Decimal
+
+    from cacao_accounting.approval_engine import _deterministic_default
+
+    from datetime import date, datetime
+
+    assert _deterministic_default(Decimal("123.45")) == "123.45"
+    assert _deterministic_default(Decimal("0")) == "0"
+    assert _deterministic_default(date(2026, 1, 15)) == "2026-01-15"
+    assert _deterministic_default(datetime(2026, 1, 15, 10, 30)) == "2026-01-15T10:30:00"
+    assert _deterministic_default("string") == "'string'"
