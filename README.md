@@ -96,10 +96,14 @@ confirmación. Para el detalle completo, consulta la [documentación de cacaoctl
 ### Arranque local rápido
 
 El script [`scripts/run_server.sh`](scripts/run_server.sh) está destinado
-únicamente al desarrollo local: reinicia la base de datos de prueba, carga
-datos de ejemplo y ejecuta `cacaoctl run` en `127.0.0.1:8080`. Se pueden
-personalizar `CACAO_HOST`, `CACAO_PORT`, `CACAO_USER`, `CACAO_PSWD` y
-`SECRET_KEY` mediante variables de entorno.
+únicamente al desarrollo local: conserva la base de datos existente, carga
+datos de ejemplo solo al crearla y ejecuta `cacaoctl run` en `127.0.0.1:8080`.
+Para reiniciar la base de datos explícitamente, ejecútalo con
+`scripts/run_server.sh --clean`. Se pueden
+personalizar `CACAO_HOST`, `CACAO_PORT`, `CACAO_USER`, `CACAO_PSWD`,
+`CACAO_DATABASE_URL` y `SECRET_KEY` mediante variables de entorno. Por
+defecto utiliza `cacaoaccounting.db` en la raíz del proyecto, incluso en modo
+de pruebas, para que la inicialización sobreviva entre procesos.
 
 Para un servidor WSGI usa `cacaoctl serve`. En Docker, el entrypoint ejecuta
 `cacaoctl db init` y `cacaoctl db migrate` de forma idempotente antes de
