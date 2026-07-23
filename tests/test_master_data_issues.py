@@ -195,7 +195,7 @@ def test_entity_search_select_is_scoped_to_authorized_companies(app_ctx, monkeyp
     database.session.commit()
 
     monkeypatch.setattr(
-        sys.modules["cacao_accounting.api.dashboard"],
+        sys.modules["cacao_accounting.api"],
         "user_can_access_company",
         lambda user, company: company.code == "cacao",
     )
@@ -227,7 +227,7 @@ def test_search_select_rejects_company_filter_outside_acl(app_ctx, monkeypatch):
     )
     database.session.commit()
     monkeypatch.setattr(
-        sys.modules["cacao_accounting.api.dashboard"],
+        sys.modules["cacao_accounting.api"],
         "user_can_access_company",
         lambda user, company: company.code == "cacao",
     )
