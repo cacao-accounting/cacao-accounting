@@ -1619,6 +1619,7 @@ class TestBatchUniqueConstraint(unittest.TestCase):
 
         uom = UOM(code="UND-B", name="Unidad Batch Test", is_active=True)
         self.database.session.add(uom)
+        self.database.session.flush()
         item = Item(
             code="ITEM-BATCH-TEST",
             name="Item para test de lotes",
